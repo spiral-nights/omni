@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#141312">
+  <title>Omni — Modular Nostr Runtime</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <!-- 1. Header -->
+  <header class="app-header">
+    <div class="brand-row">
+      <span class="brand-logo">✦ Omni</span>
+      <span style="font-size: 0.72rem; color: var(--omni-text-muted); background: var(--omni-bg-subtle); padding: 2px 6px; border-radius: var(--omni-radius-pill);">MVP</span>
+    </div>
+    <div class="header-actions">
+      <div id="relay-status" class="relay-status-pill" title="Nostr Relay Status">
+        <span class="status-dot"></span>
+        <span id="relay-count-text">Relay: 0ms Cache</span>
+      </div>
+      <button id="user-badge" class="user-profile-badge" title="Click to copy pubkey">
+        npub...
+      </button>
+      <button id="btn-open-plugins" class="dock-item" style="min-width: unset; font-size: 1.1rem; color: var(--omni-text-primary);" title="Plugin Manager">
+        🧩
+      </button>
+    </div>
+  </header>
+
+  <!-- 2. Main App Content Layout -->
+  <div class="app-layout">
+    <!-- Desktop Left / Mobile Bottom Navigation Dock -->
+    <nav class="mobile-dock" id="app-dock">
+      <button class="dock-item active" id="dock-btn-feed" title="Timeline Feed">
+        <div class="dock-icon-wrapper">💬</div>
+        <span>Feed</span>
+      </button>
+
+      <!-- Dynamic Slot for Plugin Dock Icons -->
+      <div id="dock-slot" class="dock-slot-container" style="display: flex; gap: 8px;"></div>
+
+      <button class="dock-item" id="dock-btn-widgets" title="Toggle Widgets">
+        <div class="dock-icon-wrapper">📋</div>
+        <span>Widgets</span>
+      </button>
+
+      <button class="dock-item" id="dock-btn-settings" title="Plugins & Settings">
+        <div class="dock-icon-wrapper">⚙️</div>
+        <span>Plugins</span>
+      </button>
+    </nav>
+
+    <!-- Center Viewport (Note Composer & Feed) -->
+    <main class="main-viewport">
+      <div class="feed-container">
+        <!-- Note Composer -->
+        <div class="composer-card">
+          <textarea
+            id="composer-input"
+            class="composer-input"
+            placeholder="What's happening? (Note will be signed with Schnorr/secp256k1)"
+            rows="2"
+          ></textarea>
+          <div class="composer-footer">
+            <button id="btn-publish" class="btn-publish">Publish Note</button>
+          </div>
+        </div>
+
+        <!-- Feed List -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h2 style="font-size: 0.95rem; font-weight: 600; color: var(--omni-text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Timeline Feed</h2>
+          <span id="feed-cache-indicator" style="font-size: 0.75rem; color: var(--omni-accent-primary);">⚡ 0ms Local Cache</span>
+        </div>
+
+        <div id="notes-list" class="notes-list">
+          <div style="text-align: center; color: var(--omni-text-muted); padding: 32px 0;">
+            Loading notes from local cache & relays...
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Desktop Sidebar (Hidden on Mobile) -->
+    <aside class="desktop-sidebar" id="desktop-sidebar">
+      <div class="drawer-header">
+        <h2 class="drawer-title">Workspace Widgets</h2>
+      </div>
+      <!-- Desktop Sidebar Slot -->
+      <div id="desktop-sidebar-slot" class="omni-slot"></div>
+    </aside>
+  </div>
+
+  <!-- 3. Mobile Pull-Up Drawer Sheet for Widgets -->
+  <div class="mobile-drawer-overlay" id="drawer-overlay"></div>
+  <aside class="mobile-drawer-sheet" id="drawer-sheet">
+    <div class="drawer-drag-handle"></div>
+    <div class="drawer-header">
+      <h2 class="drawer-title">Workspace Widgets</h2>
+      <button class="btn-drawer-close" id="btn-close-drawer" title="Close widgets">✕</button>
+    </div>
+    <!-- Mobile Sidebar Slot -->
+    <div id="mobile-sidebar-slot" class="omni-slot"></div>
+  </aside>
+
+  <!-- 4. Plugin Manager Modal Overlay -->
+  <div class="modal-overlay" id="plugin-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="font-size: 1.1rem; font-weight: 600;">Installed Plugins</h3>
+        <button class="btn-drawer-close" id="btn-close-modal">✕</button>
+      </div>
+      <p style="font-size: 0.82rem; color: var(--omni-text-muted);">
+        Plugins run inside sandboxed iframes without host DOM or network access. UI is projected via Shopify Remote DOM using standard HTML elements.
+      </p>
+
+      <div id="plugins-list" style="display: flex; flex-direction: column; gap: 10px;">
+        <!-- Dynamically rendered plugin cards -->
+      </div>
+
+      <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; margin-top: 8px;">
+        <h4 style="font-size: 0.88rem; margin-bottom: 6px; color: var(--omni-text-secondary);">Security & Isolation</h4>
+        <div style="font-size: 0.78rem; color: var(--omni-text-muted); display: flex; flex-direction: column; gap: 4px;">
+          <div>🔒 CSP: <code>default-src 'none'; script-src 'self'</code></div>
+          <div>🛡️ Network: Completely blocked from iframes</div>
+          <div>📦 DOM: Standard HTML Allowlist projection</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

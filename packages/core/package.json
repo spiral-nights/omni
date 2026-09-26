@@ -1,0 +1,26 @@
+{
+  "name": "@omni/core",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.4.0",
+    "@noble/hashes": "^1.4.0",
+    "@omni/types": "workspace:*",
+    "@remote-dom/core": "^1.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "fake-indexeddb": "^6.0.0",
+    "happy-dom": "^20.14.5",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://omni.run/schema/v1/manifest.json",
+  "id": "org.omni.plugins.checklist",
+  "name": "Daily Checklist",
+  "version": "1.0.0",
+  "description": "Interactive to-do and task checklist with local persistence",
+  "author": {
+    "name": "Omni Team",
+    "pubkey": "3bf0c63fcb93463407af97b5e0918838e6fb709e4693b0110d96049f1e70bcbc"
+  },
+  "icon": "check-square",
+  "entry": "dist/bundle.js",
+  "components": [
+    {
+      "id": "checklist-dock-icon",
+      "type": "icon",
+      "title": "Checklist",
+      "slot": "dock",
+      "defaultProps": { "badgeCount": 3 }
+    },
+    {
+      "id": "checklist-sidebar-widget",
+      "type": "sidebar",
+      "title": "Today Tasks",
+      "slot": "sidebar"
+    },
+    {
+      "id": "checklist-main-dashboard",
+      "type": "main",
+      "title": "Task Manager",
+      "slot": "main"
+    }
+  ],
+  "permissions": {
+    "storage": {
+      "quotaMb": 2
+    },
+    "intents": {
+      "handle": ["tasks.create-item"]
+    }
+  }
+}
