@@ -14,6 +14,7 @@ This document tracks identified UX, architectural, and functional issues in the 
 | **ISSUE-04** | Dynamic Layout & Slot Customization UI (slot mapping per page/section) | Layout / Runtime | Critical | 📋 Open |
 | **ISSUE-05** | Relay Pool Inspector & Management (connection status, add/remove) | Networking / Nostr | High | 📋 Open |
 | **ISSUE-06** | "Widgets" button interaction failure & desktop sidebar collapse | UX / Navigation | High | 📋 Open |
+| **ISSUE-07** | Plugin Inspector: Source URLs, manifest viewer, and component registry | Plugin Engine | High | 📋 Open |
 
 ---
 
@@ -121,3 +122,18 @@ This document tracks identified UX, architectural, and functional issues in the 
      - On mobile (`< 768px`): "Widgets" opens the pull-up drawer sheet.
      - On desktop (`>= 768px`): "Widgets" toggles the desktop sidebar visibility (expand / collapse), with a subtle slide transition.
   3. Ensure active visual indicator on the Widgets button when drawer or sidebar is open.
+
+---
+
+### ISSUE-07: Plugin Inspector, Origin URLs, and Manifest Viewer
+* **Problem Statement:** Users have no transparency into installed plugins: they cannot see where plugins were loaded from (source URL / repository / Blossom hash), cannot inspect the underlying `omni.manifest.json` file, and cannot view detailed metadata (author, version, license, declared components, required vs. optional permissions).
+* **Technical Remediation:**
+  1. **Plugin Detail / Inspector View:**
+     - In the Plugin Manager, each plugin card includes an **"Inspect Manifest"** button.
+     - Clicking opens a detail drawer/modal with tabbed views:
+       - **Overview Tab:** Name, ID (`org.omni...`), version, author, license, origin URL (e.g. `https://plugins.omni.org/...` or `local:@omni/plugin-checklist`), and sandbox CSP status.
+       - **Components Tab:** Lists each contributed UI component, its declared slot (`dock`, `sidebar`, `main`), title, description, and status.
+       - **Manifest Tab:** Formatted, read-only JSON code block of the complete `omni.manifest.json` with a 1-click "Copy JSON" button.
+       - **Permissions & Storage Tab:** Interactive capabilities inspector (see `ISSUE-02`) and storage quota usage meter (`X KB / 5 MB`).
+  2. **Audit & Verification:**
+     - Display cryptographic integrity hash of the plugin script bundle and manifest signature (NIP-89 readiness).
