@@ -1,145 +1,125 @@
-# 04. Layout & Widget Engine
+# 04. Layout & Remote DOM Engine
 
-## 1. Architectural Concept: Plugin-Driven Layouts
+## 1. Architectural Concept: Native Slots & Remote DOM Projection
 
-In Omni, the layout engine itself is **driven entirely by a plugin** (the **Root Shell Plugin**). 
-
-The Omni Core provides only the absolute minimal host primitives required to mount, position, secure, and auto-resize sandboxed iframes. The Root Shell Plugin decides *what* the application looks like—whether it is a classic 3-column social feed, a multi-window tiling desktop (similar to Blender/i3), a compact mobile drawer, or a customized dashboard.
+Omni departs from traditional micro-frontend architectures by eliminating nested UI iframes entirely. Instead, the **Omni Web Application** renders a native, cohesive client interface and provides a **declarative Slot System** powered by **Shopify Remote DOM (`@remote-dom/core`)**.
 
 ```
 +-----------------------------------------------------------------------------------------------+
-|                                       Omni Host Runtime                                       |
+|                                    Omni Native Web Application                                |
 |                                                                                               |
 |  +-----------------------------------------------------------------------------------------+  |
-|  |                     Root Shell Plugin (e.g. org.omni.shell.dock)                        |  |
-|  |                                                                                         |  |
-|  |  +--------------------+-------------------------------------------+------------------+  |  |
-|  |  | [Slot: menu_dock]  | [Slot: main_viewport]                     | [Slot: widget_1] |  |  |
-|  |  |                    |                                           |                  |  |  |
-|  |  | * Navigation Tabs  | * Active Feature Plugin                   | * Mini Player /  |  |  |
-|  |  | * Profile Selector |   (e.g., org.nostr.feed)                  |   Status Widget  |  |  |
-|  |  | * Plugin Launcher  |                                           |                  |  |  |
-|  |  +--------------------+-------------------------------------------+------------------+  |  |
-|  |  | [Slot: bottom_bar]                                                                |  |  |
-|  +--+------------------------------------------------------------------------------------+--+  |
+|  | [Slot: 'dock']     | [Slot: 'main']                            | [Slot: 'sidebar']      |  |
+|  |                    |                                           |                        |  |
+|  | * Home Feed Icon   | * Native Timeline Feed (Default)          | * Trending Topics      |  |
+|  | * Wallet Icon (P1) | * Active Main Plugin View (e.g. Chat/Map) | * Wallet Balance (P1)  |  |
+|  | * Media App (P2)   |                                           | * Active Media Mini-Pl |  |
+|  +--------------------+-------------------------------------------+------------------------+  |
 |                                                  |                                            |
-|                 Slot Declaration & Mount Binding | RPC: omni.layout.registerSlots(...)        |
-|                                                  v                                            |
+|                               RemoteReceiver per Slot Container                               |
+|                                                  ^                                            |
+|                                                  | Port 1 (Remote DOM Mutations)              |
+|                                                  |                                            |
 |  +-----------------------------------------------------------------------------------------+  |
-|  |                                 Host Slot & Viewport Host                               |  |
-|  |  - Tracks DOM slot bounds & coordinates                                                 |  |
-|  |  - Injects sandboxed child iframes into matching slot containers                        |  |
-|  |  - Runs Bidirectional ResizeObserver Engine to prevent clipping & scrollbar bugs        |  |
+|  |                              Isolated Sandbox (Iframe / Worker)                         |  |
+|  |                                                                                         |  |
+|  |  Plugin Bundle (e.g. Zap Wallet Plugin)                                                 |  |
+|  |  - RemoteRoot("wallet-icon")    -----> Projects to Slot 'dock'                          |  |
+|  |  - RemoteRoot("wallet-balance") -----> Projects to Slot 'sidebar'                       |  |
+|  |  - RemoteRoot("wallet-tx-view") -----> Projects to Slot 'main'                          |  |
 |  +-----------------------------------------------------------------------------------------+  |
 +-----------------------------------------------------------------------------------------------+
 ```
 
 ---
 
-## 2. Minimal Host Slot Mounting System
+## 2. Why Remote DOM Replaces Iframes
 
-To prevent untrusted plugins from tampering with one another's DOM while allowing the Root Shell to arrange views dynamically, Omni uses a **Slot Delegation Protocol**:
+In traditional micro-frontend systems, every widget renders inside an `<iframe>`. This approach introduces fatal UX and architectural issues:
+1. **Layout Traps & Broken Responsiveness:** Iframes cannot naturally stretch or shrink with their contents without asynchronous `ResizeObserver` polling and IPC message roundtrips.
+2. **Nested Scrollbar Hell:** Mismatched heights cause ugly, unusable double scrollbars.
+3. **Modal & Tooltip Clipping:** Dropdowns, popups, and tooltips are bounded by the iframe's rectangular viewport and get clipped at iframe borders.
+4. **Theme Fragmentation:** Host CSS custom properties cannot penetrate the iframe boundary without explicit variable mirroring.
+5. **Heavy Resource Footprint:** Spawning a dozen separate iframes for widgets degrades memory and CPU performance.
 
-1. **Root Shell Declares Slots:** The Root Shell renders HTML container elements (e.g., `<div data-omni-slot="main_viewport"></div>`) and informs Omni Host via RPC:
-   ```typescript
-   omni.layout.registerSlots([
-     { slotId: "menu_dock", type: "fixed", defaultSize: { width: 64 } },
-     { slotId: "main_viewport", type: "fluid" },
-     { slotId: "widget_sidebar", type: "collapsible", defaultSize: { width: 320 } },
-     { slotId: "modal_overlay", type: "overlay" }
-   ]);
-   ```
-2. **Mounting Mini-Apps to Slots:** The Root Shell requests the Host to attach installed plugins to specific slots:
-   ```typescript
-   omni.layout.mount({
-     slotId: "main_viewport",
-     pluginId: "org.nostr.feed",
-     entryPoint: "main" // Matches entry point declared in plugin manifest
-   });
-   ```
-3. **Host Injects Sandboxed Frame:** The Host instantiates the sandboxed iframe directly into the corresponding slot container, configuring isolation and communication channels.
+### How Shopify Remote DOM Solves This
+* **Headless Sandbox:** The plugin code executes in a single, lightweight sandboxed environment (headless iframe or Web Worker) with zero direct access to the Host DOM.
+* **Serialized UI Tree:** The plugin constructs virtual DOM elements (e.g., `<ui-card>`, `<ui-button>`, `<ui-badge>`, `<ui-text>`) via `@remote-dom/core`.
+* **Host-Side Native Rendering:** The Host attaches a `RemoteReceiver` to the target slot DOM container. As the plugin updates elements, Remote DOM transmits batched mutation arrays over a `MessagePort`.
+* **Zero Clipping & Native CSS:** The elements are rendered as real DOM elements in the Host page. They inherit the Host's CSS variables, participate in native Flexbox/Grid flow, scale smoothly, support keyboard accessibility, and never get clipped by arbitrary boundaries.
 
 ---
 
-## 3. Eliminating Iframe Traps: Dynamic Auto-Sizing & Sizing Handshake
+## 3. Slot Hierarchy & Component Types
 
-Traditional iframes suffer from fixed height/width cutoffs, dual scrollbars, and broken layout responsiveness. Omni eliminates these issues using a **Bidirectional Dynamic Sizing Protocol**:
+Omni categorizes UI contributions into four core component types:
 
-```
-   [ Plugin Sandbox ]                                      [ Omni Host Frame Manager ]
-           |                                                           |
- [DOM Content Mutates]                                                 |
-           |                                                           |
- [ResizeObserver fires]                                                |
-           |                                                           |
-           |-- omni.ui.reportIntrinsicDimensions({ width, height }) -->|
-           |                                                           |
-           |                                               [Update iframe style]
-           |                                               [Adjust slot container]
-           |                                                           |
-           |<-- omni.ui.onViewportResized({ width, height }) ----------|
-           |                                                           |
-[Adapt internal responsive CSS]                                        |
-```
-
-### 3.1. Sizing Modes
-Every slot supports one of three sizing models:
-
-1. **Fluid (Viewport-Driven):**
-   * The container takes all available space (e.g., main feed or document viewer).
-   * Host sets iframe to `width: 100%; height: 100%`.
-   * Plugin listens to `omni.ui.onViewportResized` and adapts internal CSS container queries.
-2. **Auto-Height / Auto-Width (Content-Driven Widgets):**
-   * Used for inline widgets, cards, banners, or dropdowns.
-   * Plugin's `@omni/sdk` attaches an internal `ResizeObserver` to `document.body` or `#omni-root`.
-   * When content expands (e.g. accordion opens or replies load), `@omni/sdk` emits `omni.ui.reportDimensions`.
-   * Host updates iframe dimensions in real time, preventing internal scrollbars.
-3. **Overlay & Sheet (Modal-Driven):**
-   * Used for interactive intents (e.g. Zap dialogs, Image Pickers, NIP-07 confirmations).
-   * Host centers the frame or renders it as a bottom slide-up sheet with a dimmed backdrop.
+| Component Type | Target Slot | Primary Role | UX Characteristics |
+| :--- | :--- | :--- | :--- |
+| **`icon`** | `dock` / `toolbar` | Quick-launch icons, unread notification badges, status indicators. | Compact (32x32 to 48x48px), tooltip on hover, click toggles sidebar or main view. |
+| **`sidebar`** | `sidebar` | Secondary panel widgets (balances, upcoming events, trending tags). | Fixed width (280-360px) or collapsible, vertical card layout, fluid height. |
+| **`main`** | `main` | Full-page / tabbed applications (custom client views, chat threads, media galleries). | Fluid width & height, primary viewport focus, replaces or tabs alongside default feed. |
+| **`widget`** | Custom slots | Floating cards, dashboard tiles, or contextual note decorations. | Slot-in anywhere the host or user configures a custom widget container. |
 
 ---
 
-## 4. Multi-Entry Point & Widget Architecture
+## 4. Multi-Component Plugin Manifest Declaration
 
-A single plugin can expose multiple entry points in its manifest:
+A single plugin can contribute multiple distinct components across different slots within `omni.manifest.json`:
 
 ```json
 {
-  "id": "org.nostr.calendar",
-  "name": "Nostr Calendar",
+  "$schema": "https://omni.run/schema/v1/manifest.json",
+  "id": "org.nostr.wallet",
+  "name": "Zap Wallet",
   "version": "1.0.0",
-  "entryPoints": {
-    "main": {
-      "path": "dist/index.html",
-      "displayType": "fullscreen",
-      "title": "Full Calendar View"
+  "entry": "dist/plugin.js",
+
+  "components": [
+    {
+      "id": "wallet-dock-icon",
+      "type": "icon",
+      "title": "Zap Wallet",
+      "slot": "dock",
+      "defaultProps": { "showBadge": true }
     },
-    "widget": {
-      "path": "dist/widget.html",
-      "displayType": "inline-card",
-      "title": "Upcoming Events Card",
-      "preferredDimensions": { "minHeight": 120, "maxHeight": 350 }
+    {
+      "id": "wallet-sidebar-card",
+      "type": "sidebar",
+      "title": "Wallet Balance",
+      "slot": "sidebar"
     },
-    "status": {
-      "path": "dist/status.html",
-      "displayType": "badge",
-      "title": "Today's Agenda Count"
+    {
+      "id": "wallet-main-history",
+      "type": "main",
+      "title": "Transactions & Lightning Channels",
+      "slot": "main"
     }
-  }
+  ]
 }
 ```
 
-* **Full View:** Mounted in `main_viewport` when user navigates to Calendar.
-* **Widget:** Mounted into a widget grid / dashboard card slot alongside other mini-app widgets.
-* **Badge / Status:** Mounted in the Root Shell's menu bar or dock to show upcoming event notifications.
-
 ---
 
-## 5. Theme & Design Token Injection
+## 5. Host Remote DOM Component Library
 
-To maintain visual cohesion across diverse plugins without breaking sandboxing:
+To enforce visual consistency and maintain security boundaries, the Host provides a standardized set of custom elements for guest plugins:
 
-1. **CSS Variables Synchronization:** On handshake, the Host injects the active color palette, typography tokens, border radii, and spacing variables into the plugin context.
-2. **Dynamic Mode Switching:** When the user switches between Light/Dark mode or changes accent colors, the Host emits an `omni.theme.changed` event over IPC.
-3. **`@omni/sdk/theme.css`:** Plugins can import default standard CSS variables (e.g., `var(--omni-bg-primary)`, `var(--omni-accent)`, `var(--omni-text-primary)`), allowing widgets to blend seamlessly into whichever Root Shell the user selects.
+```html
+<ui-card>
+  <ui-header>
+    <ui-icon name="zap"></ui-icon>
+    <ui-text variant="heading">21,000 sats</ui-text>
+  </ui-header>
+  <ui-body>
+    <ui-text variant="caption">Connected to Alby Bunker</ui-text>
+    <ui-button variant="primary" id="btn-send">Send Zap</ui-button>
+  </ui-body>
+</ui-card>
+```
+
+### Design Token Inheritance
+Because Remote DOM projects elements directly into the Host's DOM tree:
+* All host CSS variables (`--color-background`, `--color-surface`, `--color-primary`, `--font-sans`, `--radius-md`) are automatically inherited.
+* Mode changes (Light/Dark mode) apply instantly to all plugin components without any IPC broadcast or manual re-styling.
+* Font rendering, line heights, and smooth animations match the native default client perfectly.

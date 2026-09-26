@@ -23,8 +23,8 @@ Rather than plugins importing or calling each other directly, they declare capab
 |  (Mode 1: Headless RPC)           (Mode 2: Interactive UI)             (Mode 3: Pub/Sub)      |
 |         v                                    v                                    v           |
 |  +---------------------+          +----------------------+             +-------------------+  |
-|  | 1:1 Request/Reply   |          | Temporary Sheet/Modal|             | 1:Many Broadcast  |  |
-|  | (Data query/calc)   |          | (User action/flow)   |             | (Event bus)       |  |
+|  | 1:1 Request/Reply   |          | Remote DOM Modal/Sheet|            | 1:Many Broadcast  |  |
+|  | (Data query/calc)   |          | (Native User Flow)   |             | (Event bus)       |  |
 |  +---------------------+          +----------------------+             +-------------------+  |
 +-----------------------------------------------------------------------------------------------+
 ```
@@ -44,14 +44,15 @@ Used when a plugin needs data or computation from a background service or utilit
   });
   ```
 
-### 2.2. Modality 2: Interactive UI Intents (User Flow / Modal / Sheet)
-Used when an intent requires user confirmation, visual interaction, or complex input.
+### 2.2. Modality 2: Interactive UI Intents (Native Remote DOM Modal / Sheet)
+Used when an intent requires user confirmation, visual interaction, or complex input (e.g. Zap payment, media picker).
 * **Flow:**
-  1. Initiating plugin dispatches UI intent (e.g. `wallet.send-payment`).
-  2. Omni Host temporarily mounts the target plugin's intent entry point in a floating modal or slide-over sheet.
-  3. The user interacts directly with the target plugin UI (e.g. confirms satoshi amount, enters PIN).
-  4. Target plugin completes the flow and returns result via `omni.intents.completeUI(result)`.
-  5. Omni Host unmounts the modal and resolves the promise on the caller plugin.
+  1. Initiating plugin or native shell dispatches UI intent (e.g. `wallet.send-payment`).
+  2. Omni Host opens a native modal or slide-over sheet container.
+  3. The target plugin projects its interactive UI component directly into this container using **Shopify Remote DOM**.
+  4. The user interacts directly with the projected elements (native buttons, input fields, satoshi slider) with host design system styles and animations.
+  5. Target plugin completes the flow and returns the result via `omni.intents.completeUI(result)`.
+  6. Omni Host closes the modal and resolves the promise on the caller plugin.
 * **Example:**
   ```typescript
   const paymentReceipt = await omni.intents.dispatch("wallet.pay-invoice", {
@@ -93,8 +94,8 @@ flowchart TD
     
     C -- >1 Handlers Installed --> I{User Has Set Default?}
     I -- Yes --> H
-    I -- No --> J[Display 'Open With...' System Chooser]
-    J --> K[User Selects Plugin + Optional 'Always']
+    I -- No --> J[Display Open With... System Chooser]
+    J --> K[User Selects Plugin + Optional Always]
     K --> H
 ```
 

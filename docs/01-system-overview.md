@@ -2,16 +2,17 @@
 
 ## 1. Executive Summary
 
-**Omni** is an open-source, modular, micro-frontend Nostr client and runtime shell where the entire user interface, navigation chrome, workflows, and feature sets are built as isolated, swappable mini-app plugins. 
+**Omni** is an open-source, extensible Nostr web application and runtime engine. It unifies a **first-class native Nostr web client**—complete with a live timeline feed, note composer, identity management, and theme system—with an isolated, multi-widget **sandboxed plugin runtime**.
 
-Traditional Nostr clients hard-code their user experience (feeds, chat, media viewers, settings) into monolithic applications. Omni breaks this paradigm by acting as a lightweight **Nostr micro-kernel and host runtime**. 
+Traditional Nostr clients face a false dichotomy:
+1. **Monolithic clients:** Fast and cohesive, but completely rigid. Users cannot add custom sidebar tools, dock mini-apps, alternative feed algorithms, or custom media viewers without forking the entire codebase.
+2. **Iframe-based micro-frontends:** Highly modular, but visually disjointed, plagued by nested scrollbars, modal clipping, theme mismatches, and severe performance overhead from heavy iframe layouts.
 
-Omni's core handles only the fundamental operating system-level primitives:
-1. **Nostr Protocol Management:** Relay pool connections, NIP-65 gossip routing, subscription deduplication, and local event caching.
-2. **Key Security & Cryptography:** Zero-trust key custody, hardware/extension/bunker signing, and NIP-04/44 encryption/decryption.
-3. **Capability & Access Control (ACL):** Sandboxing plugins with strict Content Security Policies and granular user-granted permissions per event kind, intent, and egress target.
-4. **Local Intent Engine:** An asynchronous inter-plugin message broker enabling composable cross-app workflows (e.g. sharing media, opening zaps, navigating events, viewing profiles).
-5. **Slot-Based Layout Engine:** A minimalist mounting system allowing a Root Shell Plugin to compose widgets, viewports, docks, and modals without rendering traps.
+Omni solves this by adopting **Shopify Remote DOM (`@remote-dom/core`)** for UI projection paired with a **zero-trust micro-kernel**:
+- The **Host Web App** provides a polished, responsive default client with real native DOM nodes and design tokens.
+- **Plugins** execute safely inside sandboxed environments (sandboxed iframes or Web Workers with `connect-src 'none'`).
+- Instead of rendering isolated iframes, plugins construct lightweight remote element trees. These trees are serialized across a `MessageChannel` and projected directly into the Host's native layout slots (`dock`, `sidebar`, `main`, and custom widget slots).
+- Plugins gain full modularity with multiple component contributions (`icon`, `sidebar`, `main`, `widget`) while the user enjoys a seamless, unified, accessible native UI.
 
 ---
 
@@ -19,33 +20,48 @@ Omni's core handles only the fundamental operating system-level primitives:
 
 ```
 +---------------------------------------------------------------------------------------------------+
-|                                             OMNI CORE                                             |
+|                                        OMNI HOST WEB APP                                          |
 |                                                                                                   |
 |  +---------------------------------------------------------------------------------------------+  |
-|  |                                  Layout & Slot Manager                                      |  |
-|  |       (Mounts Sandboxes, Orchestrates Viewports, Auto-sizes Dynamic Frames & Widgets)       |  |
+|  |  Native Default Client UI                                                                   |  |
+|  |  - Global Navigation Header & Pubkey Profile Status                                         |  |
+|  |  - Primary Timeline Feed (Instant 0ms IDB Cache + Live Relay Multiplexer)                   |  |
+|  |  - Note Composer (Sign, Tag, Broadcast)                                                     |  |
+|  |  - Native Layout Slots: [slot: dock]  [slot: sidebar]  [slot: main]  [slot: custom]        |  |
 |  +---------------------------------------------------------------------------------------------+  |
 |                                                  |                                                |
 |  +-----------------------------------------------+------------------------------------------+  |
-|  |                                       Runtime Broker                                     |  |
-|  |                                                                                          |  |
+|  |                                  Host Remote DOM Engine                                  |  |
+|  |   - RemoteReceiver per slot / widget container                                           |  |
+|  |   - Projects guest elements to real DOM custom elements (<ui-button>, <ui-card>, etc.)    |  |
+|  |   - Inherits host CSS theme variables, fluid layout grid, native scroll, zero clip bugs   |  |
+|  +-----------------------------------------------+------------------------------------------+  |
+|                                                  |                                                |
+|  +-----------------------------------------------+------------------------------------------+  |
+|  |                                      Host Kernel Broker                                  |  |
 |  |   +------------------------------------+           +---------------------------------+   |  |
-|  |   |           Intent Engine            |           |    Permission & ACL Manager     |   |  |
-|  |   |  (Unicast RPC, UI Sheets, Pub/Sub) |           |  (Kind Policies, Intent Grants) |   |  |
+|  |   |           Intent Broker            |           |    Permission & ACL Manager     |   |  |
+|  |   |  (Unicast RPC, UI Sheets, Pub/Sub) |           |  (Kind Policies, Storage, Sign) |   |  |
 |  |   +------------------------------------+           +---------------------------------+   |  |
 |  +---------------------------------------+--------------------------------------------------+  |
 |                                          |                                                        |
-|                    postMessage RPC Bus   |  (Strict CSP: connect-src 'none')                      |
+|        Dual-Port MessageChannel          |  Strict CSP: connect-src 'none'                        |
+|  [Port 1: Remote DOM | Port 2: JSON-RPC] |                                                        |
 |                                          v                                                        |
 |       +---------------------------------------------------------------------+                     |
 |       |                     Sandboxed Execution Boundary                    |                     |
-|       |  +--------------------------+        +---------------------------+  |                     |
-|       |  |   Root Shell Plugin      |        |    Feature Plugins        |  |                     |
-|       |  |   (Nav, Chrome, Slots)   |        | (Feed, Chat, Notes, etc.) |  |                     |
-|       |  +--------------------------+        +---------------------------+  |                     |
-|       |  |   Widget Components      |        |    Background Workers     |  |                     |
-|       |  | (Status bar, Mini-player)|        | (Indexers, Notifications) |  |                     |
-|       |  +--------------------------+        +---------------------------+  |                     |
+|       |                     (Hidden Iframe or Web Worker)                   |                     |
+|       |                                                                     |                     |
+|       |  +---------------------------------------------------------------+  |                     |
+|       |  |  Plugin Bundle (e.g. Zap Wallet / Media Player / Chat)        |  |                     |
+|       |  |                                                               |  |                     |
+|       |  |  Exported Components:                                         |  |                     |
+|       |  |  - Icon Component    --> Remote DOM Root (Dock slot)          |  |                     |
+|       |  |  - Sidebar Component --> Remote DOM Root (Sidebar slot)       |  |                     |
+|       |  |  - Main Component    --> Remote DOM Root (Main view slot)     |  |                     |
+|       |  |                                                               |  |                     |
+|       |  |  Zero bundled SDK: Uses injected window.nostr & window.omni   |  |                     |
+|       |  +---------------------------------------------------------------+  |                     |
 |       +---------------------------------------------------------------------+                     |
 |                                          |                                                        |
 |  +---------------------------------------+--------------------------------------------------+  |
@@ -64,17 +80,31 @@ Omni's core handles only the fundamental operating system-level primitives:
                                    [ Global Nostr Relay Network ]
 ```
 
-### 1. Everything is a Plugin
-The Omni core renders zero end-user application views. Even the default navigation header, sidebar dock, feed reader, and user profile page are standalone plugins. If a user prefers a tiled dashboard layout over a mobile-style column layout, they simply swap the Root Layout plugin.
+### 1. Polished Native Experience Out of the Box
+Omni is not a blank canvas. It ships with a complete, performant Nostr client featuring a default timeline feed, note composer, identity keys, and theme controls. Users get immediate utility on first load, with the ability to progressively customize and extend the client with plugins.
 
-### 2. Nostr-Native Zero-Trust Runtime
-Plugins never touch raw private keys (`nsec`), never open unmediated WebSocket connections, and cannot make arbitrary network calls. All interactions with the Nostr protocol and external networks are governed by the Omni Capability Broker.
+### 2. Multi-Widget Component Architecture
+A plugin is not restricted to a single full-page window. A single plugin (for example, a Bitcoin/Lightning wallet) can register:
+* An **`icon`** widget: A status icon in the dock showing connection status or unread counts.
+* A **`sidebar`** widget: A quick glance at balances and recent transactions.
+* A **`main`** component: A full transaction history and routing explorer.
+* A **`widget`** component: A floating quick-pay card embeddable in any custom layout slot.
 
-### 3. Local-First Responsiveness
-Omni integrates an embedded IndexedDB local event store. Subscriptions are answered instantaneously from local storage while delta updates stream concurrently from Gossip/NIP-65 relays.
+### 3. Remote DOM: Sandboxing Without Iframe Traps
+Instead of wrapping each widget in its own isolated `<iframe>`, plugins run inside a headless sandbox (iframe or Web Worker) and construct UI using **Shopify Remote DOM**.
+- The guest sandbox creates a remote element tree.
+- Mutations stream over a dedicated `MessagePort`.
+- The Host attaches a `RemoteReceiver` to the target slot and renders real, native DOM elements.
+- UI elements naturally adapt to host CSS themes, responsive grid containers, keyboard navigation, and native scrolling without nested scrollbar bugs or modal clipping.
 
-### 4. Intent-Driven Composition
-Instead of hard-coded API integrations, plugins interact using standard semantic Intents (e.g., `omni.intents.dispatch("wallet.send-payment", { amount: 2100 })`). If multiple wallet plugins are installed, Omni provides a system chooser dialog, maintaining complete modularity.
+### 4. Zero-Trust Security Boundary
+Plugins never handle raw private keys (`nsec`), cannot open raw WebSocket connections, and are restricted by strict CSP (`connect-src 'none'`). All cryptographic operations, Nostr relay queries, storage access, and cross-plugin communications must pass through Omni's capability-checked JSON-RPC broker.
+
+### 5. Local-First Responsiveness
+Omni integrates an embedded IndexedDB local event store. Timeline subscriptions hit local storage instantly (0ms), while delta updates stream concurrently from Gossip/NIP-65 relays.
+
+### 6. Host-Injected Standard Runtime (Zero Bundle Bloat)
+Plugins never bundle an IPC library or proprietary SDK into their builds. Instead, the sandbox environment injects standard `window.nostr` (NIP-07) for signing/crypto and `window.omni` for component registration and subscriptions. Plugins only require `@omni/types` as a devDependency, ensuring tiny bundle sizes, instant forward-compatibility upgrades, and drop-in support for standard Nostr libraries.
 
 ---
 
@@ -83,9 +113,10 @@ Instead of hard-coded API integrations, plugins interact using standard semantic
 | Subsystem | Primary Role | Reference Document |
 | :--- | :--- | :--- |
 | **Host Core & Kernel** | Manages application state, plugin life cycles, and capability permissions. | [02-host-core-and-kernel.md](02-host-core-and-kernel.md) |
-| **Sandbox & IPC** | Enforces iframe / Web Worker isolation, CSP egress rules, and JSON-RPC 2.0 communication. | [03-sandbox-and-ipc-spec.md](03-sandbox-and-ipc-spec.md) |
-| **Layout & Widget Engine** | Powers plugin-defined layouts, slot registration, and bidirectional auto-resizing. | [04-layout-and-widget-engine.md](04-layout-and-widget-engine.md) |
+| **Sandbox & IPC** | Enforces sandbox isolation, CSP egress rules, and dual-channel MessageChannel IPC. | [03-sandbox-and-ipc-spec.md](03-sandbox-and-ipc-spec.md) |
+| **Layout & Remote DOM** | Native slot system (`dock`, `sidebar`, `main`, `widget`) and Remote DOM element projection. | [04-layout-and-widget-engine.md](04-layout-and-widget-engine.md) |
 | **Nostr Relay & Cache** | Coordinates WebSocket pools, NIP-65 outbox routing, subscription deduplication, and local DB caching. | [05-nostr-relay-and-cache-layer.md](05-nostr-relay-and-cache-layer.md) |
-| **Intent Engine** | Brokers Unicast RPC, Interactive UI Sheets/Modals, and Pub/Sub broadcasts between plugins. | [06-intent-protocol-spec.md](06-intent-protocol-spec.md) |
+| **Intent Engine** | Brokers Unicast RPC, Remote DOM UI Sheets/Modals, and Pub/Sub broadcasts between plugins. | [06-intent-protocol-spec.md](06-intent-protocol-spec.md) |
 | **Key & Security Model** | Orchestrates WebCrypto, NIP-07, and NIP-46 signers, and enforces NIP-04/44 encryption ACLs. | [07-key-and-security-model.md](07-key-and-security-model.md) |
-| **Plugin Developer SDK** | Developer tooling, manifest formats, `@omni/sdk` APIs, and NIP-78/89 distribution. | [08-plugin-developer-guide.md](08-plugin-developer-guide.md) |
+| **Plugin Developer Guide** | Declarative manifest specification (`omni.manifest.json`), host-injected runtime (`window.omni`/`window.nostr`), and `@omni/types`. | [08-plugin-developer-guide.md](08-plugin-developer-guide.md) |
+

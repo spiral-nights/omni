@@ -2,15 +2,15 @@
 
 ## 1. Local-First Nostr Engine Architecture
 
-In Omni, network relay queries and data access are decoupled from individual plugins. Omni implements a **Local-First Event Store + Outbox/Gossip Multiplexer**.
+In Omni, relay queries, event subscriptions, and caching are unified into a single host-level subsystem. Both the **native default feed in the Omni Web App** and all **sandboxed plugin widgets** share this exact same local-first Nostr engine and IndexedDB event store.
 
 ```
 +-----------------------------------------------------------------------------------------------+
 |                                      Omni Nostr Subsystem                                     |
 |                                                                                               |
 |  +-----------------------------------------------------------------------------------------+  |
-|  |                            Plugin Subscription Broker                                   |  |
-|  |       (Receives REQ filters from plugins, maps subscription IDs, verifies ACLs)         |  |
+|  |                            Unified Subscription Coordinator                             |  |
+|  |       (Coordinates requests from Native Shell Feed and Sandboxed Plugin Components)     |  |
 |  +-----------------------------------------------------------------------------------------+  |
 |                   |                                                         |                 |
 |       (1) Immediate Local Query                                 (2) Multiplexed Relay Sync    |
@@ -34,7 +34,7 @@ In Omni, network relay queries and data access are decoupled from individual plu
 |                   v                                                         v                 |
 |  +-----------------------------------------------------------------------------------------+  |
 |  |                             Event Ingestion & Deduplication Pipeline                    |  |
-|  |                 (Cryptographic Sig Check -> Store in IDB -> Stream to Plugins)          |  |
+|  |                 (Cryptographic Sig Check -> Store in IDB -> Stream to UI & Plugins)     |  |
 |  +-----------------------------------------------------------------------------------------+  |
 +-----------------------------------------------------------------------------------------------+
 ```
@@ -43,18 +43,18 @@ In Omni, network relay queries and data access are decoupled from individual plu
 
 ## 2. Local-First 0ms Query Pipeline
 
-When any plugin requests a subscription (`omni.nostr.subscribe(filters)`):
+When the native feed loads or when any plugin requests a subscription (`omni.nostr.subscribe(filters)`):
 
 1. **Phase 1: Local Cache Lookup (0ms):**
    * Omni queries the local IndexedDB database matching the filters.
-   * Cached events are sorted and immediately dispatched to the plugin with `{ fromCache: true }`.
-   * The plugin UI renders instantly without waiting for network round-trips.
+   * Cached events are sorted chronologically and immediately dispatched to the UI with `{ fromCache: true }`.
+   * The feed/widget renders instantaneously without waiting for network round-trips.
 2. **Phase 2: Network Delta Query:**
    * Omni computes the newest `created_at` timestamp present in the cache for those filters (`since: max_timestamp`).
    * Omni multiplexes the delta filter across the appropriate Nostr relays.
 3. **Phase 3: Live Streaming & Cache Ingestion:**
-   * As new events arrive from relays, they pass signature and schema verification, are saved to IndexedDB, and stream to the plugin with `{ fromCache: false }`.
-   * When relays report `EOSE`, Omni forwards the EOSE notification to the plugin.
+   * As new events arrive from relays, they pass signature and schema verification, are saved to IndexedDB, and stream to the UI with `{ fromCache: false }`.
+   * When relays report `EOSE`, Omni forwards the EOSE notification to the subscriber.
 
 ---
 
@@ -113,11 +113,11 @@ Rather than forcing all queries through a static list of 5-10 relays, Omni dynam
 
 ## 5. Filter Multiplexing & Deduplication
 
-When multiple plugins request overlapping filters (e.g., Feed Plugin and Notification Plugin both requesting `kind: 1` or profile metadata `kind: 0` for the same pubkeys):
+When multiple UI components or plugins request overlapping filters (e.g., Default Feed, Sidebar Trending Widget, and Chat Plugin all requesting `kind: 1` or profile metadata `kind: 0` for the same pubkeys):
 
 1. **Filter Merging:** Omni merges identical filters over the shared WebSocket channel into a single Nostr `REQ`.
-2. **Fan-Out Dispatch:** When an event arrives on the socket, Omni checks which active plugin subscriptions match the event's tags, kind, and author, broadcasting it to all eligible sandboxes simultaneously.
-3. **Tear-Down:** When a plugin unsubscribes, the host only closes the relay `REQ` if no other plugin is currently listening to that filter subset.
+2. **Fan-Out Dispatch:** When an event arrives on the socket, Omni checks which active subscriptions match the event's tags, kind, and author, broadcasting it to all eligible subscribers simultaneously.
+3. **Tear-Down:** When a subscriber unsubscribes, the host only closes the relay `REQ` if no other component or plugin is currently listening to that filter subset.
 
 ---
 
@@ -125,5 +125,5 @@ When multiple plugins request overlapping filters (e.g., Feed Plugin and Notific
 
 To prevent IndexedDB from growing unbounded on web platforms:
 * **Replaceable Events (NIP-01, NIP-16, NIP-33):** Newer versions of kind 0, 3, 10002, and 30000+ automatically overwrite/delete older versions.
-* **Ephemeral Events (kind 20000-29999):** Dispatched to plugins in memory and **never written** to IndexedDB.
+* **Ephemeral Events (kind 20000-29999):** Dispatched in memory and **never written** to IndexedDB.
 * **LRU Pruning:** An automated background job prunes regular events (e.g. kind 1 notes older than 30 days) if local storage exceeds a configurable threshold (e.g. 250MB), retaining pinned and favorited items.
