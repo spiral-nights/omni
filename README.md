@@ -168,6 +168,12 @@ When you open **http://localhost:3000**:
 
 ---
 
+## Issues & Roadmap
+
+For active tracked issues, UX enhancements, and feature roadmaps (including custom slot layouts, relay management, profile view, and refined iconography), see **[ISSUES_AND_ROADMAP.md](ISSUES_AND_ROADMAP.md)**.
+
+---
+
 ## License
 
 [MIT](LICENSE)
