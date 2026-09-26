@@ -7,59 +7,45 @@ Every Omni plugin is defined by a clean, declarative JSON manifest declaring its
 ```json
 {
   "$schema": "https://omni.run/schema/v1/manifest.json",
-  "id": "com.example.wallet",
-  "name": "Zap Wallet",
+  "id": "org.omni.plugins.checklist",
+  "name": "Daily Checklist",
   "version": "1.0.0",
-  "description": "Lightning wallet widget, balance tracker, and payment intent handler",
+  "description": "Interactive to-do and checklist widget with local persistence",
   "author": {
-    "name": "Alice",
-    "pubkey": "3bf0c63fcb93463407af97b5e0918838e6fb709e4693b0110d96049f1e70bcbc",
-    "nip05": "alice@example.com"
+    "name": "Omni Team",
+    "pubkey": "3bf0c63fcb93463407af97b5e0918838e6fb709e4693b0110d96049f1e70bcbc"
   },
-  "icon": "zap",
+  "icon": "check-square",
   "entry": "dist/bundle.js",
 
   "components": [
     {
-      "id": "wallet-dock-icon",
+      "id": "checklist-dock-icon",
       "type": "icon",
-      "title": "Zap Wallet",
+      "title": "Checklist",
       "slot": "dock",
-      "defaultProps": { "showBadge": true }
+      "defaultProps": { "badgeCount": 3 }
     },
     {
-      "id": "wallet-sidebar-balance",
+      "id": "checklist-sidebar-widget",
       "type": "sidebar",
-      "title": "Wallet Balance",
+      "title": "Tasks Today",
       "slot": "sidebar"
     },
     {
-      "id": "wallet-main-transactions",
+      "id": "checklist-main-dashboard",
       "type": "main",
-      "title": "Transaction History",
+      "title": "Task Manager",
       "slot": "main"
-    },
-    {
-      "id": "wallet-quick-pay",
-      "type": "widget",
-      "title": "Quick Pay Card",
-      "slot": "custom"
     }
   ],
 
   "permissions": {
-    "nostr": {
-      "read": { "kinds": [1, 9734, 9735] },
-      "write": { "kinds": [9734] },
-      "sign": true,
-      "encrypt": true
-    },
     "storage": {
-      "quotaMb": 5
+      "quotaMb": 2
     },
     "intents": {
-      "call": ["social.view-profile"],
-      "handle": ["wallet.send-payment", "wallet.get-balance"]
+      "handle": ["tasks.create-item"]
     }
   }
 }
@@ -123,37 +109,80 @@ const signedEvent = await window.nostr.signEvent({
 Instead of serving HTML files in iframes, plugins register render functions for each declared component using Shopify Remote DOM:
 
 ```typescript
-// 1. Register Dock Icon Component
-omni.registerComponent("wallet-dock-icon", (root) => {
+// 1. Register Dock Icon with dynamic badge count
+omni.registerComponent("checklist-dock-icon", ({ root, props }) => {
   const icon = root.createElement("ui-icon");
-  icon.setAttribute("name", "zap");
+  icon.setAttribute("name", "check-square");
+  if (props.badgeCount > 0) {
+    const badge = root.createElement("ui-badge");
+    badge.textContent = String(props.badgeCount);
+    icon.appendChild(badge);
+  }
   icon.addEventListener("click", () => {
     omni.ui.toggleSlot("sidebar");
   });
   root.appendChild(icon);
 });
 
-// 2. Register Sidebar Balance Widget
-omni.registerComponent("wallet-sidebar-balance", (root) => {
+// 2. Register Sidebar Checklist Widget
+omni.registerComponent("checklist-sidebar-widget", async ({ root }) => {
   const card = root.createElement("ui-card");
   
   const header = root.createElement("ui-header");
-  header.textContent = "Lightning Balance";
+  header.textContent = "Today Tasks";
   
-  const balance = root.createElement("ui-text");
-  balance.setAttribute("variant", "heading");
-  balance.textContent = "⚡ 21,500 sats";
+  // Task input form
+  const inputRow = root.createElement("ui-row");
+  const input = root.createElement("ui-input");
+  input.setAttribute("placeholder", "Add a new task...");
+  const addBtn = root.createElement("ui-button");
+  addBtn.setAttribute("variant", "primary");
+  addBtn.textContent = "Add";
   
-  const payBtn = root.createElement("ui-button");
-  payBtn.setAttribute("variant", "primary");
-  payBtn.textContent = "Send Payment";
-  payBtn.addEventListener("click", async () => {
-    await omni.intents.dispatch("wallet.send-payment", { amount: 1000 });
+  inputRow.appendChild(input);
+  inputRow.appendChild(addBtn);
+  
+  // Tasks list container
+  const taskList = root.createElement("ui-list");
+  
+  // Load tasks from scoped IndexedDB storage
+  const tasks = (await omni.storage.get("tasks")) || [
+    { id: 1, text: "Welcome to Omni!", done: false }
+  ];
+
+  function renderTasks() {
+    taskList.replaceChildren();
+    tasks.forEach((t) => {
+      const item = root.createElement("ui-list-item");
+      const checkbox = root.createElement("ui-checkbox");
+      if (t.done) checkbox.setAttribute("checked", "true");
+      checkbox.addEventListener("change", async () => {
+        t.done = !t.done;
+        await omni.storage.set("tasks", tasks);
+        renderTasks();
+      });
+      const text = root.createElement("ui-text");
+      text.textContent = t.text;
+      if (t.done) text.setAttribute("strikethrough", "true");
+      item.appendChild(checkbox);
+      item.appendChild(text);
+      taskList.appendChild(item);
+    });
+  }
+
+  addBtn.addEventListener("click", async () => {
+    const val = input.value?.trim();
+    if (!val) return;
+    tasks.push({ id: Date.now(), text: val, done: false });
+    await omni.storage.set("tasks", tasks);
+    input.value = "";
+    renderTasks();
   });
 
+  renderTasks();
   card.appendChild(header);
-  card.appendChild(balance);
-  card.appendChild(payBtn);
+  card.appendChild(inputRow);
+  card.appendChild(taskList);
   root.appendChild(card);
 });
 ```

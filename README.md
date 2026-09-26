@@ -10,7 +10,7 @@ Omni combines a **high-performance, native Nostr web client** (complete with a d
 
 | Subsystem | Architectural Approach | Key Technologies |
 | :--- | :--- | :--- |
-| **Default Client & Web App** | Modern Native Nostr Web App | Fast timeline feed, note composer, identity profile, theme engine |
+| **Default Client & Web App** | Mobile-First Native Web App | Fast timeline feed, note composer, "Warm Paper Dark" design tokens |
 | **UI Projection** | Remote DOM (Zero Iframe Traps) | Shopify `@remote-dom/core`, native host element rendering, theme token inheritance |
 | **Component Types** | Multi-Widget Contribution System | `icon` (dock/bar), `sidebar` (panel/tool), `main` (full view), `widget` (custom slot) |
 | **Sandboxing** | Zero-Trust Isolated Sandbox | Sandboxed `iframe` / Web Worker, strict CSP (`connect-src 'none'`), `MessageChannel` |
@@ -104,6 +104,11 @@ Detailed specifications and architectural deep-dives are documented under the [`
    * Declarative `omni.manifest.json` schema and multi-component declarations.
    * Host-injected runtime (`window.omni` & `window.nostr`), `@omni/types`, and Remote DOM.
    * Complete example plugin with dock icon, sidebar widget, and main view.
+
+9. **[09. Design System & Aesthetic Specification](docs/09-design-system-and-tokens.md)**
+   * Mobile-first responsive layout and bottom navigation dock.
+   * "Warm Paper Dark" aesthetic tokens (warm graphite `#191816`, parchment ivory `#ede8df`, sandstone `#d4a373`).
+   * Standard styling for host Remote DOM custom elements.
 
 ---
 

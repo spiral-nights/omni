@@ -12,8 +12,8 @@ Omni departs from traditional micro-frontend architectures by eliminating nested
 |  | [Slot: 'dock']     | [Slot: 'main']                            | [Slot: 'sidebar']      |  |
 |  |                    |                                           |                        |  |
 |  | * Home Feed Icon   | * Native Timeline Feed (Default)          | * Trending Topics      |  |
-|  | * Wallet Icon (P1) | * Active Main Plugin View (e.g. Chat/Map) | * Wallet Balance (P1)  |  |
-|  | * Media App (P2)   |                                           | * Active Media Mini-Pl |  |
+|  | * Checklist (P1)   | * Active Main Plugin View (e.g. Tasks)    | * Tasks Checklist (P1) |  |
+|  | * Timer (P2)       |                                           | * Pomodoro Timer (P2)  |  |
 |  +--------------------+-------------------------------------------+------------------------+  |
 |                                                  |                                            |
 |                               RemoteReceiver per Slot Container                               |
@@ -23,7 +23,7 @@ Omni departs from traditional micro-frontend architectures by eliminating nested
 |  +-----------------------------------------------------------------------------------------+  |
 |  |                              Isolated Sandbox (Iframe / Worker)                         |  |
 |  |                                                                                         |  |
-|  |  Plugin Bundle (e.g. Zap Wallet Plugin)                                                 |  |
+|  |  Plugin Bundle (e.g. Daily Checklist Plugin)                                                 |  |
 |  |  - RemoteRoot("wallet-icon")    -----> Projects to Slot 'dock'                          |  |
 |  |  - RemoteRoot("wallet-balance") -----> Projects to Slot 'sidebar'                       |  |
 |  |  - RemoteRoot("wallet-tx-view") -----> Projects to Slot 'main'                          |  |
@@ -70,29 +70,29 @@ A single plugin can contribute multiple distinct components across different slo
 ```json
 {
   "$schema": "https://omni.run/schema/v1/manifest.json",
-  "id": "org.nostr.wallet",
-  "name": "Zap Wallet",
+  "id": "org.omni.plugins.checklist",
+  "name": "Daily Checklist",
   "version": "1.0.0",
   "entry": "dist/plugin.js",
 
   "components": [
     {
-      "id": "wallet-dock-icon",
+      "id": "checklist-dock-icon",
       "type": "icon",
-      "title": "Zap Wallet",
+      "title": "Daily Checklist",
       "slot": "dock",
       "defaultProps": { "showBadge": true }
     },
     {
-      "id": "wallet-sidebar-card",
+      "id": "checklist-sidebar-widget",
       "type": "sidebar",
-      "title": "Wallet Balance",
+      "title": "Today Tasks",
       "slot": "sidebar"
     },
     {
-      "id": "wallet-main-history",
+      "id": "checklist-main-dashboard",
       "type": "main",
-      "title": "Transactions & Lightning Channels",
+      "title": "Task Manager",
       "slot": "main"
     }
   ]
@@ -118,8 +118,8 @@ To enforce visual consistency and maintain security boundaries, the Host provide
 </ui-card>
 ```
 
-### Design Token Inheritance
+### Design Token Inheritance & "Warm Paper Dark" Theme
 Because Remote DOM projects elements directly into the Host's DOM tree:
-* All host CSS variables (`--color-background`, `--color-surface`, `--color-primary`, `--font-sans`, `--radius-md`) are automatically inherited.
+* All host CSS variables defined in [09-design-system-and-tokens.md](09-design-system-and-tokens.md) (`--omni-bg-canvas`, `--omni-bg-surface`, `--omni-text-primary`, `--omni-accent-primary`, `--omni-radius-md`) are automatically inherited.
 * Mode changes (Light/Dark mode) apply instantly to all plugin components without any IPC broadcast or manual re-styling.
 * Font rendering, line heights, and smooth animations match the native default client perfectly.
