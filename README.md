@@ -112,6 +112,62 @@ Detailed specifications and architectural deep-dives are documented under the [`
 
 ---
 
+## Getting Started & Running Omni
+
+### 1. Prerequisites
+- **Node.js** >= 20.0.0
+- **pnpm** >= 9.0.0 (or pnpm 12)
+
+### 2. Install Dependencies
+```bash
+pnpm install
+```
+
+### 3. Build Packages
+Build all monorepo packages (`@omni/types`, `@omni/core`, plugins, and `@omni/web`):
+```bash
+pnpm build
+```
+
+### 4. Run Automated Test Suite
+Run the unit and integration tests across crypto, 0ms IndexedDB event storage, ACL capability engine, and standard HTML Remote DOM projection:
+```bash
+pnpm test
+```
+
+### 5. Launch Development Server
+Start the local Omni web application:
+```bash
+pnpm dev
+```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser (or use mobile device emulation in browser dev tools for the mobile experience).
+
+### 6. Or Run Production Preview
+```bash
+pnpm --filter @omni/web preview
+```
+
+---
+
+## Exploring the MVP
+
+When you open **http://localhost:3000**:
+1. **0ms Cached Feed & Schnorr Signing:**
+   - On first load, Omni generates a guest Schnorr keypair via Noble secp256k1 and displays your `npub...` in the header. Click the pill to copy your public key.
+   - Type a message in the note composer and click **Publish Note** (or press `Cmd+Enter` / `Ctrl+Enter`). Your note is signed in WebCrypto, stored in local IndexedDB (0ms query), and published to connected relays.
+2. **Mobile Dock & Widgets Drawer:**
+   - Notice the dock icons for the two MVP plugins at the bottom (or sidebar on desktop):
+     - **☑️ Daily Checklist:** Displays active task count badge.
+     - **⏱️ Focus Timer (Pomodoro):** Displays live countdown.
+   - Click the **📋 Widgets** button in the dock (or either dock icon) to pull up the slide-up drawer sheet.
+   - In the **Daily Tasks** widget: Add new tasks, toggle checkboxes, or delete items. State persists directly in the plugin's scoped IndexedDB storage.
+   - In the **Focus Timer** widget: Click **Start**, **Pause**, or **Reset** to control the timer. Watch the dock icon badge update dynamically.
+3. **Plugin Manager:**
+   - Click **🧩** in the header or **⚙️ Plugins** in the dock to open the sandboxed Plugin Manager.
+   - Inspect active permissions, verify sandbox isolation, and clear individual plugin storage databases.
+
+---
+
 ## License
 
 [MIT](LICENSE)
