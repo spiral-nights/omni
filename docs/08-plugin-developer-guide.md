@@ -109,12 +109,14 @@ const signedEvent = await window.nostr.signEvent({
 Instead of serving HTML files in iframes, plugins register render functions for each declared component using Shopify Remote DOM:
 
 ```typescript
-// 1. Register Dock Icon with dynamic badge count
+// 1. Register Dock Icon using Standard HTML
 omni.registerComponent("checklist-dock-icon", ({ root, props }) => {
-  const icon = root.createElement("ui-icon");
-  icon.setAttribute("name", "check-square");
+  const icon = root.createElement("button");
+  icon.className = "omni-dock-btn";
+  icon.innerHTML = "<span>☑️</span>";
   if (props.badgeCount > 0) {
-    const badge = root.createElement("ui-badge");
+    const badge = root.createElement("span");
+    badge.className = "badge";
     badge.textContent = String(props.badgeCount);
     icon.appendChild(badge);
   }
@@ -124,26 +126,29 @@ omni.registerComponent("checklist-dock-icon", ({ root, props }) => {
   root.appendChild(icon);
 });
 
-// 2. Register Sidebar Checklist Widget
+// 2. Register Sidebar Checklist Widget using Standard HTML
 omni.registerComponent("checklist-sidebar-widget", async ({ root }) => {
-  const card = root.createElement("ui-card");
+  const container = root.createElement("div");
+  container.className = "checklist-card";
   
-  const header = root.createElement("ui-header");
+  const header = root.createElement("h3");
   header.textContent = "Today Tasks";
   
   // Task input form
-  const inputRow = root.createElement("ui-row");
-  const input = root.createElement("ui-input");
-  input.setAttribute("placeholder", "Add a new task...");
-  const addBtn = root.createElement("ui-button");
-  addBtn.setAttribute("variant", "primary");
+  const inputRow = root.createElement("div");
+  inputRow.className = "input-row";
+  const input = root.createElement("input");
+  input.type = "text";
+  input.placeholder = "Add a new task...";
+  const addBtn = root.createElement("button");
   addBtn.textContent = "Add";
   
   inputRow.appendChild(input);
   inputRow.appendChild(addBtn);
   
   // Tasks list container
-  const taskList = root.createElement("ui-list");
+  const taskList = root.createElement("ul");
+  taskList.className = "task-list";
   
   // Load tasks from scoped IndexedDB storage
   const tasks = (await omni.storage.get("tasks")) || [
@@ -153,20 +158,21 @@ omni.registerComponent("checklist-sidebar-widget", async ({ root }) => {
   function renderTasks() {
     taskList.replaceChildren();
     tasks.forEach((t) => {
-      const item = root.createElement("ui-list-item");
-      const checkbox = root.createElement("ui-checkbox");
-      if (t.done) checkbox.setAttribute("checked", "true");
+      const li = root.createElement("li");
+      const checkbox = root.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = t.done;
       checkbox.addEventListener("change", async () => {
-        t.done = !t.done;
+        t.done = checkbox.checked;
         await omni.storage.set("tasks", tasks);
         renderTasks();
       });
-      const text = root.createElement("ui-text");
+      const text = root.createElement("span");
       text.textContent = t.text;
-      if (t.done) text.setAttribute("strikethrough", "true");
-      item.appendChild(checkbox);
-      item.appendChild(text);
-      taskList.appendChild(item);
+      if (t.done) text.style.textDecoration = "line-through";
+      li.appendChild(checkbox);
+      li.appendChild(text);
+      taskList.appendChild(li);
     });
   }
 
@@ -180,10 +186,10 @@ omni.registerComponent("checklist-sidebar-widget", async ({ root }) => {
   });
 
   renderTasks();
-  card.appendChild(header);
-  card.appendChild(inputRow);
-  card.appendChild(taskList);
-  root.appendChild(card);
+  container.appendChild(header);
+  container.appendChild(inputRow);
+  container.appendChild(taskList);
+  root.appendChild(container);
 });
 ```
 

@@ -33,7 +33,7 @@ Omni solves this by adopting **Shopify Remote DOM (`@remote-dom/core`)** for UI 
 |  +-----------------------------------------------+------------------------------------------+  |
 |  |                                  Host Remote DOM Engine                                  |  |
 |  |   - RemoteReceiver per slot / widget container                                           |  |
-|  |   - Projects guest elements to real DOM custom elements (<ui-button>, <ui-card>, etc.)    |  |
+|  |   - Projects guest elements to standard native HTML elements (<button>, <input>, <div>)   |  |
 |  |   - Inherits host CSS theme variables, fluid layout grid, native scroll, zero clip bugs   |  |
 |  +-----------------------------------------------+------------------------------------------+  |
 |                                                  |                                                |

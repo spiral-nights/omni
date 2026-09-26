@@ -89,14 +89,15 @@ Omni avoids aggressive glowing neons, cold blue-grays, and glossy surfaces. Inst
 
 ---
 
-## 4. Host Remote DOM Component Styling
+## 4. Host Styling for Standard HTML in Slots
 
-The Host provides standardized styles for custom elements projected by plugins via `@remote-dom/core`:
+The Host applies scoped CSS styling to all standard HTML elements projected into slot containers (`.omni-slot`):
 
-| Element | Default Styling | Behavior |
+| Standard HTML Element | Default Styling | Behavior |
 | :--- | :--- | :--- |
-| `<ui-card>` | Background `--omni-bg-surface`, border `1px solid --omni-border-strong`, radius `--omni-radius-md`. | Container for widgets. |
-| `<ui-button>` | Variant `primary`: `--omni-accent-primary` bg with `--omni-accent-contrast` text. Variant `ghost`: Transparent bg, `--omni-text-secondary`. | Touch-friendly target (min-height 38px). |
-| `<ui-input>` | Background `--omni-bg-subtle`, border `--omni-border-subtle`, text `--omni-text-primary`. Focus border `--omni-border-focus`. | Native text input with warm placeholder. |
-| `<ui-checkbox>` | Custom rounded square (`--omni-radius-sm`), sandstone fill with dark checkmark when checked. | Accessible toggle. |
-| `<ui-badge>` | Pill shape, `--omni-status-badge` background, `--omni-accent-contrast` bold text. | Notification or pending task counter. |
+| `<div>`, `<section>`, `<article>` | Inherits `--omni-bg-surface`, border rules, `--omni-radius-md`. | Structural widget container. |
+| `<button>` | Background `--omni-accent-primary`, color `--omni-accent-contrast`, radius `--omni-radius-sm`. | Touch-friendly button (min-height 38px). |
+| `<input type="text">` | Background `--omni-bg-subtle`, border `--omni-border-subtle`, text `--omni-text-primary`. | Native text input with warm placeholder. |
+| `<input type="checkbox">` | Native checkbox styled with `accent-color: var(--omni-accent-primary)`. | Accessible, responsive toggle. |
+| `<span>`, `<p>`, `<h1>`-`<h6>` | Text `--omni-text-primary`, `--omni-font-sans`, high legibility. | Typography hierarchy. |
+| `<ul>`, `<ol>`, `<li>` | Reset list style with custom padding and warm divider lines. | Task lists and menus. |

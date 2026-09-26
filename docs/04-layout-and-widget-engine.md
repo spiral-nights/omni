@@ -44,7 +44,7 @@ In traditional micro-frontend systems, every widget renders inside an `<iframe>`
 
 ### How Shopify Remote DOM Solves This
 * **Headless Sandbox:** The plugin code executes in a single, lightweight sandboxed environment (headless iframe or Web Worker) with zero direct access to the Host DOM.
-* **Serialized UI Tree:** The plugin constructs virtual DOM elements (e.g., `<ui-card>`, `<ui-button>`, `<ui-badge>`, `<ui-text>`) via `@remote-dom/core`.
+* **Serialized UI Tree:** The plugin constructs standard HTML elements (e.g., `<div>`, `<button>`, `<input>`, `<span>`) via `@remote-dom/core`.
 * **Host-Side Native Rendering:** The Host attaches a `RemoteReceiver` to the target slot DOM container. As the plugin updates elements, Remote DOM transmits batched mutation arrays over a `MessagePort`.
 * **Zero Clipping & Native CSS:** The elements are rendered as real DOM elements in the Host page. They inherit the Host's CSS variables, participate in native Flexbox/Grid flow, scale smoothly, support keyboard accessibility, and never get clipped by arbitrary boundaries.
 
@@ -101,22 +101,15 @@ A single plugin can contribute multiple distinct components across different slo
 
 ---
 
-## 5. Host Remote DOM Component Library
+## 5. Standard HTML Rendering & Security Model
 
-To enforce visual consistency and maintain security boundaries, the Host provides a standardized set of custom elements for guest plugins:
+Omni avoids proprietary `<ui-*>` components. Plugins write standard, familiar HTML (`<div>`, `<button>`, `<input>`, `<span>`, `<ul>`, `<li>`), rendered natively in the Host DOM with comprehensive security:
 
-```html
-<ui-card>
-  <ui-header>
-    <ui-icon name="zap"></ui-icon>
-    <ui-text variant="heading">21,000 sats</ui-text>
-  </ui-header>
-  <ui-body>
-    <ui-text variant="caption">Connected to Alby Bunker</ui-text>
-    <ui-button variant="primary" id="btn-send">Send Zap</ui-button>
-  </ui-body>
-</ui-card>
-```
+### 5.1. Security Guarantees
+1. **Isolated Event Execution:** Event listeners (such as `button.addEventListener("click", ...)`) **never run in the host context**. When a user clicks a button in the Host, the host RemoteReceiver serializes an inert event message (`{ type: "event", targetId: 42, eventName: "click" }`) over `MessagePort`. The listener executes 100% inside the sandboxed iframe.
+2. **Tag Allowlist:** The Host RemoteReceiver strictly enforces an allowed tag list (e.g. `div`, `span`, `p`, `button`, `input`, `label`, `ul`, `li`, `h1`-`h6`, `svg`). Executable or dangerous tags (`<script>`, `<iframe>`, `<object>`, `<embed>`, `<link>`) are completely blocked.
+3. **No Ingestion of Inline Scripts:** Remote DOM passes properties as data values, completely preventing string-based XSS or `onclick="..."` injection.
+4. **CSS Containment:** Slot containers enforce CSS containment (`contain: layout paint; position: relative; overflow: auto;`). Even if guest elements use `position: fixed`, they cannot escape the slot bounds or overlay the host UI.
 
 ### Design Token Inheritance & "Warm Paper Dark" Theme
 Because Remote DOM projects elements directly into the Host's DOM tree:
