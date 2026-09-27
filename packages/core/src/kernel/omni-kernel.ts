@@ -8,6 +8,7 @@ import { AclEngine, PermissionPromptHandler } from "../acl/acl-engine.js";
 import { PluginStorageManager } from "../storage/plugin-storage-manager.js";
 import { IntentBroker } from "../intents/intent-broker.js";
 import { SandboxInstance } from "../sandbox/sandbox-manager.js";
+import { NostrPluginResolver, ResolvedNostrPlugin, PublishNsiteOptions } from "../plugins/nostr-plugin-resolver.js";
 
 export interface OmniKernelOptions {
   privateKeyHex?: string;
@@ -208,5 +209,29 @@ export class OmniKernel {
     onEose?: () => void
   ): Promise<() => void> {
     return this.subscriptionCoordinator.subscribe(subId, filters, onEvent, onEose);
+  }
+
+  async resolveNsitePlugin(target: string | NostrEvent): Promise<ResolvedNostrPlugin> {
+    return NostrPluginResolver.resolve(target, {
+      relayPool: this.relayPool,
+      eventStore: this.eventStore
+    });
+  }
+
+  async publishNsitePlugin(
+    manifest: OmniManifest,
+    scriptContent: string,
+    options?: PublishNsiteOptions
+  ): Promise<ResolvedNostrPlugin> {
+    return NostrPluginResolver.publishPlugin(
+      manifest,
+      scriptContent,
+      this.keystore,
+      {
+        relayPool: this.relayPool,
+        eventStore: this.eventStore
+      },
+      options
+    );
   }
 }

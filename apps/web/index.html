@@ -186,11 +186,11 @@
 
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <label style="font-size: 0.82rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 4px;">
-          Plugin Manifest URL:
+          Nostr naddr (NIP-5A) or Manifest URL:
           <input
             id="install-manifest-url"
             type="text"
-            placeholder="https://example.com/omni.manifest.json"
+            placeholder="naddr1... / 35129:pubkey:d-tag / https://..."
             style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 8px 12px; border-radius: var(--omni-radius-sm); font-size: 0.85rem; outline: none;"
           />
         </label>
@@ -206,10 +206,15 @@
           style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 8px 12px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.78rem; outline: none; resize: vertical;"
         ></textarea>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-          <button id="btn-quick-sample-plugin" class="btn-secondary" style="font-size: 0.75rem;">
-            Load Sample Notes Plugin
-          </button>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px;">
+          <div style="display: flex; gap: 6px;">
+            <button id="btn-quick-sample-nostr" class="btn-secondary" style="font-size: 0.75rem;">
+              Load Sample Nostr (naddr)
+            </button>
+            <button id="btn-quick-sample-plugin" class="btn-secondary" style="font-size: 0.75rem;">
+              Load Raw Sample
+            </button>
+          </div>
           <button id="btn-confirm-install" class="btn-publish">
             Install Plugin
           </button>
@@ -243,9 +248,27 @@
 
       <!-- Tab Content 1: Overview -->
       <div id="inspector-pane-overview" style="display: flex; flex-direction: column; gap: 12px;">
+        <!-- Nostr Provenance Banner -->
+        <div id="inspector-nostr-provenance" style="display: none; flex-direction: column; gap: 6px; background: var(--omni-bg-surface); padding: 10px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.75rem; font-weight: 600; color: var(--omni-accent-primary);">✦ Nostr NIP-5A Verified App</span>
+            <span style="font-size: 0.7rem; color: #34d399;">SHA-256 Verified</span>
+          </div>
+          <div style="font-size: 0.75rem; color: var(--omni-text-muted); display: flex; flex-direction: column; gap: 3px;">
+            <div>Author: <code id="inspector-author-npub" style="color: var(--omni-text-primary);"></code></div>
+            <div>Nostr Address: <code id="inspector-naddr" style="color: var(--omni-text-primary); word-break: break-all;"></code></div>
+          </div>
+        </div>
+
         <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem;">
-          <div style="color: var(--omni-text-muted);">Source URL / Origin:</div>
+          <div style="color: var(--omni-text-muted);">Source Origin:</div>
           <div id="inspector-source-url" style="font-family: var(--omni-font-mono); color: var(--omni-accent-primary); word-break: break-all; background: var(--omni-bg-surface); padding: 6px 10px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);"></div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end;">
+          <button id="btn-publish-plugin-nostr" class="btn-secondary" style="font-size: 0.75rem;">
+            Publish / Share to Nostr (NIP-5A)
+          </button>
         </div>
 
         <div>

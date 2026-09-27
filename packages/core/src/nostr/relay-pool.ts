@@ -147,4 +147,49 @@ export class RelayPool {
     }
     return count;
   }
+
+  getConnectedRelayUrls(): string[] {
+    const urls: string[] = [];
+    for (const [url, ws] of this.relays.entries()) {
+      if (ws.readyState === WebSocket.OPEN) urls.push(url);
+    }
+    return urls.length > 0 ? urls : [...this.bootstrapUrls];
+  }
+
+  addRelay(url: string): void {
+    if (!this.bootstrapUrls.includes(url)) {
+      this.bootstrapUrls.push(url);
+    }
+    this.connectRelay(url);
+  }
+
+  async fetchEvent(filter: NostrFilter, timeoutMs = 4000): Promise<NostrEvent | null> {
+    return new Promise((resolve) => {
+      let resolved = false;
+      const subId = `query_${Math.random().toString(36).slice(2, 9)}`;
+      const timer = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          unsub();
+          resolve(null);
+        }
+      }, timeoutMs);
+
+      const unsub = this.subscribe(
+        subId,
+        [filter],
+        (event) => {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timer);
+            unsub();
+            resolve(event);
+          }
+        },
+        () => {
+          // On EOSE
+        }
+      );
+    });
+  }
 }

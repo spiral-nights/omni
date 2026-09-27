@@ -109,8 +109,68 @@ export class WebCryptoKeystore {
     return toBech32("nsec", privkeyHex);
   }
 
-  static decodeKey(key: string): { type: "npub" | "nsec" | "hex"; hex: string } {
+  static toNaddr(data: { identifier: string; pubkey: string; kind: number; relays?: string[] }): string {
+    const textEncoder = new TextEncoder();
+    const chunks: Uint8Array[] = [];
+
+    // Type 0: identifier (d tag)
+    const dBytes = textEncoder.encode(data.identifier || "");
+    chunks.push(new Uint8Array([0, dBytes.length]), dBytes);
+
+    // Type 1: relays
+    for (const r of data.relays || []) {
+      const rBytes = textEncoder.encode(r);
+      chunks.push(new Uint8Array([1, rBytes.length]), rBytes);
+    }
+
+    // Type 2: author pubkey (32 bytes)
+    const pubBytes = hexToBytes(data.pubkey);
+    chunks.push(new Uint8Array([2, pubBytes.length]), pubBytes);
+
+    // Type 3: kind (4 bytes big-endian)
+    const kindBuf = new Uint8Array(4);
+    new DataView(kindBuf.buffer).setUint32(0, data.kind, false);
+    chunks.push(new Uint8Array([3, 4]), kindBuf);
+
+    const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+    const combined = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const c of chunks) {
+      combined.set(c, offset);
+      offset += c.length;
+    }
+
+    return toBech32("naddr", bytesToHex(combined));
+  }
+
+  static decodeNaddr(naddrStr: string): { identifier: string; pubkey: string; kind: number; relays: string[] } {
+    const decoded = fromBech32(naddrStr);
+    if (decoded.hrp !== "naddr") throw new Error("Expected naddr bech32 string");
+    const bytes = hexToBytes(decoded.hex);
+    let i = 0;
+    const textDecoder = new TextDecoder();
+    const result = { identifier: "", pubkey: "", kind: 0, relays: [] as string[] };
+
+    while (i < bytes.length) {
+      const type = bytes[i];
+      const len = bytes[i + 1];
+      const val = bytes.slice(i + 2, i + 2 + len);
+      i += 2 + len;
+
+      if (type === 0) result.identifier = textDecoder.decode(val);
+      else if (type === 1) result.relays.push(textDecoder.decode(val));
+      else if (type === 2) result.pubkey = bytesToHex(val);
+      else if (type === 3) result.kind = new DataView(val.buffer, val.byteOffset, 4).getUint32(0, false);
+    }
+    return result;
+  }
+
+  static decodeKey(key: string): { type: "npub" | "nsec" | "hex" | "naddr"; hex?: string; data?: any } {
     key = key.trim();
+    if (key.startsWith("naddr1")) {
+      const data = WebCryptoKeystore.decodeNaddr(key);
+      return { type: "naddr", data, hex: data.pubkey };
+    }
     if (key.startsWith("npub1")) {
       const decoded = fromBech32(key);
       return { type: "npub", hex: decoded.hex };
@@ -122,7 +182,7 @@ export class WebCryptoKeystore {
     if (/^[0-9a-fA-F]{64}$/.test(key)) {
       return { type: "hex", hex: key.toLowerCase() };
     }
-    throw new Error("Invalid Nostr key format (expected npub1..., nsec1..., or 64-char hex)");
+    throw new Error("Invalid Nostr identifier (expected naddr1..., npub1..., nsec1..., or 64-char hex)");
   }
 
   async getPublicKey(): Promise<string> {

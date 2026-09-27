@@ -1,0 +1,116 @@
+// @vitest-environment happy-dom
+import { describe, it, expect, beforeEach } from "vitest";
+import "fake-indexeddb/auto";
+import {
+  WebCryptoKeystore,
+  OmniKernel,
+  NostrPluginResolver,
+  NSITE_MANIFEST_KIND
+} from "../src/index.js";
+import { OmniManifest } from "@omni/types";
+
+describe("NIP-19 naddr Codec & NIP-5A Nostr Plugin Resolver", () => {
+  it("encodes and decodes NIP-19 naddr TLV correctly", () => {
+    const original = {
+      identifier: "org.omni.plugin.checklist",
+      pubkey: "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
+      kind: NSITE_MANIFEST_KIND,
+      relays: ["wss://relay.damus.io"]
+    };
+
+    const naddr = WebCryptoKeystore.toNaddr(original);
+    expect(naddr.startsWith("naddr1")).toBe(true);
+
+    const decoded = WebCryptoKeystore.decodeNaddr(naddr);
+    expect(decoded.identifier).toBe(original.identifier);
+    expect(decoded.pubkey).toBe(original.pubkey);
+    expect(decoded.kind).toBe(original.kind);
+    expect(decoded.relays).toContain("wss://relay.damus.io");
+
+    // Also verify decodeKey handles naddr
+    const decodedKey = WebCryptoKeystore.decodeKey(naddr);
+    expect(decodedKey.type).toBe("naddr");
+    expect(decodedKey.data.identifier).toBe(original.identifier);
+  });
+
+  it("publishes and resolves a plugin via Nostr NIP-5A manifest event", async () => {
+    const kernel = new OmniKernel({ bootstrapRelays: [] });
+    await kernel.boot();
+
+    const manifest: OmniManifest = {
+      id: "org.omni.plugin.counter",
+      name: "Simple Counter",
+      version: "1.0.0",
+      description: "A lightweight counter widget published to Nostr",
+      entry: "dist/index.js",
+      components: [
+        {
+          id: "counter-widget",
+          type: "sidebar",
+          slot: "sidebar",
+          title: "Counter"
+        }
+      ],
+      permissions: {
+        storage: { quotaMb: 2 }
+      }
+    };
+
+    const scriptCode = `
+      export default function init() {
+        console.log("Counter widget active");
+      }
+    `;
+
+    // 1. Publish plugin to Nostr
+    const published = await kernel.publishNsitePlugin(manifest, scriptCode);
+
+    expect(published.event.kind).toBe(NSITE_MANIFEST_KIND);
+    expect(published.event.tags.some((t) => t[0] === "d" && t[1] === manifest.id)).toBe(true);
+    expect(published.event.tags.some((t) => t[0] === "f" && t[1] === "dist/index.js")).toBe(true);
+    expect(published.naddr.startsWith("naddr1")).toBe(true);
+    expect(published.verified).toBe(true);
+
+    // 2. Resolve plugin using naddr
+    const resolved = await kernel.resolveNsitePlugin(published.naddr);
+
+    expect(resolved.manifest.id).toBe("org.omni.plugin.counter");
+    expect(resolved.manifest.name).toBe("Simple Counter");
+    expect(resolved.scriptContent).toBe(scriptCode);
+    expect(resolved.authorPubkey).toBe(await kernel.getUserPubkey());
+    expect(resolved.verified).toBe(true);
+
+    // 3. Register resolved plugin into sandbox
+    const slotContainers = new Map<string, Element>();
+    const fakeSlot = document.createElement("div");
+    slotContainers.set("sidebar", fakeSlot);
+
+    const sandbox = await kernel.registerPlugin(resolved.manifest, resolved.scriptContent, slotContainers);
+    expect(sandbox.manifest.id).toBe("org.omni.plugin.counter");
+    expect(kernel.isPluginEnabled("org.omni.plugin.counter")).toBe(true);
+  });
+
+  it("rejects manifest events with tampered Schnorr signatures", async () => {
+    const kernel = new OmniKernel({ bootstrapRelays: [] });
+    await kernel.boot();
+
+    const manifest: OmniManifest = {
+      id: "org.omni.plugin.tampered",
+      name: "Tampered Plugin",
+      version: "1.0.0",
+      entry: "dist/index.js",
+      components: [],
+      permissions: {}
+    };
+
+    const published = await kernel.publishNsitePlugin(manifest, "console.log('legit')");
+
+    // Tamper with the event content
+    const tamperedEvent = {
+      ...published.event,
+      content: JSON.stringify({ manifest, script: "console.log('malicious injected code!')" })
+    };
+
+    await expect(kernel.resolveNsitePlugin(tamperedEvent)).rejects.toThrow(/Invalid Schnorr signature/);
+  });
+});

@@ -15,6 +15,7 @@ This document tracks identified UX, architectural, and functional issues in the 
 | **ISSUE-05** | Relay Pool Inspector & Management (connection status, add/remove) | Networking / Nostr | High | 📋 Open |
 | **ISSUE-06** | "Widgets" button interaction failure & desktop sidebar collapse | UX / Navigation | High | 📋 Open |
 | **ISSUE-07** | Plugin Inspector: Source URLs, manifest viewer, and component registry | Plugin Engine | High | ✅ Completed (commit `b8017a9`) |
+| **ISSUE-08** | NIP-5A (nsites) Nostr Plugin Publishing, Blossom Integrity, & `naddr` Resolution | Distribution / Nostr | Critical | ✅ Completed |
 
 ---
 
@@ -137,3 +138,17 @@ This document tracks identified UX, architectural, and functional issues in the 
        - **Permissions & Storage Tab:** Interactive capabilities inspector (see `ISSUE-02`) and storage quota usage meter (`X KB / 5 MB`).
   2. **Audit & Verification:**
      - Display cryptographic integrity hash of the plugin script bundle and manifest signature (NIP-89 readiness).
+
+---
+
+### ISSUE-08: NIP-5A (nsites) Nostr Plugin Publishing, Blossom Integrity, & `naddr` Resolution
+* **Problem Statement:** Installing plugins via centralized HTTPS URLs or manual JSON copy-pasting is prone to web hosting downtime, DNS censorship, and lacks cryptographic provenance tying code to a Nostr identity.
+* **Technical Remediation:**
+  1. **NIP-19 `naddr` Codec:** Implement TLV encoding and decoding for `naddr1...` (type 0: `d` tag, type 1: relays, type 2: 32-byte pubkey, type 3: 32-bit kind `35129`).
+  2. **NIP-5A Manifest Events (kind: 35129):**
+     - Authors sign parameterized replaceable manifest events with tags `["d", id]`, `["name", ...]`, `["f", "dist/index.js", <sha256_hash>, "application/javascript"]`, `["f", "omni.manifest.json", ...]`, `["slot", ...]`, `["permission", ...]`, and `["server", ...]`.
+     - Self-contained event content embeds `manifest` and `script` directly, while Blossom servers provide decentralized media hosting.
+  3. **Blossom Integrity Verification:** Blossom downloads verify that `sha256(blob) === tag_hash` before execution in the sandbox, rejecting tampered scripts.
+  4. **Omni UI Integration:**
+     - **Installer:** Accepts `naddr1...`, coordinates (`35129:pubkey:d-tag`), HTTPS URLs, or raw JSON. Includes a 1-click "Load Sample Nostr (naddr)" generator.
+     - **Inspector:** Displays Nostr provenance (`npub`, `naddr`, SHA-256 verification status) and allows 1-click "Publish / Share to Nostr (NIP-5A)" for any installed plugin.

@@ -205,6 +205,9 @@ interface InstalledPluginEntry {
   scriptContent: string;
   sourceUrl: string;
   enabled: boolean;
+  naddr?: string;
+  authorNpub?: string;
+  event?: any;
 }
 
 const installedPlugins: InstalledPluginEntry[] = [
@@ -231,14 +234,19 @@ const installPluginModal = document.getElementById("install-plugin-modal")!;
 const btnCloseInstallModal = document.getElementById("btn-close-install-modal")!;
 const installManifestUrl = document.getElementById("install-manifest-url") as HTMLInputElement;
 const installManifestJson = document.getElementById("install-manifest-json") as HTMLTextAreaElement;
-const btnQuickSamplePlugin = document.getElementById("btn-quick-sample-plugin")!;
-const btnConfirmInstall = document.getElementById("btn-confirm-install")!;
+const btnQuickSampleNostr = document.getElementById("btn-quick-sample-nostr") as HTMLButtonElement;
+const btnQuickSamplePlugin = document.getElementById("btn-quick-sample-plugin") as HTMLButtonElement;
+const btnConfirmInstall = document.getElementById("btn-confirm-install") as HTMLButtonElement;
 
 const pluginInspectorModal = document.getElementById("plugin-inspector-modal")!;
 const btnCloseInspector = document.getElementById("btn-close-inspector")!;
 const inspectorPluginName = document.getElementById("inspector-plugin-name")!;
 const inspectorPluginId = document.getElementById("inspector-plugin-id")!;
 const inspectorSourceUrl = document.getElementById("inspector-source-url")!;
+const inspectorNostrProvenance = document.getElementById("inspector-nostr-provenance")!;
+const inspectorAuthorNpub = document.getElementById("inspector-author-npub")!;
+const inspectorNaddr = document.getElementById("inspector-naddr")!;
+const btnPublishPluginNostr = document.getElementById("btn-publish-plugin-nostr") as HTMLButtonElement;
 const inspectorComponentsList = document.getElementById("inspector-components-list")!;
 const inspectorPermissionsList = document.getElementById("inspector-permissions-list")!;
 const inspectorManifestRaw = document.getElementById("inspector-manifest-raw")!;
@@ -401,6 +409,16 @@ function openPluginInspector(plugin: InstalledPluginEntry) {
   inspectorPluginId.textContent = plugin.manifest.id;
   inspectorSourceUrl.textContent = plugin.sourceUrl;
 
+  if (plugin.naddr) {
+    inspectorNostrProvenance.style.display = "flex";
+    inspectorAuthorNpub.textContent = plugin.authorNpub || "Anonymous";
+    inspectorNaddr.textContent = plugin.naddr;
+    btnPublishPluginNostr.textContent = "Re-Publish to Nostr (Update)";
+  } else {
+    inspectorNostrProvenance.style.display = "none";
+    btnPublishPluginNostr.textContent = "Publish / Share to Nostr (NIP-5A)";
+  }
+
   // 1. Components list
   inspectorComponentsList.innerHTML = "";
   for (const comp of plugin.manifest.components || []) {
@@ -550,6 +568,40 @@ btnCopyManifest.addEventListener("click", async () => {
   }
 });
 
+btnPublishPluginNostr.addEventListener("click", async () => {
+  if (!activeInspectedPlugin) return;
+  const p = activeInspectedPlugin;
+  btnPublishPluginNostr.disabled = true;
+  btnPublishPluginNostr.textContent = "Signing & Publishing to Nostr...";
+
+  try {
+    const published = await kernel.publishNsitePlugin(p.manifest, p.scriptContent);
+    p.naddr = published.naddr;
+    p.authorNpub = published.authorNpub;
+    p.event = published.event;
+    p.sourceUrl = published.naddr;
+
+    inspectorNostrProvenance.style.display = "flex";
+    inspectorAuthorNpub.textContent = published.authorNpub;
+    inspectorNaddr.textContent = published.naddr;
+    inspectorSourceUrl.textContent = published.naddr;
+    btnPublishPluginNostr.textContent = "Published & Verified!";
+
+    await navigator.clipboard.writeText(published.naddr);
+    alert(`Plugin '${p.manifest.name}' successfully signed and published to Nostr relays (NIP-5A)!\n\nShareable Nostr Address (copied to clipboard):\n${published.naddr}`);
+
+    setTimeout(() => {
+      btnPublishPluginNostr.disabled = false;
+      btnPublishPluginNostr.textContent = "Re-Publish to Nostr (Update)";
+    }, 2000);
+  } catch (err: any) {
+    console.error("Failed to publish plugin to Nostr:", err);
+    alert(`Failed to publish plugin to Nostr: ${err.message || String(err)}`);
+    btnPublishPluginNostr.disabled = false;
+    btnPublishPluginNostr.textContent = "Publish / Share to Nostr (NIP-5A)";
+  }
+});
+
 // Install Plugin Modal Logic
 btnShowInstallModal.addEventListener("click", () => {
   installPluginModal.classList.add("open");
@@ -622,50 +674,142 @@ btnQuickSamplePlugin.addEventListener("click", () => {
   installManifestJson.value = JSON.stringify(SAMPLE_SCRATCHPAD_MANIFEST, null, 2);
 });
 
+btnQuickSampleNostr.addEventListener("click", async () => {
+  btnQuickSampleNostr.disabled = true;
+  btnQuickSampleNostr.textContent = "Publishing to Nostr...";
+
+  try {
+    const sampleManifest: any = {
+      $schema: "https://omni.org/schemas/manifest.v1.json",
+      id: "org.omni.plugin.nostr-wisdom",
+      name: "Decentralized Wisdom",
+      version: "1.0.0",
+      description: "Cryptographic quotes and cypherpunk wisdom widget published via Nostr NIP-5A",
+      entry: "dist/index.js",
+      components: [
+        {
+          id: "wisdom-sidebar-widget",
+          slot: "sidebar",
+          type: "sidebar",
+          title: "Wisdom Widget"
+        }
+      ],
+      permissions: {
+        storage: { quotaMb: 2 },
+        nostr: { read: { allKinds: true } }
+      }
+    };
+
+    const sampleScript = `
+if (typeof omni !== "undefined") {
+  const quotes = [
+    "“Fix the money, fix the world.” — Satoshi Nakamoto",
+    "“Vires in numeris — Strength in numbers.”",
+    "“Don't trust, verify.” — Cypherpunk Maxim",
+    "“Nostr: Freedom of speech meets cryptographic proof.”",
+    "“Decentralization is not a feature; it is the entire foundation.”"
+  ];
+  let quoteIndex = 0;
+
+  omni.registerComponent("wisdom-sidebar-widget", ({ root }) => {
+    const card = root.createElement("div");
+    card.setAttribute("style", "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); border-radius: var(--omni-radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px;");
+
+    const header = root.createElement("div");
+    header.setAttribute("style", "display: flex; justify-content: space-between; align-items: center;");
+    const h = root.createElement("h3");
+    h.setAttribute("style", "font-size: 0.95rem; font-weight: 600; color: var(--omni-accent-primary);");
+    h.textContent = "✦ Decentralized Wisdom";
+    header.appendChild(h);
+    card.appendChild(header);
+
+    const quoteP = root.createElement("p");
+    quoteP.setAttribute("style", "font-size: 0.85rem; color: var(--omni-text-primary); line-height: 1.4; font-style: italic; min-height: 40px;");
+    quoteP.textContent = quotes[quoteIndex];
+    card.appendChild(quoteP);
+
+    const btnNext = root.createElement("button");
+    btnNext.setAttribute("style", "background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 5px 12px; border-radius: var(--omni-radius-sm); font-size: 0.78rem; cursor: pointer; align-self: flex-start;");
+    btnNext.textContent = "Next Quote →";
+    btnNext.addEventListener("click", () => {
+      quoteIndex = (quoteIndex + 1) % quotes.length;
+      quoteP.textContent = quotes[quoteIndex];
+    });
+    card.appendChild(btnNext);
+
+    root.appendChild(card);
+  });
+}
+`;
+
+    const published = await kernel.publishNsitePlugin(sampleManifest, sampleScript);
+    installManifestUrl.value = published.naddr;
+    installManifestJson.value = "";
+    btnQuickSampleNostr.textContent = "naddr Loaded!";
+    setTimeout(() => {
+      btnQuickSampleNostr.disabled = false;
+      btnQuickSampleNostr.textContent = "Load Sample Nostr (naddr)";
+    }, 2000);
+  } catch (err: any) {
+    console.error("Failed to generate Nostr sample:", err);
+    alert(`Failed to publish Nostr sample: ${err.message || String(err)}`);
+    btnQuickSampleNostr.disabled = false;
+    btnQuickSampleNostr.textContent = "Load Sample Nostr (naddr)";
+  }
+});
+
 btnConfirmInstall.addEventListener("click", async () => {
   const jsonText = installManifestJson.value.trim();
   const urlText = installManifestUrl.value.trim();
 
   let manifest: any = null;
-  if (jsonText) {
-    try {
-      manifest = JSON.parse(jsonText);
-    } catch {
-      alert("Invalid JSON manifest syntax.");
-      return;
-    }
-  } else if (urlText) {
-    try {
-      btnConfirmInstall.textContent = "Fetching...";
+  let scriptContent = "";
+  let resolvedNaddr: string | undefined;
+  let resolvedAuthorNpub: string | undefined;
+
+  btnConfirmInstall.disabled = true;
+
+  try {
+    if (urlText && (urlText.startsWith("naddr1") || urlText.includes(":"))) {
+      // 1. Resolve from Nostr Network (NIP-5A)
+      btnConfirmInstall.textContent = "Resolving from Nostr (NIP-5A)...";
+      const resolved = await kernel.resolveNsitePlugin(urlText);
+      manifest = resolved.manifest;
+      scriptContent = resolved.scriptContent;
+      resolvedNaddr = resolved.naddr;
+      resolvedAuthorNpub = resolved.authorNpub;
+    } else if (urlText) {
+      // 2. Fetch from HTTPS URL
+      btnConfirmInstall.textContent = "Fetching from URL...";
       const res = await fetch(urlText);
       manifest = await res.json();
-    } catch (e: any) {
-      alert(`Failed to fetch manifest from URL: ${e.message}`);
-      btnConfirmInstall.textContent = "Install Plugin";
+    } else if (jsonText) {
+      // 3. Raw JSON paste
+      manifest = JSON.parse(jsonText);
+    } else {
+      alert("Please provide either a Nostr naddr, Manifest URL, or paste a JSON manifest.");
+      btnConfirmInstall.disabled = false;
       return;
     }
-  } else {
-    alert("Please provide either a Manifest URL or paste a JSON manifest.");
-    return;
-  }
 
-  if (!manifest.id || !manifest.name) {
-    alert("Invalid manifest: 'id' and 'name' are required fields.");
-    btnConfirmInstall.textContent = "Install Plugin";
-    return;
-  }
+    if (!manifest.id || !manifest.name) {
+      alert("Invalid manifest: 'id' and 'name' are required fields.");
+      btnConfirmInstall.disabled = false;
+      return;
+    }
 
-  // Check if already installed
-  if (installedPlugins.some((p) => p.id === manifest.id)) {
-    alert(`Plugin '${manifest.name}' (${manifest.id}) is already installed.`);
-    btnConfirmInstall.textContent = "Install Plugin";
-    return;
-  }
+    // Check if already installed
+    if (installedPlugins.some((p) => p.id === manifest.id)) {
+      alert(`Plugin '${manifest.name}' (${manifest.id}) is already installed.`);
+      btnConfirmInstall.disabled = false;
+      return;
+    }
 
-  // Use sample script if it's the scratchpad, or create a default dynamic widget script
-  const scriptContent = manifest.id === "org.omni.plugins.scratchpad"
-    ? SAMPLE_SCRATCHPAD_SCRIPT
-    : `
+    // Default script content if not resolved from Nostr
+    if (!scriptContent) {
+      scriptContent = manifest.id === "org.omni.plugins.scratchpad"
+        ? SAMPLE_SCRATCHPAD_SCRIPT
+        : `
 if (typeof omni !== "undefined") {
   ${(manifest.components || []).map((c: any) => `
   omni.registerComponent("${c.id}", ({ root }) => {
@@ -683,27 +827,31 @@ if (typeof omni !== "undefined") {
   `).join("\n")}
 }
 `;
+    }
 
-  try {
     const entry: InstalledPluginEntry = {
       id: manifest.id,
       manifest,
       scriptContent,
-      sourceUrl: urlText || `custom:${manifest.id}`,
-      enabled: true
+      sourceUrl: resolvedNaddr || urlText || `custom:${manifest.id}`,
+      enabled: true,
+      naddr: resolvedNaddr,
+      authorNpub: resolvedAuthorNpub
     };
 
+    btnConfirmInstall.textContent = "Mounting to sandbox...";
     await kernel.registerPlugin(manifest, scriptContent, slotContainers);
     installedPlugins.push(entry);
     renderPluginManager();
     installPluginModal.classList.remove("open");
     installManifestUrl.value = "";
     installManifestJson.value = "";
-    alert(`Plugin '${manifest.name}' installed successfully!`);
+    alert(`Plugin '${manifest.name}' installed successfully!${resolvedNaddr ? `\n(Verified Nostr NIP-5A Origin: ${resolvedNaddr.slice(0, 16)}...)` : ""}`);
   } catch (err: any) {
     console.error("Install failed:", err);
     alert(`Install failed: ${err.message || String(err)}`);
   } finally {
+    btnConfirmInstall.disabled = false;
     btnConfirmInstall.textContent = "Install Plugin";
   }
 });
@@ -898,8 +1046,8 @@ btnConfirmImportKey.addEventListener("click", async () => {
 
   try {
     const decoded = WebCryptoKeystore.decodeKey(keyInput);
-    if (decoded.type === "npub") {
-      alert("The key you entered is an npub (public key). You must enter an nsec or hex private key to switch signing identity.");
+    if ((decoded.type !== "nsec" && decoded.type !== "hex") || !decoded.hex) {
+      alert("The identifier you entered is not a private key. You must enter an nsec or hex private key to switch signing identity.");
       return;
     }
 
