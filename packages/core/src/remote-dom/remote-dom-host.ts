@@ -62,6 +62,39 @@ export class RemoteDomHost {
       return rec;
     });
 
+    const filteredRecords: any[] = [];
+    for (const rec of wrappedRecords) {
+      // Intercept property mutations (type 3) targeting ROOT_ID ("~" or "0")
+      // DOMRemoteReceiver doesn't index ROOT_ID in its attached map and throws on property updates
+      if (rec[0] === 3 && (rec[1] === "~" || rec[1] === "0")) {
+        const property = rec[2];
+        const value = rec[3];
+        const type = rec[4];
+        if (this.container instanceof HTMLElement) {
+          if (type === 2) {
+            // Attribute update
+            if (value === null || value === undefined) {
+              this.container.removeAttribute(property);
+            } else {
+              if (property === "class") {
+                const classes = String(value).split(/\s+/).filter(Boolean);
+                for (const cls of classes) {
+                  this.container.classList.add(cls);
+                }
+              } else {
+                this.container.setAttribute(property, String(value));
+              }
+            }
+          } else if (type === 1) {
+            // Property update
+            (this.container as any)[property] = value;
+          }
+        }
+        continue;
+      }
+      filteredRecords.push(rec);
+    }
+
     const SVG_TAGS = new Set(["svg", "path", "circle", "rect", "line", "polyline", "polygon", "g"]);
     let origCreate: any = null;
     if (typeof document !== "undefined") {
@@ -75,7 +108,7 @@ export class RemoteDomHost {
     }
 
     try {
-      this.receiver.connection.mutate(wrappedRecords);
+      this.receiver.connection.mutate(filteredRecords);
     } catch (err) {
       console.error(`Remote DOM mutation error in [${this.componentId}]:`, err);
     } finally {

@@ -174,13 +174,18 @@
         setAttribute(name, value) {
           const strVal = String(value);
           this.attributes.set(name, strVal);
-          // Mutation 3 with updateType 2 (UPDATE_PROPERTY_TYPE_ATTRIBUTE = 2)
-          self.sendMutation([3, this.id, name, strVal, 2]);
+          // Only send mutation if not root element '~'
+          if (this.id !== "~") {
+            // Mutation 3 with updateType 2 (UPDATE_PROPERTY_TYPE_ATTRIBUTE = 2)
+            self.sendMutation([3, this.id, name, strVal, 2]);
+          }
         }
 
         removeAttribute(name) {
           this.attributes.delete(name);
-          self.sendMutation([3, this.id, name, null, 2]);
+          if (this.id !== "~") {
+            self.sendMutation([3, this.id, name, null, 2]);
+          }
         }
 
         getAttribute(name) {
@@ -203,16 +208,20 @@
         set checked(val) {
           const boolVal = Boolean(val);
           this.setAttribute("checked", boolVal ? "true" : "false");
-          // UPDATE_PROPERTY_TYPE_PROPERTY = 1
-          self.sendMutation([3, this.id, "checked", boolVal, 1]);
+          if (this.id !== "~") {
+            // UPDATE_PROPERTY_TYPE_PROPERTY = 1
+            self.sendMutation([3, this.id, "checked", boolVal, 1]);
+          }
         }
 
         get value() { return this.getAttribute("value") || ""; }
         set value(val) {
           const strVal = String(val ?? "");
           this.setAttribute("value", strVal);
-          // UPDATE_PROPERTY_TYPE_PROPERTY = 1
-          self.sendMutation([3, this.id, "value", strVal, 1]);
+          if (this.id !== "~") {
+            // UPDATE_PROPERTY_TYPE_PROPERTY = 1
+            self.sendMutation([3, this.id, "value", strVal, 1]);
+          }
         }
 
         get style() {
@@ -319,7 +328,7 @@
 
       // Root element connects to host receiver root using ROOT_ID '~'
       const root = new RemoteElement("~", "div");
-      root.className = `omni-component-${this.componentId}`;
+      root.attributes.set("class", `omni-component-${this.componentId}`);
       root.createElement = (tag) => new RemoteElement(++this.nextNodeId, tag);
       root.createTextNode = (text) => new RemoteText(++this.nextNodeId, text);
       return root;
@@ -430,28 +439,59 @@
         mountComponent(id, renderFn);
       }
     },
-    subscribe(options) {
-      const subId = `sub_${Math.random().toString(36).slice(2, 9)}`;
-      subscriptions.set(subId, options);
+    nostr: {
+      async getPublicKey() {
+        await initPromise;
+        return callRpc("nostr.getPublicKey");
+      },
+      async signEvent(event) {
+        await initPromise;
+        return callRpc("nostr.signEvent", { event });
+      },
+      async publish(event) {
+        await initPromise;
+        return callRpc("nostr.publish", { event });
+      },
+      subscribe(filters, onEvent, onEose) {
+        const subId = `sub_${Math.random().toString(36).slice(2, 9)}`;
+        let filterList = [];
+        let eventCb = onEvent;
+        let eoseCb = onEose;
 
-      const filters = options.filters || [{
-        kinds: options.kinds,
-        authors: options.authors,
-        ids: options.ids,
-        limit: options.limit
-      }];
-
-      initPromise.then(() => {
-        callRpc("nostr.subscribe", { subscriptionId: subId, filters });
-      });
-
-      return {
-        id: subId,
-        unsubscribe() {
-          subscriptions.delete(subId);
-          callRpc("nostr.unsubscribe", { subscriptionId: subId });
+        if (Array.isArray(filters)) {
+          filterList = filters;
+        } else if (filters && typeof filters === "object") {
+          const opts = filters;
+          filterList = opts.filters || [{
+            kinds: opts.kinds,
+            authors: opts.authors,
+            ids: opts.ids,
+            limit: opts.limit
+          }];
+          eventCb = opts.onEvent || onEvent;
+          eoseCb = opts.onEose || onEose;
         }
-      };
+
+        subscriptions.set(subId, {
+          onEvent: eventCb,
+          onEose: eoseCb
+        });
+
+        initPromise.then(() => {
+          callRpc("nostr.subscribe", { subscriptionId: subId, filters: filterList });
+        });
+
+        return {
+          id: subId,
+          unsubscribe() {
+            subscriptions.delete(subId);
+            callRpc("nostr.unsubscribe", { subscriptionId: subId });
+          }
+        };
+      }
+    },
+    subscribe(options, onEvent, onEose) {
+      return this.nostr.subscribe(options, onEvent, onEose);
     },
     storage: {
       async get(key) {

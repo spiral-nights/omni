@@ -163,8 +163,43 @@ describe("RemoteDomHost Standard HTML Projection", () => {
 
     expect(renderInvoked).toBe(true);
     expect(createdInputType).toBe("text");
+    expect(win.omni.nostr).toBeDefined();
+    expect(typeof win.omni.nostr.subscribe).toBe("function");
+    expect(typeof win.omni.nostr.publish).toBe("function");
+    expect(typeof win.omni.nostr.getPublicKey).toBe("function");
+    expect(typeof win.omni.nostr.signEvent).toBe("function");
 
     document.body.removeChild(iframe);
+  });
+
+  it("handles ROOT_ID ('~') property mutations directly on container without throwing", () => {
+    const container = document.createElement("div");
+    container.className = "host-slot";
+    document.body.appendChild(container);
+
+    const onEvent = vi.fn();
+    const host = new RemoteDomHost({
+      container,
+      componentId: "feed-dock-icon",
+      onEvent
+    });
+
+    // Send property mutation on ROOT_ID ("~") which previously caused:
+    // Error: Remote property is not allowed: class (type 2)
+    expect(() => {
+      host.mutate([
+        [3, "~", "class", "omni-component-feed-dock-icon custom-active", 2],
+        [3, "~", "data-status", "ready", 2]
+      ]);
+    }).not.toThrow();
+
+    // Verify container received the class and attribute
+    expect(container.classList.contains("omni-component-feed-dock-icon")).toBe(true);
+    expect(container.classList.contains("custom-active")).toBe(true);
+    expect(container.getAttribute("data-status")).toBe("ready");
+
+    host.destroy();
+    document.body.removeChild(container);
   });
 });
 

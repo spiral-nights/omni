@@ -86,6 +86,9 @@ export class OmniKernel {
         if (this.capabilityStore.getGrant(manifest.id, "nostr:write") === null) {
           this.capabilityStore.setGrant(manifest.id, "nostr:write", "always");
         }
+        if (this.capabilityStore.getGrant(manifest.id, "nostr:sign") === null) {
+          this.capabilityStore.setGrant(manifest.id, "nostr:sign", "always");
+        }
       }
     }
 
