@@ -7,6 +7,7 @@ import { IntentBroker } from "../intents/intent-broker.js";
 import { SubscriptionCoordinator } from "../nostr/subscription-coordinator.js";
 import { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import { RelayPool } from "../nostr/relay-pool.js";
+import { LocalEventStore } from "../nostr/event-store.js";
 
 export interface SandboxInstanceOptions {
   manifest: OmniManifest;
@@ -14,12 +15,14 @@ export interface SandboxInstanceOptions {
   runtimeUrl?: string;
   userPubkey: string;
   slotContainers: Map<string, Element>; // Map of slot name -> DOM Element
+  slotResolver?: (pluginId: string, componentId: string, defaultSlot: string) => Element | undefined | null;
   aclEngine: AclEngine;
   storageManager: PluginStorageManager;
   intentBroker: IntentBroker;
   subscriptionCoordinator: SubscriptionCoordinator;
   keystore: WebCryptoKeystore;
   relayPool: RelayPool;
+  eventStore: LocalEventStore;
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
 }
 
@@ -28,12 +31,33 @@ export class SandboxInstance {
   private iframe: HTMLIFrameElement | null = null;
   private remoteDomHosts: Map<string, RemoteDomHost> = new Map();
   private compContainers: Element[] = [];
+  private compContainersByCompId: Map<string, Element> = new Map();
   private dispatcher: JsonRpcDispatcher | null = null;
   private channel1: MessageChannel | null = null;
   private channel2: MessageChannel | null = null;
 
   constructor(private options: SandboxInstanceOptions) {
     this.manifest = options.manifest;
+  }
+
+  getComponentContainer(componentId: string): Element | undefined {
+    return this.compContainersByCompId.get(componentId);
+  }
+
+  reparentComponent(componentId: string, newParent: Element): boolean {
+    const container = this.compContainersByCompId.get(componentId);
+    if (container && newParent) {
+      newParent.appendChild(container);
+      return true;
+    }
+    return false;
+  }
+
+  setComponentVisible(componentId: string, visible: boolean): void {
+    const container = this.compContainersByCompId.get(componentId);
+    if (container) {
+      (container as HTMLElement).style.display = visible ? "" : "none";
+    }
   }
 
   async mount(): Promise<void> {
@@ -75,12 +99,20 @@ export class SandboxInstance {
 
     // 3. Mount Remote DOM Host to target slot containers
     for (const comp of this.manifest.components) {
-      const slotContainer = this.options.slotContainers.get(comp.slot);
+      let slotContainer: Element | undefined | null = null;
+      if (this.options.slotResolver) {
+        slotContainer = this.options.slotResolver(this.manifest.id, comp.id, comp.slot);
+      }
+      if (!slotContainer) {
+        slotContainer = this.options.slotContainers.get(comp.slot);
+      }
+
       if (slotContainer) {
         const compContainer = document.createElement("div");
         compContainer.className = `omni-component-slot omni-comp-${comp.id}`;
         slotContainer.appendChild(compContainer);
         this.compContainers.push(compContainer);
+        this.compContainersByCompId.set(comp.id, compContainer);
 
         const domHost = new RemoteDomHost({
           container: compContainer,
@@ -108,6 +140,7 @@ export class SandboxInstance {
       subscriptionCoordinator: this.options.subscriptionCoordinator,
       keystore: this.options.keystore,
       relayPool: this.options.relayPool,
+      eventStore: this.options.eventStore,
       onSlotAction: this.options.onSlotAction
     });
 
@@ -182,6 +215,7 @@ export class SandboxInstance {
       }
     }
     this.compContainers = [];
+    this.compContainersByCompId.clear();
 
     if (this.channel1) {
       this.channel1.port1.close();

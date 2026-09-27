@@ -390,6 +390,10 @@ body {
     display: flex;
   }
 
+  .desktop-sidebar.collapsed {
+    display: none !important;
+  }
+
   .mobile-drawer-overlay,
   .mobile-drawer-sheet {
     display: none !important;

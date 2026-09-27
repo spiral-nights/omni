@@ -1,61 +1,76 @@
-import { OmniKernel, WebCryptoKeystore } from "@omni/core";
+import { OmniKernel, WebCryptoKeystore, STANDARD_SLOTS } from "@omni/core";
 import { NostrEvent } from "@omni/types";
 
 // Import manifests and compiled plugin bundles (using Vite ?raw import)
+import feedManifest from "../../../packages/plugins/feed/omni.manifest.json";
+import feedScript from "../../../packages/plugins/feed/dist/index.js?raw";
+import relaysManifest from "../../../packages/plugins/relays/omni.manifest.json";
+import relaysScript from "../../../packages/plugins/relays/dist/index.js?raw";
+import profileManifest from "../../../packages/plugins/profile/omni.manifest.json";
+import profileScript from "../../../packages/plugins/profile/dist/index.js?raw";
 import checklistManifest from "../../../packages/plugins/checklist/omni.manifest.json";
-import timerManifest from "../../../packages/plugins/timer/omni.manifest.json";
 import checklistScript from "../../../packages/plugins/checklist/dist/index.js?raw";
+import timerManifest from "../../../packages/plugins/timer/omni.manifest.json";
 import timerScript from "../../../packages/plugins/timer/dist/index.js?raw";
 import { icon } from "./icons.js";
 
 // DOM Element references
+const headerStatusSlot = document.getElementById("header-status-slot")!;
+const headerActionsSlot = document.getElementById("header-actions-slot")!;
+const mainSlot = document.getElementById("main-slot")!;
 const dockSlot = document.getElementById("dock-slot")!;
+const desktopSidebar = document.getElementById("desktop-sidebar")!;
 const desktopSidebarSlot = document.getElementById("desktop-sidebar-slot")!;
 const mobileSidebarSlot = document.getElementById("mobile-sidebar-slot")!;
-const notesList = document.getElementById("notes-list")!;
-const composerInput = document.getElementById("composer-input") as HTMLTextAreaElement;
-const btnPublish = document.getElementById("btn-publish") as HTMLButtonElement;
-const userBadge = document.getElementById("user-badge") as HTMLButtonElement;
-const relayCountText = document.getElementById("relay-count-text")!;
 const drawerOverlay = document.getElementById("drawer-overlay")!;
 const drawerSheet = document.getElementById("drawer-sheet")!;
 const btnCloseDrawer = document.getElementById("btn-close-drawer")!;
 const dockBtnWidgets = document.getElementById("dock-btn-widgets")!;
 const dockBtnFeed = document.getElementById("dock-btn-feed")!;
+const dockBtnLayout = document.getElementById("dock-btn-layout")!;
 const dockBtnSettings = document.getElementById("dock-btn-settings")!;
+const btnOpenLayout = document.getElementById("btn-open-layout")!;
 const btnOpenPlugins = document.getElementById("btn-open-plugins")!;
 const pluginModal = document.getElementById("plugin-modal")!;
 const btnCloseModal = document.getElementById("btn-close-modal")!;
 const pluginsListContainer = document.getElementById("plugins-list")!;
 
+// Layout Customizer Modal Element references
+const layoutModal = document.getElementById("layout-modal")!;
+const btnCloseLayoutModal = document.getElementById("btn-close-layout-modal")!;
+const btnResetLayout = document.getElementById("btn-reset-layout")!;
+const btnDoneLayout = document.getElementById("btn-done-layout")!;
+const layoutSlotsList = document.getElementById("layout-slots-list")!;
+
 // Profile Modal Element references
-const profileModal = document.getElementById("profile-modal")!;
-const btnCloseProfileModal = document.getElementById("btn-close-profile-modal")!;
-const tabBtnProfileInfo = document.getElementById("tab-btn-profile-info")!;
-const tabBtnProfileKeys = document.getElementById("tab-btn-profile-keys")!;
-const profilePaneInfo = document.getElementById("profile-pane-info")!;
-const profilePaneKeys = document.getElementById("profile-pane-keys")!;
-const profileAvatarPreview = document.getElementById("profile-avatar-preview")!;
-const profilePreviewName = document.getElementById("profile-preview-name")!;
-const profilePreviewNpub = document.getElementById("profile-preview-npub")!;
-const inputProfileDisplayName = document.getElementById("input-profile-display-name") as HTMLInputElement;
-const inputProfileName = document.getElementById("input-profile-name") as HTMLInputElement;
-const inputProfileAbout = document.getElementById("input-profile-about") as HTMLTextAreaElement;
-const inputProfilePicture = document.getElementById("input-profile-picture") as HTMLInputElement;
-const inputProfileNip05 = document.getElementById("input-profile-nip05") as HTMLInputElement;
-const inputProfileLud16 = document.getElementById("input-profile-lud16") as HTMLInputElement;
-const btnSaveProfile = document.getElementById("btn-save-profile") as HTMLButtonElement;
-const profileKeysNpub = document.getElementById("profile-keys-npub") as HTMLInputElement;
-const btnCopyNpub = document.getElementById("btn-copy-npub") as HTMLButtonElement;
-const profileKeysHex = document.getElementById("profile-keys-hex") as HTMLInputElement;
-const btnCopyHex = document.getElementById("btn-copy-hex") as HTMLButtonElement;
-const btnRevealNsec = document.getElementById("btn-reveal-nsec") as HTMLButtonElement;
-const privateKeyDisplayWrapper = document.getElementById("private-key-display-wrapper")!;
-const profileKeysNsec = document.getElementById("profile-keys-nsec") as HTMLInputElement;
-const btnCopyNsec = document.getElementById("btn-copy-nsec") as HTMLButtonElement;
-const inputImportNsec = document.getElementById("input-import-nsec") as HTMLInputElement;
-const btnGenerateNewKey = document.getElementById("btn-generate-new-key") as HTMLButtonElement;
-const btnConfirmImportKey = document.getElementById("btn-confirm-import-key") as HTMLButtonElement;
+const profileModal = document.getElementById("profile-modal");
+const userBadge = document.getElementById("user-badge");
+const btnCloseProfileModal = document.getElementById("btn-close-profile-modal");
+const tabBtnProfileInfo = document.getElementById("tab-btn-profile-info");
+const tabBtnProfileKeys = document.getElementById("tab-btn-profile-keys");
+const profilePaneInfo = document.getElementById("profile-pane-info");
+const profilePaneKeys = document.getElementById("profile-pane-keys");
+const profileAvatarPreview = document.getElementById("profile-avatar-preview");
+const profilePreviewName = document.getElementById("profile-preview-name");
+const profilePreviewNpub = document.getElementById("profile-preview-npub");
+const inputProfileDisplayName = document.getElementById("input-profile-display-name") as HTMLInputElement | null;
+const inputProfileName = document.getElementById("input-profile-name") as HTMLInputElement | null;
+const inputProfileAbout = document.getElementById("input-profile-about") as HTMLTextAreaElement | null;
+const inputProfilePicture = document.getElementById("input-profile-picture") as HTMLInputElement | null;
+const inputProfileNip05 = document.getElementById("input-profile-nip05") as HTMLInputElement | null;
+const inputProfileLud16 = document.getElementById("input-profile-lud16") as HTMLInputElement | null;
+const btnSaveProfile = document.getElementById("btn-save-profile") as HTMLButtonElement | null;
+const profileKeysNpub = document.getElementById("profile-keys-npub") as HTMLInputElement | null;
+const btnCopyNpub = document.getElementById("btn-copy-npub") as HTMLButtonElement | null;
+const profileKeysHex = document.getElementById("profile-keys-hex") as HTMLInputElement | null;
+const btnCopyHex = document.getElementById("btn-copy-hex") as HTMLButtonElement | null;
+const btnRevealNsec = document.getElementById("btn-reveal-nsec") as HTMLButtonElement | null;
+const privateKeyDisplayWrapper = document.getElementById("private-key-display-wrapper");
+const profileKeysNsec = document.getElementById("profile-keys-nsec") as HTMLInputElement | null;
+const btnCopyNsec = document.getElementById("btn-copy-nsec") as HTMLButtonElement | null;
+const inputImportNsec = document.getElementById("input-import-nsec") as HTMLInputElement | null;
+const btnGenerateNewKey = document.getElementById("btn-generate-new-key") as HTMLButtonElement | null;
+const btnConfirmImportKey = document.getElementById("btn-confirm-import-key") as HTMLButtonElement | null;
 
 // 1. Mobile Drawer Control
 function openDrawer() {
@@ -77,7 +92,7 @@ function toggleDrawer() {
 }
 
 // 2. Responsive Slot Container Setup
-// We use a shared wrapper for sidebar widgets so their Remote DOM nodes remain intact across breakpoint transitions
+// Shared wrapper for sidebar widgets so their Remote DOM nodes remain intact across breakpoint transitions
 const sidebarSlotWrapper = document.createElement("div");
 sidebarSlotWrapper.className = "omni-slot";
 
@@ -97,6 +112,23 @@ function updateSidebarPlacement() {
 window.addEventListener("resize", updateSidebarPlacement);
 updateSidebarPlacement();
 
+// Synchronous Dock and Layout Button Listeners (Issue 6 & Issue 4)
+dockBtnWidgets?.addEventListener("click", () => {
+  const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+  if (isDesktop) {
+    desktopSidebar.classList.toggle("collapsed");
+  } else {
+    toggleDrawer();
+  }
+});
+
+dockBtnFeed?.addEventListener("click", () => {
+  mainSlot?.scrollIntoView({ behavior: "smooth" });
+});
+
+btnCloseDrawer?.addEventListener("click", closeDrawer);
+drawerOverlay?.addEventListener("click", closeDrawer);
+
 // 3. Initialize OmniKernel
 const STORAGE_KEY_NSEC = "omni_privkey";
 const savedPrivkey = localStorage.getItem(STORAGE_KEY_NSEC) || undefined;
@@ -106,97 +138,176 @@ const kernel = new OmniKernel({
   bootstrapRelays: ["wss://relay.damus.io"],
   onSlotAction: (action, slot) => {
     if (slot === "sidebar" || slot === "widgets") {
-      if (action === "toggle") toggleDrawer();
-      else if (action === "open") openDrawer();
-      else if (action === "close") closeDrawer();
+      if (action === "toggle") {
+        const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+        if (isDesktop) {
+          desktopSidebar.classList.toggle("collapsed");
+        } else {
+          toggleDrawer();
+        }
+      } else if (action === "open") {
+        const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+        if (isDesktop) {
+          desktopSidebar.classList.remove("collapsed");
+        } else {
+          openDrawer();
+        }
+      } else if (action === "close") {
+        const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+        if (isDesktop) {
+          desktopSidebar.classList.add("collapsed");
+        } else {
+          closeDrawer();
+        }
+      }
     }
   }
 });
 
 // Map of slot names to host containers
 const slotContainers = new Map<string, Element>();
+slotContainers.set("header-status", headerStatusSlot);
+slotContainers.set("header-actions", headerActionsSlot);
+slotContainers.set("main", mainSlot);
+slotContainers.set("dock", dockSlot);
 slotContainers.set("icon", dockSlot);
 slotContainers.set("sidebar", sidebarSlotWrapper);
 
-// 4. Notes Feed Rendering
-const renderedNoteIds = new Set<string>();
+// 4. Dynamic Layout Customizer UI (Issue 4)
+function renderLayoutCustomizer() {
+  if (!layoutSlotsList) return;
+  layoutSlotsList.innerHTML = "";
+  const mappings = kernel.layoutManager.getMappings();
 
-function formatTimestamp(unixSec: number): string {
-  const now = Math.floor(Date.now() / 1000);
-  const diff = now - unixSec;
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  const date = new Date(unixSec * 1000);
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  for (const slot of STANDARD_SLOTS) {
+    const slotCard = document.createElement("div");
+    slotCard.style.cssText =
+      "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); border-radius: var(--omni-radius-md); padding: 12px; display: flex; flex-direction: column; gap: 10px;";
+
+    const slotHeader = document.createElement("div");
+    slotHeader.style.cssText =
+      "display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--omni-border-subtle); padding-bottom: 6px;";
+
+    const titleDiv = document.createElement("div");
+    titleDiv.innerHTML = `<span style="font-weight: 600; font-size: 0.9rem; color: var(--omni-accent-primary);">${slot.name}</span> <span style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted);">("${slot.id}")</span>`;
+
+    slotHeader.appendChild(titleDiv);
+    slotCard.appendChild(slotHeader);
+
+    const desc = document.createElement("div");
+    desc.style.cssText = "font-size: 0.75rem; color: var(--omni-text-muted);";
+    desc.textContent = slot.description;
+    slotCard.appendChild(desc);
+
+    const itemsContainer = document.createElement("div");
+    itemsContainer.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+
+    const slotItems = mappings.filter((m) => m.slotId === slot.id);
+
+    if (slotItems.length === 0) {
+      const empty = document.createElement("div");
+      empty.style.cssText =
+        "font-size: 0.75rem; color: var(--omni-text-muted); font-style: italic; padding: 6px 0;";
+      empty.textContent = "No components currently assigned to this slot.";
+      itemsContainer.appendChild(empty);
+    } else {
+      for (const item of slotItems) {
+        const itemRow = document.createElement("div");
+        itemRow.style.cssText =
+          "display: flex; justify-content: space-between; align-items: center; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 8px 10px; gap: 8px;";
+
+        const plugin = installedPlugins.find((p) => p.id === item.pluginId);
+        const comp = plugin?.manifest?.components?.find((c: any) => c.id === item.componentId);
+        const compTitle = comp?.title || item.componentId;
+        const pluginName = plugin?.manifest?.name || item.pluginId;
+
+        const left = document.createElement("div");
+        left.style.cssText = "display: flex; flex-direction: column; gap: 2px; overflow: hidden;";
+        left.innerHTML = `<span style="font-weight: 500; font-size: 0.82rem; color: var(--omni-text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${compTitle}</span><span style="font-size: 0.68rem; color: var(--omni-text-muted);">${pluginName} (${item.componentId})</span>`;
+
+        const right = document.createElement("div");
+        right.style.cssText = "display: flex; align-items: center; gap: 8px;";
+
+        // Slot move dropdown
+        const select = document.createElement("select");
+        select.style.cssText =
+          "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none;";
+        for (const s of STANDARD_SLOTS) {
+          const opt = document.createElement("option");
+          opt.value = s.id;
+          opt.textContent = `Move to ${s.name}`;
+          if (s.id === slot.id) opt.selected = true;
+          select.appendChild(opt);
+        }
+        select.addEventListener("change", () => {
+          const targetSlotId = select.value;
+          const targetContainer = slotContainers.get(targetSlotId);
+          if (targetContainer) {
+            kernel.reparentPluginComponent(item.pluginId, item.componentId, targetSlotId, targetContainer);
+            renderLayoutCustomizer();
+          }
+        });
+
+        // Visible toggle checkbox
+        const toggleLabel = document.createElement("label");
+        toggleLabel.style.cssText =
+          "display: flex; align-items: center; gap: 4px; font-size: 0.72rem; color: var(--omni-text-secondary); cursor: pointer;";
+        const chk = document.createElement("input");
+        chk.type = "checkbox";
+        chk.checked = item.enabled;
+        chk.addEventListener("change", () => {
+          kernel.layoutManager.setComponentEnabled(item.pluginId, item.componentId, chk.checked);
+          kernel.getSandbox(item.pluginId)?.setComponentVisible(item.componentId, chk.checked);
+        });
+        toggleLabel.appendChild(chk);
+        toggleLabel.appendChild(document.createTextNode("Visible"));
+
+        right.appendChild(select);
+        right.appendChild(toggleLabel);
+
+        itemRow.appendChild(left);
+        itemRow.appendChild(right);
+        itemsContainer.appendChild(itemRow);
+      }
+    }
+
+    slotCard.appendChild(itemsContainer);
+    layoutSlotsList.appendChild(slotCard);
+  }
 }
 
-function renderNote(note: NostrEvent, userPubkey: string, prepend = false) {
-  if (renderedNoteIds.has(note.id)) return;
-  renderedNoteIds.add(note.id);
-
-  // Clear initial placeholder if this is the first real note
-  if (notesList.children.length === 1 && notesList.firstElementChild?.textContent?.includes("Loading")) {
-    notesList.innerHTML = "";
-  }
-
-  const isSelf = note.pubkey === userPubkey;
-  const shortPubkey = isSelf ? "You" : `${note.pubkey.slice(0, 8)}...${note.pubkey.slice(-4)}`;
-
-  const card = document.createElement("article");
-  card.className = "note-card";
-  card.id = `note-${note.id}`;
-
-  const header = document.createElement("div");
-  header.className = "note-header";
-
-  const author = document.createElement("span");
-  author.className = "note-author";
-  author.textContent = shortPubkey;
-  if (isSelf) {
-    author.style.color = "var(--omni-accent-primary)";
-  }
-
-  const time = document.createElement("span");
-  time.className = "note-meta";
-  time.textContent = formatTimestamp(note.created_at);
-
-  header.appendChild(author);
-  header.appendChild(time);
-
-  const content = document.createElement("div");
-  content.className = "note-content";
-  content.textContent = note.content;
-
-  const actions = document.createElement("div");
-  actions.className = "note-actions";
-
-  const btnReply = document.createElement("button");
-  btnReply.className = "note-action-btn";
-  btnReply.innerHTML = `${icon("reply", 14)} <span>0</span>`;
-
-  const btnLike = document.createElement("button");
-  btnLike.className = "note-action-btn";
-  btnLike.innerHTML = `${icon("like", 14)} <span>0</span>`;
-
-  const btnZap = document.createElement("button");
-  btnZap.className = "note-action-btn";
-  btnZap.innerHTML = `${icon("bolt", 14)} <span>0</span>`;
-
-  actions.appendChild(btnReply);
-  actions.appendChild(btnLike);
-  actions.appendChild(btnZap);
-
-  card.appendChild(header);
-  card.appendChild(content);
-  card.appendChild(actions);
-
-  if (prepend && notesList.firstChild) {
-    notesList.insertBefore(card, notesList.firstChild);
-  } else {
-    notesList.appendChild(card);
-  }
+function openLayoutModal() {
+  renderLayoutCustomizer();
+  layoutModal?.classList.add("open");
 }
+
+function closeLayoutModal() {
+  layoutModal?.classList.remove("open");
+}
+
+btnOpenLayout?.addEventListener("click", openLayoutModal);
+dockBtnLayout?.addEventListener("click", openLayoutModal);
+btnCloseLayoutModal?.addEventListener("click", closeLayoutModal);
+btnDoneLayout?.addEventListener("click", closeLayoutModal);
+layoutModal?.addEventListener("click", (e) => {
+  if (e.target === layoutModal) closeLayoutModal();
+});
+
+btnResetLayout?.addEventListener("click", () => {
+  if (!confirm("Reset all plugin component slots back to defaults?")) return;
+  const manifests = installedPlugins.map((p) => p.manifest);
+  kernel.layoutManager.resetToDefaults(manifests);
+  for (const p of installedPlugins) {
+    for (const comp of p.manifest.components) {
+      const container = slotContainers.get(comp.slot);
+      if (container) {
+        kernel.getSandbox(p.id)?.reparentComponent(comp.id, container);
+      }
+    }
+  }
+  renderLayoutCustomizer();
+});
+
 
 // 5. Plugin Lifecycle & Manager Modal
 interface InstalledPluginEntry {
@@ -211,6 +322,27 @@ interface InstalledPluginEntry {
 }
 
 const installedPlugins: InstalledPluginEntry[] = [
+  {
+    id: feedManifest.id,
+    manifest: feedManifest,
+    scriptContent: feedScript,
+    sourceUrl: "local:@omni/plugin-feed",
+    enabled: true
+  },
+  {
+    id: relaysManifest.id,
+    manifest: relaysManifest,
+    scriptContent: relaysScript,
+    sourceUrl: "local:@omni/plugin-relays",
+    enabled: true
+  },
+  {
+    id: profileManifest.id,
+    manifest: profileManifest,
+    scriptContent: profileScript,
+    sourceUrl: "local:@omni/plugin-profile",
+    enabled: true
+  },
   {
     id: checklistManifest.id,
     manifest: checklistManifest,
@@ -866,19 +998,10 @@ function uninstallPlugin(pluginId: string) {
 }
 
 // Synchronous Top-Level UI Event Bindings
-dockBtnWidgets.addEventListener("click", toggleDrawer);
-btnCloseDrawer.addEventListener("click", closeDrawer);
-drawerOverlay.addEventListener("click", closeDrawer);
-
-dockBtnFeed.addEventListener("click", () => {
-  closeDrawer();
-  window.scrollTo({ top: 0, behavior: "smooth" });
-});
-
-dockBtnSettings.addEventListener("click", openPluginModal);
-btnOpenPlugins.addEventListener("click", openPluginModal);
-btnCloseModal.addEventListener("click", closePluginModal);
-pluginModal.addEventListener("click", (e) => {
+dockBtnSettings?.addEventListener("click", openPluginModal);
+btnOpenPlugins?.addEventListener("click", openPluginModal);
+btnCloseModal?.addEventListener("click", closePluginModal);
+pluginModal?.addEventListener("click", (e) => {
   if (e.target === pluginModal) closePluginModal();
 });
 
@@ -888,111 +1011,118 @@ async function updateProfileUi() {
   const npub = await kernel.getNpub();
   const shortNpub = `${npub.slice(0, 10)}...${npub.slice(-4)}`;
 
-  profileKeysNpub.value = npub;
-  profileKeysHex.value = pubkey;
-  profilePreviewNpub.textContent = shortNpub;
+  if (profileKeysNpub) profileKeysNpub.value = npub;
+  if (profileKeysHex) profileKeysHex.value = pubkey;
+  if (profilePreviewNpub) profilePreviewNpub.textContent = shortNpub;
 
   const profile = await kernel.getProfile(pubkey);
   if (profile) {
-    inputProfileDisplayName.value = profile.display_name || "";
-    inputProfileName.value = profile.name || "";
-    inputProfileAbout.value = profile.about || "";
-    inputProfilePicture.value = profile.picture || "";
-    inputProfileNip05.value = profile.nip05 || "";
-    inputProfileLud16.value = profile.lud16 || "";
+    if (inputProfileDisplayName) inputProfileDisplayName.value = profile.display_name || "";
+    if (inputProfileName) inputProfileName.value = profile.name || "";
+    if (inputProfileAbout) inputProfileAbout.value = profile.about || "";
+    if (inputProfilePicture) inputProfilePicture.value = profile.picture || "";
+    if (inputProfileNip05) inputProfileNip05.value = profile.nip05 || "";
+    if (inputProfileLud16) inputProfileLud16.value = profile.lud16 || "";
 
     const displayName = profile.display_name || profile.name || shortNpub;
-    userBadge.textContent = displayName;
-    userBadge.title = `${displayName}\n${npub}\nClick to manage profile & keys`;
-    profilePreviewName.textContent = profile.display_name || profile.name || "Guest User";
+    if (userBadge) {
+      userBadge.textContent = displayName;
+      userBadge.title = `${displayName}\n${npub}\nClick to manage profile & keys`;
+    }
+    if (profilePreviewName) profilePreviewName.textContent = profile.display_name || profile.name || "Guest User";
 
-    if (profile.picture) {
+    if (profile.picture && profileAvatarPreview) {
       profileAvatarPreview.innerHTML = `<img src="${encodeURI(profile.picture)}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.remove()" />`;
-    } else {
+    } else if (profileAvatarPreview) {
       profileAvatarPreview.textContent = "✦";
     }
   } else {
-    inputProfileDisplayName.value = "";
-    inputProfileName.value = "";
-    inputProfileAbout.value = "";
-    inputProfilePicture.value = "";
-    inputProfileNip05.value = "";
-    inputProfileLud16.value = "";
-    userBadge.textContent = shortNpub;
-    userBadge.title = `Your Nostr Identity: ${npub}\nClick to manage profile & keys`;
-    profilePreviewName.textContent = "Guest User";
-    profileAvatarPreview.textContent = "✦";
+    if (inputProfileDisplayName) inputProfileDisplayName.value = "";
+    if (inputProfileName) inputProfileName.value = "";
+    if (inputProfileAbout) inputProfileAbout.value = "";
+    if (inputProfilePicture) inputProfilePicture.value = "";
+    if (inputProfileNip05) inputProfileNip05.value = "";
+    if (inputProfileLud16) inputProfileLud16.value = "";
+    if (userBadge) {
+      userBadge.textContent = shortNpub;
+      userBadge.title = `Your Nostr Identity: ${npub}\nClick to manage profile & keys`;
+    }
+    if (profilePreviewName) profilePreviewName.textContent = "Guest User";
+    if (profileAvatarPreview) profileAvatarPreview.textContent = "✦";
   }
 }
 
 function updateLivePreview() {
-  const dName = inputProfileDisplayName.value.trim();
-  const name = inputProfileName.value.trim();
-  profilePreviewName.textContent = dName || name || "Guest User";
+  const dName = inputProfileDisplayName?.value.trim() || "";
+  const name = inputProfileName?.value.trim() || "";
+  if (profilePreviewName) profilePreviewName.textContent = dName || name || "Guest User";
 
-  const pic = inputProfilePicture.value.trim();
-  if (pic) {
+  const pic = inputProfilePicture?.value.trim() || "";
+  if (pic && profileAvatarPreview) {
     profileAvatarPreview.innerHTML = `<img src="${encodeURI(pic)}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.remove()" />`;
-  } else {
+  } else if (profileAvatarPreview) {
     profileAvatarPreview.textContent = "✦";
   }
 }
 
-inputProfileDisplayName.addEventListener("input", updateLivePreview);
-inputProfileName.addEventListener("input", updateLivePreview);
-inputProfilePicture.addEventListener("input", updateLivePreview);
+inputProfileDisplayName?.addEventListener("input", updateLivePreview);
+inputProfileName?.addEventListener("input", updateLivePreview);
+inputProfilePicture?.addEventListener("input", updateLivePreview);
 
 function openProfileModal() {
-  profileModal.classList.add("open");
+  profileModal?.classList.add("open");
   updateProfileUi();
-  privateKeyDisplayWrapper.style.display = "none";
-  profileKeysNsec.value = "";
-  btnRevealNsec.textContent = "Reveal Private Key";
+  if (privateKeyDisplayWrapper) privateKeyDisplayWrapper.style.display = "none";
+  if (profileKeysNsec) profileKeysNsec.value = "";
+  if (btnRevealNsec) btnRevealNsec.textContent = "Reveal Private Key";
 }
 
 function closeProfileModal() {
-  profileModal.classList.remove("open");
+  profileModal?.classList.remove("open");
 }
 
-userBadge.addEventListener("click", openProfileModal);
-btnCloseProfileModal.addEventListener("click", closeProfileModal);
-profileModal.addEventListener("click", (e) => {
+userBadge?.addEventListener("click", openProfileModal);
+btnCloseProfileModal?.addEventListener("click", closeProfileModal);
+profileModal?.addEventListener("click", (e: MouseEvent) => {
   if (e.target === profileModal) closeProfileModal();
 });
 
-tabBtnProfileInfo.addEventListener("click", () => {
+tabBtnProfileInfo?.addEventListener("click", () => {
   tabBtnProfileInfo.classList.add("active");
-  tabBtnProfileKeys.classList.remove("active");
-  profilePaneInfo.style.display = "flex";
-  profilePaneKeys.style.display = "none";
+  tabBtnProfileKeys?.classList.remove("active");
+  if (profilePaneInfo) profilePaneInfo.style.display = "flex";
+  if (profilePaneKeys) profilePaneKeys.style.display = "none";
 });
 
-tabBtnProfileKeys.addEventListener("click", () => {
+tabBtnProfileKeys?.addEventListener("click", () => {
   tabBtnProfileKeys.classList.add("active");
-  tabBtnProfileInfo.classList.remove("active");
-  profilePaneKeys.style.display = "flex";
-  profilePaneInfo.style.display = "none";
+  tabBtnProfileInfo?.classList.remove("active");
+  if (profilePaneKeys) profilePaneKeys.style.display = "flex";
+  if (profilePaneInfo) profilePaneInfo.style.display = "none";
 });
 
-btnSaveProfile.addEventListener("click", async () => {
+btnSaveProfile?.addEventListener("click", async () => {
+  if (!btnSaveProfile) return;
   btnSaveProfile.disabled = true;
   btnSaveProfile.textContent = "Signing & Publishing (kind 0)...";
 
   try {
     const metadata: Record<string, any> = {};
-    if (inputProfileName.value.trim()) metadata.name = inputProfileName.value.trim();
-    if (inputProfileDisplayName.value.trim()) metadata.display_name = inputProfileDisplayName.value.trim();
-    if (inputProfileAbout.value.trim()) metadata.about = inputProfileAbout.value.trim();
-    if (inputProfilePicture.value.trim()) metadata.picture = inputProfilePicture.value.trim();
-    if (inputProfileNip05.value.trim()) metadata.nip05 = inputProfileNip05.value.trim();
-    if (inputProfileLud16.value.trim()) metadata.lud16 = inputProfileLud16.value.trim();
+    if (inputProfileName?.value.trim()) metadata.name = inputProfileName.value.trim();
+    if (inputProfileDisplayName?.value.trim()) metadata.display_name = inputProfileDisplayName.value.trim();
+    if (inputProfileAbout?.value.trim()) metadata.about = inputProfileAbout.value.trim();
+    if (inputProfilePicture?.value.trim()) metadata.picture = inputProfilePicture.value.trim();
+    if (inputProfileNip05?.value.trim()) metadata.nip05 = inputProfileNip05.value.trim();
+    if (inputProfileLud16?.value.trim()) metadata.lud16 = inputProfileLud16.value.trim();
 
     await kernel.publishProfile(metadata);
     await updateProfileUi();
     btnSaveProfile.textContent = "Profile Saved & Published!";
     setTimeout(() => {
-      btnSaveProfile.disabled = false;
-      btnSaveProfile.textContent = "Save & Publish Profile (kind 0)";
+      if (btnSaveProfile) {
+        btnSaveProfile.disabled = false;
+        btnSaveProfile.textContent = "Save & Publish Profile (kind 0)";
+      }
     }, 1800);
   } catch (err: any) {
     console.error("Failed to publish profile:", err);
@@ -1002,7 +1132,8 @@ btnSaveProfile.addEventListener("click", async () => {
   }
 });
 
-async function copyToClipboard(text: string, button: HTMLButtonElement) {
+async function copyToClipboard(text: string, button: HTMLButtonElement | null) {
+  if (!button) return;
   try {
     await navigator.clipboard.writeText(text);
     const prev = button.textContent;
@@ -1015,11 +1146,12 @@ async function copyToClipboard(text: string, button: HTMLButtonElement) {
   }
 }
 
-btnCopyNpub.addEventListener("click", () => copyToClipboard(profileKeysNpub.value, btnCopyNpub));
-btnCopyHex.addEventListener("click", () => copyToClipboard(profileKeysHex.value, btnCopyHex));
-btnCopyNsec.addEventListener("click", () => copyToClipboard(profileKeysNsec.value, btnCopyNsec));
+btnCopyNpub?.addEventListener("click", () => copyToClipboard(profileKeysNpub?.value || "", btnCopyNpub));
+btnCopyHex?.addEventListener("click", () => copyToClipboard(profileKeysHex?.value || "", btnCopyHex));
+btnCopyNsec?.addEventListener("click", () => copyToClipboard(profileKeysNsec?.value || "", btnCopyNsec));
 
-btnRevealNsec.addEventListener("click", () => {
+btnRevealNsec?.addEventListener("click", () => {
+  if (!privateKeyDisplayWrapper || !profileKeysNsec || !btnRevealNsec) return;
   if (privateKeyDisplayWrapper.style.display === "flex") {
     privateKeyDisplayWrapper.style.display = "none";
     profileKeysNsec.value = "";
@@ -1037,8 +1169,8 @@ btnRevealNsec.addEventListener("click", () => {
   btnRevealNsec.textContent = "Hide Private Key";
 });
 
-btnConfirmImportKey.addEventListener("click", async () => {
-  const keyInput = inputImportNsec.value.trim();
+btnConfirmImportKey?.addEventListener("click", async () => {
+  const keyInput = inputImportNsec?.value.trim();
   if (!keyInput) {
     alert("Please enter a private key (nsec1... or 64-char hex)");
     return;
@@ -1056,12 +1188,12 @@ btnConfirmImportKey.addEventListener("click", async () => {
 
     kernel.switchPrivateKey(decoded.hex);
     localStorage.setItem(STORAGE_KEY_NSEC, decoded.hex);
-    inputImportNsec.value = "";
+    if (inputImportNsec) inputImportNsec.value = "";
 
     await updateProfileUi();
-    privateKeyDisplayWrapper.style.display = "none";
-    profileKeysNsec.value = "";
-    btnRevealNsec.textContent = "Reveal Private Key";
+    if (privateKeyDisplayWrapper) privateKeyDisplayWrapper.style.display = "none";
+    if (profileKeysNsec) profileKeysNsec.value = "";
+    if (btnRevealNsec) btnRevealNsec.textContent = "Reveal Private Key";
 
     alert("Identity switched successfully!");
   } catch (err: any) {
@@ -1069,7 +1201,7 @@ btnConfirmImportKey.addEventListener("click", async () => {
   }
 });
 
-btnGenerateNewKey.addEventListener("click", async () => {
+btnGenerateNewKey?.addEventListener("click", async () => {
   const confirmed = window.confirm(
     "Generate a fresh random Nostr keypair? This will switch your active identity to a new anonymous account."
   );
@@ -1080,9 +1212,9 @@ btnGenerateNewKey.addEventListener("click", async () => {
   localStorage.setItem(STORAGE_KEY_NSEC, freshHex);
 
   await updateProfileUi();
-  privateKeyDisplayWrapper.style.display = "none";
-  profileKeysNsec.value = "";
-  btnRevealNsec.textContent = "Reveal Private Key";
+  if (privateKeyDisplayWrapper) privateKeyDisplayWrapper.style.display = "none";
+  if (profileKeysNsec) profileKeysNsec.value = "";
+  if (btnRevealNsec) btnRevealNsec.textContent = "Reveal Private Key";
 
   alert("New Nostr keypair generated and activated!");
 });
@@ -1101,67 +1233,23 @@ async function startApp() {
   await updateProfileUi();
   const userPubkey = await kernel.getUserPubkey();
 
-  // Mount MVP Plugins into sandbox
-  console.log("⚡ [Omni Web] Mounting Checklist plugin...");
-  await kernel.registerPlugin(checklistManifest as any, checklistScript, slotContainers);
-
-  console.log("⚡ [Omni Web] Mounting Timer plugin...");
-  await kernel.registerPlugin(timerManifest as any, timerScript, slotContainers);
+  // Mount all enabled plugins into runtime sandboxes
+  console.log("⚡ [Omni Web] Mounting core plugins into modular runtime...");
+  for (const p of installedPlugins) {
+    if (p.enabled) {
+      console.log(`⚡ [Omni Web] Mounting plugin ${p.manifest.name}...`);
+      await kernel.registerPlugin(p.manifest as any, p.scriptContent, slotContainers);
+    }
+  }
 
   // Check existing events in local store; if empty, seed a welcome note
-  const existingNotes = await kernel.eventStore.getEvents({ kinds: [1], limit: 20 });
+  const existingNotes = await kernel.eventStore.getEvents({ kinds: [1], limit: 5 });
   if (existingNotes.length === 0) {
     console.log("⚡ [Omni Web] Seeding welcome note to local 0ms store...");
-    const seedNote = await kernel.publishNote(
-      "Welcome to Omni! ✦ A modular, mobile-first Nostr web client with secure Shopify Remote DOM plugin projection. Open the Widgets drawer to use the Daily Checklist and Focus Timer."
+    await kernel.publishNote(
+      "Welcome to Omni! ✦ A modular, mobile-first Nostr web client where every feature is a first-class plugin. Use the Layout tool to customize widget slots, and inspect relay connections via the status pill."
     );
-    renderNote(seedNote, userPubkey, true);
-  } else {
-    for (const note of existingNotes) {
-      renderNote(note, userPubkey, false);
-    }
   }
-
-  // Subscribe to live timeline feed (0ms cache + real-time relays)
-  kernel.subscribeTimeline(
-    "main_feed",
-    [{ kinds: [1], limit: 50 }],
-    (event) => {
-      renderNote(event, userPubkey, true);
-    },
-    () => {
-      relayCountText.textContent = "Connected (0ms Cache)";
-    }
-  );
-
-  // Publish Note Handler
-  async function handlePublish() {
-    const text = composerInput.value.trim();
-    if (!text) return;
-
-    btnPublish.disabled = true;
-    btnPublish.textContent = "Signing...";
-
-    try {
-      const signedNote = await kernel.publishNote(text);
-      composerInput.value = "";
-      renderNote(signedNote, userPubkey, true);
-    } catch (err) {
-      console.error("Failed to publish note:", err);
-      alert(`Publish failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      btnPublish.disabled = false;
-      btnPublish.textContent = "Publish Note";
-    }
-  }
-
-  btnPublish.addEventListener("click", handlePublish);
-  composerInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      handlePublish();
-    }
-  });
 
   console.log("🚀 [Omni Web] App running successfully!");
 }

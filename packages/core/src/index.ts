@@ -11,3 +11,4 @@ export * from "./ipc/json-rpc-dispatcher.js";
 export * from "./sandbox/sandbox-manager.js";
 export * from "./plugins/nostr-plugin-resolver.js";
 export * from "./kernel/omni-kernel.js";
+export * from "./layout/layout-manager.js";

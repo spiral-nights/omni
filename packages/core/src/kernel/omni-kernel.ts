@@ -9,11 +9,13 @@ import { PluginStorageManager } from "../storage/plugin-storage-manager.js";
 import { IntentBroker } from "../intents/intent-broker.js";
 import { SandboxInstance } from "../sandbox/sandbox-manager.js";
 import { NostrPluginResolver, ResolvedNostrPlugin, PublishNsiteOptions } from "../plugins/nostr-plugin-resolver.js";
+import { LayoutManager } from "../layout/layout-manager.js";
 
 export interface OmniKernelOptions {
   privateKeyHex?: string;
   bootstrapRelays?: string[];
   promptHandler?: PermissionPromptHandler;
+  layoutManager?: LayoutManager;
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
 }
 
@@ -26,6 +28,7 @@ export class OmniKernel {
   readonly aclEngine: AclEngine;
   readonly storageManager: PluginStorageManager;
   readonly intentBroker: IntentBroker;
+  readonly layoutManager: LayoutManager;
 
   private sandboxes: Map<string, SandboxInstance> = new Map();
   private onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
@@ -39,6 +42,7 @@ export class OmniKernel {
     this.aclEngine = new AclEngine(this.capabilityStore, options.promptHandler);
     this.storageManager = new PluginStorageManager();
     this.intentBroker = new IntentBroker();
+    this.layoutManager = options.layoutManager || new LayoutManager();
     this.onSlotAction = options.onSlotAction;
   }
 
@@ -82,18 +86,25 @@ export class OmniKernel {
       }
     }
 
+    this.layoutManager.registerPlugin(manifest);
+
     const userPubkey = await this.getUserPubkey();
     const sandbox = new SandboxInstance({
       manifest,
       scriptContent,
       userPubkey,
       slotContainers,
+      slotResolver: (pluginId: string, componentId: string, defaultSlot: string) => {
+        const targetSlot = this.layoutManager.getSlotForComponent(pluginId, componentId) || defaultSlot;
+        return slotContainers.get(targetSlot) || slotContainers.get(defaultSlot);
+      },
       aclEngine: this.aclEngine,
       storageManager: this.storageManager,
       intentBroker: this.intentBroker,
       subscriptionCoordinator: this.subscriptionCoordinator,
       keystore: this.keystore,
       relayPool: this.relayPool,
+      eventStore: this.eventStore,
       onSlotAction: this.onSlotAction
     });
 
@@ -104,6 +115,24 @@ export class OmniKernel {
 
   isPluginEnabled(pluginId: string): boolean {
     return this.sandboxes.has(pluginId);
+  }
+
+  getSandbox(pluginId: string): SandboxInstance | undefined {
+    return this.sandboxes.get(pluginId);
+  }
+
+  reparentPluginComponent(
+    pluginId: string,
+    componentId: string,
+    targetSlot: string,
+    targetContainer: Element
+  ): boolean {
+    this.layoutManager.setComponentSlot(pluginId, componentId, targetSlot);
+    const sandbox = this.sandboxes.get(pluginId);
+    if (sandbox) {
+      return sandbox.reparentComponent(componentId, targetContainer);
+    }
+    return false;
   }
 
   disablePlugin(pluginId: string): void {
@@ -138,6 +167,7 @@ export class OmniKernel {
       sandbox.destroy();
       this.sandboxes.delete(pluginId);
     }
+    this.layoutManager.unregisterPlugin(pluginId);
     this.capabilityStore.revoke(pluginId);
     this.storageManager.clear(pluginId).catch(console.error);
   }
