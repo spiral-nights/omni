@@ -118,4 +118,53 @@ describe("RemoteDomHost Standard HTML Projection", () => {
 
     host.destroy();
   });
+
+  it("DEFAULT_OMNI_RUNTIME executes and creates remote elements without TypeError", async () => {
+    const { DEFAULT_OMNI_RUNTIME } = await import("../src/sandbox/default-runtime.js");
+    
+    // Create an iframe to execute DEFAULT_OMNI_RUNTIME in a fresh window context
+    const iframe = document.createElement("iframe");
+    document.body.appendChild(iframe);
+    const win = iframe.contentWindow as any;
+    
+    // Execute runtime script
+    win.eval(DEFAULT_OMNI_RUNTIME);
+
+    expect(win.omni).toBeDefined();
+    expect(typeof win.omni.registerComponent).toBe("function");
+
+    // Create MessageChannels to simulate handshake
+    const channelDom = new MessageChannel();
+    const channelRpc = new MessageChannel();
+
+    let renderInvoked = false;
+    let createdInputType = "";
+
+    // Register a component that creates elements, sets types, classes, attributes
+    win.omni.registerComponent("test-comp", ({ root }: any) => {
+      renderInvoked = true;
+      const input = root.createElement("input");
+      input.type = "text";
+      input.placeholder = "Enter value";
+      input.className = "test-input";
+      root.appendChild(input);
+      createdInputType = input.type;
+    });
+
+    // Send omni:init handshake via MessageEvent with explicit ports
+    const initEvent = new MessageEvent("message", {
+      data: { type: "omni:init", payload: { pluginId: "test.plugin" } },
+      ports: [channelDom.port2, channelRpc.port2]
+    });
+    win.dispatchEvent(initEvent);
+
+    // Give microtasks time to execute
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(renderInvoked).toBe(true);
+    expect(createdInputType).toBe("text");
+
+    document.body.removeChild(iframe);
+  });
 });
+

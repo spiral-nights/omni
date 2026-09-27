@@ -23,9 +23,8 @@
   window.addEventListener("message", (event) => {
     const data = event.data;
     if (data && data.type === "omni:init") {
-      portRemoteDom = event.ports[0];
-      portKernelRpc = event.ports[1];
-      sessionInfo = data.payload;
+      portRemoteDom = event.ports ? event.ports[0] : null;
+      portKernelRpc = event.ports ? event.ports[1] : null;
 
       setupKernelRpc();
       setupRemoteDom();
@@ -41,6 +40,7 @@
 
   // 2. Kernel RPC Communication
   function setupKernelRpc() {
+    if (!portKernelRpc) return;
     portKernelRpc.onmessage = (event) => {
       const msg = event.data;
       if (!msg) return;
@@ -371,6 +371,7 @@
   }
 
   function setupRemoteDom() {
+    if (!portRemoteDom) return;
     portRemoteDom.onmessage = (event) => {
       const data = event.data;
       if (!data) return;
