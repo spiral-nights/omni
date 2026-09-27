@@ -83,6 +83,30 @@ export type ComponentRenderFn<P = Record<string, unknown>> = (
   ctx: ComponentContext<P>
 ) => void | Promise<void>;
 
+export interface OmniNostrApi {
+  getPublicKey(): Promise<string>;
+  signEvent(event: any): Promise<NostrEvent>;
+  publish(event: any): Promise<NostrEvent & { relays: string[] }>;
+  subscribe(filters: NostrFilter[], onEvent: (event: NostrEvent, meta: EventMetadata) => void, onEose?: () => void): OmniSubscription;
+}
+
+export interface OmniRelaysApi {
+  list(): Promise<Array<{ url: string; status: "connected" | "connecting" | "disconnected" }>>;
+  add(url: string): Promise<{ success: boolean; url: string }>;
+  remove(url: string): Promise<{ success: boolean; url: string }>;
+}
+
+export interface OmniProfileApi {
+  get(pubkey?: string): Promise<Record<string, any> | null>;
+  publish(metadata: Record<string, any>): Promise<NostrEvent>;
+}
+
+export interface OmniAuthApi {
+  getNpub(): Promise<string>;
+  getNsec(): Promise<string>;
+  switchKey(key: string): Promise<{ pubkey: string; npub: string }>;
+}
+
 /**
  * Injected window.omni API Interface
  */
@@ -94,6 +118,10 @@ export interface OmniHostApi {
     render: ComponentRenderFn<P>
   ): void;
   subscribe(options: SubscribeOptions): OmniSubscription;
+  nostr: OmniNostrApi;
+  relays: OmniRelaysApi;
+  profile: OmniProfileApi;
+  auth: OmniAuthApi;
   storage: OmniStorageApi;
   intents: OmniIntentsApi;
   ui: OmniUiApi;

@@ -83,6 +83,33 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  packages/plugins/feed:
+    devDependencies:
+      '@omni/types':
+        specifier: workspace:*
+        version: link:../../types
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/plugins/profile:
+    devDependencies:
+      '@omni/types':
+        specifier: workspace:*
+        version: link:../../types
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/plugins/relays:
+    devDependencies:
+      '@omni/types':
+        specifier: workspace:*
+        version: link:../../types
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   packages/plugins/timer:
     devDependencies:
       '@omni/types':

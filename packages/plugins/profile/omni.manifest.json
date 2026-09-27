@@ -1,0 +1,31 @@
+{
+  "$schema": "https://omni.run/schema/v1/manifest.json",
+  "id": "org.omni.plugin.profile",
+  "name": "Profile & Identity",
+  "version": "1.0.0",
+  "description": "Nostr identity badge, kind-0 profile metadata editor, and key custody manager",
+  "author": {
+    "name": "Omni Core Team",
+    "pubkey": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
+  },
+  "icon": "user",
+  "entry": "dist/index.js",
+  "components": [
+    {
+      "id": "profile-badge",
+      "type": "widget",
+      "title": "User Profile Badge",
+      "slot": "header-actions"
+    }
+  ],
+  "permissions": {
+    "nostr": {
+      "read": { "allKinds": true },
+      "write": { "allKinds": true },
+      "sign": true
+    },
+    "storage": {
+      "quotaMb": 2
+    }
+  }
+}

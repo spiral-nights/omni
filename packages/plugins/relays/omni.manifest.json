@@ -1,0 +1,32 @@
+{
+  "$schema": "https://omni.run/schema/v1/manifest.json",
+  "id": "org.omni.plugin.relays",
+  "name": "Relay Pool Manager",
+  "version": "1.0.0",
+  "description": "Decentralized Nostr relay pool inspector, live latency indicators, and connection manager",
+  "author": {
+    "name": "Omni Core Team",
+    "pubkey": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
+  },
+  "icon": "relay",
+  "entry": "dist/index.js",
+  "components": [
+    {
+      "id": "relay-status-pill",
+      "type": "widget",
+      "title": "Relay Status Pill",
+      "slot": "header-status"
+    },
+    {
+      "id": "relay-sidebar-widget",
+      "type": "sidebar",
+      "title": "Relay Pool",
+      "slot": "sidebar"
+    }
+  ],
+  "permissions": {
+    "nostr": {
+      "read": { "allKinds": true }
+    }
+  }
+}

@@ -156,11 +156,41 @@ export class RelayPool {
     return urls.length > 0 ? urls : [...this.bootstrapUrls];
   }
 
+  getAllRelays(): Array<{ url: string; status: "connected" | "connecting" | "disconnected" }> {
+    const list: Array<{ url: string; status: "connected" | "connecting" | "disconnected" }> = [];
+    const allUrls = Array.from(new Set([...this.bootstrapUrls, ...this.relays.keys()]));
+    for (const url of allUrls) {
+      const ws = this.relays.get(url);
+      if (!ws) {
+        list.push({ url, status: "disconnected" });
+      } else if (ws.readyState === WebSocket.OPEN) {
+        list.push({ url, status: "connected" });
+      } else if (ws.readyState === WebSocket.CONNECTING) {
+        list.push({ url, status: "connecting" });
+      } else {
+        list.push({ url, status: "disconnected" });
+      }
+    }
+    return list;
+  }
+
   addRelay(url: string): void {
     if (!this.bootstrapUrls.includes(url)) {
       this.bootstrapUrls.push(url);
     }
     this.connectRelay(url);
+  }
+
+  removeRelay(url: string): void {
+    const ws = this.relays.get(url);
+    if (ws) {
+      ws.close();
+      this.relays.delete(url);
+    }
+    const idx = this.bootstrapUrls.indexOf(url);
+    if (idx !== -1) {
+      this.bootstrapUrls.splice(idx, 1);
+    }
   }
 
   async fetchEvent(filter: NostrFilter, timeoutMs = 4000): Promise<NostrEvent | null> {

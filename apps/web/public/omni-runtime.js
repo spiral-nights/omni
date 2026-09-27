@@ -507,6 +507,44 @@
           callRpc("ui.closeSlot", { slot });
         });
       }
+    },
+    relays: {
+      async list() {
+        await initPromise;
+        return callRpc("relays.list");
+      },
+      async add(url) {
+        await initPromise;
+        return callRpc("relays.add", { url });
+      },
+      async remove(url) {
+        await initPromise;
+        return callRpc("relays.remove", { url });
+      }
+    },
+    profile: {
+      async get(pubkey) {
+        await initPromise;
+        return callRpc("profile.get", { pubkey });
+      },
+      async publish(metadata) {
+        await initPromise;
+        return callRpc("profile.publish", { metadata });
+      }
+    },
+    auth: {
+      async getNpub() {
+        await initPromise;
+        return callRpc("auth.getNpub");
+      },
+      async getNsec() {
+        await initPromise;
+        return callRpc("auth.getNsec");
+      },
+      async switchKey(key) {
+        await initPromise;
+        return callRpc("auth.switchKey", { key });
+      }
     }
   };
 

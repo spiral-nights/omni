@@ -1,0 +1,13 @@
+{
+  "name": "@omni/plugin-feed",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@omni/types": "workspace:*",
+    "typescript": "^5.7.0"
+  }
+}

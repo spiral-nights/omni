@@ -12,6 +12,7 @@ import { IntentBroker } from "../intents/intent-broker.js";
 import { SubscriptionCoordinator } from "../nostr/subscription-coordinator.js";
 import { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import { RelayPool } from "../nostr/relay-pool.js";
+import { LocalEventStore } from "../nostr/event-store.js";
 
 export interface DispatcherContext {
   pluginId: string;
@@ -23,6 +24,7 @@ export interface DispatcherContext {
   subscriptionCoordinator: SubscriptionCoordinator;
   keystore: WebCryptoKeystore;
   relayPool: RelayPool;
+  eventStore: LocalEventStore;
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
 }
 
@@ -227,6 +229,80 @@ export class JsonRpcDispatcher {
       case "ui.toggleSlot": {
         if (this.ctx.onSlotAction) this.ctx.onSlotAction("toggle", params.slot);
         return { success: true };
+      }
+
+      case "ui.openSlot": {
+        if (this.ctx.onSlotAction) this.ctx.onSlotAction("open", params.slot);
+        return { success: true };
+      }
+
+      case "ui.closeSlot": {
+        if (this.ctx.onSlotAction) this.ctx.onSlotAction("close", params.slot);
+        return { success: true };
+      }
+
+      // 9. Relays Management
+      case "relays.list": {
+        return this.ctx.relayPool.getAllRelays();
+      }
+
+      case "relays.add": {
+        if (!params?.url || !params.url.startsWith("ws")) {
+          throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Invalid relay URL (must start with ws:// or wss://)" };
+        }
+        this.ctx.relayPool.addRelay(params.url);
+        return { success: true, url: params.url };
+      }
+
+      case "relays.remove": {
+        if (!params?.url) throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing relay url" };
+        this.ctx.relayPool.removeRelay(params.url);
+        return { success: true, url: params.url };
+      }
+
+      // 10. Profile & Identity
+      case "profile.get": {
+        const pubkey = params?.pubkey || (await this.ctx.keystore.getPublicKey());
+        const events = await this.ctx.eventStore.getEvents({ kinds: [0], authors: [pubkey], limit: 1 });
+        if (events.length > 0) {
+          try {
+            return JSON.parse(events[0].content);
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      }
+
+      case "profile.publish": {
+        const pubkey = await this.ctx.keystore.getPublicKey();
+        const draft = {
+          kind: 0,
+          content: JSON.stringify(params.metadata || {}),
+          tags: [],
+          created_at: Math.floor(Date.now() / 1000)
+        };
+        const signed = await this.ctx.keystore.signEvent(draft);
+        await this.ctx.eventStore.saveEvent(signed);
+        await this.ctx.relayPool.publish(signed);
+        return signed;
+      }
+
+      case "auth.getNpub": {
+        return this.ctx.keystore.getNpub();
+      }
+
+      case "auth.getNsec": {
+        return this.ctx.keystore.getNsec();
+      }
+
+      case "auth.switchKey": {
+        if (!params?.key) throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing key" };
+        this.ctx.keystore.setPrivateKey(params.key);
+        return {
+          pubkey: await this.ctx.keystore.getPublicKey(),
+          npub: await this.ctx.keystore.getNpub()
+        };
       }
 
       default:
