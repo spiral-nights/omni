@@ -201,5 +201,69 @@ describe("RemoteDomHost Standard HTML Projection", () => {
     host.destroy();
     document.body.removeChild(container);
   });
+
+  it("handles detached element creation followed by appendChild without premature property mutations", async () => {
+    const { DEFAULT_OMNI_RUNTIME } = await import("../src/sandbox/default-runtime.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const host = new RemoteDomHost({
+      container,
+      componentId: "feed-dock-icon",
+      onEvent: vi.fn()
+    });
+
+    const iframe = document.createElement("iframe");
+    document.body.appendChild(iframe);
+    const win = iframe.contentWindow as any;
+    win.eval(DEFAULT_OMNI_RUNTIME);
+
+    const channelDom = new MessageChannel();
+    const channelRpc = new MessageChannel();
+
+    // Hook channelDom.port1 to host.mutate
+    channelDom.port1.onmessage = (event) => {
+      if (event.data?.type === "mutate") {
+        host.mutate(event.data.records);
+      }
+    };
+
+    // Register component creating detached tree with classes and attributes
+    win.omni.registerComponent("feed-dock-icon", ({ root }: any) => {
+      const btn = root.createElement("button");
+      btn.className = "dock-item active";
+      btn.title = "Timeline Feed";
+
+      const iconWrapper = root.createElement("div");
+      iconWrapper.className = "dock-icon-wrapper";
+
+      const span = root.createElement("span");
+      span.textContent = "Feed";
+
+      btn.appendChild(iconWrapper);
+      btn.appendChild(span);
+      root.appendChild(btn);
+    });
+
+    const initEvent = new MessageEvent("message", {
+      data: { type: "omni:init", payload: { pluginId: "org.omni.plugin.feed" } },
+      ports: [channelDom.port2, channelRpc.port2]
+    });
+    win.dispatchEvent(initEvent);
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Verify button and span projected into host container
+    const button = container.querySelector("button");
+    expect(button).not.toBeNull();
+    expect(button?.classList.contains("dock-item")).toBe(true);
+    expect(button?.classList.contains("active")).toBe(true);
+    expect(button?.getAttribute("title")).toBe("Timeline Feed");
+    expect(button?.textContent).toContain("Feed");
+
+    host.destroy();
+    document.body.removeChild(container);
+    document.body.removeChild(iframe);
+  });
 });
 

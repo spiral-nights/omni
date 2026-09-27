@@ -129,6 +129,15 @@
           this.childNodes = [];
           self.nodes.set(this.id, this);
         }
+
+        isConnected() {
+          let cur = this;
+          while (cur) {
+            if (cur.id === "~") return true;
+            cur = cur.parentNode;
+          }
+          return false;
+        }
       }
 
       class RemoteText extends RemoteNode {
@@ -139,7 +148,9 @@
         get data() { return this._data; }
         set data(val) {
           this._data = String(val ?? "");
-          self.sendMutation([2, this.id, this._data]);
+          if (this.isConnected()) {
+            self.sendMutation([2, this.id, this._data]);
+          }
         }
         get textContent() { return this._data; }
         set textContent(val) { this.data = val; }
@@ -174,8 +185,8 @@
         setAttribute(name, value) {
           const strVal = String(value);
           this.attributes.set(name, strVal);
-          // Only send mutation if not root element '~'
-          if (this.id !== "~") {
+          // Only send mutation if not root element '~' and connected to tree
+          if (this.id !== "~" && this.isConnected()) {
             // Mutation 3 with updateType 2 (UPDATE_PROPERTY_TYPE_ATTRIBUTE = 2)
             self.sendMutation([3, this.id, name, strVal, 2]);
           }
@@ -183,7 +194,7 @@
 
         removeAttribute(name) {
           this.attributes.delete(name);
-          if (this.id !== "~") {
+          if (this.id !== "~" && this.isConnected()) {
             self.sendMutation([3, this.id, name, null, 2]);
           }
         }
@@ -208,7 +219,7 @@
         set checked(val) {
           const boolVal = Boolean(val);
           this.setAttribute("checked", boolVal ? "true" : "false");
-          if (this.id !== "~") {
+          if (this.id !== "~" && this.isConnected()) {
             // UPDATE_PROPERTY_TYPE_PROPERTY = 1
             self.sendMutation([3, this.id, "checked", boolVal, 1]);
           }
@@ -218,7 +229,7 @@
         set value(val) {
           const strVal = String(val ?? "");
           this.setAttribute("value", strVal);
-          if (this.id !== "~") {
+          if (this.id !== "~" && this.isConnected()) {
             // UPDATE_PROPERTY_TYPE_PROPERTY = 1
             self.sendMutation([3, this.id, "value", strVal, 1]);
           }
@@ -261,8 +272,10 @@
           }
           this.childNodes.splice(index, 0, child);
 
-          const serialized = self.serializeNode(child);
-          self.sendMutation([0, this.id, serialized, index]);
+          if (this.isConnected()) {
+            const serialized = self.serializeNode(child);
+            self.sendMutation([0, this.id, serialized, index]);
+          }
           return child;
         }
 
@@ -270,8 +283,10 @@
           const idx = this.childNodes.indexOf(child);
           if (idx !== -1) {
             this.childNodes.splice(idx, 1);
+            if (this.isConnected()) {
+              self.sendMutation([1, this.id, idx]);
+            }
             child.parentNode = null;
-            self.sendMutation([1, this.id, idx]);
           }
           return child;
         }
@@ -292,8 +307,10 @@
         addEventListener(event, listener) {
           if (!this._listeners.has(event)) {
             this._listeners.set(event, new Set());
-            // Inform host to listen to this event: Mutation 3 with updateType 3 (UPDATE_PROPERTY_TYPE_EVENT_LISTENER = 3)
-            self.sendMutation([3, this.id, event, true, 3]);
+            if (this.id !== "~" && this.isConnected()) {
+              // Inform host to listen to this event: Mutation 3 with updateType 3 (UPDATE_PROPERTY_TYPE_EVENT_LISTENER = 3)
+              self.sendMutation([3, this.id, event, true, 3]);
+            }
           }
           this._listeners.get(event).add(listener);
         }
@@ -304,7 +321,9 @@
             set.delete(listener);
             if (set.size === 0) {
               this._listeners.delete(event);
-              self.sendMutation([3, this.id, event, null, 3]);
+              if (this.id !== "~" && this.isConnected()) {
+                self.sendMutation([3, this.id, event, null, 3]);
+              }
             }
           }
         }
@@ -342,11 +361,18 @@
       for (const [k, v] of node.attributes.entries()) {
         attrs[k] = v;
       }
+      const listeners = {};
+      if (node._listeners) {
+        for (const k of node._listeners.keys()) {
+          listeners[k] = true;
+        }
+      }
       return {
         id: node.id,
         type: 1,
         element: node.localName,
         attributes: attrs,
+        eventListeners: listeners,
         children: node.childNodes.map((c) => this.serializeNode(c))
       };
     }

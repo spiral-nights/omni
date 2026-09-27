@@ -107,6 +107,13 @@ export class RemoteDomHost {
       };
     }
 
+    // Ensure all insertChild (0) operations are executed before updateProperty (3)
+    filteredRecords.sort((a, b) => {
+      const orderA = a[0] === 0 ? 0 : 1;
+      const orderB = b[0] === 0 ? 0 : 1;
+      return orderA - orderB;
+    });
+
     try {
       this.receiver.connection.mutate(filteredRecords);
     } catch (err) {
