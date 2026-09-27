@@ -62,10 +62,26 @@ export class RemoteDomHost {
       return rec;
     });
 
+    const SVG_TAGS = new Set(["svg", "path", "circle", "rect", "line", "polyline", "polygon", "g"]);
+    let origCreate: any = null;
+    if (typeof document !== "undefined") {
+      origCreate = document.createElement.bind(document);
+      document.createElement = function (tagName: string, options?: any) {
+        if (SVG_TAGS.has(tagName.toLowerCase())) {
+          return document.createElementNS("http://www.w3.org/2000/svg", tagName);
+        }
+        return origCreate(tagName, options);
+      };
+    }
+
     try {
       this.receiver.connection.mutate(wrappedRecords);
     } catch (err) {
       console.error(`Remote DOM mutation error in [${this.componentId}]:`, err);
+    } finally {
+      if (origCreate && typeof document !== "undefined") {
+        document.createElement = origCreate;
+      }
     }
   }
 

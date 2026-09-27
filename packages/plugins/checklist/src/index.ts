@@ -14,10 +14,29 @@ if (typeof omni !== "undefined") {
     btn.className = "dock-icon-btn";
     btn.title = "Daily Checklist";
 
-    const icon = root.createElement("span");
-    icon.className = "icon";
-    icon.textContent = "☑️";
-    btn.appendChild(icon);
+    const svg = root.createElement("svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "20");
+    svg.setAttribute("height", "20");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.8");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+
+    const rect = root.createElement("rect");
+    rect.setAttribute("x", "3");
+    rect.setAttribute("y", "3");
+    rect.setAttribute("width", "18");
+    rect.setAttribute("height", "18");
+    rect.setAttribute("rx", "3");
+
+    const polyline = root.createElement("polyline");
+    polyline.setAttribute("points", "9 12 11 14 15 10");
+
+    svg.appendChild(rect);
+    svg.appendChild(polyline);
+    btn.appendChild(svg);
 
     const badge = root.createElement("span");
     badge.className = "dock-badge";

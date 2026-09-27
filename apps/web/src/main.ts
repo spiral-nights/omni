@@ -6,6 +6,7 @@ import checklistManifest from "../../../packages/plugins/checklist/omni.manifest
 import timerManifest from "../../../packages/plugins/timer/omni.manifest.json";
 import checklistScript from "../../../packages/plugins/checklist/dist/index.js?raw";
 import timerScript from "../../../packages/plugins/timer/dist/index.js?raw";
+import { icon } from "./icons.js";
 
 // DOM Element references
 const dockSlot = document.getElementById("dock-slot")!;
@@ -139,14 +140,19 @@ function renderNote(note: NostrEvent, userPubkey: string, prepend = false) {
 
   const btnReply = document.createElement("button");
   btnReply.className = "note-action-btn";
-  btnReply.innerHTML = "💬 <span>0</span>";
+  btnReply.innerHTML = `${icon("reply", 14)} <span>0</span>`;
 
   const btnLike = document.createElement("button");
   btnLike.className = "note-action-btn";
-  btnLike.innerHTML = "❤️ <span>0</span>";
+  btnLike.innerHTML = `${icon("like", 14)} <span>0</span>`;
+
+  const btnZap = document.createElement("button");
+  btnZap.className = "note-action-btn";
+  btnZap.innerHTML = `${icon("bolt", 14)} <span>0</span>`;
 
   actions.appendChild(btnReply);
   actions.appendChild(btnLike);
+  actions.appendChild(btnZap);
 
   card.appendChild(header);
   card.appendChild(content);

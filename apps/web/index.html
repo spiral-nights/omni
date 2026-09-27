@@ -22,8 +22,10 @@
       <button id="user-badge" class="user-profile-badge" title="Click to copy pubkey">
         npub...
       </button>
-      <button id="btn-open-plugins" class="dock-item" style="min-width: unset; font-size: 1.1rem; color: var(--omni-text-primary);" title="Plugin Manager">
-        🧩
+      <button id="btn-open-plugins" class="dock-item" style="min-width: unset; width: 32px; height: 32px; border-radius: var(--omni-radius-sm); color: var(--omni-text-secondary);" title="Plugin Manager">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 4h4a2 2 0 0 1 2 2v4a1 1 0 0 0 1 1 2 2 0 0 1 0 4 1 1 0 0 0-1 1v4a2 2 0 0 1-2 2h-4a1 1 0 0 0-1-1 2 2 0 0 1-4 0 1 1 0 0 0-1 1H4a2 2 0 0 1-2-2v-4a1 1 0 0 0 1-1 2 2 0 0 1 0-4 1 1 0 0 0-1-1V6a2 2 0 0 1 2-2h4a1 1 0 0 0 1 1 2 2 0 0 1 4 0 1 1 0 0 0 1-1z"/>
+        </svg>
       </button>
     </div>
   </header>
@@ -33,7 +35,13 @@
     <!-- Desktop Left / Mobile Bottom Navigation Dock -->
     <nav class="mobile-dock" id="app-dock">
       <button class="dock-item active" id="dock-btn-feed" title="Timeline Feed">
-        <div class="dock-icon-wrapper">💬</div>
+        <div class="dock-icon-wrapper">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            <line x1="8" y1="9" x2="16" y2="9"/>
+            <line x1="8" y1="13" x2="13" y2="13"/>
+          </svg>
+        </div>
         <span>Feed</span>
       </button>
 
@@ -41,12 +49,23 @@
       <div id="dock-slot" class="dock-slot-container" style="display: flex; gap: 8px;"></div>
 
       <button class="dock-item" id="dock-btn-widgets" title="Toggle Widgets">
-        <div class="dock-icon-wrapper">📋</div>
+        <div class="dock-icon-wrapper">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+            <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+            <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+          </svg>
+        </div>
         <span>Widgets</span>
       </button>
 
       <button class="dock-item" id="dock-btn-settings" title="Plugins & Settings">
-        <div class="dock-icon-wrapper">⚙️</div>
+        <div class="dock-icon-wrapper">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 4h4a2 2 0 0 1 2 2v4a1 1 0 0 0 1 1 2 2 0 0 1 0 4 1 1 0 0 0-1 1v4a2 2 0 0 1-2 2h-4a1 1 0 0 0-1-1 2 2 0 0 1-4 0 1 1 0 0 0-1 1H4a2 2 0 0 1-2-2v-4a1 1 0 0 0 1-1 2 2 0 0 1 0-4 1 1 0 0 0-1-1V6a2 2 0 0 1 2-2h4a1 1 0 0 0 1 1 2 2 0 0 1 4 0 1 1 0 0 0 1-1z"/>
+          </svg>
+        </div>
         <span>Plugins</span>
       </button>
     </nav>
@@ -70,7 +89,12 @@
         <!-- Feed List -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <h2 style="font-size: 0.95rem; font-weight: 600; color: var(--omni-text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Timeline Feed</h2>
-          <span id="feed-cache-indicator" style="font-size: 0.75rem; color: var(--omni-accent-primary);">⚡ 0ms Local Cache</span>
+          <span id="feed-cache-indicator" style="font-size: 0.75rem; color: var(--omni-accent-primary); display: flex; align-items: center; gap: 4px;">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            0ms Local Cache
+          </span>
         </div>
 
         <div id="notes-list" class="notes-list">
@@ -97,7 +121,12 @@
     <div class="drawer-drag-handle"></div>
     <div class="drawer-header">
       <h2 class="drawer-title">Workspace Widgets</h2>
-      <button class="btn-drawer-close" id="btn-close-drawer" title="Close widgets">✕</button>
+      <button class="btn-drawer-close" id="btn-close-drawer" title="Close widgets">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
     </div>
     <!-- Mobile Sidebar Slot -->
     <div id="mobile-sidebar-slot" class="omni-slot"></div>
@@ -108,7 +137,12 @@
     <div class="modal-card">
       <div class="modal-header">
         <h3 style="font-size: 1.1rem; font-weight: 600;">Installed Plugins</h3>
-        <button class="btn-drawer-close" id="btn-close-modal">✕</button>
+        <button class="btn-drawer-close" id="btn-close-modal">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
       <p style="font-size: 0.82rem; color: var(--omni-text-muted);">
         Plugins run inside sandboxed iframes without host DOM or network access. UI is projected via Shopify Remote DOM using standard HTML elements.
@@ -121,9 +155,9 @@
       <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; margin-top: 8px;">
         <h4 style="font-size: 0.88rem; margin-bottom: 6px; color: var(--omni-text-secondary);">Security & Isolation</h4>
         <div style="font-size: 0.78rem; color: var(--omni-text-muted); display: flex; flex-direction: column; gap: 4px;">
-          <div>🔒 CSP: <code>default-src 'none'; script-src 'self'</code></div>
-          <div>🛡️ Network: Completely blocked from iframes</div>
-          <div>📦 DOM: Standard HTML Allowlist projection</div>
+          <div><code style="color: var(--omni-accent-primary);">CSP:</code> <code>default-src 'none'; script-src 'self'</code></div>
+          <div><code style="color: var(--omni-accent-primary);">Network:</code> Completely blocked from iframes</div>
+          <div><code style="color: var(--omni-accent-primary);">DOM:</code> Standard HTML Allowlist projection</div>
         </div>
       </div>
     </div>

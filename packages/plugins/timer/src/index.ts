@@ -55,10 +55,51 @@ if (typeof omni !== "undefined") {
     btn.className = "dock-icon-btn";
     btn.title = "Focus Timer";
 
-    const icon = root.createElement("span");
-    icon.className = "icon";
-    icon.textContent = "⏱️";
-    btn.appendChild(icon);
+    const svg = root.createElement("svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "20");
+    svg.setAttribute("height", "20");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.8");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+
+    const circle = root.createElement("circle");
+    circle.setAttribute("cx", "12");
+    circle.setAttribute("cy", "14");
+    circle.setAttribute("r", "7.5");
+
+    const line1 = root.createElement("line");
+    line1.setAttribute("x1", "12");
+    line1.setAttribute("y1", "10");
+    line1.setAttribute("x2", "12");
+    line1.setAttribute("y2", "14");
+
+    const line2 = root.createElement("line");
+    line2.setAttribute("x1", "12");
+    line2.setAttribute("y1", "14");
+    line2.setAttribute("x2", "15");
+    line2.setAttribute("y2", "14");
+
+    const topPusher = root.createElement("line");
+    topPusher.setAttribute("x1", "10");
+    topPusher.setAttribute("y1", "2.5");
+    topPusher.setAttribute("x2", "14");
+    topPusher.setAttribute("y2", "2.5");
+
+    const stem = root.createElement("line");
+    stem.setAttribute("x1", "12");
+    stem.setAttribute("y1", "2.5");
+    stem.setAttribute("x2", "12");
+    stem.setAttribute("y2", "6.5");
+
+    svg.appendChild(circle);
+    svg.appendChild(line1);
+    svg.appendChild(line2);
+    svg.appendChild(topPusher);
+    svg.appendChild(stem);
+    btn.appendChild(svg);
 
     const label = root.createElement("span");
     label.className = "dock-badge";
