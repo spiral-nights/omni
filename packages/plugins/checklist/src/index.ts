@@ -11,8 +11,11 @@ if (typeof omni !== "undefined") {
   // 1. Register Dock Icon
   omni.registerComponent("checklist-dock-icon", ({ root, props }) => {
     const btn = root.createElement("button");
-    btn.className = "dock-icon-btn";
+    btn.className = "dock-item";
     btn.title = "Daily Checklist";
+
+    const iconWrapper = root.createElement("div");
+    iconWrapper.className = "dock-icon-wrapper";
 
     const svg = root.createElement("svg");
     svg.setAttribute("viewBox", "0 0 24 24");
@@ -36,12 +39,18 @@ if (typeof omni !== "undefined") {
 
     svg.appendChild(rect);
     svg.appendChild(polyline);
-    btn.appendChild(svg);
+    iconWrapper.appendChild(svg);
 
     const badge = root.createElement("span");
     badge.className = "dock-badge";
     badge.textContent = String(props.badgeCount || 3);
-    btn.appendChild(badge);
+    iconWrapper.appendChild(badge);
+
+    btn.appendChild(iconWrapper);
+
+    const span = root.createElement("span");
+    span.textContent = "Tasks";
+    btn.appendChild(span);
 
     btn.addEventListener("click", () => {
       omni.ui.toggleSlot("sidebar");

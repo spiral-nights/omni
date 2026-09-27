@@ -260,7 +260,22 @@ body {
   z-index: 60;
 }
 
-.dock-item {
+.dock-slot-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 8px;
+}
+
+.dock-slot-container .omni-component-slot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: visible !important;
+}
+
+.dock-item,
+.dock-icon-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -273,15 +288,26 @@ body {
   cursor: pointer;
   position: relative;
   min-width: 60px;
+  padding: 4px 0;
+  transition: color 0.15s ease;
 }
 
-.dock-item.active {
+.dock-item:hover,
+.dock-icon-btn:hover {
+  color: var(--omni-text-primary);
+}
+
+.dock-item.active,
+.dock-icon-btn.active {
   color: var(--omni-accent-primary);
 }
 
 .dock-icon-wrapper {
   position: relative;
   font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 5. Mobile Pull-Up Drawer for Widgets */
@@ -380,6 +406,16 @@ body {
     gap: 24px;
     border-top: none;
     border-right: 1px solid var(--omni-border-subtle);
+  }
+
+  .dock-slot-container {
+    flex-direction: column;
+    gap: 24px;
+    width: 100%;
+  }
+
+  .dock-slot-container .omni-component-slot {
+    width: 100%;
   }
 
   .main-viewport {

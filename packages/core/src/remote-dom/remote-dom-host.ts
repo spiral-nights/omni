@@ -31,8 +31,11 @@ export class RemoteDomHost {
     // Apply CSS containment to slot container
     if (this.container instanceof HTMLElement) {
       this.container.style.position = "relative";
-      this.container.style.contain = "layout paint";
-      this.container.style.overflow = "auto";
+      const isCompact = this.container.closest("#dock-slot, #header-status-slot, #header-actions-slot");
+      if (!isCompact) {
+        this.container.style.contain = "layout paint";
+        this.container.style.overflow = "auto";
+      }
     }
 
     this.receiver = new DOMRemoteReceiver({

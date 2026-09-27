@@ -162,6 +162,8 @@ const kernel = new OmniKernel({
           closeDrawer();
         }
       }
+    } else if (slot === "main" || slot === "feed") {
+      mainSlot?.scrollIntoView({ behavior: "smooth" });
     }
   }
 });

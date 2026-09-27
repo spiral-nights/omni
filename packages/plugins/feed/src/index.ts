@@ -57,6 +57,7 @@ if (typeof omni !== "undefined") {
 
     btn.addEventListener("click", () => {
       omni.ui.closeSlot("sidebar");
+      omni.ui.openSlot("main");
     });
 
     root.appendChild(btn);

@@ -52,8 +52,11 @@ if (typeof omni !== "undefined") {
   // 1. Register Dock Icon (Reactive countdown label)
   omni.registerComponent("timer-dock-icon", ({ root }) => {
     const btn = root.createElement("button");
-    btn.className = "dock-icon-btn";
+    btn.className = "dock-item";
     btn.title = "Focus Timer";
+
+    const iconWrapper = root.createElement("div");
+    iconWrapper.className = "dock-icon-wrapper";
 
     const svg = root.createElement("svg");
     svg.setAttribute("viewBox", "0 0 24 24");
@@ -99,7 +102,7 @@ if (typeof omni !== "undefined") {
     svg.appendChild(line2);
     svg.appendChild(topPusher);
     svg.appendChild(stem);
-    btn.appendChild(svg);
+    iconWrapper.appendChild(svg);
 
     const label = root.createElement("span");
     label.className = "dock-badge";
@@ -111,7 +114,13 @@ if (typeof omni !== "undefined") {
 
     listeners.push(updateDock);
     updateDock();
-    btn.appendChild(label);
+    iconWrapper.appendChild(label);
+
+    btn.appendChild(iconWrapper);
+
+    const span = root.createElement("span");
+    span.textContent = "Timer";
+    btn.appendChild(span);
 
     btn.addEventListener("click", () => {
       omni.ui.toggleSlot("sidebar");
