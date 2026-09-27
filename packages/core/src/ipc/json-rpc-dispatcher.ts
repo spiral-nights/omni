@@ -188,23 +188,33 @@ export class JsonRpcDispatcher {
 
       // 6. Scoped Storage
       case "storage.get": {
+        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "storage:kv");
+        if (!allowed) throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for storage:kv" };
         return this.ctx.storageManager.get(this.ctx.pluginId, params.key);
       }
 
       case "storage.set": {
+        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "storage:kv");
+        if (!allowed) throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for storage:kv" };
         return this.ctx.storageManager.set(this.ctx.pluginId, params.key, params.value);
       }
 
       case "storage.delete": {
+        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "storage:kv");
+        if (!allowed) throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for storage:kv" };
         return this.ctx.storageManager.delete(this.ctx.pluginId, params.key);
       }
 
       case "storage.clear": {
+        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "storage:kv");
+        if (!allowed) throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for storage:kv" };
         return this.ctx.storageManager.clear(this.ctx.pluginId);
       }
 
       // 7. Intents
       case "intent.dispatch": {
+        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "intents:dispatch");
+        if (!allowed) throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for intents:dispatch" };
         return this.ctx.intentBroker.dispatch(this.ctx.pluginId, params.action, params.data);
       }
 

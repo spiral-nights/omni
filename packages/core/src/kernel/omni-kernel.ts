@@ -58,6 +58,29 @@ export class OmniKernel {
   ): Promise<SandboxInstance> {
     this.aclEngine.registerManifest(manifest);
 
+    // Initialize default permissions in capabilityStore if not already explicitly configured
+    if (manifest.permissions) {
+      if (manifest.permissions.storage && this.capabilityStore.getGrant(manifest.id, "storage:kv") === null) {
+        this.capabilityStore.setGrant(manifest.id, "storage:kv", "always");
+      }
+      if (manifest.permissions.intents) {
+        if (this.capabilityStore.getGrant(manifest.id, "intents:dispatch") === null) {
+          this.capabilityStore.setGrant(manifest.id, "intents:dispatch", "always");
+        }
+        if (this.capabilityStore.getGrant(manifest.id, "intents:handle") === null) {
+          this.capabilityStore.setGrant(manifest.id, "intents:handle", "always");
+        }
+      }
+      if (manifest.permissions.nostr) {
+        if (this.capabilityStore.getGrant(manifest.id, "nostr:read") === null) {
+          this.capabilityStore.setGrant(manifest.id, "nostr:read", "always");
+        }
+        if (this.capabilityStore.getGrant(manifest.id, "nostr:write") === null) {
+          this.capabilityStore.setGrant(manifest.id, "nostr:write", "always");
+        }
+      }
+    }
+
     const userPubkey = await this.getUserPubkey();
     const sandbox = new SandboxInstance({
       manifest,
@@ -76,6 +99,36 @@ export class OmniKernel {
     await sandbox.mount();
     this.sandboxes.set(manifest.id, sandbox);
     return sandbox;
+  }
+
+  isPluginEnabled(pluginId: string): boolean {
+    return this.sandboxes.has(pluginId);
+  }
+
+  disablePlugin(pluginId: string): void {
+    const sandbox = this.sandboxes.get(pluginId);
+    if (sandbox) {
+      sandbox.destroy();
+      this.sandboxes.delete(pluginId);
+    }
+  }
+
+  async enablePlugin(
+    manifest: OmniManifest,
+    scriptContent: string,
+    slotContainers: Map<string, Element>
+  ): Promise<SandboxInstance> {
+    this.disablePlugin(manifest.id);
+    return this.registerPlugin(manifest, scriptContent, slotContainers);
+  }
+
+  setPluginPermission(pluginId: string, category: string, granted: boolean): void {
+    this.capabilityStore.setGrant(pluginId, category, granted ? "always" : "deny");
+  }
+
+  getPluginPermission(pluginId: string, category: string): boolean {
+    const grant = this.capabilityStore.getGrant(pluginId, category);
+    return grant === "always" || grant === "session";
   }
 
   uninstallPlugin(pluginId: string): void {

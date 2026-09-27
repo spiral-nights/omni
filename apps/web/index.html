@@ -136,13 +136,21 @@
   <div class="modal-overlay" id="plugin-modal">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 style="font-size: 1.1rem; font-weight: 600;">Installed Plugins</h3>
-        <button class="btn-drawer-close" id="btn-close-modal">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <h3 style="font-size: 1.1rem; font-weight: 600;">Installed Plugins</h3>
+          <span id="plugins-count-badge" style="font-size: 0.72rem; background: var(--omni-bg-subtle); color: var(--omni-text-muted); padding: 1px 6px; border-radius: var(--omni-radius-pill);">2</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button id="btn-show-install-modal" class="btn-publish" style="font-size: 0.75rem; padding: 4px 10px;">
+            + Install Plugin
+          </button>
+          <button class="btn-drawer-close" id="btn-close-modal">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
       </div>
       <p style="font-size: 0.82rem; color: var(--omni-text-muted);">
         Plugins run inside sandboxed iframes without host DOM or network access. UI is projected via Shopify Remote DOM using standard HTML elements.
@@ -159,6 +167,109 @@
           <div><code style="color: var(--omni-accent-primary);">Network:</code> Completely blocked from iframes</div>
           <div><code style="color: var(--omni-accent-primary);">DOM:</code> Standard HTML Allowlist projection</div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Install Plugin Modal -->
+  <div class="modal-overlay" id="install-plugin-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="font-size: 1.05rem; font-weight: 600;">Install New Plugin</h3>
+        <button class="btn-drawer-close" id="btn-close-install-modal">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <label style="font-size: 0.82rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 4px;">
+          Plugin Manifest URL:
+          <input
+            id="install-manifest-url"
+            type="text"
+            placeholder="https://example.com/omni.manifest.json"
+            style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 8px 12px; border-radius: var(--omni-radius-sm); font-size: 0.85rem; outline: none;"
+          />
+        </label>
+
+        <div style="display: flex; align-items: center; gap: 8px; justify-content: center; font-size: 0.75rem; color: var(--omni-text-muted);">
+          <span>— or paste raw omni.manifest.json —</span>
+        </div>
+
+        <textarea
+          id="install-manifest-json"
+          rows="6"
+          placeholder='{\n  "id": "org.example.plugin",\n  "name": "Custom Widget",\n  "version": "1.0.0",\n  "components": [...]\n}'
+          style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 8px 12px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.78rem; outline: none; resize: vertical;"
+        ></textarea>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+          <button id="btn-quick-sample-plugin" class="btn-secondary" style="font-size: 0.75rem;">
+            Load Sample Notes Plugin
+          </button>
+          <button id="btn-confirm-install" class="btn-publish">
+            Install Plugin
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Plugin Inspector & Manifest Viewer Modal -->
+  <div class="modal-overlay" id="plugin-inspector-modal">
+    <div class="modal-card" style="max-width: 540px;">
+      <div class="modal-header">
+        <div>
+          <h3 id="inspector-plugin-name" style="font-size: 1.05rem; font-weight: 600;">Plugin Inspector</h3>
+          <span id="inspector-plugin-id" style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted);"></span>
+        </div>
+        <button class="btn-drawer-close" id="btn-close-inspector">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="modal-tabs">
+        <button class="modal-tab-btn active" id="tab-btn-overview">Overview</button>
+        <button class="modal-tab-btn" id="tab-btn-permissions">Permissions</button>
+        <button class="modal-tab-btn" id="tab-btn-manifest">Manifest JSON</button>
+      </div>
+
+      <!-- Tab Content 1: Overview -->
+      <div id="inspector-pane-overview" style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem;">
+          <div style="color: var(--omni-text-muted);">Source URL / Origin:</div>
+          <div id="inspector-source-url" style="font-family: var(--omni-font-mono); color: var(--omni-accent-primary); word-break: break-all; background: var(--omni-bg-surface); padding: 6px 10px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);"></div>
+        </div>
+
+        <div>
+          <h4 style="font-size: 0.85rem; margin-bottom: 6px; color: var(--omni-text-secondary);">Contributed Components</h4>
+          <div id="inspector-components-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        </div>
+      </div>
+
+      <!-- Tab Content 2: Permissions -->
+      <div id="inspector-pane-permissions" style="display: none; flex-direction: column; gap: 10px;">
+        <p style="font-size: 0.8rem; color: var(--omni-text-muted);">
+          Toggle granular capabilities granted to this plugin. Revoking a capability immediately denies runtime RPC requests.
+        </p>
+        <div id="inspector-permissions-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+      </div>
+
+      <!-- Tab Content 3: Manifest JSON -->
+      <div id="inspector-pane-manifest" style="display: none; flex-direction: column; gap: 8px;">
+        <div style="display: flex; justify-content: flex-end;">
+          <button id="btn-copy-manifest" class="btn-secondary" style="font-size: 0.72rem;">
+            Copy JSON
+          </button>
+        </div>
+        <pre class="manifest-code-block" id="inspector-manifest-raw"></pre>
       </div>
     </div>
   </div>

@@ -165,30 +165,87 @@ function renderNote(note: NostrEvent, userPubkey: string, prepend = false) {
   }
 }
 
-// 5. Plugin Manager Modal
-const installedPlugins = [
-  { manifest: checklistManifest, id: checklistManifest.id },
-  { manifest: timerManifest, id: timerManifest.id }
+// 5. Plugin Lifecycle & Manager Modal
+interface InstalledPluginEntry {
+  id: string;
+  manifest: any;
+  scriptContent: string;
+  sourceUrl: string;
+  enabled: boolean;
+}
+
+const installedPlugins: InstalledPluginEntry[] = [
+  {
+    id: checklistManifest.id,
+    manifest: checklistManifest,
+    scriptContent: checklistScript,
+    sourceUrl: "local:@omni/plugin-checklist",
+    enabled: true
+  },
+  {
+    id: timerManifest.id,
+    manifest: timerManifest,
+    scriptContent: timerScript,
+    sourceUrl: "local:@omni/plugin-timer",
+    enabled: true
+  }
 ];
+
+// Additional Modal References
+const pluginsCountBadge = document.getElementById("plugins-count-badge")!;
+const btnShowInstallModal = document.getElementById("btn-show-install-modal")!;
+const installPluginModal = document.getElementById("install-plugin-modal")!;
+const btnCloseInstallModal = document.getElementById("btn-close-install-modal")!;
+const installManifestUrl = document.getElementById("install-manifest-url") as HTMLInputElement;
+const installManifestJson = document.getElementById("install-manifest-json") as HTMLTextAreaElement;
+const btnQuickSamplePlugin = document.getElementById("btn-quick-sample-plugin")!;
+const btnConfirmInstall = document.getElementById("btn-confirm-install")!;
+
+const pluginInspectorModal = document.getElementById("plugin-inspector-modal")!;
+const btnCloseInspector = document.getElementById("btn-close-inspector")!;
+const inspectorPluginName = document.getElementById("inspector-plugin-name")!;
+const inspectorPluginId = document.getElementById("inspector-plugin-id")!;
+const inspectorSourceUrl = document.getElementById("inspector-source-url")!;
+const inspectorComponentsList = document.getElementById("inspector-components-list")!;
+const inspectorPermissionsList = document.getElementById("inspector-permissions-list")!;
+const inspectorManifestRaw = document.getElementById("inspector-manifest-raw")!;
+const btnCopyManifest = document.getElementById("btn-copy-manifest")!;
+
+const tabBtnOverview = document.getElementById("tab-btn-overview")!;
+const tabBtnPermissions = document.getElementById("tab-btn-permissions")!;
+const tabBtnManifest = document.getElementById("tab-btn-manifest")!;
+const inspectorPaneOverview = document.getElementById("inspector-pane-overview")!;
+const inspectorPanePermissions = document.getElementById("inspector-pane-permissions")!;
+const inspectorPaneManifest = document.getElementById("inspector-pane-manifest")!;
+
+let activeInspectedPlugin: InstalledPluginEntry | null = null;
 
 function renderPluginManager() {
   pluginsListContainer.innerHTML = "";
+  pluginsCountBadge.textContent = String(installedPlugins.length);
+
   for (const p of installedPlugins) {
-    const row = document.createElement("div");
-    row.className = "plugin-item-row";
+    const card = document.createElement("div");
+    card.className = "plugin-item-row";
 
-    const left = document.createElement("div");
-    left.style.display = "flex";
-    left.style.flexDirection = "column";
-    left.style.gap = "4px";
+    // Header row inside card: Title + Version + Source URL + Enable Toggle
+    const topRow = document.createElement("div");
+    topRow.style.display = "flex";
+    topRow.style.justifyContent = "space-between";
+    topRow.style.alignItems = "flex-start";
 
-    const titleRow = document.createElement("div");
-    titleRow.style.display = "flex";
-    titleRow.style.alignItems = "center";
-    titleRow.style.gap = "8px";
+    const titleGroup = document.createElement("div");
+    titleGroup.style.display = "flex";
+    titleGroup.style.flexDirection = "column";
+    titleGroup.style.gap = "4px";
+
+    const titleLine = document.createElement("div");
+    titleLine.style.display = "flex";
+    titleLine.style.alignItems = "center";
+    titleLine.style.gap = "8px";
 
     const title = document.createElement("strong");
-    title.style.fontSize = "0.92rem";
+    title.style.fontSize = "0.95rem";
     title.textContent = p.manifest.name;
 
     const version = document.createElement("span");
@@ -198,54 +255,100 @@ function renderPluginManager() {
 
     const statusBadge = document.createElement("span");
     statusBadge.style.fontSize = "0.7rem";
-    statusBadge.style.color = "var(--omni-status-online)";
+    statusBadge.style.color = p.enabled ? "var(--omni-status-online)" : "var(--omni-text-muted)";
     statusBadge.style.background = "var(--omni-bg-subtle)";
     statusBadge.style.padding = "1px 6px";
     statusBadge.style.borderRadius = "var(--omni-radius-pill)";
-    statusBadge.textContent = "Sandboxed";
+    statusBadge.textContent = p.enabled ? "Active" : "Disabled";
 
-    titleRow.appendChild(title);
-    titleRow.appendChild(version);
-    titleRow.appendChild(statusBadge);
+    titleLine.appendChild(title);
+    titleLine.appendChild(version);
+    titleLine.appendChild(statusBadge);
 
-    const desc = document.createElement("span");
-    desc.style.fontSize = "0.8rem";
+    const sourcePill = document.createElement("div");
+    sourcePill.style.fontSize = "0.72rem";
+    sourcePill.style.fontFamily = "var(--omni-font-mono)";
+    sourcePill.style.color = "var(--omni-text-muted)";
+    sourcePill.textContent = p.sourceUrl;
+
+    titleGroup.appendChild(titleLine);
+    titleGroup.appendChild(sourcePill);
+
+    // Toggle switch for Enable / Disable
+    const toggleLabel = document.createElement("label");
+    toggleLabel.className = "omni-toggle";
+    toggleLabel.title = p.enabled ? "Click to disable plugin" : "Click to enable plugin";
+
+    const toggleInput = document.createElement("input");
+    toggleInput.type = "checkbox";
+    toggleInput.checked = p.enabled;
+    toggleInput.addEventListener("change", async () => {
+      if (toggleInput.checked) {
+        await kernel.enablePlugin(p.manifest, p.scriptContent, slotContainers);
+        p.enabled = true;
+      } else {
+        kernel.disablePlugin(p.id);
+        p.enabled = false;
+      }
+      renderPluginManager();
+    });
+
+    const toggleSlider = document.createElement("span");
+    toggleSlider.className = "toggle-slider";
+    toggleLabel.appendChild(toggleInput);
+    toggleLabel.appendChild(toggleSlider);
+
+    topRow.appendChild(titleGroup);
+    topRow.appendChild(toggleLabel);
+
+    // Description
+    const desc = document.createElement("div");
+    desc.style.fontSize = "0.82rem";
     desc.style.color = "var(--omni-text-secondary)";
-    desc.textContent = p.manifest.description;
+    desc.textContent = p.manifest.description || "No description provided.";
 
-    const permissions = document.createElement("span");
-    permissions.style.fontSize = "0.72rem";
-    permissions.style.color = "var(--omni-text-muted)";
-    const permKeys = Object.keys(p.manifest.permissions || {});
-    permissions.textContent = `Permissions: ${permKeys.join(", ") || "none"}`;
+    // Action buttons row
+    const actionsRow = document.createElement("div");
+    actionsRow.style.display = "flex";
+    actionsRow.style.gap = "8px";
+    actionsRow.style.marginTop = "4px";
 
-    left.appendChild(titleRow);
-    left.appendChild(desc);
-    left.appendChild(permissions);
+    const btnInspect = document.createElement("button");
+    btnInspect.className = "btn-secondary";
+    btnInspect.textContent = "Inspect Manifest";
+    btnInspect.addEventListener("click", () => {
+      openPluginInspector(p);
+    });
 
-    const right = document.createElement("div");
-    right.style.display = "flex";
-    right.style.gap = "8px";
-
-    const btnClear = document.createElement("button");
-    btnClear.className = "btn-publish";
-    btnClear.style.padding = "4px 10px";
-    btnClear.style.fontSize = "0.75rem";
-    btnClear.style.background = "var(--omni-bg-subtle)";
-    btnClear.style.color = "var(--omni-text-secondary)";
-    btnClear.textContent = "Clear DB";
-    btnClear.addEventListener("click", async () => {
+    const btnClearDb = document.createElement("button");
+    btnClearDb.className = "btn-secondary";
+    btnClearDb.textContent = "Clear DB";
+    btnClearDb.addEventListener("click", async () => {
       await kernel.storageManager.clear(p.id);
-      btnClear.textContent = "Cleared!";
+      btnClearDb.textContent = "Cleared!";
       setTimeout(() => {
-        btnClear.textContent = "Clear DB";
+        btnClearDb.textContent = "Clear DB";
       }, 1500);
     });
 
-    right.appendChild(btnClear);
-    row.appendChild(left);
-    row.appendChild(right);
-    pluginsListContainer.appendChild(row);
+    const btnUninstall = document.createElement("button");
+    btnUninstall.className = "btn-danger";
+    btnUninstall.textContent = "Uninstall";
+    btnUninstall.addEventListener("click", () => {
+      if (confirm(`Uninstall ${p.manifest.name}? Its components and storage will be removed.`)) {
+        uninstallPlugin(p.id);
+      }
+    });
+
+    actionsRow.appendChild(btnInspect);
+    actionsRow.appendChild(btnClearDb);
+    actionsRow.appendChild(btnUninstall);
+
+    card.appendChild(topRow);
+    card.appendChild(desc);
+    card.appendChild(actionsRow);
+
+    pluginsListContainer.appendChild(card);
   }
 }
 
@@ -257,6 +360,346 @@ function openPluginModal() {
 function closePluginModal() {
   pluginModal.classList.remove("open");
 }
+
+// Plugin Inspector Modal Logic
+function openPluginInspector(plugin: InstalledPluginEntry) {
+  activeInspectedPlugin = plugin;
+  inspectorPluginName.textContent = plugin.manifest.name;
+  inspectorPluginId.textContent = plugin.manifest.id;
+  inspectorSourceUrl.textContent = plugin.sourceUrl;
+
+  // 1. Components list
+  inspectorComponentsList.innerHTML = "";
+  for (const comp of plugin.manifest.components || []) {
+    const item = document.createElement("div");
+    item.style.background = "var(--omni-bg-surface)";
+    item.style.border = "1px solid var(--omni-border-subtle)";
+    item.style.borderRadius = "var(--omni-radius-sm)";
+    item.style.padding = "8px 12px";
+    item.style.fontSize = "0.8rem";
+    item.style.display = "flex";
+    item.style.justifyContent = "space-between";
+    item.style.alignItems = "center";
+
+    const left = document.createElement("div");
+    left.innerHTML = `<strong>${comp.title || comp.id}</strong> <span style="color: var(--omni-text-muted); font-size: 0.72rem;">(${comp.id})</span>`;
+
+    const slotPill = document.createElement("span");
+    slotPill.style.background = "var(--omni-bg-subtle)";
+    slotPill.style.color = "var(--omni-accent-primary)";
+    slotPill.style.padding = "2px 8px";
+    slotPill.style.borderRadius = "var(--omni-radius-pill)";
+    slotPill.style.fontFamily = "var(--omni-font-mono)";
+    slotPill.style.fontSize = "0.72rem";
+    slotPill.textContent = `slot: ${comp.slot}`;
+
+    item.appendChild(left);
+    item.appendChild(slotPill);
+    inspectorComponentsList.appendChild(item);
+  }
+
+  // 2. Permissions list with interactive toggles
+  inspectorPermissionsList.innerHTML = "";
+  const declaredPerms: Array<{ key: string; name: string; desc: string }> = [];
+
+  if (plugin.manifest.permissions?.storage) {
+    declaredPerms.push({
+      key: "storage:kv",
+      name: "Scoped Storage (KV)",
+      desc: `Persistent IndexedDB storage (Quota: ${plugin.manifest.permissions.storage.quotaMb || 5} MB)`
+    });
+  }
+  if (plugin.manifest.permissions?.intents) {
+    declaredPerms.push({
+      key: "intents:dispatch",
+      name: "Intent Dispatch",
+      desc: "Allow cross-plugin intent calls and events"
+    });
+  }
+  // Standard Nostr permissions
+  declaredPerms.push({
+    key: "nostr:read",
+    name: "Nostr Subscriptions (Read)",
+    desc: "Subscribe to public notes, profiles, and live timeline streams"
+  });
+  declaredPerms.push({
+    key: "nostr:write",
+    name: "Nostr Event Signing (Write)",
+    desc: "Draft and request signing of Nostr notes and custom events"
+  });
+
+  for (const perm of declaredPerms) {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.justifyContent = "space-between";
+    row.style.alignItems = "center";
+    row.style.background = "var(--omni-bg-surface)";
+    row.style.border = "1px solid var(--omni-border-subtle)";
+    row.style.borderRadius = "var(--omni-radius-sm)";
+    row.style.padding = "10px 12px";
+
+    const info = document.createElement("div");
+    info.style.display = "flex";
+    info.style.flexDirection = "column";
+    info.style.gap = "2px";
+
+    const name = document.createElement("strong");
+    name.style.fontSize = "0.82rem";
+    name.textContent = perm.name;
+
+    const desc = document.createElement("span");
+    desc.style.fontSize = "0.72rem";
+    desc.style.color = "var(--omni-text-muted)";
+    desc.textContent = perm.desc;
+
+    info.appendChild(name);
+    info.appendChild(desc);
+
+    const toggle = document.createElement("label");
+    toggle.className = "omni-toggle";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = kernel.getPluginPermission(plugin.id, perm.key);
+    input.addEventListener("change", () => {
+      kernel.setPluginPermission(plugin.id, perm.key, input.checked);
+    });
+
+    const slider = document.createElement("span");
+    slider.className = "toggle-slider";
+
+    toggle.appendChild(input);
+    toggle.appendChild(slider);
+
+    row.appendChild(info);
+    row.appendChild(toggle);
+    inspectorPermissionsList.appendChild(row);
+  }
+
+  // 3. Raw Manifest
+  inspectorManifestRaw.textContent = JSON.stringify(plugin.manifest, null, 2);
+
+  // Switch to default Overview tab
+  switchInspectorTab("overview");
+  pluginInspectorModal.classList.add("open");
+}
+
+function closePluginInspector() {
+  pluginInspectorModal.classList.remove("open");
+  activeInspectedPlugin = null;
+}
+
+function switchInspectorTab(tab: "overview" | "permissions" | "manifest") {
+  tabBtnOverview.classList.toggle("active", tab === "overview");
+  tabBtnPermissions.classList.toggle("active", tab === "permissions");
+  tabBtnManifest.classList.toggle("active", tab === "manifest");
+
+  inspectorPaneOverview.style.display = tab === "overview" ? "flex" : "none";
+  inspectorPanePermissions.style.display = tab === "permissions" ? "flex" : "none";
+  inspectorPaneManifest.style.display = tab === "manifest" ? "flex" : "none";
+}
+
+tabBtnOverview.addEventListener("click", () => switchInspectorTab("overview"));
+tabBtnPermissions.addEventListener("click", () => switchInspectorTab("permissions"));
+tabBtnManifest.addEventListener("click", () => switchInspectorTab("manifest"));
+btnCloseInspector.addEventListener("click", closePluginInspector);
+pluginInspectorModal.addEventListener("click", (e) => {
+  if (e.target === pluginInspectorModal) closePluginInspector();
+});
+
+btnCopyManifest.addEventListener("click", async () => {
+  if (activeInspectedPlugin) {
+    await navigator.clipboard.writeText(JSON.stringify(activeInspectedPlugin.manifest, null, 2));
+    btnCopyManifest.textContent = "Copied!";
+    setTimeout(() => {
+      btnCopyManifest.textContent = "Copy JSON";
+    }, 1500);
+  }
+});
+
+// Install Plugin Modal Logic
+btnShowInstallModal.addEventListener("click", () => {
+  installPluginModal.classList.add("open");
+});
+
+btnCloseInstallModal.addEventListener("click", () => {
+  installPluginModal.classList.remove("open");
+});
+
+installPluginModal.addEventListener("click", (e) => {
+  if (e.target === installPluginModal) installPluginModal.classList.remove("open");
+});
+
+// Quick Sample Plugin (Scratchpad Notes)
+const SAMPLE_SCRATCHPAD_MANIFEST = {
+  $schema: "https://omni.org/schemas/manifest.v1.json",
+  id: "org.omni.plugins.scratchpad",
+  name: "Scratchpad Notes",
+  version: "1.0.0",
+  description: "Minimal persistent scratchpad note taking widget",
+  author: { name: "Omni Community" },
+  license: "MIT",
+  permissions: {
+    storage: { quotaMb: 2 }
+  },
+  components: [
+    {
+      id: "scratchpad-sidebar-widget",
+      slot: "sidebar",
+      title: "Scratchpad",
+      description: "Fast markdown scratchpad"
+    }
+  ]
+};
+
+const SAMPLE_SCRATCHPAD_SCRIPT = `
+if (typeof omni !== "undefined") {
+  omni.registerComponent("scratchpad-sidebar-widget", async ({ root }) => {
+    const card = root.createElement("div");
+    card.setAttribute("style", "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); border-radius: var(--omni-radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px;");
+
+    const header = root.createElement("div");
+    header.setAttribute("style", "display: flex; justify-content: space-between; align-items: center;");
+    const title = root.createElement("h3");
+    title.setAttribute("style", "font-size: 0.95rem; font-weight: 600;");
+    title.textContent = "Scratchpad Notes";
+    header.appendChild(title);
+    card.appendChild(header);
+
+    const textarea = root.createElement("textarea");
+    textarea.setAttribute("style", "width: 100%; min-height: 90px; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); border-radius: var(--omni-radius-sm); color: var(--omni-text-primary); padding: 8px 10px; font-family: var(--omni-font-sans); font-size: 0.85rem; outline: none; resize: vertical;");
+    textarea.setAttribute("placeholder", "Write persistent notes here...");
+
+    const saved = await omni.storage.get("scratchpad_content");
+    if (saved) textarea.value = saved;
+
+    textarea.addEventListener("input", async (e) => {
+      const val = textarea.value;
+      await omni.storage.set("scratchpad_content", val);
+    });
+
+    card.appendChild(textarea);
+    root.appendChild(card);
+  });
+}
+`;
+
+btnQuickSamplePlugin.addEventListener("click", () => {
+  installManifestUrl.value = "https://registry.omni.org/plugins/scratchpad/omni.manifest.json";
+  installManifestJson.value = JSON.stringify(SAMPLE_SCRATCHPAD_MANIFEST, null, 2);
+});
+
+btnConfirmInstall.addEventListener("click", async () => {
+  const jsonText = installManifestJson.value.trim();
+  const urlText = installManifestUrl.value.trim();
+
+  let manifest: any = null;
+  if (jsonText) {
+    try {
+      manifest = JSON.parse(jsonText);
+    } catch {
+      alert("Invalid JSON manifest syntax.");
+      return;
+    }
+  } else if (urlText) {
+    try {
+      btnConfirmInstall.textContent = "Fetching...";
+      const res = await fetch(urlText);
+      manifest = await res.json();
+    } catch (e: any) {
+      alert(`Failed to fetch manifest from URL: ${e.message}`);
+      btnConfirmInstall.textContent = "Install Plugin";
+      return;
+    }
+  } else {
+    alert("Please provide either a Manifest URL or paste a JSON manifest.");
+    return;
+  }
+
+  if (!manifest.id || !manifest.name) {
+    alert("Invalid manifest: 'id' and 'name' are required fields.");
+    btnConfirmInstall.textContent = "Install Plugin";
+    return;
+  }
+
+  // Check if already installed
+  if (installedPlugins.some((p) => p.id === manifest.id)) {
+    alert(`Plugin '${manifest.name}' (${manifest.id}) is already installed.`);
+    btnConfirmInstall.textContent = "Install Plugin";
+    return;
+  }
+
+  // Use sample script if it's the scratchpad, or create a default dynamic widget script
+  const scriptContent = manifest.id === "org.omni.plugins.scratchpad"
+    ? SAMPLE_SCRATCHPAD_SCRIPT
+    : `
+if (typeof omni !== "undefined") {
+  ${(manifest.components || []).map((c: any) => `
+  omni.registerComponent("${c.id}", ({ root }) => {
+    const card = root.createElement("div");
+    card.setAttribute("style", "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 12px;");
+    const h = root.createElement("h4");
+    h.textContent = "${c.title || c.id}";
+    const p = root.createElement("p");
+    p.setAttribute("style", "font-size: 0.8rem; color: var(--omni-text-muted);");
+    p.textContent = "${c.description || "Contributed component"}";
+    card.appendChild(h);
+    card.appendChild(p);
+    root.appendChild(card);
+  });
+  `).join("\n")}
+}
+`;
+
+  try {
+    const entry: InstalledPluginEntry = {
+      id: manifest.id,
+      manifest,
+      scriptContent,
+      sourceUrl: urlText || `custom:${manifest.id}`,
+      enabled: true
+    };
+
+    await kernel.registerPlugin(manifest, scriptContent, slotContainers);
+    installedPlugins.push(entry);
+    renderPluginManager();
+    installPluginModal.classList.remove("open");
+    installManifestUrl.value = "";
+    installManifestJson.value = "";
+    alert(`Plugin '${manifest.name}' installed successfully!`);
+  } catch (err: any) {
+    console.error("Install failed:", err);
+    alert(`Install failed: ${err.message || String(err)}`);
+  } finally {
+    btnConfirmInstall.textContent = "Install Plugin";
+  }
+});
+
+function uninstallPlugin(pluginId: string) {
+  kernel.uninstallPlugin(pluginId);
+  const idx = installedPlugins.findIndex((p) => p.id === pluginId);
+  if (idx !== -1) {
+    installedPlugins.splice(idx, 1);
+  }
+  renderPluginManager();
+}
+
+// Synchronous Top-Level UI Event Bindings
+dockBtnWidgets.addEventListener("click", toggleDrawer);
+btnCloseDrawer.addEventListener("click", closeDrawer);
+drawerOverlay.addEventListener("click", closeDrawer);
+
+dockBtnFeed.addEventListener("click", () => {
+  closeDrawer();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+dockBtnSettings.addEventListener("click", openPluginModal);
+btnOpenPlugins.addEventListener("click", openPluginModal);
+btnCloseModal.addEventListener("click", closePluginModal);
+pluginModal.addEventListener("click", (e) => {
+  if (e.target === pluginModal) closePluginModal();
+});
 
 // 6. Application Startup & Main Wiring
 async function startApp() {
@@ -343,26 +786,10 @@ async function startApp() {
     }
   });
 
-  // UI Event Listeners
-  dockBtnWidgets.addEventListener("click", toggleDrawer);
-  btnCloseDrawer.addEventListener("click", closeDrawer);
-  drawerOverlay.addEventListener("click", closeDrawer);
-
-  dockBtnFeed.addEventListener("click", () => {
-    closeDrawer();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  });
-
-  dockBtnSettings.addEventListener("click", openPluginModal);
-  btnOpenPlugins.addEventListener("click", openPluginModal);
-  btnCloseModal.addEventListener("click", closePluginModal);
-  pluginModal.addEventListener("click", (e) => {
-    if (e.target === pluginModal) closePluginModal();
-  });
-
   console.log("🚀 [Omni Web] App running successfully!");
 }
 
 startApp().catch((err) => {
   console.error("Fatal startup error in Omni Web:", err);
 });
+
