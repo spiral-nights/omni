@@ -124,7 +124,7 @@
       class RemoteNode {
         constructor(id, type) {
           this.id = String(id);
-          this.type = type;
+          this.nodeType = type;
           this.parentNode = null;
           this.childNodes = [];
           self.nodes.set(this.id, this);
@@ -326,7 +326,7 @@
     }
 
     serializeNode(node) {
-      if (node.type === 3) {
+      if (node.nodeType === 3) {
         return { id: node.id, type: 3, data: node.data };
       }
       const attrs = {};
