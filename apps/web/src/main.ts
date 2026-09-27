@@ -1,4 +1,4 @@
-import { OmniKernel } from "@omni/core";
+import { OmniKernel, WebCryptoKeystore } from "@omni/core";
 import { NostrEvent } from "@omni/types";
 
 // Import manifests and compiled plugin bundles (using Vite ?raw import)
@@ -27,6 +27,35 @@ const btnOpenPlugins = document.getElementById("btn-open-plugins")!;
 const pluginModal = document.getElementById("plugin-modal")!;
 const btnCloseModal = document.getElementById("btn-close-modal")!;
 const pluginsListContainer = document.getElementById("plugins-list")!;
+
+// Profile Modal Element references
+const profileModal = document.getElementById("profile-modal")!;
+const btnCloseProfileModal = document.getElementById("btn-close-profile-modal")!;
+const tabBtnProfileInfo = document.getElementById("tab-btn-profile-info")!;
+const tabBtnProfileKeys = document.getElementById("tab-btn-profile-keys")!;
+const profilePaneInfo = document.getElementById("profile-pane-info")!;
+const profilePaneKeys = document.getElementById("profile-pane-keys")!;
+const profileAvatarPreview = document.getElementById("profile-avatar-preview")!;
+const profilePreviewName = document.getElementById("profile-preview-name")!;
+const profilePreviewNpub = document.getElementById("profile-preview-npub")!;
+const inputProfileDisplayName = document.getElementById("input-profile-display-name") as HTMLInputElement;
+const inputProfileName = document.getElementById("input-profile-name") as HTMLInputElement;
+const inputProfileAbout = document.getElementById("input-profile-about") as HTMLTextAreaElement;
+const inputProfilePicture = document.getElementById("input-profile-picture") as HTMLInputElement;
+const inputProfileNip05 = document.getElementById("input-profile-nip05") as HTMLInputElement;
+const inputProfileLud16 = document.getElementById("input-profile-lud16") as HTMLInputElement;
+const btnSaveProfile = document.getElementById("btn-save-profile") as HTMLButtonElement;
+const profileKeysNpub = document.getElementById("profile-keys-npub") as HTMLInputElement;
+const btnCopyNpub = document.getElementById("btn-copy-npub") as HTMLButtonElement;
+const profileKeysHex = document.getElementById("profile-keys-hex") as HTMLInputElement;
+const btnCopyHex = document.getElementById("btn-copy-hex") as HTMLButtonElement;
+const btnRevealNsec = document.getElementById("btn-reveal-nsec") as HTMLButtonElement;
+const privateKeyDisplayWrapper = document.getElementById("private-key-display-wrapper")!;
+const profileKeysNsec = document.getElementById("profile-keys-nsec") as HTMLInputElement;
+const btnCopyNsec = document.getElementById("btn-copy-nsec") as HTMLButtonElement;
+const inputImportNsec = document.getElementById("input-import-nsec") as HTMLInputElement;
+const btnGenerateNewKey = document.getElementById("btn-generate-new-key") as HTMLButtonElement;
+const btnConfirmImportKey = document.getElementById("btn-confirm-import-key") as HTMLButtonElement;
 
 // 1. Mobile Drawer Control
 function openDrawer() {
@@ -69,7 +98,11 @@ window.addEventListener("resize", updateSidebarPlacement);
 updateSidebarPlacement();
 
 // 3. Initialize OmniKernel
+const STORAGE_KEY_NSEC = "omni_privkey";
+const savedPrivkey = localStorage.getItem(STORAGE_KEY_NSEC) || undefined;
+
 const kernel = new OmniKernel({
+  privateKeyHex: savedPrivkey,
   bootstrapRelays: ["wss://relay.damus.io"],
   onSlotAction: (action, slot) => {
     if (slot === "sidebar" || slot === "widgets") {
@@ -701,28 +734,224 @@ pluginModal.addEventListener("click", (e) => {
   if (e.target === pluginModal) closePluginModal();
 });
 
+// Profile & Identity Modal Wiring
+async function updateProfileUi() {
+  const pubkey = await kernel.getUserPubkey();
+  const npub = await kernel.getNpub();
+  const shortNpub = `${npub.slice(0, 10)}...${npub.slice(-4)}`;
+
+  profileKeysNpub.value = npub;
+  profileKeysHex.value = pubkey;
+  profilePreviewNpub.textContent = shortNpub;
+
+  const profile = await kernel.getProfile(pubkey);
+  if (profile) {
+    inputProfileDisplayName.value = profile.display_name || "";
+    inputProfileName.value = profile.name || "";
+    inputProfileAbout.value = profile.about || "";
+    inputProfilePicture.value = profile.picture || "";
+    inputProfileNip05.value = profile.nip05 || "";
+    inputProfileLud16.value = profile.lud16 || "";
+
+    const displayName = profile.display_name || profile.name || shortNpub;
+    userBadge.textContent = displayName;
+    userBadge.title = `${displayName}\n${npub}\nClick to manage profile & keys`;
+    profilePreviewName.textContent = profile.display_name || profile.name || "Guest User";
+
+    if (profile.picture) {
+      profileAvatarPreview.innerHTML = `<img src="${encodeURI(profile.picture)}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.remove()" />`;
+    } else {
+      profileAvatarPreview.textContent = "✦";
+    }
+  } else {
+    inputProfileDisplayName.value = "";
+    inputProfileName.value = "";
+    inputProfileAbout.value = "";
+    inputProfilePicture.value = "";
+    inputProfileNip05.value = "";
+    inputProfileLud16.value = "";
+    userBadge.textContent = shortNpub;
+    userBadge.title = `Your Nostr Identity: ${npub}\nClick to manage profile & keys`;
+    profilePreviewName.textContent = "Guest User";
+    profileAvatarPreview.textContent = "✦";
+  }
+}
+
+function updateLivePreview() {
+  const dName = inputProfileDisplayName.value.trim();
+  const name = inputProfileName.value.trim();
+  profilePreviewName.textContent = dName || name || "Guest User";
+
+  const pic = inputProfilePicture.value.trim();
+  if (pic) {
+    profileAvatarPreview.innerHTML = `<img src="${encodeURI(pic)}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.remove()" />`;
+  } else {
+    profileAvatarPreview.textContent = "✦";
+  }
+}
+
+inputProfileDisplayName.addEventListener("input", updateLivePreview);
+inputProfileName.addEventListener("input", updateLivePreview);
+inputProfilePicture.addEventListener("input", updateLivePreview);
+
+function openProfileModal() {
+  profileModal.classList.add("open");
+  updateProfileUi();
+  privateKeyDisplayWrapper.style.display = "none";
+  profileKeysNsec.value = "";
+  btnRevealNsec.textContent = "Reveal Private Key";
+}
+
+function closeProfileModal() {
+  profileModal.classList.remove("open");
+}
+
+userBadge.addEventListener("click", openProfileModal);
+btnCloseProfileModal.addEventListener("click", closeProfileModal);
+profileModal.addEventListener("click", (e) => {
+  if (e.target === profileModal) closeProfileModal();
+});
+
+tabBtnProfileInfo.addEventListener("click", () => {
+  tabBtnProfileInfo.classList.add("active");
+  tabBtnProfileKeys.classList.remove("active");
+  profilePaneInfo.style.display = "flex";
+  profilePaneKeys.style.display = "none";
+});
+
+tabBtnProfileKeys.addEventListener("click", () => {
+  tabBtnProfileKeys.classList.add("active");
+  tabBtnProfileInfo.classList.remove("active");
+  profilePaneKeys.style.display = "flex";
+  profilePaneInfo.style.display = "none";
+});
+
+btnSaveProfile.addEventListener("click", async () => {
+  btnSaveProfile.disabled = true;
+  btnSaveProfile.textContent = "Signing & Publishing (kind 0)...";
+
+  try {
+    const metadata: Record<string, any> = {};
+    if (inputProfileName.value.trim()) metadata.name = inputProfileName.value.trim();
+    if (inputProfileDisplayName.value.trim()) metadata.display_name = inputProfileDisplayName.value.trim();
+    if (inputProfileAbout.value.trim()) metadata.about = inputProfileAbout.value.trim();
+    if (inputProfilePicture.value.trim()) metadata.picture = inputProfilePicture.value.trim();
+    if (inputProfileNip05.value.trim()) metadata.nip05 = inputProfileNip05.value.trim();
+    if (inputProfileLud16.value.trim()) metadata.lud16 = inputProfileLud16.value.trim();
+
+    await kernel.publishProfile(metadata);
+    await updateProfileUi();
+    btnSaveProfile.textContent = "Profile Saved & Published!";
+    setTimeout(() => {
+      btnSaveProfile.disabled = false;
+      btnSaveProfile.textContent = "Save & Publish Profile (kind 0)";
+    }, 1800);
+  } catch (err: any) {
+    console.error("Failed to publish profile:", err);
+    alert(`Failed to publish profile: ${err.message || String(err)}`);
+    btnSaveProfile.disabled = false;
+    btnSaveProfile.textContent = "Save & Publish Profile (kind 0)";
+  }
+});
+
+async function copyToClipboard(text: string, button: HTMLButtonElement) {
+  try {
+    await navigator.clipboard.writeText(text);
+    const prev = button.textContent;
+    button.textContent = "Copied!";
+    setTimeout(() => {
+      button.textContent = prev;
+    }, 1200);
+  } catch {
+    window.prompt("Copy to clipboard:", text);
+  }
+}
+
+btnCopyNpub.addEventListener("click", () => copyToClipboard(profileKeysNpub.value, btnCopyNpub));
+btnCopyHex.addEventListener("click", () => copyToClipboard(profileKeysHex.value, btnCopyHex));
+btnCopyNsec.addEventListener("click", () => copyToClipboard(profileKeysNsec.value, btnCopyNsec));
+
+btnRevealNsec.addEventListener("click", () => {
+  if (privateKeyDisplayWrapper.style.display === "flex") {
+    privateKeyDisplayWrapper.style.display = "none";
+    profileKeysNsec.value = "";
+    btnRevealNsec.textContent = "Reveal Private Key";
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "⚠️ WARNING: Never share your private key with anyone!\nAnyone who sees your nsec has full permanent control of your identity.\n\nDo you want to reveal your private key?"
+  );
+  if (!confirmed) return;
+
+  profileKeysNsec.value = kernel.getNsec();
+  privateKeyDisplayWrapper.style.display = "flex";
+  btnRevealNsec.textContent = "Hide Private Key";
+});
+
+btnConfirmImportKey.addEventListener("click", async () => {
+  const keyInput = inputImportNsec.value.trim();
+  if (!keyInput) {
+    alert("Please enter a private key (nsec1... or 64-char hex)");
+    return;
+  }
+
+  try {
+    const decoded = WebCryptoKeystore.decodeKey(keyInput);
+    if (decoded.type === "npub") {
+      alert("The key you entered is an npub (public key). You must enter an nsec or hex private key to switch signing identity.");
+      return;
+    }
+
+    const confirmed = window.confirm("Switch to this Nostr account? This will change your active identity.");
+    if (!confirmed) return;
+
+    kernel.switchPrivateKey(decoded.hex);
+    localStorage.setItem(STORAGE_KEY_NSEC, decoded.hex);
+    inputImportNsec.value = "";
+
+    await updateProfileUi();
+    privateKeyDisplayWrapper.style.display = "none";
+    profileKeysNsec.value = "";
+    btnRevealNsec.textContent = "Reveal Private Key";
+
+    alert("Identity switched successfully!");
+  } catch (err: any) {
+    alert(`Failed to import key: ${err.message || String(err)}`);
+  }
+});
+
+btnGenerateNewKey.addEventListener("click", async () => {
+  const confirmed = window.confirm(
+    "Generate a fresh random Nostr keypair? This will switch your active identity to a new anonymous account."
+  );
+  if (!confirmed) return;
+
+  const freshHex = WebCryptoKeystore.generatePrivateKey();
+  kernel.switchPrivateKey(freshHex);
+  localStorage.setItem(STORAGE_KEY_NSEC, freshHex);
+
+  await updateProfileUi();
+  privateKeyDisplayWrapper.style.display = "none";
+  profileKeysNsec.value = "";
+  btnRevealNsec.textContent = "Reveal Private Key";
+
+  alert("New Nostr keypair generated and activated!");
+});
+
 // 6. Application Startup & Main Wiring
 async function startApp() {
   console.log("⚡ [Omni Web] Booting OmniKernel...");
   await kernel.boot();
 
-  const userPubkey = await kernel.getUserPubkey();
-  const shortPubkey = `npub:${userPubkey.slice(0, 6)}...${userPubkey.slice(-4)}`;
-  userBadge.textContent = shortPubkey;
-  userBadge.title = `Your Nostr Pubkey: ${userPubkey}\nClick to copy`;
+  // Persist private key if not already saved
+  if (!localStorage.getItem(STORAGE_KEY_NSEC)) {
+    localStorage.setItem(STORAGE_KEY_NSEC, kernel.keystore.getPrivateKey());
+  }
 
-  userBadge.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(userPubkey);
-      const original = userBadge.textContent;
-      userBadge.textContent = "Copied!";
-      setTimeout(() => {
-        userBadge.textContent = original;
-      }, 1200);
-    } catch {
-      alert(`Your Pubkey: ${userPubkey}`);
-    }
-  });
+  // Load and display user profile
+  await updateProfileUi();
+  const userPubkey = await kernel.getUserPubkey();
 
   // Mount MVP Plugins into sandbox
   console.log("⚡ [Omni Web] Mounting Checklist plugin...");

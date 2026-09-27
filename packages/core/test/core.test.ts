@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import "fake-indexeddb/auto";
-import { WebCryptoKeystore, LocalEventStore, CapabilityStore, AclEngine } from "../src/index.js";
+import { WebCryptoKeystore, LocalEventStore, CapabilityStore, AclEngine, OmniKernel } from "../src/index.js";
 
 describe("WebCryptoKeystore", () => {
   it("generates 64-char hex private and public keys", async () => {
@@ -27,6 +27,41 @@ describe("WebCryptoKeystore", () => {
 
     const valid = WebCryptoKeystore.verifyEvent(signed);
     expect(valid).toBe(true);
+  });
+
+  it("encodes and decodes NIP-19 npub and nsec with checksum verification", async () => {
+    // Official Nostr NIP-19 test vector
+    const pubHex = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+    const expectedNpub = "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6";
+    expect(WebCryptoKeystore.toNpub(pubHex)).toBe(expectedNpub);
+
+    const decodedNpub = WebCryptoKeystore.decodeKey(expectedNpub);
+    expect(decodedNpub.type).toBe("npub");
+    expect(decodedNpub.hex).toBe(pubHex);
+
+    // Private key roundtrip
+    const keystore = new WebCryptoKeystore();
+    const privHex = keystore.getPrivateKey();
+    const nsec = keystore.getNsec();
+    expect(nsec.startsWith("nsec1")).toBe(true);
+
+    const decodedNsec = WebCryptoKeystore.decodeKey(nsec);
+    expect(decodedNsec.type).toBe("nsec");
+    expect(decodedNsec.hex).toBe(privHex);
+  });
+
+  it("supports switching private keys dynamically", async () => {
+    const keystore = new WebCryptoKeystore();
+    const privHex = "ba46c053d87948f076895950ef09286723dbe84e906fbb01f2aeae6fff374058";
+    keystore.setPrivateKey(privHex);
+
+    expect(keystore.getPrivateKey()).toBe(privHex);
+    const nsec = keystore.getNsec();
+    expect(nsec).toBe("nsec1hfrvq57c09y0qa5ft9gw7zfgvu3ah6zwjphmkq0j46hxllehgpvqnfu36w");
+
+    // Also support switching using nsec string
+    keystore.setPrivateKey(nsec);
+    expect(keystore.getPrivateKey()).toBe(privHex);
   });
 });
 
@@ -67,5 +102,31 @@ describe("CapabilityStore & AclEngine", () => {
 
     const denied = await acl.checkPermission("test.plugin", "nostr:write");
     expect(denied).toBe(false);
+  });
+});
+
+describe("OmniKernel Profile Management", () => {
+  it("publishes and retrieves kind-0 profile metadata", async () => {
+    const kernel = new OmniKernel({ bootstrapRelays: [] });
+    await kernel.boot();
+
+    const profileData = {
+      name: "alice",
+      display_name: "Alice in Wonderland",
+      about: "Exploring the rabbit hole of Nostr",
+      picture: "https://example.com/alice.png",
+      nip05: "alice@example.com",
+      lud16: "alice@getalby.com"
+    };
+
+    const signedEvent = await kernel.publishProfile(profileData);
+    expect(signedEvent.kind).toBe(0);
+    expect(signedEvent.id).toHaveLength(64);
+
+    const loadedProfile = await kernel.getProfile();
+    expect(loadedProfile).not.toBeNull();
+    expect(loadedProfile?.display_name).toBe("Alice in Wonderland");
+    expect(loadedProfile?.nip05).toBe("alice@example.com");
+    expect(loadedProfile?.lud16).toBe("alice@getalby.com");
   });
 });

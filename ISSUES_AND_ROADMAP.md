@@ -8,13 +8,13 @@ This document tracks identified UX, architectural, and functional issues in the 
 
 | ID | Issue | Category | Severity | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **ISSUE-01** | Replace playful emoji icons with refined monochrome SVG line icons | UI/Aesthetic | High | 📋 Open |
-| **ISSUE-02** | Plugin lifecycle: Add/remove plugins & granular permission toggling | Plugin Engine | Critical | 📋 Open |
-| **ISSUE-03** | Profile & Identity management view (kind-0 metadata & key custody) | Identity / Nostr | High | 📋 Open |
+| **ISSUE-01** | Replace playful emoji icons with refined monochrome SVG line icons | UI/Aesthetic | High | ✅ Completed (commit `3216c78`) |
+| **ISSUE-02** | Plugin lifecycle: Add/remove plugins & granular permission toggling | Plugin Engine | Critical | ✅ Completed (commit `b8017a9`) |
+| **ISSUE-03** | Profile & Identity management view (kind-0 metadata & key custody) | Identity / Nostr | High | ✅ Completed |
 | **ISSUE-04** | Dynamic Layout & Slot Customization UI (slot mapping per page/section) | Layout / Runtime | Critical | 📋 Open |
 | **ISSUE-05** | Relay Pool Inspector & Management (connection status, add/remove) | Networking / Nostr | High | 📋 Open |
 | **ISSUE-06** | "Widgets" button interaction failure & desktop sidebar collapse | UX / Navigation | High | 📋 Open |
-| **ISSUE-07** | Plugin Inspector: Source URLs, manifest viewer, and component registry | Plugin Engine | High | 📋 Open |
+| **ISSUE-07** | Plugin Inspector: Source URLs, manifest viewer, and component registry | Plugin Engine | High | ✅ Completed (commit `b8017a9`) |
 
 ---
 

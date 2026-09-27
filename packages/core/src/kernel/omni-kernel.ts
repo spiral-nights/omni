@@ -141,6 +141,51 @@ export class OmniKernel {
     this.storageManager.clear(pluginId).catch(console.error);
   }
 
+  async getNpub(): Promise<string> {
+    return this.keystore.getNpub();
+  }
+
+  getNsec(): string {
+    return this.keystore.getNsec();
+  }
+
+  switchPrivateKey(keyHexOrNsec: string): void {
+    this.keystore.setPrivateKey(keyHexOrNsec);
+  }
+
+  async getProfile(pubkey?: string): Promise<Record<string, any> | null> {
+    const targetPubkey = pubkey || (await this.getUserPubkey());
+    const events = await this.eventStore.getEvents({
+      kinds: [0],
+      authors: [targetPubkey],
+      limit: 1
+    });
+    if (events.length > 0) {
+      try {
+        return JSON.parse(events[0].content);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  async publishProfile(metadata: Record<string, any>): Promise<NostrEvent> {
+    const pubkey = await this.getUserPubkey();
+    const content = JSON.stringify(metadata);
+    const draft = {
+      kind: 0,
+      content,
+      tags: [],
+      created_at: Math.floor(Date.now() / 1000)
+    };
+
+    const signed = await this.keystore.signEvent(draft);
+    await this.eventStore.saveEvent(signed);
+    await this.relayPool.publish(signed);
+    return signed;
+  }
+
   async publishNote(content: string, tags: string[][] = []): Promise<NostrEvent> {
     const pubkey = await this.getUserPubkey();
     const draft = {
