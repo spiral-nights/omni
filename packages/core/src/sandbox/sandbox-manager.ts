@@ -8,11 +8,14 @@ import { SubscriptionCoordinator } from "../nostr/subscription-coordinator.js";
 import { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import { RelayPool } from "../nostr/relay-pool.js";
 import { LocalEventStore } from "../nostr/event-store.js";
+import { DEFAULT_OMNI_RUNTIME } from "./default-runtime.js";
 
 export interface SandboxInstanceOptions {
   manifest: OmniManifest;
   scriptContent: string;
   runtimeUrl?: string;
+  runtimeScript?: string;
+  trusted?: boolean;
   userPubkey: string;
   slotContainers: Map<string, Element>; // Map of slot name -> DOM Element
   slotResolver?: (pluginId: string, componentId: string, defaultSlot: string) => Element | undefined | null;
@@ -63,9 +66,21 @@ export class SandboxInstance {
   async mount(): Promise<void> {
     if (typeof document === "undefined") return;
 
-    // 1. Create hidden iframe with strict isolation
+    // 1. Determine privilege & sandboxing rules
+    // System UI plugins and trusted plugins are exempt from strict opaque origin isolation
+    const isTrusted =
+      this.options.trusted === true ||
+      this.manifest.trusted === true ||
+      this.manifest.id.startsWith("org.omni.plugin.") ||
+      this.manifest.id.startsWith("org.omni.system") ||
+      this.manifest.id.startsWith("org.omni.core");
+
     this.iframe = document.createElement("iframe");
-    this.iframe.setAttribute("sandbox", "allow-scripts");
+    if (isTrusted) {
+      this.iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
+    } else {
+      this.iframe.setAttribute("sandbox", "allow-scripts");
+    }
     this.iframe.style.display = "none";
     this.iframe.setAttribute("data-plugin-id", this.manifest.id);
 
@@ -145,23 +160,28 @@ export class SandboxInstance {
     });
 
     // 5. Build srcdoc injecting omni-runtime.js + plugin script
-    const runtimeUrl = this.options.runtimeUrl || "/omni-runtime.js";
-    const csp = "default-src 'none'; script-src 'unsafe-inline' blob: 'self'; style-src 'unsafe-inline';";
+    const csp = isTrusted
+      ? "default-src 'self' 'unsafe-inline' blob: http: https: data:; style-src 'unsafe-inline' 'self'; connect-src *;"
+      : "default-src 'none'; script-src 'unsafe-inline' blob: 'self' http: https:; style-src 'unsafe-inline'; connect-src 'none';";
+
+    const runtimeCode = this.options.runtimeScript || DEFAULT_OMNI_RUNTIME;
 
     this.iframe.srcdoc = `<!DOCTYPE html>
 <html>
 <head>
   <meta http-equiv="Content-Security-Policy" content="${csp}">
-  <script src="${runtimeUrl}"></script>
+  <script>
+    window.addEventListener("error", function(e) {
+      console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);
+    });
+  </script>
+  <script>
+    ${runtimeCode}
+  </script>
 </head>
 <body>
   <script type="module">
-    // Execute plugin bundle once runtime has loaded
-    try {
-      ${this.options.scriptContent}
-    } catch (err) {
-      console.error("[Omni Sandbox Error] Failed to execute plugin ${this.manifest.id}:", err);
-    }
+    ${this.options.scriptContent}
   </script>
 </body>
 </html>`;

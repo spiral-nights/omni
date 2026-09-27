@@ -16,6 +16,7 @@ export interface OmniKernelOptions {
   bootstrapRelays?: string[];
   promptHandler?: PermissionPromptHandler;
   layoutManager?: LayoutManager;
+  runtimeScript?: string;
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
 }
 
@@ -31,6 +32,7 @@ export class OmniKernel {
   readonly layoutManager: LayoutManager;
 
   private sandboxes: Map<string, SandboxInstance> = new Map();
+  private runtimeScript?: string;
   private onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
 
   constructor(options: OmniKernelOptions = {}) {
@@ -43,6 +45,7 @@ export class OmniKernel {
     this.storageManager = new PluginStorageManager();
     this.intentBroker = new IntentBroker();
     this.layoutManager = options.layoutManager || new LayoutManager();
+    this.runtimeScript = options.runtimeScript;
     this.onSlotAction = options.onSlotAction;
   }
 
@@ -92,6 +95,8 @@ export class OmniKernel {
     const sandbox = new SandboxInstance({
       manifest,
       scriptContent,
+      runtimeScript: this.runtimeScript,
+      trusted: manifest.trusted || manifest.id.startsWith("org.omni."),
       userPubkey,
       slotContainers,
       slotResolver: (pluginId: string, componentId: string, defaultSlot: string) => {

@@ -12,6 +12,7 @@ import checklistManifest from "../../../packages/plugins/checklist/omni.manifest
 import checklistScript from "../../../packages/plugins/checklist/dist/index.js?raw";
 import timerManifest from "../../../packages/plugins/timer/omni.manifest.json";
 import timerScript from "../../../packages/plugins/timer/dist/index.js?raw";
+import omniRuntimeScript from "../public/omni-runtime.js?raw";
 import { icon } from "./icons.js";
 
 // DOM Element references
@@ -136,6 +137,7 @@ const savedPrivkey = localStorage.getItem(STORAGE_KEY_NSEC) || undefined;
 const kernel = new OmniKernel({
   privateKeyHex: savedPrivkey,
   bootstrapRelays: ["wss://relay.damus.io"],
+  runtimeScript: omniRuntimeScript,
   onSlotAction: (action, slot) => {
     if (slot === "sidebar" || slot === "widgets") {
       if (action === "toggle") {

@@ -66,6 +66,7 @@ export const OmniManifestSchema = z.object({
   author: AuthorSchema.optional(),
   icon: z.string().optional(),
   entry: z.string().min(1),
+  trusted: z.boolean().optional(),
   components: z.array(ComponentDeclarationSchema).default([]),
   permissions: ManifestPermissionsSchema
 });
