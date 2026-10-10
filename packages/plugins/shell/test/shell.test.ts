@@ -165,6 +165,51 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     expect(pageFeed?.classList.contains("active")).toBe(true);
   });
 
+  it("creates distinct pages for multiple full-page apps and displays only one at a time", () => {
+    // Add second full-page app
+    const secondApp: InstalledPluginEntry = {
+      id: "org.omni.plugin.music",
+      name: "Music Player",
+      description: "Decentralized audio player",
+      icon: "radio",
+      viewport: "main",
+      scriptContent: "console.log('music');",
+      sourceUrl: "local:@omni/plugin-music",
+      enabled: true
+    };
+    shell.installedPlugins.push(secondApp);
+    shell.renderDockLaunchers();
+
+    const dockSlot = root.querySelector("#dock-slot");
+    const items = dockSlot?.querySelectorAll(".dock-item");
+    expect(items?.length).toBe(2);
+
+    const musicBtn = Array.from(items || []).find((el) => el.getAttribute("title")?.includes("Music")) as HTMLElement;
+    const feedBtn = Array.from(items || []).find((el) => el.getAttribute("title")?.includes("Feed")) as HTMLElement;
+    expect(musicBtn).toBeTruthy();
+    expect(feedBtn).toBeTruthy();
+
+    const pageFeed = root.querySelector("#page-feed");
+    const pageMusic = root.querySelector("#page-app-org-omni-plugin-music");
+    expect(pageFeed).toBeTruthy();
+    expect(pageMusic).toBeTruthy();
+
+    // Click Music -> only Music is active, Feed and Widgets are inactive
+    musicBtn.click();
+    expect(pageMusic?.classList.contains("active")).toBe(true);
+    expect(pageFeed?.classList.contains("active")).toBe(false);
+    expect(musicBtn.classList.contains("active")).toBe(true);
+    expect(feedBtn.classList.contains("active")).toBe(false);
+
+    // Click Feed -> only Feed is active, Music is inactive
+    feedBtn.click();
+    expect(pageFeed?.classList.contains("active")).toBe(true);
+    expect(pageMusic?.classList.contains("active")).toBe(false);
+    expect(feedBtn.classList.contains("active")).toBe(true);
+    expect(musicBtn.classList.contains("active")).toBe(false);
+  });
+
+
   it("supports pure zero-manifest nsites without any manifest property", () => {
     const pureNsite: InstalledPluginEntry = {
       id: "org.example.pure-nsite",

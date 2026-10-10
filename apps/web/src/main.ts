@@ -73,6 +73,9 @@ const kernel = new OmniKernel({
   privateKeyHex: savedPrivkey,
   bootstrapRelays: ["wss://relay.damus.io"],
   runtimeScript: omniRuntimeScript,
+  slotResolver: (pluginId, _compId, slot) => {
+    return shell?.getContainerForPluginSlot(pluginId, slot);
+  },
   onSlotAction: (action, slot) => {
     shell?.handleSlotAction(action, slot);
   },

@@ -18,7 +18,7 @@ export interface InstalledPluginEntry {
   event?: any;
 }
 
-export type AppPage = "feed" | "widgets";
+export type AppPage = "feed" | "widgets" | string;
 export type SettingsTab = "profile" | "relays" | "layout" | "plugins" | "config";
 
 export interface OmniShellOptions {
@@ -34,6 +34,7 @@ export class OmniShell {
   private slotContainers: Map<string, Element> = new Map();
 
   // Internal element references
+  private mainViewport!: HTMLElement;
   private headerActionsSlot!: HTMLElement;
   private dockSlot!: HTMLElement;
   private mainSlot!: HTMLElement;
@@ -104,11 +105,75 @@ export class OmniShell {
     };
   }
 
+  public getContainerForPluginSlot(pluginId: string, slotId: string): Element {
+    if (slotId === "main") {
+      if (pluginId === "org.omni.plugin.feed") {
+        return this.mainSlot;
+      }
+      return this.ensureAppPage(pluginId);
+    }
+    if (slotId === "sidebar" || slotId === "widgets") {
+      return this.widgetsSlot;
+    }
+    if (slotId === "dock" || slotId === "icon") {
+      return this.dockSlot;
+    }
+    if (slotId === "header-actions") {
+      return this.headerActionsSlot;
+    }
+    return this.slotContainers.get(slotId) || this.mainSlot;
+  }
+
+  public ensureAppPage(pluginId: string): HTMLElement {
+    if (pluginId === "org.omni.plugin.feed") {
+      return this.mainSlot;
+    }
+    const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+    let pageEl = document.getElementById(`page-app-${safeId}`);
+    if (!pageEl) {
+      pageEl = document.createElement("section");
+      pageEl.className = "app-page";
+      pageEl.id = `page-app-${safeId}`;
+      pageEl.dataset.page = pluginId;
+      pageEl.dataset.pluginId = pluginId;
+
+      const slotEl = document.createElement("div");
+      slotEl.className = "omni-slot main-viewport-slot";
+      slotEl.id = `slot-main-${safeId}`;
+      pageEl.appendChild(slotEl);
+
+      const mainVp = this.mainViewport || this.root.querySelector(".main-viewport");
+      if (mainVp) {
+        if (this.pageWidgets && this.pageWidgets.parentNode === mainVp) {
+          mainVp.insertBefore(pageEl, this.pageWidgets);
+        } else {
+          mainVp.appendChild(pageEl);
+        }
+      }
+      return slotEl;
+    }
+    return (pageEl.querySelector(".main-viewport-slot") as HTMLElement) || pageEl;
+  }
+
+  public getActivePageId(): string {
+    if (this.pageWidgets?.classList.contains("active")) {
+      return "widgets";
+    }
+    const mainVp = this.mainViewport || this.root.querySelector(".main-viewport");
+    const activeEl = mainVp?.querySelector<HTMLElement>(".app-page.active");
+    if (activeEl) {
+      if (activeEl.id === "page-feed") return "org.omni.plugin.feed";
+      if (activeEl.dataset.pluginId) return activeEl.dataset.pluginId;
+      if (activeEl.dataset.page) return activeEl.dataset.page;
+    }
+    return "org.omni.plugin.feed";
+  }
+
   public renderDockLaunchers(): void {
     if (!this.dockSlot) return;
     this.dockSlot.innerHTML = "";
 
-    const isFeedPage = this.pageFeed?.classList.contains("active");
+    const activePage = this.getActivePageId();
 
     for (const plugin of this.installedPlugins) {
       if (!plugin.enabled) continue;
@@ -118,12 +183,20 @@ export class OmniShell {
       // Modular companion widgets live inside the Widgets & Tools Dashboard (#page-widgets).
       if (meta.viewport !== "main") continue;
 
+      if (plugin.id !== "org.omni.plugin.feed") {
+        this.ensureAppPage(plugin.id);
+      }
+
       const btn = document.createElement("button");
       btn.className = "dock-item";
       btn.title = meta.name;
       btn.dataset.pluginId = plugin.id;
 
-      if (isFeedPage) {
+      if (
+        activePage === plugin.id ||
+        (activePage === "feed" && plugin.id === "org.omni.plugin.feed") ||
+        (activePage === "org.omni.plugin.feed" && plugin.id === "org.omni.plugin.feed")
+      ) {
         btn.classList.add("active");
       }
 
@@ -142,15 +215,7 @@ export class OmniShell {
       `;
 
       btn.addEventListener("click", () => {
-        if (meta.viewport === "main") {
-          this.showPage("feed");
-          const compEl = document.querySelector(`.omni-comp-${plugin.id}-main`);
-          compEl?.scrollIntoView({ behavior: "smooth" });
-        } else {
-          this.showPage("widgets");
-          const compEl = document.querySelector(`.omni-comp-${plugin.id}-main`);
-          compEl?.scrollIntoView({ behavior: "smooth" });
-        }
+        this.showPage(plugin.id);
       });
 
       this.dockSlot.appendChild(btn);
@@ -179,37 +244,49 @@ export class OmniShell {
   }
 
   /**
-   * Switch center viewport between Full Page (Feed) and Widgets Grid
+   * Switch center viewport between full-page apps and Widgets Dashboard
    */
   public showPage(page: AppPage): void {
-    if (page === "feed") {
-      this.pageFeed.classList.add("active");
-      this.pageWidgets.classList.remove("active");
-      this.dockBtnWidgets?.classList.remove("active");
+    const mainVp = this.mainViewport || this.root.querySelector(".main-viewport");
+    const allPages = mainVp?.querySelectorAll<HTMLElement>(".app-page") || [];
+    allPages.forEach((p) => p.classList.remove("active"));
 
-      this.dockSlot?.querySelectorAll(".dock-item").forEach((btn: any) => {
-        const pId = btn.dataset.pluginId;
-        const p = this.installedPlugins.find((x) => x.id === pId);
-        if (p) {
-          const meta = this.getPluginMeta(p);
-          btn.classList.toggle("active", meta.viewport === "main");
-        } else {
-          const title = btn.getAttribute("title") || "";
-          btn.classList.toggle("active", title.toLowerCase().includes("feed"));
-        }
-      });
+    this.dockSlot?.querySelectorAll(".dock-item").forEach((btn: any) => {
+      btn.classList.remove("active");
+    });
+    this.dockBtnWidgets?.classList.remove("active");
 
-      this.mainSlot.scrollIntoView({ behavior: "smooth" });
-    } else {
+    if (page === "widgets") {
       this.pageWidgets.classList.add("active");
-      this.pageFeed.classList.remove("active");
       this.dockBtnWidgets?.classList.add("active");
-
-      this.dockSlot?.querySelectorAll(".dock-item").forEach((btn: any) => {
-        btn.classList.remove("active");
-      });
-
       this.widgetsSlot.scrollIntoView({ behavior: "smooth" });
+    } else {
+      let targetPage: HTMLElement | null = null;
+      if (page === "feed" || page === "org.omni.plugin.feed") {
+        targetPage = this.pageFeed;
+      } else {
+        const safeId = page.replace(/[^a-zA-Z0-9_-]/g, "-");
+        targetPage = document.getElementById(`page-app-${safeId}`) as HTMLElement | null;
+        if (!targetPage) {
+          targetPage = mainVp?.querySelector<HTMLElement>(`[data-plugin-id="${page}"], [data-page="${page}"]`) || null;
+        }
+      }
+
+      if (targetPage) {
+        targetPage.classList.add("active");
+        targetPage.scrollIntoView({ behavior: "smooth" });
+      } else if (this.pageFeed) {
+        this.pageFeed.classList.add("active");
+        this.pageFeed.scrollIntoView({ behavior: "smooth" });
+      }
+
+      const targetBtn = this.dockSlot?.querySelector<HTMLElement>(`[data-plugin-id="${page}"]`);
+      if (targetBtn) {
+        targetBtn.classList.add("active");
+      } else if (page === "feed" || page === "org.omni.plugin.feed") {
+        const feedBtn = this.dockSlot?.querySelector<HTMLElement>(`[data-plugin-id="org.omni.plugin.feed"]`);
+        if (feedBtn) feedBtn.classList.add("active");
+      }
     }
   }
 
@@ -378,11 +455,21 @@ export class OmniShell {
         }
         select.addEventListener("change", () => {
           const targetSlotId = select.value;
-          const targetContainer = this.slotContainers.get(targetSlotId);
+          const targetContainer = this.getContainerForPluginSlot(item.pluginId, targetSlotId);
           if (targetContainer) {
             this.kernel.reparentPluginComponent(item.pluginId, item.componentId, targetSlotId, targetContainer);
             if (plugin) {
               plugin.viewport = targetSlotId;
+            }
+            if (targetSlotId !== "main" && item.pluginId !== "org.omni.plugin.feed") {
+              const safeId = item.pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+              const pageEl = document.getElementById(`page-app-${safeId}`);
+              if (pageEl) {
+                if (pageEl.classList.contains("active")) {
+                  this.showPage("widgets");
+                }
+                pageEl.remove();
+              }
             }
             this.renderDockLaunchers();
             this.renderVisualLayoutConfigurator();
@@ -641,10 +728,20 @@ export class OmniShell {
 
       vpSelect.addEventListener("change", () => {
         const targetSlotId = vpSelect.value;
-        const targetContainer = this.slotContainers.get(targetSlotId);
+        const targetContainer = this.getContainerForPluginSlot(p.id, targetSlotId);
         if (targetContainer && primaryComp) {
           this.kernel.reparentPluginComponent(p.id, primaryComp.id, targetSlotId, targetContainer);
           p.viewport = targetSlotId;
+          if (targetSlotId !== "main" && p.id !== "org.omni.plugin.feed") {
+            const safeId = p.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+            const pageEl = document.getElementById(`page-app-${safeId}`);
+            if (pageEl) {
+              if (pageEl.classList.contains("active")) {
+                this.showPage("widgets");
+              }
+              pageEl.remove();
+            }
+          }
           this.renderDockLaunchers();
         }
       });
@@ -663,6 +760,14 @@ export class OmniShell {
 
   public uninstallPlugin(pluginId: string): void {
     this.kernel.uninstallPlugin(pluginId);
+    const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const pageEl = document.getElementById(`page-app-${safeId}`);
+    if (pageEl) {
+      if (pageEl.classList.contains("active")) {
+        this.showPage("feed");
+      }
+      pageEl.remove();
+    }
     const idx = this.installedPlugins.findIndex((p) => p.id === pluginId);
     if (idx !== -1) {
       this.installedPlugins.splice(idx, 1);
@@ -895,9 +1000,9 @@ export class OmniShell {
         </nav>
 
         <!-- Center Viewport with Multi-Page Views -->
-        <main class="main-viewport">
+        <main class="main-viewport" id="main-viewport">
           <!-- Page 1: Timeline Feed & Main Slot -->
-          <section class="app-page active" id="page-feed">
+          <section class="app-page active" id="page-feed" data-plugin-id="org.omni.plugin.feed" data-page="feed">
             <div id="main-slot" class="omni-slot main-viewport-slot"></div>
           </section>
 
@@ -1393,6 +1498,7 @@ export class OmniShell {
   }
 
   private cacheElementReferences(): void {
+    this.mainViewport = document.getElementById("main-viewport") || this.root.querySelector(".main-viewport")!;
     this.headerActionsSlot = document.getElementById("header-actions-slot")!;
     this.dockSlot = document.getElementById("dock-slot")!;
     this.mainSlot = document.getElementById("main-slot")!;
@@ -1444,9 +1550,14 @@ export class OmniShell {
         const synth = this.ensurePluginManifest(p);
         for (const comp of synth.components || []) {
           p.viewport = comp.slot;
-          const container = this.slotContainers.get(comp.slot);
+          const container = this.getContainerForPluginSlot(p.id, comp.slot);
           if (container) {
             this.kernel.getSandbox(p.id)?.reparentComponent(comp.id, container);
+          }
+          if (comp.slot !== "main" && p.id !== "org.omni.plugin.feed") {
+            const safeId = p.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+            const pageEl = document.getElementById(`page-app-${safeId}`);
+            pageEl?.remove();
           }
         }
       }

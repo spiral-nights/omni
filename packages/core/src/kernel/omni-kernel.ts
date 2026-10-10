@@ -21,6 +21,7 @@ export interface OmniKernelOptions {
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
   onHandleUri?: (uri: string, sourcePluginId?: string) => Promise<any>;
   onHandleShare?: (payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string) => Promise<any>;
+  slotResolver?: (pluginId: string, componentId: string, slot: string) => Element | undefined;
   eventStoreName?: string;
   storageName?: string;
 }
@@ -38,6 +39,7 @@ export class OmniKernel {
 
   private sandboxes: Map<string, SandboxInstance> = new Map();
   private runtimeScript?: string;
+  private slotResolver?: (pluginId: string, componentId: string, slot: string) => Element | undefined;
   private onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
   private onHandleUri?: (uri: string, sourcePluginId?: string) => Promise<any>;
   private onHandleShare?: (payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string) => Promise<any>;
@@ -54,6 +56,7 @@ export class OmniKernel {
     this.intentBroker = new IntentBroker();
     this.layoutManager = options.layoutManager || new LayoutManager();
     this.runtimeScript = options.runtimeScript;
+    this.slotResolver = options.slotResolver;
     this.onSlotAction = options.onSlotAction;
     this.onHandleUri = options.onHandleUri;
     this.onHandleShare = options.onHandleShare;
@@ -114,6 +117,10 @@ export class OmniKernel {
       slotContainers,
       slotResolver: (pluginId: string, componentId: string, defaultSlot: string) => {
         const targetSlot = this.layoutManager.getSlotForComponent(pluginId, componentId) || defaultSlot;
+        if (this.slotResolver) {
+          const custom = this.slotResolver(pluginId, componentId, targetSlot);
+          if (custom) return custom;
+        }
         return slotContainers.get(targetSlot) || slotContainers.get(defaultSlot);
       },
       aclEngine: this.aclEngine,
