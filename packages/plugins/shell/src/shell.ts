@@ -1215,6 +1215,46 @@ export class OmniShell {
           </div>
         </div>
       </div>
+
+      <!-- 6. "Open With..." System Chooser Modal (Milestone 6) -->
+      <div class="modal-overlay" id="open-with-modal">
+        <div class="modal-card" style="max-width: 440px;">
+          <div class="modal-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1.1rem; color: var(--omni-accent-primary);">✦</span>
+              <h3 style="font-size: 1.05rem; font-weight: 600;">Open With...</h3>
+            </div>
+            <button class="btn-drawer-close" id="btn-close-open-with">
+              ${icon("close", 14)}
+            </button>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="background: var(--omni-bg-surface); padding: 10px 12px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle); display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 0.72rem; color: var(--omni-text-muted);">Incoming URI / Intent:</span>
+              <code id="open-with-target-uri" style="font-size: 0.78rem; color: var(--omni-text-primary); word-break: break-all; font-family: var(--omni-font-mono);">nostr:...</code>
+            </div>
+
+            <p style="font-size: 0.8rem; color: var(--omni-text-secondary); margin: 0;">
+              Select an installed application or handler to open this content:
+            </p>
+
+            <div id="open-with-handlers-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto;"></div>
+
+            <div style="display: flex; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid var(--omni-border-subtle);">
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--omni-text-secondary); cursor: pointer;">
+                <input id="open-with-always-checkbox" type="checkbox" />
+                <span id="open-with-always-label">Always use this app for this protocol</span>
+              </label>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+              <button id="btn-cancel-open-with" class="btn-secondary" style="font-size: 0.78rem;">Cancel</button>
+              <button id="btn-confirm-open-with" class="btn-publish" style="font-size: 0.78rem;" disabled>Open</button>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
   }
 
@@ -1750,5 +1790,156 @@ export class OmniShell {
         localStorage.setItem("omni_feed_limit", cfgLimit.value);
       }
     });
+  }
+
+  // --- Milestone 6: Transparent Cross-App Intents & Open With Chooser ---
+
+  public async promptOpenWith(uri: string): Promise<string | null> {
+    const scheme = uri.split(":")[0]?.toLowerCase() || "unknown";
+
+    // 1. Check if user configured a default handler for this scheme
+    const defaultHandlerId = this.kernel.getDefaultHandler(scheme);
+    if (defaultHandlerId) {
+      const isInstalled = this.installedPlugins.some((p) => p.id === defaultHandlerId);
+      if (isInstalled) {
+        return defaultHandlerId;
+      }
+    }
+
+    // 2. Resolve available handlers from kernel
+    const handlers = await this.kernel.resolveAppHandlers(uri, this.installedPlugins);
+    if (handlers.length === 0) {
+      if (typeof alert === "function") {
+        alert(`No installed apps or handlers found for URI scheme: ${scheme}:`);
+      } else if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert(`No installed apps or handlers found for URI scheme: ${scheme}:`);
+      }
+      return null;
+    }
+
+    if (handlers.length === 1 && handlers[0].isInstalled) {
+      return handlers[0].id;
+    }
+
+    // 3. Present "Open With..." chooser dialog
+    return new Promise((resolve) => {
+      const modal = document.getElementById("open-with-modal");
+      const uriEl = document.getElementById("open-with-target-uri");
+      const listEl = document.getElementById("open-with-handlers-list");
+      const alwaysChk = document.getElementById("open-with-always-checkbox") as HTMLInputElement | null;
+      const alwaysLabel = document.getElementById("open-with-always-label");
+      const btnConfirm = document.getElementById("btn-confirm-open-with") as HTMLButtonElement | null;
+      const btnCancel = document.getElementById("btn-cancel-open-with");
+      const btnClose = document.getElementById("btn-close-open-with");
+
+      if (!modal || !listEl) return resolve(null);
+
+      if (uriEl) uriEl.textContent = uri;
+      if (alwaysLabel) alwaysLabel.textContent = `Always open ${scheme}: links with this app`;
+      if (alwaysChk) alwaysChk.checked = false;
+      if (btnConfirm) btnConfirm.disabled = true;
+
+      listEl.innerHTML = "";
+      let selectedHandlerId: string | null = null;
+
+      for (const h of handlers) {
+        const row = document.createElement("div");
+        row.className = "open-with-handler-item";
+        row.style.cssText =
+          "display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); cursor: pointer; transition: border-color 0.15s;";
+
+        const left = document.createElement("div");
+        left.style.cssText = "display: flex; align-items: center; gap: 10px;";
+
+        const iconEl = document.createElement("div");
+        iconEl.style.cssText =
+          "width: 32px; height: 32px; border-radius: var(--omni-radius-sm); background: var(--omni-bg-subtle); display: flex; align-items: center; justify-content: center; font-size: 1rem; color: var(--omni-accent-primary);";
+        iconEl.textContent = "✦";
+
+        const textCol = document.createElement("div");
+        textCol.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+        textCol.innerHTML = `<span style="font-weight: 600; font-size: 0.85rem; color: var(--omni-text-primary);">${h.name}</span><span style="font-size: 0.72rem; color: var(--omni-text-muted);">${h.description || ""}</span>`;
+
+        left.appendChild(iconEl);
+        left.appendChild(textCol);
+
+        const badge = document.createElement("span");
+        badge.style.cssText =
+          "font-size: 0.68rem; background: var(--omni-bg-subtle); color: var(--omni-accent-primary); padding: 2px 6px; border-radius: var(--omni-radius-pill);";
+        badge.textContent = h.isInstalled ? "Installed" : "Nostr NIP-89";
+
+        row.appendChild(left);
+        row.appendChild(badge);
+
+        row.addEventListener("click", () => {
+          listEl.querySelectorAll(".open-with-handler-item").forEach((el: any) => {
+            el.style.borderColor = "var(--omni-border-subtle)";
+          });
+          row.style.borderColor = "var(--omni-accent-primary)";
+          selectedHandlerId = h.id;
+          if (btnConfirm) btnConfirm.disabled = false;
+        });
+
+        listEl.appendChild(row);
+      }
+
+      const cleanup = () => {
+        modal.classList.remove("open");
+        btnCancel?.removeEventListener("click", onCancel);
+        btnClose?.removeEventListener("click", onCancel);
+        btnConfirm?.removeEventListener("click", onConfirm);
+      };
+
+      const onCancel = () => {
+        cleanup();
+        resolve(null);
+      };
+
+      const onConfirm = () => {
+        if (!selectedHandlerId) return;
+        if (alwaysChk?.checked) {
+          this.kernel.setDefaultHandler(scheme, selectedHandlerId);
+        }
+        cleanup();
+        resolve(selectedHandlerId);
+      };
+
+      btnCancel?.addEventListener("click", onCancel);
+      btnClose?.addEventListener("click", onCancel);
+      btnConfirm?.addEventListener("click", onConfirm);
+
+      modal.classList.add("open");
+    });
+  }
+
+  public async handleUri(uri: string, sourcePluginId?: string): Promise<any> {
+    const chosenHandlerId = await this.promptOpenWith(uri);
+    if (!chosenHandlerId) return { handled: false, uri };
+
+    // Launch or focus selected app
+    if (chosenHandlerId.includes("feed") || chosenHandlerId === "org.omni.plugin.feed") {
+      this.showPage("feed");
+    } else {
+      this.showPage("widgets");
+    }
+
+    return { handled: true, uri, handlerId: chosenHandlerId };
+  }
+
+  public async handleShare(
+    payload: { title?: string; text?: string; url?: string },
+    sourcePluginId?: string
+  ): Promise<any> {
+    // Switch to feed view (timeline & composer)
+    this.showPage("feed");
+
+    const draftText = [payload.title, payload.text, payload.url].filter(Boolean).join("\n\n");
+    if (draftText) {
+      try {
+        await this.kernel.intentBroker.dispatch("shell", "create_note", { content: draftText });
+      } catch (_) {}
+    }
+
+    return { handled: true, payload };
   }
 }

@@ -18,7 +18,7 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
 |  [MILESTONE 3]  [COMPLETED] Zero-Manifest Pure nsite Loader (kind 35129)              |
 |  [MILESTONE 4]  [COMPLETED] Decouple Shell UI into @omni/plugin-shell                 |
 |  [MILESTONE 5]  [COMPLETED] User-Defined Viewports (Decoupling "Slots")                |
-|  [MILESTONE 6]  Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share)            |
+|  [MILESTONE 6]  [COMPLETED] Transparent Cross-App Intents (NIP-21, NIP-89, Web Share) |
 +---------------------------------------------------------------------------------------+
 ```
 
@@ -71,13 +71,14 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
   3. **Universal Placement:** [Done] Any installed nsite can be assigned or reparented to any viewport dynamically via the Visual Layout Configurator and the Installed Plugins viewport selector.
 * **Priority:** High / P1
 
-### Milestone 6: Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share)
+### ~~Milestone 6: Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share)~~ [COMPLETED]
 * **Goal:** Replace proprietary `omni.intents` with open web and Nostr standards.
+* **Status:** Complete (Implemented NIP-21 protocol click/open interception in sandbox runtime, NIP-89 discovery and handler resolution in OmniKernel, persistent user default handler preferences, elegant "Open With..." chooser modal in OmniShell, and Web Share API shim).
 * **Scope:**
-  1. **URI Protocol Interception (NIP-21):** Intercept navigations and clicks on `nostr:`, `lightning:`, and `cashu:` protocol links (`<a href="...">` and `window.open()`) in sandboxes.
-  2. **NIP-89 App Handler Resolution:** Check installed nsites and resolve NIP-89 (`kind: 31989/31990`) handler metadata for URI schemes and event kinds.
-  3. **"Open With..." System Chooser:** Provide an elegant modal chooser when multiple handlers exist, supporting "Always use this app" default handler preferences.
-  4. **Web Share API (`navigator.share`):** Shim standard `navigator.share()` inside sandboxes to route notes/links seamlessly to the host composer or preferred sharing nsite.
+  1. **URI Protocol Interception (NIP-21):** [Done] Intercepted link clicks (`<a href="...">`) and `window.open()` targeting `nostr:`, `lightning:`, and `cashu:` protocol URIs at sandbox capture phase; dispatches `kernel.handleUri` over JSON-RPC.
+  2. **NIP-89 App Handler Resolution:** [Done] Implemented `OmniKernel.resolveAppHandlers(uri, installedPlugins)` querying installed sandboxes/plugins and `LocalEventStore` for NIP-89 (`kind: 31989`) handler definitions by scheme and kind.
+  3. **"Open With..." System Chooser:** [Done] Implemented `#open-with-modal` in `OmniShell` with warm paper styling, monochrome SVG iconography, handler selection list, and "Always open [scheme]: links with this app" checkbox saved via `kernel.setDefaultHandler()`.
+  4. **Web Share API (`navigator.share`):** [Done] Shimmed `navigator.share()` inside sandboxes to dispatch `kernel.handleShare`, routing shared notes/links seamlessly into the shell timeline composer.
 * **Priority:** High / P1
 
 ---

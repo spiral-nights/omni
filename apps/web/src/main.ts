@@ -65,6 +65,12 @@ const kernel = new OmniKernel({
   runtimeScript: omniRuntimeScript,
   onSlotAction: (action, slot) => {
     shell?.handleSlotAction(action, slot);
+  },
+  onHandleUri: (uri, srcId) => {
+    return shell?.handleUri(uri, srcId);
+  },
+  onHandleShare: (payload, srcId) => {
+    return shell?.handleShare(payload, srcId);
   }
 });
 

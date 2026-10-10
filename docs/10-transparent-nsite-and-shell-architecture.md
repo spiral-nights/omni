@@ -307,8 +307,13 @@ graph TD
   - [x] Wire `apps/web/src/main.ts` to boot kernel, mount `@omni/plugin-shell`, and pass control.
   - [x] Verify all core tests, shell tests, and production builds pass cleanly.
 
-- [ ] **Milestone 6: Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share)**
-  - Intercept `nostr:`, `lightning:`, and `cashu:` protocol navigations in the sandbox bridge.
-  - Implement NIP-89 handler lookup (`kind: 31989/31990`) in kernel and shell.
-  - Build the "Open With..." system chooser modal in `@omni/plugin-shell` with "Always use this app" persistence.
-  - Shim `navigator.share()` to route note drafts directly into the host composer or preferred sharing nsite.
+- [x] **Milestone 5: User-Defined Viewports (Deconstructing "Slots")**
+  - [x] Decouple developers from slots: pure nsites declare zero slots.
+  - [x] Define user viewports (`STANDARD_VIEWPORTS`: Full Page Viewport, Widgets Grid Viewport, Dock Shortcuts).
+  - [x] Enable dynamic viewport reassignment in Visual Layout Configurator and plugin manager cards.
+
+- [x] **Milestone 6: Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share)**
+  - [x] Intercept `nostr:`, `lightning:`, and `cashu:` protocol navigations in the sandbox bridge.
+  - [x] Implement NIP-89 handler lookup (`kind: 31989/31990`) in kernel and shell.
+  - [x] Build the "Open With..." system chooser modal in `@omni/plugin-shell` with "Always use this app" persistence.
+  - [x] Shim `navigator.share()` to route note drafts directly into the host composer or preferred sharing nsite.

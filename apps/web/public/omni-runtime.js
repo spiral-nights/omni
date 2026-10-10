@@ -1027,5 +1027,51 @@
     }
   };
 
+  // 9. NIP-21, Lightning & Cashu URI Protocol Interception
+  function isProtocolUri(url) {
+    if (typeof url !== "string") return false;
+    const trimmed = url.trim().toLowerCase();
+    return trimmed.startsWith("nostr:") || trimmed.startsWith("lightning:") || trimmed.startsWith("cashu:");
+  }
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("click", (e) => {
+      let target = e.target;
+      while (target && target !== document.body && target !== document.documentElement) {
+        if (target.tagName === "A" && target.hasAttribute("href")) {
+          const href = target.getAttribute("href");
+          if (isProtocolUri(href)) {
+            e.preventDefault();
+            e.stopPropagation();
+            initPromise.then(() => callRpc("kernel.handleUri", { uri: href }));
+            return;
+          }
+        }
+        target = target.parentNode;
+      }
+    }, true);
+  }
+
+  const originalWindowOpen = window.open;
+  window.open = function(url, target, features) {
+    if (isProtocolUri(url)) {
+      initPromise.then(() => callRpc("kernel.handleUri", { uri: url }));
+      return null;
+    }
+    return originalWindowOpen ? originalWindowOpen.apply(this, [url, target, features]) : null;
+  };
+
+  // 10. Web Share API Shim (navigator.share)
+  if (typeof navigator !== "undefined") {
+    navigator.share = async function(data) {
+      await initPromise;
+      return callRpc("kernel.handleShare", {
+        title: data ? data.title : undefined,
+        text: data ? data.text : undefined,
+        url: data ? data.url : undefined
+      });
+    };
+  }
+
   console.log("⚡ [Omni Sandbox] Injected runtime loaded.");
 })();

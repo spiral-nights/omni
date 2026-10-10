@@ -10,6 +10,7 @@ import { IntentBroker } from "../intents/intent-broker.js";
 import { SandboxInstance } from "../sandbox/sandbox-manager.js";
 import { NostrPluginResolver, ResolvedNostrPlugin, PublishNsiteOptions } from "../plugins/nostr-plugin-resolver.js";
 import { LayoutManager } from "../layout/layout-manager.js";
+import { AppHandler, detectUriScheme } from "../intents/app-handler.js";
 
 export interface OmniKernelOptions {
   privateKeyHex?: string;
@@ -18,6 +19,8 @@ export interface OmniKernelOptions {
   layoutManager?: LayoutManager;
   runtimeScript?: string;
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
+  onHandleUri?: (uri: string, sourcePluginId?: string) => Promise<any>;
+  onHandleShare?: (payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string) => Promise<any>;
   eventStoreName?: string;
   storageName?: string;
 }
@@ -36,6 +39,9 @@ export class OmniKernel {
   private sandboxes: Map<string, SandboxInstance> = new Map();
   private runtimeScript?: string;
   private onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
+  private onHandleUri?: (uri: string, sourcePluginId?: string) => Promise<any>;
+  private onHandleShare?: (payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string) => Promise<any>;
+  private defaultHandlersMemory: Record<string, string> = {};
 
   constructor(options: OmniKernelOptions = {}) {
     this.keystore = new WebCryptoKeystore(options.privateKeyHex);
@@ -49,6 +55,8 @@ export class OmniKernel {
     this.layoutManager = options.layoutManager || new LayoutManager();
     this.runtimeScript = options.runtimeScript;
     this.onSlotAction = options.onSlotAction;
+    this.onHandleUri = options.onHandleUri;
+    this.onHandleShare = options.onHandleShare;
   }
 
   async boot(): Promise<void> {
@@ -115,7 +123,9 @@ export class OmniKernel {
       keystore: this.keystore,
       relayPool: this.relayPool,
       eventStore: this.eventStore,
-      onSlotAction: this.onSlotAction
+      onSlotAction: this.onSlotAction,
+      onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
+      onHandleShare: (payload, srcId) => this.handleShare(payload, srcId)
     });
 
     await sandbox.mount();
@@ -294,5 +304,194 @@ export class OmniKernel {
       },
       options
     );
+  }
+
+  // --- Milestone 6: Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share) ---
+
+  async handleUri(uri: string, sourcePluginId?: string): Promise<any> {
+    if (this.onHandleUri) {
+      return this.onHandleUri(uri, sourcePluginId);
+    }
+    return { success: true, uri, handled: false };
+  }
+
+  async handleShare(
+    payload: { title?: string; text?: string; url?: string },
+    sourcePluginId?: string
+  ): Promise<any> {
+    if (this.onHandleShare) {
+      return this.onHandleShare(payload, sourcePluginId);
+    }
+    return { success: true, payload, handled: false };
+  }
+
+  async resolveAppHandlers(
+    uri: string,
+    extraPlugins?: Array<{ id: string; name?: string; manifest?: any; description?: string }>
+  ): Promise<AppHandler[]> {
+    const { scheme, kind } = detectUriScheme(uri);
+    const handlers: AppHandler[] = [];
+
+    // 1. Gather active sandboxes and extra/installed plugins
+    const candidates: Array<{ id: string; name: string; icon?: string; description?: string }> = [];
+
+    for (const [id, sandbox] of this.sandboxes.entries()) {
+      candidates.push({
+        id,
+        name: sandbox.manifest?.name || id,
+        icon: sandbox.manifest?.icon,
+        description: sandbox.manifest?.description
+      });
+    }
+
+    if (extraPlugins) {
+      for (const p of extraPlugins) {
+        if (!candidates.some((c) => c.id === p.id)) {
+          candidates.push({
+            id: p.id,
+            name: p.manifest?.name || p.name || p.id,
+            icon: p.manifest?.icon,
+            description: p.manifest?.description || p.description
+          });
+        }
+      }
+    }
+
+    for (const cand of candidates) {
+      const id = cand.id;
+      const name = cand.name;
+      let matched = false;
+      const schemes: string[] = [];
+
+      if (scheme === "nostr") {
+        if (
+          id.includes("feed") ||
+          name.toLowerCase().includes("feed") ||
+          name.toLowerCase().includes("timeline")
+        ) {
+          matched = true;
+          schemes.push("nostr");
+        } else if (
+          id.includes("profile") ||
+          name.toLowerCase().includes("profile")
+        ) {
+          if (kind === 0) matched = true;
+          schemes.push("nostr");
+        } else {
+          schemes.push("nostr");
+          matched = true;
+        }
+      } else if (scheme === "lightning") {
+        if (
+          id.includes("wallet") ||
+          id.includes("lightning") ||
+          name.toLowerCase().includes("wallet")
+        ) {
+          matched = true;
+          schemes.push("lightning");
+        }
+      } else if (scheme === "cashu") {
+        if (
+          id.includes("cashu") ||
+          name.toLowerCase().includes("cashu") ||
+          id.includes("wallet")
+        ) {
+          matched = true;
+          schemes.push("cashu");
+        }
+      }
+
+      if (matched) {
+        handlers.push({
+          id,
+          name,
+          icon: cand.icon || "globe",
+          description: cand.description || "Installed application",
+          isInstalled: true,
+          schemes,
+          kinds: kind !== undefined ? [kind] : undefined
+        });
+      }
+    }
+
+    // 2. Query LocalEventStore for NIP-89 App Handler Definition Events (kind: 31989)
+    try {
+      const nip89Filter: any = { kinds: [31989], limit: 20 };
+      if (kind !== undefined) {
+        nip89Filter["#k"] = [String(kind)];
+      }
+      const nip89Events = await this.eventStore.getEvents(nip89Filter);
+      for (const ev of nip89Events) {
+        const dTag = ev.tags.find((t) => t[0] === "d")?.[1] || ev.id;
+        if (!handlers.some((h) => h.id === dTag)) {
+          let name = ev.tags.find((t) => t[0] === "name")?.[1] || dTag;
+          let about = "";
+          try {
+            const meta = JSON.parse(ev.content);
+            if (meta.name) name = meta.name;
+            if (meta.about) about = meta.about;
+          } catch {}
+
+          handlers.push({
+            id: dTag,
+            name,
+            description: about || "Discovered via Nostr (NIP-89)",
+            isInstalled: false,
+            schemes: [scheme],
+            kinds: kind !== undefined ? [kind] : undefined,
+            naddr: WebCryptoKeystore.toNaddr({
+              kind: 31989,
+              pubkey: ev.pubkey,
+              identifier: dTag,
+              relays: []
+            })
+          });
+        }
+      }
+    } catch {}
+
+    return handlers;
+  }
+
+  getDefaultHandler(scheme: string): string | null {
+    try {
+      const storage = typeof window !== "undefined" && window.localStorage ? window.localStorage : (typeof localStorage !== "undefined" ? localStorage : null);
+      if (storage) {
+        const raw = storage.getItem("omni_default_handlers");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed[scheme]) return parsed[scheme];
+        }
+      }
+    } catch {}
+    return this.defaultHandlersMemory[scheme] || null;
+  }
+
+  setDefaultHandler(scheme: string, handlerId: string): void {
+    this.defaultHandlersMemory[scheme] = handlerId;
+    try {
+      const storage = typeof window !== "undefined" && window.localStorage ? window.localStorage : (typeof localStorage !== "undefined" ? localStorage : null);
+      if (storage) {
+        const raw = storage.getItem("omni_default_handlers");
+        const map = raw ? JSON.parse(raw) : {};
+        map[scheme] = handlerId;
+        storage.setItem("omni_default_handlers", JSON.stringify(map));
+      }
+    } catch {}
+  }
+
+  clearDefaultHandler(scheme: string): void {
+    delete this.defaultHandlersMemory[scheme];
+    try {
+      const storage = typeof window !== "undefined" && window.localStorage ? window.localStorage : (typeof localStorage !== "undefined" ? localStorage : null);
+      if (storage) {
+        const raw = storage.getItem("omni_default_handlers");
+        if (raw) {
+          const map = JSON.parse(raw);
+          delete map[scheme];
+          storage.setItem("omni_default_handlers", JSON.stringify(map));
+        }
+      }
+    } catch {}
   }
 }

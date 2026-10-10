@@ -26,6 +26,8 @@ export interface DispatcherContext {
   relayPool: RelayPool;
   eventStore: LocalEventStore;
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
+  onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
+  onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
 }
 
 export class JsonRpcDispatcher {
@@ -269,6 +271,24 @@ export class JsonRpcDispatcher {
       case "intent.emit": {
         this.ctx.intentBroker.emit(params.event, params.data, this.ctx.pluginId);
         return { success: true };
+      }
+
+      // 7b. Transparent Cross-App Protocol Link & Intent Interception (NIP-21, Lightning, Cashu)
+      case "kernel.handleUri": {
+        const uri = params?.uri;
+        if (!uri) throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing uri parameter" };
+        if (this.ctx.onHandleUri) {
+          return this.ctx.onHandleUri(uri, this.ctx.pluginId);
+        }
+        return { success: true, uri, handled: false };
+      }
+
+      // 7c. Web Share API Interception
+      case "kernel.handleShare": {
+        if (this.ctx.onHandleShare) {
+          return this.ctx.onHandleShare(params, this.ctx.pluginId);
+        }
+        return { success: true, handled: false };
       }
 
       // 8. UI Slot Actions

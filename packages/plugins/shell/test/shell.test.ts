@@ -148,4 +148,104 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
     expect(kernel.layoutManager.getSlotForComponent("org.omni.plugin.feed", "feed-main")).toBe("sidebar");
   });
+
+  describe("Milestone 6: Transparent Cross-App Intents & Open With Chooser", () => {
+    it("detects URI schemes and Nostr target kinds correctly", async () => {
+      const { detectUriScheme } = await import("@omni/core");
+      expect(detectUriScheme("nostr:npub1abcdef")).toEqual({
+        scheme: "nostr",
+        target: "npub1abcdef",
+        kind: 0
+      });
+      expect(detectUriScheme("nostr:nevent1xyz")).toEqual({
+        scheme: "nostr",
+        target: "nevent1xyz",
+        kind: 1
+      });
+      expect(detectUriScheme("lightning:lnbc10u1p...").scheme).toBe("lightning");
+      expect(detectUriScheme("cashu:cashuAeyJ0...").scheme).toBe("cashu");
+    });
+
+    it("resolves installed and NIP-89 app handlers for protocol URIs", async () => {
+      const handlers = await kernel.resolveAppHandlers("nostr:nevent1xyz", mockPlugins);
+      expect(handlers.length).toBeGreaterThan(0);
+      const feedHandler = handlers.find((h) => h.id === "org.omni.plugin.feed");
+      expect(feedHandler).toBeTruthy();
+      expect(feedHandler?.isInstalled).toBe(true);
+    });
+
+    it("persists and retrieves user default handler preferences", () => {
+      kernel.setDefaultHandler("nostr", "org.omni.plugin.feed");
+      expect(kernel.getDefaultHandler("nostr")).toBe("org.omni.plugin.feed");
+    });
+
+    it("bypasses chooser modal when a default handler is already configured", async () => {
+      kernel.setDefaultHandler("nostr", "org.omni.plugin.feed");
+      const result = await shell.handleUri("nostr:nevent1xyz");
+      expect(result.handled).toBe(true);
+      expect(result.handlerId).toBe("org.omni.plugin.feed");
+      const modal = root.querySelector("#open-with-modal");
+      expect(modal?.classList.contains("open")).toBe(false);
+    });
+
+    it("presents Open With modal when no default is set and user confirms selection", async () => {
+      // Clear any default handler
+      kernel.clearDefaultHandler("nostr");
+
+      // Add a second reader/timeline plugin so there are multiple choices
+      const readerPlugin: InstalledPluginEntry = {
+        id: "org.omni.plugin.reader",
+        manifest: {
+          id: "org.omni.plugin.reader",
+          name: "Notes Reader & Timeline",
+          version: "1.0.0",
+          entry: "dist/index.js",
+          components: [{ id: "reader-main", type: "main", title: "Reader", slot: "main" }],
+          permissions: { nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true } }
+        },
+        scriptContent: "console.log('reader');",
+        sourceUrl: "local:@omni/plugin-reader",
+        enabled: true
+      };
+      shell.installedPlugins.push(readerPlugin);
+
+      const handlePromise = shell.handleUri("nostr:nevent1xyz");
+      await new Promise((r) => setTimeout(r, 20));
+
+      // Modal should now be open
+      const modal = root.querySelector("#open-with-modal");
+      expect(modal?.classList.contains("open")).toBe(true);
+
+      const items = root.querySelectorAll(".open-with-handler-item");
+      expect(items.length).toBeGreaterThanOrEqual(1);
+
+      // Select first handler item
+      (items[0] as HTMLElement).click();
+
+      // Check "Always open nostr: links with this app"
+      const alwaysChk = root.querySelector("#open-with-always-checkbox") as HTMLInputElement;
+      alwaysChk.checked = true;
+
+      // Click confirm
+      const btnConfirm = root.querySelector("#btn-confirm-open-with") as HTMLButtonElement;
+      btnConfirm.click();
+
+      const res = await handlePromise;
+      expect(res.handled).toBe(true);
+      expect(modal?.classList.contains("open")).toBe(false);
+      expect(kernel.getDefaultHandler("nostr")).toBeTruthy();
+    });
+
+    it("handles Web Share API dispatch and routes to timeline composer", async () => {
+      const res = await shell.handleShare({
+        title: "Check this out",
+        text: "Exciting decentralized update",
+        url: "https://omni.run"
+      });
+      expect(res.handled).toBe(true);
+      const pageFeed = root.querySelector("#page-feed");
+      expect(pageFeed?.classList.contains("active")).toBe(true);
+    });
+  });
 });
+

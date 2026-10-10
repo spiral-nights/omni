@@ -28,6 +28,8 @@ export interface SandboxInstanceOptions {
   eventStore: LocalEventStore;
   sandboxUrl?: string;
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
+  onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
+  onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
 }
 
 export class SandboxInstance {
@@ -155,7 +157,9 @@ export class SandboxInstance {
       keystore: this.options.keystore,
       relayPool: this.options.relayPool,
       eventStore: this.options.eventStore,
-      onSlotAction: this.options.onSlotAction
+      onSlotAction: this.options.onSlotAction,
+      onHandleUri: this.options.onHandleUri,
+      onHandleShare: this.options.onHandleShare
     });
 
     // 5. Build srcdoc injecting omni-runtime.js + plugin script
