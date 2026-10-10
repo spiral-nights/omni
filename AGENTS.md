@@ -62,55 +62,19 @@ omni/
 
 ## 3. Plugin Architecture Specification
 
-### 3.1 Anatomy of a Plugin
-Each plugin in `packages/plugins/<name>/` contains:
-1. `omni.manifest.json`: Cryptographically verifiable manifest defining components, slots, and required permissions.
-2. `src/index.ts`: TypeScript source implementing the declared UI components.
-3. `package.json`: NPM package metadata with dev-dependency on `@omni/types`.
-4. `dist/index.js`: Compiled single-file ES bundle executed inside the sandbox.
+### 3.1 Anatomy of a Plugin (Pure Standalone nsite)
+Each plugin in Omni is a **100% standard Nostr site (nsite)**:
+1. `index.html` / `dist/index.js`: Standard web app or widget that mounts directly into `document.body` or `#root`.
+2. **Zero Proprietary Manifests**: No `omni.manifest.json` is required. The host shell resolves plugin metadata (name, about, icon) directly from standard NIP-5A tags (`name`, `description`, `icon`, `d`) or installed entries.
+3. **No Bundled Dock Components**: Apps do NOT bundle inner dock icon components. The host Shell automatically manages navigation dock launcher icons for all installed apps.
+4. **Standalone Companion Widgets**: If an application offers an interactive widget (e.g. countdown timer, checklist, mini player), that widget is published as its **own independent companion nsite** with its own `naddr`, targeting the `sidebar` (Widgets Grid) viewport.
 
-### 3.2 Manifest Schema (`omni.manifest.json`)
-```json
-{
-  "$schema": "https://omni.run/schema/v1/manifest.json",
-  "id": "org.omni.plugin.feed",
-  "name": "Timeline Feed & Composer",
-  "version": "1.0.0",
-  "author": {
-    "name": "Omni Core Team",
-    "pubkey": "<32-byte-hex-pubkey>"
-  },
-  "icon": "feed",
-  "entry": "dist/index.js",
-  "components": [
-    {
-      "id": "feed-dock-icon",
-      "type": "icon",
-      "title": "Feed",
-      "slot": "dock"
-    },
-    {
-      "id": "feed-main",
-      "type": "main",
-      "title": "Timeline Feed",
-      "slot": "main"
-    }
-  ],
-  "permissions": {
-    "nostr": {
-      "read": { "allKinds": true },
-      "write": { "allKinds": true },
-      "sign": true
-    },
-    "storage": {
-      "quotaMb": 5
-    }
-  }
-}
-```
-
-### 3.3 Sandbox Execution & Injected API
-Plugins run inside an isolated sandbox (`SandboxInstance`). The host injects the runtime bridge ([`apps/web/public/omni-runtime.js`](file:///home/spiralnights/code/omni/apps/web/public/omni-runtime.js)), exposing:
+### 3.2 Sandbox Execution & Standard Web APIs
+Plugins run inside an isolated sandbox (`SandboxInstance`). Omni exposes standard web and Nostr interfaces:
+- **`window.nostr`**: Full standard NIP-07 signer (`getPublicKey`, `signEvent`, `getRelays`, `nip04`, `nip44`), backed by the host keystore and ACL governance.
+- **`window.WebSocket`**: Virtual WebSocket shim that transparently routes `wss://` Nostr relay frames (`REQ`, `EVENT`, `CLOSE`) through the host's high-performance `RelayPool` and 0ms local event cache.
+- **`document.body` Auto-Mount**: Automatic DOM mirroring into the host's Remote DOM container—developers write standard HTML, React, or Svelte without custom host registration.
+- **Protocol URIs (NIP-21, Lightning, Cashu)**: Standard `<a href="nostr:...">`, `<a href="lightning:...">`, and `navigator.share()` calls are intercepted at the sandbox boundary and routed to the Shell's "Open With..." chooser.
 - **`window.omni`**:
   - `registerComponent(componentId, renderFn)`: Registers a Remote DOM component renderer.
   - `nostr.subscribe(filters, onEvent, onEose)`: Subscribes to events with immediate 0ms cache hits and live relay streaming.

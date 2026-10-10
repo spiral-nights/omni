@@ -1,9 +1,15 @@
 import { OmniKernel, WebCryptoKeystore, STANDARD_SLOTS } from "@omni/core";
-import { icon } from "./icons.js";
+import { ICONS, icon, IconName } from "./icons.js";
 
 export interface InstalledPluginEntry {
   id: string;
-  manifest: any;
+  name?: string;
+  description?: string;
+  version?: string;
+  icon?: string;
+  viewport?: string;
+  manifest?: any;
+  htmlContent?: string;
   scriptContent: string;
   sourceUrl: string;
   enabled: boolean;
@@ -53,6 +59,107 @@ export class OmniShell {
     this.installedPlugins = options.installedPlugins ? [...options.installedPlugins] : [];
   }
 
+  public getPluginMeta(p: InstalledPluginEntry): {
+    id: string;
+    name: string;
+    version: string;
+    description: string;
+    icon: string;
+    viewport: string;
+  } {
+    return {
+      id: p.id,
+      name: p.name || p.manifest?.name || p.id,
+      version: p.version || p.manifest?.version || "1.0.0",
+      description: p.description || p.manifest?.description || "",
+      icon: p.icon || p.manifest?.icon || (p.viewport === "main" ? "feed" : "widgets"),
+      viewport: p.viewport || p.manifest?.components?.[0]?.slot || "main"
+    };
+  }
+
+  public ensurePluginManifest(p: InstalledPluginEntry): any {
+    if (p.manifest && p.manifest.components && p.manifest.components.length > 0) {
+      return p.manifest;
+    }
+    const meta = this.getPluginMeta(p);
+    return {
+      id: meta.id,
+      name: meta.name,
+      version: meta.version,
+      description: meta.description,
+      icon: meta.icon,
+      entry: "index.html",
+      components: [
+        {
+          id: `${meta.id}-main`,
+          type: meta.viewport === "main" ? "main" : "widget",
+          title: meta.name,
+          slot: meta.viewport
+        }
+      ],
+      permissions: {
+        nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true },
+        storage: { quotaMb: 5 }
+      }
+    };
+  }
+
+  public renderDockLaunchers(): void {
+    if (!this.dockSlot) return;
+    this.dockSlot.innerHTML = "";
+
+    const isFeedPage = this.pageFeed?.classList.contains("active");
+
+    for (const plugin of this.installedPlugins) {
+      if (!plugin.enabled) continue;
+      const meta = this.getPluginMeta(plugin);
+
+      // If assigned specifically to "dock" slot, let Remote DOM mount companion dock widget directly
+      if (meta.viewport === "dock") continue;
+
+      const btn = document.createElement("button");
+      btn.className = "dock-item";
+      btn.title = meta.name;
+      btn.dataset.pluginId = plugin.id;
+
+      if (isFeedPage && meta.viewport === "main") {
+        btn.classList.add("active");
+      } else if (!isFeedPage && (meta.viewport === "sidebar" || meta.viewport === "widgets")) {
+        btn.classList.add("active");
+      }
+
+      let iconSvg = "";
+      if (meta.icon && ICONS[meta.icon as IconName]) {
+        iconSvg = icon(meta.icon as IconName, 20);
+      } else if (meta.viewport === "main") {
+        iconSvg = icon("feed", 20);
+      } else {
+        iconSvg = icon("widgets", 20);
+      }
+
+      btn.innerHTML = `
+        <div class="dock-icon-wrapper">
+          ${iconSvg}
+        </div>
+        <span>${meta.name.split(" ")[0]}</span>
+      `;
+
+      btn.addEventListener("click", () => {
+        if (meta.viewport === "main") {
+          this.showPage("feed");
+          const compEl = document.querySelector(`.omni-comp-${plugin.id}-main`);
+          compEl?.scrollIntoView({ behavior: "smooth" });
+        } else {
+          this.showPage("widgets");
+          const compEl = document.querySelector(`.omni-comp-${plugin.id}-main`);
+          compEl?.scrollIntoView({ behavior: "smooth" });
+        }
+      });
+
+      this.dockSlot.appendChild(btn);
+    }
+  }
+
   /**
    * Mounts the complete shell DOM and wires all interactive controllers
    */
@@ -60,6 +167,7 @@ export class OmniShell {
     this.renderSkeleton();
     this.cacheElementReferences();
     this.initSlotContainers();
+    this.renderDockLaunchers();
     this.wireNavigation();
     this.wireSettingsModal();
     this.wireInspectorModal();
@@ -82,17 +190,15 @@ export class OmniShell {
       this.pageWidgets.classList.remove("active");
       this.dockBtnWidgets?.classList.remove("active");
 
-      // Highlight dock icons matching feed
-      document.querySelectorAll(".dock-item").forEach((btn) => {
-        const title = btn.getAttribute("title") || "";
-        if (title.toLowerCase().includes("feed")) {
-          btn.classList.add("active");
-        } else if (
-          title.toLowerCase().includes("timer") ||
-          title.toLowerCase().includes("tasks") ||
-          title.toLowerCase().includes("widget")
-        ) {
-          btn.classList.remove("active");
+      this.dockSlot?.querySelectorAll(".dock-item").forEach((btn: any) => {
+        const pId = btn.dataset.pluginId;
+        const p = this.installedPlugins.find((x) => x.id === pId);
+        if (p) {
+          const meta = this.getPluginMeta(p);
+          btn.classList.toggle("active", meta.viewport === "main");
+        } else {
+          const title = btn.getAttribute("title") || "";
+          btn.classList.toggle("active", title.toLowerCase().includes("feed"));
         }
       });
 
@@ -102,16 +208,15 @@ export class OmniShell {
       this.pageFeed.classList.remove("active");
       this.dockBtnWidgets?.classList.add("active");
 
-      document.querySelectorAll(".dock-item").forEach((btn) => {
-        const title = btn.getAttribute("title") || "";
-        if (title.toLowerCase().includes("feed")) {
-          btn.classList.remove("active");
-        } else if (
-          title.toLowerCase().includes("timer") ||
-          title.toLowerCase().includes("tasks") ||
-          title.toLowerCase().includes("widget")
-        ) {
-          btn.classList.add("active");
+      this.dockSlot?.querySelectorAll(".dock-item").forEach((btn: any) => {
+        const pId = btn.dataset.pluginId;
+        const p = this.installedPlugins.find((x) => x.id === pId);
+        if (p) {
+          const meta = this.getPluginMeta(p);
+          btn.classList.toggle("active", meta.viewport === "sidebar" || meta.viewport === "widgets");
+        } else {
+          const title = btn.getAttribute("title") || "";
+          btn.classList.toggle("active", !title.toLowerCase().includes("feed") && !title.toLowerCase().includes("settings"));
         }
       });
 
@@ -393,6 +498,9 @@ export class OmniShell {
       const card = document.createElement("div");
       card.className = "plugin-item-row";
 
+      const meta = this.getPluginMeta(p);
+      const synthManifest = this.ensurePluginManifest(p);
+
       const topRow = document.createElement("div");
       topRow.style.display = "flex";
       topRow.style.justifyContent = "space-between";
@@ -410,12 +518,12 @@ export class OmniShell {
 
       const title = document.createElement("strong");
       title.style.fontSize = "0.95rem";
-      title.textContent = p.manifest.name;
+      title.textContent = meta.name;
 
       const version = document.createElement("span");
       version.style.fontSize = "0.72rem";
       version.style.color = "var(--omni-text-muted)";
-      version.textContent = `v${p.manifest.version}`;
+      version.textContent = `v${meta.version}`;
 
       const statusBadge = document.createElement("span");
       statusBadge.style.fontSize = "0.7rem";
@@ -447,12 +555,13 @@ export class OmniShell {
       toggleInput.checked = p.enabled;
       toggleInput.addEventListener("change", async () => {
         if (toggleInput.checked) {
-          await this.kernel.enablePlugin(p.manifest, p.scriptContent, this.slotContainers);
+          await this.kernel.enablePlugin(synthManifest, p.htmlContent || p.scriptContent, this.slotContainers);
           p.enabled = true;
         } else {
           this.kernel.disablePlugin(p.id);
           p.enabled = false;
         }
+        this.renderDockLaunchers();
         this.renderPluginManager();
       });
 
@@ -467,7 +576,7 @@ export class OmniShell {
       const desc = document.createElement("div");
       desc.style.fontSize = "0.82rem";
       desc.style.color = "var(--omni-text-secondary)";
-      desc.textContent = p.manifest.description || "No description provided.";
+      desc.textContent = meta.description || "No description provided.";
 
       const actionsRow = document.createElement("div");
       actionsRow.style.display = "flex";
@@ -476,7 +585,7 @@ export class OmniShell {
 
       const btnInspect = document.createElement("button");
       btnInspect.className = "btn-secondary";
-      btnInspect.textContent = "Inspect Manifest";
+      btnInspect.textContent = "Inspect Plugin";
       btnInspect.addEventListener("click", () => {
         this.openPluginInspector(p);
       });
@@ -496,7 +605,7 @@ export class OmniShell {
       btnUninstall.className = "btn-danger";
       btnUninstall.textContent = "Uninstall";
       btnUninstall.addEventListener("click", () => {
-        if (confirm(`Uninstall ${p.manifest.name}? Its components and storage will be removed.`)) {
+        if (confirm(`Uninstall ${meta.name}? Its components and storage will be removed.`)) {
           this.uninstallPlugin(p.id);
         }
       });
@@ -519,7 +628,7 @@ export class OmniShell {
       vpSelect.style.cssText =
         "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none;";
 
-      const primaryComp = p.manifest.components?.[0];
+      const primaryComp = synthManifest.components?.[0];
       const currentSlot = primaryComp
         ? (this.kernel.layoutManager.getSlotForComponent(p.id, primaryComp.id) || primaryComp.slot)
         : "main";
@@ -537,6 +646,8 @@ export class OmniShell {
         const targetContainer = this.slotContainers.get(targetSlotId);
         if (targetContainer && primaryComp) {
           this.kernel.reparentPluginComponent(p.id, primaryComp.id, targetSlotId, targetContainer);
+          p.viewport = targetSlotId;
+          this.renderDockLaunchers();
         }
       });
 
@@ -558,6 +669,7 @@ export class OmniShell {
     if (idx !== -1) {
       this.installedPlugins.splice(idx, 1);
     }
+    this.renderDockLaunchers();
     this.renderPluginManager();
   }
 
@@ -575,8 +687,11 @@ export class OmniShell {
     const permList = document.getElementById("inspector-permissions-list");
     const rawPre = document.getElementById("inspector-manifest-raw");
 
-    if (nameEl) nameEl.textContent = plugin.manifest.name;
-    if (idEl) idEl.textContent = plugin.manifest.id;
+    const meta = this.getPluginMeta(plugin);
+    const synthManifest = this.ensurePluginManifest(plugin);
+
+    if (nameEl) nameEl.textContent = meta.name;
+    if (idEl) idEl.textContent = meta.id;
     if (sourceEl) sourceEl.textContent = plugin.sourceUrl;
 
     if (plugin.naddr && nostrProvEl && authorNpubEl && naddrEl) {
@@ -592,7 +707,7 @@ export class OmniShell {
     // Components
     if (compList) {
       compList.innerHTML = "";
-      for (const comp of plugin.manifest.components || []) {
+      for (const comp of synthManifest.components || []) {
         const item = document.createElement("div");
         item.style.background = "var(--omni-bg-surface)";
         item.style.border = "1px solid var(--omni-border-subtle)";
@@ -626,14 +741,14 @@ export class OmniShell {
       permList.innerHTML = "";
       const declaredPerms: Array<{ key: string; name: string; desc: string }> = [];
 
-      if (plugin.manifest.permissions?.storage) {
+      if (synthManifest.permissions?.storage) {
         declaredPerms.push({
           key: "storage:kv",
           name: "Scoped Storage (KV)",
-          desc: `Persistent IndexedDB storage (Quota: ${plugin.manifest.permissions.storage.quotaMb || 5} MB)`
+          desc: `Persistent IndexedDB storage (Quota: ${synthManifest.permissions.storage.quotaMb || 5} MB)`
         });
       }
-      if (plugin.manifest.permissions?.intents) {
+      if (synthManifest.permissions?.intents) {
         declaredPerms.push({
           key: "intents:dispatch",
           name: "Intent Dispatch",
@@ -700,7 +815,7 @@ export class OmniShell {
       }
     }
 
-    if (rawPre) rawPre.textContent = JSON.stringify(plugin.manifest, null, 2);
+    if (rawPre) rawPre.textContent = JSON.stringify(synthManifest, null, 2);
 
     this.switchInspectorTab("overview");
     this.pluginInspectorModal.classList.add("open");
@@ -1304,16 +1419,17 @@ export class OmniShell {
     const btnResetLayout = document.getElementById("btn-reset-layout");
     btnResetLayout?.addEventListener("click", () => {
       if (!confirm("Reset all plugin component slots back to defaults?")) return;
-      const manifests = this.installedPlugins.map((p) => p.manifest);
+      const manifests = this.installedPlugins.map((p) => this.ensurePluginManifest(p));
       this.kernel.layoutManager.resetToDefaults(manifests);
       for (const p of this.installedPlugins) {
-        for (const comp of p.manifest.components || []) {
+        for (const comp of this.ensurePluginManifest(p).components || []) {
           const container = this.slotContainers.get(comp.slot);
           if (container) {
             this.kernel.getSandbox(p.id)?.reparentComponent(comp.id, container);
           }
         }
       }
+      this.renderDockLaunchers();
       this.renderVisualLayoutConfigurator();
     });
   }
@@ -1361,7 +1477,7 @@ export class OmniShell {
 
     btnCopy?.addEventListener("click", async () => {
       if (this.activeInspectedPlugin) {
-        await navigator.clipboard.writeText(JSON.stringify(this.activeInspectedPlugin.manifest, null, 2));
+        await navigator.clipboard.writeText(JSON.stringify(this.ensurePluginManifest(this.activeInspectedPlugin), null, 2));
         btnCopy.textContent = "Copied!";
         setTimeout(() => {
           btnCopy.textContent = "Copy JSON";
@@ -1376,7 +1492,7 @@ export class OmniShell {
       btnPublish.textContent = "Signing & Publishing to Nostr...";
 
       try {
-        const published = await this.kernel.publishNsitePlugin(p.manifest, p.scriptContent);
+        const published = await this.kernel.publishNsitePlugin(this.ensurePluginManifest(p), p.htmlContent || p.scriptContent);
         p.naddr = published.naddr;
         p.authorNpub = published.authorNpub;
         p.event = published.event;
@@ -1555,8 +1671,9 @@ export class OmniShell {
         };
 
         btnConfirm.textContent = "Mounting to sandbox...";
-        await this.kernel.registerPlugin(manifest, scriptContent, this.slotContainers);
+        await this.kernel.registerPlugin(this.ensurePluginManifest(entry), scriptContent, this.slotContainers);
         this.installedPlugins.push(entry);
+        this.renderDockLaunchers();
         this.renderPluginManager();
         this.installPluginModal.classList.remove("open");
         urlInput.value = "";

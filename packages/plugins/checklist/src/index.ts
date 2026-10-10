@@ -6,143 +6,125 @@ interface TaskItem {
   done: boolean;
 }
 
-// Ensure omni global exists
-if (typeof omni !== "undefined") {
-  // 1. Register Dock Icon
-  omni.registerComponent("checklist-dock-icon", ({ root, props }) => {
-    const btn = root.createElement("button");
-    btn.className = "dock-item";
-    btn.title = "Daily Checklist";
+async function mountChecklist(root: any) {
+  const isRemote = typeof root.createElement === "function";
+  const createElement = (tag: string) => isRemote ? root.createElement(tag) : document.createElement(tag);
 
-    const iconWrapper = root.createElement("div");
-    iconWrapper.className = "dock-icon-wrapper";
+  const card = createElement("div");
+  card.className = "checklist-widget-card";
 
-    const svg = root.createElement("svg");
-    svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("width", "20");
-    svg.setAttribute("height", "20");
-    svg.setAttribute("fill", "none");
-    svg.setAttribute("stroke", "currentColor");
-    svg.setAttribute("stroke-width", "1.8");
-    svg.setAttribute("stroke-linecap", "round");
-    svg.setAttribute("stroke-linejoin", "round");
+  const header = createElement("div");
+  header.className = "widget-header";
+  const title = createElement("h3");
+  title.textContent = "Daily Tasks";
+  header.appendChild(title);
+  card.appendChild(header);
 
-    const rect = root.createElement("rect");
-    rect.setAttribute("x", "3");
-    rect.setAttribute("y", "3");
-    rect.setAttribute("width", "18");
-    rect.setAttribute("height", "18");
-    rect.setAttribute("rx", "3");
+  // Input form
+  const form = createElement("div");
+  form.className = "task-input-row";
+  const input = createElement("input");
+  input.type = "text";
+  input.placeholder = "Add task...";
+  const addBtn = createElement("button");
+  addBtn.textContent = "+";
+  form.appendChild(input);
+  form.appendChild(addBtn);
+  card.appendChild(form);
 
-    const polyline = root.createElement("polyline");
-    polyline.setAttribute("points", "9 12 11 14 15 10");
+  // List container
+  const ul = createElement("ul");
+  ul.className = "task-list";
+  card.appendChild(ul);
 
-    svg.appendChild(rect);
-    svg.appendChild(polyline);
-    iconWrapper.appendChild(svg);
+  // Load initial tasks from storage
+  let tasks: TaskItem[] = [
+    { id: 1, text: "Send Nostr note", done: true },
+    { id: 2, text: "Review Omni PR", done: false },
+    { id: 3, text: "Test Focus Timer", done: false }
+  ];
 
-    const badge = root.createElement("span");
-    badge.className = "dock-badge";
-    badge.textContent = String(props.badgeCount || 3);
-    iconWrapper.appendChild(badge);
-
-    btn.appendChild(iconWrapper);
-
-    const span = root.createElement("span");
-    span.textContent = "Tasks";
-    btn.appendChild(span);
-
-    btn.addEventListener("click", () => {
-      omni.ui.toggleSlot("sidebar");
-    });
-
-    root.appendChild(btn);
-  });
-
-  // 2. Register Sidebar Widget
-  omni.registerComponent("checklist-sidebar-widget", async ({ root }) => {
-    const card = root.createElement("div");
-    card.className = "checklist-widget-card";
-
-    const header = root.createElement("div");
-    header.className = "widget-header";
-    const title = root.createElement("h3");
-    title.textContent = "Daily Tasks";
-    header.appendChild(title);
-    card.appendChild(header);
-
-    // Input form
-    const form = root.createElement("div");
-    form.className = "task-input-row";
-    const input = root.createElement("input");
-    input.type = "text";
-    input.placeholder = "Add task...";
-    const addBtn = root.createElement("button");
-    addBtn.textContent = "+";
-    form.appendChild(input);
-    form.appendChild(addBtn);
-    card.appendChild(form);
-
-    // List container
-    const ul = root.createElement("ul");
-    ul.className = "task-list";
-    card.appendChild(ul);
-
-    // Load initial tasks
-    const tasks: TaskItem[] = (await omni.storage.get<TaskItem[]>("tasks")) || [
-      { id: 1, text: "Send Nostr note", done: true },
-      { id: 2, text: "Review Omni PR", done: false },
-      { id: 3, text: "Test Focus Timer", done: false }
-    ];
-
-    function renderTasks() {
-      ul.replaceChildren();
-      for (const t of tasks) {
-        const li = root.createElement("li");
-        li.className = "task-item";
-
-        const cb = root.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = t.done;
-        cb.addEventListener("change", async () => {
-          t.done = cb.checked;
-          await omni.storage.set("tasks", tasks);
-          renderTasks();
-        });
-
-        const span = root.createElement("span");
-        span.textContent = t.text;
-        if (t.done) span.style.textDecoration = "line-through";
-
-        const delBtn = root.createElement("button");
-        delBtn.className = "delete-task-btn";
-        delBtn.textContent = "×";
-        delBtn.addEventListener("click", async () => {
-          const idx = tasks.findIndex((item) => item.id === t.id);
-          if (idx !== -1) {
-            tasks.splice(idx, 1);
-            await omni.storage.set("tasks", tasks);
-            renderTasks();
-          }
-        });
-
-        li.appendChild(cb);
-        li.appendChild(span);
-        li.appendChild(delBtn);
-        ul.appendChild(li);
-      }
+  try {
+    if (typeof omni !== "undefined" && omni.storage) {
+      const stored = await omni.storage.get<TaskItem[]>("tasks");
+      if (stored) tasks = stored;
+    } else if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem("tasks");
+      if (stored) tasks = JSON.parse(stored);
     }
+  } catch {}
 
-    addBtn.addEventListener("click", async () => {
-      const val = input.value?.trim();
-      if (!val) return;
-      tasks.push({ id: Date.now(), text: val, done: false });
-      input.value = "";
-      await omni.storage.set("tasks", tasks);
-      renderTasks();
-    });
+  async function persistTasks() {
+    try {
+      if (typeof omni !== "undefined" && omni.storage) {
+        await omni.storage.set("tasks", tasks);
+      } else if (typeof localStorage !== "undefined") {
+        localStorage.setItem("tasks", JSON.stringify(tasks));
+      }
+    } catch {}
+  }
 
+  function renderTasks() {
+    ul.replaceChildren();
+    for (const t of tasks) {
+      const li = createElement("li");
+      li.className = "task-item";
+
+      const cb = createElement("input");
+      cb.type = "checkbox";
+      cb.checked = t.done;
+      cb.addEventListener("change", async () => {
+        t.done = cb.checked;
+        await persistTasks();
+        renderTasks();
+      });
+
+      const span = createElement("span");
+      span.textContent = t.text;
+      if (t.done) span.style.textDecoration = "line-through";
+
+      const delBtn = createElement("button");
+      delBtn.className = "delete-task-btn";
+      delBtn.textContent = "×";
+      delBtn.addEventListener("click", async () => {
+        const idx = tasks.findIndex((item) => item.id === t.id);
+        if (idx !== -1) {
+          tasks.splice(idx, 1);
+          await persistTasks();
+          renderTasks();
+        }
+      });
+
+      li.appendChild(cb);
+      li.appendChild(span);
+      li.appendChild(delBtn);
+      ul.appendChild(li);
+    }
+  }
+
+  addBtn.addEventListener("click", async () => {
+    const val = input.value?.trim();
+    if (!val) return;
+    tasks.push({ id: Date.now(), text: val, done: false });
+    input.value = "";
+    await persistTasks();
     renderTasks();
-    root.appendChild(card);
   });
+
+  renderTasks();
+  root.appendChild(card);
+}
+
+if (typeof omni !== "undefined" && typeof (omni as any).registerComponent === "function") {
+  (omni as any).registerComponent("checklist-sidebar-widget", ({ root }: any) => {
+    mountChecklist(root);
+  });
+  (omni as any).registerComponent("checklist-widget", ({ root }: any) => {
+    mountChecklist(root);
+  });
+  (omni as any).registerComponent("org.omni.nsite.checklist-main", ({ root }: any) => {
+    mountChecklist(root);
+  });
+} else if (typeof document !== "undefined") {
+  mountChecklist(document.body);
 }

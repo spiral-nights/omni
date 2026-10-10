@@ -5,7 +5,6 @@ let remainingSeconds = totalSeconds;
 let isRunning = false;
 let intervalId: any = null;
 
-// Callbacks to re-render mounted views on ticks
 const listeners: Array<() => void> = [];
 function notify() {
   for (const fn of listeners) fn();
@@ -48,147 +47,81 @@ function formatTime(sec: number): string {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
-if (typeof omni !== "undefined") {
-  // 1. Register Dock Icon (Reactive countdown label)
-  omni.registerComponent("timer-dock-icon", ({ root }) => {
-    const btn = root.createElement("button");
-    btn.className = "dock-item";
-    btn.title = "Focus Timer";
+function mountTimer(root: any) {
+  const isRemote = typeof root.createElement === "function";
+  const createElement = (tag: string) => isRemote ? root.createElement(tag) : document.createElement(tag);
 
-    const iconWrapper = root.createElement("div");
-    iconWrapper.className = "dock-icon-wrapper";
+  const card = createElement("div");
+  card.className = "timer-widget-card";
 
-    const svg = root.createElement("svg");
-    svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("width", "20");
-    svg.setAttribute("height", "20");
-    svg.setAttribute("fill", "none");
-    svg.setAttribute("stroke", "currentColor");
-    svg.setAttribute("stroke-width", "1.8");
-    svg.setAttribute("stroke-linecap", "round");
-    svg.setAttribute("stroke-linejoin", "round");
+  const header = createElement("div");
+  header.className = "widget-header";
+  const title = createElement("h3");
+  title.textContent = "Focus Timer (Pomodoro)";
+  header.appendChild(title);
+  card.appendChild(header);
 
-    const circle = root.createElement("circle");
-    circle.setAttribute("cx", "12");
-    circle.setAttribute("cy", "14");
-    circle.setAttribute("r", "7.5");
+  // Circular/Typographic Display
+  const displayContainer = createElement("div");
+  displayContainer.className = "timer-display-container";
 
-    const line1 = root.createElement("line");
-    line1.setAttribute("x1", "12");
-    line1.setAttribute("y1", "10");
-    line1.setAttribute("x2", "12");
-    line1.setAttribute("y2", "14");
+  const timeText = createElement("div");
+  timeText.className = "timer-digits";
 
-    const line2 = root.createElement("line");
-    line2.setAttribute("x1", "12");
-    line2.setAttribute("y1", "14");
-    line2.setAttribute("x2", "15");
-    line2.setAttribute("y2", "14");
+  const statusText = createElement("div");
+  statusText.className = "timer-status";
 
-    const topPusher = root.createElement("line");
-    topPusher.setAttribute("x1", "10");
-    topPusher.setAttribute("y1", "2.5");
-    topPusher.setAttribute("x2", "14");
-    topPusher.setAttribute("y2", "2.5");
+  displayContainer.appendChild(timeText);
+  displayContainer.appendChild(statusText);
+  card.appendChild(displayContainer);
 
-    const stem = root.createElement("line");
-    stem.setAttribute("x1", "12");
-    stem.setAttribute("y1", "2.5");
-    stem.setAttribute("x2", "12");
-    stem.setAttribute("y2", "6.5");
+  // Buttons Row
+  const btnRow = createElement("div");
+  btnRow.className = "timer-buttons-row";
 
-    svg.appendChild(circle);
-    svg.appendChild(line1);
-    svg.appendChild(line2);
-    svg.appendChild(topPusher);
-    svg.appendChild(stem);
-    iconWrapper.appendChild(svg);
+  const startBtn = createElement("button");
+  startBtn.textContent = "Start";
+  startBtn.className = "btn-timer-start";
+  startBtn.addEventListener("click", startTimer);
 
-    const label = root.createElement("span");
-    label.className = "dock-badge";
+  const pauseBtn = createElement("button");
+  pauseBtn.textContent = "Pause";
+  pauseBtn.className = "btn-timer-pause";
+  pauseBtn.addEventListener("click", pauseTimer);
 
-    function updateDock() {
-      const mins = Math.ceil(remainingSeconds / 60);
-      label.textContent = `${mins}m`;
-    }
+  const resetBtn = createElement("button");
+  resetBtn.textContent = "Reset";
+  resetBtn.className = "btn-timer-reset";
+  resetBtn.addEventListener("click", () => resetTimer(25 * 60));
 
-    listeners.push(updateDock);
-    updateDock();
-    iconWrapper.appendChild(label);
+  btnRow.appendChild(startBtn);
+  btnRow.appendChild(pauseBtn);
+  btnRow.appendChild(resetBtn);
+  card.appendChild(btnRow);
 
-    btn.appendChild(iconWrapper);
+  function updateWidget() {
+    timeText.textContent = formatTime(remainingSeconds);
+    statusText.textContent = isRunning ? "Focusing..." : remainingSeconds === 0 ? "Done!" : "Paused";
+    startBtn.style.display = isRunning ? "none" : "inline-block";
+    pauseBtn.style.display = isRunning ? "inline-block" : "none";
+  }
 
-    const span = root.createElement("span");
-    span.textContent = "Timer";
-    btn.appendChild(span);
+  listeners.push(updateWidget);
+  updateWidget();
 
-    btn.addEventListener("click", () => {
-      omni.ui.toggleSlot("sidebar");
-    });
+  root.appendChild(card);
+}
 
-    root.appendChild(btn);
+if (typeof omni !== "undefined" && typeof (omni as any).registerComponent === "function") {
+  (omni as any).registerComponent("timer-sidebar-widget", ({ root }: any) => {
+    mountTimer(root);
   });
-
-  // 2. Register Sidebar Timer Widget
-  omni.registerComponent("timer-sidebar-widget", ({ root }) => {
-    const card = root.createElement("div");
-    card.className = "timer-widget-card";
-
-    const header = root.createElement("div");
-    header.className = "widget-header";
-    const title = root.createElement("h3");
-    title.textContent = "Focus Timer (Pomodoro)";
-    header.appendChild(title);
-    card.appendChild(header);
-
-    // Circular/Typographic Display
-    const displayContainer = root.createElement("div");
-    displayContainer.className = "timer-display-container";
-
-    const timeText = root.createElement("div");
-    timeText.className = "timer-digits";
-
-    const statusText = root.createElement("div");
-    statusText.className = "timer-status";
-
-    displayContainer.appendChild(timeText);
-    displayContainer.appendChild(statusText);
-    card.appendChild(displayContainer);
-
-    // Buttons Row
-    const btnRow = root.createElement("div");
-    btnRow.className = "timer-buttons-row";
-
-    const startBtn = root.createElement("button");
-    startBtn.textContent = "Start";
-    startBtn.className = "btn-timer-start";
-    startBtn.addEventListener("click", startTimer);
-
-    const pauseBtn = root.createElement("button");
-    pauseBtn.textContent = "Pause";
-    pauseBtn.className = "btn-timer-pause";
-    pauseBtn.addEventListener("click", pauseTimer);
-
-    const resetBtn = root.createElement("button");
-    resetBtn.textContent = "Reset";
-    resetBtn.className = "btn-timer-reset";
-    resetBtn.addEventListener("click", () => resetTimer(25 * 60));
-
-    btnRow.appendChild(startBtn);
-    btnRow.appendChild(pauseBtn);
-    btnRow.appendChild(resetBtn);
-    card.appendChild(btnRow);
-
-    function updateWidget() {
-      timeText.textContent = formatTime(remainingSeconds);
-      statusText.textContent = isRunning ? "Focusing..." : remainingSeconds === 0 ? "Done!" : "Paused";
-      startBtn.style.display = isRunning ? "none" : "inline-block";
-      pauseBtn.style.display = isRunning ? "inline-block" : "none";
-    }
-
-    listeners.push(updateWidget);
-    updateWidget();
-
-    root.appendChild(card);
+  (omni as any).registerComponent("timer-widget", ({ root }: any) => {
+    mountTimer(root);
   });
+  (omni as any).registerComponent("org.omni.nsite.timer-main", ({ root }: any) => {
+    mountTimer(root);
+  });
+} else if (typeof document !== "undefined") {
+  mountTimer(document.body);
 }

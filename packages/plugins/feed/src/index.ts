@@ -10,189 +10,140 @@ function formatTime(unixSec: number): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-if (typeof omni !== "undefined") {
-  // 1. Register Feed Dock Icon
-  omni.registerComponent("feed-dock-icon", ({ root }) => {
-    const btn = root.createElement("button");
-    btn.className = "dock-item active";
-    btn.title = "Timeline Feed";
+function mountFeed(root: any) {
+  const isRemote = typeof root.createElement === "function";
+  const createElement = (tag: string) => isRemote ? root.createElement(tag) : document.createElement(tag);
 
-    const iconWrapper = root.createElement("div");
-    iconWrapper.className = "dock-icon-wrapper";
+  const container = createElement("div");
+  container.className = "feed-container";
 
-    const svg = root.createElement("svg");
-    svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("width", "20");
-    svg.setAttribute("height", "20");
-    svg.setAttribute("fill", "none");
-    svg.setAttribute("stroke", "currentColor");
-    svg.setAttribute("stroke-width", "1.75");
-    svg.setAttribute("stroke-linecap", "round");
-    svg.setAttribute("stroke-linejoin", "round");
+  // A. Note Composer Card
+  const composerCard = createElement("div");
+  composerCard.className = "composer-card";
 
-    const path = root.createElement("path");
-    path.setAttribute("d", "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z");
+  const textarea = createElement("textarea");
+  textarea.className = "composer-input";
+  textarea.setAttribute("placeholder", "What's happening?");
+  textarea.setAttribute("rows", "2");
 
-    const line1 = root.createElement("line");
-    line1.setAttribute("x1", "8");
-    line1.setAttribute("y1", "9");
-    line1.setAttribute("x2", "16");
-    line1.setAttribute("y2", "9");
+  const composerFooter = createElement("div");
+  composerFooter.className = "composer-footer";
 
-    const line2 = root.createElement("line");
-    line2.setAttribute("x1", "8");
-    line2.setAttribute("y1", "13");
-    line2.setAttribute("x2", "13");
-    line2.setAttribute("y2", "13");
+  const btnPublish = createElement("button");
+  btnPublish.className = "btn-publish";
+  btnPublish.textContent = "Publish Note";
 
-    svg.appendChild(path);
-    svg.appendChild(line1);
-    svg.appendChild(line2);
-    iconWrapper.appendChild(svg);
-    btn.appendChild(iconWrapper);
+  composerFooter.appendChild(btnPublish);
+  composerCard.appendChild(textarea);
+  composerCard.appendChild(composerFooter);
+  container.appendChild(composerCard);
 
-    const span = root.createElement("span");
-    span.textContent = "Feed";
-    btn.appendChild(span);
+  // B. Header Row
+  const headerRow = createElement("div");
+  headerRow.setAttribute("style", "display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;");
 
-    btn.addEventListener("click", () => {
-      omni.ui.closeSlot("sidebar");
-      omni.ui.openSlot("main");
-    });
+  const heading = createElement("h2");
+  heading.setAttribute("style", "font-size: 0.95rem; font-weight: 600; color: var(--omni-text-secondary); text-transform: uppercase; letter-spacing: 0.05em;");
+  heading.textContent = "Timeline Feed";
 
-    root.appendChild(btn);
-  });
+  const cacheIndicator = createElement("span");
+  cacheIndicator.setAttribute("style", "font-size: 0.75rem; color: var(--omni-accent-primary); display: flex; align-items: center; gap: 4px;");
+  cacheIndicator.textContent = "✦ 0ms Local Cache";
 
-  // 2. Register Main Feed Viewport
-  omni.registerComponent("feed-main", async ({ root }) => {
-    const container = root.createElement("div");
-    container.className = "feed-container";
+  headerRow.appendChild(heading);
+  headerRow.appendChild(cacheIndicator);
+  container.appendChild(headerRow);
 
-    // A. Note Composer Card
-    const composerCard = root.createElement("div");
-    composerCard.className = "composer-card";
+  // C. Notes List
+  const notesList = createElement("div");
+  notesList.className = "notes-list";
 
-    const textarea = root.createElement("textarea");
-    textarea.className = "composer-input";
-    textarea.setAttribute("placeholder", "What's happening? (Note will be signed with Schnorr/secp256k1)");
-    textarea.setAttribute("rows", "2");
+  const loadingText = createElement("div");
+  loadingText.setAttribute("style", "text-align: center; color: var(--omni-text-muted); padding: 24px 0; font-size: 0.85rem;");
+  loadingText.textContent = "Loading timeline notes...";
+  notesList.appendChild(loadingText);
+  container.appendChild(notesList);
 
-    const composerFooter = root.createElement("div");
-    composerFooter.className = "composer-footer";
+  root.appendChild(container);
 
-    const btnPublish = root.createElement("button");
-    btnPublish.className = "btn-publish";
-    btnPublish.textContent = "Publish Note";
+  const renderedIds = new Set<string>();
 
-    composerFooter.appendChild(btnPublish);
-    composerCard.appendChild(textarea);
-    composerCard.appendChild(composerFooter);
-    container.appendChild(composerCard);
+  function renderNote(event: any, prepend = false) {
+    if (renderedIds.has(event.id)) return;
+    renderedIds.add(event.id);
 
-    // B. Header Row
-    const headerRow = root.createElement("div");
-    headerRow.setAttribute("style", "display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;");
-
-    const heading = root.createElement("h2");
-    heading.setAttribute("style", "font-size: 0.95rem; font-weight: 600; color: var(--omni-text-secondary); text-transform: uppercase; letter-spacing: 0.05em;");
-    heading.textContent = "Timeline Feed";
-
-    const cacheIndicator = root.createElement("span");
-    cacheIndicator.setAttribute("style", "font-size: 0.75rem; color: var(--omni-accent-primary); display: flex; align-items: center; gap: 4px;");
-    cacheIndicator.textContent = "✦ 0ms Local Cache";
-
-    headerRow.appendChild(heading);
-    headerRow.appendChild(cacheIndicator);
-    container.appendChild(headerRow);
-
-    // C. Notes List
-    const notesList = root.createElement("div");
-    notesList.className = "notes-list";
-
-    const loadingText = root.createElement("div");
-    loadingText.setAttribute("style", "text-align: center; color: var(--omni-text-muted); padding: 24px 0; font-size: 0.85rem;");
-    loadingText.textContent = "Loading timeline notes...";
-    notesList.appendChild(loadingText);
-    container.appendChild(notesList);
-
-    root.appendChild(container);
-
-    const renderedIds = new Set<string>();
-
-    function renderNote(event: any, prepend = false) {
-      if (renderedIds.has(event.id)) return;
-      renderedIds.add(event.id);
-
-      if (loadingText.parentElement) {
-        loadingText.remove();
-      }
-
-      const card = root.createElement("article");
-      card.className = "note-card";
-
-      // Note Header
-      const noteHeader = root.createElement("div");
-      noteHeader.className = "note-header";
-
-      const authorSpan = root.createElement("span");
-      authorSpan.className = "note-author";
-      const shortAuthor = `npub:${event.pubkey.slice(0, 6)}...${event.pubkey.slice(-4)}`;
-      authorSpan.textContent = shortAuthor;
-
-      const metaSpan = root.createElement("span");
-      metaSpan.className = "note-meta";
-      metaSpan.textContent = formatTime(event.created_at);
-
-      noteHeader.appendChild(authorSpan);
-      noteHeader.appendChild(metaSpan);
-
-      // Note Content
-      const noteContent = root.createElement("div");
-      noteContent.className = "note-content";
-      noteContent.textContent = event.content;
-
-      // Note Actions
-      const actions = root.createElement("div");
-      actions.className = "note-actions";
-
-      const btnReply = root.createElement("button");
-      btnReply.className = "note-action-btn";
-      btnReply.textContent = "Reply";
-
-      const btnLike = root.createElement("button");
-      btnLike.className = "note-action-btn";
-      let likes = 0;
-      btnLike.textContent = "Like";
-      btnLike.addEventListener("click", () => {
-        likes++;
-        btnLike.textContent = `Liked (${likes})`;
-        btnLike.setAttribute("style", "color: var(--omni-accent-primary);");
-      });
-
-      actions.appendChild(btnReply);
-      actions.appendChild(btnLike);
-
-      card.appendChild(noteHeader);
-      card.appendChild(noteContent);
-      card.appendChild(actions);
-
-      if (prepend && notesList.firstChild) {
-        notesList.insertBefore(card, notesList.firstChild);
-      } else {
-        notesList.appendChild(card);
-      }
+    if (loadingText.parentElement) {
+      loadingText.remove();
     }
 
-    // Publish Note Handler
-    btnPublish.addEventListener("click", async () => {
-      const text = textarea.value?.trim();
-      if (!text) return;
+    const card = createElement("article");
+    card.className = "note-card";
 
-      btnPublish.setAttribute("disabled", "true");
-      btnPublish.textContent = "Signing...";
+    // Note Header
+    const noteHeader = createElement("div");
+    noteHeader.className = "note-header";
 
-      try {
-        const published = await omni.nostr.publish({
+    const authorSpan = createElement("span");
+    authorSpan.className = "note-author";
+    const shortAuthor = `npub:${event.pubkey.slice(0, 6)}...${event.pubkey.slice(-4)}`;
+    authorSpan.textContent = shortAuthor;
+
+    const metaSpan = createElement("span");
+    metaSpan.className = "note-meta";
+    metaSpan.textContent = formatTime(event.created_at);
+
+    noteHeader.appendChild(authorSpan);
+    noteHeader.appendChild(metaSpan);
+
+    // Note Content
+    const noteContent = createElement("div");
+    noteContent.className = "note-content";
+    noteContent.textContent = event.content;
+
+    // Note Actions
+    const actions = createElement("div");
+    actions.className = "note-actions";
+
+    const btnReply = createElement("button");
+    btnReply.className = "note-action-btn";
+    btnReply.textContent = "Reply";
+
+    const btnLike = createElement("button");
+    btnLike.className = "note-action-btn";
+    let likes = 0;
+    btnLike.textContent = "Like";
+    btnLike.addEventListener("click", () => {
+      likes++;
+      btnLike.textContent = `Liked (${likes})`;
+      btnLike.setAttribute("style", "color: var(--omni-accent-primary);");
+    });
+
+    actions.appendChild(btnReply);
+    actions.appendChild(btnLike);
+
+    card.appendChild(noteHeader);
+    card.appendChild(noteContent);
+    card.appendChild(actions);
+
+    if (prepend && notesList.firstChild) {
+      notesList.insertBefore(card, notesList.firstChild);
+    } else {
+      notesList.appendChild(card);
+    }
+  }
+
+  // Publish Note Handler
+  btnPublish.addEventListener("click", async () => {
+    const text = textarea.value?.trim();
+    if (!text) return;
+
+    btnPublish.setAttribute("disabled", "true");
+    btnPublish.textContent = "Signing...";
+
+    try {
+      const nostrClient = (typeof omni !== "undefined" && omni.nostr) ? omni.nostr : (window as any).nostr;
+      if (nostrClient && nostrClient.publish) {
+        const published = await nostrClient.publish({
           kind: 1,
           content: text,
           tags: [["client", "omni"]],
@@ -209,27 +160,56 @@ if (typeof omni !== "undefined") {
           },
           true
         );
-      } catch (err: any) {
-        console.error("Failed to publish note from plugin:", err);
-      } finally {
-        btnPublish.removeAttribute("disabled");
-        btnPublish.textContent = "Publish Note";
       }
-    });
+    } catch (err: any) {
+      console.error("Failed to publish note from plugin:", err);
+    } finally {
+      btnPublish.removeAttribute("disabled");
+      btnPublish.textContent = "Publish Note";
+    }
+  });
 
-    // Subscribe to Timeline Notes
-    try {
+  // Subscribe to Timeline Notes
+  try {
+    if (typeof omni !== "undefined" && omni.nostr && omni.nostr.subscribe) {
       omni.nostr.subscribe(
         [{ kinds: [1], limit: 50 }],
-        (ev) => {
+        (ev: any) => {
           renderNote(ev, true);
         },
         () => {
           cacheIndicator.textContent = "✦ Connected Relays";
         }
       );
-    } catch (err) {
-      console.error("Feed subscription failed:", err);
+    } else if (typeof WebSocket !== "undefined") {
+      const ws = new WebSocket("wss://relay.damus.io");
+      ws.onopen = () => {
+        ws.send(JSON.stringify(["REQ", "feed-sub", { kinds: [1], limit: 50 }]));
+      };
+      ws.onmessage = (msg) => {
+        try {
+          const data = JSON.parse(msg.data);
+          if (data[0] === "EVENT" && data[2]) {
+            renderNote(data[2], true);
+          } else if (data[0] === "EOSE") {
+            cacheIndicator.textContent = "✦ Connected Relays";
+          }
+        } catch {}
+      };
     }
+  } catch (err) {
+    console.error("Feed subscription failed:", err);
+  }
+}
+
+if (typeof omni !== "undefined" && typeof (omni as any).registerComponent === "function") {
+  (omni as any).registerComponent("feed-main", ({ root }: any) => {
+    mountFeed(root);
   });
+  // Auto-mount support
+  (omni as any).registerComponent("org.omni.nsite.feed-main", ({ root }: any) => {
+    mountFeed(root);
+  });
+} else if (typeof document !== "undefined") {
+  mountFeed(document.body);
 }

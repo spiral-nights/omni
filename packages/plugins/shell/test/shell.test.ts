@@ -54,7 +54,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     shell = new OmniShell({
       root,
       kernel,
-      installedPlugins: mockPlugins
+      installedPlugins: JSON.parse(JSON.stringify(mockPlugins))
     });
     shell.mount();
   });
@@ -147,6 +147,44 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     }
 
     expect(kernel.layoutManager.getSlotForComponent("org.omni.plugin.feed", "feed-main")).toBe("sidebar");
+  });
+
+  it("renders dock launchers automatically for installed apps and routes clicks", () => {
+    const dockSlot = root.querySelector("#dock-slot");
+    expect(dockSlot).toBeTruthy();
+
+    const items = dockSlot?.querySelectorAll(".dock-item");
+    expect(items?.length).toBe(2);
+
+    const feedBtn = Array.from(items || []).find((el) => el.getAttribute("title")?.includes("Feed")) as HTMLElement;
+    expect(feedBtn).toBeTruthy();
+
+    // Click feed launcher
+    feedBtn.click();
+    const pageFeed = root.querySelector("#page-feed");
+    expect(pageFeed?.classList.contains("active")).toBe(true);
+  });
+
+  it("supports pure zero-manifest nsites without any manifest property", () => {
+    const pureNsite: InstalledPluginEntry = {
+      id: "org.example.pure-nsite",
+      name: "Pure Standalone Nsite",
+      description: "A 100% standard web app without an omni.manifest.json file",
+      icon: "globe",
+      viewport: "sidebar",
+      scriptContent: "console.log('hello pure nsite');",
+      sourceUrl: "nostr:naddr1pure",
+      enabled: true
+    };
+
+    const meta = shell.getPluginMeta(pureNsite);
+    expect(meta.name).toBe("Pure Standalone Nsite");
+    expect(meta.viewport).toBe("sidebar");
+
+    const synth = shell.ensurePluginManifest(pureNsite);
+    expect(synth.id).toBe("org.example.pure-nsite");
+    expect(synth.components.length).toBe(1);
+    expect(synth.components[0].slot).toBe("sidebar");
   });
 
   describe("Milestone 6: Transparent Cross-App Intents & Open With Chooser", () => {
