@@ -154,7 +154,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     expect(dockSlot).toBeTruthy();
 
     const items = dockSlot?.querySelectorAll(".dock-item");
-    expect(items?.length).toBe(2);
+    expect(items?.length).toBe(1); // Only full-page main apps (feed) get a dock launcher; widgets live in Widgets dashboard
 
     const feedBtn = Array.from(items || []).find((el) => el.getAttribute("title")?.includes("Feed")) as HTMLElement;
     expect(feedBtn).toBeTruthy();

@@ -114,27 +114,24 @@ export class OmniShell {
       if (!plugin.enabled) continue;
       const meta = this.getPluginMeta(plugin);
 
-      // If assigned specifically to "dock" slot, let Remote DOM mount companion dock widget directly
-      if (meta.viewport === "dock") continue;
+      // Only full-page primary applications get a dock launcher.
+      // Modular companion widgets live inside the Widgets & Tools Dashboard (#page-widgets).
+      if (meta.viewport !== "main") continue;
 
       const btn = document.createElement("button");
       btn.className = "dock-item";
       btn.title = meta.name;
       btn.dataset.pluginId = plugin.id;
 
-      if (isFeedPage && meta.viewport === "main") {
-        btn.classList.add("active");
-      } else if (!isFeedPage && (meta.viewport === "sidebar" || meta.viewport === "widgets")) {
+      if (isFeedPage) {
         btn.classList.add("active");
       }
 
       let iconSvg = "";
       if (meta.icon && ICONS[meta.icon as IconName]) {
         iconSvg = icon(meta.icon as IconName, 20);
-      } else if (meta.viewport === "main") {
-        iconSvg = icon("feed", 20);
       } else {
-        iconSvg = icon("widgets", 20);
+        iconSvg = icon("feed", 20);
       }
 
       btn.innerHTML = `
@@ -209,15 +206,7 @@ export class OmniShell {
       this.dockBtnWidgets?.classList.add("active");
 
       this.dockSlot?.querySelectorAll(".dock-item").forEach((btn: any) => {
-        const pId = btn.dataset.pluginId;
-        const p = this.installedPlugins.find((x) => x.id === pId);
-        if (p) {
-          const meta = this.getPluginMeta(p);
-          btn.classList.toggle("active", meta.viewport === "sidebar" || meta.viewport === "widgets");
-        } else {
-          const title = btn.getAttribute("title") || "";
-          btn.classList.toggle("active", !title.toLowerCase().includes("feed") && !title.toLowerCase().includes("settings"));
-        }
+        btn.classList.remove("active");
       });
 
       this.widgetsSlot.scrollIntoView({ behavior: "smooth" });

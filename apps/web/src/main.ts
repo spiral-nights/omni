@@ -59,7 +59,7 @@ const initialPlugins: InstalledPluginEntry[] = [
     name: "Profile & Keys",
     description: "Decentralized Nostr profile metadata and key custody.",
     icon: "profile",
-    viewport: "main",
+    viewport: "sidebar",
     scriptContent: profileScript,
     sourceUrl: "local:@omni/plugin-profile",
     enabled: true
