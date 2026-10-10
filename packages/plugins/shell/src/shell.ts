@@ -554,17 +554,17 @@ export class OmniShell {
       if (meta.viewport === "main") {
         roleBadge.style.color = "var(--omni-accent-primary)";
         roleBadge.style.borderColor = "var(--omni-accent-primary)";
-        roleBadge.textContent = "📱 Full-Page App";
+        roleBadge.textContent = "Full-Page App";
       } else if (meta.viewport === "dock") {
         roleBadge.style.color = "var(--omni-text-primary)";
         roleBadge.style.borderColor = "var(--omni-border-strong)";
-        roleBadge.textContent = "🧭 Dock Shortcut";
+        roleBadge.textContent = "Dock Shortcut";
       } else if (meta.viewport === "sidebar") {
         roleBadge.style.color = "var(--omni-text-secondary)";
-        roleBadge.textContent = "🧩 Widgets Dashboard";
+        roleBadge.textContent = "Widgets Dashboard";
       } else if (meta.viewport === "header-actions") {
         roleBadge.style.color = "var(--omni-text-secondary)";
-        roleBadge.textContent = "⚡ Header Action";
+        roleBadge.textContent = "Header Action";
       } else {
         roleBadge.textContent = meta.viewport;
       }
@@ -675,10 +675,10 @@ export class OmniShell {
         : "main";
 
       const viewportOptions = [
-        { id: "main", label: "📱 Full-Page App (Center Viewport)" },
-        { id: "dock", label: "🧭 Navigation Dock Shortcut" },
-        { id: "sidebar", label: "🧩 Workspace Widget (Widgets Dashboard)" },
-        { id: "header-actions", label: "⚡ Header Quick Action" }
+        { id: "main", label: "Full-Page App (Center Viewport)" },
+        { id: "dock", label: "Navigation Dock Shortcut" },
+        { id: "sidebar", label: "Workspace Widget (Widgets Dashboard)" },
+        { id: "header-actions", label: "Header Quick Action" }
       ];
 
       for (const optDef of viewportOptions) {
