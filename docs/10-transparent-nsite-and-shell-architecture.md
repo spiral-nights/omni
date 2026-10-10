@@ -300,15 +300,12 @@ graph TD
   - [x] Remove mandatory `omni.manifest.json` parsing.
   - [x] Automatically derive app name, description, and author from standard NIP-5A tags (`name`, `description`, `d`, author pubkey).
 
-- [ ] **Milestone 4: Decouple Shell into `@omni/plugin-shell`**
-  - Create package `packages/plugins/shell/`.
-  - Move the header, dock, view switcher, Settings modal, and Visual Layout Configurator into the shell plugin.
-  - Provide layout viewports (Full Page, Widgets Grid, Dock shortcuts) that can host any nsite.
-
-- [ ] **Milestone 5: Minimal `apps/web` Bootloader**
-  - Strip hardcoded layout markup from `apps/web/index.html` down to `<div id="omni-root"></div>`.
-  - Wire `apps/web/src/main.ts` to boot kernel, mount `@omni/plugin-shell`, and pass control.
-  - Verify all existing core tests and integration tests pass cleanly.
+- [x] **Milestone 4: Decouple Shell into `@omni/plugin-shell` & Minimal Host Bootloader**
+  - [x] Create package `packages/plugins/shell/` (`OmniShell`).
+  - [x] Move the header, dock, view switcher, Settings modal, and Visual Layout Configurator into the shell plugin.
+  - [x] Strip hardcoded layout markup from `apps/web/index.html` down to 15-line `<div id="omni-root"></div>`.
+  - [x] Wire `apps/web/src/main.ts` to boot kernel, mount `@omni/plugin-shell`, and pass control.
+  - [x] Verify all core tests, shell tests, and production builds pass cleanly.
 
 - [ ] **Milestone 6: Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share)**
   - Intercept `nostr:`, `lightning:`, and `cashu:` protocol navigations in the sandbox bridge.

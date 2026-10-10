@@ -1,0 +1,1715 @@
+import { OmniKernel, WebCryptoKeystore, STANDARD_SLOTS } from "@omni/core";
+import { icon } from "./icons.js";
+
+export interface InstalledPluginEntry {
+  id: string;
+  manifest: any;
+  scriptContent: string;
+  sourceUrl: string;
+  enabled: boolean;
+  naddr?: string;
+  authorNpub?: string;
+  event?: any;
+}
+
+export type AppPage = "feed" | "widgets";
+export type SettingsTab = "profile" | "relays" | "layout" | "plugins" | "config";
+
+export interface OmniShellOptions {
+  root: HTMLElement;
+  kernel: OmniKernel;
+  installedPlugins?: InstalledPluginEntry[];
+}
+
+export class OmniShell {
+  private root: HTMLElement;
+  private kernel: OmniKernel;
+  public installedPlugins: InstalledPluginEntry[];
+  private slotContainers: Map<string, Element> = new Map();
+
+  // Internal element references
+  private headerActionsSlot!: HTMLElement;
+  private dockSlot!: HTMLElement;
+  private mainSlot!: HTMLElement;
+  private widgetsSlot!: HTMLElement;
+  private pageFeed!: HTMLElement;
+  private pageWidgets!: HTMLElement;
+  private dockBtnWidgets!: HTMLElement;
+  private dockBtnSettings!: HTMLElement;
+
+  // Settings modal elements
+  private settingsModal!: HTMLElement;
+  private settingsNavBtns!: Record<SettingsTab, HTMLElement>;
+  private settingsPanes!: Record<SettingsTab, HTMLElement>;
+
+  // Inspector & Install modals
+  private pluginInspectorModal!: HTMLElement;
+  private installPluginModal!: HTMLElement;
+  private activeInspectedPlugin: InstalledPluginEntry | null = null;
+
+  constructor(options: OmniShellOptions) {
+    this.root = options.root;
+    this.kernel = options.kernel;
+    this.installedPlugins = options.installedPlugins ? [...options.installedPlugins] : [];
+  }
+
+  /**
+   * Mounts the complete shell DOM and wires all interactive controllers
+   */
+  public mount(): void {
+    this.renderSkeleton();
+    this.cacheElementReferences();
+    this.initSlotContainers();
+    this.wireNavigation();
+    this.wireSettingsModal();
+    this.wireInspectorModal();
+    this.wireInstallModal();
+    this.wireProfileControls();
+    this.wireRelaysManager();
+    this.wirePluginConfig();
+  }
+
+  public getSlotContainers(): Map<string, Element> {
+    return this.slotContainers;
+  }
+
+  /**
+   * Switch center viewport between Full Page (Feed) and Widgets Grid
+   */
+  public showPage(page: AppPage): void {
+    if (page === "feed") {
+      this.pageFeed.classList.add("active");
+      this.pageWidgets.classList.remove("active");
+      this.dockBtnWidgets?.classList.remove("active");
+
+      // Highlight dock icons matching feed
+      document.querySelectorAll(".dock-item").forEach((btn) => {
+        const title = btn.getAttribute("title") || "";
+        if (title.toLowerCase().includes("feed")) {
+          btn.classList.add("active");
+        } else if (
+          title.toLowerCase().includes("timer") ||
+          title.toLowerCase().includes("tasks") ||
+          title.toLowerCase().includes("widget")
+        ) {
+          btn.classList.remove("active");
+        }
+      });
+
+      this.mainSlot.scrollIntoView({ behavior: "smooth" });
+    } else {
+      this.pageWidgets.classList.add("active");
+      this.pageFeed.classList.remove("active");
+      this.dockBtnWidgets?.classList.add("active");
+
+      document.querySelectorAll(".dock-item").forEach((btn) => {
+        const title = btn.getAttribute("title") || "";
+        if (title.toLowerCase().includes("feed")) {
+          btn.classList.remove("active");
+        } else if (
+          title.toLowerCase().includes("timer") ||
+          title.toLowerCase().includes("tasks") ||
+          title.toLowerCase().includes("widget")
+        ) {
+          btn.classList.add("active");
+        }
+      });
+
+      this.widgetsSlot.scrollIntoView({ behavior: "smooth" });
+    }
+  }
+
+  /**
+   * Handle slot action dispatched from plugins or kernel
+   */
+  public handleSlotAction(action: string, slot: string): void {
+    if (slot === "sidebar" || slot === "widgets") {
+      if (action === "toggle") {
+        const isWidgets = this.pageWidgets.classList.contains("active");
+        this.showPage(isWidgets ? "feed" : "widgets");
+      } else if (action === "open") {
+        this.showPage("widgets");
+      } else if (action === "close") {
+        this.showPage("feed");
+      }
+    } else if (slot === "main" || slot === "feed") {
+      this.showPage("feed");
+    }
+  }
+
+  public openSettings(tab: SettingsTab = "profile"): void {
+    this.switchSettingsTab(tab);
+    this.settingsModal.classList.add("open");
+  }
+
+  public closeSettings(): void {
+    this.settingsModal.classList.remove("open");
+  }
+
+  private switchSettingsTab(tab: SettingsTab): void {
+    for (const [key, btn] of Object.entries(this.settingsNavBtns)) {
+      btn?.classList.toggle("active", key === tab);
+    }
+    for (const [key, pane] of Object.entries(this.settingsPanes)) {
+      pane?.classList.toggle("active", key === tab);
+    }
+
+    if (tab === "profile") {
+      this.updateProfileUi();
+    } else if (tab === "relays") {
+      this.renderSettingsRelays();
+    } else if (tab === "layout") {
+      this.renderVisualLayoutConfigurator();
+    } else if (tab === "plugins") {
+      this.renderPluginManager();
+    } else if (tab === "config") {
+      this.renderPluginConfig();
+    }
+  }
+
+  public async updateProfileUi(): Promise<void> {
+    const pubkey = await this.kernel.getUserPubkey();
+    const npub = await this.kernel.getNpub();
+    const shortNpub = `${npub.slice(0, 10)}...${npub.slice(-4)}`;
+
+    const profileKeysNpub = document.getElementById("profile-keys-npub") as HTMLInputElement | null;
+    const profileKeysHex = document.getElementById("profile-keys-hex") as HTMLInputElement | null;
+    const profilePreviewNpub = document.getElementById("profile-preview-npub");
+    const profilePreviewName = document.getElementById("profile-preview-name");
+    const profileAvatarPreview = document.getElementById("profile-avatar-preview");
+    const userBadge = document.getElementById("user-badge");
+
+    if (profileKeysNpub) profileKeysNpub.value = npub;
+    if (profileKeysHex) profileKeysHex.value = pubkey;
+    if (profilePreviewNpub) profilePreviewNpub.textContent = shortNpub;
+
+    const profile = await this.kernel.getProfile(pubkey);
+    const inputDisplayName = document.getElementById("input-profile-display-name") as HTMLInputElement | null;
+    const inputName = document.getElementById("input-profile-name") as HTMLInputElement | null;
+    const inputAbout = document.getElementById("input-profile-about") as HTMLTextAreaElement | null;
+    const inputPicture = document.getElementById("input-profile-picture") as HTMLInputElement | null;
+    const inputNip05 = document.getElementById("input-profile-nip05") as HTMLInputElement | null;
+    const inputLud16 = document.getElementById("input-profile-lud16") as HTMLInputElement | null;
+
+    if (profile) {
+      if (inputDisplayName) inputDisplayName.value = profile.display_name || "";
+      if (inputName) inputName.value = profile.name || "";
+      if (inputAbout) inputAbout.value = profile.about || "";
+      if (inputPicture) inputPicture.value = profile.picture || "";
+      if (inputNip05) inputNip05.value = profile.nip05 || "";
+      if (inputLud16) inputLud16.value = profile.lud16 || "";
+
+      const displayName = profile.display_name || profile.name || shortNpub;
+      if (userBadge) {
+        userBadge.textContent = displayName;
+        userBadge.title = `${displayName}\n${npub}\nClick to manage profile & keys`;
+      }
+      if (profilePreviewName) profilePreviewName.textContent = profile.display_name || profile.name || "Guest User";
+
+      if (profile.picture && profileAvatarPreview) {
+        profileAvatarPreview.innerHTML = `<img src="${encodeURI(profile.picture)}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.remove()" />`;
+      } else if (profileAvatarPreview) {
+        profileAvatarPreview.textContent = "✦";
+      }
+    } else {
+      if (inputDisplayName) inputDisplayName.value = "";
+      if (inputName) inputName.value = "";
+      if (inputAbout) inputAbout.value = "";
+      if (inputPicture) inputPicture.value = "";
+      if (inputNip05) inputNip05.value = "";
+      if (inputLud16) inputLud16.value = "";
+      if (userBadge) {
+        userBadge.textContent = shortNpub;
+        userBadge.title = `Your Nostr Identity: ${npub}\nClick to manage profile & keys`;
+      }
+      if (profilePreviewName) profilePreviewName.textContent = "Guest User";
+      if (profileAvatarPreview) profileAvatarPreview.textContent = "✦";
+    }
+  }
+
+  // --- Visual Layout Configurator ---
+  private renderVisualLayoutConfigurator(): void {
+    const visualSlotMap: Record<string, HTMLElement | null> = {
+      "header-actions": document.getElementById("visual-list-header-actions"),
+      "dock": document.getElementById("visual-list-dock"),
+      "main": document.getElementById("visual-list-main"),
+      "sidebar": document.getElementById("visual-list-sidebar")
+    };
+
+    const mappings = this.kernel.layoutManager.getMappings();
+
+    for (const [slotId, container] of Object.entries(visualSlotMap)) {
+      if (!container) continue;
+      container.innerHTML = "";
+
+      const slotItems = mappings.filter((m) => m.slotId === slotId);
+
+      if (slotItems.length === 0) {
+        const empty = document.createElement("div");
+        empty.style.cssText =
+          "font-size: 0.7rem; color: var(--omni-text-muted); font-style: italic; padding: 8px 4px; text-align: center; border: 1px dashed var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
+        empty.textContent = "Empty slot";
+        container.appendChild(empty);
+        continue;
+      }
+
+      for (const item of slotItems) {
+        const plugin = this.installedPlugins.find((p) => p.id === item.pluginId);
+        const comp = plugin?.manifest?.components?.find((c: any) => c.id === item.componentId);
+        const compTitle = comp?.title || item.componentId;
+        const pluginName = plugin?.manifest?.name || item.pluginId;
+
+        const chip = document.createElement("div");
+        chip.className = "visual-comp-chip";
+
+        const infoDiv = document.createElement("div");
+        infoDiv.style.cssText = "display: flex; flex-direction: column; gap: 2px; overflow: hidden;";
+        infoDiv.innerHTML = `<span style="font-weight: 600; font-size: 0.78rem; color: var(--omni-text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${compTitle}</span><span style="font-size: 0.65rem; color: var(--omni-text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${pluginName}</span>`;
+
+        const controlsDiv = document.createElement("div");
+        controlsDiv.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 4px;";
+
+        const select = document.createElement("select");
+        select.style.cssText =
+          "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.68rem; padding: 2px 4px; border-radius: var(--omni-radius-sm); outline: none; flex: 1; min-width: 0;";
+        for (const s of STANDARD_SLOTS) {
+          const opt = document.createElement("option");
+          opt.value = s.id;
+          opt.textContent = `→ ${s.name}`;
+          if (s.id === slotId) opt.selected = true;
+          select.appendChild(opt);
+        }
+        select.addEventListener("change", () => {
+          const targetSlotId = select.value;
+          const targetContainer = this.slotContainers.get(targetSlotId);
+          if (targetContainer) {
+            this.kernel.reparentPluginComponent(item.pluginId, item.componentId, targetSlotId, targetContainer);
+            this.renderVisualLayoutConfigurator();
+          }
+        });
+
+        const toggleLabel = document.createElement("label");
+        toggleLabel.style.cssText =
+          "display: flex; align-items: center; gap: 3px; font-size: 0.68rem; color: var(--omni-text-secondary); cursor: pointer; flex-shrink: 0;";
+        const chk = document.createElement("input");
+        chk.type = "checkbox";
+        chk.checked = item.enabled;
+        chk.addEventListener("change", () => {
+          this.kernel.layoutManager.setComponentEnabled(item.pluginId, item.componentId, chk.checked);
+          this.kernel.getSandbox(item.pluginId)?.setComponentVisible(item.componentId, chk.checked);
+        });
+        toggleLabel.appendChild(chk);
+        toggleLabel.appendChild(document.createTextNode("Show"));
+
+        controlsDiv.appendChild(select);
+        controlsDiv.appendChild(toggleLabel);
+
+        chip.appendChild(infoDiv);
+        chip.appendChild(controlsDiv);
+        container.appendChild(chip);
+      }
+    }
+  }
+
+  // --- Relays Pool Manager UI ---
+  private renderSettingsRelays(): void {
+    const list = document.getElementById("settings-relays-list");
+    const badge = document.getElementById("relays-status-badge");
+    if (!list) return;
+    list.innerHTML = "";
+
+    const relays = this.kernel.relayPool.getAllRelays();
+    const connectedCount = relays.filter((r) => r.status === "connected").length;
+
+    if (badge) {
+      badge.textContent = `${connectedCount} / ${relays.length} Connected`;
+      badge.style.color = connectedCount > 0 ? "var(--omni-status-online)" : "var(--omni-text-muted)";
+    }
+
+    if (relays.length === 0) {
+      const empty = document.createElement("div");
+      empty.style.cssText =
+        "font-size: 0.78rem; color: var(--omni-text-muted); font-style: italic; padding: 16px; text-align: center;";
+      empty.textContent = "No relays connected. Add one above or select a preset.";
+      list.appendChild(empty);
+      return;
+    }
+
+    for (const r of relays) {
+      const row = document.createElement("div");
+      row.style.cssText =
+        "display: flex; justify-content: space-between; align-items: center; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 8px 12px; gap: 10px;";
+
+      const left = document.createElement("div");
+      left.style.cssText = "display: flex; align-items: center; gap: 8px; overflow: hidden; min-width: 0;";
+
+      const dot = document.createElement("span");
+      const dotColor =
+        r.status === "connected"
+          ? "var(--omni-status-online)"
+          : r.status === "connecting"
+          ? "#f59e0b"
+          : "var(--omni-status-offline)";
+      dot.style.cssText = `width: 8px; height: 8px; border-radius: 50%; background: ${dotColor}; flex-shrink: 0;`;
+
+      const urlSpan = document.createElement("span");
+      urlSpan.style.cssText =
+        "font-family: var(--omni-font-mono); font-size: 0.78rem; color: var(--omni-text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;";
+      urlSpan.textContent = r.url;
+
+      const statusPill = document.createElement("span");
+      statusPill.style.cssText =
+        "font-size: 0.68rem; color: var(--omni-text-muted); text-transform: capitalize; flex-shrink: 0;";
+      statusPill.textContent = r.status;
+
+      left.appendChild(dot);
+      left.appendChild(urlSpan);
+      left.appendChild(statusPill);
+
+      const btnRemove = document.createElement("button");
+      btnRemove.className = "btn-secondary";
+      btnRemove.style.cssText = "font-size: 0.72rem; padding: 3px 8px; color: #f87171; flex-shrink: 0;";
+      btnRemove.textContent = "Disconnect";
+      btnRemove.addEventListener("click", () => {
+        this.kernel.relayPool.removeRelay(r.url);
+        this.renderSettingsRelays();
+      });
+
+      row.appendChild(left);
+      row.appendChild(btnRemove);
+      list.appendChild(row);
+    }
+  }
+
+  // --- Installed Plugins Manager UI ---
+  public renderPluginManager(): void {
+    const container = document.getElementById("plugins-list");
+    const countBadge = document.getElementById("plugins-count-badge");
+    if (!container) return;
+    container.innerHTML = "";
+    if (countBadge) countBadge.textContent = String(this.installedPlugins.length);
+
+    for (const p of this.installedPlugins) {
+      const card = document.createElement("div");
+      card.className = "plugin-item-row";
+
+      const topRow = document.createElement("div");
+      topRow.style.display = "flex";
+      topRow.style.justifyContent = "space-between";
+      topRow.style.alignItems = "flex-start";
+
+      const titleGroup = document.createElement("div");
+      titleGroup.style.display = "flex";
+      titleGroup.style.flexDirection = "column";
+      titleGroup.style.gap = "4px";
+
+      const titleLine = document.createElement("div");
+      titleLine.style.display = "flex";
+      titleLine.style.alignItems = "center";
+      titleLine.style.gap = "8px";
+
+      const title = document.createElement("strong");
+      title.style.fontSize = "0.95rem";
+      title.textContent = p.manifest.name;
+
+      const version = document.createElement("span");
+      version.style.fontSize = "0.72rem";
+      version.style.color = "var(--omni-text-muted)";
+      version.textContent = `v${p.manifest.version}`;
+
+      const statusBadge = document.createElement("span");
+      statusBadge.style.fontSize = "0.7rem";
+      statusBadge.style.color = p.enabled ? "var(--omni-status-online)" : "var(--omni-text-muted)";
+      statusBadge.style.background = "var(--omni-bg-subtle)";
+      statusBadge.style.padding = "1px 6px";
+      statusBadge.style.borderRadius = "var(--omni-radius-pill)";
+      statusBadge.textContent = p.enabled ? "Active" : "Disabled";
+
+      titleLine.appendChild(title);
+      titleLine.appendChild(version);
+      titleLine.appendChild(statusBadge);
+
+      const sourcePill = document.createElement("div");
+      sourcePill.style.fontSize = "0.72rem";
+      sourcePill.style.fontFamily = "var(--omni-font-mono)";
+      sourcePill.style.color = "var(--omni-text-muted)";
+      sourcePill.textContent = p.sourceUrl;
+
+      titleGroup.appendChild(titleLine);
+      titleGroup.appendChild(sourcePill);
+
+      const toggleLabel = document.createElement("label");
+      toggleLabel.className = "omni-toggle";
+      toggleLabel.title = p.enabled ? "Click to disable plugin" : "Click to enable plugin";
+
+      const toggleInput = document.createElement("input");
+      toggleInput.type = "checkbox";
+      toggleInput.checked = p.enabled;
+      toggleInput.addEventListener("change", async () => {
+        if (toggleInput.checked) {
+          await this.kernel.enablePlugin(p.manifest, p.scriptContent, this.slotContainers);
+          p.enabled = true;
+        } else {
+          this.kernel.disablePlugin(p.id);
+          p.enabled = false;
+        }
+        this.renderPluginManager();
+      });
+
+      const toggleSlider = document.createElement("span");
+      toggleSlider.className = "toggle-slider";
+      toggleLabel.appendChild(toggleInput);
+      toggleLabel.appendChild(toggleSlider);
+
+      topRow.appendChild(titleGroup);
+      topRow.appendChild(toggleLabel);
+
+      const desc = document.createElement("div");
+      desc.style.fontSize = "0.82rem";
+      desc.style.color = "var(--omni-text-secondary)";
+      desc.textContent = p.manifest.description || "No description provided.";
+
+      const actionsRow = document.createElement("div");
+      actionsRow.style.display = "flex";
+      actionsRow.style.gap = "8px";
+      actionsRow.style.marginTop = "4px";
+
+      const btnInspect = document.createElement("button");
+      btnInspect.className = "btn-secondary";
+      btnInspect.textContent = "Inspect Manifest";
+      btnInspect.addEventListener("click", () => {
+        this.openPluginInspector(p);
+      });
+
+      const btnClearDb = document.createElement("button");
+      btnClearDb.className = "btn-secondary";
+      btnClearDb.textContent = "Clear DB";
+      btnClearDb.addEventListener("click", async () => {
+        await this.kernel.storageManager.clear(p.id);
+        btnClearDb.textContent = "Cleared!";
+        setTimeout(() => {
+          btnClearDb.textContent = "Clear DB";
+        }, 1500);
+      });
+
+      const btnUninstall = document.createElement("button");
+      btnUninstall.className = "btn-danger";
+      btnUninstall.textContent = "Uninstall";
+      btnUninstall.addEventListener("click", () => {
+        if (confirm(`Uninstall ${p.manifest.name}? Its components and storage will be removed.`)) {
+          this.uninstallPlugin(p.id);
+        }
+      });
+
+      actionsRow.appendChild(btnInspect);
+      actionsRow.appendChild(btnClearDb);
+      actionsRow.appendChild(btnUninstall);
+
+      card.appendChild(topRow);
+      card.appendChild(desc);
+      card.appendChild(actionsRow);
+
+      container.appendChild(card);
+    }
+  }
+
+  public uninstallPlugin(pluginId: string): void {
+    this.kernel.uninstallPlugin(pluginId);
+    const idx = this.installedPlugins.findIndex((p) => p.id === pluginId);
+    if (idx !== -1) {
+      this.installedPlugins.splice(idx, 1);
+    }
+    this.renderPluginManager();
+  }
+
+  // --- Plugin Inspector Modal ---
+  private openPluginInspector(plugin: InstalledPluginEntry): void {
+    this.activeInspectedPlugin = plugin;
+    const nameEl = document.getElementById("inspector-plugin-name");
+    const idEl = document.getElementById("inspector-plugin-id");
+    const sourceEl = document.getElementById("inspector-source-url");
+    const nostrProvEl = document.getElementById("inspector-nostr-provenance");
+    const authorNpubEl = document.getElementById("inspector-author-npub");
+    const naddrEl = document.getElementById("inspector-naddr");
+    const btnPublish = document.getElementById("btn-publish-plugin-nostr") as HTMLButtonElement | null;
+    const compList = document.getElementById("inspector-components-list");
+    const permList = document.getElementById("inspector-permissions-list");
+    const rawPre = document.getElementById("inspector-manifest-raw");
+
+    if (nameEl) nameEl.textContent = plugin.manifest.name;
+    if (idEl) idEl.textContent = plugin.manifest.id;
+    if (sourceEl) sourceEl.textContent = plugin.sourceUrl;
+
+    if (plugin.naddr && nostrProvEl && authorNpubEl && naddrEl) {
+      nostrProvEl.style.display = "flex";
+      authorNpubEl.textContent = plugin.authorNpub || "Anonymous";
+      naddrEl.textContent = plugin.naddr;
+      if (btnPublish) btnPublish.textContent = "Re-Publish to Nostr (Update)";
+    } else {
+      if (nostrProvEl) nostrProvEl.style.display = "none";
+      if (btnPublish) btnPublish.textContent = "Publish / Share to Nostr (NIP-5A)";
+    }
+
+    // Components
+    if (compList) {
+      compList.innerHTML = "";
+      for (const comp of plugin.manifest.components || []) {
+        const item = document.createElement("div");
+        item.style.background = "var(--omni-bg-surface)";
+        item.style.border = "1px solid var(--omni-border-subtle)";
+        item.style.borderRadius = "var(--omni-radius-sm)";
+        item.style.padding = "8px 12px";
+        item.style.fontSize = "0.8rem";
+        item.style.display = "flex";
+        item.style.justifyContent = "space-between";
+        item.style.alignItems = "center";
+
+        const left = document.createElement("div");
+        left.innerHTML = `<strong>${comp.title || comp.id}</strong> <span style="color: var(--omni-text-muted); font-size: 0.72rem;">(${comp.id})</span>`;
+
+        const slotPill = document.createElement("span");
+        slotPill.style.background = "var(--omni-bg-subtle)";
+        slotPill.style.color = "var(--omni-accent-primary)";
+        slotPill.style.padding = "2px 8px";
+        slotPill.style.borderRadius = "var(--omni-radius-pill)";
+        slotPill.style.fontFamily = "var(--omni-font-mono)";
+        slotPill.style.fontSize = "0.72rem";
+        slotPill.textContent = `slot: ${comp.slot}`;
+
+        item.appendChild(left);
+        item.appendChild(slotPill);
+        compList.appendChild(item);
+      }
+    }
+
+    // Permissions
+    if (permList) {
+      permList.innerHTML = "";
+      const declaredPerms: Array<{ key: string; name: string; desc: string }> = [];
+
+      if (plugin.manifest.permissions?.storage) {
+        declaredPerms.push({
+          key: "storage:kv",
+          name: "Scoped Storage (KV)",
+          desc: `Persistent IndexedDB storage (Quota: ${plugin.manifest.permissions.storage.quotaMb || 5} MB)`
+        });
+      }
+      if (plugin.manifest.permissions?.intents) {
+        declaredPerms.push({
+          key: "intents:dispatch",
+          name: "Intent Dispatch",
+          desc: "Allow cross-plugin intent calls and events"
+        });
+      }
+      declaredPerms.push({
+        key: "nostr:read",
+        name: "Nostr Subscriptions (Read)",
+        desc: "Subscribe to public notes, profiles, and live timeline streams"
+      });
+      declaredPerms.push({
+        key: "nostr:write",
+        name: "Nostr Event Signing (Write)",
+        desc: "Draft and request signing of Nostr notes and custom events"
+      });
+
+      for (const perm of declaredPerms) {
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.justifyContent = "space-between";
+        row.style.alignItems = "center";
+        row.style.background = "var(--omni-bg-surface)";
+        row.style.border = "1px solid var(--omni-border-subtle)";
+        row.style.borderRadius = "var(--omni-radius-sm)";
+        row.style.padding = "10px 12px";
+
+        const info = document.createElement("div");
+        info.style.display = "flex";
+        info.style.flexDirection = "column";
+        info.style.gap = "2px";
+
+        const pName = document.createElement("strong");
+        pName.style.fontSize = "0.82rem";
+        pName.textContent = perm.name;
+
+        const pDesc = document.createElement("span");
+        pDesc.style.fontSize = "0.72rem";
+        pDesc.style.color = "var(--omni-text-muted)";
+        pDesc.textContent = perm.desc;
+
+        info.appendChild(pName);
+        info.appendChild(pDesc);
+
+        const toggle = document.createElement("label");
+        toggle.className = "omni-toggle";
+
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = this.kernel.getPluginPermission(plugin.id, perm.key);
+        input.addEventListener("change", () => {
+          this.kernel.setPluginPermission(plugin.id, perm.key, input.checked);
+        });
+
+        const slider = document.createElement("span");
+        slider.className = "toggle-slider";
+
+        toggle.appendChild(input);
+        toggle.appendChild(slider);
+
+        row.appendChild(info);
+        row.appendChild(toggle);
+        permList.appendChild(row);
+      }
+    }
+
+    if (rawPre) rawPre.textContent = JSON.stringify(plugin.manifest, null, 2);
+
+    this.switchInspectorTab("overview");
+    this.pluginInspectorModal.classList.add("open");
+  }
+
+  private switchInspectorTab(tab: "overview" | "permissions" | "manifest"): void {
+    const tabOverview = document.getElementById("tab-btn-overview");
+    const tabPerms = document.getElementById("tab-btn-permissions");
+    const tabMan = document.getElementById("tab-btn-manifest");
+    const paneOverview = document.getElementById("inspector-pane-overview");
+    const panePerms = document.getElementById("inspector-pane-permissions");
+    const paneMan = document.getElementById("inspector-pane-manifest");
+
+    tabOverview?.classList.toggle("active", tab === "overview");
+    tabPerms?.classList.toggle("active", tab === "permissions");
+    tabMan?.classList.toggle("active", tab === "manifest");
+
+    if (paneOverview) paneOverview.style.display = tab === "overview" ? "flex" : "none";
+    if (panePerms) panePerms.style.display = tab === "permissions" ? "flex" : "none";
+    if (paneMan) paneMan.style.display = tab === "manifest" ? "flex" : "none";
+  }
+
+  // --- Plugin Config ---
+  private renderPluginConfig(): void {
+    const cfgTimerWork = document.getElementById("cfg-timer-work") as HTMLInputElement | null;
+    const cfgTimerBreak = document.getElementById("cfg-timer-break") as HTMLInputElement | null;
+    const cfgTimerLongBreak = document.getElementById("cfg-timer-long-break") as HTMLInputElement | null;
+    const cfgFeedLimit = document.getElementById("cfg-feed-limit") as HTMLInputElement | null;
+
+    const savedTimer = localStorage.getItem("omni_timer_config");
+    if (savedTimer) {
+      try {
+        const parsed = JSON.parse(savedTimer);
+        if (cfgTimerWork && parsed.work) cfgTimerWork.value = String(parsed.work);
+        if (cfgTimerBreak && parsed.shortBreak) cfgTimerBreak.value = String(parsed.shortBreak);
+        if (cfgTimerLongBreak && parsed.longBreak) cfgTimerLongBreak.value = String(parsed.longBreak);
+      } catch {}
+    }
+
+    const savedLimit = localStorage.getItem("omni_feed_limit");
+    if (savedLimit && cfgFeedLimit) {
+      cfgFeedLimit.value = savedLimit;
+    }
+  }
+
+  // --- Initial DOM Skeleton Rendering ---
+  private renderSkeleton(): void {
+    this.root.innerHTML = `
+      <!-- 1. Header -->
+      <header class="app-header">
+        <div class="brand-row">
+          <span class="brand-logo">✦ Omni</span>
+          <span style="font-size: 0.72rem; color: var(--omni-text-muted); background: var(--omni-bg-subtle); padding: 2px 6px; border-radius: var(--omni-radius-pill);">Universal nsite Runtime</span>
+        </div>
+        <div class="header-actions">
+          <div id="header-actions-slot" class="omni-slot-inline" style="display: flex; align-items: center; gap: 8px;"></div>
+        </div>
+      </header>
+
+      <!-- 2. Main App Content Layout -->
+      <div class="app-layout">
+        <!-- Navigation Dock -->
+        <nav class="mobile-dock" id="app-dock">
+          <div id="dock-slot" class="dock-slot-container"></div>
+
+          <button class="dock-item" id="dock-btn-widgets" title="Workspace Widgets & Tools">
+            <div class="dock-icon-wrapper">
+              ${icon("widgets", 20)}
+            </div>
+            <span>Widgets</span>
+          </button>
+
+          <button class="dock-item" id="dock-btn-settings" title="Settings & System Control">
+            <div class="dock-icon-wrapper">
+              ${icon("settings", 20)}
+            </div>
+            <span>Settings</span>
+          </button>
+        </nav>
+
+        <!-- Center Viewport with Multi-Page Views -->
+        <main class="main-viewport">
+          <!-- Page 1: Timeline Feed & Main Slot -->
+          <section class="app-page active" id="page-feed">
+            <div id="main-slot" class="omni-slot main-viewport-slot"></div>
+          </section>
+
+          <!-- Page 2: Dedicated Full Widgets Dashboard -->
+          <section class="app-page" id="page-widgets">
+            <div class="widgets-page-header">
+              <div class="widgets-page-title-row">
+                <h2 class="widgets-page-title">Workspace Widgets & Tools</h2>
+                <span class="widgets-page-badge">Full View</span>
+              </div>
+              <p class="widgets-page-desc">All active modular widgets, tools, and productivity plugins.</p>
+            </div>
+            <div id="widgets-slot" class="omni-slot widgets-grid"></div>
+          </section>
+        </main>
+      </div>
+
+      <!-- 3. Unified Settings Modal -->
+      <div class="modal-overlay" id="settings-modal">
+        <div class="settings-modal-card">
+          <div class="settings-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              ${icon("settings", 20)}
+              <h2 style="font-size: 1.15rem; font-weight: 600;">Settings & Control</h2>
+            </div>
+            <button class="btn-drawer-close" id="btn-close-settings-modal" title="Close Settings">
+              ${icon("close", 14)}
+            </button>
+          </div>
+
+          <div class="settings-body">
+            <nav class="settings-nav">
+              <button class="settings-nav-btn active" id="settings-tab-btn-profile" data-tab="profile">
+                ${icon("user", 16)}
+                <span>Profile & Keys</span>
+              </button>
+              <button class="settings-nav-btn" id="settings-tab-btn-relays" data-tab="relays">
+                ${icon("relay", 16)}
+                <span>Connected Relays</span>
+              </button>
+              <button class="settings-nav-btn" id="settings-tab-btn-layout" data-tab="layout">
+                ${icon("layout", 16)}
+                <span>Visual Layout</span>
+              </button>
+              <button class="settings-nav-btn" id="settings-tab-btn-plugins" data-tab="plugins">
+                ${icon("plugins", 16)}
+                <span>Installed Plugins</span>
+              </button>
+              <button class="settings-nav-btn" id="settings-tab-btn-config" data-tab="config">
+                ${icon("sliders", 16)}
+                <span>Plugin Config</span>
+              </button>
+            </nav>
+
+            <div class="settings-content">
+              <!-- Pane 1: Profile & Keys -->
+              <div class="settings-pane active" id="settings-pane-profile">
+                <div class="modal-tabs">
+                  <button class="modal-tab-btn active" id="tab-btn-profile-info">Profile Info (kind 0)</button>
+                  <button class="modal-tab-btn" id="tab-btn-profile-keys">Keys & Custody</button>
+                </div>
+
+                <div id="profile-pane-info" style="display: flex; flex-direction: column; gap: 14px;">
+                  <div style="display: flex; align-items: center; gap: 14px;">
+                    <div id="profile-avatar-preview" style="width: 56px; height: 56px; border-radius: 50%; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: var(--omni-accent-primary); overflow: hidden; flex-shrink: 0;">
+                      ✦
+                    </div>
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+                      <div id="profile-preview-name" style="font-weight: 600; font-size: 0.95rem;">Guest User</div>
+                      <div id="profile-preview-npub" style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted);">npub...</div>
+                    </div>
+                  </div>
+
+                  <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                      Display Name:
+                      <input id="input-profile-display-name" type="text" placeholder="e.g. Alice Smith" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                    </label>
+
+                    <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                      Name / Handle:
+                      <input id="input-profile-name" type="text" placeholder="e.g. alice" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                    </label>
+
+                    <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                      About / Bio:
+                      <textarea id="input-profile-about" rows="2" placeholder="Tell the Nostr network about yourself..." style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none; resize: vertical;"></textarea>
+                    </label>
+
+                    <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                      Avatar / Picture URL:
+                      <input id="input-profile-picture" type="text" placeholder="https://example.com/avatar.jpg" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                    </label>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                      <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                        NIP-05 Identifier:
+                        <input id="input-profile-nip05" type="text" placeholder="alice@domain.com" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                      </label>
+                      <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                        Lightning Address (lud16):
+                        <input id="input-profile-lud16" type="text" placeholder="alice@getalby.com" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+                    <button id="btn-save-profile" class="btn-publish">
+                      Save & Publish Profile (kind 0)
+                    </button>
+                  </div>
+                </div>
+
+                <div id="profile-pane-keys" style="display: none; flex-direction: column; gap: 14px;">
+                  <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <span style="font-size: 0.78rem; color: var(--omni-text-secondary);">Public Key (npub):</span>
+                    <div style="display: flex; gap: 6px;">
+                      <input id="profile-keys-npub" type="text" readonly style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.75rem; outline: none;" />
+                      <button id="btn-copy-npub" class="btn-secondary" style="font-size: 0.75rem;">Copy</button>
+                    </div>
+                  </div>
+
+                  <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <span style="font-size: 0.78rem; color: var(--omni-text-secondary);">Public Key (Hex):</span>
+                    <div style="display: flex; gap: 6px;">
+                      <input id="profile-keys-hex" type="text" readonly style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-muted); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.72rem; outline: none;" />
+                      <button id="btn-copy-hex" class="btn-secondary" style="font-size: 0.75rem;">Copy</button>
+                    </div>
+                  </div>
+
+                  <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-secondary);">Private Key (nsec):</span>
+                      <button id="btn-reveal-nsec" class="btn-secondary" style="font-size: 0.72rem;">Reveal Private Key</button>
+                    </div>
+                    <div id="private-key-display-wrapper" style="display: none; flex-direction: column; gap: 6px;">
+                      <div style="display: flex; gap: 6px;">
+                        <input id="profile-keys-nsec" type="text" readonly style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid rgba(239,68,68,0.4); color: #f87171; padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.75rem; outline: none;" />
+                        <button id="btn-copy-nsec" class="btn-secondary" style="font-size: 0.75rem;">Copy</button>
+                      </div>
+                      <span style="font-size: 0.7rem; color: var(--omni-text-muted);">⚠️ Never share your nsec private key with untrusted parties.</span>
+                    </div>
+                  </div>
+
+                  <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <span style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-secondary);">Switch Identity / Import Key:</span>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                      <input id="input-import-nsec" type="password" placeholder="Paste nsec1... or 64-char hex private key" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                      <div style="display: flex; justify-content: space-between; gap: 8px; margin-top: 4px;">
+                        <button id="btn-generate-new-key" class="btn-secondary" style="font-size: 0.75rem;">Generate Fresh Key</button>
+                        <button id="btn-confirm-import-key" class="btn-publish" style="font-size: 0.78rem;">Import & Switch</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pane 2: Connected Relays -->
+              <div class="settings-pane" id="settings-pane-relays">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <h3 style="font-size: 1.05rem; font-weight: 600;">Relay Pool Manager</h3>
+                    <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Manage real-time WebSocket connections to Nostr relays</span>
+                  </div>
+                  <span id="relays-status-badge" style="font-size: 0.72rem; background: var(--omni-bg-subtle); color: var(--omni-accent-primary); padding: 3px 8px; border-radius: var(--omni-radius-pill);">Live</span>
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                  <input id="input-add-relay" type="text" placeholder="wss://relay.example.com" style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 8px 12px; border-radius: var(--omni-radius-sm); font-size: 0.85rem; outline: none;" />
+                  <button id="btn-add-relay" class="btn-publish" style="font-size: 0.8rem; white-space: nowrap;">+ Connect Relay</button>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                  <span style="font-size: 0.72rem; color: var(--omni-text-muted);">Presets:</span>
+                  <button class="btn-secondary relay-preset-btn" data-url="wss://relay.damus.io" style="font-size: 0.7rem; padding: 2px 8px;">damus.io</button>
+                  <button class="btn-secondary relay-preset-btn" data-url="wss://nos.lol" style="font-size: 0.7rem; padding: 2px 8px;">nos.lol</button>
+                  <button class="btn-secondary relay-preset-btn" data-url="wss://relay.primal.net" style="font-size: 0.7rem; padding: 2px 8px;">primal.net</button>
+                  <button class="btn-secondary relay-preset-btn" data-url="wss://relay.nostr.band" style="font-size: 0.7rem; padding: 2px 8px;">nostr.band</button>
+                </div>
+
+                <div id="settings-relays-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;"></div>
+              </div>
+
+              <!-- Pane 3: Visual Layout Configurator -->
+              <div class="settings-pane" id="settings-pane-layout">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <h3 style="font-size: 1.05rem; font-weight: 600;">Visual Layout & Slots</h3>
+                    <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Interactive diagram of the client shell. Assign components to viewports dynamically.</span>
+                  </div>
+                  <button id="btn-reset-layout" class="btn-secondary" style="font-size: 0.75rem;">Reset to Defaults</button>
+                </div>
+
+                <div class="visual-diagram-container">
+                  <div class="visual-diagram-mockup">
+                    <div class="visual-mockup-header">
+                      <div style="font-weight: 600; font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; align-items: center; gap: 6px;">
+                        <span>✦ Logo</span>
+                      </div>
+                      <div class="visual-slot-zone" id="visual-zone-header-actions" data-slot="header-actions" style="min-width: 140px;">
+                        <div class="visual-slot-header">
+                          <span>Header Actions</span>
+                          <code>actions</code>
+                        </div>
+                        <div class="visual-slot-comp-list" id="visual-list-header-actions"></div>
+                      </div>
+                    </div>
+
+                    <div class="visual-mockup-body">
+                      <div class="visual-slot-zone" id="visual-zone-dock" data-slot="dock">
+                        <div class="visual-slot-header">
+                          <span>Nav Dock</span>
+                          <code>dock</code>
+                        </div>
+                        <div class="visual-slot-comp-list" id="visual-list-dock"></div>
+                      </div>
+
+                      <div class="visual-slot-zone" id="visual-zone-main" data-slot="main">
+                        <div class="visual-slot-header">
+                          <span>Feed Page</span>
+                          <code>main</code>
+                        </div>
+                        <div class="visual-slot-comp-list" id="visual-list-main"></div>
+                      </div>
+
+                      <div class="visual-slot-zone" id="visual-zone-sidebar" data-slot="sidebar">
+                        <div class="visual-slot-header">
+                          <span>Widgets Page</span>
+                          <code>widgets</code>
+                        </div>
+                        <div class="visual-slot-comp-list" id="visual-list-sidebar"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pane 4: Installed Plugins -->
+              <div class="settings-pane" id="settings-pane-plugins">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <h3 style="font-size: 1.05rem; font-weight: 600;">Installed Plugins</h3>
+                    <span id="plugins-count-badge" style="font-size: 0.72rem; background: var(--omni-bg-subtle); color: var(--omni-accent-primary); padding: 1px 6px; border-radius: var(--omni-radius-pill);">0</span>
+                  </div>
+                  <button id="btn-show-install-modal" class="btn-publish" style="font-size: 0.75rem; padding: 4px 10px;">
+                    + Install Plugin (NIP-5A)
+                  </button>
+                </div>
+
+                <p style="font-size: 0.78rem; color: var(--omni-text-muted); margin: 0;">
+                  Standard Nostr sites running securely inside sandboxes with capability gating.
+                </p>
+
+                <div id="plugins-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+              </div>
+
+              <!-- Pane 5: Plugin Config -->
+              <div class="settings-pane" id="settings-pane-config">
+                <div>
+                  <h3 style="font-size: 1.05rem; font-weight: 600;">Plugin Preferences</h3>
+                  <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Configure options and behaviors for active first-class plugins</span>
+                </div>
+
+                <div style="background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-weight: 600; font-size: 0.88rem; color: var(--omni-text-primary);">Focus Timer (Pomodoro)</span>
+                    <span style="font-size: 0.7rem; color: var(--omni-text-muted);">@omni/plugin-timer</span>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                    <label style="font-size: 0.75rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                      Work (min):
+                      <input id="cfg-timer-work" type="number" min="1" max="120" value="25" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                    </label>
+                    <label style="font-size: 0.75rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                      Short Break:
+                      <input id="cfg-timer-break" type="number" min="1" max="30" value="5" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                    </label>
+                    <label style="font-size: 0.75rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                      Long Break:
+                      <input id="cfg-timer-long-break" type="number" min="1" max="60" value="15" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                    </label>
+                  </div>
+                  <div style="display: flex; justify-content: flex-end;">
+                    <button id="btn-save-timer-cfg" class="btn-publish" style="font-size: 0.75rem; padding: 5px 12px;">Save Timer Settings</button>
+                  </div>
+                </div>
+
+                <div style="background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-weight: 600; font-size: 0.88rem; color: var(--omni-text-primary);">Daily Checklist</span>
+                    <span style="font-size: 0.7rem; color: var(--omni-text-muted);">@omni/plugin-checklist</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.78rem; color: var(--omni-text-secondary);">Manage Task Storage:</span>
+                    <button id="btn-clear-completed-tasks" class="btn-secondary" style="font-size: 0.75rem;">Clear Completed Tasks</button>
+                  </div>
+                </div>
+
+                <div style="background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-weight: 600; font-size: 0.88rem; color: var(--omni-text-primary);">Timeline Feed & Composer</span>
+                    <span style="font-size: 0.7rem; color: var(--omni-text-muted);">@omni/plugin-feed</span>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; align-items: center; justify-content: space-between;">
+                      <span>Initial Notes Query Limit:</span>
+                      <input id="cfg-feed-limit" type="number" min="10" max="100" value="30" style="width: 70px; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 4px 8px; border-radius: var(--omni-radius-sm); font-size: 0.78rem; outline: none;" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Install Plugin Modal -->
+      <div class="modal-overlay" id="install-plugin-modal">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 style="font-size: 1.05rem; font-weight: 600;">Install New Plugin</h3>
+            <button class="btn-drawer-close" id="btn-close-install-modal">
+              ${icon("close", 14)}
+            </button>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <label style="font-size: 0.82rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 4px;">
+              Nostr naddr (NIP-5A) or Manifest URL:
+              <input
+                id="install-manifest-url"
+                type="text"
+                placeholder="naddr1... / 35129:pubkey:d-tag / https://..."
+                style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 8px 12px; border-radius: var(--omni-radius-sm); font-size: 0.85rem; outline: none;"
+              />
+            </label>
+
+            <div style="display: flex; align-items: center; gap: 8px; justify-content: center; font-size: 0.75rem; color: var(--omni-text-muted);">
+              <span>— or paste raw manifest JSON / inline nsite HTML —</span>
+            </div>
+
+            <textarea
+              id="install-manifest-json"
+              rows="6"
+              placeholder='{\n  "id": "org.example.plugin",\n  "name": "Custom Widget",\n  "version": "1.0.0"\n}'
+              style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 8px 12px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.78rem; outline: none; resize: vertical;"
+            ></textarea>
+
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px;">
+              <div style="display: flex; gap: 6px;">
+                <button id="btn-quick-sample-nostr" class="btn-secondary" style="font-size: 0.75rem;">
+                  Load Sample Nostr (naddr)
+                </button>
+                <button id="btn-quick-sample-plugin" class="btn-secondary" style="font-size: 0.75rem;">
+                  Load Raw Sample
+                </button>
+              </div>
+              <button id="btn-confirm-install" class="btn-publish">
+                Install Plugin
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Plugin Inspector Modal -->
+      <div class="modal-overlay" id="plugin-inspector-modal">
+        <div class="modal-card" style="max-width: 540px;">
+          <div class="modal-header">
+            <div>
+              <h3 id="inspector-plugin-name" style="font-size: 1.05rem; font-weight: 600;">Plugin Inspector</h3>
+              <span id="inspector-plugin-id" style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted);"></span>
+            </div>
+            <button class="btn-drawer-close" id="btn-close-inspector">
+              ${icon("close", 14)}
+            </button>
+          </div>
+
+          <div class="modal-tabs">
+            <button class="modal-tab-btn active" id="tab-btn-overview">Overview</button>
+            <button class="modal-tab-btn" id="tab-btn-permissions">Permissions</button>
+            <button class="modal-tab-btn" id="tab-btn-manifest">Manifest JSON</button>
+          </div>
+
+          <div id="inspector-pane-overview" style="display: flex; flex-direction: column; gap: 12px;">
+            <div id="inspector-nostr-provenance" style="display: none; flex-direction: column; gap: 6px; background: var(--omni-bg-surface); padding: 10px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.75rem; font-weight: 600; color: var(--omni-accent-primary);">✦ Nostr NIP-5A Verified App</span>
+                <span style="font-size: 0.7rem; color: #34d399;">SHA-256 Verified</span>
+              </div>
+              <div style="font-size: 0.75rem; color: var(--omni-text-muted); display: flex; flex-direction: column; gap: 3px;">
+                <div>Author: <code id="inspector-author-npub" style="color: var(--omni-text-primary);"></code></div>
+                <div>Nostr Address: <code id="inspector-naddr" style="color: var(--omni-text-primary); word-break: break-all;"></code></div>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem;">
+              <div style="color: var(--omni-text-muted);">Source Origin:</div>
+              <div id="inspector-source-url" style="font-family: var(--omni-font-mono); color: var(--omni-accent-primary); word-break: break-all; background: var(--omni-bg-surface); padding: 6px 10px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);"></div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end;">
+              <button id="btn-publish-plugin-nostr" class="btn-secondary" style="font-size: 0.75rem;">
+                Publish / Share to Nostr (NIP-5A)
+              </button>
+            </div>
+
+            <div>
+              <h4 style="font-size: 0.85rem; margin-bottom: 6px; color: var(--omni-text-secondary);">Contributed Components</h4>
+              <div id="inspector-components-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+            </div>
+          </div>
+
+          <div id="inspector-pane-permissions" style="display: none; flex-direction: column; gap: 10px;">
+            <p style="font-size: 0.8rem; color: var(--omni-text-muted);">
+              Granular capabilities granted to this plugin. Revoking immediately denies runtime RPC requests.
+            </p>
+            <div id="inspector-permissions-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+          </div>
+
+          <div id="inspector-pane-manifest" style="display: none; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: flex-end;">
+              <button id="btn-copy-manifest" class="btn-secondary" style="font-size: 0.72rem;">
+                Copy JSON
+              </button>
+            </div>
+            <pre class="manifest-code-block" id="inspector-manifest-raw"></pre>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private cacheElementReferences(): void {
+    this.headerActionsSlot = document.getElementById("header-actions-slot")!;
+    this.dockSlot = document.getElementById("dock-slot")!;
+    this.mainSlot = document.getElementById("main-slot")!;
+    this.widgetsSlot = document.getElementById("widgets-slot")!;
+    this.pageFeed = document.getElementById("page-feed")!;
+    this.pageWidgets = document.getElementById("page-widgets")!;
+    this.dockBtnWidgets = document.getElementById("dock-btn-widgets")!;
+    this.dockBtnSettings = document.getElementById("dock-btn-settings")!;
+
+    this.settingsModal = document.getElementById("settings-modal")!;
+    this.settingsNavBtns = {
+      profile: document.getElementById("settings-tab-btn-profile")!,
+      relays: document.getElementById("settings-tab-btn-relays")!,
+      layout: document.getElementById("settings-tab-btn-layout")!,
+      plugins: document.getElementById("settings-tab-btn-plugins")!,
+      config: document.getElementById("settings-tab-btn-config")!
+    };
+    this.settingsPanes = {
+      profile: document.getElementById("settings-pane-profile")!,
+      relays: document.getElementById("settings-pane-relays")!,
+      layout: document.getElementById("settings-pane-layout")!,
+      plugins: document.getElementById("settings-pane-plugins")!,
+      config: document.getElementById("settings-pane-config")!
+    };
+
+    this.pluginInspectorModal = document.getElementById("plugin-inspector-modal")!;
+    this.installPluginModal = document.getElementById("install-plugin-modal")!;
+  }
+
+  private initSlotContainers(): void {
+    this.slotContainers.set("header-actions", this.headerActionsSlot);
+    this.slotContainers.set("main", this.mainSlot);
+    this.slotContainers.set("dock", this.dockSlot);
+    this.slotContainers.set("icon", this.dockSlot);
+    this.slotContainers.set("sidebar", this.widgetsSlot);
+    this.slotContainers.set("widgets", this.widgetsSlot);
+  }
+
+  private wireNavigation(): void {
+    this.dockBtnWidgets?.addEventListener("click", () => this.showPage("widgets"));
+    this.dockBtnSettings?.addEventListener("click", () => this.openSettings("profile"));
+
+    const btnResetLayout = document.getElementById("btn-reset-layout");
+    btnResetLayout?.addEventListener("click", () => {
+      if (!confirm("Reset all plugin component slots back to defaults?")) return;
+      const manifests = this.installedPlugins.map((p) => p.manifest);
+      this.kernel.layoutManager.resetToDefaults(manifests);
+      for (const p of this.installedPlugins) {
+        for (const comp of p.manifest.components || []) {
+          const container = this.slotContainers.get(comp.slot);
+          if (container) {
+            this.kernel.getSandbox(p.id)?.reparentComponent(comp.id, container);
+          }
+        }
+      }
+      this.renderVisualLayoutConfigurator();
+    });
+  }
+
+  private wireSettingsModal(): void {
+    const btnClose = document.getElementById("btn-close-settings-modal");
+    btnClose?.addEventListener("click", () => this.closeSettings());
+    this.settingsModal?.addEventListener("click", (e) => {
+      if (e.target === this.settingsModal) this.closeSettings();
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && this.settingsModal?.classList.contains("open")) {
+        this.closeSettings();
+      }
+    });
+
+    for (const [tab, btn] of Object.entries(this.settingsNavBtns)) {
+      btn?.addEventListener("click", () => this.switchSettingsTab(tab as SettingsTab));
+    }
+  }
+
+  private wireInspectorModal(): void {
+    const btnClose = document.getElementById("btn-close-inspector");
+    const tabOverview = document.getElementById("tab-btn-overview");
+    const tabPerms = document.getElementById("tab-btn-permissions");
+    const tabMan = document.getElementById("tab-btn-manifest");
+    const btnCopy = document.getElementById("btn-copy-manifest");
+    const btnPublish = document.getElementById("btn-publish-plugin-nostr") as HTMLButtonElement | null;
+
+    btnClose?.addEventListener("click", () => {
+      this.pluginInspectorModal.classList.remove("open");
+      this.activeInspectedPlugin = null;
+    });
+
+    this.pluginInspectorModal?.addEventListener("click", (e) => {
+      if (e.target === this.pluginInspectorModal) {
+        this.pluginInspectorModal.classList.remove("open");
+        this.activeInspectedPlugin = null;
+      }
+    });
+
+    tabOverview?.addEventListener("click", () => this.switchInspectorTab("overview"));
+    tabPerms?.addEventListener("click", () => this.switchInspectorTab("permissions"));
+    tabMan?.addEventListener("click", () => this.switchInspectorTab("manifest"));
+
+    btnCopy?.addEventListener("click", async () => {
+      if (this.activeInspectedPlugin) {
+        await navigator.clipboard.writeText(JSON.stringify(this.activeInspectedPlugin.manifest, null, 2));
+        btnCopy.textContent = "Copied!";
+        setTimeout(() => {
+          btnCopy.textContent = "Copy JSON";
+        }, 1500);
+      }
+    });
+
+    btnPublish?.addEventListener("click", async () => {
+      if (!this.activeInspectedPlugin || !btnPublish) return;
+      const p = this.activeInspectedPlugin;
+      btnPublish.disabled = true;
+      btnPublish.textContent = "Signing & Publishing to Nostr...";
+
+      try {
+        const published = await this.kernel.publishNsitePlugin(p.manifest, p.scriptContent);
+        p.naddr = published.naddr;
+        p.authorNpub = published.authorNpub;
+        p.event = published.event;
+        p.sourceUrl = published.naddr;
+
+        const nostrProvEl = document.getElementById("inspector-nostr-provenance");
+        const authorNpubEl = document.getElementById("inspector-author-npub");
+        const naddrEl = document.getElementById("inspector-naddr");
+        const sourceUrlEl = document.getElementById("inspector-source-url");
+
+        if (nostrProvEl) nostrProvEl.style.display = "flex";
+        if (authorNpubEl) authorNpubEl.textContent = published.authorNpub;
+        if (naddrEl) naddrEl.textContent = published.naddr;
+        if (sourceUrlEl) sourceUrlEl.textContent = published.naddr;
+        btnPublish.textContent = "Published & Verified!";
+
+        await navigator.clipboard.writeText(published.naddr);
+        alert(`Plugin '${p.manifest.name}' published to Nostr (NIP-5A)!\n\nNostr Address:\n${published.naddr}`);
+
+        setTimeout(() => {
+          btnPublish.disabled = false;
+          btnPublish.textContent = "Re-Publish to Nostr (Update)";
+        }, 2000);
+      } catch (err: any) {
+        console.error("Failed to publish plugin to Nostr:", err);
+        alert(`Failed to publish plugin to Nostr: ${err.message || String(err)}`);
+        btnPublish.disabled = false;
+        btnPublish.textContent = "Publish / Share to Nostr (NIP-5A)";
+      }
+    });
+  }
+
+  private wireInstallModal(): void {
+    const btnShow = document.getElementById("btn-show-install-modal");
+    const btnClose = document.getElementById("btn-close-install-modal");
+    const urlInput = document.getElementById("install-manifest-url") as HTMLInputElement;
+    const jsonInput = document.getElementById("install-manifest-json") as HTMLTextAreaElement;
+    const btnQuickNostr = document.getElementById("btn-quick-sample-nostr") as HTMLButtonElement;
+    const btnQuickRaw = document.getElementById("btn-quick-sample-plugin") as HTMLButtonElement;
+    const btnConfirm = document.getElementById("btn-confirm-install") as HTMLButtonElement;
+
+    btnShow?.addEventListener("click", () => this.installPluginModal.classList.add("open"));
+    btnClose?.addEventListener("click", () => this.installPluginModal.classList.remove("open"));
+    this.installPluginModal?.addEventListener("click", (e) => {
+      if (e.target === this.installPluginModal) this.installPluginModal.classList.remove("open");
+    });
+
+    btnQuickRaw?.addEventListener("click", () => {
+      urlInput.value = "https://registry.omni.org/plugins/scratchpad/omni.manifest.json";
+      jsonInput.value = JSON.stringify(
+        {
+          id: "org.omni.plugins.scratchpad",
+          name: "Scratchpad Notes",
+          version: "1.0.0",
+          description: "Minimal persistent scratchpad note taking widget",
+          components: [{ id: "scratchpad-widget", slot: "sidebar", title: "Scratchpad" }]
+        },
+        null,
+        2
+      );
+    });
+
+    btnQuickNostr?.addEventListener("click", async () => {
+      btnQuickNostr.disabled = true;
+      btnQuickNostr.textContent = "Publishing to Nostr...";
+      try {
+        const sampleManifest = {
+          id: "org.omni.plugin.nostr-wisdom",
+          name: "Decentralized Wisdom",
+          version: "1.0.0",
+          description: "Cryptographic quotes and cypherpunk wisdom widget",
+          entry: "index.html",
+          components: [{ id: "wisdom-widget", slot: "sidebar", title: "Wisdom Widget" }]
+        };
+        const sampleScript = `
+          <!DOCTYPE html>
+          <html>
+          <body>
+            <div style="background: var(--omni-bg-surface); padding: 14px; border-radius: var(--omni-radius-md); border: 1px solid var(--omni-border-strong);">
+              <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--omni-accent-primary);">✦ Decentralized Wisdom</h3>
+              <p style="font-size: 0.85rem; font-style: italic; margin-top: 8px;">“Don't trust, verify.” — Cypherpunk Maxim</p>
+            </div>
+          </body>
+          </html>
+        `;
+        const published = await this.kernel.publishNsitePlugin(sampleManifest as any, sampleScript);
+        urlInput.value = published.naddr;
+        jsonInput.value = "";
+        btnQuickNostr.textContent = "naddr Loaded!";
+        setTimeout(() => {
+          btnQuickNostr.disabled = false;
+          btnQuickNostr.textContent = "Load Sample Nostr (naddr)";
+        }, 2000);
+      } catch (err: any) {
+        console.error("Failed to generate Nostr sample:", err);
+        alert(`Failed: ${err.message || String(err)}`);
+        btnQuickNostr.disabled = false;
+        btnQuickNostr.textContent = "Load Sample Nostr (naddr)";
+      }
+    });
+
+    btnConfirm?.addEventListener("click", async () => {
+      const jsonText = jsonInput.value.trim();
+      const urlText = urlInput.value.trim();
+      let manifest: any = null;
+      let scriptContent = "";
+      let resolvedNaddr: string | undefined;
+      let resolvedAuthorNpub: string | undefined;
+
+      btnConfirm.disabled = true;
+      try {
+        if (urlText && (urlText.startsWith("naddr1") || urlText.includes(":"))) {
+          btnConfirm.textContent = "Resolving from Nostr (NIP-5A)...";
+          const resolved = await this.kernel.resolveNsitePlugin(urlText);
+          manifest = resolved.manifest;
+          scriptContent = resolved.scriptContent;
+          resolvedNaddr = resolved.naddr;
+          resolvedAuthorNpub = resolved.authorNpub;
+        } else if (urlText) {
+          btnConfirm.textContent = "Fetching from URL...";
+          const res = await fetch(urlText);
+          manifest = await res.json();
+        } else if (jsonText) {
+          if (jsonText.startsWith("<") || jsonText.startsWith("<!DOCTYPE")) {
+            scriptContent = jsonText;
+            manifest = {
+              id: `custom-app-${Date.now()}`,
+              name: "Custom HTML App",
+              version: "1.0.0",
+              entry: "index.html",
+              components: [{ id: "custom-main", slot: "main", title: "Custom App" }]
+            };
+          } else {
+            manifest = JSON.parse(jsonText);
+          }
+        } else {
+          alert("Please provide either a Nostr naddr, URL, or JSON/HTML content.");
+          btnConfirm.disabled = false;
+          return;
+        }
+
+        if (!manifest.id || !manifest.name) {
+          alert("Invalid plugin manifest: 'id' and 'name' are required.");
+          btnConfirm.disabled = false;
+          return;
+        }
+
+        if (this.installedPlugins.some((p) => p.id === manifest.id)) {
+          alert(`Plugin '${manifest.name}' (${manifest.id}) is already installed.`);
+          btnConfirm.disabled = false;
+          return;
+        }
+
+        if (!scriptContent) {
+          scriptContent = `
+            <!DOCTYPE html>
+            <html>
+            <body>
+              <div style="background: var(--omni-bg-surface); padding: 12px; border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md);">
+                <h4>${manifest.name}</h4>
+                <p style="font-size: 0.8rem; color: var(--omni-text-muted);">${manifest.description || "Active application"}</p>
+              </div>
+            </body>
+            </html>
+          `;
+        }
+
+        const entry: InstalledPluginEntry = {
+          id: manifest.id,
+          manifest,
+          scriptContent,
+          sourceUrl: resolvedNaddr || urlText || `custom:${manifest.id}`,
+          enabled: true,
+          naddr: resolvedNaddr,
+          authorNpub: resolvedAuthorNpub
+        };
+
+        btnConfirm.textContent = "Mounting to sandbox...";
+        await this.kernel.registerPlugin(manifest, scriptContent, this.slotContainers);
+        this.installedPlugins.push(entry);
+        this.renderPluginManager();
+        this.installPluginModal.classList.remove("open");
+        urlInput.value = "";
+        jsonInput.value = "";
+        alert(`Plugin '${manifest.name}' installed successfully!`);
+      } catch (err: any) {
+        console.error("Install failed:", err);
+        alert(`Install failed: ${err.message || String(err)}`);
+      } finally {
+        btnConfirm.disabled = false;
+        btnConfirm.textContent = "Install Plugin";
+      }
+    });
+  }
+
+  private wireProfileControls(): void {
+    const tabInfo = document.getElementById("tab-btn-profile-info");
+    const tabKeys = document.getElementById("tab-btn-profile-keys");
+    const paneInfo = document.getElementById("profile-pane-info");
+    const paneKeys = document.getElementById("profile-pane-keys");
+    const userBadge = document.getElementById("user-badge");
+    const btnSave = document.getElementById("btn-save-profile") as HTMLButtonElement | null;
+    const btnCopyNpub = document.getElementById("btn-copy-npub") as HTMLButtonElement | null;
+    const btnCopyHex = document.getElementById("btn-copy-hex") as HTMLButtonElement | null;
+    const btnCopyNsec = document.getElementById("btn-copy-nsec") as HTMLButtonElement | null;
+    const btnRevealNsec = document.getElementById("btn-reveal-nsec") as HTMLButtonElement | null;
+    const wrapperNsec = document.getElementById("private-key-display-wrapper");
+    const inputNsec = document.getElementById("profile-keys-nsec") as HTMLInputElement | null;
+    const inputImport = document.getElementById("input-import-nsec") as HTMLInputElement | null;
+    const btnImport = document.getElementById("btn-confirm-import-key");
+    const btnGenerate = document.getElementById("btn-generate-new-key");
+
+    userBadge?.addEventListener("click", () => this.openSettings("profile"));
+
+    tabInfo?.addEventListener("click", () => {
+      tabInfo.classList.add("active");
+      tabKeys?.classList.remove("active");
+      if (paneInfo) paneInfo.style.display = "flex";
+      if (paneKeys) paneKeys.style.display = "none";
+    });
+
+    tabKeys?.addEventListener("click", () => {
+      tabKeys.classList.add("active");
+      tabInfo?.classList.remove("active");
+      if (paneKeys) paneKeys.style.display = "flex";
+      if (paneInfo) paneInfo.style.display = "none";
+    });
+
+    btnSave?.addEventListener("click", async () => {
+      if (!btnSave) return;
+      btnSave.disabled = true;
+      btnSave.textContent = "Signing & Publishing (kind 0)...";
+      try {
+        const metadata: Record<string, any> = {};
+        const inputName = document.getElementById("input-profile-name") as HTMLInputElement | null;
+        const inputDName = document.getElementById("input-profile-display-name") as HTMLInputElement | null;
+        const inputAbout = document.getElementById("input-profile-about") as HTMLTextAreaElement | null;
+        const inputPic = document.getElementById("input-profile-picture") as HTMLInputElement | null;
+        const inputNip05 = document.getElementById("input-profile-nip05") as HTMLInputElement | null;
+        const inputLud16 = document.getElementById("input-profile-lud16") as HTMLInputElement | null;
+
+        if (inputName?.value.trim()) metadata.name = inputName.value.trim();
+        if (inputDName?.value.trim()) metadata.display_name = inputDName.value.trim();
+        if (inputAbout?.value.trim()) metadata.about = inputAbout.value.trim();
+        if (inputPic?.value.trim()) metadata.picture = inputPic.value.trim();
+        if (inputNip05?.value.trim()) metadata.nip05 = inputNip05.value.trim();
+        if (inputLud16?.value.trim()) metadata.lud16 = inputLud16.value.trim();
+
+        await this.kernel.publishProfile(metadata);
+        await this.updateProfileUi();
+        btnSave.textContent = "Profile Saved & Published!";
+        setTimeout(() => {
+          btnSave.disabled = false;
+          btnSave.textContent = "Save & Publish Profile (kind 0)";
+        }, 1800);
+      } catch (err: any) {
+        console.error("Failed to publish profile:", err);
+        alert(`Failed to publish profile: ${err.message || String(err)}`);
+        btnSave.disabled = false;
+        btnSave.textContent = "Save & Publish Profile (kind 0)";
+      }
+    });
+
+    const copyText = async (val: string, btn: HTMLButtonElement | null) => {
+      if (!btn) return;
+      try {
+        await navigator.clipboard.writeText(val);
+        const prev = btn.textContent;
+        btn.textContent = "Copied!";
+        setTimeout(() => {
+          btn.textContent = prev;
+        }, 1200);
+      } catch {
+        window.prompt("Copy:", val);
+      }
+    };
+
+    btnCopyNpub?.addEventListener("click", () => {
+      const val = (document.getElementById("profile-keys-npub") as HTMLInputElement)?.value || "";
+      copyText(val, btnCopyNpub);
+    });
+    btnCopyHex?.addEventListener("click", () => {
+      const val = (document.getElementById("profile-keys-hex") as HTMLInputElement)?.value || "";
+      copyText(val, btnCopyHex);
+    });
+    btnCopyNsec?.addEventListener("click", () => {
+      const val = (document.getElementById("profile-keys-nsec") as HTMLInputElement)?.value || "";
+      copyText(val, btnCopyNsec);
+    });
+
+    btnRevealNsec?.addEventListener("click", () => {
+      if (!wrapperNsec || !inputNsec || !btnRevealNsec) return;
+      if (wrapperNsec.style.display === "flex") {
+        wrapperNsec.style.display = "none";
+        inputNsec.value = "";
+        btnRevealNsec.textContent = "Reveal Private Key";
+        return;
+      }
+      if (!window.confirm("⚠️ WARNING: Never share your private key!\nReveal private key?")) return;
+      inputNsec.value = this.kernel.getNsec();
+      wrapperNsec.style.display = "flex";
+      btnRevealNsec.textContent = "Hide Private Key";
+    });
+
+    btnImport?.addEventListener("click", async () => {
+      const val = inputImport?.value.trim();
+      if (!val) {
+        alert("Enter private key (nsec1... or hex)");
+        return;
+      }
+      try {
+        const decoded = WebCryptoKeystore.decodeKey(val);
+        if ((decoded.type !== "nsec" && decoded.type !== "hex") || !decoded.hex) {
+          alert("Identifier is not a private key.");
+          return;
+        }
+        if (!window.confirm("Switch to this Nostr account?")) return;
+        this.kernel.switchPrivateKey(decoded.hex);
+        localStorage.setItem("omni_privkey", decoded.hex);
+        if (inputImport) inputImport.value = "";
+        await this.updateProfileUi();
+        if (wrapperNsec) wrapperNsec.style.display = "none";
+        if (inputNsec) inputNsec.value = "";
+        if (btnRevealNsec) btnRevealNsec.textContent = "Reveal Private Key";
+        alert("Identity switched successfully!");
+      } catch (err: any) {
+        alert(`Failed to import key: ${err.message || String(err)}`);
+      }
+    });
+
+    btnGenerate?.addEventListener("click", async () => {
+      if (!window.confirm("Generate fresh Nostr keypair?")) return;
+      const freshHex = WebCryptoKeystore.generatePrivateKey();
+      this.kernel.switchPrivateKey(freshHex);
+      localStorage.setItem("omni_privkey", freshHex);
+      await this.updateProfileUi();
+      if (wrapperNsec) wrapperNsec.style.display = "none";
+      if (inputNsec) inputNsec.value = "";
+      if (btnRevealNsec) btnRevealNsec.textContent = "Reveal Private Key";
+      alert("New Nostr keypair generated!");
+    });
+  }
+
+  private wireRelaysManager(): void {
+    const inputAdd = document.getElementById("input-add-relay") as HTMLInputElement | null;
+    const btnAdd = document.getElementById("btn-add-relay");
+    btnAdd?.addEventListener("click", () => {
+      let url = inputAdd?.value.trim();
+      if (!url) return;
+      if (!url.startsWith("wss://") && !url.startsWith("ws://")) {
+        url = `wss://${url}`;
+      }
+      this.kernel.relayPool.addRelay(url);
+      if (inputAdd) inputAdd.value = "";
+      this.renderSettingsRelays();
+    });
+
+    document.querySelectorAll(".relay-preset-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const url = btn.getAttribute("data-url");
+        if (url) {
+          this.kernel.relayPool.addRelay(url);
+          this.renderSettingsRelays();
+        }
+      });
+    });
+  }
+
+  private wirePluginConfig(): void {
+    const btnSaveTimer = document.getElementById("btn-save-timer-cfg");
+    const btnClearTasks = document.getElementById("btn-clear-completed-tasks");
+    const cfgLimit = document.getElementById("cfg-feed-limit") as HTMLInputElement | null;
+
+    btnSaveTimer?.addEventListener("click", async () => {
+      const work = parseInt((document.getElementById("cfg-timer-work") as HTMLInputElement)?.value || "25", 10);
+      const shortBreak = parseInt((document.getElementById("cfg-timer-break") as HTMLInputElement)?.value || "5", 10);
+      const longBreak = parseInt((document.getElementById("cfg-timer-long-break") as HTMLInputElement)?.value || "15", 10);
+      const cfg = { work, shortBreak, longBreak };
+
+      localStorage.setItem("omni_timer_config", JSON.stringify(cfg));
+      await this.kernel.storageManager.set("org.omni.plugin.timer", "timer_config", cfg);
+
+      if (btnSaveTimer) {
+        btnSaveTimer.textContent = "Saved!";
+        setTimeout(() => {
+          btnSaveTimer.textContent = "Save Timer Settings";
+        }, 1500);
+      }
+    });
+
+    btnClearTasks?.addEventListener("click", async () => {
+      try {
+        const tasksRaw = await this.kernel.storageManager.get("org.omni.plugin.checklist", "checklist_tasks");
+        if (Array.isArray(tasksRaw)) {
+          const active = (tasksRaw as any[]).filter((t: any) => !t.done);
+          await this.kernel.storageManager.set("org.omni.plugin.checklist", "checklist_tasks", active);
+        }
+        if (btnClearTasks) {
+          btnClearTasks.textContent = "Completed Tasks Cleared!";
+          setTimeout(() => {
+            btnClearTasks.textContent = "Clear Completed Tasks";
+          }, 1500);
+        }
+      } catch (err) {
+        console.error("Failed to clear tasks:", err);
+      }
+    });
+
+    cfgLimit?.addEventListener("change", () => {
+      if (cfgLimit) {
+        localStorage.setItem("omni_feed_limit", cfgLimit.value);
+      }
+    });
+  }
+}

@@ -23,6 +23,9 @@ importers:
       '@omni/plugin-checklist':
         specifier: workspace:*
         version: link:../../packages/plugins/checklist
+      '@omni/plugin-shell':
+        specifier: workspace:*
+        version: link:../../packages/plugins/shell
       '@omni/plugin-timer':
         specifier: workspace:*
         version: link:../../packages/plugins/timer
@@ -106,6 +109,25 @@ importers:
       '@omni/types':
         specifier: workspace:*
         version: link:../../types
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/plugins/shell:
+    dependencies:
+      '@omni/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@omni/types':
+        specifier: workspace:*
+        version: link:../../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.4
+      fake-indexeddb:
+        specifier: ^6.0.0
+        version: 6.2.5
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

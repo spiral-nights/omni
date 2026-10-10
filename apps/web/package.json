@@ -10,6 +10,7 @@
   "dependencies": {
     "@omni/core": "workspace:*",
     "@omni/types": "workspace:*",
+    "@omni/plugin-shell": "workspace:*",
     "@omni/plugin-checklist": "workspace:*",
     "@omni/plugin-timer": "workspace:*",
     "@remote-dom/core": "^1.12.0"

@@ -1,0 +1,20 @@
+{
+  "name": "@omni/plugin-shell",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@omni/core": "workspace:*",
+    "@omni/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "fake-indexeddb": "^6.0.0",
+    "typescript": "^5.7.0"
+  }
+}

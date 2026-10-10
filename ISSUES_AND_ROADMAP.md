@@ -16,7 +16,7 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
 |  [MILESTONE 1]  [COMPLETED] Transparent APIs: Virtual WebSocket & NIP-07 Shim         |
 |  [MILESTONE 2]  [COMPLETED] Subscription Namespacing & Cache Isolation                |
 |  [MILESTONE 3]  [COMPLETED] Zero-Manifest Pure nsite Loader (kind 35129)              |
-|  [MILESTONE 4]  Decouple Shell UI into @omni/plugin-shell                             |
+|  [MILESTONE 4]  [COMPLETED] Decouple Shell UI into @omni/plugin-shell                 |
 |  [MILESTONE 5]  User-Defined Viewports (Decoupling "Slots" from Developers)           |
 |  [MILESTONE 6]  Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share)            |
 +---------------------------------------------------------------------------------------+
@@ -50,12 +50,13 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
   3. **Standalone Companion Widgets:** [Done] Companion widgets are published as their own standalone nsites with their own `naddr` (e.g., `chess-game` vs `chess-widget`), maintaining 100% web compatibility with zero custom schemas.
 * **Priority:** High / P1
 
-### Milestone 4: Decouple Shell UI into `@omni/plugin-shell`
+### ~~Milestone 4: Decouple Shell UI into `@omni/plugin-shell`~~ [COMPLETED]
 * **Goal:** Remove all hardcoded UI markup from `apps/web/index.html`.
+* **Status:** Complete (Extracted `@omni/plugin-shell` with dynamic DOM rendering, unified settings modal, visual layout configurator, inspector, and install modals; reduced `apps/web/index.html` to a 15-line bootloader and `main.ts` to a 95-line microkernel).
 * **Scope:**
-  1. **Minimal Host Bootloader:** Reduce `apps/web/index.html` to a ~30-line skeleton with `<div id="omni-root"></div>`.
-  2. **Extract `@omni/plugin-shell`:** Create a standalone shell package implementing the header, dock, view router, Settings modal, and Visual Layout Configurator.
-  3. **Microkernel Host (`apps/web/src/main.ts`):** Host strictly boots `OmniKernel`, loads the active shell plugin, and delegates the UI frame.
+  1. **Minimal Host Bootloader:** [Done] Reduced `apps/web/index.html` to a ~15-line skeleton with `<div id="omni-root"></div>`.
+  2. **Extract `@omni/plugin-shell`:** [Done] Created standalone package `packages/plugins/shell` (`OmniShell`) implementing the header, navigation dock, view router, Settings modal (profile, relays, layout, plugins, config), and inspector/install dialogs.
+  3. **Microkernel Host (`apps/web/src/main.ts`):** [Done] Host strictly boots `OmniKernel`, instantiates `OmniShell` on `#omni-root`, mounts plugins via `shell.getSlotContainers()`, and delegates the UI frame.
 * **Priority:** High / P1
 
 ### Milestone 5: User-Defined Viewports (Deconstructing "Slots")
