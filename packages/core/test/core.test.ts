@@ -63,6 +63,23 @@ describe("WebCryptoKeystore", () => {
     keystore.setPrivateKey(nsec);
     expect(keystore.getPrivateKey()).toBe(privHex);
   });
+
+  it("encrypts and decrypts NIP-04 direct messages", async () => {
+    const alice = new WebCryptoKeystore();
+    const bob = new WebCryptoKeystore();
+
+    const alicePub = await alice.getPublicKey();
+    const bobPub = await bob.getPublicKey();
+
+    const plaintext = "Secret nostr message for Bob's eyes only!";
+    const encrypted = await alice.nip04Encrypt(bobPub, plaintext);
+
+    expect(encrypted).toContain("?iv=");
+    expect(encrypted).not.toBe(plaintext);
+
+    const decrypted = await bob.nip04Decrypt(alicePub, encrypted);
+    expect(decrypted).toBe(plaintext);
+  });
 });
 
 describe("LocalEventStore", () => {

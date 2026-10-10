@@ -57,6 +57,10 @@ export class SubscriptionCoordinator {
       }
     );
 
+    if (this.relayPool.getAllRelays().length === 0 && onEose) {
+      queueMicrotask(() => onEose());
+    }
+
     return () => {
       unsubscribeRelays();
       seenEventIds.clear();

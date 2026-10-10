@@ -218,7 +218,8 @@ export class SandboxInstance {
                 accent: "#d4a373"
               }
             },
-            slots: Array.from(this.options.slotContainers.keys())
+            slots: Array.from(this.options.slotContainers.keys()),
+            components: this.manifest.components?.map(c => c.id) || ["main"]
           }
         };
 

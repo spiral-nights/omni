@@ -11,18 +11,61 @@
   const rpcPending = new Map();
   let rpcIdCounter = 1;
 
-  // Active subscription listeners
+  // Active subscription listeners (for window.omni.nostr.subscribe)
   const subscriptions = new Map();
+  // Virtual WebSocket subscriptions (subId -> VirtualWebSocket)
+  const wsActiveSubscriptions = new Map();
   // Intent handlers
   const intentHandlers = new Map();
   // Component registrations and instances
   const registeredComponents = new Map();
   const componentContexts = new Map();
 
-  // 1. Listen for Handshake from Host
+  // 1. Transparent LocalStorage Shim (handles sandboxed opaque origin restrictions)
+  try {
+    window.localStorage.getItem("__omni_probe__");
+  } catch (_) {
+    const memoryStore = new Map();
+    const storageShim = {
+      getItem(key) {
+        return memoryStore.has(String(key)) ? memoryStore.get(String(key)) : null;
+      },
+      setItem(key, value) {
+        const k = String(key);
+        const v = String(value);
+        memoryStore.set(k, v);
+        initPromise.then(() => callRpc("storage.set", { key: k, value: v }).catch(() => {}));
+      },
+      removeItem(key) {
+        const k = String(key);
+        memoryStore.delete(k);
+        initPromise.then(() => callRpc("storage.delete", { key: k }).catch(() => {}));
+      },
+      clear() {
+        memoryStore.clear();
+        initPromise.then(() => callRpc("storage.clear").catch(() => {}));
+      },
+      key(i) {
+        return Array.from(memoryStore.keys())[i] || null;
+      },
+      get length() {
+        return memoryStore.size;
+      }
+    };
+    try {
+      Object.defineProperty(window, "localStorage", {
+        value: storageShim,
+        configurable: true,
+        enumerable: true
+      });
+    } catch (_) {}
+  }
+
+  // 2. Listen for Handshake from Host
   window.addEventListener("message", (event) => {
     const data = event.data;
     if (data && data.type === "omni:init") {
+      sessionInfo = data.payload;
       portRemoteDom = event.ports ? event.ports[0] : null;
       portKernelRpc = event.ports ? event.ports[1] : null;
 
@@ -35,10 +78,17 @@
       for (const [id, renderFn] of registeredComponents.entries()) {
         mountComponent(id, renderFn);
       }
+
+      // If no components were explicitly registered via omni.registerComponent, auto-mount DOM
+      setTimeout(() => {
+        if (registeredComponents.size === 0) {
+          setupDomAutoMount();
+        }
+      }, 0);
     }
   });
 
-  // 2. Kernel RPC Communication
+  // 3. Kernel RPC Communication
   function setupKernelRpc() {
     if (!portKernelRpc) return;
     portKernelRpc.onmessage = (event) => {
@@ -59,17 +109,45 @@
 
       // Handle Notifications (Streaming events)
       if (msg.method === "nostr.stream.event") {
-        const sub = subscriptions.get(msg.params.subscriptionId);
+        const subId = msg.params.subscriptionId;
+
+        // Check window.omni subscriptions
+        const sub = subscriptions.get(subId);
         if (sub && sub.onEvent) {
           sub.onEvent(msg.params.event, {
             fromCache: msg.params.fromCache,
             relay: msg.params.relay
           });
         }
+
+        // Check Virtual WebSocket subscriptions
+        const ws = wsActiveSubscriptions.get(subId);
+        if (ws) {
+          const frame = JSON.stringify(["EVENT", subId, msg.params.event]);
+          const ev = new MessageEvent("message", { data: frame });
+          if (typeof ws.onmessage === "function") {
+            try { ws.onmessage(ev); } catch (e) { console.error(e); }
+          }
+          ws.dispatchEvent(ev);
+        }
       } else if (msg.method === "nostr.stream.eose") {
-        const sub = subscriptions.get(msg.params.subscriptionId);
+        const subId = msg.params.subscriptionId;
+
+        // Check window.omni subscriptions
+        const sub = subscriptions.get(subId);
         if (sub && sub.onEose) {
           sub.onEose();
+        }
+
+        // Check Virtual WebSocket subscriptions
+        const ws = wsActiveSubscriptions.get(subId);
+        if (ws) {
+          const frame = JSON.stringify(["EOSE", subId]);
+          const ev = new MessageEvent("message", { data: frame });
+          if (typeof ws.onmessage === "function") {
+            try { ws.onmessage(ev); } catch (e) { console.error(e); }
+          }
+          ws.dispatchEvent(ev);
         }
       }
     };
@@ -88,7 +166,127 @@
     });
   }
 
-  // 3. Remote DOM Component Engine
+  // 4. Virtual WebSocket for Transparent Nostr Relay Connections
+  class VirtualWebSocket extends EventTarget {
+    static CONNECTING = 0;
+    static OPEN = 1;
+    static CLOSING = 2;
+    static CLOSED = 3;
+
+    CONNECTING = 0;
+    OPEN = 1;
+    CLOSING = 2;
+    CLOSED = 3;
+
+    constructor(url, protocols) {
+      super();
+      this.url = String(url || "");
+      this.protocols = protocols;
+      this.readyState = VirtualWebSocket.CONNECTING;
+      this.bufferedAmount = 0;
+      this.binaryType = "blob";
+      this.onopen = null;
+      this.onmessage = null;
+      this.onerror = null;
+      this.onclose = null;
+
+      this._subscriptions = new Set();
+
+      initPromise.then(() => {
+        if (this.readyState === VirtualWebSocket.CONNECTING) {
+          this.readyState = VirtualWebSocket.OPEN;
+          const openEv = new Event("open");
+          if (typeof this.onopen === "function") {
+            try { this.onopen(openEv); } catch (e) { console.error(e); }
+          }
+          this.dispatchEvent(openEv);
+        }
+      });
+    }
+
+    send(data) {
+      if (this.readyState !== VirtualWebSocket.OPEN && this.readyState !== VirtualWebSocket.CONNECTING) {
+        throw new Error("WebSocket is not open: readyState " + this.readyState);
+      }
+
+      initPromise.then(async () => {
+        let frame;
+        try {
+          frame = typeof data === "string" ? JSON.parse(data) : null;
+        } catch (_) {}
+
+        if (Array.isArray(frame)) {
+          const type = frame[0];
+          if (type === "REQ") {
+            const subId = frame[1];
+            const filters = frame.slice(2);
+            this._subscriptions.add(subId);
+            wsActiveSubscriptions.set(subId, this);
+
+            try {
+              await callRpc("nostr.subscribe", { subscriptionId: subId, filters });
+            } catch (err) {
+              const noticeEv = new MessageEvent("message", {
+                data: JSON.stringify(["NOTICE", "Subscription error: " + (err.message || "Unknown error")])
+              });
+              if (typeof this.onmessage === "function") this.onmessage(noticeEv);
+              this.dispatchEvent(noticeEv);
+            }
+          } else if (type === "CLOSE") {
+            const subId = frame[1];
+            this._subscriptions.delete(subId);
+            wsActiveSubscriptions.delete(subId);
+            await callRpc("nostr.unsubscribe", { subscriptionId: subId });
+          } else if (type === "EVENT") {
+            const event = frame[1];
+            try {
+              await callRpc("nostr.publish", { event });
+              const okEv = new MessageEvent("message", {
+                data: JSON.stringify(["OK", event?.id || "", true, ""])
+              });
+              if (typeof this.onmessage === "function") this.onmessage(okEv);
+              this.dispatchEvent(okEv);
+            } catch (err) {
+              const okEv = new MessageEvent("message", {
+                data: JSON.stringify(["OK", event?.id || "", false, err.message || "Publish failed"])
+              });
+              if (typeof this.onmessage === "function") this.onmessage(okEv);
+              this.dispatchEvent(okEv);
+            }
+          }
+        }
+      });
+    }
+
+    close(code, reason) {
+      if (this.readyState === VirtualWebSocket.CLOSED) return;
+      this.readyState = VirtualWebSocket.CLOSING;
+
+      for (const subId of this._subscriptions) {
+        wsActiveSubscriptions.delete(subId);
+        callRpc("nostr.unsubscribe", { subscriptionId: subId }).catch(() => {});
+      }
+      this._subscriptions.clear();
+
+      this.readyState = VirtualWebSocket.CLOSED;
+      const closeEv = new CloseEvent("close", {
+        code: code || 1000,
+        reason: reason || "Normal Closure",
+        wasClean: true
+      });
+      if (typeof this.onclose === "function") {
+        try { this.onclose(closeEv); } catch (e) { console.error(e); }
+      }
+      this.dispatchEvent(closeEv);
+    }
+  }
+
+  window.WebSocket = VirtualWebSocket;
+  if (typeof globalThis !== "undefined") {
+    globalThis.WebSocket = VirtualWebSocket;
+  }
+
+  // 5. Remote DOM Component Engine
   class RemoteDomContext {
     constructor(componentId) {
       this.componentId = componentId;
@@ -98,7 +296,7 @@
       this.mutationQueue = [];
       this.flushTimeout = null;
 
-      // Root element with id "0"
+      // Root element with id "~"
       this.root = this.createRootElement();
     }
 
@@ -345,7 +543,7 @@
           if (!this._listeners.has(event)) {
             this._listeners.set(event, new Set());
             if (this.id !== "~" && this.isConnected()) {
-              // Inform host to listen to this event: Mutation 3 with updateType 3 (UPDATE_PROPERTY_TYPE_EVENT_LISTENER = 3)
+              // Mutation 3 with updateType 3 (UPDATE_PROPERTY_TYPE_EVENT_LISTENER = 3)
               self.sendMutation([3, this.id, event, true, 3]);
             }
           }
@@ -476,7 +674,161 @@
     }
   }
 
-  // 4. Standard NIP-07 (window.nostr)
+  // 6. Transparent DOM Auto-Mount for Pure nsites
+  function setupDomAutoMount() {
+    if (registeredComponents.size > 0) return;
+
+    const compId = (sessionInfo && sessionInfo.components && sessionInfo.components[0]) ||
+                   (sessionInfo && sessionInfo.slots && sessionInfo.slots[0]) ||
+                   "main";
+
+    let ctx = componentContexts.get(compId);
+    if (!ctx) {
+      ctx = new RemoteDomContext(compId);
+      componentContexts.set(compId, ctx);
+    }
+
+    const nativeToRemote = new WeakMap();
+    const remoteIdToNative = new Map();
+
+    function mirrorNode(nativeNode) {
+      if (!nativeNode) return null;
+      if (nativeToRemote.has(nativeNode)) return nativeToRemote.get(nativeNode);
+
+      if (nativeNode.nodeType === 3) {
+        if (nativeNode.parentNode && (nativeNode.parentNode.nodeName === "SCRIPT" || nativeNode.parentNode.nodeName === "STYLE")) {
+          return null;
+        }
+        const remoteText = ctx.root.createTextNode(nativeNode.data || "");
+        nativeToRemote.set(nativeNode, remoteText);
+        remoteIdToNative.set(remoteText.id, nativeNode);
+        return remoteText;
+      }
+
+      if (nativeNode.nodeType === 1) {
+        const tag = nativeNode.tagName.toLowerCase();
+        if (tag === "script" || tag === "style" || tag === "link") return null;
+
+        const remoteEl = ctx.root.createElement(tag);
+        nativeToRemote.set(nativeNode, remoteEl);
+        remoteIdToNative.set(remoteEl.id, nativeNode);
+
+        if (nativeNode.attributes) {
+          for (let i = 0; i < nativeNode.attributes.length; i++) {
+            const attr = nativeNode.attributes[i];
+            remoteEl.setAttribute(attr.name, attr.value);
+          }
+        }
+
+        // Auto-register common interactive listeners
+        if (["button", "input", "textarea", "select", "a"].includes(tag) || nativeNode.hasAttribute("onclick")) {
+          remoteEl.addEventListener("click", () => {});
+          remoteEl.addEventListener("input", () => {});
+          remoteEl.addEventListener("change", () => {});
+        }
+
+        for (const child of nativeNode.childNodes) {
+          const remoteChild = mirrorNode(child);
+          if (remoteChild) {
+            remoteEl.appendChild(remoteChild);
+          }
+        }
+
+        return remoteEl;
+      }
+
+      return null;
+    }
+
+    // Mirror current body contents
+    const targetRoot = document.getElementById("root") || document.body;
+    if (targetRoot === document.body) {
+      for (const child of document.body.childNodes) {
+        const remoteChild = mirrorNode(child);
+        if (remoteChild) {
+          ctx.root.appendChild(remoteChild);
+        }
+      }
+    } else {
+      const remoteRoot = mirrorNode(targetRoot);
+      if (remoteRoot) {
+        ctx.root.appendChild(remoteRoot);
+      }
+    }
+
+    // Intercept host events and dispatch to native DOM element
+    const origHandleHostEvent = ctx.handleHostEvent.bind(ctx);
+    ctx.handleHostEvent = function(id, eventName, detail) {
+      origHandleHostEvent(id, eventName, detail);
+      const nativeNode = remoteIdToNative.get(String(id));
+      if (nativeNode) {
+        if (detail) {
+          if (detail.value !== undefined && "value" in nativeNode) nativeNode.value = detail.value;
+          if (detail.checked !== undefined && "checked" in nativeNode) nativeNode.checked = detail.checked;
+        }
+        let ev;
+        if (eventName === "click") {
+          ev = new MouseEvent("click", { bubbles: true, cancelable: true });
+        } else if (eventName === "input" || eventName === "change") {
+          ev = new Event(eventName, { bubbles: true, cancelable: true });
+        } else {
+          ev = new CustomEvent(eventName, { bubbles: true, cancelable: true, detail });
+        }
+        nativeNode.dispatchEvent(ev);
+      }
+    };
+
+    // Observe future native DOM mutations
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.type === "childList") {
+          const parentRemote = m.target === document.body ? ctx.root : nativeToRemote.get(m.target);
+          if (!parentRemote) continue;
+
+          for (const added of m.addedNodes) {
+            const remoteChild = mirrorNode(added);
+            if (remoteChild && !remoteChild.parentNode) {
+              parentRemote.appendChild(remoteChild);
+            }
+          }
+
+          for (const removed of m.removedNodes) {
+            const remoteChild = nativeToRemote.get(removed);
+            if (remoteChild) {
+              remoteChild.remove();
+            }
+          }
+        } else if (m.type === "attributes") {
+          const remoteEl = nativeToRemote.get(m.target);
+          if (remoteEl) {
+            const attrName = m.attributeName;
+            if (attrName) {
+              const val = m.target.getAttribute(attrName);
+              if (val === null) {
+                remoteEl.removeAttribute(attrName);
+              } else {
+                remoteEl.setAttribute(attrName, val);
+              }
+            }
+          }
+        } else if (m.type === "characterData") {
+          const remoteText = nativeToRemote.get(m.target);
+          if (remoteText) {
+            remoteText.data = m.target.data || "";
+          }
+        }
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: true
+    });
+  }
+
+  // 7. Standard NIP-07 (window.nostr)
   window.nostr = {
     async getPublicKey() {
       await initPromise;
@@ -485,10 +837,34 @@
     async signEvent(event) {
       await initPromise;
       return callRpc("nostr.signEvent", { event });
+    },
+    async getRelays() {
+      await initPromise;
+      return callRpc("nostr.getRelays");
+    },
+    nip04: {
+      async encrypt(pubkey, plaintext) {
+        await initPromise;
+        return callRpc("nostr.nip04.encrypt", { pubkey, plaintext });
+      },
+      async decrypt(pubkey, ciphertext) {
+        await initPromise;
+        return callRpc("nostr.nip04.decrypt", { pubkey, ciphertext });
+      }
+    },
+    nip44: {
+      async encrypt(pubkey, plaintext) {
+        await initPromise;
+        return callRpc("nostr.nip44.encrypt", { pubkey, plaintext });
+      },
+      async decrypt(pubkey, ciphertext) {
+        await initPromise;
+        return callRpc("nostr.nip44.decrypt", { pubkey, ciphertext });
+      }
     }
   };
 
-  // 5. Injected window.omni API
+  // 8. Injected window.omni API (Full backward compatibility)
   window.omni = {
     get session() {
       return sessionInfo;
@@ -591,7 +967,6 @@
         });
       },
       on(event, listener) {
-        // Local listener
         return () => {};
       }
     },

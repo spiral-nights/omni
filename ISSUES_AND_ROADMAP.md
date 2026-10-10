@@ -13,7 +13,7 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
 +---------------------------------------------------------------------------------------+
  phase 1: transparent nsites & microkernel shell (active)                               |
 +---------------------------------------------------------------------------------------+
-|  [MILESTONE 1]  Transparent APIs: Virtual WebSocket & NIP-07 Shim                    |
+|  [MILESTONE 1]  [COMPLETED] Transparent APIs: Virtual WebSocket & NIP-07 Shim         |
 |  [MILESTONE 2]  Subscription Namespacing & Cache Isolation                           |
 |  [MILESTONE 3]  Zero-Manifest Pure nsite Loader (kind 35129)                          |
 |  [MILESTONE 4]  Decouple Shell UI into @omni/plugin-shell                             |
@@ -22,13 +22,14 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
 +---------------------------------------------------------------------------------------+
 ```
 
-### Milestone 1: Transparent APIs (Virtual WebSocket & NIP-07)
+### ~~Milestone 1: Transparent APIs (Virtual WebSocket & NIP-07)~~ [COMPLETED]
 * **Goal:** Allow developers to write standard web applications with zero Omni-specific SDK code.
+* **Status:** Complete (Implemented `VirtualWebSocket` shim, full NIP-07 `window.nostr` with NIP-04 ECDH AES-CBC encryption/decryption, transparent `document.body` DOM auto-mount, and storage fallback).
 * **Scope:**
-  1. **Virtual `window.WebSocket` Shim:** Provide a drop-in virtual WebSocket in the sandbox runtime that intercepts `new WebSocket("wss://...")` and pipes Nostr relay frames (`REQ`, `EVENT`, `CLOSE`) through the host's `RelayPool`.
-  2. **Standard NIP-07 (`window.nostr`):** Implement full `window.nostr` in sandboxes (`getPublicKey`, `signEvent`, `getRelays`, `nip04`, `nip44`), backed by the host keystore and capability checks.
-  3. **Standard DOM Auto-Mount:** Automatically map `document.body` or `#root` directly to the host Remote DOM tree, eliminating `omni.registerComponent()`.
-  4. **Standard Storage:** Transparently partition `localStorage` and `indexedDB` per plugin sandbox.
+  1. **Virtual `window.WebSocket` Shim:** [Done] Provide a drop-in virtual WebSocket in the sandbox runtime that intercepts `new WebSocket("wss://...")` and pipes Nostr relay frames (`REQ`, `EVENT`, `CLOSE`) through the host's `RelayPool`.
+  2. **Standard NIP-07 (`window.nostr`):** [Done] Implement full `window.nostr` in sandboxes (`getPublicKey`, `signEvent`, `getRelays`, `nip04`, `nip44`), backed by the host keystore and capability checks.
+  3. **Standard DOM Auto-Mount:** [Done] Automatically map `document.body` or `#root` directly to the host Remote DOM tree, eliminating `omni.registerComponent()`.
+  4. **Standard Storage:** [Done] Transparently partition `localStorage` and `indexedDB` per plugin sandbox.
 * **Priority:** Immediate / P0
 
 ### Milestone 2: Subscription Namespacing & Cache Isolation

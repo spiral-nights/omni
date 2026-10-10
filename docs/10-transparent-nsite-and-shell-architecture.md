@@ -284,11 +284,11 @@ graph TD
 
 ### Milestone Checklist
 
-- [ ] **Milestone 1: Virtual WebSocket & NIP-07 Shim**
-  - Implement Virtual `window.WebSocket` class in `apps/web/public/omni-runtime.js` and `default-runtime.ts`.
-  - Connect Virtual WebSocket `send()` to kernel RPC methods (`nostr.subscribe`, `nostr.publish`).
-  - Implement standard NIP-07 `window.nostr` (`getPublicKey`, `signEvent`, `getRelays`, `nip04`, `nip44`).
-  - Support `document.body` auto-mount into Remote DOM root.
+- [x] **Milestone 1: Virtual WebSocket & NIP-07 Shim**
+  - [x] Implement Virtual `window.WebSocket` class in `apps/web/public/omni-runtime.js` and `default-runtime.ts`.
+  - [x] Connect Virtual WebSocket `send()` to kernel RPC methods (`nostr.subscribe`, `nostr.publish`).
+  - [x] Implement standard NIP-07 `window.nostr` (`getPublicKey`, `signEvent`, `getRelays`, `nip04`, `nip44`).
+  - [x] Support `document.body` auto-mount into Remote DOM root.
 
 - [ ] **Milestone 2: Subscription & Cache Isolation**
   - Add subscription namespacing (`${pluginId}:${subId}`) in `SubscriptionCoordinator` and `RelayPool`.

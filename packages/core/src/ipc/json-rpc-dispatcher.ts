@@ -188,6 +188,52 @@ export class JsonRpcDispatcher {
         return { subscriptionId: subId, status: "unsubscribed" };
       }
 
+      // 5b. Nostr Get Relays (NIP-07)
+      case "nostr.getRelays": {
+        const relays = this.ctx.relayPool.getAllRelays();
+        const map: Record<string, { read: boolean; write: boolean }> = {};
+        for (const r of relays) {
+          map[r.url] = { read: true, write: true };
+        }
+        return map;
+      }
+
+      // 5c. Nostr NIP-04 Encrypt/Decrypt
+      case "nostr.nip04.encrypt": {
+        const pubkey = params?.pubkey;
+        const plaintext = params?.plaintext;
+        if (!pubkey || plaintext === undefined) {
+          throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing pubkey or plaintext" };
+        }
+        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "nostr:sign");
+        if (!allowed) {
+          throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for nostr:sign" };
+        }
+        return this.ctx.keystore.nip04Encrypt(pubkey, String(plaintext));
+      }
+
+      case "nostr.nip04.decrypt": {
+        const pubkey = params?.pubkey;
+        const ciphertext = params?.ciphertext;
+        if (!pubkey || !ciphertext) {
+          throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing pubkey or ciphertext" };
+        }
+        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "nostr:sign");
+        if (!allowed) {
+          throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for nostr:sign" };
+        }
+        return this.ctx.keystore.nip04Decrypt(pubkey, String(ciphertext));
+      }
+
+      // 5d. Nostr NIP-44 Encrypt/Decrypt
+      case "nostr.nip44.encrypt": {
+        return this.ctx.keystore.nip44Encrypt(params?.pubkey, params?.plaintext);
+      }
+
+      case "nostr.nip44.decrypt": {
+        return this.ctx.keystore.nip44Decrypt(params?.pubkey, params?.ciphertext);
+      }
+
       // 6. Scoped Storage
       case "storage.get": {
         const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "storage:kv");

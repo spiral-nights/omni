@@ -1,4 +1,4 @@
-import { schnorr } from "@noble/curves/secp256k1";
+import { schnorr, secp256k1 } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, hexToBytes } from "@noble/curves/abstract/utils";
 import { NostrEvent, UnsignedEvent } from "@omni/types";
@@ -268,4 +268,40 @@ export class WebCryptoKeystore {
       return false;
     }
   }
+
+  async nip04Encrypt(recipientPubkey: string, plaintext: string): Promise<string> {
+    const pubHex = recipientPubkey.length === 64 ? "02" + recipientPubkey : recipientPubkey;
+    const shared = secp256k1.getSharedSecret(this.privateKeyHex, pubHex);
+    const sharedX = shared.slice(1, 33);
+    const key = await crypto.subtle.importKey("raw", sharedX, { name: "AES-CBC" }, false, ["encrypt"]);
+    const iv = crypto.getRandomValues(new Uint8Array(16));
+    const encoded = new TextEncoder().encode(plaintext);
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-CBC", iv }, key, encoded);
+    const b64Encrypted = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+    const b64Iv = btoa(String.fromCharCode(...iv));
+    return `${b64Encrypted}?iv=${b64Iv}`;
+  }
+
+  async nip04Decrypt(senderPubkey: string, ciphertext: string): Promise<string> {
+    const parts = ciphertext.split("?iv=");
+    if (parts.length !== 2) throw new Error("Invalid NIP-04 ciphertext format (missing ?iv=)");
+    const [b64Encrypted, b64Iv] = parts;
+    const pubHex = senderPubkey.length === 64 ? "02" + senderPubkey : senderPubkey;
+    const shared = secp256k1.getSharedSecret(this.privateKeyHex, pubHex);
+    const sharedX = shared.slice(1, 33);
+    const key = await crypto.subtle.importKey("raw", sharedX, { name: "AES-CBC" }, false, ["decrypt"]);
+    const iv = Uint8Array.from(atob(b64Iv), c => c.charCodeAt(0));
+    const encrypted = Uint8Array.from(atob(b64Encrypted), c => c.charCodeAt(0));
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-CBC", iv }, key, encrypted);
+    return new TextDecoder().decode(decrypted);
+  }
+
+  async nip44Encrypt(_recipientPubkey: string, _plaintext: string): Promise<string> {
+    throw new Error("NIP-44 encryption will be available in Phase 2");
+  }
+
+  async nip44Decrypt(_senderPubkey: string, _ciphertext: string): Promise<string> {
+    throw new Error("NIP-44 decryption will be available in Phase 2");
+  }
 }
+
