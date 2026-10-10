@@ -23,6 +23,7 @@ export class RelayPool {
   constructor(options: RelayPoolOptions = {}) {
     this.bootstrapUrls = options.bootstrapRelays || [
       "wss://relay.damus.io",
+      "wss://relay.ditto.pub",
       "wss://nos.lol",
       "wss://relay.nostr.band"
     ];

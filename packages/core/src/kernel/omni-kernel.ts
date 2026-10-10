@@ -1,4 +1,4 @@
-import { OmniManifest, NostrEvent, NostrFilter, EventMetadata } from "@omni/types";
+import { OmniManifest, NostrEvent, NostrFilter, EventMetadata, OmniWorkspaceState, OMNI_WORKSPACE_D_TAG } from "@omni/types";
 import { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import { LocalEventStore } from "../nostr/event-store.js";
 import { RelayPool } from "../nostr/relay-pool.js";
@@ -266,6 +266,117 @@ export class OmniKernel {
     onEose?: () => void
   ): Promise<() => void> {
     return this.subscriptionCoordinator.subscribe(subId, filters, onEvent, onEose);
+  }
+
+  // --- NIP-78: Arbitrary Custom App Data & Workspace Sync ---
+
+  async publishAppData(identifier: string, data: any, extraTags: string[][] = []): Promise<NostrEvent> {
+    const pubkey = await this.getUserPubkey();
+    const content = typeof data === "string" ? data : JSON.stringify(data);
+    const draft = {
+      kind: 30078,
+      content,
+      tags: [["d", identifier], ["client", "omni"], ...extraTags],
+      created_at: Math.floor(Date.now() / 1000)
+    };
+
+    const signed = await this.keystore.signEvent(draft);
+    await this.eventStore.saveEvent(signed);
+    await this.relayPool.publish(signed);
+    return signed;
+  }
+
+  async getAppData<T = any>(identifier: string, pubkey?: string): Promise<{ data: T; event: NostrEvent } | null> {
+    const targetPubkey = pubkey || (await this.getUserPubkey());
+    const events = await this.eventStore.getEvents({
+      kinds: [30078],
+      authors: [targetPubkey],
+      "#d": [identifier],
+      limit: 1
+    });
+
+    if (events.length > 0) {
+      try {
+        const parsed = JSON.parse(events[0].content);
+        return { data: parsed as T, event: events[0] };
+      } catch {
+        return { data: events[0].content as unknown as T, event: events[0] };
+      }
+    }
+    return null;
+  }
+
+  async fetchRemoteAppData<T = any>(
+    identifier: string,
+    pubkey?: string,
+    timeoutMs = 3000
+  ): Promise<{ data: T; event: NostrEvent } | null> {
+    const targetPubkey = pubkey || (await this.getUserPubkey());
+    const filter: NostrFilter = {
+      kinds: [30078],
+      authors: [targetPubkey],
+      "#d": [identifier],
+      limit: 1
+    };
+
+    return new Promise((resolve) => {
+      let resolved = false;
+      let latestEvent: NostrEvent | null = null;
+
+      const finish = async () => {
+        if (resolved) return;
+        resolved = true;
+        unsubscribe();
+        if (latestEvent) {
+          await this.eventStore.saveEvent(latestEvent);
+          try {
+            const parsed = JSON.parse(latestEvent.content);
+            resolve({ data: parsed as T, event: latestEvent });
+          } catch {
+            resolve({ data: latestEvent.content as unknown as T, event: latestEvent });
+          }
+        } else {
+          const local = await this.getAppData<T>(identifier, targetPubkey);
+          resolve(local);
+        }
+      };
+
+      const timer = setTimeout(finish, timeoutMs);
+
+      const subId = `nip78-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const unsubscribe = this.relayPool.subscribe(
+        subId,
+        [filter],
+        (ev) => {
+          if (!latestEvent || ev.created_at > latestEvent.created_at) {
+            latestEvent = ev;
+          }
+        },
+        () => {
+          clearTimeout(timer);
+          finish();
+        }
+      );
+    });
+  }
+
+  async publishWorkspaceState(state: OmniWorkspaceState): Promise<NostrEvent> {
+    return this.publishAppData(OMNI_WORKSPACE_D_TAG, state);
+  }
+
+  async getWorkspaceState(pubkey?: string): Promise<{ state: OmniWorkspaceState; event: NostrEvent } | null> {
+    const res = await this.getAppData<OmniWorkspaceState>(OMNI_WORKSPACE_D_TAG, pubkey);
+    if (!res) return null;
+    return { state: res.data, event: res.event };
+  }
+
+  async fetchRemoteWorkspaceState(
+    pubkey?: string,
+    timeoutMs?: number
+  ): Promise<{ state: OmniWorkspaceState; event: NostrEvent } | null> {
+    const res = await this.fetchRemoteAppData<OmniWorkspaceState>(OMNI_WORKSPACE_D_TAG, pubkey, timeoutMs);
+    if (!res) return null;
+    return { state: res.data, event: res.event };
   }
 
   async resolveNsitePlugin(target: string | NostrEvent): Promise<ResolvedNostrPlugin> {

@@ -1,4 +1,5 @@
 import { OmniKernel, WebCryptoKeystore, STANDARD_SLOTS } from "@omni/core";
+import { OmniWorkspaceState, OmniWorkspacePluginConfig, OMNI_WORKSPACE_D_TAG, NostrEvent } from "@omni/types";
 import { ICONS, icon, IconName } from "./icons.js";
 
 export interface InstalledPluginEntry {
@@ -32,6 +33,13 @@ export class OmniShell {
   private kernel: OmniKernel;
   public installedPlugins: InstalledPluginEntry[];
   private slotContainers: Map<string, Element> = new Map();
+
+  // NIP-78 Workspace sync state
+  public workspaceSyncStatus: "synced" | "unsynced" | "syncing" = "synced";
+  public lastSyncedAt: number | null = null;
+  public autoSyncNip78: boolean = true;
+  private syncDebounceTimer: any = null;
+  public readonly LOCAL_WORKSPACE_KEY = "omni_workspace_state";
 
   // Internal element references
   private mainViewport!: HTMLElement;
@@ -105,6 +113,228 @@ export class OmniShell {
         storage: { quotaMb: 5 }
       }
     };
+  }
+
+  // --- NIP-78 Workspace State Export & Import ---
+
+  public exportWorkspaceState(): OmniWorkspaceState {
+    return {
+      version: 1,
+      updatedAt: Date.now(),
+      activePage: this.getActivePageId(),
+      autoSync: this.autoSyncNip78,
+      plugins: this.installedPlugins.map((p) => {
+        const meta = this.getPluginMeta(p);
+        return {
+          id: p.id,
+          viewport: meta.viewport,
+          enabled: p.enabled,
+          name: meta.name,
+          description: meta.description,
+          icon: meta.icon,
+          naddr: p.naddr,
+          sourceUrl: p.sourceUrl
+        };
+      })
+    };
+  }
+
+  private getStorage(): Storage | null {
+    try {
+      if (typeof window !== "undefined" && window.localStorage && typeof window.localStorage.getItem === "function") {
+        return window.localStorage;
+      }
+      if (typeof localStorage !== "undefined" && typeof localStorage.getItem === "function") {
+        return localStorage;
+      }
+    } catch {}
+    return null;
+  }
+
+  public saveLocalWorkspace(): void {
+    try {
+      const state = this.exportWorkspaceState();
+      const storage = this.getStorage();
+      if (storage) {
+        storage.setItem(this.LOCAL_WORKSPACE_KEY, JSON.stringify(state));
+      }
+      this.workspaceSyncStatus = "unsynced";
+      this.updateSyncUi();
+      if (this.autoSyncNip78) {
+        this.scheduleNip78Sync();
+      }
+    } catch (err) {
+      console.warn("Failed to save local workspace state:", err);
+    }
+  }
+
+  public scheduleNip78Sync(): void {
+    if (this.syncDebounceTimer) {
+      clearTimeout(this.syncDebounceTimer);
+    }
+    this.syncDebounceTimer = setTimeout(() => {
+      this.syncWorkspaceToNostr().catch((err) => {
+        console.warn("Automatic workspace sync to Nostr failed:", err);
+      });
+    }, 1200);
+  }
+
+  public applyWorkspaceState(state: OmniWorkspaceState, persistLocal = true): void {
+    if (!state || !state.plugins) return;
+
+    if (typeof state.autoSync === "boolean") {
+      this.autoSyncNip78 = state.autoSync;
+      const chk = document.getElementById("chk-auto-sync-workspace") as HTMLInputElement | null;
+      if (chk) chk.checked = this.autoSyncNip78;
+    }
+
+    for (const item of state.plugins) {
+      const plugin = this.installedPlugins.find((p) => p.id === item.id);
+      if (plugin) {
+        if (typeof item.enabled === "boolean") {
+          plugin.enabled = item.enabled;
+        }
+        if (item.viewport && item.viewport !== plugin.viewport) {
+          plugin.viewport = item.viewport;
+          const synth = this.ensurePluginManifest(plugin);
+          const primaryComp = synth.components?.[0];
+          if (primaryComp) {
+            const container = this.getContainerForPluginSlot(plugin.id, item.viewport, primaryComp.id);
+            if (container) {
+              this.kernel.reparentPluginComponent(plugin.id, primaryComp.id, item.viewport, container);
+            }
+          }
+          if (item.viewport !== "main" && item.viewport !== "dock" && plugin.id !== "org.omni.plugin.feed") {
+            const safeId = plugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+            const pageEl = document.getElementById(`page-app-${safeId}`);
+            if (pageEl) {
+              if (pageEl.classList.contains("active")) {
+                this.showPage("widgets");
+              }
+              pageEl.remove();
+            }
+          }
+        }
+      }
+    }
+
+    if (state.activePage && state.activePage !== this.getActivePageId()) {
+      this.showPage(state.activePage);
+    }
+
+    this.renderDockLaunchers();
+    this.renderPluginManager();
+
+    if (persistLocal) {
+      const storage = this.getStorage();
+      if (storage) {
+        try {
+          storage.setItem(this.LOCAL_WORKSPACE_KEY, JSON.stringify(state));
+        } catch {}
+      }
+    }
+  }
+
+  public async syncWorkspaceToNostr(): Promise<NostrEvent> {
+    this.workspaceSyncStatus = "syncing";
+    this.updateSyncUi();
+    try {
+      const state = this.exportWorkspaceState();
+      const event = await this.kernel.publishWorkspaceState(state);
+      this.workspaceSyncStatus = "synced";
+      this.lastSyncedAt = Date.now();
+      this.updateSyncUi();
+      return event;
+    } catch (err: any) {
+      this.workspaceSyncStatus = "unsynced";
+      this.updateSyncUi();
+      throw err;
+    }
+  }
+
+  public async restoreWorkspaceFromNostr(): Promise<boolean> {
+    this.workspaceSyncStatus = "syncing";
+    this.updateSyncUi();
+    try {
+      const res = await this.kernel.fetchRemoteWorkspaceState();
+      if (res && res.state) {
+        this.applyWorkspaceState(res.state, true);
+        this.workspaceSyncStatus = "synced";
+        this.lastSyncedAt = (res.event.created_at || Math.floor(Date.now() / 1000)) * 1000;
+        this.updateSyncUi();
+        return true;
+      }
+      this.workspaceSyncStatus = "synced";
+      this.updateSyncUi();
+      return false;
+    } catch (err: any) {
+      this.workspaceSyncStatus = "unsynced";
+      this.updateSyncUi();
+      throw err;
+    }
+  }
+
+  public updateSyncUi(): void {
+    const textEl = document.getElementById("workspace-sync-status-text");
+    const dotEl = document.getElementById("workspace-sync-status-dot");
+    const timeEl = document.getElementById("workspace-sync-timestamp");
+    const btnSync = document.getElementById("btn-sync-workspace") as HTMLButtonElement | null;
+    const btnRestore = document.getElementById("btn-restore-workspace") as HTMLButtonElement | null;
+
+    if (!textEl) return;
+
+    if (this.workspaceSyncStatus === "syncing") {
+      textEl.textContent = "Syncing with Nostr relays (NIP-78)...";
+      if (dotEl) dotEl.style.color = "var(--omni-text-muted)";
+      if (btnSync) btnSync.disabled = true;
+      if (btnRestore) btnRestore.disabled = true;
+    } else if (this.workspaceSyncStatus === "synced") {
+      textEl.textContent = "Synced with Nostr relays (NIP-78 kind 30078)";
+      if (dotEl) dotEl.style.color = "var(--omni-accent-primary)";
+      if (btnSync) btnSync.disabled = false;
+      if (btnRestore) btnRestore.disabled = false;
+    } else {
+      textEl.textContent = "Unsynced local changes";
+      if (dotEl) dotEl.style.color = "#f87171";
+      if (btnSync) btnSync.disabled = false;
+      if (btnRestore) btnRestore.disabled = false;
+    }
+
+    if (timeEl) {
+      if (this.lastSyncedAt) {
+        const timeStr = new Date(this.lastSyncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        timeEl.textContent = `Last synced: ${timeStr}`;
+      } else {
+        timeEl.textContent = "Not synced yet during this session";
+      }
+    }
+  }
+
+  public loadInitialWorkspace(): OmniWorkspaceState | null {
+    try {
+      const storage = this.getStorage();
+      if (!storage) return null;
+      const saved = storage.getItem(this.LOCAL_WORKSPACE_KEY);
+      if (saved) {
+        const state: OmniWorkspaceState = JSON.parse(saved);
+        if (state && state.plugins) {
+          for (const item of state.plugins) {
+            const plugin = this.installedPlugins.find((p) => p.id === item.id);
+            if (plugin) {
+              if (item.viewport) plugin.viewport = item.viewport;
+              if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
+            }
+          }
+          if (typeof state.autoSync === "boolean") {
+            this.autoSyncNip78 = state.autoSync;
+          }
+          return state;
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to parse initial workspace from localStorage:", err);
+    }
+    return null;
   }
 
   public getContainerForPluginSlot(pluginId: string, slotId: string, compId?: string): Element {
@@ -707,6 +937,7 @@ export class OmniShell {
           }
           this.renderDockLaunchers();
           this.renderPluginManager();
+          this.saveLocalWorkspace();
         }
       });
 
@@ -738,6 +969,7 @@ export class OmniShell {
     }
     this.renderDockLaunchers();
     this.renderPluginManager();
+    this.saveLocalWorkspace();
   }
 
   // --- Plugin Inspector Modal ---
@@ -1137,6 +1369,7 @@ export class OmniShell {
 
                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                   <span style="font-size: 0.72rem; color: var(--omni-text-muted);">Presets:</span>
+                  <button class="btn-secondary relay-preset-btn" data-url="wss://relay.ditto.pub" style="font-size: 0.7rem; padding: 2px 8px;">ditto.pub</button>
                   <button class="btn-secondary relay-preset-btn" data-url="wss://relay.damus.io" style="font-size: 0.7rem; padding: 2px 8px;">damus.io</button>
                   <button class="btn-secondary relay-preset-btn" data-url="wss://nos.lol" style="font-size: 0.7rem; padding: 2px 8px;">nos.lol</button>
                   <button class="btn-secondary relay-preset-btn" data-url="wss://relay.primal.net" style="font-size: 0.7rem; padding: 2px 8px;">primal.net</button>
@@ -1153,11 +1386,35 @@ export class OmniShell {
                     <h3 style="font-size: 1.05rem; font-weight: 600;">Installed Plugins & Viewports</h3>
                     <span id="plugins-count-badge" style="font-size: 0.72rem; background: var(--omni-bg-subtle); color: var(--omni-accent-primary); padding: 1px 6px; border-radius: var(--omni-radius-pill);">0</span>
                   </div>
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <button id="btn-reset-layout" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" title="Reset all apps to default viewports">Reset Viewports</button>
-                    <button id="btn-show-install-modal" class="btn-publish" style="font-size: 0.75rem; padding: 4px 10px;">
-                      + Install Plugin (NIP-5A)
+                  <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <button id="btn-sync-workspace" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;" title="Sync workspace layout to Nostr relays (NIP-78)">
+                      ${icon("cloud", 14)} Sync to Nostr
                     </button>
+                    <button id="btn-restore-workspace" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;" title="Restore workspace layout from Nostr relays (NIP-78)">
+                      ${icon("download", 14)} Restore
+                    </button>
+                    <button id="btn-reset-layout" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 8px;" title="Reset all apps to default viewports">Reset</button>
+                    <button id="btn-show-install-modal" class="btn-publish" style="font-size: 0.75rem; padding: 4px 10px;">
+                      + Install Plugin
+                    </button>
+                  </div>
+                </div>
+
+                <!-- NIP-78 Workspace Cloud Sync Banner -->
+                <div id="workspace-sync-banner" style="display: flex; flex-direction: column; gap: 6px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 10px 12px; margin-top: 2px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <span id="workspace-sync-status-dot" style="font-size: 0.8rem; color: var(--omni-accent-primary);">✦</span>
+                      <span id="workspace-sync-status-text" style="font-size: 0.78rem; font-weight: 600; color: var(--omni-text-primary);">Synced with Nostr relays (NIP-78 kind 30078)</span>
+                    </div>
+                    <label style="font-size: 0.72rem; color: var(--omni-text-muted); display: inline-flex; align-items: center; gap: 5px; cursor: pointer;">
+                      <input id="chk-auto-sync-workspace" type="checkbox" checked style="cursor: pointer;" />
+                      Auto-sync layout changes
+                    </label>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: var(--omni-text-muted);">
+                    <span>Identifier: <code>omni/workspace/v1</code></span>
+                    <span id="workspace-sync-timestamp">Not synced yet during this session</span>
                   </div>
                 </div>
 
@@ -1449,6 +1706,37 @@ export class OmniShell {
       }
       this.renderDockLaunchers();
       this.renderPluginManager();
+      this.saveLocalWorkspace();
+    });
+
+    const btnSyncWorkspace = document.getElementById("btn-sync-workspace");
+    btnSyncWorkspace?.addEventListener("click", async () => {
+      try {
+        await this.syncWorkspaceToNostr();
+        alert("Workspace layout synced to Nostr relays successfully!");
+      } catch (err: any) {
+        alert(`Sync failed: ${err.message || String(err)}`);
+      }
+    });
+
+    const btnRestoreWorkspace = document.getElementById("btn-restore-workspace");
+    btnRestoreWorkspace?.addEventListener("click", async () => {
+      try {
+        const restored = await this.restoreWorkspaceFromNostr();
+        if (restored) {
+          alert("Workspace layout successfully restored from Nostr relays!");
+        } else {
+          alert("No remote workspace event found on relays.");
+        }
+      } catch (err: any) {
+        alert(`Restore failed: ${err.message || String(err)}`);
+      }
+    });
+
+    const chkAutoSync = document.getElementById("chk-auto-sync-workspace") as HTMLInputElement | null;
+    chkAutoSync?.addEventListener("change", () => {
+      this.autoSyncNip78 = !!chkAutoSync.checked;
+      this.saveLocalWorkspace();
     });
   }
 
@@ -1693,6 +1981,7 @@ export class OmniShell {
         this.installedPlugins.push(entry);
         this.renderDockLaunchers();
         this.renderPluginManager();
+        this.saveLocalWorkspace();
         this.installPluginModal.classList.remove("open");
         urlInput.value = "";
         jsonInput.value = "";

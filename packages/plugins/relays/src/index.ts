@@ -53,6 +53,7 @@ function mountRelays(root: any) {
   presetRow.setAttribute("style", "display: flex; flex-wrap: wrap; gap: 4px;");
 
   const presets = [
+    { name: "Ditto", url: "wss://relay.ditto.pub" },
     { name: "Damus", url: "wss://relay.damus.io" },
     { name: "Nos.lol", url: "wss://nos.lol" },
     { name: "Primal", url: "wss://relay.primal.net" },

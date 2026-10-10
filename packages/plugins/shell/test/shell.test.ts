@@ -46,6 +46,28 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
   ];
 
   beforeEach(() => {
+    const store = new Map<string, string>();
+    const mockStorage = {
+      getItem: (k: string) => store.get(k) || null,
+      setItem: (k: string, v: string) => store.set(k, String(v)),
+      removeItem: (k: string) => store.delete(k),
+      clear: () => store.clear(),
+      get length() { return store.size; },
+      key: (idx: number) => Array.from(store.keys())[idx] || null
+    };
+    try {
+      Object.defineProperty(globalThis, "localStorage", {
+        value: mockStorage,
+        configurable: true,
+        writable: true
+      });
+      Object.defineProperty(window, "localStorage", {
+        value: mockStorage,
+        configurable: true,
+        writable: true
+      });
+    } catch {}
+
     document.body.innerHTML = '<div id="omni-root"></div>';
     root = document.getElementById("omni-root")!;
     kernel = new OmniKernel({
@@ -366,6 +388,106 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(res.handled).toBe(true);
       const pageFeed = root.querySelector("#page-feed");
       expect(pageFeed?.classList.contains("active")).toBe(true);
+    });
+  });
+
+  describe("NIP-78 Workspace State Sync (kind: 30078)", () => {
+    it("renders the NIP-78 Workspace Cloud Sync banner and controls in Settings", () => {
+      const banner = root.querySelector("#workspace-sync-banner");
+      const btnSync = root.querySelector("#btn-sync-workspace");
+      const btnRestore = root.querySelector("#btn-restore-workspace");
+      const chkAutoSync = root.querySelector("#chk-auto-sync-workspace") as HTMLInputElement;
+
+      expect(banner).toBeTruthy();
+      expect(btnSync).toBeTruthy();
+      expect(btnRestore).toBeTruthy();
+      expect(chkAutoSync).toBeTruthy();
+      expect(chkAutoSync.checked).toBe(true);
+    });
+
+    it("exports current workspace layout state cleanly", () => {
+      const exported = shell.exportWorkspaceState();
+      expect(exported.version).toBe(1);
+      expect(exported.activePage).toBe("org.omni.plugin.feed");
+      expect(exported.autoSync).toBe(true);
+      expect(exported.plugins).toHaveLength(2);
+      expect(exported.plugins[0].id).toBe("org.omni.plugin.feed");
+      expect(exported.plugins[0].viewport).toBe("main");
+      expect(exported.plugins[1].id).toBe("org.omni.plugin.timer");
+      expect(exported.plugins[1].viewport).toBe("sidebar");
+    });
+
+    it("applies new workspace state and reparents viewports", () => {
+      const newState = {
+        version: 1 as const,
+        updatedAt: Date.now(),
+        activePage: "org.omni.plugin.timer",
+        autoSync: true,
+        plugins: [
+          {
+            id: "org.omni.plugin.feed",
+            viewport: "dock",
+            enabled: true
+          },
+          {
+            id: "org.omni.plugin.timer",
+            viewport: "main",
+            enabled: true
+          }
+        ]
+      };
+
+      shell.applyWorkspaceState(newState, true);
+
+      expect(shell.getActivePageId()).toBe("org.omni.plugin.timer");
+      const feedPlugin = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.feed");
+      const timerPlugin = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer");
+
+      expect(feedPlugin?.viewport).toBe("dock");
+      expect(timerPlugin?.viewport).toBe("main");
+    });
+
+    it("persists workspace to localStorage and restores on loadInitialWorkspace", () => {
+      const newState = {
+        version: 1 as const,
+        updatedAt: Date.now(),
+        activePage: "widgets",
+        autoSync: false,
+        plugins: [
+          {
+            id: "org.omni.plugin.feed",
+            viewport: "sidebar",
+            enabled: true
+          }
+        ]
+      };
+
+      shell.applyWorkspaceState(newState, true);
+      const rawStored = window.localStorage.getItem(shell.LOCAL_WORKSPACE_KEY);
+      expect(rawStored).toBeTruthy();
+
+      // Fresh shell instance loading initial workspace
+      const freshShell = new OmniShell({
+        root,
+        kernel,
+        installedPlugins: JSON.parse(JSON.stringify(mockPlugins))
+      });
+      const loaded = freshShell.loadInitialWorkspace();
+      expect(loaded).not.toBeNull();
+      expect(freshShell.installedPlugins[0].viewport).toBe("sidebar");
+      expect(freshShell.autoSyncNip78).toBe(false);
+    });
+
+    it("syncs workspace to kernel NIP-78 eventStore and updates sync UI", async () => {
+      await kernel.boot();
+      const event = await shell.syncWorkspaceToNostr();
+
+      expect(event.kind).toBe(30078);
+      expect(event.tags).toContainEqual(["d", "omni/workspace/v1"]);
+      expect(shell.workspaceSyncStatus).toBe("synced");
+
+      const statusText = root.querySelector("#workspace-sync-status-text");
+      expect(statusText?.textContent).toContain("Synced with Nostr relays");
     });
   });
 });

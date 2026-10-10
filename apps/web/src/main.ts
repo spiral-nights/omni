@@ -71,7 +71,7 @@ let shell: OmniShell;
 // 1. Initialize Host Orchestration Kernel
 const kernel = new OmniKernel({
   privateKeyHex: savedPrivkey,
-  bootstrapRelays: ["wss://relay.damus.io"],
+  bootstrapRelays: ["wss://relay.damus.io", "wss://relay.ditto.pub"],
   runtimeScript: omniRuntimeScript,
   slotResolver: (pluginId, compId, slot) => {
     return shell?.getContainerForPluginSlot(pluginId, slot, compId);
@@ -100,6 +100,9 @@ async function startApp() {
     kernel,
     installedPlugins: initialPlugins
   });
+
+  // Restore local workspace customizations (0ms instant startup)
+  shell.loadInitialWorkspace();
   shell.mount();
 
   // Boot Kernel (Keystore, RelayPool, Storage, Coordinator)
@@ -112,6 +115,19 @@ async function startApp() {
 
   // Sync active user identity and profile
   await shell.updateProfileUi();
+
+  // Check 0ms local event store for saved NIP-78 workspace event
+  try {
+    const cachedWorkspace = await kernel.getWorkspaceState();
+    if (cachedWorkspace && cachedWorkspace.state) {
+      console.log("✦ [Omni Web] Restoring cached NIP-78 workspace layout from 0ms store...");
+      shell.applyWorkspaceState(cachedWorkspace.state, false);
+      shell.lastSyncedAt = cachedWorkspace.event.created_at * 1000;
+      shell.updateSyncUi();
+    }
+  } catch (err) {
+    console.warn("Could not check local NIP-78 workspace store:", err);
+  }
 
   // Seed local welcome note if storage is empty
   const existingNotes = await kernel.eventStore.getEvents({ kinds: [1], limit: 5 });
@@ -132,6 +148,22 @@ async function startApp() {
       await kernel.registerPlugin(synthManifest, p.htmlContent || p.scriptContent, slotContainers);
     }
   }
+
+  // Background fetch of remote NIP-78 workspace state from connected relays
+  kernel
+    .fetchRemoteWorkspaceState(undefined, 4000)
+    .then((remote) => {
+      if (remote && remote.state) {
+        console.log("✦ [Omni Web] Received remote NIP-78 workspace update from relays.");
+        shell.applyWorkspaceState(remote.state, true);
+        shell.lastSyncedAt = remote.event.created_at * 1000;
+        shell.workspaceSyncStatus = "synced";
+        shell.updateSyncUi();
+      }
+    })
+    .catch((err) => {
+      console.warn("Background NIP-78 sync query:", err);
+    });
 
   console.log("🚀 [Omni Web] App running successfully with modular @omni/plugin-shell!");
 }
