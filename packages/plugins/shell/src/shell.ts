@@ -349,9 +349,11 @@ export class OmniShell {
 
       for (const item of slotItems) {
         const plugin = this.installedPlugins.find((p) => p.id === item.pluginId);
-        const comp = plugin?.manifest?.components?.find((c: any) => c.id === item.componentId);
-        const compTitle = comp?.title || item.componentId;
-        const pluginName = plugin?.manifest?.name || item.pluginId;
+        const meta = plugin ? this.getPluginMeta(plugin) : null;
+        const synthManifest = plugin ? this.ensurePluginManifest(plugin) : null;
+        const comp = synthManifest?.components?.find((c: any) => c.id === item.componentId);
+        const compTitle = comp?.title || meta?.name || item.componentId;
+        const pluginName = meta?.name || item.pluginId;
 
         const chip = document.createElement("div");
         chip.className = "visual-comp-chip";
@@ -367,6 +369,7 @@ export class OmniShell {
         select.style.cssText =
           "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.68rem; padding: 2px 4px; border-radius: var(--omni-radius-sm); outline: none; flex: 1; min-width: 0;";
         for (const s of STANDARD_SLOTS) {
+          if (s.id === "header-status") continue; // only show usable slots
           const opt = document.createElement("option");
           opt.value = s.id;
           opt.textContent = `→ ${s.name}`;
@@ -378,6 +381,10 @@ export class OmniShell {
           const targetContainer = this.slotContainers.get(targetSlotId);
           if (targetContainer) {
             this.kernel.reparentPluginComponent(item.pluginId, item.componentId, targetSlotId, targetContainer);
+            if (plugin) {
+              plugin.viewport = targetSlotId;
+            }
+            this.renderDockLaunchers();
             this.renderVisualLayoutConfigurator();
           }
         });
@@ -391,6 +398,7 @@ export class OmniShell {
         chk.addEventListener("change", () => {
           this.kernel.layoutManager.setComponentEnabled(item.pluginId, item.componentId, chk.checked);
           this.kernel.getSandbox(item.pluginId)?.setComponentVisible(item.componentId, chk.checked);
+          this.renderDockLaunchers();
         });
         toggleLabel.appendChild(chk);
         toggleLabel.appendChild(document.createTextNode("Show"));
@@ -623,6 +631,7 @@ export class OmniShell {
         : "main";
 
       for (const vp of STANDARD_SLOTS) {
+        if (vp.id === "header-status") continue;
         const opt = document.createElement("option");
         opt.value = vp.id;
         opt.textContent = vp.name;
@@ -1076,50 +1085,71 @@ export class OmniShell {
               <div class="settings-pane" id="settings-pane-layout">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <div>
-                    <h3 style="font-size: 1.05rem; font-weight: 600;">Visual Layout & Viewports</h3>
-                    <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Assign any installed nsite to Full Page, Widgets Grid, or Dock Shortcut dynamically.</span>
+                    <h3 style="font-size: 1.05rem; font-weight: 600;">Visual Layout & Pages</h3>
+                    <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Configure how installed apps and widgets map to center pages and navigation launchers.</span>
                   </div>
                   <button id="btn-reset-layout" class="btn-secondary" style="font-size: 0.75rem;">Reset to Defaults</button>
                 </div>
 
                 <div class="visual-diagram-container">
                   <div class="visual-diagram-mockup">
+                    <!-- Header Bar -->
                     <div class="visual-mockup-header">
                       <div style="font-weight: 600; font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; align-items: center; gap: 6px;">
-                        <span>✦ Logo</span>
+                        <span>✦ Omni Header</span>
                       </div>
                       <div class="visual-slot-zone" id="visual-zone-header-actions" data-slot="header-actions" style="min-width: 140px;">
                         <div class="visual-slot-header">
-                          <span>Header Actions</span>
-                          <code>actions</code>
+                          <span>Header Quick Actions</span>
+                          <code>header-actions</code>
                         </div>
                         <div class="visual-slot-comp-list" id="visual-list-header-actions"></div>
                       </div>
                     </div>
 
-                    <div class="visual-mockup-body">
-                      <div class="visual-slot-zone" id="visual-zone-dock" data-slot="dock">
+                    <!-- Shell Body: Left Navigation Menu + Center Page Viewports -->
+                    <div class="visual-mockup-page-body">
+                      <!-- Left Navigation Dock -->
+                      <div class="visual-slot-zone visual-dock-zone" id="visual-zone-dock" data-slot="dock">
                         <div class="visual-slot-header">
-                          <span>Dock Shortcuts</span>
+                          <span>Navigation Menu</span>
                           <code>dock</code>
+                        </div>
+                        <div style="font-size: 0.68rem; color: var(--omni-text-muted); margin-bottom: 2px;">
+                          Switches center page
+                        </div>
+                        <div class="visual-fixed-dock-items">
+                          <div class="visual-static-dock-chip">✦ Widgets Page</div>
+                          <div class="visual-static-dock-chip">⚙ Settings</div>
                         </div>
                         <div class="visual-slot-comp-list" id="visual-list-dock"></div>
                       </div>
 
-                      <div class="visual-slot-zone" id="visual-zone-main" data-slot="main">
-                        <div class="visual-slot-header">
-                          <span>Full Page Viewport</span>
-                          <code>full-page</code>
+                      <!-- Center Area: Pages Viewport -->
+                      <div class="visual-center-pages-zone">
+                        <!-- Full-Page Apps -->
+                        <div class="visual-slot-zone visual-page-zone" id="visual-zone-main" data-slot="main">
+                          <div class="visual-slot-header">
+                            <span>Page 1: Full-Page Apps (Center Viewport)</span>
+                            <code>full-page / main</code>
+                          </div>
+                          <div style="font-size: 0.68rem; color: var(--omni-text-muted); margin-bottom: 2px;">
+                            Primary views with dedicated left nav launcher
+                          </div>
+                          <div class="visual-slot-comp-list" id="visual-list-main"></div>
                         </div>
-                        <div class="visual-slot-comp-list" id="visual-list-main"></div>
-                      </div>
 
-                      <div class="visual-slot-zone" id="visual-zone-sidebar" data-slot="sidebar">
-                        <div class="visual-slot-header">
-                          <span>Widgets Grid Viewport</span>
-                          <code>widgets-grid</code>
+                        <!-- Workspace Widgets Dashboard Page -->
+                        <div class="visual-slot-zone visual-widgets-zone" id="visual-zone-sidebar" data-slot="sidebar">
+                          <div class="visual-slot-header">
+                            <span>Page 2: Workspace Widgets Dashboard</span>
+                            <code>widgets-dashboard</code>
+                          </div>
+                          <div style="font-size: 0.68rem; color: var(--omni-text-muted); margin-bottom: 2px;">
+                            Card grid accessed via the "Widgets" navigation launcher
+                          </div>
+                          <div class="visual-slot-comp-list visual-grid-comp-list" id="visual-list-sidebar"></div>
                         </div>
-                        <div class="visual-slot-comp-list" id="visual-list-sidebar"></div>
                       </div>
                     </div>
                   </div>
@@ -1411,7 +1441,9 @@ export class OmniShell {
       const manifests = this.installedPlugins.map((p) => this.ensurePluginManifest(p));
       this.kernel.layoutManager.resetToDefaults(manifests);
       for (const p of this.installedPlugins) {
-        for (const comp of this.ensurePluginManifest(p).components || []) {
+        const synth = this.ensurePluginManifest(p);
+        for (const comp of synth.components || []) {
+          p.viewport = comp.slot;
           const container = this.slotContainers.get(comp.slot);
           if (container) {
             this.kernel.getSandbox(p.id)?.reparentComponent(comp.id, container);

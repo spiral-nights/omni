@@ -15,11 +15,11 @@ export interface AvailableSlot {
 }
 
 export const STANDARD_SLOTS: AvailableSlot[] = [
-  { id: "main", name: "Full Page Viewport", description: "Primary full-screen viewport for timeline notes and standalone apps" },
-  { id: "sidebar", name: "Widgets Grid Viewport", description: "Interactive dashboard card viewport for productivity widgets and tools" },
-  { id: "dock", name: "Dock Shortcut", description: "Pinned item on desktop vertical dock or mobile bottom bar" },
+  { id: "main", name: "Full-Page App (Center View)", description: "Primary center view with dedicated launcher in the navigation dock" },
+  { id: "sidebar", name: "Widgets Dashboard Card", description: "Modular card displayed on the Workspace Widgets & Tools dashboard page" },
+  { id: "dock", name: "Navigation Dock Shortcut", description: "Shortcut button or companion icon in the left navigation dock" },
   { id: "header-status", name: "Header Status Area", description: "Top header area next to brand logo" },
-  { id: "header-actions", name: "Header Actions", description: "Top right header area for quick actions and profile badge" }
+  { id: "header-actions", name: "Header Quick Action", description: "Top right header area for quick actions and profile tools" }
 ];
 
 export const STANDARD_VIEWPORTS = STANDARD_SLOTS;
