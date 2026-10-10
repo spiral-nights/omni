@@ -15,7 +15,7 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
 +---------------------------------------------------------------------------------------+
 |  [MILESTONE 1]  [COMPLETED] Transparent APIs: Virtual WebSocket & NIP-07 Shim         |
 |  [MILESTONE 2]  [COMPLETED] Subscription Namespacing & Cache Isolation                |
-|  [MILESTONE 3]  Zero-Manifest Pure nsite Loader (kind 35129)                          |
+|  [MILESTONE 3]  [COMPLETED] Zero-Manifest Pure nsite Loader (kind 35129)              |
 |  [MILESTONE 4]  Decouple Shell UI into @omni/plugin-shell                             |
 |  [MILESTONE 5]  User-Defined Viewports (Decoupling "Slots" from Developers)           |
 |  [MILESTONE 6]  Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share)            |
@@ -41,12 +41,13 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
   3. **Storage Partitioning:** [Done] Sandbox-isolated IndexedDB databases ensuring zero cross-plugin state access.
 * **Priority:** Immediate / P0
 
-### Milestone 3: Zero-Manifest Pure nsite Loader
+### ~~Milestone 3: Zero-Manifest Pure nsite Loader~~ [COMPLETED]
 * **Goal:** Eliminate `omni.manifest.json`. Any standard NIP-5A nsite runs as a plugin.
+* **Status:** Complete (Pure NIP-5A kind: 35129 nsite resolver for `index.html` on Blossom and inline HTML, automatic metadata synthesis from standard Nostr tags, direct HTML document injection in sandboxes, and standalone companion widget publishing).
 * **Scope:**
-  1. **Eliminate Manifest Requirement:** Remove mandatory `omni.manifest.json` parsing from `NostrPluginResolver` and `SandboxInstance`.
-  2. **Pure Standalone nsites:** Resolve any standard NIP-5A `kind: 35129` event by reading `["f", "index.html", <hash>]` from Blossom.
-  3. **Standalone Companion Widgets:** Companion widgets are published as their own standalone nsites with their own `naddr` (e.g., `chess-game` vs `chess-widget`), maintaining 100% web compatibility with zero custom schemas.
+  1. **Eliminate Manifest Requirement:** [Done] Remove mandatory `omni.manifest.json` parsing from `NostrPluginResolver` and `SandboxInstance`.
+  2. **Pure Standalone nsites:** [Done] Resolve any standard NIP-5A `kind: 35129` event by reading `["f", "index.html", <hash>]` from Blossom or inline HTML payload.
+  3. **Standalone Companion Widgets:** [Done] Companion widgets are published as their own standalone nsites with their own `naddr` (e.g., `chess-game` vs `chess-widget`), maintaining 100% web compatibility with zero custom schemas.
 * **Priority:** High / P1
 
 ### Milestone 4: Decouple Shell UI into `@omni/plugin-shell`

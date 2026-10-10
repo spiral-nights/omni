@@ -295,10 +295,10 @@ graph TD
   - [x] Enforce ACL filtering on local cache queries (prevent unpermitted DMs/Kind-4 snooping).
   - [x] Scope IndexedDB and localStorage keys per `pluginId`.
 
-- [ ] **Milestone 3: Pure nsite Loader (Zero Manifests)**
-  - Update `NostrPluginResolver` to resolve any NIP-5A `kind: 35129` event by reading `["f", "index.html", ...]`.
-  - Remove mandatory `omni.manifest.json` parsing.
-  - Automatically derive app name, description, and author from standard NIP-5A tags (`name`, `description`, `d`, author pubkey).
+- [x] **Milestone 3: Pure nsite Loader (Zero Manifests)**
+  - [x] Update `NostrPluginResolver` to resolve any NIP-5A `kind: 35129` event by reading `["f", "index.html", ...]`.
+  - [x] Remove mandatory `omni.manifest.json` parsing.
+  - [x] Automatically derive app name, description, and author from standard NIP-5A tags (`name`, `description`, `d`, author pubkey).
 
 - [ ] **Milestone 4: Decouple Shell into `@omni/plugin-shell`**
   - Create package `packages/plugins/shell/`.

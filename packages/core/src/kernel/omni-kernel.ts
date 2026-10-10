@@ -274,4 +274,25 @@ export class OmniKernel {
       options
     );
   }
+
+  async publishNsite(
+    nsite: {
+      identifier: string;
+      name: string;
+      description?: string;
+      icon?: string;
+      htmlContent: string;
+    },
+    options?: PublishNsiteOptions
+  ): Promise<ResolvedNostrPlugin> {
+    return NostrPluginResolver.publishNsite(
+      nsite,
+      this.keystore,
+      {
+        relayPool: this.relayPool,
+        eventStore: this.eventStore
+      },
+      options
+    );
+  }
 }

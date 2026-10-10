@@ -113,4 +113,56 @@ describe("NIP-19 naddr Codec & NIP-5A Nostr Plugin Resolver", () => {
 
     await expect(kernel.resolveNsitePlugin(tamperedEvent)).rejects.toThrow(/Invalid Schnorr signature/);
   });
+
+  it("publishes and resolves a zero-manifest pure standalone nsite (index.html)", async () => {
+    const kernel = new OmniKernel({ bootstrapRelays: [] });
+    await kernel.boot();
+
+    const pureNsiteHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Pure Nostr Chess</title>
+</head>
+<body>
+  <div class="chess-board">
+    <h2>Nostr Chess Widget</h2>
+    <button id="move-pawn">Move E4</button>
+  </div>
+</body>
+</html>`;
+
+    // Publish as standard NIP-5A nsite with zero omni.manifest.json
+    const published = await kernel.publishNsite({
+      identifier: "world.chess.widget",
+      name: "Nostr Chess Widget",
+      description: "A pure standalone Nostr web app running without any manifest",
+      icon: "chess",
+      htmlContent: pureNsiteHtml
+    });
+
+    expect(published.event.kind).toBe(NSITE_MANIFEST_KIND);
+    expect(published.event.tags.some((t) => t[0] === "d" && t[1] === "world.chess.widget")).toBe(true);
+    expect(published.event.tags.some((t) => t[0] === "f" && t[1] === "index.html")).toBe(true);
+    expect(published.naddr.startsWith("naddr1")).toBe(true);
+
+    // Resolve pure nsite via naddr
+    const resolved = await kernel.resolveNsitePlugin(published.naddr);
+
+    expect(resolved.manifest.id).toBe("world.chess.widget");
+    expect(resolved.manifest.name).toBe("Nostr Chess Widget");
+    expect(resolved.manifest.entry).toBe("index.html");
+    expect(resolved.manifest.components.length).toBeGreaterThanOrEqual(1);
+    expect(resolved.manifest.components[0].slot).toBe("main");
+    expect(resolved.scriptContent).toContain("Nostr Chess Widget");
+
+    // Mount into SandboxInstance and verify DOM renders
+    const slotContainers = new Map<string, Element>();
+    const mainSlot = document.createElement("div");
+    slotContainers.set("main", mainSlot);
+
+    const sandbox = await kernel.registerPlugin(resolved.manifest, resolved.scriptContent, slotContainers);
+    expect(sandbox.manifest.id).toBe("world.chess.widget");
+    expect(kernel.isPluginEnabled("world.chess.widget")).toBe(true);
+  });
 });
+

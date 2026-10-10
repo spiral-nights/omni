@@ -128,8 +128,10 @@ export class NostrPluginResolver {
       }
     }
 
-    // Check event content for JSON payload
-    if (event.content && event.content.trim().startsWith("{")) {
+    // 1. Check if event content has raw HTML or script
+    if (event.content && (event.content.trim().startsWith("<!DOCTYPE") || event.content.trim().startsWith("<") || event.content.includes("<body"))) {
+      scriptContent = event.content;
+    } else if (event.content && event.content.trim().startsWith("{")) {
       try {
         const parsed = JSON.parse(event.content);
         if (parsed.manifest) {
@@ -146,41 +148,62 @@ export class NostrPluginResolver {
       }
     }
 
-    // If manifest was not in content, reconstruct from NIP-5A tags
+    // 2. If manifest was not in content, synthesize cleanly from standard NIP-5A tags
     if (!manifest) {
-      const dTag = event.tags.find((t) => t[0] === "d")?.[1] || identifier || "unnamed.plugin";
-      const nameTag = event.tags.find((t) => t[0] === "name")?.[1] || dTag;
+      const dTag = event.tags.find((t) => t[0] === "d")?.[1] || identifier || event.id;
+      const nameTag = event.tags.find((t) => t[0] === "name")?.[1] ||
+                      event.tags.find((t) => t[0] === "title")?.[1] ||
+                      dTag;
       const verTag = event.tags.find((t) => t[0] === "version")?.[1] || "1.0.0";
-      const descTag = event.tags.find((t) => t[0] === "description")?.[1] || "";
+      const descTag = event.tags.find((t) => t[0] === "description")?.[1] ||
+                      event.tags.find((t) => t[0] === "about")?.[1] ||
+                      "";
+      const iconTag = event.tags.find((t) => t[0] === "icon" || t[0] === "image")?.[1] || "globe";
       const slotTags = event.tags.filter((t) => t[0] === "slot").map((t) => t[1]);
       const permTags = event.tags.filter((t) => t[0] === "permission").map((t) => t[1]);
 
-      const permissions: Record<string, any> = {};
+      const permissions: Record<string, any> = {
+        nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true },
+        storage: { quotaMb: 5 }
+      };
+
       for (const p of permTags) {
         if (p === "storage:kv" || p === "storage") permissions.storage = { quotaMb: 5 };
-        else if (p.startsWith("nostr")) permissions.nostr = { read: { allKinds: true } };
+        else if (p.startsWith("nostr")) permissions.nostr = { read: { allKinds: true }, write: { allKinds: true }, sign: true };
         else if (p.startsWith("intent")) permissions.intents = { allowedIntents: ["*"] };
       }
+
+      const components = slotTags.length > 0
+        ? slotTags.map((slot, idx) => {
+            let type: "icon" | "sidebar" | "main" | "widget" = "widget";
+            if (slot === "icon") type = "icon";
+            else if (slot === "sidebar") type = "sidebar";
+            else if (slot === "main") type = "main";
+            return {
+              id: `${dTag}-comp-${idx}`,
+              type,
+              title: nameTag,
+              slot
+            };
+          })
+        : [
+            {
+              id: `${dTag}-main`,
+              type: "main" as const,
+              title: nameTag,
+              slot: "main"
+            }
+          ];
 
       manifest = {
         id: dTag,
         name: nameTag,
         version: verTag,
         description: descTag,
-        entry: "dist/index.js",
+        icon: iconTag,
+        entry: "index.html",
         author: { name: WebCryptoKeystore.toNpub(event.pubkey), pubkey: event.pubkey },
-        components: slotTags.map((slot, idx) => {
-          let type: "icon" | "sidebar" | "main" | "widget" = "widget";
-          if (slot === "icon") type = "icon";
-          else if (slot === "sidebar") type = "sidebar";
-          else if (slot === "main") type = "main";
-          return {
-            id: `${dTag}-comp-${idx}`,
-            type,
-            title: nameTag,
-            slot
-          };
-        }),
+        components,
         permissions
       };
     }
@@ -189,19 +212,24 @@ export class NostrPluginResolver {
       throw new Error(`Failed to extract valid manifest for Nostr plugin event '${event.id}'`);
     }
 
-    // If script was not inline, fetch by Blossom hash
+    // 3. If script/HTML was not inline, fetch from Blossom by candidate hash
     if (!scriptContent) {
-      // Find candidate script hash from f tags
+      // Look for index.html, index.js, or dist/index.js
+      const htmlFileKey = Object.keys(blossomHashes).find(
+        (f) => f === "index.html" || f.endsWith(".html")
+      );
       const scriptFileKey = Object.keys(blossomHashes).find(
         (f) => f.endsWith(".js") || f === "index.js" || f === "dist/index.js"
       );
+      const targetFileKey = htmlFileKey || scriptFileKey;
 
-      if (scriptFileKey) {
-        const scriptHash = blossomHashes[scriptFileKey];
+      if (targetFileKey) {
+        const fileHash = blossomHashes[targetFileKey];
         const serverTags = event.tags.filter((t) => t[0] === "server").map((t) => t[1]);
         const servers = [...serverTags, ...DEFAULT_BLOSSOM_SERVERS];
 
-        scriptContent = await NostrPluginResolver.fetchAndVerifyBlossomBlob(scriptHash, servers);
+        scriptContent = await NostrPluginResolver.fetchAndVerifyBlossomBlob(fileHash, servers);
+        manifest.entry = targetFileKey;
       }
     }
 
@@ -339,4 +367,48 @@ export class NostrPluginResolver {
       }
     };
   }
+
+  /**
+   * Publish a 100% standard standalone nsite (index.html) to Nostr (NIP-5A kind: 35129)
+   */
+  static async publishNsite(
+    nsite: {
+      identifier: string;
+      name: string;
+      description?: string;
+      icon?: string;
+      htmlContent: string;
+    },
+    keystore: WebCryptoKeystore,
+    context: { relayPool: RelayPool; eventStore: LocalEventStore },
+    options: PublishNsiteOptions = {}
+  ): Promise<ResolvedNostrPlugin> {
+    const authorPubkey = await keystore.getPublicKey();
+    const htmlBytes = new TextEncoder().encode(nsite.htmlContent);
+    const htmlHash = bytesToHex(sha256(htmlBytes));
+    const blossomServers = options.blossomServers || DEFAULT_BLOSSOM_SERVERS;
+
+    const tags: string[][] = [
+      ["d", nsite.identifier],
+      ["name", nsite.name],
+      ["description", nsite.description || ""],
+      ["f", "index.html", htmlHash, "text/html"],
+      ...blossomServers.slice(0, 2).map((s) => ["server", s])
+    ];
+    if (nsite.icon) tags.push(["icon", nsite.icon]);
+
+    const draft = {
+      kind: NSITE_MANIFEST_KIND,
+      content: nsite.htmlContent,
+      tags,
+      created_at: Math.floor(Date.now() / 1000)
+    };
+
+    const signedEvent = await keystore.signEvent(draft);
+    await context.eventStore.saveEvent(signedEvent);
+    await context.relayPool.publish(signedEvent);
+
+    return NostrPluginResolver.resolve(signedEvent, context);
+  }
 }
+

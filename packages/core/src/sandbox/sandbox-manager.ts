@@ -178,7 +178,23 @@ export class SandboxInstance {
       .replace(/\/\*#\s*sourceMappingURL=[\s\S]*?\*\//gi, "")
       .replace(/\/\/[#@]\s*sourceURL=[^\r\n]*/gi, "");
 
-    this.iframe.srcdoc = `<!DOCTYPE html>
+    const isHtmlDoc = pluginCode.trim().startsWith("<!DOCTYPE") ||
+      pluginCode.trim().startsWith("<html") ||
+      /<head\b/i.test(pluginCode) ||
+      /<body\b/i.test(pluginCode);
+
+    if (isHtmlDoc) {
+      const injectedHead = `\n  <base href="${baseHref}">\n  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  <script>\n    window.addEventListener("error", function(e) {\n      console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);\n    });\n  </script>\n  <script>\n    ${runtimeCode}\n  </script>\n`;
+
+      if (/<head\b[^>]*>/i.test(pluginCode)) {
+        this.iframe.srcdoc = pluginCode.replace(/<head\b[^>]*>/i, (match) => `${match}${injectedHead}`);
+      } else if (/<html\b[^>]*>/i.test(pluginCode)) {
+        this.iframe.srcdoc = pluginCode.replace(/<html\b[^>]*>/i, (match) => `${match}\n<head>${injectedHead}</head>`);
+      } else {
+        this.iframe.srcdoc = `<!DOCTYPE html>\n<html>\n<head>${injectedHead}</head>\n<body>\n${pluginCode}\n</body>\n</html>`;
+      }
+    } else {
+      this.iframe.srcdoc = `<!DOCTYPE html>
 <html>
 <head>
   <base href="${baseHref}">
@@ -198,6 +214,7 @@ export class SandboxInstance {
   </script>
 </body>
 </html>`;
+    }
 
     // 6. Append to document and perform handshake on load
     document.body.appendChild(this.iframe);
