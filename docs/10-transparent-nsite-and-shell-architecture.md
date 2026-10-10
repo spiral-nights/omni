@@ -195,7 +195,7 @@ The Shell Plugin renders and controls:
 - The top header (brand, identity badge).
 - The navigation dock (page tabs, settings trigger).
 - View routing (Page 1: Full Page Viewport, Page 2: Widgets Grid Viewport).
-- Settings Modal & Visual Layout Configurator.
+- Settings Modal & Plugins / Viewports Manager.
 - Container elements where sandboxed nsites are projected.
 
 ---
@@ -302,7 +302,7 @@ graph TD
 
 - [x] **Milestone 4: Decouple Shell into `@omni/plugin-shell` & Minimal Host Bootloader**
   - [x] Create package `packages/plugins/shell/` (`OmniShell`).
-  - [x] Move the header, dock, view switcher, Settings modal, and Visual Layout Configurator into the shell plugin.
+  - [x] Move the header, dock, view switcher, Settings modal, and Plugins / Viewports Manager into the shell plugin.
   - [x] Strip hardcoded layout markup from `apps/web/index.html` down to 15-line `<div id="omni-root"></div>`.
   - [x] Wire `apps/web/src/main.ts` to boot kernel, mount `@omni/plugin-shell`, and pass control.
   - [x] Verify all core tests, shell tests, and production builds pass cleanly.
@@ -310,7 +310,7 @@ graph TD
 - [x] **Milestone 5: User-Defined Viewports (Deconstructing "Slots")**
   - [x] Decouple developers from slots: pure nsites declare zero slots.
   - [x] Define user viewports (`STANDARD_VIEWPORTS`: Full Page Viewport, Widgets Grid Viewport, Dock Shortcuts).
-  - [x] Enable dynamic viewport reassignment in Visual Layout Configurator and plugin manager cards.
+  - [x] Enable dynamic viewport reassignment and role badges directly in the Plugins & Viewports manager.
 
 - [x] **Milestone 6: Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share)**
   - [x] Intercept `nostr:`, `lightning:`, and `cashu:` protocol navigations in the sandbox bridge.

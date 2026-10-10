@@ -52,23 +52,23 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
 
 ### ~~Milestone 4: Decouple Shell UI into `@omni/plugin-shell`~~ [COMPLETED]
 * **Goal:** Remove all hardcoded UI markup from `apps/web/index.html`.
-* **Status:** Complete (Extracted `@omni/plugin-shell` with dynamic DOM rendering, unified settings modal, visual layout configurator, inspector, and install modals; reduced `apps/web/index.html` to a 15-line bootloader and `main.ts` to a 95-line microkernel).
+* **Status:** Complete (Extracted `@omni/plugin-shell` with dynamic DOM rendering, unified settings modal with consolidated Plugins & Viewports manager, inspector, and install modals; reduced `apps/web/index.html` to a 15-line bootloader and `main.ts` to a 95-line microkernel).
 * **Scope:**
   1. **Minimal Host Bootloader:** [Done] Reduced `apps/web/index.html` to a ~15-line skeleton with `<div id="omni-root"></div>`.
-  2. **Extract `@omni/plugin-shell`:** [Done] Created standalone package `packages/plugins/shell` (`OmniShell`) implementing the header, navigation dock, view router, Settings modal (profile, relays, layout, plugins, config), and inspector/install dialogs.
+  2. **Extract `@omni/plugin-shell`:** [Done] Created standalone package `packages/plugins/shell` (`OmniShell`) implementing the header, navigation dock, view router, Settings modal (profile, relays, plugins & viewports, config), and inspector/install dialogs.
   3. **Microkernel Host (`apps/web/src/main.ts`):** [Done] Host strictly boots `OmniKernel`, instantiates `OmniShell` on `#omni-root`, mounts plugins via `shell.getSlotContainers()`, and delegates the UI frame.
 * **Priority:** High / P1
 
 ### ~~Milestone 5: User-Defined Viewports (Deconstructing "Slots")~~ [COMPLETED]
 * **Goal:** Eliminate named "slots" from developer vocabulary; make layout viewports purely user-driven.
-* **Status:** Complete (Updated `STANDARD_VIEWPORTS` in `@omni/core` to user viewports; decoupled developers from slots so pure nsites declare zero slots; added dynamic viewport reassignment in Visual Layout Configurator and plugin manager cards).
+* **Status:** Complete (Updated `STANDARD_VIEWPORTS` in `@omni/core` to user viewports; decoupled developers from slots so pure nsites declare zero slots; consolidated dynamic viewport reassignment and role badges directly into the Plugins & Viewports manager).
 * **Scope:**
   1. **Decouple Slots from Developers:** [Done] Pure nsites and widgets declare zero slots in their code or metadata; default to universal execution.
   2. **User-Configured Viewports:** [Done] Shell exposes user viewports:
      - **Full Page Viewport (`main`):** Primary full-screen view.
      - **Widgets Grid Viewport (`sidebar`):** Interactive dashboard cards.
      - **Dock Shortcuts (`dock`):** Pinned icons and quick triggers.
-  3. **Universal Placement:** [Done] Any installed nsite can be assigned or reparented to any viewport dynamically via the Visual Layout Configurator and the Installed Plugins viewport selector.
+  3. **Universal Placement:** [Done] Any installed nsite can be assigned or reparented to any viewport dynamically via the consolidated Installed Plugins & Viewports manager cards.
 * **Priority:** High / P1
 
 ### ~~Milestone 6: Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share)~~ [COMPLETED]

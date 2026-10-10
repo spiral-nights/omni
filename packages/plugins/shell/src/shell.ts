@@ -19,7 +19,7 @@ export interface InstalledPluginEntry {
 }
 
 export type AppPage = "feed" | "widgets" | string;
-export type SettingsTab = "profile" | "relays" | "layout" | "plugins" | "config";
+export type SettingsTab = "profile" | "relays" | "plugins" | "config";
 
 export interface OmniShellOptions {
   root: HTMLElement;
@@ -329,7 +329,7 @@ export class OmniShell {
     }
   }
 
-  public openSettings(tab: SettingsTab = "profile"): void {
+  public openSettings(tab: SettingsTab | "layout" = "profile"): void {
     this.switchSettingsTab(tab);
     this.settingsModal.classList.add("open");
   }
@@ -338,23 +338,22 @@ export class OmniShell {
     this.settingsModal.classList.remove("open");
   }
 
-  private switchSettingsTab(tab: SettingsTab): void {
+  private switchSettingsTab(tab: SettingsTab | "layout"): void {
+    const targetTab: SettingsTab = tab === "layout" ? "plugins" : tab;
     for (const [key, btn] of Object.entries(this.settingsNavBtns)) {
-      btn?.classList.toggle("active", key === tab);
+      btn?.classList.toggle("active", key === targetTab);
     }
     for (const [key, pane] of Object.entries(this.settingsPanes)) {
-      pane?.classList.toggle("active", key === tab);
+      pane?.classList.toggle("active", key === targetTab);
     }
 
-    if (tab === "profile") {
+    if (targetTab === "profile") {
       this.updateProfileUi();
-    } else if (tab === "relays") {
+    } else if (targetTab === "relays") {
       this.renderSettingsRelays();
-    } else if (tab === "layout") {
-      this.renderVisualLayoutConfigurator();
-    } else if (tab === "plugins") {
+    } else if (targetTab === "plugins") {
       this.renderPluginManager();
-    } else if (tab === "config") {
+    } else if (targetTab === "config") {
       this.renderPluginConfig();
     }
   }
@@ -419,107 +418,7 @@ export class OmniShell {
     }
   }
 
-  // --- Visual Layout Configurator ---
-  private renderVisualLayoutConfigurator(): void {
-    const visualSlotMap: Record<string, HTMLElement | null> = {
-      "header-actions": document.getElementById("visual-list-header-actions"),
-      "dock": document.getElementById("visual-list-dock"),
-      "main": document.getElementById("visual-list-main"),
-      "sidebar": document.getElementById("visual-list-sidebar")
-    };
 
-    const mappings = this.kernel.layoutManager.getMappings();
-
-    for (const [slotId, container] of Object.entries(visualSlotMap)) {
-      if (!container) continue;
-      container.innerHTML = "";
-
-      const slotItems = mappings.filter((m) => m.slotId === slotId);
-
-      if (slotItems.length === 0) {
-        const empty = document.createElement("div");
-        empty.style.cssText =
-          "font-size: 0.7rem; color: var(--omni-text-muted); font-style: italic; padding: 8px 4px; text-align: center; border: 1px dashed var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
-        empty.textContent = "Empty slot";
-        container.appendChild(empty);
-        continue;
-      }
-
-      for (const item of slotItems) {
-        const plugin = this.installedPlugins.find((p) => p.id === item.pluginId);
-        const meta = plugin ? this.getPluginMeta(plugin) : null;
-        const synthManifest = plugin ? this.ensurePluginManifest(plugin) : null;
-        const comp = synthManifest?.components?.find((c: any) => c.id === item.componentId);
-        const compTitle = comp?.title || meta?.name || item.componentId;
-        const pluginName = meta?.name || item.pluginId;
-
-        const chip = document.createElement("div");
-        chip.className = "visual-comp-chip";
-
-        const infoDiv = document.createElement("div");
-        infoDiv.style.cssText = "display: flex; flex-direction: column; gap: 2px; overflow: hidden;";
-        infoDiv.innerHTML = `<span style="font-weight: 600; font-size: 0.78rem; color: var(--omni-text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${compTitle}</span><span style="font-size: 0.65rem; color: var(--omni-text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${pluginName}</span>`;
-
-        const controlsDiv = document.createElement("div");
-        controlsDiv.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 4px;";
-
-        const select = document.createElement("select");
-        select.style.cssText =
-          "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.68rem; padding: 2px 4px; border-radius: var(--omni-radius-sm); outline: none; flex: 1; min-width: 0;";
-        for (const s of STANDARD_SLOTS) {
-          if (s.id === "header-status") continue; // only show usable slots
-          const opt = document.createElement("option");
-          opt.value = s.id;
-          opt.textContent = `→ ${s.name}`;
-          if (s.id === slotId) opt.selected = true;
-          select.appendChild(opt);
-        }
-        select.addEventListener("change", () => {
-          const targetSlotId = select.value;
-          const targetContainer = this.getContainerForPluginSlot(item.pluginId, targetSlotId, item.componentId);
-          if (targetContainer) {
-            this.kernel.reparentPluginComponent(item.pluginId, item.componentId, targetSlotId, targetContainer);
-            if (plugin) {
-              plugin.viewport = targetSlotId;
-            }
-            if (targetSlotId !== "main" && targetSlotId !== "dock" && item.pluginId !== "org.omni.plugin.feed") {
-              const safeId = item.pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
-              const pageEl = document.getElementById(`page-app-${safeId}`);
-              if (pageEl) {
-                if (pageEl.classList.contains("active")) {
-                  this.showPage("widgets");
-                }
-                pageEl.remove();
-              }
-            }
-            this.renderDockLaunchers();
-            this.renderVisualLayoutConfigurator();
-          }
-        });
-
-        const toggleLabel = document.createElement("label");
-        toggleLabel.style.cssText =
-          "display: flex; align-items: center; gap: 3px; font-size: 0.68rem; color: var(--omni-text-secondary); cursor: pointer; flex-shrink: 0;";
-        const chk = document.createElement("input");
-        chk.type = "checkbox";
-        chk.checked = item.enabled;
-        chk.addEventListener("change", () => {
-          this.kernel.layoutManager.setComponentEnabled(item.pluginId, item.componentId, chk.checked);
-          this.kernel.getSandbox(item.pluginId)?.setComponentVisible(item.componentId, chk.checked);
-          this.renderDockLaunchers();
-        });
-        toggleLabel.appendChild(chk);
-        toggleLabel.appendChild(document.createTextNode("Show"));
-
-        controlsDiv.appendChild(select);
-        controlsDiv.appendChild(toggleLabel);
-
-        chip.appendChild(infoDiv);
-        chip.appendChild(controlsDiv);
-        container.appendChild(chip);
-      }
-    }
-  }
 
   // --- Relays Pool Manager UI ---
   private renderSettingsRelays(): void {
@@ -620,6 +519,17 @@ export class OmniShell {
       titleLine.style.display = "flex";
       titleLine.style.alignItems = "center";
       titleLine.style.gap = "8px";
+      titleLine.style.flexWrap = "wrap";
+
+      let iconSvg = "";
+      if (meta.icon && ICONS[meta.icon as IconName]) {
+        iconSvg = icon(meta.icon as IconName, 18);
+      } else {
+        iconSvg = icon("plugins", 18);
+      }
+      const iconWrap = document.createElement("div");
+      iconWrap.style.cssText = "display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary);";
+      iconWrap.innerHTML = iconSvg;
 
       const title = document.createElement("strong");
       title.style.fontSize = "0.95rem";
@@ -638,9 +548,32 @@ export class OmniShell {
       statusBadge.style.borderRadius = "var(--omni-radius-pill)";
       statusBadge.textContent = p.enabled ? "Active" : "Disabled";
 
+      const roleBadge = document.createElement("span");
+      roleBadge.style.cssText =
+        "font-size: 0.68rem; font-weight: 500; padding: 2px 7px; border-radius: var(--omni-radius-pill); border: 1px solid var(--omni-border-subtle); background: var(--omni-bg-subtle);";
+      if (meta.viewport === "main") {
+        roleBadge.style.color = "var(--omni-accent-primary)";
+        roleBadge.style.borderColor = "var(--omni-accent-primary)";
+        roleBadge.textContent = "📱 Full-Page App";
+      } else if (meta.viewport === "dock") {
+        roleBadge.style.color = "var(--omni-text-primary)";
+        roleBadge.style.borderColor = "var(--omni-border-strong)";
+        roleBadge.textContent = "🧭 Dock Shortcut";
+      } else if (meta.viewport === "sidebar") {
+        roleBadge.style.color = "var(--omni-text-secondary)";
+        roleBadge.textContent = "🧩 Widgets Dashboard";
+      } else if (meta.viewport === "header-actions") {
+        roleBadge.style.color = "var(--omni-text-secondary)";
+        roleBadge.textContent = "⚡ Header Action";
+      } else {
+        roleBadge.textContent = meta.viewport;
+      }
+
+      titleLine.appendChild(iconWrap);
       titleLine.appendChild(title);
       titleLine.appendChild(version);
       titleLine.appendChild(statusBadge);
+      titleLine.appendChild(roleBadge);
 
       const sourcePill = document.createElement("div");
       sourcePill.style.fontSize = "0.72rem";
@@ -724,26 +657,35 @@ export class OmniShell {
       viewportRow.style.cssText =
         "display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 6px 10px; background: var(--omni-bg-subtle); border-radius: var(--omni-radius-sm); font-size: 0.75rem;";
 
-      const vpLabel = document.createElement("span");
-      vpLabel.style.color = "var(--omni-text-secondary)";
-      vpLabel.textContent = "Assigned Viewport:";
+      const vpLabelGroup = document.createElement("div");
+      vpLabelGroup.style.cssText = "display: flex; flex-direction: column; gap: 1px;";
+      vpLabelGroup.innerHTML = `
+        <span style="font-weight: 600; color: var(--omni-text-primary);">Navigation Viewport:</span>
+        <span style="font-size: 0.68rem; color: var(--omni-text-muted);">Choose where this app or widget appears</span>
+      `;
 
       const vpSelect = document.createElement("select");
       vpSelect.className = "plugin-viewport-select";
       vpSelect.style.cssText =
-        "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none;";
+        "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none; cursor: pointer;";
 
       const primaryComp = synthManifest.components?.[0];
       const currentSlot = primaryComp
         ? (this.kernel.layoutManager.getSlotForComponent(p.id, primaryComp.id) || primaryComp.slot)
         : "main";
 
-      for (const vp of STANDARD_SLOTS) {
-        if (vp.id === "header-status") continue;
+      const viewportOptions = [
+        { id: "main", label: "📱 Full-Page App (Center Viewport)" },
+        { id: "dock", label: "🧭 Navigation Dock Shortcut" },
+        { id: "sidebar", label: "🧩 Workspace Widget (Widgets Dashboard)" },
+        { id: "header-actions", label: "⚡ Header Quick Action" }
+      ];
+
+      for (const optDef of viewportOptions) {
         const opt = document.createElement("option");
-        opt.value = vp.id;
-        opt.textContent = vp.name;
-        if (vp.id === currentSlot) opt.selected = true;
+        opt.value = optDef.id;
+        opt.textContent = optDef.label;
+        if (optDef.id === currentSlot) opt.selected = true;
         vpSelect.appendChild(opt);
       }
 
@@ -764,10 +706,11 @@ export class OmniShell {
             }
           }
           this.renderDockLaunchers();
+          this.renderPluginManager();
         }
       });
 
-      viewportRow.appendChild(vpLabel);
+      viewportRow.appendChild(vpLabelGroup);
       viewportRow.appendChild(vpSelect);
 
       card.appendChild(topRow);
@@ -1064,13 +1007,9 @@ export class OmniShell {
                 ${icon("relay", 16)}
                 <span>Connected Relays</span>
               </button>
-              <button class="settings-nav-btn" id="settings-tab-btn-layout" data-tab="layout">
-                ${icon("layout", 16)}
-                <span>Visual Layout</span>
-              </button>
               <button class="settings-nav-btn" id="settings-tab-btn-plugins" data-tab="plugins">
                 ${icon("plugins", 16)}
-                <span>Installed Plugins</span>
+                <span>Plugins & Viewports</span>
               </button>
               <button class="settings-nav-btn" id="settings-tab-btn-config" data-tab="config">
                 ${icon("sliders", 16)}
@@ -1207,95 +1146,23 @@ export class OmniShell {
                 <div id="settings-relays-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;"></div>
               </div>
 
-              <!-- Pane 3: Visual Layout Configurator -->
-              <div class="settings-pane" id="settings-pane-layout">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <div>
-                    <h3 style="font-size: 1.05rem; font-weight: 600;">Visual Layout & Pages</h3>
-                    <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Configure how installed apps and widgets map to center pages and navigation launchers.</span>
-                  </div>
-                  <button id="btn-reset-layout" class="btn-secondary" style="font-size: 0.75rem;">Reset to Defaults</button>
-                </div>
-
-                <div class="visual-diagram-container">
-                  <div class="visual-diagram-mockup">
-                    <!-- Header Bar -->
-                    <div class="visual-mockup-header">
-                      <div style="font-weight: 600; font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; align-items: center; gap: 6px;">
-                        <span>✦ Omni Header</span>
-                      </div>
-                      <div class="visual-slot-zone" id="visual-zone-header-actions" data-slot="header-actions" style="min-width: 140px;">
-                        <div class="visual-slot-header">
-                          <span>Header Quick Actions</span>
-                          <code>header-actions</code>
-                        </div>
-                        <div class="visual-slot-comp-list" id="visual-list-header-actions"></div>
-                      </div>
-                    </div>
-
-                    <!-- Shell Body: Left Navigation Menu + Center Page Viewports -->
-                    <div class="visual-mockup-page-body">
-                      <!-- Left Navigation Dock -->
-                      <div class="visual-slot-zone visual-dock-zone" id="visual-zone-dock" data-slot="dock">
-                        <div class="visual-slot-header">
-                          <span>Navigation Menu</span>
-                          <code>dock</code>
-                        </div>
-                        <div style="font-size: 0.68rem; color: var(--omni-text-muted); margin-bottom: 2px;">
-                          Switches center page
-                        </div>
-                        <div class="visual-fixed-dock-items">
-                          <div class="visual-static-dock-chip">✦ Widgets Page</div>
-                          <div class="visual-static-dock-chip">⚙ Settings</div>
-                        </div>
-                        <div class="visual-slot-comp-list" id="visual-list-dock"></div>
-                      </div>
-
-                      <!-- Center Area: Pages Viewport -->
-                      <div class="visual-center-pages-zone">
-                        <!-- Full-Page Apps -->
-                        <div class="visual-slot-zone visual-page-zone" id="visual-zone-main" data-slot="main">
-                          <div class="visual-slot-header">
-                            <span>Page 1: Full-Page Apps (Center Viewport)</span>
-                            <code>full-page / main</code>
-                          </div>
-                          <div style="font-size: 0.68rem; color: var(--omni-text-muted); margin-bottom: 2px;">
-                            Primary views with dedicated left nav launcher
-                          </div>
-                          <div class="visual-slot-comp-list" id="visual-list-main"></div>
-                        </div>
-
-                        <!-- Workspace Widgets Dashboard Page -->
-                        <div class="visual-slot-zone visual-widgets-zone" id="visual-zone-sidebar" data-slot="sidebar">
-                          <div class="visual-slot-header">
-                            <span>Page 2: Workspace Widgets Dashboard</span>
-                            <code>widgets-dashboard</code>
-                          </div>
-                          <div style="font-size: 0.68rem; color: var(--omni-text-muted); margin-bottom: 2px;">
-                            Card grid accessed via the "Widgets" navigation launcher
-                          </div>
-                          <div class="visual-slot-comp-list visual-grid-comp-list" id="visual-list-sidebar"></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Pane 4: Installed Plugins -->
+              <!-- Pane 3: Installed Plugins & Viewports -->
               <div class="settings-pane" id="settings-pane-plugins">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <h3 style="font-size: 1.05rem; font-weight: 600;">Installed Plugins</h3>
+                    <h3 style="font-size: 1.05rem; font-weight: 600;">Installed Plugins & Viewports</h3>
                     <span id="plugins-count-badge" style="font-size: 0.72rem; background: var(--omni-bg-subtle); color: var(--omni-accent-primary); padding: 1px 6px; border-radius: var(--omni-radius-pill);">0</span>
                   </div>
-                  <button id="btn-show-install-modal" class="btn-publish" style="font-size: 0.75rem; padding: 4px 10px;">
-                    + Install Plugin (NIP-5A)
-                  </button>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <button id="btn-reset-layout" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" title="Reset all apps to default viewports">Reset Viewports</button>
+                    <button id="btn-show-install-modal" class="btn-publish" style="font-size: 0.75rem; padding: 4px 10px;">
+                      + Install Plugin (NIP-5A)
+                    </button>
+                  </div>
                 </div>
 
                 <p style="font-size: 0.78rem; color: var(--omni-text-muted); margin: 0;">
-                  Standard Nostr sites running securely inside sandboxes with capability gating.
+                  Manage installed Nostr nsites, assign their navigation viewports (Full-Page App, Dock Shortcut, or Widget), and configure permissions.
                 </p>
 
                 <div id="plugins-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
@@ -1533,14 +1400,12 @@ export class OmniShell {
     this.settingsNavBtns = {
       profile: document.getElementById("settings-tab-btn-profile")!,
       relays: document.getElementById("settings-tab-btn-relays")!,
-      layout: document.getElementById("settings-tab-btn-layout")!,
       plugins: document.getElementById("settings-tab-btn-plugins")!,
       config: document.getElementById("settings-tab-btn-config")!
     };
     this.settingsPanes = {
       profile: document.getElementById("settings-pane-profile")!,
       relays: document.getElementById("settings-pane-relays")!,
-      layout: document.getElementById("settings-pane-layout")!,
       plugins: document.getElementById("settings-pane-plugins")!,
       config: document.getElementById("settings-pane-config")!
     };
@@ -1583,7 +1448,7 @@ export class OmniShell {
         }
       }
       this.renderDockLaunchers();
-      this.renderVisualLayoutConfigurator();
+      this.renderPluginManager();
     });
   }
 
