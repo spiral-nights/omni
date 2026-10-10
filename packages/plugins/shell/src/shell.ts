@@ -259,7 +259,6 @@ export class OmniShell {
     if (page === "widgets") {
       this.pageWidgets.classList.add("active");
       this.dockBtnWidgets?.classList.add("active");
-      this.widgetsSlot.scrollIntoView({ behavior: "smooth" });
     } else {
       let targetPage: HTMLElement | null = null;
       if (page === "feed" || page === "org.omni.plugin.feed") {
@@ -274,10 +273,8 @@ export class OmniShell {
 
       if (targetPage) {
         targetPage.classList.add("active");
-        targetPage.scrollIntoView({ behavior: "smooth" });
       } else if (this.pageFeed) {
         this.pageFeed.classList.add("active");
-        this.pageFeed.scrollIntoView({ behavior: "smooth" });
       }
 
       const targetBtn = this.dockSlot?.querySelector<HTMLElement>(`[data-plugin-id="${page}"]`);
@@ -287,6 +284,13 @@ export class OmniShell {
         const feedBtn = this.dockSlot?.querySelector<HTMLElement>(`[data-plugin-id="org.omni.plugin.feed"]`);
         if (feedBtn) feedBtn.classList.add("active");
       }
+    }
+
+    if (mainVp) {
+      if (typeof mainVp.scrollTo === "function") {
+        mainVp.scrollTo({ top: 0, behavior: "instant" });
+      }
+      mainVp.scrollTop = 0;
     }
   }
 
