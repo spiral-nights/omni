@@ -17,7 +17,7 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
 |  [MILESTONE 2]  [COMPLETED] Subscription Namespacing & Cache Isolation                |
 |  [MILESTONE 3]  [COMPLETED] Zero-Manifest Pure nsite Loader (kind 35129)              |
 |  [MILESTONE 4]  [COMPLETED] Decouple Shell UI into @omni/plugin-shell                 |
-|  [MILESTONE 5]  User-Defined Viewports (Decoupling "Slots" from Developers)           |
+|  [MILESTONE 5]  [COMPLETED] User-Defined Viewports (Decoupling "Slots")                |
 |  [MILESTONE 6]  Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share)            |
 +---------------------------------------------------------------------------------------+
 ```
@@ -59,15 +59,16 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
   3. **Microkernel Host (`apps/web/src/main.ts`):** [Done] Host strictly boots `OmniKernel`, instantiates `OmniShell` on `#omni-root`, mounts plugins via `shell.getSlotContainers()`, and delegates the UI frame.
 * **Priority:** High / P1
 
-### Milestone 5: User-Defined Viewports (Deconstructing "Slots")
+### ~~Milestone 5: User-Defined Viewports (Deconstructing "Slots")~~ [COMPLETED]
 * **Goal:** Eliminate named "slots" from developer vocabulary; make layout viewports purely user-driven.
+* **Status:** Complete (Updated `STANDARD_VIEWPORTS` in `@omni/core` to user viewports; decoupled developers from slots so pure nsites declare zero slots; added dynamic viewport reassignment in Visual Layout Configurator and plugin manager cards).
 * **Scope:**
-  1. **Decouple Slots from Developers:** Developers never declare slots in their code.
-  2. **User-Configured Viewports:** Shell exposes visual containers:
-     - **Full Page Viewport:** Primary full-screen view.
-     - **Widgets Grid Viewport:** Interactive dashboard cards.
-     - **Dock Shortcuts:** Pinned items.
-  3. **Universal Placement:** Any installed nsite can be assigned to any viewport dynamically via the Visual Layout Configurator.
+  1. **Decouple Slots from Developers:** [Done] Pure nsites and widgets declare zero slots in their code or metadata; default to universal execution.
+  2. **User-Configured Viewports:** [Done] Shell exposes user viewports:
+     - **Full Page Viewport (`main`):** Primary full-screen view.
+     - **Widgets Grid Viewport (`sidebar`):** Interactive dashboard cards.
+     - **Dock Shortcuts (`dock`):** Pinned icons and quick triggers.
+  3. **Universal Placement:** [Done] Any installed nsite can be assigned or reparented to any viewport dynamically via the Visual Layout Configurator and the Installed Plugins viewport selector.
 * **Priority:** High / P1
 
 ### Milestone 6: Transparent Cross-App Intents (NIP-21, NIP-89 & Web Share)

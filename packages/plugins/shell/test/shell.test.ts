@@ -131,4 +131,21 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     expect(shell.installedPlugins.length).toBe(1);
     expect(shell.installedPlugins[0].id).toBe("org.omni.plugin.feed");
   });
+
+  it("Milestone 5: supports user-defined viewport reassignment via plugin manager card", () => {
+    shell.openSettings("plugins");
+    const container = root.querySelector("#plugins-list");
+    expect(container).toBeTruthy();
+
+    const select = container?.querySelector(".plugin-viewport-select") as HTMLSelectElement | null;
+    expect(select).toBeTruthy();
+
+    // Reassign feed to widgets grid
+    if (select) {
+      select.value = "sidebar";
+      select.dispatchEvent(new Event("change"));
+    }
+
+    expect(kernel.layoutManager.getSlotForComponent("org.omni.plugin.feed", "feed-main")).toBe("sidebar");
+  });
 });

@@ -15,12 +15,14 @@ export interface AvailableSlot {
 }
 
 export const STANDARD_SLOTS: AvailableSlot[] = [
-  { id: "main", name: "Feed Page", description: "Primary view area for timeline notes and main tools" },
-  { id: "sidebar", name: "Widgets Page", description: "Full-page grid dashboard for workspace widgets & productivity tools" },
-  { id: "dock", name: "Navigation Dock", description: "Desktop & mobile navigation dock for icons & shortcuts" },
+  { id: "main", name: "Full Page Viewport", description: "Primary full-screen viewport for timeline notes and standalone apps" },
+  { id: "sidebar", name: "Widgets Grid Viewport", description: "Interactive dashboard card viewport for productivity widgets and tools" },
+  { id: "dock", name: "Dock Shortcut", description: "Pinned item on desktop vertical dock or mobile bottom bar" },
   { id: "header-status", name: "Header Status Area", description: "Top header area next to brand logo" },
   { id: "header-actions", name: "Header Actions", description: "Top right header area for quick actions and profile badge" }
 ];
+
+export const STANDARD_VIEWPORTS = STANDARD_SLOTS;
 
 export class LayoutManager {
   private mappings: SlotMapping[] = [];

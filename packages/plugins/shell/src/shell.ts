@@ -505,8 +505,47 @@ export class OmniShell {
       actionsRow.appendChild(btnClearDb);
       actionsRow.appendChild(btnUninstall);
 
+      // User-Defined Viewport Assignment Selector
+      const viewportRow = document.createElement("div");
+      viewportRow.style.cssText =
+        "display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 6px 10px; background: var(--omni-bg-subtle); border-radius: var(--omni-radius-sm); font-size: 0.75rem;";
+
+      const vpLabel = document.createElement("span");
+      vpLabel.style.color = "var(--omni-text-secondary)";
+      vpLabel.textContent = "Assigned Viewport:";
+
+      const vpSelect = document.createElement("select");
+      vpSelect.className = "plugin-viewport-select";
+      vpSelect.style.cssText =
+        "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none;";
+
+      const primaryComp = p.manifest.components?.[0];
+      const currentSlot = primaryComp
+        ? (this.kernel.layoutManager.getSlotForComponent(p.id, primaryComp.id) || primaryComp.slot)
+        : "main";
+
+      for (const vp of STANDARD_SLOTS) {
+        const opt = document.createElement("option");
+        opt.value = vp.id;
+        opt.textContent = vp.name;
+        if (vp.id === currentSlot) opt.selected = true;
+        vpSelect.appendChild(opt);
+      }
+
+      vpSelect.addEventListener("change", () => {
+        const targetSlotId = vpSelect.value;
+        const targetContainer = this.slotContainers.get(targetSlotId);
+        if (targetContainer && primaryComp) {
+          this.kernel.reparentPluginComponent(p.id, primaryComp.id, targetSlotId, targetContainer);
+        }
+      });
+
+      viewportRow.appendChild(vpLabel);
+      viewportRow.appendChild(vpSelect);
+
       card.appendChild(topRow);
       card.appendChild(desc);
+      card.appendChild(viewportRow);
       card.appendChild(actionsRow);
 
       container.appendChild(card);
@@ -933,8 +972,8 @@ export class OmniShell {
               <div class="settings-pane" id="settings-pane-layout">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <div>
-                    <h3 style="font-size: 1.05rem; font-weight: 600;">Visual Layout & Slots</h3>
-                    <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Interactive diagram of the client shell. Assign components to viewports dynamically.</span>
+                    <h3 style="font-size: 1.05rem; font-weight: 600;">Visual Layout & Viewports</h3>
+                    <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Assign any installed nsite to Full Page, Widgets Grid, or Dock Shortcut dynamically.</span>
                   </div>
                   <button id="btn-reset-layout" class="btn-secondary" style="font-size: 0.75rem;">Reset to Defaults</button>
                 </div>
@@ -957,7 +996,7 @@ export class OmniShell {
                     <div class="visual-mockup-body">
                       <div class="visual-slot-zone" id="visual-zone-dock" data-slot="dock">
                         <div class="visual-slot-header">
-                          <span>Nav Dock</span>
+                          <span>Dock Shortcuts</span>
                           <code>dock</code>
                         </div>
                         <div class="visual-slot-comp-list" id="visual-list-dock"></div>
@@ -965,16 +1004,16 @@ export class OmniShell {
 
                       <div class="visual-slot-zone" id="visual-zone-main" data-slot="main">
                         <div class="visual-slot-header">
-                          <span>Feed Page</span>
-                          <code>main</code>
+                          <span>Full Page Viewport</span>
+                          <code>full-page</code>
                         </div>
                         <div class="visual-slot-comp-list" id="visual-list-main"></div>
                       </div>
 
                       <div class="visual-slot-zone" id="visual-zone-sidebar" data-slot="sidebar">
                         <div class="visual-slot-header">
-                          <span>Widgets Page</span>
-                          <code>widgets</code>
+                          <span>Widgets Grid Viewport</span>
+                          <code>widgets-grid</code>
                         </div>
                         <div class="visual-slot-comp-list" id="visual-list-sidebar"></div>
                       </div>
