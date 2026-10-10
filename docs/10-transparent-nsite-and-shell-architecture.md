@@ -290,10 +290,10 @@ graph TD
   - [x] Implement standard NIP-07 `window.nostr` (`getPublicKey`, `signEvent`, `getRelays`, `nip04`, `nip44`).
   - [x] Support `document.body` auto-mount into Remote DOM root.
 
-- [ ] **Milestone 2: Subscription & Cache Isolation**
-  - Add subscription namespacing (`${pluginId}:${subId}`) in `SubscriptionCoordinator` and `RelayPool`.
-  - Enforce ACL filtering on local cache queries (prevent unpermitted DMs/Kind-4 snooping).
-  - Scope IndexedDB and localStorage keys per `pluginId`.
+- [x] **Milestone 2: Subscription & Cache Isolation**
+  - [x] Add subscription namespacing (`${pluginId}:${subId}`) in `SubscriptionCoordinator` and `RelayPool`.
+  - [x] Enforce ACL filtering on local cache queries (prevent unpermitted DMs/Kind-4 snooping).
+  - [x] Scope IndexedDB and localStorage keys per `pluginId`.
 
 - [ ] **Milestone 3: Pure nsite Loader (Zero Manifests)**
   - Update `NostrPluginResolver` to resolve any NIP-5A `kind: 35129` event by reading `["f", "index.html", ...]`.

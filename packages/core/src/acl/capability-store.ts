@@ -58,11 +58,12 @@ export class CapabilityStore {
     }
   }
 
-  getGrant(pluginId: string, category: string, scope?: string): GrantLevel | null {
+  getGrant(pluginId: string, category: string, scope?: string, allowWildcard: boolean = true): GrantLevel | null {
     const specificKey = this.getKey(pluginId, category, scope);
     if (this.memoryStore.has(specificKey)) {
       return this.memoryStore.get(specificKey)!;
     }
+    if (!allowWildcard) return null;
     const wildcardKey = this.getKey(pluginId, category, "*");
     return this.memoryStore.get(wildcardKey) || null;
   }

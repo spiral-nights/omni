@@ -53,26 +53,7 @@ export class RelayPool {
       };
 
       ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (!Array.isArray(data)) return;
-
-          const [type, subId, payload] = data;
-
-          if (type === "EVENT" && subId) {
-            const sub = this.subscriptions.get(subId);
-            if (sub) {
-              sub.onEvent(payload as NostrEvent, url);
-            }
-          } else if (type === "EOSE" && subId) {
-            const sub = this.subscriptions.get(subId);
-            if (sub && sub.onEose) {
-              sub.onEose(url);
-            }
-          }
-        } catch {
-          // Ignore parse errors from relays
-        }
+        this.handleRelayMessage(event.data, url);
       };
 
       ws.onclose = () => {
@@ -138,6 +119,29 @@ export class RelayPool {
     }
     this.relays.clear();
     this.subscriptions.clear();
+  }
+
+  handleRelayMessage(messageData: string, relayUrl: string = "wss://mock.relay"): void {
+    try {
+      const data = JSON.parse(messageData);
+      if (!Array.isArray(data)) return;
+
+      const [type, subId, payload] = data;
+
+      if (type === "EVENT" && subId) {
+        const sub = this.subscriptions.get(subId);
+        if (sub) {
+          sub.onEvent(payload as NostrEvent, relayUrl);
+        }
+      } else if (type === "EOSE" && subId) {
+        const sub = this.subscriptions.get(subId);
+        if (sub && sub.onEose) {
+          sub.onEose(relayUrl);
+        }
+      }
+    } catch {
+      // Ignore parse errors from relays
+    }
   }
 
   getConnectedRelayCount(): number {

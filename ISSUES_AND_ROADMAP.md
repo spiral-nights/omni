@@ -14,7 +14,7 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
  phase 1: transparent nsites & microkernel shell (active)                               |
 +---------------------------------------------------------------------------------------+
 |  [MILESTONE 1]  [COMPLETED] Transparent APIs: Virtual WebSocket & NIP-07 Shim         |
-|  [MILESTONE 2]  Subscription Namespacing & Cache Isolation                           |
+|  [MILESTONE 2]  [COMPLETED] Subscription Namespacing & Cache Isolation                |
 |  [MILESTONE 3]  Zero-Manifest Pure nsite Loader (kind 35129)                          |
 |  [MILESTONE 4]  Decouple Shell UI into @omni/plugin-shell                             |
 |  [MILESTONE 5]  User-Defined Viewports (Decoupling "Slots" from Developers)           |
@@ -32,12 +32,13 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
   4. **Standard Storage:** [Done] Transparently partition `localStorage` and `indexedDB` per plugin sandbox.
 * **Priority:** Immediate / P0
 
-### Milestone 2: Subscription Namespacing & Cache Isolation
+### ~~Milestone 2: Subscription Namespacing & Cache Isolation~~ [COMPLETED]
 * **Goal:** Ensure data requested by Plugin 1 never leaks into or crosses over to Plugin 2.
+* **Status:** Complete (Namespaced subId routing `${pluginId}:${subId}`, strict ACL-governed cache filtering for sensitive kinds 4/1059/14, and per-plugin IndexedDB compound key storage partitioning).
 * **Scope:**
-  1. **Subscription Namespacing:** Prefix all subscription IDs with the requesting plugin ID (`${pluginId}:${subId}`). Incoming `EVENT` and `EOSE` frames from relays are routed strictly to the originating plugin's virtual socket.
-  2. **ACL-Governed Cache Filtering:** When plugins query the shared `LocalEventStore` (0ms cache), enforce ACL filtering so low-privilege plugins cannot read sensitive events (e.g. Kind-4/1059 DMs) even if they exist in the local database.
-  3. **Storage Partitioning:** Sandbox-isolated IndexedDB databases ensuring zero cross-plugin state access.
+  1. **Subscription Namespacing:** [Done] Prefix all subscription IDs with the requesting plugin ID (`${pluginId}:${subId}`). Incoming `EVENT` and `EOSE` frames from relays are routed strictly to the originating plugin's virtual socket.
+  2. **ACL-Governed Cache Filtering:** [Done] When plugins query the shared `LocalEventStore` (0ms cache), enforce ACL filtering so low-privilege plugins cannot read sensitive events (e.g. Kind-4/1059 DMs) even if they exist in the local database.
+  3. **Storage Partitioning:** [Done] Sandbox-isolated IndexedDB databases ensuring zero cross-plugin state access.
 * **Priority:** Immediate / P0
 
 ### Milestone 3: Zero-Manifest Pure nsite Loader

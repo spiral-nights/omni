@@ -47,4 +47,22 @@ export class AclEngine {
 
     return false;
   }
+
+  async canReadEvent(pluginId: string, event: { kind: number }): Promise<boolean> {
+    const SENSITIVE_KINDS = [4, 1059, 14];
+    if (SENSITIVE_KINDS.includes(event.kind)) {
+      const encryptGrant = this.store.getGrant(pluginId, "nostr:encrypt");
+      if (encryptGrant === "always" || encryptGrant === "session") {
+        return true;
+      }
+      const specificKindGrant = this.store.getGrant(pluginId, "nostr:read", String(event.kind), false);
+      if (specificKindGrant === "always" || specificKindGrant === "session") {
+        return true;
+      }
+      return false;
+    }
+
+    return this.checkPermission(pluginId, "nostr:read", { kind: event.kind });
+  }
 }
+

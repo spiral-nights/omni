@@ -18,6 +18,8 @@ export interface OmniKernelOptions {
   layoutManager?: LayoutManager;
   runtimeScript?: string;
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
+  eventStoreName?: string;
+  storageName?: string;
 }
 
 export class OmniKernel {
@@ -37,12 +39,12 @@ export class OmniKernel {
 
   constructor(options: OmniKernelOptions = {}) {
     this.keystore = new WebCryptoKeystore(options.privateKeyHex);
-    this.eventStore = new LocalEventStore();
+    this.eventStore = new LocalEventStore(options.eventStoreName);
     this.relayPool = new RelayPool({ bootstrapRelays: options.bootstrapRelays });
-    this.subscriptionCoordinator = new SubscriptionCoordinator(this.eventStore, this.relayPool);
     this.capabilityStore = new CapabilityStore();
     this.aclEngine = new AclEngine(this.capabilityStore, options.promptHandler);
-    this.storageManager = new PluginStorageManager();
+    this.subscriptionCoordinator = new SubscriptionCoordinator(this.eventStore, this.relayPool, this.aclEngine);
+    this.storageManager = new PluginStorageManager(options.storageName);
     this.intentBroker = new IntentBroker();
     this.layoutManager = options.layoutManager || new LayoutManager();
     this.runtimeScript = options.runtimeScript;
