@@ -12,12 +12,6 @@
   "entry": "dist/index.js",
   "components": [
     {
-      "id": "relay-status-pill",
-      "type": "widget",
-      "title": "Relay Status Pill",
-      "slot": "header-status"
-    },
-    {
       "id": "relay-sidebar-widget",
       "type": "sidebar",
       "title": "Relay Pool",

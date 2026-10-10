@@ -265,5 +265,60 @@ describe("RemoteDomHost Standard HTML Projection", () => {
     document.body.removeChild(container);
     document.body.removeChild(iframe);
   });
+
+  it("intercepts click events on elements with initial eventListeners in inserted tree (mutation 0)", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const onEvent = vi.fn();
+    const host = new RemoteDomHost({
+      container,
+      componentId: "timer-widget",
+      onEvent
+    });
+
+    // Insert tree with nested button having initial eventListeners: { click: true }
+    host.mutate([
+      [
+        0,
+        "~",
+        {
+          id: "card-1",
+          type: 1,
+          element: "div",
+          attributes: { class: "timer-card" },
+          children: [
+            {
+              id: "btn-start",
+              type: 1,
+              element: "button",
+              attributes: { class: "btn-start" },
+              eventListeners: { click: true },
+              children: [{ id: "txt-start", type: 3, data: "Start" }]
+            }
+          ]
+        },
+        0
+      ]
+    ]);
+
+    const btnStart = container.querySelector(".btn-start") as HTMLButtonElement;
+    expect(btnStart).not.toBeNull();
+
+    // Trigger click on host button
+    btnStart.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(onEvent).toHaveBeenCalledWith(
+      "timer-widget",
+      expect.objectContaining({
+        id: "btn-start",
+        eventName: "click"
+      })
+    );
+
+    host.destroy();
+    document.body.removeChild(container);
+  });
 });
 

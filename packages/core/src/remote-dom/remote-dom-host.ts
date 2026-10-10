@@ -42,16 +42,44 @@ export class RemoteDomHost {
       root: this.container,
       elements: allowed
     });
+
+    // Ensure form inputs (input, textarea, select) pass value/checked in event.detail
+    // so DOMRemoteReceiver's handler (which passes event.detail) conveys input values
+    if (this.container instanceof HTMLElement) {
+      const enrichInputEvent = (e: Event) => {
+        const target = e.target as any;
+        if (target && ("value" in target || "checked" in target)) {
+          try {
+            Object.defineProperty(e, "detail", {
+              value: {
+                value: target.value !== undefined ? String(target.value) : "",
+                checked: Boolean(target.checked)
+              },
+              configurable: true
+            });
+          } catch {}
+        }
+      };
+
+      this.container.addEventListener("input", enrichInputEvent, true);
+      this.container.addEventListener("change", enrichInputEvent, true);
+    }
   }
 
   mutate(records: any[]): void {
     const wrappedRecords = records.map((rec) => {
+      // Mutation 0 (MUTATION_TYPE_INSERT_CHILD): wrap all eventListeners in inserted tree
+      if (rec[0] === 0 && rec[2]) {
+        this.wrapNodeEventListeners(rec[2]);
+        return rec;
+      }
+
       // Mutation 3 (MUTATION_TYPE_UPDATE_PROPERTY) with updateType 3 (UPDATE_PROPERTY_TYPE_EVENT_LISTENER)
       if (rec[0] === 3 && rec[4] === 3) {
         const id = rec[1];
         const property = rec[2];
         const value = rec[3];
-        if (value) {
+        if (value && typeof value !== "function") {
           const listener = (detail: any) => {
             this.onEvent(this.componentId, {
               id,
@@ -133,6 +161,30 @@ export class RemoteDomHost {
       return this.receiver.connection.call(id, method, ...args);
     } catch (err) {
       console.error(`Remote DOM method call error in [${this.componentId}]:`, err);
+    }
+  }
+
+  private wrapNodeEventListeners(node: any): void {
+    if (!node || typeof node !== "object") return;
+    if (node.eventListeners && typeof node.eventListeners === "object") {
+      const id = node.id;
+      for (const eventName of Object.keys(node.eventListeners)) {
+        const val = node.eventListeners[eventName];
+        if (typeof val !== "function") {
+          node.eventListeners[eventName] = (detail: any) => {
+            this.onEvent(this.componentId, {
+              id,
+              eventName,
+              detail
+            });
+          };
+        }
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        this.wrapNodeEventListeners(child);
+      }
     }
   }
 

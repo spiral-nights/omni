@@ -105,7 +105,9 @@
     sendMutation(record) {
       this.mutationQueue.push(record);
       if (!this.flushTimeout) {
-        this.flushTimeout = setTimeout(() => {
+        this.flushTimeout = true;
+        queueMicrotask(() => {
+          this.flushTimeout = false;
           if (portRemoteDom && this.mutationQueue.length > 0) {
             portRemoteDom.postMessage({
               type: "mutate",
@@ -114,8 +116,7 @@
             });
             this.mutationQueue = [];
           }
-          this.flushTimeout = null;
-        }, 5);
+        });
       }
     }
 
@@ -137,6 +138,37 @@
             cur = cur.parentNode;
           }
           return false;
+        }
+
+        get parentElement() {
+          return this.parentNode && this.parentNode.nodeType === 1 ? this.parentNode : null;
+        }
+
+        remove() {
+          if (this.parentNode) {
+            this.parentNode.removeChild(this);
+          }
+        }
+
+        get firstChild() {
+          return this.childNodes.length > 0 ? this.childNodes[0] : null;
+        }
+
+        get lastChild() {
+          return this.childNodes.length > 0 ? this.childNodes[this.childNodes.length - 1] : null;
+        }
+
+        get children() {
+          return this.childNodes.filter((c) => c.nodeType === 1);
+        }
+
+        get firstElementChild() {
+          return this.childNodes.find((c) => c.nodeType === 1) || null;
+        }
+
+        get lastElementChild() {
+          const els = this.children;
+          return els.length > 0 ? els[els.length - 1] : null;
         }
       }
 
@@ -250,9 +282,14 @@
           return this.childNodes.map((c) => c.textContent || "").join("");
         }
         set textContent(val) {
+          const str = String(val ?? "");
+          if (this.childNodes.length === 1 && this.childNodes[0].nodeType === 3) {
+            this.childNodes[0].data = str;
+            return;
+          }
           this.replaceChildren();
-          if (val) {
-            this.appendChild(new RemoteText(++self.nextNodeId, val));
+          if (str) {
+            this.appendChild(new RemoteText(++self.nextNodeId, str));
           }
         }
 

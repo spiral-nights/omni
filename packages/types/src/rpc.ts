@@ -81,5 +81,6 @@ export interface OmniInitMessage {
       colors: Record<string, string>;
     };
     slots: string[];
+    scriptContent?: string;
   };
 }

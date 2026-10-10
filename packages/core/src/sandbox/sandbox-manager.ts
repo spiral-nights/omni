@@ -26,6 +26,7 @@ export interface SandboxInstanceOptions {
   keystore: WebCryptoKeystore;
   relayPool: RelayPool;
   eventStore: LocalEventStore;
+  sandboxUrl?: string;
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
 }
 
@@ -76,11 +77,9 @@ export class SandboxInstance {
       this.manifest.id.startsWith("org.omni.core");
 
     this.iframe = document.createElement("iframe");
-    if (isTrusted) {
-      this.iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
-    } else {
-      this.iframe.setAttribute("sandbox", "allow-scripts");
-    }
+    // Use strict allow-scripts without allow-same-origin to prevent browser sandbox elevation warnings
+    // and maintain proper origin isolation (opaque 'null' origin).
+    this.iframe.setAttribute("sandbox", "allow-scripts");
     this.iframe.style.display = "none";
     this.iframe.setAttribute("data-plugin-id", this.manifest.id);
 
@@ -164,11 +163,25 @@ export class SandboxInstance {
       ? "default-src 'self' 'unsafe-inline' blob: http: https: data:; style-src 'unsafe-inline' 'self'; connect-src *;"
       : "default-src 'none'; script-src 'unsafe-inline' blob: 'self' http: https:; style-src 'unsafe-inline'; connect-src 'none';";
 
-    const runtimeCode = this.options.runtimeScript || DEFAULT_OMNI_RUNTIME;
+    const baseHref = typeof window !== "undefined" && window.location?.origin
+      ? `${window.location.origin}/`
+      : "/";
+
+    // Strip any sourceMappingURL and sourceURL comments to prevent DevTools URL constructor errors on about:srcdoc
+    const runtimeCode = (this.options.runtimeScript || DEFAULT_OMNI_RUNTIME)
+      .replace(/\/\/[#@]\s*sourceMappingURL=[^\r\n]*/gi, "")
+      .replace(/\/\*#\s*sourceMappingURL=[\s\S]*?\*\//gi, "")
+      .replace(/\/\/[#@]\s*sourceURL=[^\r\n]*/gi, "");
+
+    const pluginCode = (this.options.scriptContent || "")
+      .replace(/\/\/[#@]\s*sourceMappingURL=[^\r\n]*/gi, "")
+      .replace(/\/\*#\s*sourceMappingURL=[\s\S]*?\*\//gi, "")
+      .replace(/\/\/[#@]\s*sourceURL=[^\r\n]*/gi, "");
 
     this.iframe.srcdoc = `<!DOCTYPE html>
 <html>
 <head>
+  <base href="${baseHref}">
   <meta http-equiv="Content-Security-Policy" content="${csp}">
   <script>
     window.addEventListener("error", function(e) {
@@ -181,7 +194,7 @@ export class SandboxInstance {
 </head>
 <body>
   <script type="module">
-    ${this.options.scriptContent}
+    ${pluginCode}
   </script>
 </body>
 </html>`;

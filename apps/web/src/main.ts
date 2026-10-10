@@ -16,37 +16,62 @@ import omniRuntimeScript from "../public/omni-runtime.js?raw";
 import { icon } from "./icons.js";
 
 // DOM Element references
-const headerStatusSlot = document.getElementById("header-status-slot")!;
 const headerActionsSlot = document.getElementById("header-actions-slot")!;
 const mainSlot = document.getElementById("main-slot")!;
+const widgetsSlot = document.getElementById("widgets-slot")!;
 const dockSlot = document.getElementById("dock-slot")!;
-const desktopSidebar = document.getElementById("desktop-sidebar")!;
-const desktopSidebarSlot = document.getElementById("desktop-sidebar-slot")!;
-const mobileSidebarSlot = document.getElementById("mobile-sidebar-slot")!;
-const drawerOverlay = document.getElementById("drawer-overlay")!;
-const drawerSheet = document.getElementById("drawer-sheet")!;
-const btnCloseDrawer = document.getElementById("btn-close-drawer")!;
+const pageFeed = document.getElementById("page-feed")!;
+const pageWidgets = document.getElementById("page-widgets")!;
 const dockBtnWidgets = document.getElementById("dock-btn-widgets")!;
 const dockBtnFeed = document.getElementById("dock-btn-feed")!;
-const dockBtnLayout = document.getElementById("dock-btn-layout")!;
 const dockBtnSettings = document.getElementById("dock-btn-settings")!;
-const btnOpenLayout = document.getElementById("btn-open-layout")!;
-const btnOpenPlugins = document.getElementById("btn-open-plugins")!;
-const pluginModal = document.getElementById("plugin-modal")!;
-const btnCloseModal = document.getElementById("btn-close-modal")!;
 const pluginsListContainer = document.getElementById("plugins-list")!;
 
-// Layout Customizer Modal Element references
-const layoutModal = document.getElementById("layout-modal")!;
-const btnCloseLayoutModal = document.getElementById("btn-close-layout-modal")!;
-const btnResetLayout = document.getElementById("btn-reset-layout")!;
-const btnDoneLayout = document.getElementById("btn-done-layout")!;
-const layoutSlotsList = document.getElementById("layout-slots-list")!;
+// Unified Settings Modal Element references
+const settingsModal = document.getElementById("settings-modal")!;
+const btnCloseSettingsModal = document.getElementById("btn-close-settings-modal")!;
 
-// Profile Modal Element references
-const profileModal = document.getElementById("profile-modal");
+type SettingsTab = "profile" | "relays" | "layout" | "plugins" | "config";
+
+const settingsNavBtns: Record<SettingsTab, HTMLElement | null> = {
+  profile: document.getElementById("settings-tab-btn-profile"),
+  relays: document.getElementById("settings-tab-btn-relays"),
+  layout: document.getElementById("settings-tab-btn-layout"),
+  plugins: document.getElementById("settings-tab-btn-plugins"),
+  config: document.getElementById("settings-tab-btn-config")
+};
+
+const settingsPanes: Record<SettingsTab, HTMLElement | null> = {
+  profile: document.getElementById("settings-pane-profile"),
+  relays: document.getElementById("settings-pane-relays"),
+  layout: document.getElementById("settings-pane-layout"),
+  plugins: document.getElementById("settings-pane-plugins"),
+  config: document.getElementById("settings-pane-config")
+};
+
+// Visual Layout Diagram Slot references
+const visualListHeaderActions = document.getElementById("visual-list-header-actions");
+const visualListDock = document.getElementById("visual-list-dock");
+const visualListMain = document.getElementById("visual-list-main");
+const visualListSidebar = document.getElementById("visual-list-sidebar");
+const btnResetLayout = document.getElementById("btn-reset-layout");
+
+// Relays Manager Element references
+const inputAddRelay = document.getElementById("input-add-relay") as HTMLInputElement | null;
+const btnAddRelay = document.getElementById("btn-add-relay") as HTMLButtonElement | null;
+const settingsRelaysList = document.getElementById("settings-relays-list");
+const relaysStatusBadge = document.getElementById("relays-status-badge");
+
+// Plugin Config Element references
+const cfgTimerWork = document.getElementById("cfg-timer-work") as HTMLInputElement | null;
+const cfgTimerBreak = document.getElementById("cfg-timer-break") as HTMLInputElement | null;
+const cfgTimerLongBreak = document.getElementById("cfg-timer-long-break") as HTMLInputElement | null;
+const btnSaveTimerCfg = document.getElementById("btn-save-timer-cfg") as HTMLButtonElement | null;
+const btnClearCompletedTasks = document.getElementById("btn-clear-completed-tasks") as HTMLButtonElement | null;
+const cfgFeedLimit = document.getElementById("cfg-feed-limit") as HTMLInputElement | null;
+
+// Profile Elements
 const userBadge = document.getElementById("user-badge");
-const btnCloseProfileModal = document.getElementById("btn-close-profile-modal");
 const tabBtnProfileInfo = document.getElementById("tab-btn-profile-info");
 const tabBtnProfileKeys = document.getElementById("tab-btn-profile-keys");
 const profilePaneInfo = document.getElementById("profile-pane-info");
@@ -73,64 +98,50 @@ const inputImportNsec = document.getElementById("input-import-nsec") as HTMLInpu
 const btnGenerateNewKey = document.getElementById("btn-generate-new-key") as HTMLButtonElement | null;
 const btnConfirmImportKey = document.getElementById("btn-confirm-import-key") as HTMLButtonElement | null;
 
-// 1. Mobile Drawer Control
-function openDrawer() {
-  drawerOverlay.classList.add("open");
-  drawerSheet.classList.add("open");
-}
+// 1. Full-Page Multi-View Routing (Feed Page vs Full Widgets Page)
+type AppPage = "feed" | "widgets";
 
-function closeDrawer() {
-  drawerOverlay.classList.remove("open");
-  drawerSheet.classList.remove("open");
-}
+function showPage(page: AppPage) {
+  if (page === "feed") {
+    pageFeed.classList.add("active");
+    pageWidgets.classList.remove("active");
+    dockBtnFeed?.classList.add("active");
+    dockBtnWidgets?.classList.remove("active");
 
-function toggleDrawer() {
-  if (drawerSheet.classList.contains("open")) {
-    closeDrawer();
+    // Also highlight plugin-registered dock icons
+    document.querySelectorAll(".dock-item").forEach((btn) => {
+      const title = btn.getAttribute("title") || "";
+      if (title.toLowerCase().includes("feed")) {
+        btn.classList.add("active");
+      } else if (title.toLowerCase().includes("timer") || title.toLowerCase().includes("tasks") || title.toLowerCase().includes("widget")) {
+        btn.classList.remove("active");
+      }
+    });
+
+    mainSlot.scrollIntoView({ behavior: "smooth" });
   } else {
-    openDrawer();
+    pageWidgets.classList.add("active");
+    pageFeed.classList.remove("active");
+    dockBtnWidgets?.classList.add("active");
+    dockBtnFeed?.classList.remove("active");
+
+    document.querySelectorAll(".dock-item").forEach((btn) => {
+      const title = btn.getAttribute("title") || "";
+      if (title.toLowerCase().includes("feed")) {
+        btn.classList.remove("active");
+      } else if (title.toLowerCase().includes("timer") || title.toLowerCase().includes("tasks") || title.toLowerCase().includes("widget")) {
+        btn.classList.add("active");
+      }
+    });
+
+    widgetsSlot.scrollIntoView({ behavior: "smooth" });
   }
 }
 
-// 2. Responsive Slot Container Setup
-// Shared wrapper for sidebar widgets so their Remote DOM nodes remain intact across breakpoint transitions
-const sidebarSlotWrapper = document.createElement("div");
-sidebarSlotWrapper.className = "omni-slot";
+dockBtnWidgets?.addEventListener("click", () => showPage("widgets"));
+dockBtnFeed?.addEventListener("click", () => showPage("feed"));
 
-function updateSidebarPlacement() {
-  const isDesktop = window.matchMedia("(min-width: 768px)").matches;
-  if (isDesktop) {
-    if (sidebarSlotWrapper.parentElement !== desktopSidebarSlot) {
-      desktopSidebarSlot.appendChild(sidebarSlotWrapper);
-    }
-  } else {
-    if (sidebarSlotWrapper.parentElement !== mobileSidebarSlot) {
-      mobileSidebarSlot.appendChild(sidebarSlotWrapper);
-    }
-  }
-}
-
-window.addEventListener("resize", updateSidebarPlacement);
-updateSidebarPlacement();
-
-// Synchronous Dock and Layout Button Listeners (Issue 6 & Issue 4)
-dockBtnWidgets?.addEventListener("click", () => {
-  const isDesktop = window.matchMedia("(min-width: 768px)").matches;
-  if (isDesktop) {
-    desktopSidebar.classList.toggle("collapsed");
-  } else {
-    toggleDrawer();
-  }
-});
-
-dockBtnFeed?.addEventListener("click", () => {
-  mainSlot?.scrollIntoView({ behavior: "smooth" });
-});
-
-btnCloseDrawer?.addEventListener("click", closeDrawer);
-drawerOverlay?.addEventListener("click", closeDrawer);
-
-// 3. Initialize OmniKernel
+// 2. Initialize OmniKernel
 const STORAGE_KEY_NSEC = "omni_privkey";
 const savedPrivkey = localStorage.getItem(STORAGE_KEY_NSEC) || undefined;
 
@@ -141,179 +152,29 @@ const kernel = new OmniKernel({
   onSlotAction: (action, slot) => {
     if (slot === "sidebar" || slot === "widgets") {
       if (action === "toggle") {
-        const isDesktop = window.matchMedia("(min-width: 768px)").matches;
-        if (isDesktop) {
-          desktopSidebar.classList.toggle("collapsed");
-        } else {
-          toggleDrawer();
-        }
+        const isWidgets = pageWidgets.classList.contains("active");
+        showPage(isWidgets ? "feed" : "widgets");
       } else if (action === "open") {
-        const isDesktop = window.matchMedia("(min-width: 768px)").matches;
-        if (isDesktop) {
-          desktopSidebar.classList.remove("collapsed");
-        } else {
-          openDrawer();
-        }
+        showPage("widgets");
       } else if (action === "close") {
-        const isDesktop = window.matchMedia("(min-width: 768px)").matches;
-        if (isDesktop) {
-          desktopSidebar.classList.add("collapsed");
-        } else {
-          closeDrawer();
-        }
+        showPage("feed");
       }
     } else if (slot === "main" || slot === "feed") {
-      mainSlot?.scrollIntoView({ behavior: "smooth" });
+      showPage("feed");
     }
   }
 });
 
 // Map of slot names to host containers
 const slotContainers = new Map<string, Element>();
-slotContainers.set("header-status", headerStatusSlot);
 slotContainers.set("header-actions", headerActionsSlot);
 slotContainers.set("main", mainSlot);
 slotContainers.set("dock", dockSlot);
 slotContainers.set("icon", dockSlot);
-slotContainers.set("sidebar", sidebarSlotWrapper);
+slotContainers.set("sidebar", widgetsSlot);
+slotContainers.set("widgets", widgetsSlot);
 
-// 4. Dynamic Layout Customizer UI (Issue 4)
-function renderLayoutCustomizer() {
-  if (!layoutSlotsList) return;
-  layoutSlotsList.innerHTML = "";
-  const mappings = kernel.layoutManager.getMappings();
-
-  for (const slot of STANDARD_SLOTS) {
-    const slotCard = document.createElement("div");
-    slotCard.style.cssText =
-      "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); border-radius: var(--omni-radius-md); padding: 12px; display: flex; flex-direction: column; gap: 10px;";
-
-    const slotHeader = document.createElement("div");
-    slotHeader.style.cssText =
-      "display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--omni-border-subtle); padding-bottom: 6px;";
-
-    const titleDiv = document.createElement("div");
-    titleDiv.innerHTML = `<span style="font-weight: 600; font-size: 0.9rem; color: var(--omni-accent-primary);">${slot.name}</span> <span style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted);">("${slot.id}")</span>`;
-
-    slotHeader.appendChild(titleDiv);
-    slotCard.appendChild(slotHeader);
-
-    const desc = document.createElement("div");
-    desc.style.cssText = "font-size: 0.75rem; color: var(--omni-text-muted);";
-    desc.textContent = slot.description;
-    slotCard.appendChild(desc);
-
-    const itemsContainer = document.createElement("div");
-    itemsContainer.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
-
-    const slotItems = mappings.filter((m) => m.slotId === slot.id);
-
-    if (slotItems.length === 0) {
-      const empty = document.createElement("div");
-      empty.style.cssText =
-        "font-size: 0.75rem; color: var(--omni-text-muted); font-style: italic; padding: 6px 0;";
-      empty.textContent = "No components currently assigned to this slot.";
-      itemsContainer.appendChild(empty);
-    } else {
-      for (const item of slotItems) {
-        const itemRow = document.createElement("div");
-        itemRow.style.cssText =
-          "display: flex; justify-content: space-between; align-items: center; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 8px 10px; gap: 8px;";
-
-        const plugin = installedPlugins.find((p) => p.id === item.pluginId);
-        const comp = plugin?.manifest?.components?.find((c: any) => c.id === item.componentId);
-        const compTitle = comp?.title || item.componentId;
-        const pluginName = plugin?.manifest?.name || item.pluginId;
-
-        const left = document.createElement("div");
-        left.style.cssText = "display: flex; flex-direction: column; gap: 2px; overflow: hidden;";
-        left.innerHTML = `<span style="font-weight: 500; font-size: 0.82rem; color: var(--omni-text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${compTitle}</span><span style="font-size: 0.68rem; color: var(--omni-text-muted);">${pluginName} (${item.componentId})</span>`;
-
-        const right = document.createElement("div");
-        right.style.cssText = "display: flex; align-items: center; gap: 8px;";
-
-        // Slot move dropdown
-        const select = document.createElement("select");
-        select.style.cssText =
-          "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none;";
-        for (const s of STANDARD_SLOTS) {
-          const opt = document.createElement("option");
-          opt.value = s.id;
-          opt.textContent = `Move to ${s.name}`;
-          if (s.id === slot.id) opt.selected = true;
-          select.appendChild(opt);
-        }
-        select.addEventListener("change", () => {
-          const targetSlotId = select.value;
-          const targetContainer = slotContainers.get(targetSlotId);
-          if (targetContainer) {
-            kernel.reparentPluginComponent(item.pluginId, item.componentId, targetSlotId, targetContainer);
-            renderLayoutCustomizer();
-          }
-        });
-
-        // Visible toggle checkbox
-        const toggleLabel = document.createElement("label");
-        toggleLabel.style.cssText =
-          "display: flex; align-items: center; gap: 4px; font-size: 0.72rem; color: var(--omni-text-secondary); cursor: pointer;";
-        const chk = document.createElement("input");
-        chk.type = "checkbox";
-        chk.checked = item.enabled;
-        chk.addEventListener("change", () => {
-          kernel.layoutManager.setComponentEnabled(item.pluginId, item.componentId, chk.checked);
-          kernel.getSandbox(item.pluginId)?.setComponentVisible(item.componentId, chk.checked);
-        });
-        toggleLabel.appendChild(chk);
-        toggleLabel.appendChild(document.createTextNode("Visible"));
-
-        right.appendChild(select);
-        right.appendChild(toggleLabel);
-
-        itemRow.appendChild(left);
-        itemRow.appendChild(right);
-        itemsContainer.appendChild(itemRow);
-      }
-    }
-
-    slotCard.appendChild(itemsContainer);
-    layoutSlotsList.appendChild(slotCard);
-  }
-}
-
-function openLayoutModal() {
-  renderLayoutCustomizer();
-  layoutModal?.classList.add("open");
-}
-
-function closeLayoutModal() {
-  layoutModal?.classList.remove("open");
-}
-
-btnOpenLayout?.addEventListener("click", openLayoutModal);
-dockBtnLayout?.addEventListener("click", openLayoutModal);
-btnCloseLayoutModal?.addEventListener("click", closeLayoutModal);
-btnDoneLayout?.addEventListener("click", closeLayoutModal);
-layoutModal?.addEventListener("click", (e) => {
-  if (e.target === layoutModal) closeLayoutModal();
-});
-
-btnResetLayout?.addEventListener("click", () => {
-  if (!confirm("Reset all plugin component slots back to defaults?")) return;
-  const manifests = installedPlugins.map((p) => p.manifest);
-  kernel.layoutManager.resetToDefaults(manifests);
-  for (const p of installedPlugins) {
-    for (const comp of p.manifest.components) {
-      const container = slotContainers.get(comp.slot);
-      if (container) {
-        kernel.getSandbox(p.id)?.reparentComponent(comp.id, container);
-      }
-    }
-  }
-  renderLayoutCustomizer();
-});
-
-
-// 5. Plugin Lifecycle & Manager Modal
+// 4. Plugin Registry & Installed Plugins Model
 interface InstalledPluginEntry {
   id: string;
   manifest: any;
@@ -362,6 +223,309 @@ const installedPlugins: InstalledPluginEntry[] = [
     enabled: true
   }
 ];
+
+// 5. Unified Settings Modal Navigation & Controls
+function openSettingsModal(tab: SettingsTab = "profile") {
+  switchSettingsTab(tab);
+  settingsModal.classList.add("open");
+}
+
+function closeSettingsModal() {
+  settingsModal.classList.remove("open");
+}
+
+function switchSettingsTab(tab: SettingsTab) {
+  for (const [key, btn] of Object.entries(settingsNavBtns)) {
+    if (btn) btn.classList.toggle("active", key === tab);
+  }
+  for (const [key, pane] of Object.entries(settingsPanes)) {
+    if (pane) pane.classList.toggle("active", key === tab);
+  }
+
+  if (tab === "profile") {
+    updateProfileUi();
+  } else if (tab === "relays") {
+    renderSettingsRelays();
+  } else if (tab === "layout") {
+    renderVisualLayoutConfigurator();
+  } else if (tab === "plugins") {
+    renderPluginManager();
+  } else if (tab === "config") {
+    renderPluginConfig();
+  }
+}
+
+for (const [tab, btn] of Object.entries(settingsNavBtns)) {
+  btn?.addEventListener("click", () => switchSettingsTab(tab as SettingsTab));
+}
+
+btnCloseSettingsModal?.addEventListener("click", closeSettingsModal);
+settingsModal?.addEventListener("click", (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && settingsModal?.classList.contains("open")) {
+    closeSettingsModal();
+  }
+});
+
+// 6. Visual Layout Configurator
+function renderVisualLayoutConfigurator() {
+  const visualSlotMap: Record<string, HTMLElement | null> = {
+    "header-actions": visualListHeaderActions,
+    "dock": visualListDock,
+    "main": visualListMain,
+    "sidebar": visualListSidebar
+  };
+
+  const mappings = kernel.layoutManager.getMappings();
+
+  for (const [slotId, container] of Object.entries(visualSlotMap)) {
+    if (!container) continue;
+    container.innerHTML = "";
+
+    const slotItems = mappings.filter((m) => m.slotId === slotId);
+
+    if (slotItems.length === 0) {
+      const empty = document.createElement("div");
+      empty.style.cssText =
+        "font-size: 0.7rem; color: var(--omni-text-muted); font-style: italic; padding: 8px 4px; text-align: center; border: 1px dashed var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
+      empty.textContent = "Empty slot";
+      container.appendChild(empty);
+      continue;
+    }
+
+    for (const item of slotItems) {
+      const plugin = installedPlugins.find((p) => p.id === item.pluginId);
+      const comp = plugin?.manifest?.components?.find((c: any) => c.id === item.componentId);
+      const compTitle = comp?.title || item.componentId;
+      const pluginName = plugin?.manifest?.name || item.pluginId;
+
+      const chip = document.createElement("div");
+      chip.className = "visual-comp-chip";
+
+      // Chip Header: Title + Subtitle
+      const infoDiv = document.createElement("div");
+      infoDiv.style.cssText = "display: flex; flex-direction: column; gap: 2px; overflow: hidden;";
+      infoDiv.innerHTML = `<span style="font-weight: 600; font-size: 0.78rem; color: var(--omni-text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${compTitle}</span><span style="font-size: 0.65rem; color: var(--omni-text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${pluginName}</span>`;
+
+      // Chip Controls: Move slot selector + Visibility checkbox
+      const controlsDiv = document.createElement("div");
+      controlsDiv.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 4px;";
+
+      // Slot move dropdown
+      const select = document.createElement("select");
+      select.style.cssText =
+        "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.68rem; padding: 2px 4px; border-radius: var(--omni-radius-sm); outline: none; flex: 1; min-width: 0;";
+      for (const s of STANDARD_SLOTS) {
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = `→ ${s.name}`;
+        if (s.id === slotId) opt.selected = true;
+        select.appendChild(opt);
+      }
+      select.addEventListener("change", () => {
+        const targetSlotId = select.value;
+        const targetContainer = slotContainers.get(targetSlotId);
+        if (targetContainer) {
+          kernel.reparentPluginComponent(item.pluginId, item.componentId, targetSlotId, targetContainer);
+          renderVisualLayoutConfigurator();
+        }
+      });
+
+      // Visible toggle checkbox
+      const toggleLabel = document.createElement("label");
+      toggleLabel.style.cssText =
+        "display: flex; align-items: center; gap: 3px; font-size: 0.68rem; color: var(--omni-text-secondary); cursor: pointer; flex-shrink: 0;";
+      const chk = document.createElement("input");
+      chk.type = "checkbox";
+      chk.checked = item.enabled;
+      chk.addEventListener("change", () => {
+        kernel.layoutManager.setComponentEnabled(item.pluginId, item.componentId, chk.checked);
+        kernel.getSandbox(item.pluginId)?.setComponentVisible(item.componentId, chk.checked);
+      });
+      toggleLabel.appendChild(chk);
+      toggleLabel.appendChild(document.createTextNode("Show"));
+
+      controlsDiv.appendChild(select);
+      controlsDiv.appendChild(toggleLabel);
+
+      chip.appendChild(infoDiv);
+      chip.appendChild(controlsDiv);
+      container.appendChild(chip);
+    }
+  }
+}
+
+btnResetLayout?.addEventListener("click", () => {
+  if (!confirm("Reset all plugin component slots back to defaults?")) return;
+  const manifests = installedPlugins.map((p) => p.manifest);
+  kernel.layoutManager.resetToDefaults(manifests);
+  for (const p of installedPlugins) {
+    for (const comp of p.manifest.components) {
+      const container = slotContainers.get(comp.slot);
+      if (container) {
+        kernel.getSandbox(p.id)?.reparentComponent(comp.id, container);
+      }
+    }
+  }
+  renderVisualLayoutConfigurator();
+});
+
+// 7. Relays Pool Manager Settings UI
+function renderSettingsRelays() {
+  if (!settingsRelaysList) return;
+  settingsRelaysList.innerHTML = "";
+
+  const relays = kernel.relayPool.getAllRelays();
+  const connectedCount = relays.filter((r) => r.status === "connected").length;
+
+  if (relaysStatusBadge) {
+    relaysStatusBadge.textContent = `${connectedCount} / ${relays.length} Connected`;
+    relaysStatusBadge.style.color = connectedCount > 0 ? "var(--omni-status-online)" : "var(--omni-text-muted)";
+  }
+
+  if (relays.length === 0) {
+    const empty = document.createElement("div");
+    empty.style.cssText =
+      "font-size: 0.78rem; color: var(--omni-text-muted); font-style: italic; padding: 16px; text-align: center;";
+    empty.textContent = "No relays connected. Add one above or select a preset.";
+    settingsRelaysList.appendChild(empty);
+    return;
+  }
+
+  for (const r of relays) {
+    const row = document.createElement("div");
+    row.style.cssText =
+      "display: flex; justify-content: space-between; align-items: center; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 8px 12px; gap: 10px;";
+
+    const left = document.createElement("div");
+    left.style.cssText = "display: flex; align-items: center; gap: 8px; overflow: hidden; min-width: 0;";
+
+    const dot = document.createElement("span");
+    const dotColor =
+      r.status === "connected"
+        ? "var(--omni-status-online)"
+        : r.status === "connecting"
+        ? "#f59e0b"
+        : "var(--omni-status-offline)";
+    dot.style.cssText = `width: 8px; height: 8px; border-radius: 50%; background: ${dotColor}; flex-shrink: 0;`;
+
+    const urlSpan = document.createElement("span");
+    urlSpan.style.cssText =
+      "font-family: var(--omni-font-mono); font-size: 0.78rem; color: var(--omni-text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;";
+    urlSpan.textContent = r.url;
+
+    const statusPill = document.createElement("span");
+    statusPill.style.cssText =
+      "font-size: 0.68rem; color: var(--omni-text-muted); text-transform: capitalize; flex-shrink: 0;";
+    statusPill.textContent = r.status;
+
+    left.appendChild(dot);
+    left.appendChild(urlSpan);
+    left.appendChild(statusPill);
+
+    const btnRemove = document.createElement("button");
+    btnRemove.className = "btn-secondary";
+    btnRemove.style.cssText = "font-size: 0.72rem; padding: 3px 8px; color: #f87171; flex-shrink: 0;";
+    btnRemove.textContent = "Disconnect";
+    btnRemove.addEventListener("click", () => {
+      kernel.relayPool.removeRelay(r.url);
+      renderSettingsRelays();
+    });
+
+    row.appendChild(left);
+    row.appendChild(btnRemove);
+    settingsRelaysList.appendChild(row);
+  }
+}
+
+btnAddRelay?.addEventListener("click", () => {
+  let url = inputAddRelay?.value.trim();
+  if (!url) return;
+  if (!url.startsWith("wss://") && !url.startsWith("ws://")) {
+    url = `wss://${url}`;
+  }
+  kernel.relayPool.addRelay(url);
+  if (inputAddRelay) inputAddRelay.value = "";
+  renderSettingsRelays();
+});
+
+inputAddRelay?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    btnAddRelay?.click();
+  }
+});
+
+document.querySelectorAll(".relay-preset-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const url = btn.getAttribute("data-url");
+    if (url) {
+      kernel.relayPool.addRelay(url);
+      renderSettingsRelays();
+    }
+  });
+});
+
+// 8. Plugin Preferences / Dedicated Config
+function renderPluginConfig() {
+  const savedTimer = localStorage.getItem("omni_timer_config");
+  if (savedTimer) {
+    try {
+      const parsed = JSON.parse(savedTimer);
+      if (cfgTimerWork && parsed.work) cfgTimerWork.value = String(parsed.work);
+      if (cfgTimerBreak && parsed.shortBreak) cfgTimerBreak.value = String(parsed.shortBreak);
+      if (cfgTimerLongBreak && parsed.longBreak) cfgTimerLongBreak.value = String(parsed.longBreak);
+    } catch {}
+  }
+
+  const savedLimit = localStorage.getItem("omni_feed_limit");
+  if (savedLimit && cfgFeedLimit) {
+    cfgFeedLimit.value = savedLimit;
+  }
+}
+
+btnSaveTimerCfg?.addEventListener("click", async () => {
+  const work = parseInt(cfgTimerWork?.value || "25", 10);
+  const shortBreak = parseInt(cfgTimerBreak?.value || "5", 10);
+  const longBreak = parseInt(cfgTimerLongBreak?.value || "15", 10);
+  const cfg = { work, shortBreak, longBreak };
+
+  localStorage.setItem("omni_timer_config", JSON.stringify(cfg));
+  await kernel.storageManager.set("org.omni.plugin.timer", "timer_config", cfg);
+
+  if (btnSaveTimerCfg) {
+    btnSaveTimerCfg.textContent = "Saved!";
+    setTimeout(() => {
+      btnSaveTimerCfg.textContent = "Save Timer Settings";
+    }, 1500);
+  }
+});
+
+btnClearCompletedTasks?.addEventListener("click", async () => {
+  try {
+    const tasksRaw = await kernel.storageManager.get("org.omni.plugin.checklist", "checklist_tasks");
+    if (Array.isArray(tasksRaw)) {
+      const active = (tasksRaw as any[]).filter((t: any) => !t.done);
+      await kernel.storageManager.set("org.omni.plugin.checklist", "checklist_tasks", active);
+    }
+    if (btnClearCompletedTasks) {
+      btnClearCompletedTasks.textContent = "Completed Tasks Cleared!";
+      setTimeout(() => {
+        btnClearCompletedTasks.textContent = "Clear Completed Tasks";
+      }, 1500);
+    }
+  } catch (err) {
+    console.error("Failed to clear tasks:", err);
+  }
+});
+
+cfgFeedLimit?.addEventListener("change", () => {
+  if (cfgFeedLimit) {
+    localStorage.setItem("omni_feed_limit", cfgFeedLimit.value);
+  }
+});
+
 
 // Additional Modal References
 const pluginsCountBadge = document.getElementById("plugins-count-badge")!;
@@ -530,12 +694,11 @@ function renderPluginManager() {
 }
 
 function openPluginModal() {
-  renderPluginManager();
-  pluginModal.classList.add("open");
+  openSettingsModal("plugins");
 }
 
 function closePluginModal() {
-  pluginModal.classList.remove("open");
+  closeSettingsModal();
 }
 
 // Plugin Inspector Modal Logic
@@ -1002,12 +1165,7 @@ function uninstallPlugin(pluginId: string) {
 }
 
 // Synchronous Top-Level UI Event Bindings
-dockBtnSettings?.addEventListener("click", openPluginModal);
-btnOpenPlugins?.addEventListener("click", openPluginModal);
-btnCloseModal?.addEventListener("click", closePluginModal);
-pluginModal?.addEventListener("click", (e) => {
-  if (e.target === pluginModal) closePluginModal();
-});
+dockBtnSettings?.addEventListener("click", () => openSettingsModal("profile"));
 
 // Profile & Identity Modal Wiring
 async function updateProfileUi() {
@@ -1074,22 +1232,17 @@ inputProfileName?.addEventListener("input", updateLivePreview);
 inputProfilePicture?.addEventListener("input", updateLivePreview);
 
 function openProfileModal() {
-  profileModal?.classList.add("open");
-  updateProfileUi();
+  openSettingsModal("profile");
   if (privateKeyDisplayWrapper) privateKeyDisplayWrapper.style.display = "none";
   if (profileKeysNsec) profileKeysNsec.value = "";
   if (btnRevealNsec) btnRevealNsec.textContent = "Reveal Private Key";
 }
 
 function closeProfileModal() {
-  profileModal?.classList.remove("open");
+  closeSettingsModal();
 }
 
 userBadge?.addEventListener("click", openProfileModal);
-btnCloseProfileModal?.addEventListener("click", closeProfileModal);
-profileModal?.addEventListener("click", (e: MouseEvent) => {
-  if (e.target === profileModal) closeProfileModal();
-});
 
 tabBtnProfileInfo?.addEventListener("click", () => {
   tabBtnProfileInfo.classList.add("active");
@@ -1237,15 +1390,6 @@ async function startApp() {
   await updateProfileUi();
   const userPubkey = await kernel.getUserPubkey();
 
-  // Mount all enabled plugins into runtime sandboxes
-  console.log("⚡ [Omni Web] Mounting core plugins into modular runtime...");
-  for (const p of installedPlugins) {
-    if (p.enabled) {
-      console.log(`⚡ [Omni Web] Mounting plugin ${p.manifest.name}...`);
-      await kernel.registerPlugin(p.manifest as any, p.scriptContent, slotContainers);
-    }
-  }
-
   // Check existing events in local store; if empty, seed a welcome note
   const existingNotes = await kernel.eventStore.getEvents({ kinds: [1], limit: 5 });
   if (existingNotes.length === 0) {
@@ -1253,6 +1397,15 @@ async function startApp() {
     await kernel.publishNote(
       "Welcome to Omni! ✦ A modular, mobile-first Nostr web client where every feature is a first-class plugin. Use the Layout tool to customize widget slots, and inspect relay connections via the status pill."
     );
+  }
+
+  // Mount all enabled plugins into runtime sandboxes
+  console.log("⚡ [Omni Web] Mounting core plugins into modular runtime...");
+  for (const p of installedPlugins) {
+    if (p.enabled) {
+      console.log(`⚡ [Omni Web] Mounting plugin ${p.manifest.name}...`);
+      await kernel.registerPlugin(p.manifest as any, p.scriptContent, slotContainers);
+    }
   }
 
   console.log("🚀 [Omni Web] App running successfully!");

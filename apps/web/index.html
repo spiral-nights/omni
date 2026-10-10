@@ -15,22 +15,8 @@
       <span style="font-size: 0.72rem; color: var(--omni-text-muted); background: var(--omni-bg-subtle); padding: 2px 6px; border-radius: var(--omni-radius-pill);">MVP</span>
     </div>
     <div class="header-actions">
-      <!-- Dynamic Slot: header-status (e.g. relay-status-pill) -->
-      <div id="header-status-slot" class="omni-slot-inline" style="display: flex; align-items: center; gap: 8px;"></div>
       <!-- Dynamic Slot: header-actions (e.g. profile-badge) -->
       <div id="header-actions-slot" class="omni-slot-inline" style="display: flex; align-items: center; gap: 8px;"></div>
-      <button id="btn-open-layout" class="dock-item" style="min-width: unset; width: 32px; height: 32px; border-radius: var(--omni-radius-sm); color: var(--omni-text-secondary);" title="Customize Layout & Slots">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-          <line x1="3" y1="9" x2="21" y2="9"/>
-          <line x1="9" y1="21" x2="9" y2="9"/>
-        </svg>
-      </button>
-      <button id="btn-open-plugins" class="dock-item" style="min-width: unset; width: 32px; height: 32px; border-radius: var(--omni-radius-sm); color: var(--omni-text-secondary);" title="Plugin Manager">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M14 4h4a2 2 0 0 1 2 2v4a1 1 0 0 0 1 1 2 2 0 0 1 0 4 1 1 0 0 0-1 1v4a2 2 0 0 1-2 2h-4a1 1 0 0 0-1-1 2 2 0 0 1-4 0 1 1 0 0 0-1 1H4a2 2 0 0 1-2-2v-4a1 1 0 0 0 1-1 2 2 0 0 1 0-4 1 1 0 0 0-1-1V6a2 2 0 0 1 2-2h4a1 1 0 0 0 1 1 2 2 0 0 1 4 0 1 1 0 0 0 1-1z"/>
-        </svg>
-      </button>
     </div>
   </header>
 
@@ -41,7 +27,7 @@
       <!-- Dynamic Slot for Plugin Dock Icons -->
       <div id="dock-slot" class="dock-slot-container"></div>
 
-      <button class="dock-item" id="dock-btn-widgets" title="Toggle Widgets">
+      <button class="dock-item" id="dock-btn-widgets" title="Workspace Widgets & Tools">
         <div class="dock-icon-wrapper">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="9" rx="1.5"/>
@@ -53,93 +39,387 @@
         <span>Widgets</span>
       </button>
 
-      <button class="dock-item" id="dock-btn-layout" title="Customize Layout">
+      <button class="dock-item" id="dock-btn-settings" title="Settings & System Control">
         <div class="dock-icon-wrapper">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            <line x1="3" y1="9" x2="21" y2="9"/>
-            <line x1="9" y1="21" x2="9" y2="9"/>
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
         </div>
-        <span>Layout</span>
-      </button>
-
-      <button class="dock-item" id="dock-btn-settings" title="Plugins & Settings">
-        <div class="dock-icon-wrapper">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 4h4a2 2 0 0 1 2 2v4a1 1 0 0 0 1 1 2 2 0 0 1 0 4 1 1 0 0 0-1 1v4a2 2 0 0 1-2 2h-4a1 1 0 0 0-1-1 2 2 0 0 1-4 0 1 1 0 0 0-1 1H4a2 2 0 0 1-2-2v-4a1 1 0 0 0 1-1 2 2 0 0 1 0-4 1 1 0 0 0-1-1V6a2 2 0 0 1 2-2h4a1 1 0 0 0 1 1 2 2 0 0 1 4 0 1 1 0 0 0 1-1z"/>
-          </svg>
-        </div>
-        <span>Plugins</span>
+        <span>Settings</span>
       </button>
     </nav>
 
-    <!-- Center Viewport (Dynamic Slot: main) -->
+    <!-- Center Viewport with Multi-Page Views -->
     <main class="main-viewport">
-      <div id="main-slot" class="omni-slot main-viewport-slot" style="width: 100%; max-width: 640px; padding: 16px;"></div>
-    </main>
+      <!-- Page 1: Timeline Feed & Main Slot -->
+      <section class="app-page active" id="page-feed">
+        <div id="main-slot" class="omni-slot main-viewport-slot"></div>
+      </section>
 
-    <!-- Desktop Sidebar (Hidden on Mobile) -->
-    <aside class="desktop-sidebar" id="desktop-sidebar">
-      <div class="drawer-header">
-        <h2 class="drawer-title">Workspace Widgets</h2>
-      </div>
-      <!-- Desktop Sidebar Slot -->
-      <div id="desktop-sidebar-slot" class="omni-slot"></div>
-    </aside>
+      <!-- Page 2: Dedicated Full Widgets Dashboard -->
+      <section class="app-page" id="page-widgets">
+        <div class="widgets-page-header">
+          <div class="widgets-page-title-row">
+            <h2 class="widgets-page-title">Workspace Widgets & Tools</h2>
+            <span class="widgets-page-badge">Full View</span>
+          </div>
+          <p class="widgets-page-desc">All active modular widgets, tools, and productivity plugins.</p>
+        </div>
+        <div id="widgets-slot" class="omni-slot widgets-grid"></div>
+      </section>
+    </main>
   </div>
 
-  <!-- 3. Mobile Pull-Up Drawer Sheet for Widgets -->
-  <div class="mobile-drawer-overlay" id="drawer-overlay"></div>
-  <aside class="mobile-drawer-sheet" id="drawer-sheet">
-    <div class="drawer-drag-handle"></div>
-    <div class="drawer-header">
-      <h2 class="drawer-title">Workspace Widgets</h2>
-      <button class="btn-drawer-close" id="btn-close-drawer" title="Close widgets">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </div>
-    <!-- Mobile Sidebar Slot -->
-    <div id="mobile-sidebar-slot" class="omni-slot"></div>
-  </aside>
-
-  <!-- 4. Plugin Manager Modal Overlay -->
-  <div class="modal-overlay" id="plugin-modal">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <h3 style="font-size: 1.1rem; font-weight: 600;">Installed Plugins</h3>
-          <span id="plugins-count-badge" style="font-size: 0.72rem; background: var(--omni-bg-subtle); color: var(--omni-text-muted); padding: 1px 6px; border-radius: var(--omni-radius-pill);">2</span>
+  <!-- 4. Unified Settings & System Control Modal -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="settings-modal-card">
+      <div class="settings-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <h2 style="font-size: 1.15rem; font-weight: 600;">Settings & Control</h2>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <button id="btn-show-install-modal" class="btn-publish" style="font-size: 0.75rem; padding: 4px 10px;">
-            + Install Plugin
-          </button>
-          <button class="btn-drawer-close" id="btn-close-modal">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
+        <button class="btn-drawer-close" id="btn-close-settings-modal" title="Close Settings">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="settings-body">
+        <!-- Sidebar Navigation -->
+        <nav class="settings-nav">
+          <button class="settings-nav-btn active" id="settings-tab-btn-profile" data-tab="profile">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
             </svg>
+            <span>Profile & Keys</span>
           </button>
-        </div>
-      </div>
-      <p style="font-size: 0.82rem; color: var(--omni-text-muted);">
-        Plugins run inside sandboxed iframes without host DOM or network access. UI is projected via Shopify Remote DOM using standard HTML elements.
-      </p>
+          <button class="settings-nav-btn" id="settings-tab-btn-relays" data-tab="relays">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4.93 4.93a10 10 0 0 1 14.14 0"/>
+              <path d="M7.76 7.76a6 6 0 0 1 8.48 0"/>
+              <circle cx="12" cy="12" r="2"/>
+              <path d="M12 14v7"/>
+            </svg>
+            <span>Connected Relays</span>
+          </button>
+          <button class="settings-nav-btn" id="settings-tab-btn-layout" data-tab="layout">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <line x1="3" y1="9" x2="21" y2="9"/>
+              <line x1="9" y1="21" x2="9" y2="9"/>
+            </svg>
+            <span>Visual Layout</span>
+          </button>
+          <button class="settings-nav-btn" id="settings-tab-btn-plugins" data-tab="plugins">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 4h4a2 2 0 0 1 2 2v4a1 1 0 0 0 1 1 2 2 0 0 1 0 4 1 1 0 0 0-1 1v4a2 2 0 0 1-2 2h-4a1 1 0 0 0-1-1 2 2 0 0 1-4 0 1 1 0 0 0-1 1H4a2 2 0 0 1-2-2v-4a1 1 0 0 0 1-1 2 2 0 0 1 0-4 1 1 0 0 0-1-1V6a2 2 0 0 1 2-2h4a1 1 0 0 0 1 1 2 2 0 0 1 4 0 1 1 0 0 0 1-1z"/>
+            </svg>
+            <span>Installed Plugins</span>
+          </button>
+          <button class="settings-nav-btn" id="settings-tab-btn-config" data-tab="config">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="4" y1="21" x2="4" y2="14"/>
+              <line x1="4" y1="10" x2="4" y2="3"/>
+              <line x1="12" y1="21" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12" y2="3"/>
+              <line x1="20" y1="21" x2="20" y2="16"/>
+              <line x1="20" y1="12" x2="20" y2="3"/>
+              <line x1="1" y1="14" x2="7" y2="14"/>
+              <line x1="9" y1="8" x2="15" y2="8"/>
+              <line x1="17" y1="16" x2="23" y2="16"/>
+            </svg>
+            <span>Plugin Config</span>
+          </button>
+        </nav>
 
-      <div id="plugins-list" style="display: flex; flex-direction: column; gap: 10px;">
-        <!-- Dynamically rendered plugin cards -->
-      </div>
+        <!-- Tab Content Panes -->
+        <div class="settings-content">
+          <!-- Pane 1: Profile & Keys -->
+          <div class="settings-pane active" id="settings-pane-profile">
+            <div class="modal-tabs">
+              <button class="modal-tab-btn active" id="tab-btn-profile-info">Profile Info (kind 0)</button>
+              <button class="modal-tab-btn" id="tab-btn-profile-keys">Keys & Custody</button>
+            </div>
 
-      <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; margin-top: 8px;">
-        <h4 style="font-size: 0.88rem; margin-bottom: 6px; color: var(--omni-text-secondary);">Security & Isolation</h4>
-        <div style="font-size: 0.78rem; color: var(--omni-text-muted); display: flex; flex-direction: column; gap: 4px;">
-          <div><code style="color: var(--omni-accent-primary);">CSP:</code> <code>default-src 'none'; script-src 'self'</code></div>
-          <div><code style="color: var(--omni-accent-primary);">Network:</code> Completely blocked from iframes</div>
-          <div><code style="color: var(--omni-accent-primary);">DOM:</code> Standard HTML Allowlist projection</div>
+            <div id="profile-pane-info" style="display: flex; flex-direction: column; gap: 14px;">
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <div id="profile-avatar-preview" style="width: 56px; height: 56px; border-radius: 50%; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: var(--omni-accent-primary); overflow: hidden; flex-shrink: 0;">
+                  ✦
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+                  <div id="profile-preview-name" style="font-weight: 600; font-size: 0.95rem;">Guest User</div>
+                  <div id="profile-preview-npub" style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted);">npub...</div>
+                </div>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                  Display Name:
+                  <input id="input-profile-display-name" type="text" placeholder="e.g. Alice Smith" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                </label>
+
+                <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                  Name / Handle:
+                  <input id="input-profile-name" type="text" placeholder="e.g. alice" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                </label>
+
+                <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                  About / Bio:
+                  <textarea id="input-profile-about" rows="2" placeholder="Tell the Nostr network about yourself..." style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none; resize: vertical;"></textarea>
+                </label>
+
+                <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                  Avatar / Picture URL:
+                  <input id="input-profile-picture" type="text" placeholder="https://example.com/avatar.jpg" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                </label>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                    NIP-05 Identifier:
+                    <input id="input-profile-nip05" type="text" placeholder="alice@domain.com" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                  </label>
+                  <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                    Lightning Address (lud16):
+                    <input id="input-profile-lud16" type="text" placeholder="alice@getalby.com" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                  </label>
+                </div>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+                <button id="btn-save-profile" class="btn-publish">
+                  Save & Publish Profile (kind 0)
+                </button>
+              </div>
+            </div>
+
+            <div id="profile-pane-keys" style="display: none; flex-direction: column; gap: 14px;">
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 0.78rem; color: var(--omni-text-secondary);">Public Key (npub):</span>
+                <div style="display: flex; gap: 6px;">
+                  <input id="profile-keys-npub" type="text" readonly style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.75rem; outline: none;" />
+                  <button id="btn-copy-npub" class="btn-secondary" style="font-size: 0.75rem;">Copy</button>
+                </div>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 0.78rem; color: var(--omni-text-secondary);">Public Key (Hex):</span>
+                <div style="display: flex; gap: 6px;">
+                  <input id="profile-keys-hex" type="text" readonly style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-muted); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.72rem; outline: none;" />
+                  <button id="btn-copy-hex" class="btn-secondary" style="font-size: 0.75rem;">Copy</button>
+                </div>
+              </div>
+
+              <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-secondary);">Private Key (nsec):</span>
+                  <button id="btn-reveal-nsec" class="btn-secondary" style="font-size: 0.72rem;">Reveal Private Key</button>
+                </div>
+                <div id="private-key-display-wrapper" style="display: none; flex-direction: column; gap: 6px;">
+                  <div style="display: flex; gap: 6px;">
+                    <input id="profile-keys-nsec" type="text" readonly style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid rgba(239,68,68,0.4); color: #f87171; padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.75rem; outline: none;" />
+                    <button id="btn-copy-nsec" class="btn-secondary" style="font-size: 0.75rem;">Copy</button>
+                  </div>
+                  <span style="font-size: 0.7rem; color: var(--omni-text-muted);">⚠️ Never share your nsec private key with untrusted parties.</span>
+                </div>
+              </div>
+
+              <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+                <span style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-secondary);">Switch Identity / Import Key:</span>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <input id="input-import-nsec" type="password" placeholder="Paste nsec1... or 64-char hex private key" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                  <div style="display: flex; justify-content: space-between; gap: 8px; margin-top: 4px;">
+                    <button id="btn-generate-new-key" class="btn-secondary" style="font-size: 0.75rem;">Generate Fresh Key</button>
+                    <button id="btn-confirm-import-key" class="btn-publish" style="font-size: 0.78rem;">Import & Switch</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pane 2: Connected Relays -->
+          <div class="settings-pane" id="settings-pane-relays">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h3 style="font-size: 1.05rem; font-weight: 600;">Relay Pool Manager</h3>
+                <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Manage real-time WebSocket connections to Nostr relays</span>
+              </div>
+              <span id="relays-status-badge" style="font-size: 0.72rem; background: var(--omni-bg-subtle); color: var(--omni-accent-primary); padding: 3px 8px; border-radius: var(--omni-radius-pill);">Live</span>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+              <input id="input-add-relay" type="text" placeholder="wss://relay.example.com" style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 8px 12px; border-radius: var(--omni-radius-sm); font-size: 0.85rem; outline: none;" />
+              <button id="btn-add-relay" class="btn-publish" style="font-size: 0.8rem; white-space: nowrap;">+ Connect Relay</button>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span style="font-size: 0.72rem; color: var(--omni-text-muted);">Presets:</span>
+              <button class="btn-secondary relay-preset-btn" data-url="wss://relay.damus.io" style="font-size: 0.7rem; padding: 2px 8px;">damus.io</button>
+              <button class="btn-secondary relay-preset-btn" data-url="wss://nos.lol" style="font-size: 0.7rem; padding: 2px 8px;">nos.lol</button>
+              <button class="btn-secondary relay-preset-btn" data-url="wss://relay.primal.net" style="font-size: 0.7rem; padding: 2px 8px;">primal.net</button>
+              <button class="btn-secondary relay-preset-btn" data-url="wss://relay.nostr.band" style="font-size: 0.7rem; padding: 2px 8px;">nostr.band</button>
+            </div>
+
+            <div id="settings-relays-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;"></div>
+          </div>
+
+          <!-- Pane 3: Visual Layout Configurator -->
+          <div class="settings-pane" id="settings-pane-layout">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h3 style="font-size: 1.05rem; font-weight: 600;">Visual Layout & Slots</h3>
+                <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Interactive diagram of the client shell. Reorder or move components across slots visually.</span>
+              </div>
+              <button id="btn-reset-layout" class="btn-secondary" style="font-size: 0.75rem;">Reset to Defaults</button>
+            </div>
+
+            <!-- Visual Wireframe Mockup Diagram -->
+            <div class="visual-diagram-container">
+              <div class="visual-diagram-mockup">
+                <!-- Header Slot Row -->
+                <div class="visual-mockup-header">
+                  <div style="font-weight: 600; font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; align-items: center; gap: 6px;">
+                    <span>✦ Logo</span>
+                  </div>
+                  <div class="visual-slot-zone" id="visual-zone-header-actions" data-slot="header-actions" style="min-width: 140px;">
+                    <div class="visual-slot-header">
+                      <span>Header Actions</span>
+                      <code>actions</code>
+                    </div>
+                    <div class="visual-slot-comp-list" id="visual-list-header-actions"></div>
+                  </div>
+                </div>
+
+                <!-- Body Row (Dock, Main Feed Page, Full Widgets Page) -->
+                <div class="visual-mockup-body">
+                  <!-- Dock Zone -->
+                  <div class="visual-slot-zone" id="visual-zone-dock" data-slot="dock">
+                    <div class="visual-slot-header">
+                      <span>Nav Dock</span>
+                      <code>dock</code>
+                    </div>
+                    <div class="visual-slot-comp-list" id="visual-list-dock"></div>
+                  </div>
+
+                  <!-- Main Viewport Zone -->
+                  <div class="visual-slot-zone" id="visual-zone-main" data-slot="main">
+                    <div class="visual-slot-header">
+                      <span>Feed Page</span>
+                      <code>main</code>
+                    </div>
+                    <div class="visual-slot-comp-list" id="visual-list-main"></div>
+                  </div>
+
+                  <!-- Widgets Page Zone -->
+                  <div class="visual-slot-zone" id="visual-zone-sidebar" data-slot="sidebar">
+                    <div class="visual-slot-header">
+                      <span>Widgets Page</span>
+                      <code>widgets</code>
+                    </div>
+                    <div class="visual-slot-comp-list" id="visual-list-sidebar"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pane 4: Installed Plugins -->
+          <div class="settings-pane" id="settings-pane-plugins">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="font-size: 1.05rem; font-weight: 600;">Installed Plugins</h3>
+                <span id="plugins-count-badge" style="font-size: 0.72rem; background: var(--omni-bg-subtle); color: var(--omni-accent-primary); padding: 1px 6px; border-radius: var(--omni-radius-pill);">0</span>
+              </div>
+              <button id="btn-show-install-modal" class="btn-publish" style="font-size: 0.75rem; padding: 4px 10px;">
+                + Install Plugin (NIP-5A)
+              </button>
+            </div>
+
+            <p style="font-size: 0.78rem; color: var(--omni-text-muted); margin: 0;">
+              Plugins run in sandboxed iframes. UI is projected through Remote DOM into native host layout slots.
+            </p>
+
+            <div id="plugins-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+
+            <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; margin-top: 6px;">
+              <h4 style="font-size: 0.85rem; margin-bottom: 6px; color: var(--omni-text-secondary);">Security & Sandboxing</h4>
+              <div style="font-size: 0.75rem; color: var(--omni-text-muted); display: flex; flex-direction: column; gap: 3px;">
+                <div><code style="color: var(--omni-accent-primary);">Isolation:</code> Sub-resource isolation with capability gating</div>
+                <div><code style="color: var(--omni-accent-primary);">IPC:</code> Dual-channel Remote DOM mutations & JSON-RPC kernel dispatcher</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pane 5: Plugin Config (Dedicated settings per plugin) -->
+          <div class="settings-pane" id="settings-pane-config">
+            <div>
+              <h3 style="font-size: 1.05rem; font-weight: 600;">Plugin Preferences</h3>
+              <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Configure options and behaviors for active first-class plugins</span>
+            </div>
+
+            <!-- Focus Timer Config Card -->
+            <div style="background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-weight: 600; font-size: 0.88rem; color: var(--omni-text-primary);">Focus Timer (Pomodoro)</span>
+                <span style="font-size: 0.7rem; color: var(--omni-text-muted);">@omni/plugin-timer</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                <label style="font-size: 0.75rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                  Work Duration (min):
+                  <input id="cfg-timer-work" type="number" min="1" max="120" value="25" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                </label>
+                <label style="font-size: 0.75rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                  Short Break (min):
+                  <input id="cfg-timer-break" type="number" min="1" max="30" value="5" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                </label>
+                <label style="font-size: 0.75rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
+                  Long Break (min):
+                  <input id="cfg-timer-long-break" type="number" min="1" max="60" value="15" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
+                </label>
+              </div>
+              <div style="display: flex; justify-content: flex-end;">
+                <button id="btn-save-timer-cfg" class="btn-publish" style="font-size: 0.75rem; padding: 5px 12px;">Save Timer Settings</button>
+              </div>
+            </div>
+
+            <!-- Daily Checklist Config Card -->
+            <div style="background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-weight: 600; font-size: 0.88rem; color: var(--omni-text-primary);">Daily Checklist</span>
+                <span style="font-size: 0.7rem; color: var(--omni-text-muted);">@omni/plugin-checklist</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.78rem; color: var(--omni-text-secondary);">Manage Task Storage:</span>
+                <button id="btn-clear-completed-tasks" class="btn-secondary" style="font-size: 0.75rem;">Clear Completed Tasks</button>
+              </div>
+            </div>
+
+            <!-- Timeline Feed Config Card -->
+            <div style="background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-weight: 600; font-size: 0.88rem; color: var(--omni-text-primary);">Timeline Feed & Composer</span>
+                <span style="font-size: 0.7rem; color: var(--omni-text-muted);">@omni/plugin-feed</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; align-items: center; justify-content: space-between;">
+                  <span>Initial Notes Query Limit:</span>
+                  <input id="cfg-feed-limit" type="number" min="10" max="100" value="30" style="width: 70px; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 4px 8px; border-radius: var(--omni-radius-sm); font-size: 0.78rem; outline: none;" />
+                </label>
+                <div style="font-size: 0.72rem; color: var(--omni-text-muted);">
+                  0ms local cache query enabled by default via IndexedDB LocalEventStore.
+                </div>
+              </div>
+            </div>
+
+            <!-- Dynamic settings slot container for plugins providing custom settings components -->
+            <div id="settings-dynamic-plugin-slot"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -267,163 +547,6 @@
           </button>
         </div>
         <pre class="manifest-code-block" id="inspector-manifest-raw"></pre>
-      </div>
-    </div>
-  </div>
-
-  <!-- 7. Profile & Identity Management Modal -->
-  <div class="modal-overlay" id="profile-modal">
-    <div class="modal-card" style="max-width: 520px;">
-      <div class="modal-header">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <h3 style="font-size: 1.05rem; font-weight: 600;">Profile & Identity</h3>
-        </div>
-        <button class="btn-drawer-close" id="btn-close-profile-modal">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-      </div>
-
-      <!-- Tabs -->
-      <div class="modal-tabs">
-        <button class="modal-tab-btn active" id="tab-btn-profile-info">Profile Info (kind 0)</button>
-        <button class="modal-tab-btn" id="tab-btn-profile-keys">Keys & Custody</button>
-      </div>
-
-      <!-- Tab Content 1: Profile Info -->
-      <div id="profile-pane-info" style="display: flex; flex-direction: column; gap: 12px;">
-        <div style="display: flex; align-items: center; gap: 14px;">
-          <div id="profile-avatar-preview" style="width: 56px; height: 56px; border-radius: 50%; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: var(--omni-accent-primary); overflow: hidden; flex-shrink: 0;">
-            ✦
-          </div>
-          <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
-            <div id="profile-preview-name" style="font-weight: 600; font-size: 0.95rem;">Guest User</div>
-            <div id="profile-preview-npub" style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted);">npub...</div>
-          </div>
-        </div>
-
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-            Display Name:
-            <input id="input-profile-display-name" type="text" placeholder="e.g. Alice Smith" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-          </label>
-
-          <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-            Name / Handle:
-            <input id="input-profile-name" type="text" placeholder="e.g. alice" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-          </label>
-
-          <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-            About / Bio:
-            <textarea id="input-profile-about" rows="2" placeholder="Tell the Nostr network about yourself..." style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none; resize: vertical;"></textarea>
-          </label>
-
-          <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-            Avatar / Picture URL:
-            <input id="input-profile-picture" type="text" placeholder="https://example.com/avatar.jpg" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-          </label>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-              NIP-05 Identifier:
-              <input id="input-profile-nip05" type="text" placeholder="alice@domain.com" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-            </label>
-            <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-              Lightning Address (lud16):
-              <input id="input-profile-lud16" type="text" placeholder="alice@getalby.com" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-            </label>
-          </div>
-        </div>
-
-        <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
-          <button id="btn-save-profile" class="btn-publish">
-            Save & Publish Profile (kind 0)
-          </button>
-        </div>
-      </div>
-
-      <!-- Tab Content 2: Keys & Custody -->
-      <div id="profile-pane-keys" style="display: none; flex-direction: column; gap: 14px;">
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <span style="font-size: 0.78rem; color: var(--omni-text-secondary);">Public Key (npub):</span>
-          <div style="display: flex; gap: 6px;">
-            <input id="profile-keys-npub" type="text" readonly style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.75rem; outline: none;" />
-            <button id="btn-copy-npub" class="btn-secondary" style="font-size: 0.75rem;">Copy</button>
-          </div>
-        </div>
-
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <span style="font-size: 0.78rem; color: var(--omni-text-secondary);">Public Key (Hex):</span>
-          <div style="display: flex; gap: 6px;">
-            <input id="profile-keys-hex" type="text" readonly style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-muted); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.72rem; outline: none;" />
-            <button id="btn-copy-hex" class="btn-secondary" style="font-size: 0.75rem;">Copy</button>
-          </div>
-        </div>
-
-        <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-secondary);">Private Key (nsec):</span>
-            <button id="btn-reveal-nsec" class="btn-secondary" style="font-size: 0.72rem;">Reveal Private Key</button>
-          </div>
-          <div id="private-key-display-wrapper" style="display: none; flex-direction: column; gap: 6px;">
-            <div style="display: flex; gap: 6px;">
-              <input id="profile-keys-nsec" type="text" readonly style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid rgba(239,68,68,0.4); color: #f87171; padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.75rem; outline: none;" />
-              <button id="btn-copy-nsec" class="btn-secondary" style="font-size: 0.75rem;">Copy</button>
-            </div>
-            <span style="font-size: 0.7rem; color: var(--omni-text-muted);">⚠️ Never share your nsec private key with untrusted parties.</span>
-          </div>
-        </div>
-
-        <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-          <span style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-secondary);">Switch Identity / Import Key:</span>
-          <div style="display: flex; flex-direction: column; gap: 6px;">
-            <input id="input-import-nsec" type="password" placeholder="Paste nsec1... or 64-char hex private key" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-            <div style="display: flex; justify-content: space-between; gap: 8px; margin-top: 4px;">
-              <button id="btn-generate-new-key" class="btn-secondary" style="font-size: 0.75rem;">Generate Fresh Key</button>
-              <button id="btn-confirm-import-key" class="btn-publish" style="font-size: 0.78rem;">Import & Switch</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 5. Layout & Slot Customizer Modal Overlay (Issue 4) -->
-  <div class="modal-overlay" id="layout-modal">
-    <div class="modal-card" style="max-width: 620px;">
-      <div class="modal-header">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            <line x1="3" y1="9" x2="21" y2="9"/>
-            <line x1="9" y1="21" x2="9" y2="9"/>
-          </svg>
-          <h3 style="font-size: 1.1rem; font-weight: 600;">Customize Layout & Slots</h3>
-        </div>
-        <button class="btn-drawer-close" id="btn-close-layout-modal" title="Close layout customizer">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-      </div>
-
-      <div style="font-size: 0.8rem; color: var(--omni-text-muted); margin-bottom: 14px;">
-        Assign plugin components to slots, reorder them, or toggle their visibility. Changes take effect dynamically.
-      </div>
-
-      <!-- Slots and Assigned Components List -->
-      <div id="layout-slots-list" style="display: flex; flex-direction: column; gap: 14px; max-height: 58vh; overflow-y: auto; padding-right: 4px;"></div>
-
-      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; margin-top: 14px;">
-        <button id="btn-reset-layout" class="btn-secondary" style="font-size: 0.78rem;">
-          Reset to Defaults
-        </button>
-        <button id="btn-done-layout" class="btn-publish" style="font-size: 0.82rem; padding: 6px 16px;">
-          Done
-        </button>
       </div>
     </div>
   </div>

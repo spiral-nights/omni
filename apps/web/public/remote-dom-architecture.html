@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Omni • Remote DOM & IPC Architecture Guide</title>
+  <style>
+    :root {
+      --bg-canvas: #141312;
+      --bg-surface: #191816;
+      --bg-elevated: #22201d;
+      --bg-subtle: #2b2824;
+      --border-subtle: #33302b;
+      --border-strong: #47433c;
+      --text-primary: #ede8df;
+      --text-secondary: #9e988f;
+      --text-muted: #6b665f;
+      --accent: #d4a373;
+      --accent-contrast: #141312;
+      --accent-badge: rgba(212, 163, 115, 0.15);
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      padding: 40px 24px 80px;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 40px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 24px;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--accent-badge);
+      border: 1px solid rgba(212, 163, 115, 0.3);
+      padding: 4px 10px;
+      border-radius: 9999px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      letter-spacing: -0.03em;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+    }
+
+    h2 {
+      font-size: 1.4rem;
+      margin: 36px 0 16px;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 8px;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      margin: 20px 0 10px;
+      color: var(--text-primary);
+    }
+
+    p, li {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+    }
+
+    ul, ol {
+      margin-left: 20px;
+      margin-bottom: 16px;
+    }
+
+    li { margin-bottom: 6px; }
+
+    strong { color: var(--text-primary); }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.88em;
+      background: var(--bg-elevated);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    pre {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      margin: 16px 0 24px;
+    }
+
+    pre code {
+      background: transparent;
+      padding: 0;
+      border: none;
+      color: var(--text-primary);
+      font-size: 0.85rem;
+    }
+
+    /* Diagram flow styles */
+    .flow-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      padding: 24px;
+      margin: 24px 0;
+    }
+
+    .columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 720px) {
+      .columns { grid-template-columns: 1fr; }
+    }
+
+    .column {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 16px;
+    }
+
+    .column-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .step-box {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      font-size: 0.85rem;
+    }
+
+    .step-box .num {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: var(--accent-contrast);
+      text-align: center;
+      line-height: 20px;
+      font-weight: 700;
+      font-size: 0.75rem;
+      margin-right: 8px;
+    }
+
+    .ipc-pipe {
+      background: rgba(212, 163, 115, 0.08);
+      border: 1px dashed var(--accent);
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+      margin: 16px 0;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: var(--accent);
+    }
+
+    .callout {
+      border-left: 3px solid var(--accent);
+      background: var(--bg-surface);
+      padding: 14px 18px;
+      border-radius: 0 6px 6px 0;
+      margin: 18px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="badge">Architecture Specification</span>
+    <h1>Omni Remote DOM & IPC Lifecycle</h1>
+    <p class="subtitle">Complete technical guide to sandboxed guest mutation streaming and bidirectional event propagation.</p>
+  </header>
+
+  <section>
+    <h2>1. High-Level Architecture Overview</h2>
+    <p>
+      Omni runs third-party and core plugins inside sandboxed iframes. Unlike typical iframes that render UI within their own viewport, Omni uses <strong>Shopify's Remote DOM architecture</strong> to project virtual elements from the sandboxed iframe directly into the host shell's native layout slots (<code>dock</code>, <code>main</code>, <code>sidebar</code>, <code>header-status</code>, <code>header-actions</code>).
+    </p>
+
+    <div class="flow-card">
+      <div class="columns">
+        <div class="column">
+          <div class="column-title">
+            <span>🛡️ Sandbox Guest (Iframe)</span>
+          </div>
+          <p>Runs untrusted plugin logic. Has access to <code>window.omni</code> bridge and lightweight <code>RemoteElement</code> tree.</p>
+          <div class="step-box"><span class="num">1</span> Plugin registers component via <code>omni.registerComponent()</code></div>
+          <div class="step-box"><span class="num">2</span> Creates detached elements: <code>root.createElement("button")</code></div>
+          <div class="step-box"><span class="num">3</span> Attaches event listener: <code>btn.addEventListener("click", fn)</code></div>
+          <div class="step-box"><span class="num">4</span> Appends to root: <code>root.appendChild(card)</code></div>
+        </div>
+
+        <div class="column">
+          <div class="column-title">
+            <span>⚡ Host Kernel (Native DOM)</span>
+          </div>
+          <p>Controls layout slots, access control governance, and native rendering via <code>DOMRemoteReceiver</code>.</p>
+          <div class="step-box"><span class="num">5</span> <code>RemoteDomHost</code> intercepts mutations and wraps event listeners</div>
+          <div class="step-box"><span class="num">6</span> <code>DOMRemoteReceiver</code> creates native HTML element on host DOM</div>
+          <div class="step-box"><span class="num">7</span> User clicks native button in host window</div>
+          <div class="step-box"><span class="num">8</span> Host callback forwards event ID to sandbox over MessagePort</div>
+        </div>
+      </div>
+
+      <div class="ipc-pipe">
+        ⇄ MessagePort (Channel 1: Fast Remote DOM stream) & MessagePort (Channel 2: JSON-RPC 2.0 Kernel) ⇄
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Dual-Channel IPC Isolation</h2>
+    <p>
+      When <code>OmniKernel</code> mounts a plugin in <code>SandboxInstance</code>, it creates two distinct <code>MessageChannel</code> pairs transferred via <code>postMessage</code> during handshake:
+    </p>
+    <ul>
+      <li>
+        <strong>Channel 1 (<code>portRemoteDom</code>)</strong>: High-speed mutation stream. Responsible exclusively for Remote DOM mutations (type <code>"mutate"</code>) and host event routing (type <code>"event"</code>).
+      </li>
+      <li>
+        <strong>Channel 2 (<code>portRpc</code>)</strong>: Capability-governed JSON-RPC 2.0 bus. Used for asynchronous kernel operations: <code>nostr.subscribe</code>, <code>nostr.publish</code>, <code>storage.get/set</code>, <code>ui.toggleSlot</code>, and <code>profile.*</code>.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>3. The Mutation Protocol (Guest → Host)</h2>
+    <p>
+      As elements are created, modified, or deleted in the sandbox, the guest runtime queues mutation tuples and flushes them on a microtask (<code>queueMicrotask</code>).
+    </p>
+
+    <pre><code>// Mutation Record Shapes:
+[0, parentId, serializedChildNode, index]   // MUTATION_TYPE_INSERT_CHILD
+[1, parentId, childIndex]                   // MUTATION_TYPE_REMOVE_CHILD
+[2, textNodeId, newTextContent]             // MUTATION_TYPE_UPDATE_TEXT
+[3, elementId, propertyName, value, type]   // MUTATION_TYPE_UPDATE_PROPERTY
+                                            // type 1 = Property, 2 = Attribute, 3 = EventListener</code></pre>
+
+    <h3>Why Function References Cannot Cross postMessage</h3>
+    <p>
+      In JavaScript, functions cannot be cloned or transferred across <code>postMessage</code>. When a guest element calls <code>btn.addEventListener("click", callback)</code>, the sandbox records <code>callback</code> in its local <code>eventListeners</code> Map and serializes the listener declaration simply as <code>{ click: true }</code> or sends mutation <code>[3, btnId, "click", true, 3]</code>.
+    </p>
+
+    <div class="callout">
+      <strong>The Host Wrapping Solution:</strong><br />
+      Shopify's <code>DOMRemoteReceiver</code> requires that event listeners passed to it be <em>callable functions</em>.
+      In <code>RemoteDomHost.mutate()</code>, the host recursively traverses newly inserted trees (mutation <code>0</code>) and property records (mutation <code>3</code>). It replaces <code>true</code> with a host-side callback:
+      <pre><code>node.eventListeners[eventName] = (detail) => {
+  this.onEvent(this.componentId, { id: node.id, eventName, detail });
+};</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>4. Event Dispatch & Bubbling (Host → Guest)</h2>
+    <p>
+      When the user clicks a projected element in the host DOM:
+    </p>
+    <ol>
+      <li>
+        The browser dispatches a native DOM event on the target element.
+      </li>
+      <li>
+        <code>DOMRemoteReceiver</code>'s listener triggers and executes our wrapped callback.
+      </li>
+      <li>
+        The host fires <code>onEvent()</code>, sending <code>{ type: "event", componentId, id: "btn-start", eventName: "click" }</code> over Channel 1 to the sandbox.
+      </li>
+      <li>
+        In <code>omni-runtime.js</code>, <code>handleHostEvent()</code> looks up the element by ID and invokes the guest listener functions registered for that event name.
+      </li>
+    </ol>
+
+    <h3>Hit-Testing & Strict Target Checks</h3>
+    <p>
+      Shopify's <code>DOMRemoteReceiver</code> includes an intentional security and isolation check:
+    </p>
+    <pre><code>if (event.target !== element) return;</code></pre>
+    <p>
+      If a button contains child elements (e.g. <code>&lt;button&gt;&lt;svg&gt;&lt;circle/&gt;&lt;/svg&gt; &lt;span&gt;Start&lt;/span&gt;&lt;/button&gt;</code>), clicking on the label or icon causes the browser to report <code>event.target</code> as the <code>&lt;span&gt;</code> or <code>&lt;circle&gt;</code>, not the <code>&lt;button&gt;</code>.
+    </p>
+    <div class="callout">
+      <strong>Resolution:</strong><br />
+      In <code>style.css</code>, button descendants receive:
+      <pre><code>.omni-slot button *, .dock-item * {
+  pointer-events: none;
+}</code></pre>
+      This causes the browser's hit-testing to treat the parent <code>&lt;button&gt;</code> as the direct event target, guaranteeing that <code>event.target === element</code> always matches and triggers cleanly.
+    </div>
+  </section>
+
+  <section>
+    <h2>5. Reactive Updates (Sandbox → Host)</h2>
+    <p>
+      When a plugin's click handler runs (e.g. Pomodoro timer ticking down, or checklist item toggling):
+    </p>
+    <ol>
+      <li>
+        The plugin mutates state: <code>remainingSeconds--</code> and sets <code>timeText.textContent = "24:59"</code>.
+      </li>
+      <li>
+        In <code>omni-runtime.js</code>, <code>RemoteElement.textContent</code> checks if a single text child already exists. If so, it calls <code>this.childNodes[0].data = "24:59"</code>.
+      </li>
+      <li>
+        <code>RemoteText.data</code> immediately emits mutation <code>[2, textId, "24:59"]</code>.
+      </li>
+      <li>
+        <code>queueMicrotask</code> flushes the mutation across Channel 1 within the same browser turn.
+      </li>
+      <li>
+        On the host, <code>DOMRemoteReceiver.updateText()</code> updates the native DOM text node in place: <code>textNode.data = newText</code> with zero element teardown or reflow overhead.
+      </li>
+    </ol>
+  </section>
+
+</body>
+</html>

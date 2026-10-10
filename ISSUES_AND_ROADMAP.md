@@ -1,154 +1,88 @@
-# Omni — Issues & Enhancement Roadmap
+# Omni — Architecture Roadmap & Issue Tracker
 
-This document tracks identified UX, architectural, and functional issues in the Omni MVP, along with planned fixes and implementation specifications.
-
----
-
-## Issue Tracker Matrix
-
-| ID | Issue | Category | Severity | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **ISSUE-01** | Replace playful emoji icons with refined monochrome SVG line icons | UI/Aesthetic | High | ✅ Completed (commit `3216c78`) |
-| **ISSUE-02** | Plugin lifecycle: Add/remove plugins & granular permission toggling | Plugin Engine | Critical | ✅ Completed (commit `b8017a9`) |
-| **ISSUE-03** | Profile & Identity management view (kind-0 metadata & key custody) | Identity / Nostr | High | ✅ Completed |
-| **ISSUE-04** | Dynamic Layout & Slot Customization UI (slot mapping per page/section) | Layout / Runtime | Critical | ✅ Completed |
-| **ISSUE-05** | Relay Pool Inspector & Management (connection status, add/remove) | Networking / Nostr | High | ✅ Completed |
-| **ISSUE-06** | "Widgets" button interaction failure & desktop sidebar collapse | UX / Navigation | High | ✅ Completed |
-| **ISSUE-07** | Plugin Inspector: Source URLs, manifest viewer, and component registry | Plugin Engine | High | ✅ Completed (commit `b8017a9`) |
-| **ISSUE-08** | NIP-5A (nsites) Nostr Plugin Publishing, Blossom Integrity, & `naddr` Resolution | Distribution / Nostr | Critical | ✅ Completed |
+> *Last Updated: September 2026*  
+> Tracking completed foundation milestones and remaining architectural capabilities.
 
 ---
 
-## Detailed Issue Analysis & Remediation Plans
+## 1. Completed Milestones (Archive)
 
-### ISSUE-01: Refined Minimalist Iconography (Remove Emojis)
-* **Problem Statement:** The current interface relies on colorful Unicode emojis (`☑️`, `⏱️`, `🧩`, `💬`, `📋`, `⚙️`, `❤️`, `🏠`) which clash with the tactful "Warm Paper Dark" / e-ink aesthetic (`#141312` graphite, `#ede8df` warm ivory, `#d4a373` sandstone).
-* **Target Aesthetic:** Clean, geometric 1.5px monochrome SVG line icons that inherit `currentColor` and adopt sandstone accent styling when active.
-* **Scope of Changes:**
-  1. Create an inline SVG icon library (`apps/web/src/icons.ts`) containing:
-     - `FeedIcon` (clean speech bubble / post line)
-     - `WidgetsIcon` (split view / layout tiles)
-     - `PluginsIcon` (clean puzzle / plug glyph)
-     - `SettingsIcon` (minimal gear / sliders)
-     - `ProfileIcon` (user silhouette)
-     - `ChecklistIcon` (minimal checklist square)
-     - `TimerIcon` (minimal clock / stop-timer)
-     - `RelayIcon` (radio antenna / mesh nodes)
-     - `CloseIcon`, `AddIcon`, `TrashIcon`, `CopyIcon`, `LockIcon`
-  2. Update plugins (`@omni/plugin-checklist`, `@omni/plugin-timer`) to use SVG line vectors rather than emoji characters.
-  3. Update web client shell, composer buttons, note reaction counters, and dock navigation.
+The following core MVP capabilities, architectural refactors, and critical bug fixes have been fully designed, implemented, and verified in the test suite (`pnpm test`):
 
----
-
-### ISSUE-02: Plugin Lifecycle & Granular Permission Controls
-* **Problem Statement:** Users currently cannot install third-party plugins by URL or manifest, cannot uninstall/disable plugins, and cannot view or toggle individual permission grants (e.g., granting `storage:kv` while denying `nostr:write`).
-* **Technical Remediation:**
-  1. **Plugin Installation:** Provide an "Install Plugin" dialog accepting a manifest JSON URL or direct manifest payload.
-  2. **Enable / Disable State:** Persist an `enabled: boolean` state per plugin in `CapabilityStore`. Disabled plugins are immediately unmounted from slots and their sandboxes destroyed.
-  3. **Granular Permission Manager:**
-     - Interactive permission toggles for each declared permission:
-       - `nostr:read` (Allow subscription to notes & events)
-       - `nostr:write` (Allow prompt-less signing of specific kinds)
-       - `storage:kv` (IndexedDB persistent storage with quota limit)
-       - `intents:dispatch` / `intents:handle` (Cross-plugin intent routing)
-     - Revocation immediately invalidates capability tokens in `AclEngine`.
-  4. **Uninstall / Wipe:** Remove plugin sandbox, revoke all capabilities, and purge scoped IndexedDB KV data.
+| Milestone / Issue | Domain | Resolution Summary | Status |
+| :--- | :--- | :--- | :--- |
+| **ISSUE-01: Monochrome Line Icons** | UI / Design Tokens | Replaced all emoji glyphs with clean, geometric monochrome SVG line icons inheriting `currentColor`. | ✅ Completed (`3216c78`) |
+| **ISSUE-02: Plugin Lifecycle & ACL** | Kernel / Security | Built `CapabilityStore` & `AclEngine` with granular toggles (`nostr:read`, `nostr:write`, `nostr:sign`, `storage:kv`). | ✅ Completed (`b8017a9`) |
+| **ISSUE-03: Profile & Identity View** | Nostr / Identity | Kind-0 metadata editing, `npub`/`nsec` key custody, and account switching. | ✅ Completed (`5159a29`) |
+| **ISSUE-04: Dynamic Layout Engine** | Layout / Shell | Drag & drop widget layout customizer, slot persistence, and multi-slot assignment (`LayoutManager`). | ✅ Completed (`928ed01`) |
+| **ISSUE-05: Relay Pool Inspector** | Networking | Real-time relay status pill, connection health, and add/remove relay manager. | ✅ Completed (`463bc6a`) |
+| **ISSUE-06: Responsive Navigation** | UI / Responsive | Unified desktop vertical sidebar and mobile slide-out bottom sheet with breakpoint coordination. | ✅ Completed (`928ed01`) |
+| **ISSUE-07: Plugin Inspector & Manifest Viewer** | Kernel / DevTools | Added manifest inspector modal displaying component declarations, permissions, and raw JSON. | ✅ Completed (`b8017a9`) |
+| **ISSUE-08: NIP-5A (nsites) & Blossom** | Distribution | Decentralized plugin resolution via NIP-19 `naddr1...`, kind-35129 manifest events, and Blossom SHA-256 verification. | ✅ Completed (`98b9bed`) |
+| **MODULAR-01: First-Class Plugin Refactor** | Architecture | Converted all UI domains (`feed`, `relays`, `profile`, `checklist`, `timer`) into standalone packages under `packages/plugins/*`. | ✅ Completed (`463bc6a`) |
+| **IPC-01: Remote DOM Event Propagation** | Remote DOM | Fixed host listener wrapping in `RemoteDomHost`, enabled `queueMicrotask` batching, and resolved button child hit-testing. | ✅ Completed (`85c88b9`) |
+| **SEC-01: Strict Opaque Sandbox Isolation** | Security | Enforced strict `sandbox="allow-scripts"` (opaque origin), eliminating browser sandbox elevation warnings. | ✅ Completed (`adf0245`) |
+| **FEED-01: 0ms Local Cache & Composer Sync** | Feed & Nostr | Fixed boot order for 0ms store queries and added capture-phase `InputEvent` detail enrichment for form inputs. | ✅ Completed (`adf0245`) |
 
 ---
 
-### ISSUE-03: Profile & Identity Management
-* **Problem Statement:** There is no profile view to manage identity, view full public/private keys, edit kind-0 metadata, or switch/export accounts.
-* **Technical Remediation:**
-  1. **Profile Navigation / View:** Add a dedicated Profile tab or modal accessible via the header user badge.
-  2. **Key Custody & Export:**
-     - Display `npub` (bech32) and full hex public key with 1-click copy.
-     - Secure "Reveal Private Key (`nsec`)" with password/confirmation barrier.
-     - "Import Account" (`nsec` or 12-word mnemonic) to switch from temporary guest key to existing Nostr identity.
-  3. **Nostr Kind-0 Metadata Editor:**
-     - Display and edit profile fields: Display Name, Name/Handle (`@name`), About/Bio, Picture URL, NIP-05 identifier, and Lightning Address (`lud16`).
-     - Publish signed kind-0 event to connected relays and cache in local `LocalEventStore`.
+## 2. Remaining Roadmap & Active Backlog
 
----
+The remaining roadmap focuses on production readiness, cross-plugin interoperability, and advanced Nostr protocol features:
 
-### ISSUE-04: Dynamic Layout & Slot Customization Engine
-* **Problem Statement:** Plugin components are hardcoded into default slots. Users cannot choose which components appear where, nor can they attach widgets to different pages, sections, or slots (e.g. placing the checklist in the dock, main viewport, or sidebar).
-* **Technical Remediation:**
-  1. **Slot Registry & Layout Store:**
-     - Introduce `LayoutStore` (persisted in IndexedDB) tracking slot assignments:
-       ```ts
-       interface SlotMapping {
-         slotId: "dock" | "sidebar" | "main-feed-header" | "main-feed-footer";
-         componentId: string; // e.g. "checklist-dock-icon"
-         pluginId: string;
-         order: number;
-         enabled: boolean;
-       }
-       ```
-  2. **Slot Customizer UI:**
-     - Provide a visual "Customize Layout" mode:
-       - Each slot displays an "Add Widget (+)" button.
-       - A drawer/modal shows all registered components from installed plugins.
-       - Drag, re-order, or remove components from any slot.
-  3. **Multi-Slot Dynamic Mounting:**
-     - `OmniKernel` dynamically mounts and unmounts `RemoteDomHost` instances when slot assignments change without needing a full page reload.
+```
++---------------------------------------------------------------------------------------+
+|                                    OMNI ROADMAP                                       |
++---------------------------------------------------------------------------------------+
+|  [MILESTONE 1]  Signer Providers: NIP-07 Browser Extension & NIP-46 Remote Bunker     |
+|  [MILESTONE 2]  Interactive UI Sheet & Cross-Plugin Pub/Sub Intent Modalities         |
+|  [MILESTONE 3]  NIP-65 Gossip / Outbox Relay Routing                                  |
+|  [MILESTONE 4]  Multi-Account & Encrypted Keystore Passphrase (PBKDF2 + AES-GCM)      |
+|  [MILESTONE 5]  NIP-44 / NIP-04 Direct Messaging Plugin                               |
+|  [MILESTONE 6]  Headless Web Workers Sandbox Mode (@remote-dom/core/polyfill)         |
++---------------------------------------------------------------------------------------+
+```
 
----
+### Milestone 1: Multi-Tier Signer Providers (NIP-07 & NIP-46 Bunker)
+* **Goal:** Allow users to use hardware signers or browser extensions instead of storing raw keys locally.
+* **Scope:**
+  1. **NIP-07 Extension Bridge:** Proxy signing and verification to `window.nostr` (Alby, nos2x) when detected, auditing permissions via Omni's ACL engine.
+  2. **NIP-46 Remote Signer (Nostr Connect / Amber):** Implement client connection to remote bunker keys over encrypted Nostr relays, keeping private keys completely off the web device.
+* **Priority:** High
 
-### ISSUE-05: Relay Pool Visibility & Management
-* **Problem Statement:** The header only displays a static status pill. Users cannot inspect which relays they are connected to, view connection states, latency, or add/remove relays.
-* **Technical Remediation:**
-  1. **Relay Manager Modal / Drawer:**
-     - Clicking the Relay pill opens the Relay Manager view.
-     - Lists all active relays (e.g. `wss://relay.damus.io`, `wss://nos.lol`, `wss://relay.nostr.band`).
-     - Real-time connection indicators (🟢 Connected, 🟡 Connecting, 🔴 Disconnected) and round-trip ping latency.
-  2. **Relay Controls:**
-     - "Add Relay" input field with URL validation.
-     - Toggle Read vs. Write permissions per relay (NIP-65 gossip readiness).
-     - Remove relay button.
-     - "Reconnect All" action.
-  3. **Relay Persistence:**
-     - Save user relay list in `localStorage` / IndexedDB and publish as NIP-65 relay list event (kind 10002).
+### Milestone 2: Interactive UI Intents & Pub/Sub Bus
+* **Goal:** Full cross-plugin interoperability without plugins taking hard dependencies on each other.
+* **Scope:**
+  1. **Modality 2 (Interactive UI Intents):** When a plugin dispatches an intent requiring user interaction (e.g. `wallet.send-payment`), Omni Host opens a native modal/sheet and the target plugin projects its interactive UI using Remote DOM.
+  2. **Modality 3 (Pub/Sub Event Bus):** 1-to-many event bus allowing background plugins to broadcast state (e.g. audio player track change, incoming notification).
+* **Priority:** High
 
----
+### Milestone 3: NIP-65 Gossip / Outbox Relay Routing
+* **Goal:** Smarter, decentralized note delivery without relying on a static list of bootstrap relays.
+* **Scope:**
+  1. Query kind 10002 relay list metadata for authors in the user's timeline.
+  2. Route note requests and subscriptions dynamically to authors' designated read/write relays.
+  3. Publish the user's own NIP-65 relay list event when relays are configured in the Relay Manager.
+* **Priority:** Medium
 
-### ISSUE-06: "Widgets" Button Interaction Failure & Desktop Sidebar Collapse
-* **Problem Statement:** The "Widgets" button in the dock does nothing when clicked.
-* **Root Cause Analysis:**
-  1. **CSS Breakpoint Conflict:** In `apps/web/src/style.css`, media query `@media (min-width: 768px)` sets `.mobile-drawer-sheet, .mobile-drawer-overlay { display: none !important; }`. On standard desktop resolutions, clicking "Widgets" toggles classes on a hidden element.
-  2. **Deferred Event Binding:** In `apps/web/src/main.ts`, the click listener for `dockBtnWidgets` was placed at the end of the async `startApp()` function. If initialization had any async latency, click events were missed.
-  3. **Desktop Visibility:** On desktop screens, widgets reside in `.desktop-sidebar` on the right side of the screen, but there is no toggle button or collapse state for the desktop sidebar.
-* **Remediation Plan:**
-  1. Move all DOM event bindings to top-level synchronous execution on page load.
-  2. Implement unified widget visibility logic:
-     - On mobile (`< 768px`): "Widgets" opens the pull-up drawer sheet.
-     - On desktop (`>= 768px`): "Widgets" toggles the desktop sidebar visibility (expand / collapse), with a subtle slide transition.
-  3. Ensure active visual indicator on the Widgets button when drawer or sidebar is open.
+### Milestone 4: Multi-Account Management & Keystore Passphrase Encryption
+* **Goal:** Support multiple Nostr identities and encrypt local keys at rest.
+* **Scope:**
+  1. Encrypt stored `nsec` with AES-256-GCM using a PBKDF2-derived passphrase or WebAuthn PRF.
+  2. Fast account switcher dropdown in the header actions area.
+  3. Per-account scoped local event cache and layout preferences.
+* **Priority:** Medium
 
----
+### Milestone 5: NIP-44 / NIP-04 End-to-End Encrypted Messaging Plugin
+* **Goal:** Private communications in Omni.
+* **Scope:**
+  1. Create `@omni/plugin-messages` contributing a conversation list in the sidebar and thread view in the main slot.
+  2. Enforce NIP-44 conversation key exchange and host ACL decryption prompts.
+* **Priority:** Medium
 
-### ISSUE-07: Plugin Inspector, Origin URLs, and Manifest Viewer
-* **Problem Statement:** Users have no transparency into installed plugins: they cannot see where plugins were loaded from (source URL / repository / Blossom hash), cannot inspect the underlying `omni.manifest.json` file, and cannot view detailed metadata (author, version, license, declared components, required vs. optional permissions).
-* **Technical Remediation:**
-  1. **Plugin Detail / Inspector View:**
-     - In the Plugin Manager, each plugin card includes an **"Inspect Manifest"** button.
-     - Clicking opens a detail drawer/modal with tabbed views:
-       - **Overview Tab:** Name, ID (`org.omni...`), version, author, license, origin URL (e.g. `https://plugins.omni.org/...` or `local:@omni/plugin-checklist`), and sandbox CSP status.
-       - **Components Tab:** Lists each contributed UI component, its declared slot (`dock`, `sidebar`, `main`), title, description, and status.
-       - **Manifest Tab:** Formatted, read-only JSON code block of the complete `omni.manifest.json` with a 1-click "Copy JSON" button.
-       - **Permissions & Storage Tab:** Interactive capabilities inspector (see `ISSUE-02`) and storage quota usage meter (`X KB / 5 MB`).
-  2. **Audit & Verification:**
-     - Display cryptographic integrity hash of the plugin script bundle and manifest signature (NIP-89 readiness).
-
----
-
-### ISSUE-08: NIP-5A (nsites) Nostr Plugin Publishing, Blossom Integrity, & `naddr` Resolution
-* **Problem Statement:** Installing plugins via centralized HTTPS URLs or manual JSON copy-pasting is prone to web hosting downtime, DNS censorship, and lacks cryptographic provenance tying code to a Nostr identity.
-* **Technical Remediation:**
-  1. **NIP-19 `naddr` Codec:** Implement TLV encoding and decoding for `naddr1...` (type 0: `d` tag, type 1: relays, type 2: 32-byte pubkey, type 3: 32-bit kind `35129`).
-  2. **NIP-5A Manifest Events (kind: 35129):**
-     - Authors sign parameterized replaceable manifest events with tags `["d", id]`, `["name", ...]`, `["f", "dist/index.js", <sha256_hash>, "application/javascript"]`, `["f", "omni.manifest.json", ...]`, `["slot", ...]`, `["permission", ...]`, and `["server", ...]`.
-     - Self-contained event content embeds `manifest` and `script` directly, while Blossom servers provide decentralized media hosting.
-  3. **Blossom Integrity Verification:** Blossom downloads verify that `sha256(blob) === tag_hash` before execution in the sandbox, rejecting tampered scripts.
-  4. **Omni UI Integration:**
-     - **Installer:** Accepts `naddr1...`, coordinates (`35129:pubkey:d-tag`), HTTPS URLs, or raw JSON. Includes a 1-click "Load Sample Nostr (naddr)" generator.
-     - **Inspector:** Displays Nostr provenance (`npub`, `naddr`, SHA-256 verification status) and allows 1-click "Publish / Share to Nostr (NIP-5A)" for any installed plugin.
+### Milestone 6: Web Workers Sandbox Mode
+* **Goal:** Headless background execution for non-UI services (indexing, sync, automations).
+* **Scope:**
+  1. Add Web Worker execution backend to `SandboxInstance` using `@remote-dom/core/polyfill`.
+  2. Permit plugins with `manifest.mode = "worker"` to run headlessly without DOM frame overhead.
+* **Priority:** Low
