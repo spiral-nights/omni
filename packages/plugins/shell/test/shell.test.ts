@@ -209,6 +209,44 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     expect(musicBtn.classList.contains("active")).toBe(false);
   });
 
+  it("renders a dock launcher visually and routes clicks when a plugin is added to navigation dock shortcut", () => {
+    // Timer was originally in sidebar (Widgets dashboard)
+    const timerPlugin = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer")!;
+    expect(timerPlugin).toBeTruthy();
+
+    const dockSlot = root.querySelector("#dock-slot");
+    const initialItems = dockSlot?.querySelectorAll(".dock-item");
+    // Initially only Feed is in main/dock
+    expect(initialItems?.length).toBe(1);
+
+    // Promote timer to "dock" ("Navigation Dock Shortcut")
+    timerPlugin.viewport = "dock";
+    kernel.layoutManager.setComponentSlot("org.omni.plugin.timer", "timer-widget", "dock");
+    shell.renderDockLaunchers();
+
+    const updatedItems = dockSlot?.querySelectorAll(".dock-item");
+    expect(updatedItems?.length).toBe(2);
+
+    const timerBtn = Array.from(updatedItems || []).find((el) => el.getAttribute("title")?.includes("Timer")) as HTMLElement;
+    expect(timerBtn).toBeTruthy();
+    expect(timerBtn.textContent).toContain("Timer");
+
+    // Click timer launcher in the dock
+    timerBtn.click();
+    const pageTimer = root.querySelector("#page-app-org-omni-plugin-timer");
+    expect(pageTimer).toBeTruthy();
+    expect(pageTimer?.classList.contains("active")).toBe(true);
+    expect(timerBtn.classList.contains("active")).toBe(true);
+
+    // Demote back to sidebar
+    timerPlugin.viewport = "sidebar";
+    kernel.layoutManager.setComponentSlot("org.omni.plugin.timer", "timer-widget", "sidebar");
+    shell.renderDockLaunchers();
+
+    const finalItems = dockSlot?.querySelectorAll(".dock-item");
+    expect(finalItems?.length).toBe(1);
+    expect(Array.from(finalItems || []).some((el) => el.getAttribute("title")?.includes("Timer"))).toBe(false);
+  });
 
   it("supports pure zero-manifest nsites without any manifest property", () => {
     const pureNsite: InstalledPluginEntry = {

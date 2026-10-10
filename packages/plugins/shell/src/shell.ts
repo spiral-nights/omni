@@ -68,13 +68,15 @@ export class OmniShell {
     icon: string;
     viewport: string;
   } {
+    const primaryCompId = p.manifest?.components?.[0]?.id || `${p.id}-main`;
+    const layoutSlot = this.kernel?.layoutManager?.getSlotForComponent(p.id, primaryCompId);
     return {
       id: p.id,
       name: p.name || p.manifest?.name || p.id,
       version: p.version || p.manifest?.version || "1.0.0",
       description: p.description || p.manifest?.description || "",
       icon: p.icon || p.manifest?.icon || (p.viewport === "main" ? "feed" : "widgets"),
-      viewport: p.viewport || p.manifest?.components?.[0]?.slot || "main"
+      viewport: layoutSlot || p.viewport || p.manifest?.components?.[0]?.slot || "main"
     };
   }
 
@@ -105,8 +107,11 @@ export class OmniShell {
     };
   }
 
-  public getContainerForPluginSlot(pluginId: string, slotId: string): Element {
-    if (slotId === "main") {
+  public getContainerForPluginSlot(pluginId: string, slotId: string, compId?: string): Element {
+    if (slotId === "main" || slotId === "dock") {
+      if (slotId === "dock" && (compId?.endsWith("-icon") || compId?.includes("icon"))) {
+        return this.dockSlot;
+      }
       if (pluginId === "org.omni.plugin.feed") {
         return this.mainSlot;
       }
@@ -115,7 +120,7 @@ export class OmniShell {
     if (slotId === "sidebar" || slotId === "widgets") {
       return this.widgetsSlot;
     }
-    if (slotId === "dock" || slotId === "icon") {
+    if (slotId === "icon") {
       return this.dockSlot;
     }
     if (slotId === "header-actions") {
@@ -171,7 +176,11 @@ export class OmniShell {
 
   public renderDockLaunchers(): void {
     if (!this.dockSlot) return;
-    this.dockSlot.innerHTML = "";
+    Array.from(this.dockSlot.children).forEach((child) => {
+      if (child.classList.contains("dock-item")) {
+        child.remove();
+      }
+    });
 
     const activePage = this.getActivePageId();
 
@@ -179,9 +188,10 @@ export class OmniShell {
       if (!plugin.enabled) continue;
       const meta = this.getPluginMeta(plugin);
 
-      // Only full-page primary applications get a dock launcher.
-      // Modular companion widgets live inside the Widgets & Tools Dashboard (#page-widgets).
-      if (meta.viewport !== "main") continue;
+      // Primary applications in "main" or items assigned to "dock" ("Navigation Dock Shortcut")
+      // get a dedicated navigation dock launcher button.
+      // Modular companion widgets ("sidebar") live inside the Widgets & Tools Dashboard (#page-widgets).
+      if (meta.viewport !== "main" && meta.viewport !== "dock") continue;
 
       if (plugin.id !== "org.omni.plugin.feed") {
         this.ensureAppPage(plugin.id);
@@ -207,11 +217,18 @@ export class OmniShell {
         iconSvg = icon("feed", 20);
       }
 
+      let label = meta.name.split(" ")[0];
+      if (plugin.id === "org.omni.plugin.feed") label = "Feed";
+      else if (plugin.id === "org.omni.plugin.timer") label = "Timer";
+      else if (plugin.id === "org.omni.plugin.checklist") label = "Daily";
+      else if (plugin.id === "org.omni.plugin.relays") label = "Relays";
+      else if (plugin.id === "org.omni.plugin.profile") label = "Profile";
+
       btn.innerHTML = `
         <div class="dock-icon-wrapper">
           ${iconSvg}
         </div>
-        <span>${meta.name.split(" ")[0]}</span>
+        <span>${label}</span>
       `;
 
       btn.addEventListener("click", () => {
@@ -459,13 +476,13 @@ export class OmniShell {
         }
         select.addEventListener("change", () => {
           const targetSlotId = select.value;
-          const targetContainer = this.getContainerForPluginSlot(item.pluginId, targetSlotId);
+          const targetContainer = this.getContainerForPluginSlot(item.pluginId, targetSlotId, item.componentId);
           if (targetContainer) {
             this.kernel.reparentPluginComponent(item.pluginId, item.componentId, targetSlotId, targetContainer);
             if (plugin) {
               plugin.viewport = targetSlotId;
             }
-            if (targetSlotId !== "main" && item.pluginId !== "org.omni.plugin.feed") {
+            if (targetSlotId !== "main" && targetSlotId !== "dock" && item.pluginId !== "org.omni.plugin.feed") {
               const safeId = item.pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
               const pageEl = document.getElementById(`page-app-${safeId}`);
               if (pageEl) {
@@ -732,11 +749,11 @@ export class OmniShell {
 
       vpSelect.addEventListener("change", () => {
         const targetSlotId = vpSelect.value;
-        const targetContainer = this.getContainerForPluginSlot(p.id, targetSlotId);
+        const targetContainer = this.getContainerForPluginSlot(p.id, targetSlotId, primaryComp?.id);
         if (targetContainer && primaryComp) {
           this.kernel.reparentPluginComponent(p.id, primaryComp.id, targetSlotId, targetContainer);
           p.viewport = targetSlotId;
-          if (targetSlotId !== "main" && p.id !== "org.omni.plugin.feed") {
+          if (targetSlotId !== "main" && targetSlotId !== "dock" && p.id !== "org.omni.plugin.feed") {
             const safeId = p.id.replace(/[^a-zA-Z0-9_-]/g, "-");
             const pageEl = document.getElementById(`page-app-${safeId}`);
             if (pageEl) {
@@ -1554,11 +1571,11 @@ export class OmniShell {
         const synth = this.ensurePluginManifest(p);
         for (const comp of synth.components || []) {
           p.viewport = comp.slot;
-          const container = this.getContainerForPluginSlot(p.id, comp.slot);
+          const container = this.getContainerForPluginSlot(p.id, comp.slot, comp.id);
           if (container) {
             this.kernel.getSandbox(p.id)?.reparentComponent(comp.id, container);
           }
-          if (comp.slot !== "main" && p.id !== "org.omni.plugin.feed") {
+          if (comp.slot !== "main" && comp.slot !== "dock" && p.id !== "org.omni.plugin.feed") {
             const safeId = p.id.replace(/[^a-zA-Z0-9_-]/g, "-");
             const pageEl = document.getElementById(`page-app-${safeId}`);
             pageEl?.remove();
