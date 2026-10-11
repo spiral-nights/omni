@@ -45,20 +45,15 @@ async function mountChecklist(root: any) {
   ];
 
   try {
-    if (typeof omni !== "undefined" && omni.storage) {
-      const stored = await omni.storage.get<TaskItem[]>("tasks");
-      if (stored) tasks = stored;
-    } else if (typeof localStorage !== "undefined") {
+    if (typeof localStorage !== "undefined") {
       const stored = localStorage.getItem("tasks");
       if (stored) tasks = JSON.parse(stored);
     }
   } catch {}
 
-  async function persistTasks() {
+  function persistTasks() {
     try {
-      if (typeof omni !== "undefined" && omni.storage) {
-        await omni.storage.set("tasks", tasks);
-      } else if (typeof localStorage !== "undefined") {
+      if (typeof localStorage !== "undefined") {
         localStorage.setItem("tasks", JSON.stringify(tasks));
       }
     } catch {}
@@ -136,10 +131,7 @@ async function mountChecklistSettings(root: any) {
   // Status stats
   let tasks: TaskItem[] = [];
   try {
-    if (typeof omni !== "undefined" && omni.storage) {
-      const stored = await omni.storage.get<TaskItem[]>("tasks");
-      if (stored) tasks = stored;
-    } else if (typeof localStorage !== "undefined") {
+    if (typeof localStorage !== "undefined") {
       const stored = localStorage.getItem("tasks");
       if (stored) tasks = JSON.parse(stored);
     }
@@ -168,9 +160,7 @@ async function mountChecklistSettings(root: any) {
     const active = tasks.filter((t) => !t.done);
     tasks = active;
     try {
-      if (typeof omni !== "undefined" && omni.storage) {
-        await omni.storage.set("tasks", active);
-      } else if (typeof localStorage !== "undefined") {
+      if (typeof localStorage !== "undefined") {
         localStorage.setItem("tasks", JSON.stringify(active));
       }
     } catch (_) {}
@@ -195,8 +185,6 @@ function isSettingsRoute(): boolean {
     if (new URLSearchParams(search).get("view") === "settings") return true;
     if (window.location.hash.includes("settings")) return true;
     if ((window as any).__OMNI_ROUTE__?.includes("settings")) return true;
-    if ((window as any).omni?.session?.viewId === "settings") return true;
-    if ((window as any).omni?.session?.route?.includes("settings")) return true;
   } catch (_) {}
   return false;
 }
@@ -209,15 +197,16 @@ const mountApp = (root: any) => {
   }
 };
 
-if (typeof omni !== "undefined" && typeof (omni as any).registerComponent === "function") {
-  (omni as any).registerComponent("checklist-sidebar-widget", ({ root }: any) => mountApp(root));
-  (omni as any).registerComponent("checklist-widget", ({ root }: any) => mountApp(root));
-  (omni as any).registerComponent("org.omni.nsite.checklist-main", ({ root }: any) => mountApp(root));
-  (omni as any).registerComponent("org.omni.plugin.checklist-main", ({ root }: any) => mountApp(root));
-  (omni as any).registerComponent("org.omni.plugin.checklist-settings", ({ root }: any) => mountApp(root));
-  (omni as any).registerComponent("main", ({ root }: any) => mountApp(root));
+function init() {
+  if (typeof document !== "undefined") {
+    mountApp(document.body);
+  }
 }
 
 if (typeof document !== "undefined") {
-  mountApp(document.body);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 }

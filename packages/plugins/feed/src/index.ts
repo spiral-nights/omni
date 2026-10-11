@@ -141,25 +141,43 @@ function mountFeed(root: any) {
     btnPublish.textContent = "Signing...";
 
     try {
-      const nostrClient = (typeof omni !== "undefined" && omni.nostr) ? omni.nostr : (window as any).nostr;
-      if (nostrClient && nostrClient.publish) {
-        const published = await nostrClient.publish({
-          kind: 1,
-          content: text,
-          tags: [["client", "omni"]],
-          created_at: Math.floor(Date.now() / 1000)
-        });
-
-        textarea.value = "";
-        renderNote(
-          {
-            id: published.id,
-            pubkey: published.pubkey,
+      const nostr = (window as any).nostr || (typeof omni !== "undefined" ? (omni as any).nostr : null);
+      if (nostr) {
+        let published: any;
+        if (typeof nostr.publish === "function") {
+          published = await nostr.publish({
+            kind: 1,
             content: text,
+            tags: [["client", "omni"]],
             created_at: Math.floor(Date.now() / 1000)
-          },
-          true
-        );
+          });
+        } else if (typeof nostr.signEvent === "function") {
+          published = await nostr.signEvent({
+            kind: 1,
+            content: text,
+            tags: [["client", "omni"]],
+            created_at: Math.floor(Date.now() / 1000)
+          });
+          try {
+            const ws = new WebSocket("wss://relay.damus.io");
+            ws.onopen = () => {
+              ws.send(JSON.stringify(["EVENT", published]));
+            };
+          } catch {}
+        }
+
+        if (published) {
+          textarea.value = "";
+          renderNote(
+            {
+              id: published.id,
+              pubkey: published.pubkey,
+              content: text,
+              created_at: Math.floor(Date.now() / 1000)
+            },
+            true
+          );
+        }
       }
     } catch (err: any) {
       console.error("Failed to publish note from plugin:", err);
@@ -169,19 +187,9 @@ function mountFeed(root: any) {
     }
   });
 
-  // Subscribe to Timeline Notes
+  // Subscribe to Timeline Notes via standard WebSocket
   try {
-    if (typeof omni !== "undefined" && omni.nostr && omni.nostr.subscribe) {
-      omni.nostr.subscribe(
-        [{ kinds: [1], limit: 50 }],
-        (ev: any) => {
-          renderNote(ev, true);
-        },
-        () => {
-          cacheIndicator.textContent = "✦ Connected Relays";
-        }
-      );
-    } else if (typeof WebSocket !== "undefined") {
+    if (typeof WebSocket !== "undefined") {
       const ws = new WebSocket("wss://relay.damus.io");
       ws.onopen = () => {
         ws.send(JSON.stringify(["REQ", "feed-sub", { kinds: [1], limit: 50 }]));
@@ -196,20 +204,32 @@ function mountFeed(root: any) {
           }
         } catch {}
       };
+    } else if (typeof omni !== "undefined" && (omni as any).nostr?.subscribe) {
+      (omni as any).nostr.subscribe(
+        [{ kinds: [1], limit: 50 }],
+        (ev: any) => {
+          renderNote(ev, true);
+        },
+        () => {
+          cacheIndicator.textContent = "✦ Connected Relays";
+        }
+      );
     }
   } catch (err) {
     console.error("Feed subscription failed:", err);
   }
 }
 
-if (typeof omni !== "undefined" && typeof (omni as any).registerComponent === "function") {
-  (omni as any).registerComponent("feed-main", ({ root }: any) => {
-    mountFeed(root);
-  });
-  // Auto-mount support
-  (omni as any).registerComponent("org.omni.nsite.feed-main", ({ root }: any) => {
-    mountFeed(root);
-  });
-} else if (typeof document !== "undefined") {
-  mountFeed(document.body);
+function init() {
+  if (typeof document !== "undefined") {
+    mountFeed(document.body);
+  }
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 }

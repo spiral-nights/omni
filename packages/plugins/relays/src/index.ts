@@ -147,22 +147,16 @@ function mountRelays(root: any) {
   renderRelays();
 }
 
-if (typeof omni !== "undefined" && typeof (omni as any).registerComponent === "function") {
-  (omni as any).registerComponent("relay-sidebar-widget", ({ root }: any) => {
-    mountRelays(root);
-  });
-  (omni as any).registerComponent("relays-widget", ({ root }: any) => {
-    mountRelays(root);
-  });
-  (omni as any).registerComponent("relays-main", ({ root }: any) => {
-    mountRelays(root);
-  });
-  (omni as any).registerComponent("relays-settings", ({ root }: any) => {
-    mountRelays(root);
-  });
-  (omni as any).registerComponent("org.omni.nsite.relays-main", ({ root }: any) => {
-    mountRelays(root);
-  });
-} else if (typeof document !== "undefined") {
-  mountRelays(document.body);
+function init() {
+  if (typeof document !== "undefined") {
+    mountRelays(document.body);
+  }
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 }

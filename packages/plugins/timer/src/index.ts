@@ -228,8 +228,6 @@ function isSettingsRoute(): boolean {
     if (new URLSearchParams(search).get("view") === "settings") return true;
     if (window.location.hash.includes("settings")) return true;
     if ((window as any).__OMNI_ROUTE__?.includes("settings")) return true;
-    if ((window as any).omni?.session?.viewId === "settings") return true;
-    if ((window as any).omni?.session?.route?.includes("settings")) return true;
   } catch (_) {}
   return false;
 }
@@ -242,15 +240,16 @@ const mountApp = (root: any) => {
   }
 };
 
-if (typeof omni !== "undefined" && typeof (omni as any).registerComponent === "function") {
-  (omni as any).registerComponent("timer-sidebar-widget", ({ root }: any) => mountApp(root));
-  (omni as any).registerComponent("timer-widget", ({ root }: any) => mountApp(root));
-  (omni as any).registerComponent("org.omni.nsite.timer-main", ({ root }: any) => mountApp(root));
-  (omni as any).registerComponent("org.omni.plugin.timer-main", ({ root }: any) => mountApp(root));
-  (omni as any).registerComponent("org.omni.plugin.timer-settings", ({ root }: any) => mountApp(root));
-  (omni as any).registerComponent("main", ({ root }: any) => mountApp(root));
+function init() {
+  if (typeof document !== "undefined") {
+    mountApp(document.body);
+  }
 }
 
 if (typeof document !== "undefined") {
-  mountApp(document.body);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 }

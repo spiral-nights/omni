@@ -1,4 +1,4 @@
-import { OmniKernel, WebCryptoKeystore, STANDARD_SLOTS, NostrPluginResolver } from "@omni/core";
+import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STANDARD_SLOTS } from "@omni/core";
 import { OmniWorkspaceState, OmniWorkspacePluginConfig, PluginPlacement, OMNI_WORKSPACE_D_TAG, NostrEvent, PluginViewDeclaration } from "@omni/types";
 import { ICONS, icon, IconName } from "./icons.js";
 
@@ -36,6 +36,7 @@ export class OmniShell {
   private root: HTMLElement;
   private kernel: OmniKernel;
   public installedPlugins: InstalledPluginEntry[];
+  public readonly layoutManager: LayoutManager;
   private slotContainers: Map<string, Element> = new Map();
   private expandedPluginId: string | null = null;
 
@@ -73,6 +74,7 @@ export class OmniShell {
   constructor(options: OmniShellOptions) {
     this.root = options.root;
     this.kernel = options.kernel;
+    this.layoutManager = this.kernel?.layoutManager || new LayoutManager();
     if (options.installedPlugins) {
       const seen = new Set<string>();
       this.installedPlugins = options.installedPlugins.filter((p) => {
@@ -104,7 +106,7 @@ export class OmniShell {
       };
     }
     const primaryCompId = p.manifest?.components?.[0]?.id || `${p.id}-main`;
-    const layoutSlot = this.kernel?.layoutManager?.getSlotForComponent(p.id, primaryCompId);
+    const layoutSlot = this.layoutManager.getSlotForComponent(p.id, primaryCompId);
     return {
       id: p.id,
       name: p.name || p.manifest?.name || p.id,
@@ -335,7 +337,7 @@ export class OmniShell {
           plugin.placements = item.placements;
           if (item.placements.length === 0) {
             plugin.viewport = "";
-            this.kernel.layoutManager.unregisterPlugin(plugin.id);
+            this.layoutManager.unregisterPlugin(plugin.id);
           }
         }
         if (item.viewport && item.viewport !== plugin.viewport) {
@@ -471,7 +473,7 @@ export class OmniShell {
                 plugin.placements = item.placements;
                 if (item.placements.length === 0) {
                   plugin.viewport = "";
-                  this.kernel.layoutManager?.unregisterPlugin(plugin.id);
+                  this.layoutManager?.unregisterPlugin(plugin.id);
                 }
               }
               if (item.route !== undefined) plugin.route = item.route;
@@ -1103,7 +1105,7 @@ export class OmniShell {
           p.viewport = pl.viewport;
           const primaryComp = synthManifest.components?.[0];
           if (primaryComp) {
-            this.kernel.layoutManager.setComponentSlot(p.id, primaryComp.id, pl.viewport);
+            this.layoutManager.setComponentSlot(p.id, primaryComp.id, pl.viewport);
           }
           await this.remountPlugin(p);
         });
@@ -1157,7 +1159,7 @@ export class OmniShell {
             p.viewport = "";
             p.route = "";
             p.viewId = "";
-            this.kernel.layoutManager.unregisterPlugin(p.id);
+            this.layoutManager.unregisterPlugin(p.id);
           }
           await this.remountPlugin(p);
           this.renderSettingsNavAndPanes();
@@ -1495,7 +1497,7 @@ export class OmniShell {
           p.viewport = pl.viewport;
           const primaryComp = synthManifest.components?.[0];
           if (primaryComp) {
-            this.kernel.layoutManager.setComponentSlot(p.id, primaryComp.id, pl.viewport);
+            this.layoutManager.setComponentSlot(p.id, primaryComp.id, pl.viewport);
           }
           await this.remountPlugin(p);
         });
@@ -1551,7 +1553,7 @@ export class OmniShell {
             p.viewport = "";
             p.route = "";
             p.viewId = "";
-            this.kernel.layoutManager.unregisterPlugin(p.id);
+            this.layoutManager.unregisterPlugin(p.id);
           }
           await this.remountPlugin(p);
         });
@@ -2244,7 +2246,7 @@ export class OmniShell {
     btnResetLayout?.addEventListener("click", () => {
       if (!confirm("Reset all plugin component slots back to defaults?")) return;
       const manifests = this.installedPlugins.map((p) => this.ensurePluginManifest(p));
-      this.kernel.layoutManager.resetToDefaults(manifests);
+      this.layoutManager.resetToDefaults(manifests);
       for (const p of this.installedPlugins) {
         const synth = this.ensurePluginManifest(p);
         for (const comp of synth.components || []) {

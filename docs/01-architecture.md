@@ -20,12 +20,18 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
    - There are **no proprietary manifests** (`omni.manifest.json` is completely eliminated).
    - Apps are standard web applications mounting to standard DOM (`document.body`).
    - If an author creates a companion widget (e.g. countdown timer or mini-card), it is published as its **own independent companion nsite** with its own `naddr`.
-3. **Zero Proprietary SDKs (`window.omni` Eliminated)**:
-   - Developers write standard web code using open web & Nostr standards: `window.nostr` (NIP-07), native `WebSocket`, standard `localStorage`, `indexedDB`, and DOM.
-   - The host runtime transparently virtualizes the environment for sandboxed guests.
-4. **User-Defined Viewports (Slots Deconstructed)**:
+3. **Strict Shell vs. Kernel Separation**:
+   - **Kernel (`@omni/core`) is Headless**: It owns sandboxing, WebCrypto keys, relay pooling, 0ms local event caching, capability security (ACL), and Remote DOM transport. It has zero awareness of UI layouts, slot semantics (`main`, `sidebar`, `dock`, `header-actions`), or user pages.
+   - **Shell (`@omni/plugin-shell`) Owns All Presentation**: It owns viewports, layout management (`LayoutManager`), the desktop navigation dock, widgets dashboard grid, settings tabs, and NIP-78 workspace serialization.
+4. **Zero Proprietary SDKs (`window.omni` Eliminated from Plugins)**:
+   - Plugins are 100% unaware of Omni. No `omni.registerComponent`, no `omni.storage`, no `omni.profile`, and no `omni.relays`.
+   - Plugins mount standard DOM directly to `document.body` or `#root`. The sandbox runtime automatically mirrors `document.body` across the Remote DOM bridge.
+   - Sub-views and routes (`?view=settings`, `?view=widget`) are read via standard `window.location.search`.
+   - Storage uses standard `window.localStorage` (transparently partitioned per plugin ID by the sandbox).
+   - Identity & signing use standard `window.nostr` (NIP-07).
+5. **User-Defined Viewports (Zero Hardcoded Slots)**:
    - Developers never declare or hardcode layout "slots".
-   - The **user** decides where each app or widget appears:
+   - The **user** assigns apps and chooses routes in Settings:
      - **Full-Page App** (`main`): Primary center viewport page with dedicated navigation dock link.
      - **Navigation Dock Shortcut** (`dock`): Quick launcher pinned to the navigation dock.
      - **Workspace Widget** (`sidebar`): Interactive card inside the multi-column Widgets Dashboard.

@@ -1,14 +1,10 @@
 /// <reference types="@omni/types" />
 
 function getCurrentView(): string {
-  if (typeof omni !== "undefined" && (omni as any).session?.viewId) {
-    return (omni as any).session.viewId;
-  }
   const route =
-    (typeof window !== "undefined" && (window as any).__OMNI_ROUTE__) ||
-    (typeof omni !== "undefined" && (omni as any).session?.route) ||
     (typeof window !== "undefined" && window.location?.search) ||
     (typeof window !== "undefined" && window.location?.hash?.replace("#", "?")) ||
+    (typeof window !== "undefined" && (window as any).__OMNI_ROUTE__) ||
     "";
   if (route) {
     try {
@@ -415,22 +411,16 @@ function initMount(root: any) {
   mountProfile(root);
 }
 
-if (typeof omni !== "undefined" && typeof (omni as any).registerComponent === "function") {
-  (omni as any).registerComponent("profile-main", ({ root }: any) => {
-    initMount(root);
-  });
-  (omni as any).registerComponent("profile-badge", ({ root }: any) => {
-    initMount(root);
-  });
-  (omni as any).registerComponent("profile-settings", ({ root }: any) => {
-    initMount(root);
-  });
-  (omni as any).registerComponent("org.omni.plugin.profile-settings", ({ root }: any) => {
-    initMount(root);
-  });
-  (omni as any).registerComponent("org.omni.nsite.profile-main", ({ root }: any) => {
-    initMount(root);
-  });
-} else if (typeof document !== "undefined") {
-  initMount(document.body);
+function init() {
+  if (typeof document !== "undefined") {
+    initMount(document.body);
+  }
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 }

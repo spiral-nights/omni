@@ -168,7 +168,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       select.dispatchEvent(new Event("change"));
     }
 
-    expect(kernel.layoutManager.getSlotForComponent("org.omni.plugin.feed", "feed-main")).toBe("sidebar");
+    expect(shell.layoutManager.getSlotForComponent("org.omni.plugin.feed", "feed-main")).toBe("sidebar");
   });
 
   it("supports route assignment and per-plugin settings sections", async () => {
@@ -416,7 +416,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
     // Promote timer to "dock" ("Navigation Dock Shortcut")
     timerPlugin.viewport = "dock";
-    kernel.layoutManager.setComponentSlot("org.omni.plugin.timer", "timer-widget", "dock");
+    shell.layoutManager.setComponentSlot("org.omni.plugin.timer", "timer-widget", "dock");
     shell.renderDockLaunchers();
 
     const updatedItems = dockSlot?.querySelectorAll(".dock-item");
@@ -435,7 +435,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
     // Demote back to sidebar
     timerPlugin.viewport = "sidebar";
-    kernel.layoutManager.setComponentSlot("org.omni.plugin.timer", "timer-widget", "sidebar");
+    shell.layoutManager.setComponentSlot("org.omni.plugin.timer", "timer-widget", "sidebar");
     shell.renderDockLaunchers();
 
     const finalItems = dockSlot?.querySelectorAll(".dock-item");

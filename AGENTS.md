@@ -19,11 +19,21 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
 2. **The Host Bootloader (`apps/web`) is a Minimal Microkernel**:
    - `apps/web/index.html` is strictly a ~15-line skeleton with `<div id="omni-root"></div>`.
    - `apps/web/src/main.ts` initializes `OmniKernel`, instantiates `OmniShell`, and mounts the shell UI into `#omni-root`.
-3. **Pure Standalone nsites (Zero Proprietary Manifests)**:
+3. **Pure Standalone nsites (Zero Proprietary Manifests or SDKs)**:
    - There is NO `omni.manifest.json`.
    - Every app and widget is a 100% standard web app (nsite) mounting to `document.body` or `#root`.
-   - Sub-views and routes (e.g. `?view=settings`, `?view=widget`) are declared via standard Nostr tags (`["view", "<id>", "<title>", "<path>"]`) or HTML `<link rel="alternate">` / Web Manifest shortcuts.
-4. **User-Defined Viewports & Route Assignment (Zero Hardcoded Slots)**:
+   - **Zero Proprietary SDKs**: Plugins must NEVER reference `omni.*` (`omni.registerComponent`, `omni.storage`, `omni.profile`, etc.).
+   - Standard Web & Nostr APIs are used exclusively:
+     - DOM auto-mirroring via `document.body` mounting.
+     - View navigation via standard `window.location.search` (`?view=settings`, `?view=widget`).
+     - Persistent storage via standard `window.localStorage` (partitioned per plugin).
+     - Signing & key queries via standard `window.nostr` (NIP-07).
+     - Relay communication via standard `window.WebSocket`.
+   - Sub-views and routes are declared via standard Nostr tags (`["view", "<id>", "<title>", "<path>"]`) or HTML `<link rel="alternate">` / Web Manifest shortcuts.
+4. **Strict Shell vs. Kernel Separation**:
+   - **Kernel (`@omni/core`) is Headless**: Manages sandboxes, WebCrypto keystore, relay pooling, 0ms local event caching, capability store (ACL), and Remote DOM transport. It has zero knowledge of UI layouts, slot semantics, or user pages.
+   - **Shell (`@omni/plugin-shell`) Owns Presentation**: Manages viewport slots (`main`, `dock`, `sidebar`, `header-actions`), layout mapping (`LayoutManager`), desktop/mobile navigation docks, widgets dashboard grid, settings tabs, and NIP-78 workspace synchronization.
+5. **User-Defined Viewports & Route Assignment (Zero Hardcoded Slots)**:
    - Developers never declare or configure "slots".
    - Users assign apps and choose specific routes directly in Settings:
      - **Full-Page App** (`main`): Primary center viewport page with dedicated navigation dock link.
@@ -31,7 +41,7 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
      - **Workspace Widget** (`sidebar`): Interactive card inside the multi-column Widgets Dashboard.
      - **Header Quick Action** (`header-actions`): Compact status icon/pill in top navigation.
    - Any declared `settings` route (`?view=settings`) is automatically surfaced in the plugin's dedicated section in the Settings menu.
-5. **Decentralized Workspace Sync (NIP-78)**:
+6. **Decentralized Workspace Sync (NIP-78)**:
    - Layout configurations, viewport assignments, route selections, and enabled plugins sync via `kind: 30078`, tag `["d", "omni/workspace/v1"]`, backed by 0ms local storage fallback.
 
 ---
