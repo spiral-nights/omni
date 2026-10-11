@@ -1,5 +1,5 @@
 import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STANDARD_SLOTS } from "@omni/core";
-import { OmniWorkspaceState, OmniWorkspacePluginConfig, PluginPlacement, OMNI_WORKSPACE_D_TAG, NostrEvent, PluginViewDeclaration } from "@omni/types";
+import { OmniWorkspaceState, OmniWorkspacePluginConfig, PluginPlacement, OMNI_WORKSPACE_D_TAG, NostrEvent, PluginViewDeclaration, OmniShellHost } from "@omni/types";
 import { ICONS, icon, IconName } from "./icons.js";
 
 export interface InstalledPluginEntry {
@@ -32,7 +32,7 @@ export interface OmniShellOptions {
   installedPlugins?: InstalledPluginEntry[];
 }
 
-export class OmniShell {
+export class OmniShell implements OmniShellHost {
   private root: HTMLElement;
   private kernel: OmniKernel;
   public installedPlugins: InstalledPluginEntry[];

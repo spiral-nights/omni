@@ -80,57 +80,184 @@ omni/
 
 ---
 
-## 3. Microkernel Bootloader & Pluggable Shell
+## 3. Microkernel Bootloader & Swappable Shell Architecture
 
-Omni separates the **execution kernel** from the **user interface frame**:
+Omni enforces a strict architectural boundary between the **headless execution microkernel (`@omni/core`)** and the **presentation shell (`@omni/plugin-shell`)**:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Host Browser Window                      │
-│                                                             │
-│   apps/web/src/main.ts                                      │
-│   • Boots OmniKernel (keystore, relay pool, storage)        │
-│   • Loads saved NIP-78 / local workspace viewports          │
-│   • Mounts @omni/plugin-shell into #omni-root               │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ Mounts UI frame
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  @omni/plugin-shell (UI Frame)              │
-│                                                             │
-│   • Header (User Badge, NIP-05 / npub display, sync state)  │
-│   • Navigation Dock (Page links, Widgets Dashboard, Settings│
-│   • View Router (Full-Page Apps vs Widgets Dashboard)       │
-│   • Settings Modal (Identity, Relays, Plugins & Viewports)  │
-│   • Container Slots (mainSlot, widgetsSlot, dockSlot)       │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ Supplies container elements
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   OmniKernel Sandbox Engine                 │
-│                                                             │
-│   Projects sandboxed nsites into shell container slots:     │
-│   • Feed App ──> #slot-main                                 │
-│   • Timer Widget ──> #slot-widgets                          │
-│   • Daily Checklist ──> #slot-widgets                       │
-│   • Custom nsite ──> #page-app-<id> or #slot-widgets        │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│                           Host Browser Window                             │
+│                                                                           │
+│   apps/web/src/main.ts (Bootloader)                                       │
+│   • Instantiates OmniKernel (keystore, relay pool, event cache, ACL)      │
+│   • Instantiates OmniShell (or any custom swappable shell implementation) │
+│   • Bridges Shell callbacks (slotResolver, handleUri, handleShare)        │
+└───────────────────────────────┬───────────────────────────────────────────┘
+                                │ Mounts native UI frame
+                                ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                    OmniShell Host (Presentation Layer)                    │
+│                                                                           │
+│   • Mounts into #omni-root with direct DOM control                        │
+│   • Renders layout skeleton: Header, Navigation Dock, Pages, Widget Grid  │
+│   • Defines & allocates physical slot containers (main, sidebar, dock...) │
+│   • Manages Settings tabs, viewport dropdowns & route selectors           │
+│   • Serializes workspace state to NIP-78 (kind: 30078, d: omni/workspace) │
+└───────────────────────────────┬───────────────────────────────────────────┘
+                                │ Supplies physical DOM container elements
+                                ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                  OmniKernel Sandbox Engine (Headless Layer)               │
+│                                                                           │
+│   Projects sandboxed nsites via Remote DOM into shell container slots:    │
+│   • Timeline Feed     ──> getContainerForPluginSlot(id, "main")           │
+│   • Focus Timer       ──> getContainerForPluginSlot(id, "sidebar")        │
+│   • Daily Checklist   ──> getContainerForPluginSlot(id, "sidebar")        │
+│   • Relay Manager     ──> getContainerForPluginSlot(id, "sidebar")        │
+│   • Third-Party nsite ──> getContainerForPluginSlot(id, userSelectedSlot) │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.1 Minimal Bootloader (`apps/web/index.html` & `main.ts`)
-- `index.html` contains zero hardcoded feature markup: strictly a responsive viewport `<div id="omni-root"></div>`.
-- `main.ts` does only:
-  1. Instantiates `OmniKernel` with default relays (`wss://relay.damus.io`, `wss://relay.ditto.pub`).
-  2. Instantiates `OmniShell` passing `#omni-root`.
-  3. Restores saved workspace state (`shell.loadInitialWorkspace()`) so plugins initialize directly into user-assigned viewports.
-  4. Calls `kernel.boot()` and mounts plugins into their containers.
+### 3.1 What Makes the Shell Unique: Host-Level Runtime Plugin vs. Sandboxed nsite
 
-### 3.2 Page-Centric Routing & Navigation
-- The host supports **distinct center pages**:
-  - Each app assigned to `Full-Page App` (`main`) gets its own dedicated full-width center `<section class="app-page">`.
-  - The navigation dock automatically renders launcher buttons for all installed full-page apps.
-  - Clicking an app in the dock smoothly brings that app into view while resetting scroll positions.
-  - The **Widgets & Tools Dashboard** (`widgets`) renders all companion widgets together in a multi-column responsive workspace.
+In Omni, there is a fundamental distinction between the Shell and regular plugins:
+
+| Dimension | Sandboxed Plugin (nsite) | Presentation Shell (`@omni/plugin-shell`) |
+| :--- | :--- | :--- |
+| **Execution Environment** | Sandboxed `<iframe>` (`sandbox="allow-scripts"`, `null` origin) | Host browser thread (`http://localhost:5173` or host domain) |
+| **DOM Access** | No access to host DOM; mounts to sandbox `document.body` | Direct access to `#omni-root` and window layout |
+| **UI Projection** | Elements serialized across Remote DOM (Channel 1) | Renders native HTML/CSS containers that receive Remote DOM |
+| **Storage Access** | Partitioned per `pluginId` by `PluginStorageManager` | Host origin `localStorage` (`omni_workspace_state`) |
+| **Keystore Access** | NIP-07 `window.nostr` governed by `AclEngine` checks | Access to `kernel.keystore` for workspace backup & restore |
+| **Role in App** | Independent domain app/widget (feed, timer, notes) | System container, layout manager, and user frame |
+
+Because regular plugins are 100% standard nsites with no knowledge of the host or proprietary SDKs, **the Shell can be swapped out entirely** without modifying a single line of plugin code.
+
+---
+
+### 3.2 The Canonical Shell Contract (`OmniShellHost`)
+
+Any alternative shell (e.g. a mobile bottom-navigation shell, a tiling desktop manager, or a keyboard-driven terminal UI) satisfies the canonical [`OmniShellHost`](file:///home/spiralnights/code/omni/packages/types/src/workspace.ts) contract:
+
+```typescript
+export interface OmniShellHost {
+  /**
+   * Mounts the shell layout and UI frame into the root host DOM element (#omni-root).
+   */
+  mount(): void;
+
+  /**
+   * Resolves physical DOM container elements for plugin viewports.
+   * Called by the Kernel whenever a plugin or widget needs to project its UI.
+   */
+  getContainerForPluginSlot(
+    pluginId: string, 
+    viewport: string, 
+    componentId?: string
+  ): Element | undefined;
+
+  /**
+   * Optional: Handles drawer or slot toggle/open/close requests.
+   */
+  handleSlotAction?(action: "toggle" | "open" | "close", slot: string): void;
+
+  /**
+   * Optional: Handles protocol URIs (nostr:, lightning:, cashu:) intercepted at sandbox boundaries.
+   */
+  handleUri?(uri: string, sourcePluginId?: string): Promise<any>;
+
+  /**
+   * Optional: Handles Web Share API payload delegations.
+   */
+  handleShare?(payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string): Promise<any>;
+
+  /**
+   * Exports the current workspace layout state for NIP-78 and local persistence.
+   */
+  exportWorkspaceState(): OmniWorkspaceState;
+}
+```
+
+---
+
+### 3.3 How Viewport Slots & Routing Work
+
+#### 1. The Canonical Slot Definitions (`STANDARD_SLOTS`)
+Omni defines standard layout slots in [`STANDARD_SLOTS`](file:///home/spiralnights/code/omni/packages/core/src/layout/layout-manager.ts):
+
+| Slot ID | Canonical Name | Purpose |
+| :--- | :--- | :--- |
+| `main` | Full-Page App (Center View) | Primary full-width view with dedicated launcher in navigation dock |
+| `sidebar` | Widgets Dashboard Card | Modular card in the multi-column workspace widgets grid |
+| `dock` | Navigation Dock Shortcut | Compact button / companion icon pinned to the dock |
+| `header-actions` | Header Quick Action | Top-right toolbar action or status indicator |
+| `header-status` | Header Status Area | Reserved branding area next to logo |
+
+#### 2. Slot Allocation Lifecycle
+1. When `OmniShell` boots, it builds the physical DOM scaffold:
+   - Header bar with `.header-right`
+   - Navigation dock `<aside id="omni-dock">`
+   - Main page container `<main id="omni-main-viewport">`
+   - Widgets dashboard `<div id="omni-widgets-grid">`
+2. When the user assigns a plugin to a viewport (e.g. Profile to `main`), `OmniShell.getContainerForPluginSlot(pluginId, viewport)` dynamically creates or returns the target element:
+   - For `main`: `<div id="page-app-[safeId]" class="page-view">`
+   - For `sidebar`: `<div class="widget-card">`
+   - For `dock`: `<div class="dock-quick-view">`
+   - For `header-actions`: `<div class="header-action-slot">`
+3. The Kernel's `SandboxInstance` connects to this element and mounts a `RemoteDomHost` into it.
+
+#### 3. How the Settings Page Discovers Available Slots
+The Settings page is rendered by `OmniShell`. To ensure zero discrepancy between the layout engine and the user interface, `OmniShell` provides:
+```typescript
+public getAvailableViewports(): { id: string; label: string; description: string }[] {
+  return STANDARD_SLOTS
+    .filter((s) => s.id !== "header-status")
+    .map((s) => ({ id: s.id, label: s.name, description: s.description }));
+}
+```
+Both the **Plugins Overview** card and each plugin's **Dedicated Settings Tab** use `getAvailableViewports()` to populate the `<select class="plugin-viewport-select">` menus dynamically.
+
+---
+
+### 3.4 How to Swap Out the Shell
+
+Because the microkernel bootloader (`apps/web/src/main.ts`) is cleanly decoupled from the shell, swapping the shell requires only replacing the shell instantiation:
+
+```typescript
+// apps/web/src/main.ts
+
+import { OmniKernel } from "@omni/core";
+// Replace standard shell with custom mobile or tiling shell:
+import { MyCustomMobileShell } from "@my-org/omni-mobile-shell";
+
+// 1. Initialize Headless Kernel
+const kernel = new OmniKernel({
+  bootstrapRelays: ["wss://relay.damus.io", "wss://relay.ditto.pub"],
+  slotResolver: (pluginId, compId, slot) => shell?.getContainerForPluginSlot(pluginId, slot, compId),
+  onHandleUri: (uri, srcId) => shell?.handleUri(uri, srcId),
+  onHandleShare: (payload, srcId) => shell?.handleShare(payload, srcId)
+});
+
+// 2. Initialize Custom Shell
+const rootEl = document.getElementById("omni-root")!;
+const shell = new MyCustomMobileShell({ root: rootEl, kernel, installedPlugins: initialPlugins });
+
+// 3. Mount UI and Boot Kernel
+shell.mount();
+await kernel.boot();
+```
+
+All existing plugins (`@omni/plugin-feed`, `@omni/plugin-timer`, `@omni/plugin-relays`, etc.) immediately render inside `MyCustomMobileShell` with zero code modifications.
+
+---
+
+### 3.5 Decentralized Workspace Synchronization (NIP-78)
+
+1. **State Persistence**:
+   - Layout configurations, viewport assignments, enabled states, and custom routes serialize to `OmniWorkspaceState` (`kind: 30078`, tag `["d", "omni/workspace/v1"]`).
+   - Backed by 0ms local storage fallback in host `localStorage` (`omni_workspace_state`).
+2. **Security Reservation**:
+   - `AclEngine` and `JsonRpcDispatcher` restrict the `omni/*` NIP-78 namespace to the host Shell. Untrusted guest plugins cannot sign or publish `kind: 30078` events tagged `omni/*`.
 
 ---
 

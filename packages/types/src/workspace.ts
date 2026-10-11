@@ -34,3 +34,41 @@ export interface OmniWorkspaceState {
   autoSync?: boolean;
   plugins: OmniWorkspacePluginConfig[];
 }
+
+/**
+ * Canonical contract for Omni Shell implementations.
+ * Any swappable shell (e.g. mobile shell, terminal shell, desktop shell)
+ * satisfies this contract to mount and coordinate with OmniKernel.
+ */
+export interface OmniShellHost {
+  /**
+   * Mounts the shell layout and UI frame into the root host DOM element
+   */
+  mount(): void;
+
+  /**
+   * Resolves physical DOM container elements for plugin viewports (main, sidebar, dock, header-actions)
+   */
+  getContainerForPluginSlot(pluginId: string, viewport: string, componentId?: string): Element | undefined;
+
+  /**
+   * Handles drawer / slot toggling requests triggered by plugins or user actions
+   */
+  handleSlotAction?(action: "toggle" | "open" | "close", slot: string): void;
+
+  /**
+   * Handles protocol URIs (nostr:, lightning:, cashu:) intercepted at the sandbox boundary
+   */
+  handleUri?(uri: string, sourcePluginId?: string): Promise<any>;
+
+  /**
+   * Handles Web Share API payload delegations
+   */
+  handleShare?(payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string): Promise<any>;
+
+  /**
+   * Exports the current workspace layout state for NIP-78 and local persistence
+   */
+  exportWorkspaceState(): OmniWorkspaceState;
+}
+
