@@ -650,8 +650,13 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
         ]
       };
 
-      shell.applyWorkspaceState(newState, true);
+      // When switchPage is false, active page should remain unchanged
+      shell.showPage("feed");
+      shell.applyWorkspaceState(newState, true, false);
+      expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
 
+      // When switchPage is true, active page updates
+      shell.applyWorkspaceState(newState, true, true);
       expect(shell.getActivePageId()).toBe("org.omni.plugin.timer");
       const feedPlugin = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.feed");
       const timerPlugin = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer");

@@ -318,7 +318,7 @@ export class OmniShell implements OmniShellHost {
     }, 1200);
   }
 
-  public applyWorkspaceState(state: OmniWorkspaceState, persistLocal = true): void {
+  public applyWorkspaceState(state: OmniWorkspaceState, persistLocal = true, switchPage = false): void {
     if (!state || !state.plugins) return;
 
     if (typeof state.autoSync === "boolean") {
@@ -361,7 +361,7 @@ export class OmniShell implements OmniShellHost {
             const pageEl = document.getElementById(`page-app-${safeId}`);
             if (pageEl) {
               if (pageEl.classList.contains("active")) {
-                this.showPage("widgets");
+                this.showPage("feed");
               }
               pageEl.remove();
             }
@@ -370,7 +370,7 @@ export class OmniShell implements OmniShellHost {
       }
     }
 
-    if (state.activePage && state.activePage !== this.getActivePageId()) {
+    if (switchPage && state.activePage && state.activePage !== this.getActivePageId()) {
       this.showPage(state.activePage);
     }
 

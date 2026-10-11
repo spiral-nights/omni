@@ -145,7 +145,7 @@ async function startApp() {
     const cachedWorkspace = await kernel.getWorkspaceState();
     if (cachedWorkspace && cachedWorkspace.state) {
       console.log("✦ [Omni Web] Restoring cached NIP-78 workspace layout from 0ms store...");
-      shell.applyWorkspaceState(cachedWorkspace.state, false);
+      shell.applyWorkspaceState(cachedWorkspace.state, false, false);
       shell.lastSyncedAt = cachedWorkspace.event.created_at * 1000;
       shell.updateSyncUi();
     }
@@ -177,7 +177,7 @@ async function startApp() {
     .then((remote) => {
       if (remote && remote.state) {
         console.log("✦ [Omni Web] Received remote NIP-78 workspace update from relays.");
-        shell.applyWorkspaceState(remote.state, true);
+        shell.applyWorkspaceState(remote.state, true, false);
         shell.lastSyncedAt = remote.event.created_at * 1000;
         shell.workspaceSyncStatus = "synced";
         shell.updateSyncUi();
