@@ -28,6 +28,7 @@ export interface SandboxInstanceOptions {
   eventStore: LocalEventStore;
   route?: string;
   viewId?: string;
+  instanceId?: string;
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
   onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
   onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
@@ -277,7 +278,7 @@ export class SandboxInstance {
           type: "omni:init",
           payload: {
             pluginId: this.manifest.id,
-            instanceId: `inst_${Math.random().toString(36).slice(2, 9)}`,
+            instanceId: this.options.instanceId || `inst_${Math.random().toString(36).slice(2, 9)}`,
             userPubkey: this.options.userPubkey,
             theme: {
               mode: "dark",

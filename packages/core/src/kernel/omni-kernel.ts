@@ -77,7 +77,7 @@ export class OmniKernel {
     manifest: OmniManifest,
     scriptContent: string,
     slotContainers: Map<string, Element>,
-    options?: { route?: string; viewId?: string }
+    options?: { route?: string; viewId?: string; instanceId?: string; targetSlot?: string }
   ): Promise<SandboxInstance> {
     this.aclEngine.registerManifest(manifest);
 
@@ -131,8 +131,9 @@ export class OmniKernel {
       slotContainers,
       route: options?.route,
       viewId: options?.viewId,
+      instanceId: options?.instanceId,
       slotResolver: (pluginId: string, componentId: string, defaultSlot: string) => {
-        const targetSlot = this.layoutManager.getSlotForComponent(pluginId, componentId) || defaultSlot;
+        const targetSlot = options?.targetSlot || this.layoutManager.getSlotForComponent(pluginId, componentId) || defaultSlot;
         if (this.slotResolver) {
           const custom = this.slotResolver(pluginId, componentId, targetSlot);
           if (custom) return custom;
@@ -152,16 +153,30 @@ export class OmniKernel {
     });
 
     await sandbox.mount();
-    this.sandboxes.set(manifest.id, sandbox);
+    const instanceKey = options?.instanceId || manifest.id;
+    this.sandboxes.set(instanceKey, sandbox);
     return sandbox;
   }
 
   isPluginEnabled(pluginId: string): boolean {
-    return this.sandboxes.has(pluginId);
+    for (const key of this.sandboxes.keys()) {
+      if (key === pluginId || key.startsWith(`${pluginId}::`)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   getSandbox(pluginId: string): SandboxInstance | undefined {
-    return this.sandboxes.get(pluginId);
+    if (this.sandboxes.has(pluginId)) {
+      return this.sandboxes.get(pluginId);
+    }
+    for (const [key, sandbox] of this.sandboxes.entries()) {
+      if (key.startsWith(`${pluginId}::`)) {
+        return sandbox;
+      }
+    }
+    return undefined;
   }
 
   reparentPluginComponent(
@@ -171,7 +186,7 @@ export class OmniKernel {
     targetContainer: Element
   ): boolean {
     this.layoutManager.setComponentSlot(pluginId, componentId, targetSlot);
-    const sandbox = this.sandboxes.get(pluginId);
+    const sandbox = this.getSandbox(pluginId);
     if (sandbox) {
       return sandbox.reparentComponent(componentId, targetContainer);
     }
@@ -179,18 +194,20 @@ export class OmniKernel {
   }
 
   disablePlugin(pluginId: string): void {
-    const sandbox = this.sandboxes.get(pluginId);
-    if (sandbox) {
-      sandbox.destroy();
-      this.sandboxes.delete(pluginId);
+    for (const [key, sandbox] of Array.from(this.sandboxes.entries())) {
+      if (key === pluginId || key.startsWith(`${pluginId}::`)) {
+        sandbox.destroy();
+        this.sandboxes.delete(key);
+      }
     }
+    this.destroyPluginSettings(pluginId);
   }
 
   async enablePlugin(
     manifest: OmniManifest,
     scriptContent: string,
     slotContainers: Map<string, Element>,
-    options?: { route?: string; viewId?: string }
+    options?: { route?: string; viewId?: string; instanceId?: string; targetSlot?: string }
   ): Promise<SandboxInstance> {
     this.disablePlugin(manifest.id);
     return this.registerPlugin(manifest, scriptContent, slotContainers, options);
@@ -268,12 +285,7 @@ export class OmniKernel {
   }
 
   uninstallPlugin(pluginId: string): void {
-    this.destroyPluginSettings(pluginId);
-    const sandbox = this.sandboxes.get(pluginId);
-    if (sandbox) {
-      sandbox.destroy();
-      this.sandboxes.delete(pluginId);
-    }
+    this.disablePlugin(pluginId);
     this.layoutManager.unregisterPlugin(pluginId);
     this.capabilityStore.revoke(pluginId);
     this.storageManager.clear(pluginId).catch(console.error);
@@ -534,12 +546,15 @@ export class OmniKernel {
     const candidates: Array<{ id: string; name: string; icon?: string; description?: string }> = [];
 
     for (const [id, sandbox] of this.sandboxes.entries()) {
-      candidates.push({
-        id,
-        name: sandbox.manifest?.name || id,
-        icon: sandbox.manifest?.icon,
-        description: sandbox.manifest?.description
-      });
+      const pluginId = sandbox.manifest?.id || id.split("::")[0];
+      if (!candidates.some((c) => c.id === pluginId)) {
+        candidates.push({
+          id: pluginId,
+          name: sandbox.manifest?.name || pluginId,
+          icon: sandbox.manifest?.icon,
+          description: sandbox.manifest?.description
+        });
+      }
     }
 
     if (extraPlugins) {

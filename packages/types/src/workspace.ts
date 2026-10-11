@@ -4,6 +4,14 @@
 
 export const OMNI_WORKSPACE_D_TAG = "omni/workspace/v1";
 
+export interface PluginPlacement {
+  id: string; // unique placement identifier, e.g. "main", "sidebar", "dock", "header-actions"
+  viewport: string; // "main" | "dock" | "sidebar" | "header-actions"
+  route?: string; // target route (e.g. "?view=widget", "" or "?view=settings")
+  viewId?: string; // matched view ID
+  enabled?: boolean;
+}
+
 export interface OmniWorkspacePluginConfig {
   id: string;
   viewport?: string; // "main" | "dock" | "sidebar" | "header-actions"
@@ -16,6 +24,7 @@ export interface OmniWorkspacePluginConfig {
   icon?: string;
   route?: string; // Target route/query (e.g. "?view=widget", "?view=settings", or "")
   viewId?: string; // View identifier (e.g. "main", "widget", "settings")
+  placements?: PluginPlacement[]; // Multi-viewport placements
 }
 
 export interface OmniWorkspaceState {

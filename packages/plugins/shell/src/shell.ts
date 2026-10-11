@@ -1,5 +1,5 @@
 import { OmniKernel, WebCryptoKeystore, STANDARD_SLOTS, NostrPluginResolver } from "@omni/core";
-import { OmniWorkspaceState, OmniWorkspacePluginConfig, OMNI_WORKSPACE_D_TAG, NostrEvent, PluginViewDeclaration } from "@omni/types";
+import { OmniWorkspaceState, OmniWorkspacePluginConfig, PluginPlacement, OMNI_WORKSPACE_D_TAG, NostrEvent, PluginViewDeclaration } from "@omni/types";
 import { ICONS, icon, IconName } from "./icons.js";
 
 export interface InstalledPluginEntry {
@@ -12,6 +12,7 @@ export interface InstalledPluginEntry {
   route?: string;
   viewId?: string;
   views?: PluginViewDeclaration[];
+  placements?: PluginPlacement[];
   manifest?: any;
   htmlContent?: string;
   scriptContent: string;
@@ -36,6 +37,7 @@ export class OmniShell {
   private kernel: OmniKernel;
   public installedPlugins: InstalledPluginEntry[];
   private slotContainers: Map<string, Element> = new Map();
+  private expandedPluginId: string | null = null;
 
   // NIP-78 Workspace sync state
   public workspaceSyncStatus: "synced" | "unsynced" | "syncing" = "synced";
@@ -130,6 +132,91 @@ export class OmniShell {
     };
   }
 
+  public getPluginPlacements(p: InstalledPluginEntry): PluginPlacement[] {
+    if (p.placements && p.placements.length > 0) {
+      return p.placements;
+    }
+    const vp = p.viewport || (p.manifest?.components?.[0]?.slot) || "main";
+    return [
+      {
+        id: `${vp}-primary`,
+        viewport: vp,
+        route: p.route !== undefined ? p.route : "",
+        viewId: p.viewId || "main",
+        enabled: p.enabled !== false
+      }
+    ];
+  }
+
+  public ensurePlacementManifest(p: InstalledPluginEntry, pl: PluginPlacement): any {
+    const synth = this.ensurePluginManifest(p);
+    const safePlId = pl.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+    return {
+      ...synth,
+      components: [
+        {
+          id: `${p.id}-${safePlId}`,
+          type: pl.viewport === "main" ? "main" : "widget",
+          title: p.name || p.id,
+          slot: pl.viewport
+        }
+      ]
+    };
+  }
+
+  public async mountPlugin(plugin: InstalledPluginEntry): Promise<void> {
+    if (!plugin.enabled) return;
+    const placements = this.getPluginPlacements(plugin);
+    const slotContainers = this.getSlotContainers();
+
+    for (const pl of placements) {
+      if (pl.enabled === false) continue;
+      const synth = this.ensurePlacementManifest(plugin, pl);
+      const targetContainer = this.getContainerForPluginSlot(plugin.id, pl.viewport, synth.components?.[0]?.id);
+      const customSlotContainers = new Map(slotContainers);
+      if (targetContainer) {
+        customSlotContainers.set(pl.viewport, targetContainer);
+      }
+
+      await this.kernel.registerPlugin(
+        synth,
+        plugin.htmlContent || plugin.scriptContent,
+        customSlotContainers,
+        {
+          instanceId: `${plugin.id}::${pl.id}`,
+          route: pl.route,
+          viewId: pl.viewId,
+          targetSlot: pl.viewport
+        }
+      );
+    }
+  }
+
+  public async remountPlugin(plugin: InstalledPluginEntry): Promise<void> {
+    this.kernel.disablePlugin(plugin.id);
+    const placements = this.getPluginPlacements(plugin);
+    const hasMainPlacement = placements.some(
+      (pl) => pl.enabled !== false && (pl.viewport === "main" || pl.viewport === "dock")
+    );
+    if (!hasMainPlacement && plugin.id !== "org.omni.plugin.feed") {
+      const safeId = plugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const pageEl = document.getElementById(`page-app-${safeId}`);
+      if (pageEl) {
+        if (pageEl.classList.contains("active")) {
+          this.showPage("widgets");
+        }
+        pageEl.remove();
+      }
+    }
+
+    if (plugin.enabled) {
+      await this.mountPlugin(plugin);
+    }
+    this.renderDockLaunchers();
+    this.renderPluginManager();
+    this.saveLocalWorkspace();
+  }
+
   // --- NIP-78 Workspace State Export & Import ---
 
   public exportWorkspaceState(): OmniWorkspaceState {
@@ -140,11 +227,13 @@ export class OmniShell {
       autoSync: this.autoSyncNip78,
       plugins: this.installedPlugins.map((p) => {
         const meta = this.getPluginMeta(p);
+        const placements = this.getPluginPlacements(p);
         return {
           id: p.id,
           viewport: meta.viewport,
           route: p.route,
           viewId: p.viewId,
+          placements,
           enabled: p.enabled,
           name: meta.name,
           description: meta.description,
@@ -216,6 +305,9 @@ export class OmniShell {
         }
         if (item.viewId !== undefined) {
           plugin.viewId = item.viewId;
+        }
+        if (item.placements && Array.isArray(item.placements)) {
+          plugin.placements = item.placements;
         }
         if (item.viewport && item.viewport !== plugin.viewport) {
           plugin.viewport = item.viewport;
@@ -444,7 +536,11 @@ export class OmniShell {
       // Primary applications in "main" or items assigned to "dock" ("Navigation Dock Shortcut")
       // get a dedicated navigation dock launcher button.
       // Modular companion widgets ("sidebar") live inside the Widgets & Tools Dashboard (#page-widgets).
-      if (meta.viewport !== "main" && meta.viewport !== "dock") continue;
+      const placements = this.getPluginPlacements(plugin);
+      const hasDockOrMain = placements.some(
+        (pl) => pl.enabled !== false && (pl.viewport === "main" || pl.viewport === "dock")
+      ) || (meta.viewport === "main" || meta.viewport === "dock");
+      if (!hasDockOrMain) continue;
 
       if (plugin.id !== "org.omni.plugin.feed") {
         this.ensureAppPage(plugin.id);
@@ -749,27 +845,28 @@ export class OmniShell {
     if (countBadge) countBadge.textContent = String(this.installedPlugins.length);
 
     for (const p of this.installedPlugins) {
-      const card = document.createElement("div");
-      card.className = "plugin-item-row";
-
       const meta = this.getPluginMeta(p);
       const synthManifest = this.ensurePluginManifest(p);
+      const pluginViews = (synthManifest.views && synthManifest.views.length > 0)
+        ? synthManifest.views
+        : (p.views && p.views.length > 0)
+        ? p.views
+        : [{ id: "main", title: "Main App", path: "" }];
+      const placements = this.getPluginPlacements(p);
+      const isExpanded = this.expandedPluginId === p.id;
 
-      const topRow = document.createElement("div");
-      topRow.style.display = "flex";
-      topRow.style.justifyContent = "space-between";
-      topRow.style.alignItems = "flex-start";
+      const card = document.createElement("div");
+      card.className = "plugin-item-row plugin-card-collapsible";
+      card.dataset.pluginId = p.id;
+      card.style.cssText = `margin-bottom: 8px; background: var(--omni-bg-surface); border: 1px solid ${isExpanded ? "var(--omni-border-strong)" : "var(--omni-border-subtle)"}; border-radius: var(--omni-radius-md); overflow: hidden; transition: border-color 0.15s ease;`;
 
-      const titleGroup = document.createElement("div");
-      titleGroup.style.display = "flex";
-      titleGroup.style.flexDirection = "column";
-      titleGroup.style.gap = "4px";
+      // 1. Collapsible Header Row (Compact & informative on load)
+      const header = document.createElement("div");
+      header.className = "plugin-card-header plugin-card-collapsible-header";
+      header.style.cssText = `display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; user-select: none; gap: 10px; background: ${isExpanded ? "var(--omni-bg-elevated)" : "transparent"}; transition: background 0.15s ease;`;
 
-      const titleLine = document.createElement("div");
-      titleLine.style.display = "flex";
-      titleLine.style.alignItems = "center";
-      titleLine.style.gap = "8px";
-      titleLine.style.flexWrap = "wrap";
+      const headerLeft = document.createElement("div");
+      headerLeft.style.cssText = "display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; flex-wrap: wrap;";
 
       let iconSvg = "";
       if (meta.icon && ICONS[meta.icon as IconName]) {
@@ -778,79 +875,68 @@ export class OmniShell {
         iconSvg = icon("plugins", 18);
       }
       const iconWrap = document.createElement("div");
-      iconWrap.style.cssText = "display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary);";
+      iconWrap.style.cssText = "display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;";
       iconWrap.innerHTML = iconSvg;
 
       const title = document.createElement("strong");
-      title.style.fontSize = "0.95rem";
+      title.style.cssText = "font-size: 0.92rem; color: var(--omni-text-primary); white-space: nowrap;";
       title.textContent = meta.name;
 
       const version = document.createElement("span");
-      version.style.fontSize = "0.72rem";
-      version.style.color = "var(--omni-text-muted)";
+      version.style.cssText = "font-size: 0.72rem; color: var(--omni-text-muted); font-family: var(--omni-font-mono);";
       version.textContent = `v${meta.version}`;
 
       const statusBadge = document.createElement("span");
-      statusBadge.style.fontSize = "0.7rem";
-      statusBadge.style.color = p.enabled ? "var(--omni-status-online)" : "var(--omni-text-muted)";
-      statusBadge.style.background = "var(--omni-bg-subtle)";
-      statusBadge.style.padding = "1px 6px";
-      statusBadge.style.borderRadius = "var(--omni-radius-pill)";
+      statusBadge.style.cssText = `font-size: 0.68rem; padding: 1px 6px; border-radius: var(--omni-radius-pill); background: var(--omni-bg-subtle); color: ${p.enabled ? "var(--omni-status-online)" : "var(--omni-text-muted)"}; font-weight: 500;`;
       statusBadge.textContent = p.enabled ? "Active" : "Disabled";
 
-      const roleBadge = document.createElement("span");
-      roleBadge.style.cssText =
-        "font-size: 0.68rem; font-weight: 500; padding: 2px 7px; border-radius: var(--omni-radius-pill); border: 1px solid var(--omni-border-subtle); background: var(--omni-bg-subtle);";
-      if (meta.viewport === "main") {
-        roleBadge.style.color = "var(--omni-accent-primary)";
-        roleBadge.style.borderColor = "var(--omni-accent-primary)";
-        roleBadge.textContent = "Full-Page App";
-      } else if (meta.viewport === "dock") {
-        roleBadge.style.color = "var(--omni-text-primary)";
-        roleBadge.style.borderColor = "var(--omni-border-strong)";
-        roleBadge.textContent = "Dock Shortcut";
-      } else if (meta.viewport === "sidebar") {
-        roleBadge.style.color = "var(--omni-text-secondary)";
-        roleBadge.textContent = "Widgets Dashboard";
-      } else if (meta.viewport === "header-actions") {
-        roleBadge.style.color = "var(--omni-text-secondary)";
-        roleBadge.textContent = "Header Action";
-      } else {
-        roleBadge.textContent = meta.viewport;
+      // Placement summary badges
+      const placementsSummaryWrap = document.createElement("div");
+      placementsSummaryWrap.style.cssText = "display: flex; gap: 4px; flex-wrap: wrap; align-items: center;";
+      const activePlacements = placements.filter((pl) => pl.enabled !== false);
+      if (activePlacements.length > 0) {
+        for (const pl of activePlacements) {
+          const badge = document.createElement("span");
+          badge.style.cssText = "font-size: 0.66rem; padding: 1px 6px; border-radius: var(--omni-radius-pill); border: 1px solid var(--omni-border-subtle); background: var(--omni-bg-subtle); color: var(--omni-text-secondary);";
+          if (pl.viewport === "main") {
+            badge.style.color = "var(--omni-accent-primary)";
+            badge.style.borderColor = "var(--omni-accent-primary)";
+            badge.textContent = "Full-Page App";
+          } else if (pl.viewport === "dock") {
+            badge.textContent = "Dock Shortcut";
+          } else if (pl.viewport === "sidebar") {
+            badge.textContent = "Widgets Dashboard";
+          } else if (pl.viewport === "header-actions") {
+            badge.textContent = "Header Action";
+          } else {
+            badge.textContent = pl.viewport;
+          }
+          placementsSummaryWrap.appendChild(badge);
+        }
       }
 
-      titleLine.appendChild(iconWrap);
-      titleLine.appendChild(title);
-      titleLine.appendChild(version);
-      titleLine.appendChild(statusBadge);
-      titleLine.appendChild(roleBadge);
+      headerLeft.appendChild(iconWrap);
+      headerLeft.appendChild(title);
+      headerLeft.appendChild(version);
+      headerLeft.appendChild(statusBadge);
+      headerLeft.appendChild(placementsSummaryWrap);
 
-      const sourcePill = document.createElement("div");
-      sourcePill.style.fontSize = "0.72rem";
-      sourcePill.style.fontFamily = "var(--omni-font-mono)";
-      sourcePill.style.color = "var(--omni-text-muted)";
-      sourcePill.textContent = p.sourceUrl;
+      const headerRight = document.createElement("div");
+      headerRight.style.cssText = "display: flex; align-items: center; gap: 10px; flex-shrink: 0;";
 
-      titleGroup.appendChild(titleLine);
-      titleGroup.appendChild(sourcePill);
-
+      // Enable/disable master toggle
       const toggleLabel = document.createElement("label");
       toggleLabel.className = "omni-toggle";
       toggleLabel.title = p.enabled ? "Click to disable plugin" : "Click to enable plugin";
+      toggleLabel.addEventListener("click", (e) => e.stopPropagation());
 
       const toggleInput = document.createElement("input");
       toggleInput.type = "checkbox";
       toggleInput.checked = p.enabled;
-      toggleInput.addEventListener("change", async () => {
-        if (toggleInput.checked) {
-          await this.kernel.enablePlugin(synthManifest, p.htmlContent || p.scriptContent, this.slotContainers);
-          p.enabled = true;
-        } else {
-          this.kernel.disablePlugin(p.id);
-          p.enabled = false;
-        }
-        this.renderDockLaunchers();
-        this.renderPluginManager();
+      toggleInput.addEventListener("change", async (e) => {
+        e.stopPropagation();
+        p.enabled = toggleInput.checked;
+        await this.remountPlugin(p);
       });
 
       const toggleSlider = document.createElement("span");
@@ -858,171 +944,197 @@ export class OmniShell {
       toggleLabel.appendChild(toggleInput);
       toggleLabel.appendChild(toggleSlider);
 
-      topRow.appendChild(titleGroup);
-      topRow.appendChild(toggleLabel);
+      // Expand/Collapse Chevron Indicator
+      const chevronWrap = document.createElement("div");
+      chevronWrap.className = "plugin-expand-chevron";
+      chevronWrap.style.cssText = "color: var(--omni-text-muted); display: flex; align-items: center; justify-content: center; width: 18px; height: 18px;";
+      chevronWrap.innerHTML = isExpanded ? icon("chevron-up", 14) : icon("chevron-down", 14);
+
+      headerRight.appendChild(toggleLabel);
+      headerRight.appendChild(chevronWrap);
+
+      header.appendChild(headerLeft);
+      header.appendChild(headerRight);
+
+      // Header click toggles expand/collapse (accordion: only 1 section open at a time)
+      header.addEventListener("click", () => {
+        if (this.expandedPluginId) {
+          this.kernel.destroyPluginSettings(this.expandedPluginId);
+        }
+        this.expandedPluginId = this.expandedPluginId === p.id ? null : p.id;
+        this.renderPluginManager();
+      });
+
+      card.appendChild(header);
+
+      // 2. Collapsible Details Panel (Hidden on load, shown when expanded)
+      const details = document.createElement("div");
+      details.className = "plugin-details-panel plugin-card-details";
+      details.style.cssText = `display: ${isExpanded ? "flex" : "none"}; flex-direction: column; padding: 12px 14px; gap: 12px; border-top: 1px solid var(--omni-border-subtle); background: var(--omni-bg-canvas);`;
+
+      // Description & provenance
+      const descRow = document.createElement("div");
+      descRow.style.cssText = "display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap;";
 
       const desc = document.createElement("div");
-      desc.style.fontSize = "0.82rem";
-      desc.style.color = "var(--omni-text-secondary)";
+      desc.style.cssText = "font-size: 0.8rem; color: var(--omni-text-secondary); max-width: 650px;";
       desc.textContent = meta.description || "No description provided.";
 
-      const actionsRow = document.createElement("div");
-      actionsRow.style.display = "flex";
-      actionsRow.style.gap = "8px";
-      actionsRow.style.marginTop = "4px";
+      const sourcePill = document.createElement("div");
+      sourcePill.style.cssText = "font-size: 0.7rem; font-family: var(--omni-font-mono); color: var(--omni-text-muted); background: var(--omni-bg-surface); padding: 2px 6px; border-radius: var(--omni-radius-xs); border: 1px solid var(--omni-border-subtle);";
+      sourcePill.textContent = p.sourceUrl;
 
-      const btnInspect = document.createElement("button");
-      btnInspect.className = "btn-secondary";
-      btnInspect.textContent = "Inspect Plugin";
-      btnInspect.addEventListener("click", () => {
-        this.openPluginInspector(p);
+      descRow.appendChild(desc);
+      descRow.appendChild(sourcePill);
+      details.appendChild(descRow);
+
+      // 3. Placements & Routes Section (Multi-viewport assignment)
+      const placementsSection = document.createElement("div");
+      placementsSection.className = "plugin-placements-section";
+      placementsSection.style.cssText = "display: flex; flex-direction: column; gap: 8px; background: var(--omni-bg-surface); padding: 10px 12px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);";
+
+      const placementsHeader = document.createElement("div");
+      placementsHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center; gap: 8px;";
+
+      const placementsTitle = document.createElement("span");
+      placementsTitle.style.cssText = "font-weight: 600; font-size: 0.78rem; color: var(--omni-text-primary);";
+      placementsTitle.textContent = "Placements & Assigned Routes";
+
+      const btnAddPlacement = document.createElement("button");
+      btnAddPlacement.className = "btn-secondary btn-add-placement";
+      btnAddPlacement.style.cssText = "font-size: 0.7rem; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;";
+      btnAddPlacement.innerHTML = `<span>+</span> Add Location`;
+      btnAddPlacement.addEventListener("click", async () => {
+        const nextVp = placements.some((pl) => pl.viewport === "main") ? "sidebar" : "main";
+        const newPl: PluginPlacement = {
+          id: `pl-${Date.now().toString(36)}`,
+          viewport: nextVp,
+          route: pluginViews[0]?.path || "",
+          viewId: pluginViews[0]?.id || "main",
+          enabled: true
+        };
+        p.placements = [...placements, newPl];
+        p.viewport = newPl.viewport;
+        p.route = newPl.route;
+        p.viewId = newPl.viewId;
+        await this.remountPlugin(p);
       });
 
-      const btnClearDb = document.createElement("button");
-      btnClearDb.className = "btn-secondary";
-      btnClearDb.textContent = "Clear DB";
-      btnClearDb.addEventListener("click", async () => {
-        await this.kernel.storageManager.clear(p.id);
-        btnClearDb.textContent = "Cleared!";
-        setTimeout(() => {
-          btnClearDb.textContent = "Clear DB";
-        }, 1500);
-      });
-
-      const btnUninstall = document.createElement("button");
-      btnUninstall.className = "btn-danger";
-      btnUninstall.textContent = "Uninstall";
-      btnUninstall.addEventListener("click", () => {
-        if (confirm(`Uninstall ${meta.name}? Its components and storage will be removed.`)) {
-          this.uninstallPlugin(p.id);
-        }
-      });
-
-      actionsRow.appendChild(btnInspect);
-      actionsRow.appendChild(btnClearDb);
-      actionsRow.appendChild(btnUninstall);
-
-      // User-Defined Viewport Assignment Selector
-      const viewportRow = document.createElement("div");
-      viewportRow.style.cssText =
-        "display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 6px 10px; background: var(--omni-bg-subtle); border-radius: var(--omni-radius-sm); font-size: 0.75rem;";
-
-      const vpLabelGroup = document.createElement("div");
-      vpLabelGroup.style.cssText = "display: flex; flex-direction: column; gap: 1px;";
-      vpLabelGroup.innerHTML = `
-        <span style="font-weight: 600; color: var(--omni-text-primary);">Navigation Viewport:</span>
-        <span style="font-size: 0.68rem; color: var(--omni-text-muted);">Choose where this app or widget appears</span>
-      `;
-
-      const vpSelect = document.createElement("select");
-      vpSelect.className = "plugin-viewport-select";
-      vpSelect.style.cssText =
-        "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none; cursor: pointer;";
-
-      const primaryComp = synthManifest.components?.[0];
-      const currentSlot = primaryComp
-        ? (this.kernel.layoutManager.getSlotForComponent(p.id, primaryComp.id) || primaryComp.slot)
-        : "main";
+      placementsHeader.appendChild(placementsTitle);
+      placementsHeader.appendChild(btnAddPlacement);
+      placementsSection.appendChild(placementsHeader);
 
       const viewportOptions = [
-        { id: "main", label: "Full-Page App (Center Viewport)" },
-        { id: "dock", label: "Navigation Dock Shortcut" },
-        { id: "sidebar", label: "Workspace Widget (Widgets Dashboard)" },
-        { id: "header-actions", label: "Header Quick Action" }
+        { id: "main", label: "Full-Page App" },
+        { id: "dock", label: "Navigation Dock" },
+        { id: "sidebar", label: "Widgets Dashboard" },
+        { id: "header-actions", label: "Header Action" }
       ];
 
-      for (const optDef of viewportOptions) {
-        const opt = document.createElement("option");
-        opt.value = optDef.id;
-        opt.textContent = optDef.label;
-        if (optDef.id === currentSlot) opt.selected = true;
-        vpSelect.appendChild(opt);
-      }
+      // Render each placement row
+      for (let plIdx = 0; plIdx < placements.length; plIdx++) {
+        const pl = placements[plIdx];
+        const row = document.createElement("div");
+        row.className = "plugin-placement-row";
+        row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; background: var(--omni-bg-subtle); border-radius: var(--omni-radius-xs); font-size: 0.74rem; flex-wrap: wrap;";
 
-      vpSelect.addEventListener("change", () => {
-        const targetSlotId = vpSelect.value;
-        const targetContainer = this.getContainerForPluginSlot(p.id, targetSlotId, primaryComp?.id);
-        if (targetContainer && primaryComp) {
-          this.kernel.reparentPluginComponent(p.id, primaryComp.id, targetSlotId, targetContainer);
-          p.viewport = targetSlotId;
-          if (targetSlotId !== "main" && targetSlotId !== "dock" && p.id !== "org.omni.plugin.feed") {
-            const safeId = p.id.replace(/[^a-zA-Z0-9_-]/g, "-");
-            const pageEl = document.getElementById(`page-app-${safeId}`);
-            if (pageEl) {
-              if (pageEl.classList.contains("active")) {
-                this.showPage("widgets");
-              }
-              pageEl.remove();
-            }
+        const controlsLeft = document.createElement("div");
+        controlsLeft.style.cssText = "display: flex; align-items: center; gap: 8px; flex: 1; flex-wrap: wrap;";
+
+        // Viewport selector
+        const vpLabel = document.createElement("span");
+        vpLabel.style.cssText = "font-weight: 500; color: var(--omni-text-secondary);";
+        vpLabel.textContent = "Location:";
+
+        const vpSelect = document.createElement("select");
+        vpSelect.className = "plugin-viewport-select";
+        vpSelect.style.cssText = "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none; cursor: pointer;";
+
+        for (const optDef of viewportOptions) {
+          const opt = document.createElement("option");
+          opt.value = optDef.id;
+          opt.textContent = optDef.label;
+          if (optDef.id === pl.viewport) opt.selected = true;
+          vpSelect.appendChild(opt);
+        }
+
+        vpSelect.addEventListener("change", async () => {
+          pl.viewport = vpSelect.value;
+          p.viewport = pl.viewport;
+          const primaryComp = synthManifest.components?.[0];
+          if (primaryComp) {
+            this.kernel.layoutManager.setComponentSlot(p.id, primaryComp.id, pl.viewport);
           }
-          this.renderDockLaunchers();
-          this.renderPluginManager();
-          this.saveLocalWorkspace();
+          await this.remountPlugin(p);
+        });
+
+        // Route selector
+        const routeLabel = document.createElement("span");
+        routeLabel.style.cssText = "font-weight: 500; color: var(--omni-text-secondary); margin-left: 6px;";
+        routeLabel.textContent = "View:";
+
+        const routeSelect = document.createElement("select");
+        routeSelect.className = "plugin-route-select";
+        routeSelect.style.cssText = "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none; cursor: pointer;";
+
+        for (const v of pluginViews) {
+          const opt = document.createElement("option");
+          opt.value = v.path;
+          opt.textContent = `${v.title} (${v.path || "/"})`;
+          if ((pl.route !== undefined && pl.route === v.path) || (!pl.route && v.id === "main")) {
+            opt.selected = true;
+          }
+          routeSelect.appendChild(opt);
         }
-      });
 
-      viewportRow.appendChild(vpLabelGroup);
-      viewportRow.appendChild(vpSelect);
+        routeSelect.addEventListener("change", async () => {
+          pl.route = routeSelect.value;
+          const matchedView = pluginViews.find((v: any) => v.path === routeSelect.value);
+          pl.viewId = matchedView?.id || "main";
+          p.route = pl.route;
+          p.viewId = pl.viewId;
+          await this.remountPlugin(p);
+        });
 
-      // Route / Sub-View Assignment Selector
-      const routeRow = document.createElement("div");
-      routeRow.style.cssText =
-        "display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; padding: 6px 10px; background: var(--omni-bg-subtle); border-radius: var(--omni-radius-sm); font-size: 0.75rem;";
+        controlsLeft.appendChild(vpLabel);
+        controlsLeft.appendChild(vpSelect);
+        controlsLeft.appendChild(routeLabel);
+        controlsLeft.appendChild(routeSelect);
 
-      const routeLabelGroup = document.createElement("div");
-      routeLabelGroup.style.cssText = "display: flex; flex-direction: column; gap: 1px;";
-      routeLabelGroup.innerHTML = `
-        <span style="font-weight: 600; color: var(--omni-text-primary);">Assigned Route:</span>
-        <span style="font-size: 0.68rem; color: var(--omni-text-muted);">Choose which sub-view this area runs</span>
-      `;
+        row.appendChild(controlsLeft);
 
-      const routeSelect = document.createElement("select");
-      routeSelect.className = "plugin-route-select";
-      routeSelect.style.cssText =
-        "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none; cursor: pointer;";
-
-      const pluginViews = (synthManifest.views && synthManifest.views.length > 0)
-        ? synthManifest.views
-        : (p.views && p.views.length > 0)
-        ? p.views
-        : [{ id: "main", title: "Main App", path: "" }];
-
-      for (const v of pluginViews) {
-        const opt = document.createElement("option");
-        opt.value = v.path;
-        opt.textContent = `${v.title} (${v.path || "/"})`;
-        if ((p.route !== undefined && p.route === v.path) || (!p.route && v.id === "main")) {
-          opt.selected = true;
+        // Remove placement button (if multiple placements or allow unassign)
+        if (placements.length > 1) {
+          const btnRemovePl = document.createElement("button");
+          btnRemovePl.className = "btn-secondary btn-remove-placement";
+          btnRemovePl.style.cssText = "font-size: 0.68rem; padding: 2px 6px; color: #f87171;";
+          btnRemovePl.textContent = "Remove";
+          btnRemovePl.title = "Remove this placement";
+          btnRemovePl.addEventListener("click", async () => {
+            p.placements = placements.filter((_, idx) => idx !== plIdx);
+            if (p.placements.length > 0) {
+              p.viewport = p.placements[0].viewport;
+              p.route = p.placements[0].route;
+              p.viewId = p.placements[0].viewId;
+            }
+            await this.remountPlugin(p);
+          });
+          row.appendChild(btnRemovePl);
         }
-        routeSelect.appendChild(opt);
+
+        placementsSection.appendChild(row);
       }
 
-      routeSelect.addEventListener("change", async () => {
-        p.route = routeSelect.value;
-        const matchedView = pluginViews.find((v: any) => v.path === routeSelect.value);
-        p.viewId = matchedView?.id || "main";
-        if (p.enabled) {
-          await this.kernel.enablePlugin(synthManifest, p.htmlContent || p.scriptContent, this.slotContainers, {
-            route: p.route,
-            viewId: p.viewId
-          });
-        }
-        this.saveLocalWorkspace();
-      });
+      details.appendChild(placementsSection);
 
-      routeRow.appendChild(routeLabelGroup);
-      routeRow.appendChild(routeSelect);
-
-      // Dedicated Per-Plugin Settings Section
+      // 4. Plugin Settings Section (Clean, no extraneous syntax spam)
       const safeId = p.id.replace(/[^a-zA-Z0-9_-]/g, "-");
       const settingsBox = document.createElement("div");
       settingsBox.className = "plugin-settings-box";
-      settingsBox.style.cssText =
-        "margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--omni-border-subtle); display: flex; flex-direction: column; gap: 6px;";
+      settingsBox.style.cssText = "display: flex; flex-direction: column; gap: 6px; background: var(--omni-bg-surface); padding: 10px 12px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);";
 
       const settingsHeader = document.createElement("div");
-      settingsHeader.style.cssText =
-        "display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;";
+      settingsHeader.style.cssText = "display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;";
 
       const settingsTitle = document.createElement("span");
       settingsTitle.style.cssText = "font-weight: 600; font-size: 0.78rem; color: var(--omni-text-primary);";
@@ -1033,8 +1145,7 @@ export class OmniShell {
       const mountContainer = document.createElement("div");
       mountContainer.id = `plugin-settings-mount-${safeId}`;
       mountContainer.className = "plugin-settings-mount-container";
-      mountContainer.style.cssText =
-        "display: none; margin-top: 6px; padding: 10px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
+      mountContainer.style.cssText = "display: none; margin-top: 6px; padding: 10px; background: var(--omni-bg-canvas); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
 
       if (settingsView) {
         const btnToggleSettings = document.createElement("button");
@@ -1078,19 +1189,56 @@ export class OmniShell {
       } else {
         const noSettingsNote = document.createElement("div");
         noSettingsNote.style.cssText = "font-size: 0.72rem; color: var(--omni-text-muted);";
-        noSettingsNote.innerHTML = `No custom settings route declared. <span style="opacity: 0.8;">(Conventions: tag <code>["view", "settings"]</code> or <code>&lt;link rel="alternate" href="?view=settings" title="Settings"&gt;</code>)</span>`;
+        noSettingsNote.textContent = "No custom settings available.";
 
         settingsHeader.appendChild(settingsTitle);
         settingsBox.appendChild(settingsHeader);
         settingsBox.appendChild(noSettingsNote);
       }
 
-      card.appendChild(topRow);
-      card.appendChild(desc);
-      card.appendChild(viewportRow);
-      card.appendChild(routeRow);
-      card.appendChild(actionsRow);
-      card.appendChild(settingsBox);
+      details.appendChild(settingsBox);
+
+      // 5. Actions Row (Inspect, Clear DB, Uninstall)
+      const actionsRow = document.createElement("div");
+      actionsRow.style.cssText = "display: flex; gap: 8px; align-items: center; margin-top: 2px;";
+
+      const btnInspect = document.createElement("button");
+      btnInspect.className = "btn-secondary";
+      btnInspect.style.cssText = "font-size: 0.72rem; padding: 3px 8px;";
+      btnInspect.textContent = "Inspect Plugin";
+      btnInspect.addEventListener("click", () => {
+        this.openPluginInspector(p);
+      });
+
+      const btnClearDb = document.createElement("button");
+      btnClearDb.className = "btn-secondary";
+      btnClearDb.style.cssText = "font-size: 0.72rem; padding: 3px 8px;";
+      btnClearDb.textContent = "Clear DB";
+      btnClearDb.addEventListener("click", async () => {
+        await this.kernel.storageManager.clear(p.id);
+        btnClearDb.textContent = "Cleared!";
+        setTimeout(() => {
+          btnClearDb.textContent = "Clear DB";
+        }, 1500);
+      });
+
+      const btnUninstall = document.createElement("button");
+      btnUninstall.className = "btn-danger";
+      btnUninstall.style.cssText = "font-size: 0.72rem; padding: 3px 8px;";
+      btnUninstall.textContent = "Uninstall";
+      btnUninstall.addEventListener("click", () => {
+        if (confirm(`Uninstall ${meta.name}? Its components and storage will be removed.`)) {
+          this.uninstallPlugin(p.id);
+        }
+      });
+
+      actionsRow.appendChild(btnInspect);
+      actionsRow.appendChild(btnClearDb);
+      actionsRow.appendChild(btnUninstall);
+
+      details.appendChild(actionsRow);
+
+      card.appendChild(details);
 
       container.appendChild(card);
     }
@@ -1146,10 +1294,17 @@ export class OmniShell {
       if (btnPublish) btnPublish.textContent = "Publish / Share to Nostr (NIP-5A)";
     }
 
-    // Components
-    if (compList) {
-      compList.innerHTML = "";
-      for (const comp of synthManifest.components || []) {
+    // Discovered Routes & Views
+    const viewsList = document.getElementById("inspector-views-list") || compList;
+    if (viewsList) {
+      viewsList.innerHTML = "";
+      const views = (synthManifest.views && synthManifest.views.length > 0)
+        ? synthManifest.views
+        : (plugin.views && plugin.views.length > 0)
+        ? plugin.views
+        : [{ id: "main", title: "Main App", path: "" }];
+
+      for (const v of views) {
         const item = document.createElement("div");
         item.style.background = "var(--omni-bg-surface)";
         item.style.border = "1px solid var(--omni-border-subtle)";
@@ -1161,20 +1316,20 @@ export class OmniShell {
         item.style.alignItems = "center";
 
         const left = document.createElement("div");
-        left.innerHTML = `<strong>${comp.title || comp.id}</strong> <span style="color: var(--omni-text-muted); font-size: 0.72rem;">(${comp.id})</span>`;
+        left.innerHTML = `<strong>${v.title}</strong> <span style="color: var(--omni-text-muted); font-size: 0.72rem;">(${v.id})</span>`;
 
-        const slotPill = document.createElement("span");
-        slotPill.style.background = "var(--omni-bg-subtle)";
-        slotPill.style.color = "var(--omni-accent-primary)";
-        slotPill.style.padding = "2px 8px";
-        slotPill.style.borderRadius = "var(--omni-radius-pill)";
-        slotPill.style.fontFamily = "var(--omni-font-mono)";
-        slotPill.style.fontSize = "0.72rem";
-        slotPill.textContent = `slot: ${comp.slot}`;
+        const pathPill = document.createElement("span");
+        pathPill.style.background = "var(--omni-bg-subtle)";
+        pathPill.style.color = "var(--omni-accent-primary)";
+        pathPill.style.padding = "2px 8px";
+        pathPill.style.borderRadius = "var(--omni-radius-pill)";
+        pathPill.style.fontFamily = "var(--omni-font-mono)";
+        pathPill.style.fontSize = "0.72rem";
+        pathPill.textContent = v.path || "/ (default)";
 
         item.appendChild(left);
-        item.appendChild(slotPill);
-        compList.appendChild(item);
+        item.appendChild(pathPill);
+        viewsList.appendChild(item);
       }
     }
 
@@ -1207,6 +1362,17 @@ export class OmniShell {
         name: "Nostr Event Signing (Write)",
         desc: "Draft and request signing of Nostr notes and custom events"
       });
+      if (
+        synthManifest.permissions?.relays ||
+        this.kernel.getPluginPermission(plugin.id, "relays:manage") ||
+        plugin.id === "org.omni.plugin.relays"
+      ) {
+        declaredPerms.push({
+          key: "relays:manage",
+          name: "Relay Management (relays:manage)",
+          desc: "Add, remove, and monitor connected WebSocket relays in the host relay pool"
+        });
+      }
 
       for (const perm of declaredPerms) {
         const row = document.createElement("div");
@@ -1257,7 +1423,38 @@ export class OmniShell {
       }
     }
 
-    if (rawPre) rawPre.textContent = JSON.stringify(synthManifest, null, 2);
+    if (rawPre) {
+      if (plugin.event) {
+        rawPre.textContent = JSON.stringify(plugin.event, null, 2);
+      } else {
+        const views = (synthManifest.views && synthManifest.views.length > 0)
+          ? synthManifest.views
+          : (plugin.views && plugin.views.length > 0)
+          ? plugin.views
+          : [{ id: "main", title: "Main App", path: "" }];
+
+        const eventTags: string[][] = [
+          ["d", meta.id],
+          ["name", meta.name],
+          ["version", meta.version],
+          ["description", meta.description || ""],
+          ["entry", "index.html"]
+        ];
+
+        for (const v of views) {
+          eventTags.push(["view", v.id, v.title, v.path]);
+        }
+
+        const standardNostrEvent = {
+          kind: 30066,
+          pubkey: plugin.authorNpub || "local-device-keystore",
+          created_at: Math.floor(Date.now() / 1000),
+          tags: eventTags,
+          content: "(Standalone nsite HTML / Blossom sha256 blob)"
+        };
+        rawPre.textContent = JSON.stringify(standardNostrEvent, null, 2);
+      }
+    }
 
     this.switchInspectorTab("overview");
     this.pluginInspectorModal.classList.add("open");
@@ -1557,7 +1754,7 @@ export class OmniShell {
 
           <div style="display: flex; flex-direction: column; gap: 12px;">
             <label style="font-size: 0.82rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 4px;">
-              Nostr naddr (NIP-5A) or Manifest URL:
+              Nostr naddr (NIP-5A) or App URL:
               <input
                 id="install-manifest-url"
                 type="text"
@@ -1567,13 +1764,13 @@ export class OmniShell {
             </label>
 
             <div style="display: flex; align-items: center; gap: 8px; justify-content: center; font-size: 0.75rem; color: var(--omni-text-muted);">
-              <span>— or paste raw manifest JSON / inline nsite HTML —</span>
+              <span>— or paste inline nsite HTML or script —</span>
             </div>
 
             <textarea
               id="install-manifest-json"
               rows="6"
-              placeholder='{\n  "id": "org.example.plugin",\n  "name": "Custom Widget",\n  "version": "1.0.0"\n}'
+              placeholder="<!DOCTYPE html>&#10;<html>&#10;<head>&#10;  <title>Custom App</title>&#10;  <link rel=&quot;alternate&quot; href=&quot;?view=widget&quot; title=&quot;Widget View&quot;>&#10;</head>&#10;<body>...</body>&#10;</html>"
               style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 8px 12px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.78rem; outline: none; resize: vertical;"
             ></textarea>
 
@@ -1583,7 +1780,7 @@ export class OmniShell {
                   Load Sample Nostr (naddr)
                 </button>
                 <button id="btn-quick-sample-plugin" class="btn-secondary" style="font-size: 0.75rem;">
-                  Load Raw Sample
+                  Load HTML Sample
                 </button>
               </div>
               <button id="btn-confirm-install" class="btn-publish">
@@ -1610,7 +1807,7 @@ export class OmniShell {
           <div class="modal-tabs">
             <button class="modal-tab-btn active" id="tab-btn-overview">Overview</button>
             <button class="modal-tab-btn" id="tab-btn-permissions">Permissions</button>
-            <button class="modal-tab-btn" id="tab-btn-manifest">Manifest JSON</button>
+            <button class="modal-tab-btn" id="tab-btn-manifest">Nostr Event</button>
           </div>
 
           <div id="inspector-pane-overview" style="display: flex; flex-direction: column; gap: 12px;">
@@ -1637,8 +1834,11 @@ export class OmniShell {
             </div>
 
             <div>
-              <h4 style="font-size: 0.85rem; margin-bottom: 6px; color: var(--omni-text-secondary);">Contributed Components</h4>
-              <div id="inspector-components-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <h4 style="font-size: 0.85rem; color: var(--omni-text-secondary);">Discovered Routes & Views</h4>
+                <span style="font-size: 0.7rem; color: var(--omni-text-muted);">Standard Nostr tags & HTML links</span>
+              </div>
+              <div id="inspector-views-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
             </div>
           </div>
 
@@ -1650,9 +1850,10 @@ export class OmniShell {
           </div>
 
           <div id="inspector-pane-manifest" style="display: none; flex-direction: column; gap: 8px;">
-            <div style="display: flex; justify-content: flex-end;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.72rem; color: var(--omni-text-muted);">Standard decentralized Nostr site event (NIP-5A kind 30066 / 30078)</span>
               <button id="btn-copy-manifest" class="btn-secondary" style="font-size: 0.72rem;">
-                Copy JSON
+                Copy Event JSON
               </button>
             </div>
             <pre class="manifest-code-block" id="inspector-manifest-raw"></pre>
@@ -1840,11 +2041,12 @@ export class OmniShell {
     tabMan?.addEventListener("click", () => this.switchInspectorTab("manifest"));
 
     btnCopy?.addEventListener("click", async () => {
-      if (this.activeInspectedPlugin) {
-        await navigator.clipboard.writeText(JSON.stringify(this.ensurePluginManifest(this.activeInspectedPlugin), null, 2));
+      const rawPre = document.getElementById("inspector-manifest-raw");
+      if (rawPre?.textContent) {
+        await navigator.clipboard.writeText(rawPre.textContent);
         btnCopy.textContent = "Copied!";
         setTimeout(() => {
-          btnCopy.textContent = "Copy JSON";
+          btnCopy.textContent = "Copy Event JSON";
         }, 1500);
       }
     });
@@ -1905,18 +2107,20 @@ export class OmniShell {
     });
 
     btnQuickRaw?.addEventListener("click", () => {
-      urlInput.value = "https://registry.omni.org/plugins/scratchpad/omni.manifest.json";
-      jsonInput.value = JSON.stringify(
-        {
-          id: "org.omni.plugins.scratchpad",
-          name: "Scratchpad Notes",
-          version: "1.0.0",
-          description: "Minimal persistent scratchpad note taking widget",
-          components: [{ id: "scratchpad-widget", slot: "sidebar", title: "Scratchpad" }]
-        },
-        null,
-        2
-      );
+      urlInput.value = "";
+      jsonInput.value = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Scratchpad Notes</title>
+  <link rel="alternate" href="?view=widget" title="Scratchpad Widget">
+</head>
+<body>
+  <div style="background: var(--omni-bg-surface); padding: 14px; border-radius: var(--omni-radius-md);">
+    <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--omni-accent-primary);">✦ Scratchpad Notes</h3>
+    <textarea style="width: 100%; height: 100px; margin-top: 8px; background: var(--omni-bg-subtle); color: var(--omni-text-primary); border: 1px solid var(--omni-border-subtle); border-radius: 4px; padding: 8px; font-family: inherit; font-size: 0.82rem;" placeholder="Write quick notes here..."></textarea>
+  </div>
+</body>
+</html>`;
     });
 
     btnQuickNostr?.addEventListener("click", async () => {

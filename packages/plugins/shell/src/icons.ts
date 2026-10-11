@@ -24,7 +24,9 @@ export type IconName =
   | "cloud"
   | "refresh"
   | "upload"
-  | "download";
+  | "download"
+  | "chevron-down"
+  | "chevron-up";
 
 export const ICONS: Record<IconName, string> = {
   cloud: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -159,6 +161,14 @@ export const ICONS: Record<IconName, string> = {
     <polyline points="19 9 22 12 19 15"/>
     <line x1="2" y1="12" x2="22" y2="12"/>
     <line x1="12" y1="2" x2="12" y2="22"/>
+  </svg>`,
+
+  "chevron-down": `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>`,
+
+  "chevron-up": `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="18 15 12 9 6 15"/>
   </svg>`
 };
 

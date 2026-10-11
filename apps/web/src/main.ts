@@ -162,15 +162,10 @@ async function startApp() {
 
   // Mount enabled plugins into sandboxes using shell slot containers
   console.log("⚡ [Omni Web] Mounting core plugins into sandboxed viewports...");
-  const slotContainers = shell.getSlotContainers();
   for (const p of shell.installedPlugins) {
     if (p.enabled) {
-      const synthManifest = shell.ensurePluginManifest(p);
-      console.log(`⚡ [Omni Web] Mounting nsite ${synthManifest.name}...`);
-      await kernel.registerPlugin(synthManifest, p.htmlContent || p.scriptContent, slotContainers, {
-        route: p.route,
-        viewId: p.viewId
-      });
+      console.log(`⚡ [Omni Web] Mounting nsite ${p.name}...`);
+      await shell.mountPlugin(p);
     }
   }
 

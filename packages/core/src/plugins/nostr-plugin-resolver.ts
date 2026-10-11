@@ -422,6 +422,7 @@ export class NostrPluginResolver {
       ["f", "dist/index.js", scriptHash, "application/javascript"],
       ["f", "omni.manifest.json", manifestHash, "application/json"],
       ...manifest.components.map((c) => ["slot", c.slot]),
+      ...(manifest.views || []).map((v) => ["view", v.id, v.title, v.path]),
       ...Object.keys(manifest.permissions || {}).map((p) => ["permission", p]),
       ...blossomServers.slice(0, 2).map((s) => ["server", s])
     ];
