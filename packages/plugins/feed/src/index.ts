@@ -40,21 +40,36 @@ function mountFeed(root: any) {
 
   // B. Header Row
   const headerRow = createElement("div");
-  headerRow.setAttribute("style", "display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;");
+  headerRow.setAttribute("style", "display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap;");
 
   const heading = createElement("h2");
-  heading.setAttribute("style", "font-size: 0.95rem; font-weight: 600; color: var(--omni-text-secondary); text-transform: uppercase; letter-spacing: 0.05em;");
+  heading.setAttribute("style", "font-size: 0.95rem; font-weight: 600; color: var(--omni-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin: 0;");
   heading.textContent = "Timeline Feed";
 
+  const headerRight = createElement("div");
+  headerRight.setAttribute("style", "display: flex; align-items: center; gap: 8px;");
+
   const cacheIndicator = createElement("span");
-  cacheIndicator.setAttribute("style", "font-size: 0.75rem; color: var(--omni-accent-primary); display: flex; align-items: center; gap: 4px;");
+  cacheIndicator.setAttribute("style", "font-size: 0.72rem; color: var(--omni-accent-primary); display: flex; align-items: center; gap: 4px;");
   cacheIndicator.textContent = "✦ 0ms Local Cache";
 
+  const btnRefresh = createElement("button");
+  btnRefresh.className = "btn-refresh-feed";
+  btnRefresh.textContent = "↻ Refresh";
+
+  headerRight.appendChild(cacheIndicator);
+  headerRight.appendChild(btnRefresh);
   headerRow.appendChild(heading);
-  headerRow.appendChild(cacheIndicator);
+  headerRow.appendChild(headerRight);
   container.appendChild(headerRow);
 
-  // C. Notes List
+  // C. New Posts Pill (Bluesky-style)
+  const newPostsPill = createElement("button");
+  newPostsPill.className = "new-posts-pill";
+  newPostsPill.setAttribute("style", "display: none;");
+  container.appendChild(newPostsPill);
+
+  // D. Notes List
   const notesList = createElement("div");
   notesList.className = "notes-list";
 
@@ -64,9 +79,31 @@ function mountFeed(root: any) {
   notesList.appendChild(loadingText);
   container.appendChild(notesList);
 
+  // E. Load Older Notes Button (Pagination)
+  const btnLoadMore = createElement("button");
+  btnLoadMore.className = "btn-load-more";
+  btnLoadMore.textContent = "Load Older Notes";
+  btnLoadMore.setAttribute("style", "display: none;");
+  container.appendChild(btnLoadMore);
+
   root.appendChild(container);
 
   const renderedIds = new Set<string>();
+  let oldestTimestamp = Infinity;
+  let latestTimestamp = 0;
+  const pendingNewNotes: any[] = [];
+  let isInitialBatchComplete = false;
+  let activeWs: any = null;
+
+  function updateNewPostsPill() {
+    const count = pendingNewNotes.length;
+    if (count > 0) {
+      newPostsPill.textContent = `✦ ${count} New Note${count > 1 ? "s" : ""} · Click to view`;
+      newPostsPill.setAttribute("style", "display: flex;");
+    } else {
+      newPostsPill.setAttribute("style", "display: none;");
+    }
+  }
 
   function renderNote(event: any, prepend = false) {
     if (renderedIds.has(event.id)) return;
@@ -74,6 +111,14 @@ function mountFeed(root: any) {
 
     if (loadingText.parentElement) {
       loadingText.remove();
+    }
+    btnLoadMore.setAttribute("style", "display: block;");
+
+    if (event.created_at && event.created_at < oldestTimestamp) {
+      oldestTimestamp = event.created_at;
+    }
+    if (event.created_at && event.created_at > latestTimestamp) {
+      latestTimestamp = event.created_at;
     }
 
     const card = createElement("article");
@@ -85,12 +130,12 @@ function mountFeed(root: any) {
 
     const authorSpan = createElement("span");
     authorSpan.className = "note-author";
-    const shortAuthor = `npub:${event.pubkey.slice(0, 6)}...${event.pubkey.slice(-4)}`;
+    const shortAuthor = event.pubkey ? `npub:${event.pubkey.slice(0, 6)}...${event.pubkey.slice(-4)}` : "anonymous";
     authorSpan.textContent = shortAuthor;
 
     const metaSpan = createElement("span");
     metaSpan.className = "note-meta";
-    metaSpan.textContent = formatTime(event.created_at);
+    metaSpan.textContent = event.created_at ? formatTime(event.created_at) : "just now";
 
     noteHeader.appendChild(authorSpan);
     noteHeader.appendChild(metaSpan);
@@ -98,7 +143,7 @@ function mountFeed(root: any) {
     // Note Content
     const noteContent = createElement("div");
     noteContent.className = "note-content";
-    noteContent.textContent = event.content;
+    noteContent.textContent = event.content || "";
 
     // Note Actions
     const actions = createElement("div");
@@ -132,6 +177,61 @@ function mountFeed(root: any) {
     }
   }
 
+  function handleIncomingEvent(event: any, fromCache = false) {
+    if (renderedIds.has(event.id)) return;
+
+    if (!isInitialBatchComplete || fromCache) {
+      // During initial fetch or from local store, display immediately
+      renderNote(event, true);
+    } else {
+      // Like Bluesky: buffer live notes so reading isn't interrupted by jumping DOM
+      if (!pendingNewNotes.some((n) => n.id === event.id)) {
+        pendingNewNotes.unshift(event);
+        updateNewPostsPill();
+      }
+    }
+  }
+
+  newPostsPill.addEventListener("click", () => {
+    while (pendingNewNotes.length > 0) {
+      const note = pendingNewNotes.pop();
+      renderNote(note, true);
+    }
+    updateNewPostsPill();
+  });
+
+  // Refresh Feed button handler
+  btnRefresh.addEventListener("click", () => {
+    // 1. Reveal any buffered notes
+    while (pendingNewNotes.length > 0) {
+      const note = pendingNewNotes.pop();
+      renderNote(note, true);
+    }
+    updateNewPostsPill();
+
+    // 2. Query for new events since latestTimestamp
+    if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+      const refreshSubId = `refresh-${Date.now()}`;
+      const sinceTime = latestTimestamp > 0 ? latestTimestamp : Math.floor(Date.now() / 1000) - 120;
+      activeWs.send(JSON.stringify(["REQ", refreshSubId, { kinds: [1], since: sinceTime, limit: 30 }]));
+      btnRefresh.textContent = "↻ Fetching...";
+      setTimeout(() => {
+        btnRefresh.textContent = "↻ Refresh";
+      }, 1500);
+    }
+  });
+
+  // Load More Notes (Bottom pagination)
+  btnLoadMore.addEventListener("click", () => {
+    if (oldestTimestamp === Infinity) return;
+    if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+      btnLoadMore.textContent = "Loading older notes...";
+      btnLoadMore.setAttribute("disabled", "true");
+      const olderSubId = `older-${Date.now()}`;
+      activeWs.send(JSON.stringify(["REQ", olderSubId, { kinds: [1], until: oldestTimestamp - 1, limit: 25 }]));
+    }
+  });
+
   // Publish Note Handler
   btnPublish.addEventListener("click", async () => {
     const text = textarea.value?.trim();
@@ -158,12 +258,9 @@ function mountFeed(root: any) {
             tags: [["client", "omni"]],
             created_at: Math.floor(Date.now() / 1000)
           });
-          try {
-            const ws = new WebSocket("wss://relay.damus.io");
-            ws.onopen = () => {
-              ws.send(JSON.stringify(["EVENT", published]));
-            };
-          } catch {}
+          if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+            activeWs.send(JSON.stringify(["EVENT", published]));
+          }
         }
 
         if (published) {
@@ -191,26 +288,48 @@ function mountFeed(root: any) {
   try {
     if (typeof WebSocket !== "undefined") {
       const ws = new WebSocket("wss://relay.damus.io");
+      activeWs = ws;
+
       ws.onopen = () => {
-        ws.send(JSON.stringify(["REQ", "feed-sub", { kinds: [1], limit: 50 }]));
+        // 1. Bounded initial query: fetch the latest 30 notes
+        ws.send(JSON.stringify(["REQ", "feed-initial", { kinds: [1], limit: 30 }]));
       };
+
       ws.onmessage = (msg) => {
         try {
           const data = JSON.parse(msg.data);
-          if (data[0] === "EVENT" && data[2]) {
-            renderNote(data[2], true);
-          } else if (data[0] === "EOSE") {
-            cacheIndicator.textContent = "✦ Connected Relays";
+          const type = data[0];
+          const subId = data[1];
+
+          if (type === "EVENT" && data[2]) {
+            handleIncomingEvent(data[2]);
+          } else if (type === "EOSE") {
+            if (subId === "feed-initial") {
+              isInitialBatchComplete = true;
+              cacheIndicator.textContent = "✦ Connected Relays";
+              // Close the initial backfill query
+              ws.send(JSON.stringify(["CLOSE", "feed-initial"]));
+              // Subscribe to live new notes going forward with a bounded timestamp
+              ws.send(JSON.stringify(["REQ", "feed-live", { kinds: [1], since: Math.floor(Date.now() / 1000) }]));
+            } else if (subId?.startsWith("older-")) {
+              btnLoadMore.textContent = "Load Older Notes";
+              btnLoadMore.removeAttribute("disabled");
+              ws.send(JSON.stringify(["CLOSE", subId]));
+            } else if (subId?.startsWith("refresh-")) {
+              btnRefresh.textContent = "↻ Refresh";
+              ws.send(JSON.stringify(["CLOSE", subId]));
+            }
           }
         } catch {}
       };
     } else if (typeof omni !== "undefined" && (omni as any).nostr?.subscribe) {
       (omni as any).nostr.subscribe(
-        [{ kinds: [1], limit: 50 }],
+        [{ kinds: [1], limit: 30 }],
         (ev: any) => {
-          renderNote(ev, true);
+          handleIncomingEvent(ev);
         },
         () => {
+          isInitialBatchComplete = true;
           cacheIndicator.textContent = "✦ Connected Relays";
         }
       );

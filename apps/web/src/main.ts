@@ -153,23 +153,34 @@ async function startApp() {
     console.warn("Could not check local NIP-78 workspace store:", err);
   }
 
-  // Seed local welcome note if storage is empty
-  const existingNotes = await kernel.eventStore.getEvents({ kinds: [1], limit: 5 });
-  if (existingNotes.length === 0) {
-    console.log("⚡ [Omni Web] Seeding welcome note to local 0ms store...");
-    await kernel.publishNote(
-      "Welcome to Omni! ✦ A modular Nostr web client where every feature is a first-class plugin. Use the Layout tool to customize viewports, and inspect relay connections via Settings."
-    );
+  // Seed local welcome note if storage is empty (non-blocking in background)
+  kernel.eventStore.getEvents({ kinds: [1], limit: 5 }).then((existingNotes) => {
+    if (existingNotes.length === 0) {
+      console.log("⚡ [Omni Web] Seeding welcome note to local 0ms store...");
+      kernel.publishNote(
+        "Welcome to Omni! ✦ A modular Nostr web client where every feature is a first-class plugin. Use the Layout tool to customize viewports, and inspect relay connections via Settings."
+      ).catch(() => {});
+    }
+  }).catch(() => {});
+
+  // Mount primary active plugin immediately so the user sees the feed in <50ms!
+  const activePluginId = shell.getActivePageId() || "org.omni.plugin.feed";
+  const primaryPlugin =
+    shell.installedPlugins.find((p) => p.id === activePluginId && p.enabled) ||
+    shell.installedPlugins.find((p) => p.id === "org.omni.plugin.feed");
+
+  if (primaryPlugin) {
+    console.log(`⚡ [Omni Web] Mounting primary visible nsite ${primaryPlugin.name}...`);
+    await shell.mountPlugin(primaryPlugin);
   }
 
-  // Mount enabled plugins into sandboxes using shell slot containers
-  console.log("⚡ [Omni Web] Mounting core plugins into sandboxed viewports...");
-  for (const p of shell.installedPlugins) {
-    if (p.enabled) {
-      console.log(`⚡ [Omni Web] Mounting nsite ${p.name}...`);
-      await shell.mountPlugin(p);
-    }
-  }
+  // Mount remaining background plugins concurrently without blocking active feed
+  const backgroundPlugins = shell.installedPlugins.filter(
+    (p) => p.id !== primaryPlugin?.id && p.enabled
+  );
+  Promise.all(backgroundPlugins.map((p) => shell.mountPlugin(p))).catch((err) => {
+    console.warn("Background plugin mount:", err);
+  });
 
   // Background fetch of remote NIP-78 workspace state from connected relays
   kernel

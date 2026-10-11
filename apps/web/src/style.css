@@ -290,6 +290,76 @@ body {
   background: var(--omni-accent-hover);
 }
 
+/* Bluesky-style New Posts Pill */
+.new-posts-pill {
+  width: 100%;
+  background: var(--omni-bg-elevated);
+  border: 1px solid var(--omni-accent-primary);
+  color: var(--omni-accent-primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: var(--omni-radius-pill);
+  cursor: pointer;
+  margin-bottom: 12px;
+  text-align: center;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.new-posts-pill:hover {
+  background: var(--omni-accent-primary);
+  color: var(--omni-accent-contrast);
+}
+
+/* Refresh Feed Button */
+.btn-refresh-feed {
+  background: var(--omni-bg-subtle);
+  border: 1px solid var(--omni-border-subtle);
+  color: var(--omni-text-secondary);
+  font-size: 0.74rem;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: var(--omni-radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.btn-refresh-feed:hover {
+  border-color: var(--omni-border-strong);
+  color: var(--omni-text-primary);
+  background: var(--omni-bg-elevated);
+}
+
+/* Load Older Notes Button */
+.btn-load-more {
+  width: 100%;
+  background: var(--omni-bg-subtle);
+  border: 1px solid var(--omni-border-subtle);
+  color: var(--omni-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--omni-radius-sm);
+  cursor: pointer;
+  text-align: center;
+  margin-top: 10px;
+  transition: all 0.15s ease;
+}
+
+.btn-load-more:hover {
+  border-color: var(--omni-border-strong);
+  color: var(--omni-text-primary);
+  background: var(--omni-bg-elevated);
+}
+
 /* Timeline Notes List */
 .feed-container .notes-list {
   display: flex;
