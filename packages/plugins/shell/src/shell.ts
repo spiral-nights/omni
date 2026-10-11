@@ -110,7 +110,8 @@ export class OmniShell {
       ],
       permissions: {
         nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true },
-        storage: { quotaMb: 5 }
+        storage: { quotaMb: 5 },
+        relays: p.id === "org.omni.plugin.relays" ? { manage: true, read: true } : undefined
       }
     };
   }

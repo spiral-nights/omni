@@ -313,6 +313,10 @@ export class JsonRpcDispatcher {
       }
 
       case "relays.add": {
+        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "relays:manage");
+        if (!allowed) {
+          throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for relays:manage" };
+        }
         if (!params?.url || !params.url.startsWith("ws")) {
           throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Invalid relay URL (must start with ws:// or wss://)" };
         }
@@ -321,6 +325,10 @@ export class JsonRpcDispatcher {
       }
 
       case "relays.remove": {
+        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "relays:manage");
+        if (!allowed) {
+          throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for relays:manage" };
+        }
         if (!params?.url) throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing relay url" };
         this.ctx.relayPool.removeRelay(params.url);
         return { success: true, url: params.url };

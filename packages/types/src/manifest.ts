@@ -40,6 +40,10 @@ export const ManifestPermissionsSchema = z.object({
   intents: z.object({
     call: z.array(z.string()).optional(),
     handle: z.array(z.string()).optional()
+  }).optional(),
+  relays: z.object({
+    manage: z.boolean().optional(),
+    read: z.boolean().optional()
   }).optional()
 }).default({});
 export type ManifestPermissions = z.infer<typeof ManifestPermissionsSchema>;

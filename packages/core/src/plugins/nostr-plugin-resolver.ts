@@ -171,6 +171,7 @@ export class NostrPluginResolver {
         if (p === "storage:kv" || p === "storage") permissions.storage = { quotaMb: 5 };
         else if (p.startsWith("nostr")) permissions.nostr = { read: { allKinds: true }, write: { allKinds: true }, sign: true };
         else if (p.startsWith("intent")) permissions.intents = { allowedIntents: ["*"] };
+        else if (p === "relays:manage" || p === "relays") permissions.relays = { manage: true };
       }
 
       const components = slotTags.length > 0

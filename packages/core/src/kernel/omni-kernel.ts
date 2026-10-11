@@ -103,6 +103,18 @@ export class OmniKernel {
           this.capabilityStore.setGrant(manifest.id, "nostr:sign", "always");
         }
       }
+      if (
+        (manifest.id === "org.omni.plugin.relays" || manifest.permissions?.relays?.manage) &&
+        (manifest.trusted || manifest.id.startsWith("org.omni."))
+      ) {
+        if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null) {
+          this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
+        }
+      }
+    } else if (manifest.id === "org.omni.plugin.relays" || manifest.trusted || manifest.id.startsWith("org.omni.")) {
+      if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null && manifest.id === "org.omni.plugin.relays") {
+        this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
+      }
     }
 
     this.layoutManager.registerPlugin(manifest);
