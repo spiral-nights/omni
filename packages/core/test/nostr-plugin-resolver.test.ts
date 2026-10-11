@@ -164,5 +164,46 @@ describe("NIP-19 naddr Codec & NIP-5A Nostr Plugin Resolver", () => {
     expect(sandbox.manifest.id).toBe("world.chess.widget");
     expect(kernel.isPluginEnabled("world.chess.widget")).toBe(true);
   });
+
+  it("discovers routes and sub-views via Tier 1 Nostr event tags and Tier 2 HTML links", () => {
+    // 1. Tier 1: Nostr tags
+    const mockEvent = {
+      id: "abc",
+      pubkey: "11".repeat(32),
+      created_at: 1000,
+      kind: NSITE_MANIFEST_KIND,
+      tags: [
+        ["d", "pomodoro-app"],
+        ["view", "settings", "Timer Settings"],
+        ["view", "widget", "Mini Countdown", "?view=widget"]
+      ],
+      content: "",
+      sig: "def"
+    };
+
+    const viewsFromTags = NostrPluginResolver.detectPluginViews(mockEvent as any, "");
+    expect(viewsFromTags.length).toBe(3);
+    expect(viewsFromTags.find((v) => v.id === "main")?.path).toBe("");
+    expect(viewsFromTags.find((v) => v.id === "settings")?.title).toBe("Timer Settings");
+    expect(viewsFromTags.find((v) => v.id === "settings")?.path).toBe("?view=settings");
+    expect(viewsFromTags.find((v) => v.id === "widget")?.title).toBe("Mini Countdown");
+    expect(viewsFromTags.find((v) => v.id === "widget")?.path).toBe("?view=widget");
+
+    // 2. Tier 2: HTML links
+    const htmlWithAlternateLinks = `<!DOCTYPE html>
+<html>
+<head>
+  <link rel="alternate" href="?view=settings" title="Custom Settings" />
+  <link rel="alternate" href="?view=dashboard" title="Dashboard Card" />
+</head>
+<body><h1>App</h1></body>
+</html>`;
+
+    const viewsFromHtml = NostrPluginResolver.detectPluginViews(null, htmlWithAlternateLinks);
+    expect(viewsFromHtml.length).toBe(3);
+    expect(viewsFromHtml.find((v) => v.id === "main")).toBeTruthy();
+    expect(viewsFromHtml.find((v) => v.id === "settings")?.title).toBe("Custom Settings");
+    expect(viewsFromHtml.find((v) => v.id === "dashboard")?.path).toBe("?view=dashboard");
+  });
 });
 

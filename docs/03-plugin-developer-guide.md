@@ -120,16 +120,75 @@ Because the user can assign your application to either a **Full-Page App** (`mai
 
 ---
 
-## 4. Companion Widgets
+## 4. Multi-View Architecture & Settings Conventions
 
-If your application includes both a full-fledged dashboard and a lightweight companion widget (e.g. a Pomodoro timer card, checklist, or mini-player):
+Rather than requiring separate packages or proprietary manifests, Omni supports **sub-views and routes within a single nsite bundle**. This allows a single application to provide:
+- A primary full-page application (`main`)
+- A dedicated settings panel (`settings`)
+- One or more dashboard companion widgets (`widget`)
 
-1. **Publish Two Independent nsites**:
-   - `naddr1...my-full-app` (targets `main` by default).
-   - `naddr1...my-companion-widget` (targets `sidebar` / Widgets Dashboard by default).
-2. **Zero Bundled Dock Icons**:
-   - Apps do **not** bundle inner dock icon components.
-   - The host Shell automatically manages navigation dock launcher buttons for all installed apps.
+### 4.1 Reserved Route Conventions
+Omni recognizes standard semantic route names:
+- **`settings`** (`?view=settings`): Automatically surfaced in Omni's **Settings & Control** menu under the plugin's dedicated section.
+- **`widget`** (`?view=widget`): Optimized for compact display in the **Widgets Dashboard** (`sidebar`), **Dock Shortcut** (`dock`), or **Header Quick Action** (`header-actions`).
+- **`main`** (`/` or `?view=main`): The primary full-page experience.
+
+### 4.2 Route Detection (Zero Custom SDKs)
+Omni detects supported sub-views using two open standards:
+
+#### Tier 1: Nostr-Native Event Tags (Fastest & Relay-Filterable)
+Add `view` tags directly to your published Nostr nsite event (`kind: 35129` or `kind: 30063`):
+```json
+{
+  "kind": 35129,
+  "tags": [
+    ["d", "my-pomodoro"],
+    ["name", "Focus Timer"],
+    ["view", "settings", "Timer Settings", "?view=settings"],
+    ["view", "widget", "Countdown Card", "?view=widget"]
+  ]
+}
+```
+*Note: If the path parameter is omitted, Omni automatically defaults to `?view=<id>`.*
+
+#### Tier 2: HTML `<link rel="alternate">` or Web App Manifest
+Include standard HTML alternate links in your `index.html` `<head>`:
+```html
+<link rel="alternate" href="?view=settings" title="Settings" />
+<link rel="alternate" href="?view=widget" title="Mini Widget" />
+```
+Or declare standard W3C Web App Manifest `shortcuts`:
+```json
+{
+  "shortcuts": [
+    { "name": "Settings", "url": "/?view=settings" },
+    { "name": "Widget", "url": "/?view=widget" }
+  ]
+}
+```
+
+### 4.3 Handling Routes in Guest Code
+Your guest web app inspects `window.location.search` or `window.location.hash` using standard web APIs:
+```javascript
+// Standard web routing (works in vanilla JS, React Router, SvelteKit, etc.)
+const params = new URLSearchParams(window.location.search);
+const view = params.get("view") || window.location.hash.replace("#", "") || "main";
+
+if (view === "settings") {
+  renderSettingsForm();
+} else if (view === "widget") {
+  renderCompactWidget();
+} else {
+  renderFullApplication();
+}
+```
+*Both `localStorage` and `indexedDB` are automatically shared across all routes of your nsite because they run within the same origin sandbox partition.*
+
+### 4.4 Viewport & Route Assignment in Omni
+When a user assigns your plugin to a viewport in Omni:
+1. They select the **Target Viewport** (e.g. *Full-Page App*, *Widgets Dashboard*, *Dock Shortcut*, or *Header Action*).
+2. They select the **Assigned Route** (e.g. `Main App (/)` or `Countdown Card (/?view=widget)`).
+3. If your plugin declares a `settings` route, an **"Open Settings Panel"** control is automatically rendered inside the plugin's card in Omni's Settings menu.
 
 ---
 

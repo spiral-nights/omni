@@ -171,6 +171,57 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     expect(kernel.layoutManager.getSlotForComponent("org.omni.plugin.feed", "feed-main")).toBe("sidebar");
   });
 
+  it("supports route assignment and per-plugin settings sections", async () => {
+    shell.openSettings("plugins");
+    const container = root.querySelector("#plugins-list");
+    expect(container).toBeTruthy();
+
+    // Check that route selector is rendered
+    const routeSelects = container?.querySelectorAll(".plugin-route-select");
+    expect(routeSelects?.length).toBeGreaterThanOrEqual(1);
+
+    const firstRouteSelect = routeSelects?.[0] as HTMLSelectElement;
+    expect(firstRouteSelect).toBeTruthy();
+
+    // Check per-plugin settings boxes
+    const settingsBoxes = container?.querySelectorAll(".plugin-settings-box");
+    expect(settingsBoxes?.length).toBe(shell.installedPlugins.length);
+
+    // Feed plugin does not declare settings
+    const feedBox = settingsBoxes?.[0];
+    expect(feedBox?.textContent).toContain("Plugin Settings");
+
+    // Add a plugin that has a settings route and check toggle button
+    shell.installedPlugins.push({
+      id: "org.omni.test.timer",
+      name: "Test Timer App",
+      viewport: "sidebar",
+      enabled: true,
+      scriptContent: "console.log('timer')",
+      sourceUrl: "local:@omni/test-timer",
+      views: [
+        { id: "main", title: "Main Timer", path: "" },
+        { id: "widget", title: "Timer Widget", path: "?view=widget" },
+        { id: "settings", title: "Timer Preferences", path: "?view=settings" }
+      ]
+    });
+
+    shell.renderPluginManager();
+
+    const updatedBoxes = container?.querySelectorAll(".plugin-settings-box");
+    const timerBox = Array.from(updatedBoxes || []).find((b) => b.querySelector(".btn-plugin-settings"));
+    expect(timerBox).toBeTruthy();
+
+    const openSettingsBtn = timerBox?.querySelector(".btn-plugin-settings") as HTMLButtonElement;
+    expect(openSettingsBtn).toBeTruthy();
+    expect(openSettingsBtn.textContent).toBe("Open Settings Panel");
+
+    // Click to open settings
+    openSettingsBtn.click();
+    const mountContainer = timerBox?.querySelector(".plugin-settings-mount-container") as HTMLElement;
+    expect(mountContainer.style.display).toBe("block");
+  });
+
   it("renders dock launchers automatically for installed apps and routes clicks", () => {
     const dockSlot = root.querySelector("#dock-slot");
     expect(dockSlot).toBeTruthy();

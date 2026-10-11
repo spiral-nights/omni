@@ -38,6 +38,7 @@ export class OmniKernel {
   readonly layoutManager: LayoutManager;
 
   private sandboxes: Map<string, SandboxInstance> = new Map();
+  private settingsSandboxes: Map<string, SandboxInstance> = new Map();
   private runtimeScript?: string;
   private slotResolver?: (pluginId: string, componentId: string, slot: string) => Element | undefined;
   private onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
@@ -75,7 +76,8 @@ export class OmniKernel {
   async registerPlugin(
     manifest: OmniManifest,
     scriptContent: string,
-    slotContainers: Map<string, Element>
+    slotContainers: Map<string, Element>,
+    options?: { route?: string; viewId?: string }
   ): Promise<SandboxInstance> {
     this.aclEngine.registerManifest(manifest);
 
@@ -127,6 +129,8 @@ export class OmniKernel {
       trusted: manifest.trusted || manifest.id.startsWith("org.omni."),
       userPubkey,
       slotContainers,
+      route: options?.route,
+      viewId: options?.viewId,
       slotResolver: (pluginId: string, componentId: string, defaultSlot: string) => {
         const targetSlot = this.layoutManager.getSlotForComponent(pluginId, componentId) || defaultSlot;
         if (this.slotResolver) {
@@ -185,10 +189,63 @@ export class OmniKernel {
   async enablePlugin(
     manifest: OmniManifest,
     scriptContent: string,
-    slotContainers: Map<string, Element>
+    slotContainers: Map<string, Element>,
+    options?: { route?: string; viewId?: string }
   ): Promise<SandboxInstance> {
     this.disablePlugin(manifest.id);
-    return this.registerPlugin(manifest, scriptContent, slotContainers);
+    return this.registerPlugin(manifest, scriptContent, slotContainers, options);
+  }
+
+  async mountPluginSettings(
+    pluginId: string,
+    manifest: OmniManifest,
+    scriptContent: string,
+    container: Element,
+    route: string = "?view=settings"
+  ): Promise<SandboxInstance> {
+    this.destroyPluginSettings(pluginId);
+
+    const slotContainers = new Map<string, Element>();
+    slotContainers.set("main", container);
+    slotContainers.set("settings", container);
+
+    const userPubkey = await this.getUserPubkey();
+    const sandbox = new SandboxInstance({
+      manifest,
+      scriptContent,
+      runtimeScript: this.runtimeScript,
+      trusted: manifest.trusted || manifest.id.startsWith("org.omni."),
+      userPubkey,
+      slotContainers,
+      route,
+      viewId: "settings",
+      aclEngine: this.aclEngine,
+      storageManager: this.storageManager,
+      intentBroker: this.intentBroker,
+      subscriptionCoordinator: this.subscriptionCoordinator,
+      keystore: this.keystore,
+      relayPool: this.relayPool,
+      eventStore: this.eventStore,
+      onSlotAction: this.onSlotAction,
+      onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
+      onHandleShare: (payload, srcId) => this.handleShare(payload, srcId)
+    });
+
+    await sandbox.mount();
+    this.settingsSandboxes.set(pluginId, sandbox);
+    return sandbox;
+  }
+
+  destroyPluginSettings(pluginId: string): void {
+    const sandbox = this.settingsSandboxes.get(pluginId);
+    if (sandbox) {
+      sandbox.destroy();
+      this.settingsSandboxes.delete(pluginId);
+    }
+  }
+
+  getPluginSettingsSandbox(pluginId: string): SandboxInstance | undefined {
+    return this.settingsSandboxes.get(pluginId);
   }
 
   setPluginPermission(pluginId: string, category: string, granted: boolean): void {
@@ -201,6 +258,7 @@ export class OmniKernel {
   }
 
   uninstallPlugin(pluginId: string): void {
+    this.destroyPluginSettings(pluginId);
     const sandbox = this.sandboxes.get(pluginId);
     if (sandbox) {
       sandbox.destroy();

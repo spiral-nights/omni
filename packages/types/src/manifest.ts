@@ -59,6 +59,18 @@ export const AuthorSchema = z.object({
 export type Author = z.infer<typeof AuthorSchema>;
 
 /**
+ * Sub-view / Route Declaration Schema
+ * Allows pure nsites to declare supported routes (e.g. settings, widget)
+ * without requiring any proprietary SDK.
+ */
+export const PluginViewDeclarationSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  path: z.string().default("")
+});
+export type PluginViewDeclaration = z.infer<typeof PluginViewDeclarationSchema>;
+
+/**
  * Full Omni Plugin Manifest Schema
  */
 export const OmniManifestSchema = z.object({
@@ -72,6 +84,7 @@ export const OmniManifestSchema = z.object({
   entry: z.string().min(1),
   trusted: z.boolean().optional(),
   components: z.array(ComponentDeclarationSchema).default([]),
+  views: z.array(PluginViewDeclarationSchema).default([]),
   permissions: ManifestPermissionsSchema
 });
 export type OmniManifest = z.infer<typeof OmniManifestSchema>;

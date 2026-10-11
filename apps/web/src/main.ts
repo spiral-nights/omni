@@ -20,6 +20,10 @@ const initialPlugins: InstalledPluginEntry[] = [
     description: "Decentralized Nostr timeline notes and Schnorr-signed publishing.",
     icon: "feed",
     viewport: "main",
+    views: [
+      { id: "main", title: "Timeline Feed", path: "" },
+      { id: "widget", title: "Feed Widget", path: "?view=widget" }
+    ],
     scriptContent: feedScript,
     sourceUrl: "local:@omni/plugin-feed",
     enabled: true
@@ -30,6 +34,11 @@ const initialPlugins: InstalledPluginEntry[] = [
     description: "Pomodoro focus countdown and productivity timer widget.",
     icon: "timer",
     viewport: "sidebar",
+    views: [
+      { id: "main", title: "Full Focus Screen", path: "" },
+      { id: "widget", title: "Timer Card", path: "?view=widget" },
+      { id: "settings", title: "Timer Settings", path: "?view=settings" }
+    ],
     scriptContent: timerScript,
     sourceUrl: "local:@omni/plugin-timer",
     enabled: true
@@ -40,6 +49,11 @@ const initialPlugins: InstalledPluginEntry[] = [
     description: "Track daily goals and productivity tasks.",
     icon: "check-circle",
     viewport: "sidebar",
+    views: [
+      { id: "main", title: "Full Task List", path: "" },
+      { id: "widget", title: "Checklist Card", path: "?view=widget" },
+      { id: "settings", title: "Checklist Settings", path: "?view=settings" }
+    ],
     scriptContent: checklistScript,
     sourceUrl: "local:@omni/plugin-checklist",
     enabled: true
@@ -50,6 +64,10 @@ const initialPlugins: InstalledPluginEntry[] = [
     description: "Manage connected relays and monitor live WebSocket pool status.",
     icon: "relays",
     viewport: "sidebar",
+    views: [
+      { id: "main", title: "Relay Pool Manager", path: "" },
+      { id: "widget", title: "Relay Status Pill", path: "?view=widget" }
+    ],
     scriptContent: relaysScript,
     sourceUrl: "local:@omni/plugin-relays",
     enabled: true
@@ -60,6 +78,10 @@ const initialPlugins: InstalledPluginEntry[] = [
     description: "Decentralized Nostr profile metadata and key custody.",
     icon: "profile",
     viewport: "sidebar",
+    views: [
+      { id: "main", title: "Profile & Keys Editor", path: "" },
+      { id: "widget", title: "User Badge Pill", path: "?view=widget" }
+    ],
     scriptContent: profileScript,
     sourceUrl: "local:@omni/plugin-profile",
     enabled: true
@@ -145,7 +167,10 @@ async function startApp() {
     if (p.enabled) {
       const synthManifest = shell.ensurePluginManifest(p);
       console.log(`⚡ [Omni Web] Mounting nsite ${synthManifest.name}...`);
-      await kernel.registerPlugin(synthManifest, p.htmlContent || p.scriptContent, slotContainers);
+      await kernel.registerPlugin(synthManifest, p.htmlContent || p.scriptContent, slotContainers, {
+        route: p.route,
+        viewId: p.viewId
+      });
     }
   }
 

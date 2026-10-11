@@ -1,6 +1,6 @@
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex } from "@noble/curves/abstract/utils";
-import { NostrEvent, OmniManifest } from "@omni/types";
+import { NostrEvent, OmniManifest, PluginViewDeclaration } from "@omni/types";
 import { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import { RelayPool } from "../nostr/relay-pool.js";
 import { LocalEventStore } from "../nostr/event-store.js";
@@ -205,6 +205,7 @@ export class NostrPluginResolver {
         entry: "index.html",
         author: { name: WebCryptoKeystore.toNpub(event.pubkey), pubkey: event.pubkey },
         components,
+        views: [],
         permissions
       };
     }
@@ -240,6 +241,9 @@ export class NostrPluginResolver {
       );
     }
 
+    // Detect sub-views and routes from Nostr event tags and HTML/manifest
+    manifest.views = NostrPluginResolver.detectPluginViews(event, scriptContent);
+
     const naddr = WebCryptoKeystore.toNaddr({
       identifier: manifest.id,
       pubkey: event.pubkey,
@@ -257,6 +261,102 @@ export class NostrPluginResolver {
       verified: true,
       blossomHashes
     };
+  }
+
+  /**
+   * Discovers sub-views and routes supported by an nsite without requiring any proprietary SDK:
+   * - Tier 1: Nostr-native event tags (["view", id, title?, path?])
+   * - Tier 2: Install-time HTML / PWA manifest inspection (<link rel="alternate" ...> or shortcuts)
+   */
+  static detectPluginViews(event?: NostrEvent | null, htmlOrScript?: string | null): PluginViewDeclaration[] {
+    const viewsMap = new Map<string, PluginViewDeclaration>();
+
+    // Always ensure default 'main' view exists
+    viewsMap.set("main", {
+      id: "main",
+      title: "Main App",
+      path: ""
+    });
+
+    // --- Tier 1: Nostr-Native Event Tags ---
+    if (event && Array.isArray(event.tags)) {
+      const viewTags = event.tags.filter((t) => t[0] === "view" || t[0] === "route");
+      for (const tag of viewTags) {
+        if (tag.length >= 2) {
+          const id = tag[1].trim();
+          if (!id) continue;
+          const title = tag[2]?.trim() || (id.charAt(0).toUpperCase() + id.slice(1));
+          let path = tag[3]?.trim();
+          if (!path) {
+            path = id === "main" ? "" : `?view=${encodeURIComponent(id)}`;
+          }
+          viewsMap.set(id, { id, title, path });
+        }
+      }
+
+      // Also support ["views", "settings", "widget"] shorthand
+      const viewsListTag = event.tags.find((t) => t[0] === "views");
+      if (viewsListTag) {
+        for (let i = 1; i < viewsListTag.length; i++) {
+          const id = viewsListTag[i].trim();
+          if (!id || viewsMap.has(id)) continue;
+          const title = id.charAt(0).toUpperCase() + id.slice(1);
+          const path = id === "main" ? "" : `?view=${encodeURIComponent(id)}`;
+          viewsMap.set(id, { id, title, path });
+        }
+      }
+    }
+
+    // --- Tier 2: Install-Time HTML / Manifest Inspection ---
+    if (htmlOrScript && typeof htmlOrScript === "string") {
+      // 1. Detect <link rel="alternate" href="..." title="..."> tags
+      const linkRegex = /<link\b[^>]*rel=["']alternate["'][^>]*>/gi;
+      let match: RegExpExecArray | null;
+      while ((match = linkRegex.exec(htmlOrScript)) !== null) {
+        const tagHtml = match[0];
+        const hrefMatch = /href=["']([^"']+)["']/i.exec(tagHtml);
+        const titleMatch = /title=["']([^"']+)["']/i.exec(tagHtml);
+        if (hrefMatch) {
+          const href = hrefMatch[1].trim();
+          let id = "";
+          const viewParamMatch = /[?&]view=([^&#]+)/i.exec(href);
+          if (viewParamMatch) {
+            id = decodeURIComponent(viewParamMatch[1]);
+          } else {
+            const cleanHref = href.replace(/^[/#?]+/, "").replace(/\.html$/, "");
+            id = cleanHref || "view";
+          }
+          const title = titleMatch ? titleMatch[1].trim() : (id.charAt(0).toUpperCase() + id.slice(1));
+          if (id && !viewsMap.has(id)) {
+            viewsMap.set(id, { id, title, path: href });
+          }
+        }
+      }
+
+      // 2. Detect web app manifest shortcuts if JSON or embedded
+      const shortcutsRegex = /"shortcuts"\s*:\s*\[([\s\S]*?)\]/i;
+      const shortcutsMatch = shortcutsRegex.exec(htmlOrScript);
+      if (shortcutsMatch) {
+        try {
+          const rawShortcuts = JSON.parse(`[${shortcutsMatch[1]}]`);
+          if (Array.isArray(rawShortcuts)) {
+            for (const s of rawShortcuts) {
+              if (s && s.url) {
+                const url = String(s.url);
+                const viewParamMatch = /[?&]view=([^&#]+)/i.exec(url);
+                const id = viewParamMatch ? decodeURIComponent(viewParamMatch[1]) : (s.name?.toLowerCase().replace(/\s+/g, "-") || "shortcut");
+                const title = s.name || (id.charAt(0).toUpperCase() + id.slice(1));
+                if (id && !viewsMap.has(id)) {
+                  viewsMap.set(id, { id, title, path: url });
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    return Array.from(viewsMap.values());
   }
 
   /**

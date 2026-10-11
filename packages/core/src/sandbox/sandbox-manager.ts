@@ -26,7 +26,8 @@ export interface SandboxInstanceOptions {
   keystore: WebCryptoKeystore;
   relayPool: RelayPool;
   eventStore: LocalEventStore;
-  sandboxUrl?: string;
+  route?: string;
+  viewId?: string;
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
   onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
   onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
@@ -187,8 +188,26 @@ export class SandboxInstance {
       /<head\b/i.test(pluginCode) ||
       /<body\b/i.test(pluginCode);
 
+    const routeVal = this.options.route || "";
+    const viewIdVal = this.options.viewId || "main";
+
+    const routeInjectionScript = `
+    // Transparent Sub-View & Route Injection for Pure nsites
+    try {
+      var __omniRoute = ${JSON.stringify(routeVal)};
+      if (__omniRoute) {
+        window.__OMNI_ROUTE__ = __omniRoute;
+        if (__omniRoute.startsWith("#")) {
+          window.location.hash = __omniRoute;
+        } else if (__omniRoute.startsWith("?")) {
+          window.location.hash = __omniRoute.replace("?", "#");
+        }
+      }
+    } catch (_) {}
+    `;
+
     if (isHtmlDoc) {
-      const injectedHead = `\n  <base href="${baseHref}">\n  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  <script>\n    window.addEventListener("error", function(e) {\n      console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);\n    });\n  </script>\n  <script>\n    ${runtimeCode}\n  </script>\n`;
+      const injectedHead = `\n  <base href="${baseHref}">\n  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  <script>\n    window.addEventListener("error", function(e) {\n      console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);\n    });\n    ${routeInjectionScript}\n  </script>\n  <script>\n    ${runtimeCode}\n  </script>\n`;
 
       if (/<head\b[^>]*>/i.test(pluginCode)) {
         this.iframe.srcdoc = pluginCode.replace(/<head\b[^>]*>/i, (match) => `${match}${injectedHead}`);
@@ -207,6 +226,7 @@ export class SandboxInstance {
     window.addEventListener("error", function(e) {
       console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);
     });
+    ${routeInjectionScript}
   </script>
   <script>
     ${runtimeCode}
@@ -240,7 +260,9 @@ export class SandboxInstance {
               }
             },
             slots: Array.from(this.options.slotContainers.keys()),
-            components: this.manifest.components?.map(c => c.id) || ["main"]
+            components: this.manifest.components?.map(c => c.id) || ["main"],
+            route: routeVal,
+            viewId: viewIdVal
           }
         };
 

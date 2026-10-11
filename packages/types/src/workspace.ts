@@ -14,6 +14,8 @@ export interface OmniWorkspacePluginConfig {
   name?: string;
   description?: string;
   icon?: string;
+  route?: string; // Target route/query (e.g. "?view=widget", "?view=settings", or "")
+  viewId?: string; // View identifier (e.g. "main", "widget", "settings")
 }
 
 export interface OmniWorkspaceState {

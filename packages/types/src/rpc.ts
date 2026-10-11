@@ -83,5 +83,7 @@ export interface OmniInitMessage {
     slots: string[];
     components?: string[];
     scriptContent?: string;
+    route?: string;
+    viewId?: string;
   };
 }

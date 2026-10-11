@@ -1,5 +1,5 @@
-import { OmniKernel, WebCryptoKeystore, STANDARD_SLOTS } from "@omni/core";
-import { OmniWorkspaceState, OmniWorkspacePluginConfig, OMNI_WORKSPACE_D_TAG, NostrEvent } from "@omni/types";
+import { OmniKernel, WebCryptoKeystore, STANDARD_SLOTS, NostrPluginResolver } from "@omni/core";
+import { OmniWorkspaceState, OmniWorkspacePluginConfig, OMNI_WORKSPACE_D_TAG, NostrEvent, PluginViewDeclaration } from "@omni/types";
 import { ICONS, icon, IconName } from "./icons.js";
 
 export interface InstalledPluginEntry {
@@ -9,6 +9,9 @@ export interface InstalledPluginEntry {
   version?: string;
   icon?: string;
   viewport?: string;
+  route?: string;
+  viewId?: string;
+  views?: PluginViewDeclaration[];
   manifest?: any;
   htmlContent?: string;
   scriptContent: string;
@@ -89,7 +92,17 @@ export class OmniShell {
   }
 
   public ensurePluginManifest(p: InstalledPluginEntry): any {
+    if (!p.views || p.views.length === 0) {
+      if (p.manifest?.views && p.manifest.views.length > 0) {
+        p.views = p.manifest.views;
+      } else {
+        p.views = NostrPluginResolver.detectPluginViews(p.event, p.htmlContent || p.scriptContent);
+      }
+    }
     if (p.manifest && p.manifest.components && p.manifest.components.length > 0) {
+      if (!p.manifest.views || p.manifest.views.length === 0) {
+        p.manifest.views = p.views;
+      }
       return p.manifest;
     }
     const meta = this.getPluginMeta(p);
@@ -108,6 +121,7 @@ export class OmniShell {
           slot: meta.viewport
         }
       ],
+      views: p.views || [{ id: "main", title: "Main App", path: "" }],
       permissions: {
         nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true },
         storage: { quotaMb: 5 },
@@ -129,6 +143,8 @@ export class OmniShell {
         return {
           id: p.id,
           viewport: meta.viewport,
+          route: p.route,
+          viewId: p.viewId,
           enabled: p.enabled,
           name: meta.name,
           description: meta.description,
@@ -194,6 +210,12 @@ export class OmniShell {
       if (plugin) {
         if (typeof item.enabled === "boolean") {
           plugin.enabled = item.enabled;
+        }
+        if (item.route !== undefined) {
+          plugin.route = item.route;
+        }
+        if (item.viewId !== undefined) {
+          plugin.viewId = item.viewId;
         }
         if (item.viewport && item.viewport !== plugin.viewport) {
           plugin.viewport = item.viewport;
@@ -942,10 +964,133 @@ export class OmniShell {
       viewportRow.appendChild(vpLabelGroup);
       viewportRow.appendChild(vpSelect);
 
+      // Route / Sub-View Assignment Selector
+      const routeRow = document.createElement("div");
+      routeRow.style.cssText =
+        "display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; padding: 6px 10px; background: var(--omni-bg-subtle); border-radius: var(--omni-radius-sm); font-size: 0.75rem;";
+
+      const routeLabelGroup = document.createElement("div");
+      routeLabelGroup.style.cssText = "display: flex; flex-direction: column; gap: 1px;";
+      routeLabelGroup.innerHTML = `
+        <span style="font-weight: 600; color: var(--omni-text-primary);">Assigned Route:</span>
+        <span style="font-size: 0.68rem; color: var(--omni-text-muted);">Choose which sub-view this area runs</span>
+      `;
+
+      const routeSelect = document.createElement("select");
+      routeSelect.className = "plugin-route-select";
+      routeSelect.style.cssText =
+        "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none; cursor: pointer;";
+
+      const pluginViews = (synthManifest.views && synthManifest.views.length > 0)
+        ? synthManifest.views
+        : (p.views && p.views.length > 0)
+        ? p.views
+        : [{ id: "main", title: "Main App", path: "" }];
+
+      for (const v of pluginViews) {
+        const opt = document.createElement("option");
+        opt.value = v.path;
+        opt.textContent = `${v.title} (${v.path || "/"})`;
+        if ((p.route !== undefined && p.route === v.path) || (!p.route && v.id === "main")) {
+          opt.selected = true;
+        }
+        routeSelect.appendChild(opt);
+      }
+
+      routeSelect.addEventListener("change", async () => {
+        p.route = routeSelect.value;
+        const matchedView = pluginViews.find((v: any) => v.path === routeSelect.value);
+        p.viewId = matchedView?.id || "main";
+        if (p.enabled) {
+          await this.kernel.enablePlugin(synthManifest, p.htmlContent || p.scriptContent, this.slotContainers, {
+            route: p.route,
+            viewId: p.viewId
+          });
+        }
+        this.saveLocalWorkspace();
+      });
+
+      routeRow.appendChild(routeLabelGroup);
+      routeRow.appendChild(routeSelect);
+
+      // Dedicated Per-Plugin Settings Section
+      const safeId = p.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const settingsBox = document.createElement("div");
+      settingsBox.className = "plugin-settings-box";
+      settingsBox.style.cssText =
+        "margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--omni-border-subtle); display: flex; flex-direction: column; gap: 6px;";
+
+      const settingsHeader = document.createElement("div");
+      settingsHeader.style.cssText =
+        "display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;";
+
+      const settingsTitle = document.createElement("span");
+      settingsTitle.style.cssText = "font-weight: 600; font-size: 0.78rem; color: var(--omni-text-primary);";
+      settingsTitle.textContent = "Plugin Settings";
+
+      const settingsView = pluginViews.find((v: any) => v.id === "settings" || v.path.includes("settings"));
+
+      const mountContainer = document.createElement("div");
+      mountContainer.id = `plugin-settings-mount-${safeId}`;
+      mountContainer.className = "plugin-settings-mount-container";
+      mountContainer.style.cssText =
+        "display: none; margin-top: 6px; padding: 10px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
+
+      if (settingsView) {
+        const btnToggleSettings = document.createElement("button");
+        btnToggleSettings.className = "btn-secondary btn-plugin-settings";
+        btnToggleSettings.style.cssText = "font-size: 0.72rem; padding: 2px 8px;";
+        btnToggleSettings.textContent = "Open Settings Panel";
+
+        let isSettingsMounted = false;
+        btnToggleSettings.addEventListener("click", async () => {
+          if (!isSettingsMounted) {
+            mountContainer.style.display = "block";
+            btnToggleSettings.textContent = "Loading...";
+            try {
+              await this.kernel.mountPluginSettings(
+                p.id,
+                synthManifest,
+                p.htmlContent || p.scriptContent,
+                mountContainer,
+                settingsView.path || "?view=settings"
+              );
+              btnToggleSettings.textContent = "Close Settings";
+              isSettingsMounted = true;
+            } catch (err) {
+              console.error(`Failed to mount settings for ${p.id}:`, err);
+              mountContainer.textContent = "Failed to load settings.";
+              btnToggleSettings.textContent = "Open Settings Panel";
+            }
+          } else {
+            this.kernel.destroyPluginSettings(p.id);
+            mountContainer.style.display = "none";
+            mountContainer.innerHTML = "";
+            btnToggleSettings.textContent = "Open Settings Panel";
+            isSettingsMounted = false;
+          }
+        });
+
+        settingsHeader.appendChild(settingsTitle);
+        settingsHeader.appendChild(btnToggleSettings);
+        settingsBox.appendChild(settingsHeader);
+        settingsBox.appendChild(mountContainer);
+      } else {
+        const noSettingsNote = document.createElement("div");
+        noSettingsNote.style.cssText = "font-size: 0.72rem; color: var(--omni-text-muted);";
+        noSettingsNote.innerHTML = `No custom settings route declared. <span style="opacity: 0.8;">(Conventions: tag <code>["view", "settings"]</code> or <code>&lt;link rel="alternate" href="?view=settings" title="Settings"&gt;</code>)</span>`;
+
+        settingsHeader.appendChild(settingsTitle);
+        settingsBox.appendChild(settingsHeader);
+        settingsBox.appendChild(noSettingsNote);
+      }
+
       card.appendChild(topRow);
       card.appendChild(desc);
       card.appendChild(viewportRow);
+      card.appendChild(routeRow);
       card.appendChild(actionsRow);
+      card.appendChild(settingsBox);
 
       container.appendChild(card);
     }
