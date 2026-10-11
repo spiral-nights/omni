@@ -115,16 +115,109 @@ async function mountChecklist(root: any) {
   root.appendChild(card);
 }
 
+async function mountChecklistSettings(root: any) {
+  const isRemote = typeof root.createElement === "function";
+  const createElement = (tag: string) => isRemote ? root.createElement(tag) : document.createElement(tag);
+
+  const container = createElement("div");
+  container.className = "checklist-settings-container";
+  container.style.cssText = "display: flex; flex-direction: column; gap: 12px; font-family: var(--omni-font-sans, system-ui); color: var(--omni-text-primary, #ede8df);";
+
+  const title = createElement("h4");
+  title.textContent = "Daily Checklist Settings";
+  title.style.cssText = "margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--omni-accent-primary, #d4a373);";
+  container.appendChild(title);
+
+  const desc = createElement("p");
+  desc.textContent = "Manage persistent tasks storage and cleanup completed items.";
+  desc.style.cssText = "margin: 0; font-size: 0.78rem; color: var(--omni-text-muted, #9e988f);";
+  container.appendChild(desc);
+
+  // Status stats
+  let tasks: TaskItem[] = [];
+  try {
+    if (typeof omni !== "undefined" && omni.storage) {
+      const stored = await omni.storage.get<TaskItem[]>("tasks");
+      if (stored) tasks = stored;
+    } else if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem("tasks");
+      if (stored) tasks = JSON.parse(stored);
+    }
+  } catch {}
+
+  const statsRow = createElement("div");
+  statsRow.style.cssText = "display: flex; gap: 16px; font-size: 0.8rem; background: var(--omni-bg-subtle, #2a2723); padding: 8px 12px; border-radius: 4px;";
+  const totalSpan = createElement("span");
+  totalSpan.textContent = `Total Tasks: ${tasks.length}`;
+  const completedSpan = createElement("span");
+  completedSpan.textContent = `Completed: ${tasks.filter(t => t.done).length}`;
+  statsRow.appendChild(totalSpan);
+  statsRow.appendChild(completedSpan);
+  container.appendChild(statsRow);
+
+  // Action Buttons
+  const actionsRow = createElement("div");
+  actionsRow.style.cssText = "display: flex; gap: 8px; margin-top: 4px;";
+
+  const btnClear = createElement("button");
+  btnClear.textContent = "Clear Completed Tasks";
+  btnClear.className = "btn-secondary";
+  btnClear.style.cssText = "background: var(--omni-bg-subtle, #2a2723); border: 1px solid var(--omni-border-strong, #3d3933); color: var(--omni-text-primary, #ede8df); padding: 6px 12px; border-radius: 4px; font-size: 0.78rem; cursor: pointer;";
+
+  btnClear.addEventListener("click", async () => {
+    const active = tasks.filter((t) => !t.done);
+    tasks = active;
+    try {
+      if (typeof omni !== "undefined" && omni.storage) {
+        await omni.storage.set("tasks", active);
+      } else if (typeof localStorage !== "undefined") {
+        localStorage.setItem("tasks", JSON.stringify(active));
+      }
+    } catch (_) {}
+    totalSpan.textContent = `Total Tasks: ${tasks.length}`;
+    completedSpan.textContent = `Completed: 0`;
+    btnClear.textContent = "Cleared!";
+    setTimeout(() => {
+      btnClear.textContent = "Clear Completed Tasks";
+    }, 1500);
+  });
+
+  actionsRow.appendChild(btnClear);
+  container.appendChild(actionsRow);
+
+  root.appendChild(container);
+}
+
+function isSettingsRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const search = window.location.search || "";
+    if (new URLSearchParams(search).get("view") === "settings") return true;
+    if (window.location.hash.includes("settings")) return true;
+    if ((window as any).__OMNI_ROUTE__?.includes("settings")) return true;
+    if ((window as any).omni?.session?.viewId === "settings") return true;
+    if ((window as any).omni?.session?.route?.includes("settings")) return true;
+  } catch (_) {}
+  return false;
+}
+
+const mountApp = (root: any) => {
+  if (isSettingsRoute()) {
+    mountChecklistSettings(root);
+  } else {
+    mountChecklist(root);
+  }
+};
+
 if (typeof omni !== "undefined" && typeof (omni as any).registerComponent === "function") {
-  (omni as any).registerComponent("checklist-sidebar-widget", ({ root }: any) => {
-    mountChecklist(root);
-  });
-  (omni as any).registerComponent("checklist-widget", ({ root }: any) => {
-    mountChecklist(root);
-  });
-  (omni as any).registerComponent("org.omni.nsite.checklist-main", ({ root }: any) => {
-    mountChecklist(root);
-  });
-} else if (typeof document !== "undefined") {
-  mountChecklist(document.body);
+  (omni as any).registerComponent("checklist-sidebar-widget", ({ root }: any) => mountApp(root));
+  (omni as any).registerComponent("checklist-widget", ({ root }: any) => mountApp(root));
+  (omni as any).registerComponent("org.omni.nsite.checklist-main", ({ root }: any) => mountApp(root));
+  (omni as any).registerComponent("org.omni.plugin.checklist-main", ({ root }: any) => mountApp(root));
+  (omni as any).registerComponent("org.omni.plugin.checklist-settings", ({ root }: any) => mountApp(root));
+  (omni as any).registerComponent("main", ({ root }: any) => mountApp(root));
+}
+
+if (typeof document !== "undefined") {
+  mountApp(document.body);
 }

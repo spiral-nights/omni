@@ -10,6 +10,20 @@ function notify() {
   for (const fn of listeners) fn();
 }
 
+// Load saved config if available
+try {
+  if (typeof localStorage !== "undefined") {
+    const raw = localStorage.getItem("omni_timer_config");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.work) {
+        totalSeconds = parsed.work * 60;
+        remainingSeconds = totalSeconds;
+      }
+    }
+  }
+} catch (_) {}
+
 function startTimer() {
   if (isRunning) return;
   isRunning = true;
@@ -34,7 +48,7 @@ function pauseTimer() {
   notify();
 }
 
-function resetTimer(seconds: number = 25 * 60) {
+function resetTimer(seconds: number = totalSeconds) {
   pauseTimer();
   totalSeconds = seconds;
   remainingSeconds = seconds;
@@ -92,7 +106,7 @@ function mountTimer(root: any) {
   const resetBtn = createElement("button");
   resetBtn.textContent = "Reset";
   resetBtn.className = "btn-timer-reset";
-  resetBtn.addEventListener("click", () => resetTimer(25 * 60));
+  resetBtn.addEventListener("click", () => resetTimer(totalSeconds));
 
   btnRow.appendChild(startBtn);
   btnRow.appendChild(pauseBtn);
@@ -112,16 +126,131 @@ function mountTimer(root: any) {
   root.appendChild(card);
 }
 
+function mountTimerSettings(root: any) {
+  const isRemote = typeof root.createElement === "function";
+  const createElement = (tag: string) => isRemote ? root.createElement(tag) : document.createElement(tag);
+
+  const container = createElement("div");
+  container.className = "timer-settings-container";
+  container.style.cssText = "display: flex; flex-direction: column; gap: 12px; font-family: var(--omni-font-sans, system-ui); color: var(--omni-text-primary, #ede8df);";
+
+  const title = createElement("h4");
+  title.textContent = "Focus Timer Preferences";
+  title.style.cssText = "margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--omni-accent-primary, #d4a373);";
+  container.appendChild(title);
+
+  const desc = createElement("p");
+  desc.textContent = "Customize focus intervals and break timers. Changes persist to local storage.";
+  desc.style.cssText = "margin: 0; font-size: 0.78rem; color: var(--omni-text-muted, #9e988f);";
+  container.appendChild(desc);
+
+  // Load existing config
+  let savedCfg = { work: 25, shortBreak: 5, longBreak: 15 };
+  try {
+    const raw = localStorage.getItem("omni_timer_config");
+    if (raw) savedCfg = JSON.parse(raw);
+  } catch (_) {}
+
+  const formGrid = createElement("div");
+  formGrid.style.cssText = "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;";
+
+  // Work Duration
+  const workGroup = createElement("label");
+  workGroup.style.cssText = "display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--omni-text-secondary, #9e988f);";
+  workGroup.textContent = "Focus (min):";
+  const workInput = createElement("input");
+  workInput.type = "number";
+  workInput.value = String(savedCfg.work || 25);
+  workInput.style.cssText = "background: var(--omni-bg-subtle, #2a2723); border: 1px solid var(--omni-border-strong, #3d3933); color: var(--omni-text-primary, #ede8df); padding: 6px 8px; border-radius: 4px; font-size: 0.82rem;";
+  workGroup.appendChild(workInput);
+  formGrid.appendChild(workGroup);
+
+  // Short Break
+  const breakGroup = createElement("label");
+  breakGroup.style.cssText = "display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--omni-text-secondary, #9e988f);";
+  breakGroup.textContent = "Short Break (min):";
+  const breakInput = createElement("input");
+  breakInput.type = "number";
+  breakInput.value = String(savedCfg.shortBreak || 5);
+  breakInput.style.cssText = "background: var(--omni-bg-subtle, #2a2723); border: 1px solid var(--omni-border-strong, #3d3933); color: var(--omni-text-primary, #ede8df); padding: 6px 8px; border-radius: 4px; font-size: 0.82rem;";
+  breakGroup.appendChild(breakInput);
+  formGrid.appendChild(breakGroup);
+
+  // Long Break
+  const longGroup = createElement("label");
+  longGroup.style.cssText = "display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--omni-text-secondary, #9e988f);";
+  longGroup.textContent = "Long Break (min):";
+  const longInput = createElement("input");
+  longInput.type = "number";
+  longInput.value = String(savedCfg.longBreak || 15);
+  longInput.style.cssText = "background: var(--omni-bg-subtle, #2a2723); border: 1px solid var(--omni-border-strong, #3d3933); color: var(--omni-text-primary, #ede8df); padding: 6px 8px; border-radius: 4px; font-size: 0.82rem;";
+  longGroup.appendChild(longInput);
+  formGrid.appendChild(longGroup);
+
+  container.appendChild(formGrid);
+
+  // Save button
+  const btnRow = createElement("div");
+  btnRow.style.cssText = "display: flex; justify-content: flex-end; margin-top: 4px;";
+  const btnSave = createElement("button");
+  btnSave.textContent = "Save Settings";
+  btnSave.className = "btn-publish";
+  btnSave.style.cssText = "background: var(--omni-accent-primary, #d4a373); color: #141312; border: none; padding: 6px 14px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer;";
+
+  btnSave.addEventListener("click", () => {
+    const work = parseInt(workInput.value || "25", 10);
+    const shortBreak = parseInt(breakInput.value || "5", 10);
+    const longBreak = parseInt(longInput.value || "15", 10);
+    const cfg = { work, shortBreak, longBreak };
+
+    try {
+      localStorage.setItem("omni_timer_config", JSON.stringify(cfg));
+    } catch (_) {}
+
+    resetTimer(work * 60);
+
+    btnSave.textContent = "Saved!";
+    setTimeout(() => {
+      btnSave.textContent = "Save Settings";
+    }, 1500);
+  });
+
+  btnRow.appendChild(btnSave);
+  container.appendChild(btnRow);
+
+  root.appendChild(container);
+}
+
+function isSettingsRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const search = window.location.search || "";
+    if (new URLSearchParams(search).get("view") === "settings") return true;
+    if (window.location.hash.includes("settings")) return true;
+    if ((window as any).__OMNI_ROUTE__?.includes("settings")) return true;
+    if ((window as any).omni?.session?.viewId === "settings") return true;
+    if ((window as any).omni?.session?.route?.includes("settings")) return true;
+  } catch (_) {}
+  return false;
+}
+
+const mountApp = (root: any) => {
+  if (isSettingsRoute()) {
+    mountTimerSettings(root);
+  } else {
+    mountTimer(root);
+  }
+};
+
 if (typeof omni !== "undefined" && typeof (omni as any).registerComponent === "function") {
-  (omni as any).registerComponent("timer-sidebar-widget", ({ root }: any) => {
-    mountTimer(root);
-  });
-  (omni as any).registerComponent("timer-widget", ({ root }: any) => {
-    mountTimer(root);
-  });
-  (omni as any).registerComponent("org.omni.nsite.timer-main", ({ root }: any) => {
-    mountTimer(root);
-  });
-} else if (typeof document !== "undefined") {
-  mountTimer(document.body);
+  (omni as any).registerComponent("timer-sidebar-widget", ({ root }: any) => mountApp(root));
+  (omni as any).registerComponent("timer-widget", ({ root }: any) => mountApp(root));
+  (omni as any).registerComponent("org.omni.nsite.timer-main", ({ root }: any) => mountApp(root));
+  (omni as any).registerComponent("org.omni.plugin.timer-main", ({ root }: any) => mountApp(root));
+  (omni as any).registerComponent("org.omni.plugin.timer-settings", ({ root }: any) => mountApp(root));
+  (omni as any).registerComponent("main", ({ root }: any) => mountApp(root));
+}
+
+if (typeof document !== "undefined") {
+  mountApp(document.body);
 }

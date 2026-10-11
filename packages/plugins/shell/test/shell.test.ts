@@ -218,8 +218,17 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
     // Click to open settings
     openSettingsBtn.click();
+    await new Promise((r) => setTimeout(r, 50));
     const mountContainer = timerBox?.querySelector(".plugin-settings-mount-container") as HTMLElement;
     expect(mountContainer.style.display).toBe("block");
+    expect(mountContainer.querySelector(".omni-component-slot")).toBeTruthy();
+    expect(openSettingsBtn.textContent).toBe("Close Settings");
+
+    // Click again to close settings
+    openSettingsBtn.click();
+    expect(mountContainer.style.display).toBe("none");
+    expect(mountContainer.children.length).toBe(0);
+    expect(openSettingsBtn.textContent).toBe("Open Settings Panel");
   });
 
   it("renders dock launchers automatically for installed apps and routes clicks", () => {
@@ -404,7 +413,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       shell.installedPlugins.push(readerPlugin);
 
       const handlePromise = shell.handleUri("nostr:nevent1xyz");
-      await new Promise((r) => setTimeout(r, 20));
+      await new Promise((r) => setTimeout(r, 60));
 
       // Modal should now be open
       const modal = root.querySelector("#open-with-modal");

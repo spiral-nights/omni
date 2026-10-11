@@ -146,6 +146,34 @@ export class SandboxInstance {
       }
     }
 
+    if (this.remoteDomHosts.size === 0) {
+      const fallbackContainer = this.options.slotResolver
+        ? this.options.slotResolver(this.manifest.id, "main", "main")
+        : (this.options.slotContainers.get("settings") ||
+           this.options.slotContainers.get("main") ||
+           this.options.slotContainers.values().next().value);
+
+      if (fallbackContainer) {
+        const compContainer = document.createElement("div");
+        compContainer.className = `omni-component-slot omni-comp-fallback`;
+        fallbackContainer.appendChild(compContainer);
+        this.compContainers.push(compContainer);
+
+        const domHost = new RemoteDomHost({
+          container: compContainer,
+          componentId: "main",
+          onEvent: (componentId, eventData) => {
+            this.channel1?.port1.postMessage({
+              type: "event",
+              componentId,
+              ...eventData
+            });
+          }
+        });
+        this.remoteDomHosts.set("main", domHost);
+      }
+    }
+
     // 4. Setup Host JSON-RPC Dispatcher on channel2 port1
     this.dispatcher = new JsonRpcDispatcher({
       pluginId: this.manifest.id,

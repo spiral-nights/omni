@@ -208,6 +208,15 @@ export class OmniKernel {
     const slotContainers = new Map<string, Element>();
     slotContainers.set("main", container);
     slotContainers.set("settings", container);
+    slotContainers.set("sidebar", container);
+    slotContainers.set("dock", container);
+    slotContainers.set("header-actions", container);
+    slotContainers.set("header-status", container);
+    if (manifest.components) {
+      for (const comp of manifest.components) {
+        if (comp.slot) slotContainers.set(comp.slot, container);
+      }
+    }
 
     const userPubkey = await this.getUserPubkey();
     const sandbox = new SandboxInstance({
@@ -217,6 +226,7 @@ export class OmniKernel {
       trusted: manifest.trusted || manifest.id.startsWith("org.omni."),
       userPubkey,
       slotContainers,
+      slotResolver: () => container,
       route,
       viewId: "settings",
       aclEngine: this.aclEngine,
