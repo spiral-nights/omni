@@ -129,41 +129,16 @@ async function startApp() {
   shell.loadInitialWorkspace();
   shell.mount();
 
-  // Boot Kernel (Keystore, RelayPool, Storage, Coordinator)
+  // Boot Kernel (Keystore, RelayPool, Storage, Coordinator, 0ms Cache)
   await kernel.boot();
+  await kernel.seedInitialNotesIfEmpty();
 
   // Persist private key if newly generated
   if (!localStorage.getItem(STORAGE_KEY_NSEC)) {
     localStorage.setItem(STORAGE_KEY_NSEC, kernel.keystore.getPrivateKey());
   }
 
-  // Sync active user identity and profile
-  await shell.updateProfileUi();
-
-  // Check 0ms local event store for saved NIP-78 workspace event
-  try {
-    const cachedWorkspace = await kernel.getWorkspaceState();
-    if (cachedWorkspace && cachedWorkspace.state) {
-      console.log("✦ [Omni Web] Restoring cached NIP-78 workspace layout from 0ms store...");
-      shell.applyWorkspaceState(cachedWorkspace.state, false, false);
-      shell.lastSyncedAt = cachedWorkspace.event.created_at * 1000;
-      shell.updateSyncUi();
-    }
-  } catch (err) {
-    console.warn("Could not check local NIP-78 workspace store:", err);
-  }
-
-  // Seed local welcome note if storage is empty (non-blocking in background)
-  kernel.eventStore.getEvents({ kinds: [1], limit: 5 }).then((existingNotes) => {
-    if (existingNotes.length === 0) {
-      console.log("⚡ [Omni Web] Seeding welcome note to local 0ms store...");
-      kernel.publishNote(
-        "Welcome to Omni! ✦ A modular Nostr web client where every feature is a first-class plugin. Use the Layout tool to customize viewports, and inspect relay connections via Settings."
-      ).catch(() => {});
-    }
-  }).catch(() => {});
-
-  // Mount primary active plugin immediately so the user sees the feed in <50ms!
+  // Mount primary active plugin immediately so the user sees the feed in <30ms!
   const activePluginId = shell.getActivePageId() || "org.omni.plugin.feed";
   const primaryPlugin =
     shell.installedPlugins.find((p) => p.id === activePluginId && p.enabled) ||
@@ -171,8 +146,27 @@ async function startApp() {
 
   if (primaryPlugin) {
     console.log(`⚡ [Omni Web] Mounting primary visible nsite ${primaryPlugin.name}...`);
-    await shell.mountPlugin(primaryPlugin);
+    shell.mountPlugin(primaryPlugin).catch((err) => {
+      console.error("Failed to mount primary plugin:", err);
+    });
   }
+
+  // Sync active user identity and profile in background
+  shell.updateProfileUi().catch((err) => {
+    console.warn("Could not update profile UI:", err);
+  });
+
+  // Check 0ms local event store for saved NIP-78 workspace event in background
+  kernel.getWorkspaceState().then((cachedWorkspace) => {
+    if (cachedWorkspace && cachedWorkspace.state) {
+      console.log("✦ [Omni Web] Restoring cached NIP-78 workspace layout from 0ms store...");
+      shell.applyWorkspaceState(cachedWorkspace.state, false, false);
+      shell.lastSyncedAt = cachedWorkspace.event.created_at * 1000;
+      shell.updateSyncUi();
+    }
+  }).catch((err) => {
+    console.warn("Could not check local NIP-78 workspace store:", err);
+  });
 
   // Mount remaining background plugins concurrently without blocking active feed
   const backgroundPlugins = shell.installedPlugins.filter(

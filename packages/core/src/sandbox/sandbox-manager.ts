@@ -223,6 +223,17 @@ export class SandboxInstance {
     const routeInjectionScript = `
     // Transparent Sub-View & Route Injection for Pure nsites
     try {
+      window.__omniPendingInit = null;
+      window.addEventListener("message", function(e) {
+        if (e.data && e.data.type === "omni:init") {
+          window.__omniPendingInit = e;
+        }
+      });
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "omni:guest-ready", pluginId: ${JSON.stringify(this.manifest.id)} }, "*");
+      }
+    } catch (_) {}
+    try {
       var __omniRoute = ${JSON.stringify(routeVal)};
       if (__omniRoute) {
         window.__OMNI_ROUTE__ = __omniRoute;
@@ -275,6 +286,9 @@ export class SandboxInstance {
       const doHandshake = () => {
         if (resolved) return;
         resolved = true;
+        if (typeof window !== "undefined" && onMessage) {
+          window.removeEventListener("message", onMessage);
+        }
 
         const initMsg: OmniInitMessage = {
           type: "omni:init",
@@ -310,21 +324,37 @@ export class SandboxInstance {
         resolve();
       };
 
+      const onMessage = (event: MessageEvent) => {
+        if (
+          event.data?.type === "omni:guest-ready" &&
+          (event.source === this.iframe?.contentWindow || event.data?.pluginId === this.manifest.id)
+        ) {
+          doHandshake();
+        }
+      };
+
+      if (typeof window !== "undefined") {
+        window.addEventListener("message", onMessage);
+      }
+
       if (this.iframe) {
         this.iframe.onload = doHandshake;
         this.iframe.addEventListener("load", doHandshake, { once: true });
         document.body.appendChild(this.iframe);
       } else {
+        if (typeof window !== "undefined") {
+          window.removeEventListener("message", onMessage);
+        }
         resolve();
         return;
       }
 
-      // Safety timeout: Ensure promise resolves even if browser load event was missed or delayed
+      // Fast fallback timeout: Ensure promise resolves even if browser load event was missed or delayed
       setTimeout(() => {
         if (!resolved) {
           doHandshake();
         }
-      }, 300);
+      }, 50);
     });
   }
 

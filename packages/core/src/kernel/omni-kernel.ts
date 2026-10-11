@@ -66,7 +66,43 @@ export class OmniKernel {
   async boot(): Promise<void> {
     await this.eventStore.init();
     await this.storageManager.init();
-    await this.relayPool.connect();
+    this.relayPool.connect().catch(() => {});
+  }
+
+  async seedInitialNotesIfEmpty(): Promise<void> {
+    try {
+      const existing = await this.eventStore.getEvents({ kinds: [1], limit: 1 });
+      if (existing.length === 0) {
+        const now = Math.floor(Date.now() / 1000);
+        const demoNotes = [
+          {
+            kind: 1,
+            content: "Welcome to Omni! ✦ A modular Nostr web client where every feature is a first-class plugin. Use the Layout tool to customize viewports, and inspect relay connections via Settings.",
+            tags: [["client", "omni"]],
+            created_at: now - 120
+          },
+          {
+            kind: 1,
+            content: "Omni runs 100% standard Nostr web apps (nsites) in hardened sandboxes with virtualized WebSockets and NIP-07 signing.",
+            tags: [["client", "omni"]],
+            created_at: now - 60
+          },
+          {
+            kind: 1,
+            content: "Try publishing a note above or switching to the Widgets dashboard in the navigation dock!",
+            tags: [["client", "omni"]],
+            created_at: now - 10
+          }
+        ];
+
+        for (const draft of demoNotes) {
+          const signed = await this.keystore.signEvent(draft);
+          await this.eventStore.saveEvent(signed);
+        }
+      }
+    } catch (err) {
+      console.warn("Error seeding initial notes:", err);
+    }
   }
 
   async getUserPubkey(): Promise<string> {

@@ -62,7 +62,7 @@
   }
 
   // 2. Listen for Handshake from Host
-  window.addEventListener("message", (event) => {
+  function handleInitMessage(event) {
     const data = event.data;
     if (data && data.type === "omni:init") {
       sessionInfo = data.payload;
@@ -78,13 +78,24 @@
       scheduleComponentMount();
 
       // If no components were explicitly registered via omni.registerComponent, auto-mount DOM
-      setTimeout(() => {
+      const runAutoMount = () => {
         if (registeredComponents.size === 0) {
           setupDomAutoMount();
         }
-      }, 0);
+      };
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", runAutoMount, { once: true });
+      } else {
+        runAutoMount();
+      }
     }
-  });
+  }
+
+  window.addEventListener("message", handleInitMessage);
+  if (typeof window !== "undefined" && window.__omniPendingInit) {
+    handleInitMessage(window.__omniPendingInit);
+    window.__omniPendingInit = null;
+  }
 
   // 3. Kernel RPC Communication
   function setupKernelRpc() {
