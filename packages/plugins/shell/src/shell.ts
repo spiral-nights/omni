@@ -272,6 +272,12 @@ export class OmniShell {
     };
   }
 
+  public getAvailableViewports(): { id: string; label: string; description: string }[] {
+    return STANDARD_SLOTS
+      .filter((s) => s.id !== "header-status")
+      .map((s) => ({ id: s.id, label: s.name, description: s.description }));
+  }
+
   private getStorage(): Storage | null {
     try {
       if (typeof window !== "undefined" && window.localStorage && typeof window.localStorage.getItem === "function") {
@@ -850,12 +856,7 @@ export class OmniShell {
       this.settingsNav.appendChild(sectionTitle);
     }
 
-    const viewportOptions = [
-      { id: "main", label: "Full-Page App (Center Viewport)" },
-      { id: "dock", label: "Navigation Dock Shortcut" },
-      { id: "sidebar", label: "Workspace Widget (Widgets Dashboard)" },
-      { id: "header-actions", label: "Header Quick Action (Top Bar)" }
-    ];
+    const viewportOptions = this.getAvailableViewports();
 
     for (const p of this.installedPlugins) {
       const meta = this.getPluginMeta(p);
@@ -1458,12 +1459,7 @@ export class OmniShell {
         placementsSection.appendChild(emptyPl);
       }
 
-      const viewportOptions = [
-        { id: "main", label: "Full-Page App" },
-        { id: "dock", label: "Navigation Dock" },
-        { id: "sidebar", label: "Widgets Dashboard" },
-        { id: "header-actions", label: "Header Action" }
-      ];
+      const viewportOptions = this.getAvailableViewports();
 
       // Render each placement row
       for (let plIdx = 0; plIdx < placements.length; plIdx++) {
