@@ -15,7 +15,7 @@ export interface AvailableSlot {
 }
 
 export const STANDARD_SLOTS: AvailableSlot[] = [
-  { id: "main", name: "Full-Page App (Center View)", description: "Primary center view with dedicated launcher in the navigation dock" },
+  { id: "main", name: "Full-Page App", description: "Primary center view with dedicated launcher in the navigation dock" },
   { id: "sidebar", name: "Widgets Dashboard Card", description: "Modular card displayed on the Workspace Widgets & Tools dashboard page" },
   { id: "dock", name: "Navigation Dock Shortcut", description: "Shortcut button or companion icon in the left navigation dock" },
   { id: "header-status", name: "Header Status Area", description: "Top header area next to brand logo" },
