@@ -24,7 +24,7 @@ export interface InstalledPluginEntry {
 }
 
 export type AppPage = "feed" | "widgets" | string;
-export type SettingsTab = "profile" | "relays" | "plugins";
+export type SettingsTab = "profile" | "relays" | "plugins" | string;
 
 export interface OmniShellOptions {
   root: HTMLElement;
@@ -59,8 +59,11 @@ export class OmniShell {
 
   // Settings modal elements
   private settingsModal!: HTMLElement;
-  private settingsNavBtns!: Record<SettingsTab, HTMLElement>;
-  private settingsPanes!: Record<SettingsTab, HTMLElement>;
+  private settingsNav!: HTMLElement;
+  private settingsContent!: HTMLElement;
+  private currentMountedSettingsPluginId: string | null = null;
+  public settingsNavBtns: Record<string, HTMLElement> = {};
+  public settingsPanes: Record<string, HTMLElement> = {};
 
   // Inspector & Install modals
   private pluginInspectorModal!: HTMLElement;
@@ -602,6 +605,7 @@ export class OmniShell {
     this.wireInstallModal();
     this.wireProfileControls();
     this.wireRelaysManager();
+    this.renderSettingsNavAndPanes();
   }
 
   public getSlotContainers(): Map<string, Element> {
@@ -683,23 +687,90 @@ export class OmniShell {
   }
 
   public closeSettings(): void {
+    if (this.currentMountedSettingsPluginId) {
+      this.kernel.destroyPluginSettings(this.currentMountedSettingsPluginId);
+      this.currentMountedSettingsPluginId = null;
+    }
     this.settingsModal.classList.remove("open");
   }
 
-  private switchSettingsTab(tab: SettingsTab | "layout"): void {
-    const targetTab: SettingsTab = tab === "layout" ? "plugins" : tab;
-    for (const [key, btn] of Object.entries(this.settingsNavBtns)) {
-      btn?.classList.toggle("active", key === targetTab);
-    }
-    for (const [key, pane] of Object.entries(this.settingsPanes)) {
-      pane?.classList.toggle("active", key === targetTab);
+  public switchSettingsTab(tab: string): void {
+    let targetTab = tab;
+    if (targetTab === "profile") {
+      const profilePlugin = this.installedPlugins.find((p) => p.id === "org.omni.plugin.profile" || p.id.includes("profile"));
+      if (profilePlugin) {
+        targetTab = profilePlugin.id;
+      }
+    } else if (targetTab === "relays") {
+      const relayPlugin = this.installedPlugins.find((p) => p.id === "org.omni.plugin.relays" || p.id.includes("relays"));
+      if (relayPlugin) {
+        targetTab = relayPlugin.id;
+      }
+    } else if (targetTab === "layout") {
+      targetTab = "plugins";
     }
 
-    if (targetTab === "profile") {
-      this.updateProfileUi();
-    } else if (targetTab === "relays") {
-      this.renderSettingsRelays();
-    } else if (targetTab === "plugins") {
+    if (this.currentMountedSettingsPluginId && this.currentMountedSettingsPluginId !== targetTab) {
+      this.kernel.destroyPluginSettings(this.currentMountedSettingsPluginId);
+      this.currentMountedSettingsPluginId = null;
+    }
+
+    // Toggle active state on navigation tab buttons
+    const navBtns = this.settingsModal?.querySelectorAll<HTMLElement>(".settings-nav-btn") || [];
+    navBtns.forEach((btn) => {
+      const btnTab = btn.getAttribute("data-tab");
+      const isActive = btnTab === targetTab ||
+        (tab === "relays" && (btnTab === "relays" || btn.id === "settings-tab-btn-relays")) ||
+        (tab === "profile" && (btnTab === "profile" || btn.id === "settings-tab-btn-profile"));
+      btn.classList.toggle("active", isActive);
+    });
+
+    // Toggle active state and visibility on panes
+    const panes = this.settingsModal?.querySelectorAll<HTMLElement>(".settings-pane") || [];
+    panes.forEach((pane) => {
+      const paneTab = pane.getAttribute("data-tab");
+      const isActive = paneTab === targetTab ||
+        (tab === "relays" && (paneTab === "relays" || pane.id === "settings-pane-relays")) ||
+        (tab === "profile" && (paneTab === "profile" || pane.id === "settings-pane-profile"));
+      pane.classList.toggle("active", isActive);
+      pane.style.display = isActive ? (pane.classList.contains("plugin-pane") ? "flex" : "block") : "none";
+    });
+
+    // Auto-mount sandboxed settings if the target plugin declares a settings view
+    const targetPlugin = this.installedPlugins.find(
+      (p) => p.id === targetTab || (tab === "relays" && p.id === "org.omni.plugin.relays") || (tab === "profile" && p.id === "org.omni.plugin.profile")
+    );
+    if (targetPlugin) {
+      const synthManifest = this.ensurePluginManifest(targetPlugin);
+      const pluginViews = (synthManifest.views && synthManifest.views.length > 0)
+        ? synthManifest.views
+        : (targetPlugin.views && targetPlugin.views.length > 0)
+        ? targetPlugin.views
+        : [{ id: "main", title: "Main App", path: "" }];
+      const settingsView = pluginViews.find((v: any) => v.id === "settings" || v.path.includes("settings"));
+      if (settingsView) {
+        const safeId = targetPlugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+        const mountContainer = document.getElementById(`plugin-settings-mount-${safeId}`);
+        if (mountContainer) {
+          mountContainer.style.display = "block";
+          mountContainer.innerHTML = "";
+          this.kernel.mountPluginSettings(
+            targetPlugin.id,
+            synthManifest,
+            targetPlugin.htmlContent || targetPlugin.scriptContent,
+            mountContainer,
+            settingsView.path || "?view=settings"
+          ).then(() => {
+            this.currentMountedSettingsPluginId = targetPlugin.id;
+          }).catch((err) => {
+            console.error(`Failed to mount settings for ${targetPlugin.id}:`, err);
+            mountContainer.textContent = "Failed to load settings.";
+          });
+        }
+      }
+    }
+
+    if (targetTab === "plugins") {
       this.renderPluginManager();
     }
   }
@@ -708,132 +779,432 @@ export class OmniShell {
     const pubkey = await this.kernel.getUserPubkey();
     const npub = await this.kernel.getNpub();
     const shortNpub = `${npub.slice(0, 10)}...${npub.slice(-4)}`;
-
-    const profileKeysNpub = document.getElementById("profile-keys-npub") as HTMLInputElement | null;
-    const profileKeysHex = document.getElementById("profile-keys-hex") as HTMLInputElement | null;
-    const profilePreviewNpub = document.getElementById("profile-preview-npub");
-    const profilePreviewName = document.getElementById("profile-preview-name");
-    const profileAvatarPreview = document.getElementById("profile-avatar-preview");
     const userBadge = document.getElementById("user-badge");
 
-    if (profileKeysNpub) profileKeysNpub.value = npub;
-    if (profileKeysHex) profileKeysHex.value = pubkey;
-    if (profilePreviewNpub) profilePreviewNpub.textContent = shortNpub;
-
     const profile = await this.kernel.getProfile(pubkey);
-    const inputDisplayName = document.getElementById("input-profile-display-name") as HTMLInputElement | null;
-    const inputName = document.getElementById("input-profile-name") as HTMLInputElement | null;
-    const inputAbout = document.getElementById("input-profile-about") as HTMLTextAreaElement | null;
-    const inputPicture = document.getElementById("input-profile-picture") as HTMLInputElement | null;
-    const inputNip05 = document.getElementById("input-profile-nip05") as HTMLInputElement | null;
-    const inputLud16 = document.getElementById("input-profile-lud16") as HTMLInputElement | null;
-
     if (profile) {
-      if (inputDisplayName) inputDisplayName.value = profile.display_name || "";
-      if (inputName) inputName.value = profile.name || "";
-      if (inputAbout) inputAbout.value = profile.about || "";
-      if (inputPicture) inputPicture.value = profile.picture || "";
-      if (inputNip05) inputNip05.value = profile.nip05 || "";
-      if (inputLud16) inputLud16.value = profile.lud16 || "";
-
       const displayName = profile.display_name || profile.name || shortNpub;
       if (userBadge) {
         userBadge.textContent = displayName;
         userBadge.title = `${displayName}\n${npub}\nClick to manage profile & keys`;
       }
-      if (profilePreviewName) profilePreviewName.textContent = profile.display_name || profile.name || "Guest User";
-
-      if (profile.picture && profileAvatarPreview) {
-        profileAvatarPreview.innerHTML = `<img src="${encodeURI(profile.picture)}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.remove()" />`;
-      } else if (profileAvatarPreview) {
-        profileAvatarPreview.textContent = "✦";
-      }
-    } else {
-      if (inputDisplayName) inputDisplayName.value = "";
-      if (inputName) inputName.value = "";
-      if (inputAbout) inputAbout.value = "";
-      if (inputPicture) inputPicture.value = "";
-      if (inputNip05) inputNip05.value = "";
-      if (inputLud16) inputLud16.value = "";
-      if (userBadge) {
-        userBadge.textContent = shortNpub;
-        userBadge.title = `Your Nostr Identity: ${npub}\nClick to manage profile & keys`;
-      }
-      if (profilePreviewName) profilePreviewName.textContent = "Guest User";
-      if (profileAvatarPreview) profileAvatarPreview.textContent = "✦";
+    } else if (userBadge) {
+      userBadge.textContent = shortNpub;
+      userBadge.title = `Your Nostr Identity: ${npub}\nClick to manage profile & keys`;
     }
   }
 
-
-
-  // --- Relays Pool Manager UI ---
   private renderSettingsRelays(): void {
-    const list = document.getElementById("settings-relays-list");
-    const badge = document.getElementById("relays-status-badge");
-    if (!list) return;
-    list.innerHTML = "";
+    // Relays pool is managed via @omni/plugin-relays
+  }
 
-    const relays = this.kernel.relayPool.getAllRelays();
-    const connectedCount = relays.filter((r) => r.status === "connected").length;
+  public renderSettingsNavAndPanes(): void {
+    if (!this.settingsNav || !this.settingsContent) return;
 
-    if (badge) {
-      badge.textContent = `${connectedCount} / ${relays.length} Connected`;
-      badge.style.color = connectedCount > 0 ? "var(--omni-status-online)" : "var(--omni-text-muted)";
+    // Remove previous plugin tab buttons and section title from nav
+    const oldPluginBtns = this.settingsNav.querySelectorAll(".plugin-tab-btn, .settings-nav-section-title");
+    oldPluginBtns.forEach((el) => el.remove());
+
+    // Remove previous plugin panes from content (preserves #settings-pane-plugins)
+    const oldPluginPanes = this.settingsContent.querySelectorAll(".settings-pane.plugin-pane");
+    oldPluginPanes.forEach((el) => el.remove());
+
+    if (this.installedPlugins.length > 0) {
+      const sectionTitle = document.createElement("div");
+      sectionTitle.className = "settings-nav-section-title";
+      sectionTitle.style.cssText =
+        "font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--omni-text-muted); padding: 10px 12px 4px 12px; margin-top: 4px; border-top: 1px solid var(--omni-border-subtle);";
+      sectionTitle.textContent = "Installed Plugins";
+      this.settingsNav.appendChild(sectionTitle);
     }
 
-    if (relays.length === 0) {
-      const empty = document.createElement("div");
-      empty.style.cssText =
-        "font-size: 0.78rem; color: var(--omni-text-muted); font-style: italic; padding: 16px; text-align: center;";
-      empty.textContent = "No relays connected. Add one above or select a preset.";
-      list.appendChild(empty);
-      return;
-    }
+    const viewportOptions = [
+      { id: "main", label: "Full-Page App (Center Viewport)" },
+      { id: "dock", label: "Navigation Dock Shortcut" },
+      { id: "sidebar", label: "Workspace Widget (Widgets Dashboard)" },
+      { id: "header-actions", label: "Header Quick Action (Top Bar)" }
+    ];
 
-    for (const r of relays) {
-      const row = document.createElement("div");
-      row.style.cssText =
-        "display: flex; justify-content: space-between; align-items: center; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 8px 12px; gap: 10px;";
+    for (const p of this.installedPlugins) {
+      const meta = this.getPluginMeta(p);
+      const safeId = p.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const synthManifest = this.ensurePluginManifest(p);
+      const pluginViews = (synthManifest.views && synthManifest.views.length > 0)
+        ? synthManifest.views
+        : (p.views && p.views.length > 0)
+        ? p.views
+        : [{ id: "main", title: "Main App", path: "" }];
+      const settingsView = pluginViews.find((v: any) => v.id === "settings" || v.path.includes("settings"));
 
-      const left = document.createElement("div");
-      left.style.cssText = "display: flex; align-items: center; gap: 8px; overflow: hidden; min-width: 0;";
+      const btnId = p.id === "org.omni.plugin.relays"
+        ? "settings-tab-btn-relays"
+        : p.id === "org.omni.plugin.profile"
+        ? "settings-tab-btn-profile"
+        : `settings-tab-btn-${safeId}`;
 
-      const dot = document.createElement("span");
-      const dotColor =
-        r.status === "connected"
-          ? "var(--omni-status-online)"
-          : r.status === "connecting"
-          ? "#f59e0b"
-          : "var(--omni-status-offline)";
-      dot.style.cssText = `width: 8px; height: 8px; border-radius: 50%; background: ${dotColor}; flex-shrink: 0;`;
+      const paneId = p.id === "org.omni.plugin.relays"
+        ? "settings-pane-relays"
+        : p.id === "org.omni.plugin.profile"
+        ? "settings-pane-profile"
+        : `settings-pane-${safeId}`;
 
-      const urlSpan = document.createElement("span");
-      urlSpan.style.cssText =
-        "font-family: var(--omni-font-mono); font-size: 0.78rem; color: var(--omni-text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;";
-      urlSpan.textContent = r.url;
+      // 1. Tab Button in Nav
+      const tabBtn = document.createElement("button");
+      tabBtn.className = "settings-nav-btn plugin-tab-btn";
+      tabBtn.id = btnId;
+      tabBtn.setAttribute("data-tab", p.id);
+      tabBtn.title = meta.name;
 
-      const statusPill = document.createElement("span");
-      statusPill.style.cssText =
-        "font-size: 0.68rem; color: var(--omni-text-muted); text-transform: capitalize; flex-shrink: 0;";
-      statusPill.textContent = r.status;
+      const safeIconName: IconName =
+        meta.icon === "relays" ? "relay" :
+        meta.icon === "profile" ? "user" :
+        meta.icon === "check-circle" || meta.icon === "checklist" ? "check" :
+        (ICONS[meta.icon as IconName] ? (meta.icon as IconName) : "plugins");
 
-      left.appendChild(dot);
-      left.appendChild(urlSpan);
-      left.appendChild(statusPill);
+      tabBtn.innerHTML = `
+        ${icon(safeIconName, 16)}
+        <span>${meta.name}</span>
+      `;
+      tabBtn.addEventListener("click", () => this.switchSettingsTab(p.id));
+      this.settingsNav.appendChild(tabBtn);
+      this.settingsNavBtns[p.id] = tabBtn;
+      if (p.id === "org.omni.plugin.relays") this.settingsNavBtns["relays"] = tabBtn;
+      if (p.id === "org.omni.plugin.profile") this.settingsNavBtns["profile"] = tabBtn;
 
-      const btnRemove = document.createElement("button");
-      btnRemove.className = "btn-secondary";
-      btnRemove.style.cssText = "font-size: 0.72rem; padding: 3px 8px; color: #f87171; flex-shrink: 0;";
-      btnRemove.textContent = "Disconnect";
-      btnRemove.addEventListener("click", () => {
-        this.kernel.relayPool.removeRelay(r.url);
-        this.renderSettingsRelays();
+      // 2. Dedicated Settings Pane
+      const pane = document.createElement("div");
+      pane.className = "settings-pane plugin-pane";
+      pane.id = paneId;
+      pane.setAttribute("data-tab", p.id);
+      pane.style.cssText = "display: none; flex-direction: column; gap: 14px;";
+
+      // Header: Icon + Name + Version + Toggle
+      const headerBox = document.createElement("div");
+      headerBox.style.cssText =
+        "display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--omni-border-subtle);";
+
+      const headerLeft = document.createElement("div");
+      headerLeft.style.cssText = "display: flex; align-items: center; gap: 12px;";
+
+      const iconBox = document.createElement("div");
+      iconBox.style.cssText =
+        "width: 40px; height: 40px; border-radius: var(--omni-radius-sm); background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;";
+      iconBox.innerHTML = icon(safeIconName, 22);
+
+      const titleInfo = document.createElement("div");
+      titleInfo.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+      titleInfo.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <h3 style="font-size: 1.1rem; font-weight: 600; color: var(--omni-text-primary); margin: 0;">${meta.name}</h3>
+          <span style="font-size: 0.68rem; font-family: var(--omni-font-mono); color: var(--omni-text-muted); background: var(--omni-bg-surface); padding: 1px 6px; border-radius: var(--omni-radius-pill);">v${meta.version}</span>
+        </div>
+        <p style="font-size: 0.78rem; color: var(--omni-text-secondary); margin: 0;">${meta.description || "Nostr sandboxed application."}</p>
+      `;
+
+      headerLeft.appendChild(iconBox);
+      headerLeft.appendChild(titleInfo);
+
+      const toggleLabel = document.createElement("label");
+      toggleLabel.style.cssText =
+        "display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--omni-text-muted); cursor: pointer;";
+      const chkToggle = document.createElement("input");
+      chkToggle.type = "checkbox";
+      chkToggle.checked = p.enabled !== false;
+      chkToggle.addEventListener("change", async () => {
+        p.enabled = chkToggle.checked;
+        await this.remountPlugin(p);
+      });
+      toggleLabel.appendChild(chkToggle);
+      toggleLabel.appendChild(document.createTextNode(p.enabled !== false ? "Active" : "Disabled"));
+
+      headerBox.appendChild(headerLeft);
+      headerBox.appendChild(toggleLabel);
+      pane.appendChild(headerBox);
+
+      // Sandboxed Settings View
+      const settingsBox = document.createElement("div");
+      settingsBox.className = "plugin-settings-box";
+      settingsBox.style.cssText =
+        "display: flex; flex-direction: column; gap: 8px; background: var(--omni-bg-surface); padding: 12px 14px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);";
+
+      const settingsHeader = document.createElement("div");
+      settingsHeader.style.cssText =
+        "display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;";
+
+      const settingsTitle = document.createElement("span");
+      settingsTitle.style.cssText = "font-weight: 600; font-size: 0.82rem; color: var(--omni-text-primary);";
+      settingsTitle.textContent = "Settings & Preferences";
+      settingsHeader.appendChild(settingsTitle);
+
+      const mountContainer = document.createElement("div");
+      mountContainer.id = `plugin-settings-mount-${safeId}`;
+      mountContainer.className = "plugin-settings-mount-container";
+      mountContainer.style.cssText =
+        "display: block; margin-top: 6px; padding: 10px; background: var(--omni-bg-canvas); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
+
+      if (settingsView) {
+        const btnToggleSettings = document.createElement("button");
+        btnToggleSettings.className = "btn-secondary btn-plugin-settings";
+        btnToggleSettings.style.cssText = "font-size: 0.72rem; padding: 2px 8px;";
+        btnToggleSettings.textContent = "Close Settings";
+
+        let isSettingsMounted = false;
+        btnToggleSettings.addEventListener("click", async () => {
+          if (!isSettingsMounted) {
+            mountContainer.style.display = "block";
+            btnToggleSettings.textContent = "Loading...";
+            try {
+              await this.kernel.mountPluginSettings(
+                p.id,
+                synthManifest,
+                p.htmlContent || p.scriptContent,
+                mountContainer,
+                settingsView.path || "?view=settings"
+              );
+              btnToggleSettings.textContent = "Close Settings";
+              isSettingsMounted = true;
+            } catch (err) {
+              console.error(`Failed to mount settings for ${p.id}:`, err);
+              mountContainer.textContent = "Failed to load settings.";
+              btnToggleSettings.textContent = "Open Settings Panel";
+            }
+          } else {
+            this.kernel.destroyPluginSettings(p.id);
+            mountContainer.style.display = "none";
+            mountContainer.innerHTML = "";
+            btnToggleSettings.textContent = "Open Settings Panel";
+            isSettingsMounted = false;
+          }
+        });
+
+        settingsHeader.appendChild(btnToggleSettings);
+        settingsBox.appendChild(settingsHeader);
+        settingsBox.appendChild(mountContainer);
+      } else {
+        const noSettingsNote = document.createElement("div");
+        noSettingsNote.style.cssText = "font-size: 0.72rem; color: var(--omni-text-muted); font-style: italic;";
+        noSettingsNote.textContent = "No custom settings route declared. Configure viewports and placements below.";
+        settingsBox.appendChild(settingsHeader);
+        settingsBox.appendChild(noSettingsNote);
+      }
+
+      pane.appendChild(settingsBox);
+
+      // Placements Section
+      const placementsSection = document.createElement("div");
+      placementsSection.className = "plugin-placements-section";
+      placementsSection.style.cssText =
+        "display: flex; flex-direction: column; gap: 8px; background: var(--omni-bg-surface); padding: 12px 14px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);";
+
+      const placementsHeader = document.createElement("div");
+      placementsHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
+
+      const placementsTitle = document.createElement("span");
+      placementsTitle.style.cssText = "font-weight: 600; font-size: 0.82rem; color: var(--omni-text-primary);";
+      placementsTitle.textContent = "Assigned Viewports & Routes";
+
+      const btnAddPlacement = document.createElement("button");
+      btnAddPlacement.className = "btn-secondary btn-add-placement";
+      btnAddPlacement.style.cssText = "font-size: 0.72rem; padding: 2px 8px;";
+      btnAddPlacement.textContent = "+ Add Location";
+      btnAddPlacement.addEventListener("click", async () => {
+        const currentPlacements = this.getPluginPlacements(p);
+        currentPlacements.push({
+          id: `placement-${Date.now()}`,
+          viewport: "sidebar",
+          route: "",
+          viewId: "main",
+          enabled: true
+        });
+        p.placements = currentPlacements;
+        await this.remountPlugin(p);
+        this.renderSettingsNavAndPanes();
+        this.switchSettingsTab(p.id);
       });
 
-      row.appendChild(left);
-      row.appendChild(btnRemove);
-      list.appendChild(row);
+      placementsHeader.appendChild(placementsTitle);
+      placementsHeader.appendChild(btnAddPlacement);
+      placementsSection.appendChild(placementsHeader);
+
+      const placements = this.getPluginPlacements(p);
+      for (let plIdx = 0; plIdx < placements.length; plIdx++) {
+        const pl = placements[plIdx];
+        const row = document.createElement("div");
+        row.className = "plugin-placement-row";
+        row.style.cssText =
+          "display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: var(--omni-bg-canvas); padding: 8px 10px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);";
+
+        const controlsLeft = document.createElement("div");
+        controlsLeft.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
+
+        const vpLabel = document.createElement("span");
+        vpLabel.style.cssText = "font-weight: 500; color: var(--omni-text-secondary); font-size: 0.72rem;";
+        vpLabel.textContent = `Placement #${plIdx + 1}:`;
+
+        const vpSelect = document.createElement("select");
+        vpSelect.className = "plugin-viewport-select";
+        vpSelect.style.cssText =
+          "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none; cursor: pointer;";
+
+        for (const optDef of viewportOptions) {
+          const opt = document.createElement("option");
+          opt.value = optDef.id;
+          opt.textContent = optDef.label;
+          if (optDef.id === pl.viewport) opt.selected = true;
+          vpSelect.appendChild(opt);
+        }
+
+        vpSelect.addEventListener("change", async () => {
+          pl.viewport = vpSelect.value;
+          p.viewport = pl.viewport;
+          const primaryComp = synthManifest.components?.[0];
+          if (primaryComp) {
+            this.kernel.layoutManager.setComponentSlot(p.id, primaryComp.id, pl.viewport);
+          }
+          await this.remountPlugin(p);
+        });
+
+        const routeLabel = document.createElement("span");
+        routeLabel.style.cssText = "font-weight: 500; color: var(--omni-text-secondary); margin-left: 6px; font-size: 0.72rem;";
+        routeLabel.textContent = "View:";
+
+        const routeSelect = document.createElement("select");
+        routeSelect.className = "plugin-route-select";
+        routeSelect.style.cssText =
+          "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none; cursor: pointer;";
+
+        for (const v of pluginViews) {
+          const opt = document.createElement("option");
+          opt.value = v.path;
+          opt.textContent = `${v.title} (${v.path || "/"})`;
+          if ((pl.route !== undefined && pl.route === v.path) || (!pl.route && v.id === "main")) {
+            opt.selected = true;
+          }
+          routeSelect.appendChild(opt);
+        }
+
+        routeSelect.addEventListener("change", async () => {
+          pl.route = routeSelect.value;
+          const matchedView = pluginViews.find((v: any) => v.path === routeSelect.value);
+          pl.viewId = matchedView?.id || "main";
+          p.route = pl.route;
+          p.viewId = pl.viewId;
+          await this.remountPlugin(p);
+        });
+
+        controlsLeft.appendChild(vpLabel);
+        controlsLeft.appendChild(vpSelect);
+        controlsLeft.appendChild(routeLabel);
+        controlsLeft.appendChild(routeSelect);
+        row.appendChild(controlsLeft);
+
+        if (placements.length > 1) {
+          const btnRemovePl = document.createElement("button");
+          btnRemovePl.className = "btn-secondary btn-remove-placement";
+          btnRemovePl.style.cssText = "font-size: 0.68rem; padding: 2px 6px; color: #f87171;";
+          btnRemovePl.textContent = "Remove";
+          btnRemovePl.title = "Remove this placement";
+          btnRemovePl.addEventListener("click", async () => {
+            p.placements = placements.filter((_, idx) => idx !== plIdx);
+            if (p.placements.length > 0) {
+              p.viewport = p.placements[0].viewport;
+              p.route = p.placements[0].route;
+              p.viewId = p.placements[0].viewId;
+            }
+            await this.remountPlugin(p);
+            this.renderSettingsNavAndPanes();
+            this.switchSettingsTab(p.id);
+          });
+          row.appendChild(btnRemovePl);
+        }
+
+        placementsSection.appendChild(row);
+      }
+
+      pane.appendChild(placementsSection);
+
+      // Actions Row
+      const actionsRow = document.createElement("div");
+      actionsRow.style.cssText = "display: flex; gap: 8px; align-items: center; margin-top: 4px;";
+
+      const btnInspect = document.createElement("button");
+      btnInspect.className = "btn-secondary";
+      btnInspect.style.cssText = "font-size: 0.75rem; padding: 4px 10px;";
+      btnInspect.textContent = "Inspect Plugin";
+      btnInspect.addEventListener("click", () => this.openPluginInspector(p));
+
+      const btnClearDb = document.createElement("button");
+      btnClearDb.className = "btn-secondary";
+      btnClearDb.style.cssText = "font-size: 0.75rem; padding: 4px 10px;";
+      btnClearDb.textContent = "Clear Storage";
+      btnClearDb.addEventListener("click", async () => {
+        await this.kernel.storageManager.clear(p.id);
+        btnClearDb.textContent = "Cleared!";
+        setTimeout(() => { btnClearDb.textContent = "Clear Storage"; }, 1500);
+      });
+
+      const btnUninstall = document.createElement("button");
+      btnUninstall.className = "btn-danger";
+      btnUninstall.style.cssText = "font-size: 0.75rem; padding: 4px 10px;";
+      btnUninstall.textContent = "Uninstall";
+      btnUninstall.addEventListener("click", () => {
+        if (confirm(`Uninstall ${meta.name}?`)) {
+          this.uninstallPlugin(p.id);
+        }
+      });
+
+      actionsRow.appendChild(btnInspect);
+      actionsRow.appendChild(btnClearDb);
+      actionsRow.appendChild(btnUninstall);
+      pane.appendChild(actionsRow);
+
+      this.settingsContent.appendChild(pane);
+      this.settingsPanes[p.id] = pane;
+      if (p.id === "org.omni.plugin.relays") this.settingsPanes["relays"] = pane;
+      if (p.id === "org.omni.plugin.profile") this.settingsPanes["profile"] = pane;
     }
+
+    // Fallbacks if relays or profile are not in installedPlugins
+    if (!this.installedPlugins.some((p) => p.id === "org.omni.plugin.relays" || p.id === "relays")) {
+      const fbRelaysPane = document.createElement("div");
+      fbRelaysPane.className = "settings-pane plugin-pane";
+      fbRelaysPane.id = "settings-pane-relays";
+      fbRelaysPane.setAttribute("data-tab", "relays");
+      fbRelaysPane.style.cssText = "display: none; padding: 24px; text-align: center; color: var(--omni-text-muted); font-size: 0.85rem;";
+      fbRelaysPane.textContent = "No Relay Manager plugin installed. You can install one from the Workspace tab.";
+      this.settingsContent.appendChild(fbRelaysPane);
+      this.settingsPanes["relays"] = fbRelaysPane;
+
+      const fbRelaysBtn = document.createElement("button");
+      fbRelaysBtn.className = "settings-nav-btn plugin-tab-btn";
+      fbRelaysBtn.id = "settings-tab-btn-relays";
+      fbRelaysBtn.setAttribute("data-tab", "relays");
+      fbRelaysBtn.style.display = "none";
+      this.settingsNav.appendChild(fbRelaysBtn);
+      this.settingsNavBtns["relays"] = fbRelaysBtn;
+    }
+
+    if (!this.installedPlugins.some((p) => p.id === "org.omni.plugin.profile" || p.id === "profile")) {
+      const fbProfilePane = document.createElement("div");
+      fbProfilePane.className = "settings-pane plugin-pane";
+      fbProfilePane.id = "settings-pane-profile";
+      fbProfilePane.setAttribute("data-tab", "profile");
+      fbProfilePane.style.cssText = "display: none; padding: 24px; text-align: center; color: var(--omni-text-muted); font-size: 0.85rem;";
+      fbProfilePane.textContent = "No Profile Manager plugin installed. You can install one from the Workspace tab.";
+      this.settingsContent.appendChild(fbProfilePane);
+      this.settingsPanes["profile"] = fbProfilePane;
+
+      const fbProfileBtn = document.createElement("button");
+      fbProfileBtn.className = "settings-nav-btn plugin-tab-btn";
+      fbProfileBtn.id = "settings-tab-btn-profile";
+      fbProfileBtn.setAttribute("data-tab", "profile");
+      fbProfileBtn.style.display = "none";
+      this.settingsNav.appendChild(fbProfileBtn);
+      this.settingsNavBtns["profile"] = fbProfileBtn;
+    }
+
+    // Populate Workspace tab overview
+    this.renderPluginManager();
   }
 
   // --- Installed Plugins Manager UI ---
@@ -1259,7 +1630,7 @@ export class OmniShell {
       this.installedPlugins.splice(idx, 1);
     }
     this.renderDockLaunchers();
-    this.renderPluginManager();
+    this.renderSettingsNavAndPanes();
     this.saveLocalWorkspace();
   }
 
@@ -1547,153 +1918,16 @@ export class OmniShell {
           </div>
 
           <div class="settings-body">
-            <nav class="settings-nav">
-              <button class="settings-nav-btn active" id="settings-tab-btn-profile" data-tab="profile">
-                ${icon("user", 16)}
-                <span>Profile & Keys</span>
-              </button>
-              <button class="settings-nav-btn" id="settings-tab-btn-relays" data-tab="relays">
-                ${icon("relay", 16)}
-                <span>Connected Relays</span>
-              </button>
-              <button class="settings-nav-btn" id="settings-tab-btn-plugins" data-tab="plugins">
+            <nav class="settings-nav" id="settings-nav">
+              <button class="settings-nav-btn active" id="settings-tab-btn-plugins" data-tab="plugins">
                 ${icon("plugins", 16)}
-                <span>Plugins & Viewports</span>
+                <span>Workspace</span>
               </button>
             </nav>
 
-            <div class="settings-content">
-              <!-- Pane 1: Profile & Keys -->
-              <div class="settings-pane active" id="settings-pane-profile">
-                <div class="modal-tabs">
-                  <button class="modal-tab-btn active" id="tab-btn-profile-info">Profile Info (kind 0)</button>
-                  <button class="modal-tab-btn" id="tab-btn-profile-keys">Keys & Custody</button>
-                </div>
-
-                <div id="profile-pane-info" style="display: flex; flex-direction: column; gap: 14px;">
-                  <div style="display: flex; align-items: center; gap: 14px;">
-                    <div id="profile-avatar-preview" style="width: 56px; height: 56px; border-radius: 50%; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: var(--omni-accent-primary); overflow: hidden; flex-shrink: 0;">
-                      ✦
-                    </div>
-                    <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
-                      <div id="profile-preview-name" style="font-weight: 600; font-size: 0.95rem;">Guest User</div>
-                      <div id="profile-preview-npub" style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted);">npub...</div>
-                    </div>
-                  </div>
-
-                  <div style="display: flex; flex-direction: column; gap: 10px;">
-                    <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-                      Display Name:
-                      <input id="input-profile-display-name" type="text" placeholder="e.g. Alice Smith" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-                    </label>
-
-                    <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-                      Name / Handle:
-                      <input id="input-profile-name" type="text" placeholder="e.g. alice" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-                    </label>
-
-                    <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-                      About / Bio:
-                      <textarea id="input-profile-about" rows="2" placeholder="Tell the Nostr network about yourself..." style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none; resize: vertical;"></textarea>
-                    </label>
-
-                    <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-                      Avatar / Picture URL:
-                      <input id="input-profile-picture" type="text" placeholder="https://example.com/avatar.jpg" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-                    </label>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                      <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-                        NIP-05 Identifier:
-                        <input id="input-profile-nip05" type="text" placeholder="alice@domain.com" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-                      </label>
-                      <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-                        Lightning Address (lud16):
-                        <input id="input-profile-lud16" type="text" placeholder="alice@getalby.com" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
-                    <button id="btn-save-profile" class="btn-publish">
-                      Save & Publish Profile (kind 0)
-                    </button>
-                  </div>
-                </div>
-
-                <div id="profile-pane-keys" style="display: none; flex-direction: column; gap: 14px;">
-                  <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <span style="font-size: 0.78rem; color: var(--omni-text-secondary);">Public Key (npub):</span>
-                    <div style="display: flex; gap: 6px;">
-                      <input id="profile-keys-npub" type="text" readonly style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.75rem; outline: none;" />
-                      <button id="btn-copy-npub" class="btn-secondary" style="font-size: 0.75rem;">Copy</button>
-                    </div>
-                  </div>
-
-                  <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <span style="font-size: 0.78rem; color: var(--omni-text-secondary);">Public Key (Hex):</span>
-                    <div style="display: flex; gap: 6px;">
-                      <input id="profile-keys-hex" type="text" readonly style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-muted); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.72rem; outline: none;" />
-                      <button id="btn-copy-hex" class="btn-secondary" style="font-size: 0.75rem;">Copy</button>
-                    </div>
-                  </div>
-
-                  <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                      <span style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-secondary);">Private Key (nsec):</span>
-                      <button id="btn-reveal-nsec" class="btn-secondary" style="font-size: 0.72rem;">Reveal Private Key</button>
-                    </div>
-                    <div id="private-key-display-wrapper" style="display: none; flex-direction: column; gap: 6px;">
-                      <div style="display: flex; gap: 6px;">
-                        <input id="profile-keys-nsec" type="text" readonly style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid rgba(239,68,68,0.4); color: #f87171; padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.75rem; outline: none;" />
-                        <button id="btn-copy-nsec" class="btn-secondary" style="font-size: 0.75rem;">Copy</button>
-                      </div>
-                      <span style="font-size: 0.7rem; color: var(--omni-text-muted);">⚠️ Never share your nsec private key with untrusted parties.</span>
-                    </div>
-                  </div>
-
-                  <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-                    <span style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-secondary);">Switch Identity / Import Key:</span>
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                      <input id="input-import-nsec" type="password" placeholder="Paste nsec1... or 64-char hex private key" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-                      <div style="display: flex; justify-content: space-between; gap: 8px; margin-top: 4px;">
-                        <button id="btn-generate-new-key" class="btn-secondary" style="font-size: 0.75rem;">Generate Fresh Key</button>
-                        <button id="btn-confirm-import-key" class="btn-publish" style="font-size: 0.78rem;">Import & Switch</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Pane 2: Connected Relays -->
-              <div class="settings-pane" id="settings-pane-relays">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <div>
-                    <h3 style="font-size: 1.05rem; font-weight: 600;">Relay Pool Manager</h3>
-                    <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Manage real-time WebSocket connections to Nostr relays</span>
-                  </div>
-                  <span id="relays-status-badge" style="font-size: 0.72rem; background: var(--omni-bg-subtle); color: var(--omni-accent-primary); padding: 3px 8px; border-radius: var(--omni-radius-pill);">Live</span>
-                </div>
-
-                <div style="display: flex; gap: 8px;">
-                  <input id="input-add-relay" type="text" placeholder="wss://relay.example.com" style="flex: 1; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 8px 12px; border-radius: var(--omni-radius-sm); font-size: 0.85rem; outline: none;" />
-                  <button id="btn-add-relay" class="btn-publish" style="font-size: 0.8rem; white-space: nowrap;">+ Connect Relay</button>
-                </div>
-
-                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                  <span style="font-size: 0.72rem; color: var(--omni-text-muted);">Presets:</span>
-                  <button class="btn-secondary relay-preset-btn" data-url="wss://relay.ditto.pub" style="font-size: 0.7rem; padding: 2px 8px;">ditto.pub</button>
-                  <button class="btn-secondary relay-preset-btn" data-url="wss://relay.damus.io" style="font-size: 0.7rem; padding: 2px 8px;">damus.io</button>
-                  <button class="btn-secondary relay-preset-btn" data-url="wss://nos.lol" style="font-size: 0.7rem; padding: 2px 8px;">nos.lol</button>
-                  <button class="btn-secondary relay-preset-btn" data-url="wss://relay.primal.net" style="font-size: 0.7rem; padding: 2px 8px;">primal.net</button>
-                  <button class="btn-secondary relay-preset-btn" data-url="wss://relay.nostr.band" style="font-size: 0.7rem; padding: 2px 8px;">nostr.band</button>
-                </div>
-
-                <div id="settings-relays-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;"></div>
-              </div>
-
-              <!-- Pane 3: Installed Plugins & Viewports -->
-              <div class="settings-pane" id="settings-pane-plugins">
+            <div class="settings-content" id="settings-content">
+              <!-- System Tab: Installed Plugins & Workspace -->
+              <div class="settings-pane active" id="settings-pane-plugins" data-tab="plugins">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <h3 style="font-size: 1.05rem; font-weight: 600;">Installed Plugins & Viewports</h3>
@@ -1915,15 +2149,15 @@ export class OmniShell {
     this.dockBtnSettings = document.getElementById("dock-btn-settings")!;
 
     this.settingsModal = document.getElementById("settings-modal")!;
+    this.settingsNav = document.getElementById("settings-nav")!;
+    this.settingsContent = document.getElementById("settings-content")!;
+    const pluginsBtn = document.getElementById("settings-tab-btn-plugins");
+    const pluginsPane = document.getElementById("settings-pane-plugins");
     this.settingsNavBtns = {
-      profile: document.getElementById("settings-tab-btn-profile")!,
-      relays: document.getElementById("settings-tab-btn-relays")!,
-      plugins: document.getElementById("settings-tab-btn-plugins")!
+      plugins: pluginsBtn!
     };
     this.settingsPanes = {
-      profile: document.getElementById("settings-pane-profile")!,
-      relays: document.getElementById("settings-pane-relays")!,
-      plugins: document.getElementById("settings-pane-plugins")!
+      plugins: pluginsPane!
     };
 
     this.pluginInspectorModal = document.getElementById("plugin-inspector-modal")!;
@@ -2011,9 +2245,8 @@ export class OmniShell {
       }
     });
 
-    for (const [tab, btn] of Object.entries(this.settingsNavBtns)) {
-      btn?.addEventListener("click", () => this.switchSettingsTab(tab as SettingsTab));
-    }
+    const pluginsBtn = document.getElementById("settings-tab-btn-plugins");
+    pluginsBtn?.addEventListener("click", () => this.switchSettingsTab("plugins"));
   }
 
   private wireInspectorModal(): void {
@@ -2242,7 +2475,7 @@ export class OmniShell {
         await this.kernel.registerPlugin(this.ensurePluginManifest(entry), scriptContent, this.slotContainers);
         this.installedPlugins.push(entry);
         this.renderDockLaunchers();
-        this.renderPluginManager();
+        this.renderSettingsNavAndPanes();
         this.saveLocalWorkspace();
         this.installPluginModal.classList.remove("open");
         urlInput.value = "";
@@ -2259,176 +2492,12 @@ export class OmniShell {
   }
 
   private wireProfileControls(): void {
-    const tabInfo = document.getElementById("tab-btn-profile-info");
-    const tabKeys = document.getElementById("tab-btn-profile-keys");
-    const paneInfo = document.getElementById("profile-pane-info");
-    const paneKeys = document.getElementById("profile-pane-keys");
     const userBadge = document.getElementById("user-badge");
-    const btnSave = document.getElementById("btn-save-profile") as HTMLButtonElement | null;
-    const btnCopyNpub = document.getElementById("btn-copy-npub") as HTMLButtonElement | null;
-    const btnCopyHex = document.getElementById("btn-copy-hex") as HTMLButtonElement | null;
-    const btnCopyNsec = document.getElementById("btn-copy-nsec") as HTMLButtonElement | null;
-    const btnRevealNsec = document.getElementById("btn-reveal-nsec") as HTMLButtonElement | null;
-    const wrapperNsec = document.getElementById("private-key-display-wrapper");
-    const inputNsec = document.getElementById("profile-keys-nsec") as HTMLInputElement | null;
-    const inputImport = document.getElementById("input-import-nsec") as HTMLInputElement | null;
-    const btnImport = document.getElementById("btn-confirm-import-key");
-    const btnGenerate = document.getElementById("btn-generate-new-key");
-
     userBadge?.addEventListener("click", () => this.openSettings("profile"));
-
-    tabInfo?.addEventListener("click", () => {
-      tabInfo.classList.add("active");
-      tabKeys?.classList.remove("active");
-      if (paneInfo) paneInfo.style.display = "flex";
-      if (paneKeys) paneKeys.style.display = "none";
-    });
-
-    tabKeys?.addEventListener("click", () => {
-      tabKeys.classList.add("active");
-      tabInfo?.classList.remove("active");
-      if (paneKeys) paneKeys.style.display = "flex";
-      if (paneInfo) paneInfo.style.display = "none";
-    });
-
-    btnSave?.addEventListener("click", async () => {
-      if (!btnSave) return;
-      btnSave.disabled = true;
-      btnSave.textContent = "Signing & Publishing (kind 0)...";
-      try {
-        const metadata: Record<string, any> = {};
-        const inputName = document.getElementById("input-profile-name") as HTMLInputElement | null;
-        const inputDName = document.getElementById("input-profile-display-name") as HTMLInputElement | null;
-        const inputAbout = document.getElementById("input-profile-about") as HTMLTextAreaElement | null;
-        const inputPic = document.getElementById("input-profile-picture") as HTMLInputElement | null;
-        const inputNip05 = document.getElementById("input-profile-nip05") as HTMLInputElement | null;
-        const inputLud16 = document.getElementById("input-profile-lud16") as HTMLInputElement | null;
-
-        if (inputName?.value.trim()) metadata.name = inputName.value.trim();
-        if (inputDName?.value.trim()) metadata.display_name = inputDName.value.trim();
-        if (inputAbout?.value.trim()) metadata.about = inputAbout.value.trim();
-        if (inputPic?.value.trim()) metadata.picture = inputPic.value.trim();
-        if (inputNip05?.value.trim()) metadata.nip05 = inputNip05.value.trim();
-        if (inputLud16?.value.trim()) metadata.lud16 = inputLud16.value.trim();
-
-        await this.kernel.publishProfile(metadata);
-        await this.updateProfileUi();
-        btnSave.textContent = "Profile Saved & Published!";
-        setTimeout(() => {
-          btnSave.disabled = false;
-          btnSave.textContent = "Save & Publish Profile (kind 0)";
-        }, 1800);
-      } catch (err: any) {
-        console.error("Failed to publish profile:", err);
-        alert(`Failed to publish profile: ${err.message || String(err)}`);
-        btnSave.disabled = false;
-        btnSave.textContent = "Save & Publish Profile (kind 0)";
-      }
-    });
-
-    const copyText = async (val: string, btn: HTMLButtonElement | null) => {
-      if (!btn) return;
-      try {
-        await navigator.clipboard.writeText(val);
-        const prev = btn.textContent;
-        btn.textContent = "Copied!";
-        setTimeout(() => {
-          btn.textContent = prev;
-        }, 1200);
-      } catch {
-        window.prompt("Copy:", val);
-      }
-    };
-
-    btnCopyNpub?.addEventListener("click", () => {
-      const val = (document.getElementById("profile-keys-npub") as HTMLInputElement)?.value || "";
-      copyText(val, btnCopyNpub);
-    });
-    btnCopyHex?.addEventListener("click", () => {
-      const val = (document.getElementById("profile-keys-hex") as HTMLInputElement)?.value || "";
-      copyText(val, btnCopyHex);
-    });
-    btnCopyNsec?.addEventListener("click", () => {
-      const val = (document.getElementById("profile-keys-nsec") as HTMLInputElement)?.value || "";
-      copyText(val, btnCopyNsec);
-    });
-
-    btnRevealNsec?.addEventListener("click", () => {
-      if (!wrapperNsec || !inputNsec || !btnRevealNsec) return;
-      if (wrapperNsec.style.display === "flex") {
-        wrapperNsec.style.display = "none";
-        inputNsec.value = "";
-        btnRevealNsec.textContent = "Reveal Private Key";
-        return;
-      }
-      if (!window.confirm("⚠️ WARNING: Never share your private key!\nReveal private key?")) return;
-      inputNsec.value = this.kernel.getNsec();
-      wrapperNsec.style.display = "flex";
-      btnRevealNsec.textContent = "Hide Private Key";
-    });
-
-    btnImport?.addEventListener("click", async () => {
-      const val = inputImport?.value.trim();
-      if (!val) {
-        alert("Enter private key (nsec1... or hex)");
-        return;
-      }
-      try {
-        const decoded = WebCryptoKeystore.decodeKey(val);
-        if ((decoded.type !== "nsec" && decoded.type !== "hex") || !decoded.hex) {
-          alert("Identifier is not a private key.");
-          return;
-        }
-        if (!window.confirm("Switch to this Nostr account?")) return;
-        this.kernel.switchPrivateKey(decoded.hex);
-        localStorage.setItem("omni_privkey", decoded.hex);
-        if (inputImport) inputImport.value = "";
-        await this.updateProfileUi();
-        if (wrapperNsec) wrapperNsec.style.display = "none";
-        if (inputNsec) inputNsec.value = "";
-        if (btnRevealNsec) btnRevealNsec.textContent = "Reveal Private Key";
-        alert("Identity switched successfully!");
-      } catch (err: any) {
-        alert(`Failed to import key: ${err.message || String(err)}`);
-      }
-    });
-
-    btnGenerate?.addEventListener("click", async () => {
-      if (!window.confirm("Generate fresh Nostr keypair?")) return;
-      const freshHex = WebCryptoKeystore.generatePrivateKey();
-      this.kernel.switchPrivateKey(freshHex);
-      localStorage.setItem("omni_privkey", freshHex);
-      await this.updateProfileUi();
-      if (wrapperNsec) wrapperNsec.style.display = "none";
-      if (inputNsec) inputNsec.value = "";
-      if (btnRevealNsec) btnRevealNsec.textContent = "Reveal Private Key";
-      alert("New Nostr keypair generated!");
-    });
   }
 
   private wireRelaysManager(): void {
-    const inputAdd = document.getElementById("input-add-relay") as HTMLInputElement | null;
-    const btnAdd = document.getElementById("btn-add-relay");
-    btnAdd?.addEventListener("click", () => {
-      let url = inputAdd?.value.trim();
-      if (!url) return;
-      if (!url.startsWith("wss://") && !url.startsWith("ws://")) {
-        url = `wss://${url}`;
-      }
-      this.kernel.relayPool.addRelay(url);
-      if (inputAdd) inputAdd.value = "";
-      this.renderSettingsRelays();
-    });
-
-    document.querySelectorAll(".relay-preset-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const url = btn.getAttribute("data-url");
-        if (url) {
-          this.kernel.relayPool.addRelay(url);
-          this.renderSettingsRelays();
-        }
-      });
-    });
+    // Relays management is handled by the standalone @omni/plugin-relays plugin
   }
 
 

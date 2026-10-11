@@ -151,6 +151,12 @@ if (typeof omni !== "undefined" && typeof (omni as any).registerComponent === "f
   (omni as any).registerComponent("relays-widget", ({ root }: any) => {
     mountRelays(root);
   });
+  (omni as any).registerComponent("relays-main", ({ root }: any) => {
+    mountRelays(root);
+  });
+  (omni as any).registerComponent("relays-settings", ({ root }: any) => {
+    mountRelays(root);
+  });
   (omni as any).registerComponent("org.omni.nsite.relays-main", ({ root }: any) => {
     mountRelays(root);
   });

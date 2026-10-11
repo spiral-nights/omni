@@ -703,5 +703,127 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(statusText?.textContent).toContain("Synced with Nostr relays");
     });
   });
+
+  describe("Pluggable Settings & Dedicated Per-Plugin Tabs Architecture", () => {
+    it("renders a dedicated tab in Settings navigation for each installed plugin", () => {
+      const nav = root.querySelector("#settings-nav");
+      expect(nav).toBeTruthy();
+
+      // System tab for Workspace
+      expect(nav?.querySelector("#settings-tab-btn-plugins")).toBeTruthy();
+
+      // Dedicated tab buttons for each installed plugin
+      expect(nav?.querySelector("#settings-tab-btn-org-omni-plugin-feed")).toBeTruthy();
+      expect(nav?.querySelector("#settings-tab-btn-org-omni-plugin-timer")).toBeTruthy();
+
+      // Dedicated panes for each installed plugin
+      const content = root.querySelector("#settings-content");
+      expect(content?.querySelector("#settings-pane-plugins")).toBeTruthy();
+      expect(content?.querySelector("#settings-pane-org-omni-plugin-feed")).toBeTruthy();
+      expect(content?.querySelector("#settings-pane-org-omni-plugin-timer")).toBeTruthy();
+    });
+
+    it("supports pluggable Profile and Relay managers with their own tabs and panes", async () => {
+      // Add pluggable Profile and Relay plugins
+      shell.installedPlugins.push(
+        {
+          id: "org.omni.plugin.relays",
+          name: "Connected Relays",
+          icon: "relays",
+          viewport: "sidebar",
+          scriptContent: "console.log('relays');",
+          sourceUrl: "local:@omni/plugin-relays",
+          enabled: true,
+          views: [
+            { id: "main", title: "Relay Pool", path: "" },
+            { id: "settings", title: "Relay Settings", path: "?view=settings" }
+          ]
+        },
+        {
+          id: "org.omni.plugin.profile",
+          name: "Profile & Keys",
+          icon: "profile",
+          viewport: "sidebar",
+          scriptContent: "console.log('profile');",
+          sourceUrl: "local:@omni/plugin-profile",
+          enabled: true,
+          views: [
+            { id: "main", title: "Profile", path: "" },
+            { id: "settings", title: "Profile Settings", path: "?view=settings" }
+          ]
+        }
+      );
+
+      shell.renderSettingsNavAndPanes();
+
+      const nav = root.querySelector("#settings-nav");
+      const relaysBtn = nav?.querySelector("#settings-tab-btn-relays");
+      const profileBtn = nav?.querySelector("#settings-tab-btn-profile");
+      expect(relaysBtn).toBeTruthy();
+      expect(profileBtn).toBeTruthy();
+
+      // Open Relays Settings tab
+      shell.openSettings("relays");
+      const relaysPane = root.querySelector("#settings-pane-relays");
+      expect(relaysPane?.classList.contains("active")).toBe(true);
+      expect(relaysBtn?.classList.contains("active")).toBe(true);
+
+      // Open Profile Settings tab
+      shell.openSettings("profile");
+      const profilePane = root.querySelector("#settings-pane-profile");
+      expect(profilePane?.classList.contains("active")).toBe(true);
+      expect(profileBtn?.classList.contains("active")).toBe(true);
+      expect(relaysPane?.classList.contains("active")).toBe(false);
+
+      shell.closeSettings();
+    });
+
+    it("auto-mounts settings view when a plugin's tab is selected and unmounts on modal close", async () => {
+      // Add a plugin with custom settings view
+      shell.installedPlugins.push({
+        id: "org.omni.test.timer2",
+        name: "Timer App 2",
+        viewport: "sidebar",
+        scriptContent: "console.log('timer2');",
+        sourceUrl: "local:@omni/timer2",
+        enabled: true,
+        views: [
+          { id: "main", title: "Main", path: "" },
+          { id: "settings", title: "Preferences", path: "?view=settings" }
+        ]
+      });
+
+      shell.renderSettingsNavAndPanes();
+
+      // Open settings for this plugin
+      shell.openSettings("org.omni.test.timer2");
+
+      const pane = root.querySelector("#settings-pane-org-omni-test-timer2") as HTMLElement;
+      expect(pane).toBeTruthy();
+      expect(pane.classList.contains("active")).toBe(true);
+
+      const mountContainer = pane.querySelector(".plugin-settings-mount-container") as HTMLElement;
+      expect(mountContainer).toBeTruthy();
+
+      // Wait for async mount
+      await new Promise((r) => setTimeout(r, 60));
+      expect(kernel.getPluginSettingsSandbox("org.omni.test.timer2")).toBeTruthy();
+
+      // Close settings modal -> destroys mounted settings sandbox
+      shell.closeSettings();
+      expect(kernel.getPluginSettingsSandbox("org.omni.test.timer2")).toBeUndefined();
+    });
+
+    it("dynamically cleans up tabs and panes when a plugin is uninstalled", () => {
+      expect(root.querySelector("#settings-tab-btn-org-omni-plugin-timer")).toBeTruthy();
+      expect(root.querySelector("#settings-pane-org-omni-plugin-timer")).toBeTruthy();
+
+      shell.uninstallPlugin("org.omni.plugin.timer");
+
+      expect(root.querySelector("#settings-tab-btn-org-omni-plugin-timer")).toBeNull();
+      expect(root.querySelector("#settings-pane-org-omni-plugin-timer")).toBeNull();
+    });
+  });
 });
+
 

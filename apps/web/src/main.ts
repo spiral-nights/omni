@@ -66,7 +66,8 @@ const initialPlugins: InstalledPluginEntry[] = [
     viewport: "sidebar",
     views: [
       { id: "main", title: "Relay Pool Manager", path: "" },
-      { id: "widget", title: "Relay Status Pill", path: "?view=widget" }
+      { id: "widget", title: "Relay Status Pill", path: "?view=widget" },
+      { id: "settings", title: "Relay Settings", path: "?view=settings" }
     ],
     scriptContent: relaysScript,
     sourceUrl: "local:@omni/plugin-relays",
@@ -80,7 +81,8 @@ const initialPlugins: InstalledPluginEntry[] = [
     viewport: "sidebar",
     views: [
       { id: "main", title: "Profile & Keys Editor", path: "" },
-      { id: "widget", title: "User Badge Pill", path: "?view=widget" }
+      { id: "widget", title: "User Badge Pill", path: "?view=widget" },
+      { id: "settings", title: "Profile Settings", path: "?view=settings" }
     ],
     scriptContent: profileScript,
     sourceUrl: "local:@omni/plugin-profile",
