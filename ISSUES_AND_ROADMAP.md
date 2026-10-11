@@ -5,13 +5,13 @@
 
 ---
 
-## 1. Active Focus: Transparent nsites, Zero Manifests, & Microkernel Shell
+## 1. Phase 1: Transparent nsites, Zero Manifests, & Pluggable Shell [COMPLETED]
 
-The primary objective is transitioning Omni from requiring proprietary SDKs and manifests into a **universal micro-frontend runtime for 100% standard Nostr sites (nsites)** with a pluggable microkernel shell.
+The primary objective was transitioning Omni from requiring proprietary SDKs and manifests into a **universal micro-frontend runtime for 100% standard Nostr sites (nsites)** with a pluggable microkernel shell.
 
 ```
 +---------------------------------------------------------------------------------------+
- phase 1: transparent nsites & microkernel shell (active)                               |
+ phase 1: transparent nsites & microkernel shell (all milestones completed)             |
 +---------------------------------------------------------------------------------------+
 |  [MILESTONE 1]  [COMPLETED] Transparent APIs: Virtual WebSocket & NIP-07 Shim         |
 |  [MILESTONE 2]  [COMPLETED] Subscription Namespacing & Cache Isolation                |
@@ -19,6 +19,7 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
 |  [MILESTONE 4]  [COMPLETED] Decouple Shell UI into @omni/plugin-shell                 |
 |  [MILESTONE 5]  [COMPLETED] User-Defined Viewports (Decoupling "Slots")                |
 |  [MILESTONE 6]  [COMPLETED] Transparent Cross-App Intents (NIP-21, NIP-89, Web Share) |
+|  [MILESTONE 7]  [COMPLETED] Decentralized Workspace Sync (NIP-78 kind 30078)          |
 +---------------------------------------------------------------------------------------+
 ```
 
@@ -81,30 +82,39 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
   4. **Web Share API (`navigator.share`):** [Done] Shimmed `navigator.share()` inside sandboxes to dispatch `kernel.handleShare`, routing shared notes/links seamlessly into the shell timeline composer.
 * **Priority:** High / P1
 
+### ~~Milestone 7: Decentralized Workspace Sync (NIP-78)~~ [COMPLETED]
+* **Goal:** Persist and synchronize user viewport configurations, active page, and plugin states across devices via Nostr.
+* **Status:** Complete (Implemented `kind: 30078` parameterized replaceable event with `["d", "omni/workspace/v1"]`, 0ms local storage persistence fallback, debounced background publishing, and cloud restore buttons in Plugins Settings).
+* **Scope:**
+  1. **Schema & Types:** [Done] Defined `OmniWorkspaceState` in `@omni/types` capturing plugin IDs, viewport assignments, and enabled states.
+  2. **Core Kernel Methods:** [Done] Implemented `publishWorkspaceState`, `getWorkspaceState`, and `fetchRemoteWorkspaceState` with local `LocalEventStore` caching.
+  3. **Shell Cloud Sync Engine:** [Done] Added real-time sync status banner, "Sync to Nostr" / "Restore from Relays" controls, and auto-sync debouncing.
+* **Priority:** High / P1
+
 ---
 
-## 2. Upcoming Backlog: Advanced Protocol & Client Capabilities
+## 2. Phase 2: Advanced Protocol & Client Capabilities [UPCOMING]
 
 ```
 +---------------------------------------------------------------------------------------+
  phase 2: advanced nostr protocol & client capabilities                                 |
 +---------------------------------------------------------------------------------------+
-|  [MILESTONE 7]  Multi-Tier Signers: NIP-46 Remote Bunker & Hardware Keys              |
-|  [MILESTONE 8]  NIP-65 Gossip / Outbox Relay Routing                                  |
-|  [MILESTONE 9]  Multi-Account Management & Passphrase Encryption                      |
-|  [MILESTONE 10] NIP-44 End-to-End Encrypted Messaging                                 |
-|  [MILESTONE 11] Headless Web Worker Sandbox Mode                                      |
+|  [MILESTONE 8]  Multi-Tier Signers: NIP-46 Remote Bunker & Hardware Keys              |
+|  [MILESTONE 9]  NIP-65 Gossip / Outbox Relay Routing                                  |
+|  [MILESTONE 10] Multi-Account Management & Passphrase Encryption                      |
+|  [MILESTONE 11] NIP-44 End-to-End Encrypted Messaging                                 |
+|  [MILESTONE 12] Headless Web Worker Sandbox Mode                                      |
 +---------------------------------------------------------------------------------------+
 ```
 
-### Milestone 7: Multi-Tier Signers (NIP-46 Remote Bunker)
+### Milestone 8: Multi-Tier Signers (NIP-46 Remote Bunker)
 * **Goal:** Allow users to use remote bunker keys or hardware signers, keeping private keys completely off the web device.
 * **Scope:**
   1. **NIP-46 Remote Bunker Client:** Connect to Amber, nsecBunker, or Nostr Connect over encrypted relays.
   2. **NIP-07 Browser Extension Passthrough:** Seamless fallback to installed browser extensions (Alby, nos2x) when detected.
 * **Priority:** Medium / P2
 
-### Milestone 8: NIP-65 Gossip / Outbox Relay Routing
+### Milestone 9: NIP-65 Gossip / Outbox Relay Routing
 * **Goal:** Dynamic, decentralized note delivery without relying on a static bootstrap relay list.
 * **Scope:**
   1. Query Kind 10002 relay list metadata for authors in the user's timeline.
@@ -112,7 +122,7 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
   3. Publish the user's own NIP-65 relay list event when relays are added/removed in Settings.
 * **Priority:** Medium / P2
 
-### Milestone 9: Multi-Account Management & Passphrase Encryption
+### Milestone 10: Multi-Account Management & Passphrase Encryption
 * **Goal:** Multiple Nostr identities and local key encryption at rest.
 * **Scope:**
   1. Encrypt stored `nsec` with AES-256-GCM using a PBKDF2-derived passphrase or WebAuthn PRF.
@@ -120,14 +130,14 @@ The primary objective is transitioning Omni from requiring proprietary SDKs and 
   3. Per-account scoped local cache and layout preferences.
 * **Priority:** Medium / P2
 
-### Milestone 10: NIP-44 End-to-End Encrypted Messaging
+### Milestone 11: NIP-44 End-to-End Encrypted Messaging
 * **Goal:** Private communications in Omni using the modern NIP-44 standard.
 * **Scope:**
   1. Implement conversation key exchange and NIP-44 message encryption/decryption.
   2. Enforce host ACL prompts before plugins can access encrypted conversation streams.
 * **Priority:** Medium / P2
 
-### Milestone 11: Headless Web Worker Sandbox Mode
+### Milestone 12: Headless Web Worker Sandbox Mode
 * **Goal:** Background headless execution for non-UI services (indexing, sync, notifications).
 * **Scope:**
   1. Add Web Worker execution backend to `SandboxInstance` using `@remote-dom/core/polyfill`.

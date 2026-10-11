@@ -1,8 +1,8 @@
 # Omni
 
-> **A modular, extensible Nostr web application and runtime engine featuring a native default client, multi-widget plugins, and secure Remote DOM UI projection.**
+> **An extensible, local-first Nostr web client and sandboxed micro-frontend runtime for 100% standard Nostr sites (nsites).**
 
-Omni combines a **high-performance, native Nostr web client** (complete with a default timeline feed, note composer, identity management, and theme engine) with a **sandboxed micro-frontend runtime**. Plugins can seamlessly contribute multiple UI components—ranging from dock icons and sidebar widgets to full-page views and custom cards—without the performance penalties, layout clipping, and styling mismatches of nested iframes.
+Omni combines a **high-performance, local-first Nostr web client** with a **sandboxed micro-frontend runtime**. Every client domain (feed, relays, profile, tasks, timer, and the shell itself) is a standalone plugin. Third-party applications and companion widgets execute as **100% standard web apps (nsites)** inside isolated sandboxes, projecting directly into the native host DOM via Remote DOM without nested iframes, custom SDKs, or proprietary manifests.
 
 ---
 
@@ -10,167 +10,136 @@ Omni combines a **high-performance, native Nostr web client** (complete with a d
 
 | Subsystem | Architectural Approach | Key Technologies |
 | :--- | :--- | :--- |
-| **Default Client & Web App** | Mobile-First Native Web App | Fast timeline feed, note composer, "Warm Paper Dark" design tokens |
-| **UI Projection** | Remote DOM (Zero Iframe Traps) | Shopify `@remote-dom/core`, native host element rendering, theme token inheritance |
-| **Component Types** | Multi-Widget Contribution System | `icon` (dock/bar), `sidebar` (panel/tool), `main` (full view), `widget` (custom slot) |
-| **Sandboxing** | Zero-Trust Isolated Sandbox | Sandboxed `iframe` / Web Worker, strict CSP (`connect-src 'none'`), `MessageChannel` |
-| **IPC & Communication** | Dual-Channel IPC Architecture | Dedicated Remote DOM mutation port + typed JSON-RPC 2.0 kernel bus |
-| **Nostr Storage & Relay** | Local-First + Gossip Outbox | IndexedDB Event Store (0ms cache reads), NIP-65 Outbox Routing, Filter Multiplexer |
-| **Inter-App Comm** | Tri-Modal Intent Broker | Unicast RPC, Native Remote DOM UI Sheets/Modals, Pub/Sub Broadcasts |
-| **Key Custody** | Multi-Tier Signer Provider | WebCrypto (PBKDF2/AES-GCM), NIP-07 browser extension, NIP-46 Remote Bunker |
-| **Plugin Distribution** | Decentralized Manifests | Declarative `omni.manifest.json`, NIP-89 App Manifests, Blossom/IPFS |
+| **Shell UI & Navigation** | Decoupled Shell Plugin | `@omni/plugin-shell` with dynamic page router and Warm Paper Dark tokens |
+| **Host Bootloader** | Minimal Microkernel (~30 lines) | `apps/web` boots `OmniKernel` and passes container root to shell |
+| **App Model** | Pure Standalone nsites (Zero Manifests) | Standard HTML/JS apps mounting to `document.body` or `#root` |
+| **UI Projection** | Remote DOM (Zero Iframe Traps) | Shopify `@remote-dom/core` on dedicated mutation channel (Port 1) |
+| **User Viewports** | User-Configured Layout Containers | Full-Page App (`main`), Dock Shortcut (`dock`), Widget Card (`sidebar`), Header Action |
+| **Workspace Sync** | Decentralized NIP-78 Sync | `kind: 30078`, `omni/workspace/v1` with 0ms local fallback & relay sync |
+| **Nostr Networking** | Transparent Virtual WebSocket | Virtual `window.WebSocket` multiplexed to `RelayPool` with subscription namespacing |
+| **Signer & Identity** | Standard NIP-07 Virtualization | `window.nostr` backed by host keystore (secp256k1 Schnorr) & ACL engine |
+| **Storage & Cache** | Local-First 0ms Store + Partitioning | IndexedDB `omni_event_store` (0ms hits) + partitioned guest storage |
+| **Cross-App Intents** | Open Web & Nostr Protocol Standards | NIP-21 URIs (`nostr:`, `lightning:`, `cashu:`), NIP-89 Handlers, Web Share |
+| **App Distribution** | Decentralized NIP-5A & Blossom | Parameterized events (`kind: 35129`), NIP-19 `naddr` resolution, Blossom SHA-256 |
 
 ---
 
 ## Architectural Highlights
 
 ```
-+---------------------------------------------------------------------------------------------------+
-|                                        OMNI WEB APPLICATION                                       |
-|                                                                                                   |
-|  +---------------------------------------------------------------------------------------------+  |
-|  |  Native Default UI Shell                                                                    |  |
-|  |  - Header / Navigation Bar (Profile, Relay Status, Theme Toggle)                            |  |
-|  |  - Primary Timeline Feed (0ms IndexedDB Cached Notes + Live WebSocket Streaming)            |  |
-|  |  - Note Composer (Draft, Sign, Broadcast)                                                  |  |
-|  |  - Layout Slots:                                                                            |  |
-|  |     [Slot: 'dock']               [Slot: 'sidebar']               [Slot: 'main']             |  |
-|  +---------------------------------------------------------------------------------------------+  |
-|               |                             |                               |                     |
-|               v                             v                               v                     |
-|  +---------------------------------------------------------------------------------------------+  |
-|  |  Host Remote DOM Engine (Shopify @remote-dom/core)                                          |  |
-|  |  - Attaches RemoteReceiver to native host layout slots                                      |  |
-|  |  - Renders guest components using Host's native design tokens & UI custom elements          |  |
-|  |  - Zero iframe styling boundaries, zero scrollbar traps, natural responsive sizing          |  |
-|  +---------------------------------------------------------------------------------------------+  |
-+---------------------------------------------------------------------------------------------------+
-                                                  |
-                                  MessageChannel / postMessage
-                        (Port 1: Remote DOM Tree  |  Port 2: Kernel JSON-RPC)
-                                                  |
-+---------------------------------------------------------------------------------------------------+
-|                           SANDBOXED PLUGIN RUNTIME (iframe / Web Worker)                          |
-|                                                                                                   |
-|  - Strict isolation: sandbox="allow-scripts", CSP: connect-src 'none'                            |
-|  - Zero direct network or raw key access; all I/O is capability-governed                          |
-|  - Renders UI via Shopify Remote DOM (RemoteRoot -> serialized mutations)                         |
-|  - Exports declared components: icon, sidebar, main, and custom widgets                           |
-|  - Host injects standard window.nostr (NIP-07) and window.omni bridge (zero bundle bloat)
-|  - Plugins bundle zero runtime framework code (only @omni/types in devDependencies)                    |
-+---------------------------------------------------------------------------------------------------+
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                   OMNI WEB APPLICATION                                 │
+│                                                                                        │
+│  apps/web/src/main.ts (Host Microkernel Bootloader)                                    │
+│  ├── OmniKernel (Keystore, RelayPool, LocalEventStore, AclEngine)                      │
+│  └── Mounts @omni/plugin-shell into <div id="omni-root">                               │
+│                                                                                        │
+│  @omni/plugin-shell (First-Class UI Frame Plugin)                                      │
+│  ├── Top Header (Identity badge, NIP-05 / npub, cloud sync status)                     │
+│  ├── Navigation Dock (Adaptive: left sidebar on desktop, bottom bar on mobile)         │
+│  ├── Page Router (Center pages for full-page apps + multi-column Widgets Dashboard)    │
+│  └── Settings Modal (Profile & keys custody, live relay manager, plugins & viewports)  │
+└───────────────────────────────────────────┬────────────────────────────────────────────┘
+                                            │ Container Elements
+                                            ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                             Shopify Remote DOM Host Layer                              │
+│  • Projects guest element trees directly into native host container slots              │
+│  • Full inheritance of host CSS variables and Warm Paper Dark design tokens            │
+│  • Zero nested iframe scrolling traps, clipped popovers, or theme mismatches           │
+└───────────────────────────────────────────▲────────────────────────────────────────────┘
+                                            │ MessageChannel (Port 1: Remote DOM mutations)
+                                            │ MessageChannel (Port 2: Kernel JSON-RPC 2.0)
+┌───────────────────────────────────────────┴────────────────────────────────────────────┘
+│                          SANDBOXED NSITE GUEST RUNTIME (iframe)                        │
+│                                                                                        │
+│  - Standard Web & Nostr Application: React, Svelte, or Vanilla JS                      │
+│  - Strict Sandbox Isolation: sandbox="allow-scripts", CSP: connect-src 'none'          │
+│  - Virtual window.WebSocket: Standard relay frames (REQ, EVENT) routed via host        │
+│  - Standard window.nostr: NIP-07 signer backed by host keystore & ACL checks           │
+│  - Auto DOM Mirroring: document.body mutations stream automatically to host container  │
+│  - Scoped Storage: localStorage and IndexedDB isolated per pluginId                    │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Architecture Documentation
+## Consolidated Architecture Documentation
 
-Detailed specifications and architectural deep-dives are documented under the [`docs/`](docs/) directory:
+Comprehensive architecture guides and specifications are consolidated in the [`docs/`](docs/) directory:
 
-1. **[01. System Overview & Philosophy](docs/01-system-overview.md)**
-   * High-level architectural paradigm: Native Web Client + Sandboxed Extension Runtime.
-   * Remote DOM vs. Traditional Iframes.
-   * Core design principles and zero-trust philosophy.
+1. **[01. System Architecture & Core Runtime](docs/01-architecture.md)**
+   * System philosophy, package structure, and microkernel bootloader.
+   * Decoupled shell plugin (`@omni/plugin-shell`) and page-centric navigation.
+   * Dual-channel sandboxing & Remote DOM execution invariants.
+   * Transparent API virtualization (Virtual `window.WebSocket`, `window.nostr`, DOM auto-mount).
+   * Subscription namespacing and ACL-governed cache isolation.
 
-2. **[02. Host Core & Kernel Architecture](docs/02-host-core-and-kernel.md)**
-   * Omni Host runtime lifecycle and state machine.
-   * Capability Manager and Access Control List (ACL) engine.
-   * Session initialization, permission grant lifecycles, and system buses.
+2. **[02. Nostr Protocols, Storage & Decentralized Distribution](docs/02-protocols-and-storage.md)**
+   * Local-first 0ms IndexedDB event cache (`LocalEventStore`) + multiplexed `RelayPool`.
+   * NIP-78 Workspace Layout Sync (`kind: 30078`, `omni/workspace/v1`).
+   * Decentralized distribution via NIP-5A (`kind: 35129`), NIP-19 `naddr`, and Blossom.
+   * Transparent cross-app intents (NIP-21 URIs, NIP-89 App Handlers, "Open With..." chooser).
+   * Key custody and security model (`WebCryptoKeystore`, secp256k1 Schnorr, `CapabilityStore`).
 
-3. **[03. Sandbox & IPC Specification](docs/03-sandbox-and-ipc-spec.md)**
-   * Execution boundaries: Sandboxed `<iframe>` and Web Workers.
-   * Dual-channel architecture: Remote DOM port + Kernel JSON-RPC 2.0 port.
-   * Request/response envelopes, error codes, and event streaming.
-
-4. **[04. Layout & Remote DOM Engine](docs/04-layout-and-widget-engine.md)**
-   * Native layout slots: `dock`, `sidebar`, `main`, and custom widget slots.
-   * How Shopify Remote DOM projects guest components into native host DOM.
-   * Eliminating iframe resizing hacks, scroll traps, and modal clipping.
-
-5. **[05. Nostr Relay & Local Cache Layer](docs/05-nostr-relay-and-cache-layer.md)**
-   * Local-first embedded IndexedDB event store (0ms cache hits).
-   * Outbox / Gossip Model (NIP-65) dynamic relay routing.
-   * Subscription multiplexing, filter deduplication, and delta streaming.
-
-6. **[06. Intent Protocol Specification](docs/06-intent-protocol-spec.md)**
-   * Tri-modal Intent Broker (Direct RPC, Native Remote DOM UI Sheets, Pub/Sub Broadcasts).
-   * Intent resolution, action routing, and NIP-89 fallback discovery.
-
-7. **[07. Key Management & Security Model](docs/07-key-and-security-model.md)**
-   * Multi-tier Signer Provider: Local WebCrypto `nsec`, NIP-07 browser extensions, and NIP-46 Remote Bunker.
-   * Granular ACLs for event signing, NIP-04/44 encryption, and local storage quotas.
-
-8. **[08. Plugin Developer Guide & Manifest Spec](docs/08-plugin-developer-guide.md)**
-   * Declarative `omni.manifest.json` schema and multi-component declarations.
-   * Host-injected runtime (`window.omni` & `window.nostr`), `@omni/types`, and Remote DOM.
-   * Complete example plugin with dock icon, sidebar widget, and main view.
-
-9. **[09. Design System & Aesthetic Specification](docs/09-design-system-and-tokens.md)**
-   * Mobile-first responsive layout and bottom navigation dock.
-   * "Warm Paper Dark" aesthetic tokens (warm graphite `#191816`, parchment ivory `#ede8df`, sandstone `#d4a373`).
-   * Standard styling for host Remote DOM custom elements.
+3. **[03. Plugin & nsite Developer Guide](docs/03-plugin-developer-guide.md)**
+   * Writing standard web apps and widgets without proprietary SDKs or manifests.
+   * Standard APIs (`window.nostr`, `WebSocket`, `localStorage`, `indexedDB`, standard DOM).
+   * Multi-viewport responsive styling using CSS Container Queries (`@container`).
+   * Publishing standalone companion widgets with distinct `naddr` addresses.
+   * "Warm Paper Dark" design tokens and strict geometric monochrome line iconography.
 
 ---
 
-## Getting Started & Running Omni
+## Developer Quickstart
 
 ### 1. Prerequisites
 - **Node.js** >= 20.0.0
-- **pnpm** >= 9.0.0 (or pnpm 12)
+- **pnpm** >= 9.0.0
 
-### 2. Install Dependencies
+### 2. Install & Build Monorepo
 ```bash
 pnpm install
+pnpm -r run build
 ```
 
-### 3. Build Packages
-Build all monorepo packages (`@omni/types`, `@omni/core`, plugins, and `@omni/web`):
-```bash
-pnpm build
-```
-
-### 4. Run Automated Test Suite
-Run the unit and integration tests across crypto, 0ms IndexedDB event storage, ACL capability engine, and standard HTML Remote DOM projection:
+### 3. Run Test Suite
+Omni includes 59 automated unit and integration tests across crypto, 0ms IndexedDB storage, ACL engine, NIP-78 workspace sync, NIP-5A resolver, and Remote DOM:
 ```bash
 pnpm test
 ```
 
-### 5. Launch Development Server
-Start the local Omni web application:
+### 4. Start Local Development Server
 ```bash
-pnpm dev
+pnpm -C apps/web dev
 ```
-Open **[http://localhost:3000](http://localhost:3000)** in your browser (or use mobile device emulation in browser dev tools for the mobile experience).
-
-### 6. Or Run Production Preview
-```bash
-pnpm --filter @omni/web preview
-```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
 ---
 
-## Exploring the MVP
+## Exploring Omni
 
-When you open **http://localhost:3000**:
-1. **0ms Cached Feed & Schnorr Signing:**
-   - On first load, Omni generates a guest Schnorr keypair via Noble secp256k1 and displays your `npub...` in the header. Click the pill to copy your public key.
-   - Type a message in the note composer and click **Publish Note** (or press `Cmd+Enter` / `Ctrl+Enter`). Your note is signed in WebCrypto, stored in local IndexedDB (0ms query), and published to connected relays.
-2. **Mobile Dock & Widgets Drawer:**
-   - Notice the dock icons for the two MVP plugins at the bottom (or sidebar on desktop):
-     - **☑️ Daily Checklist:** Displays active task count badge.
-     - **⏱️ Focus Timer (Pomodoro):** Displays live countdown.
-   - Click the **📋 Widgets** button in the dock (or either dock icon) to pull up the slide-up drawer sheet.
-   - In the **Daily Tasks** widget: Add new tasks, toggle checkboxes, or delete items. State persists directly in the plugin's scoped IndexedDB storage.
-   - In the **Focus Timer** widget: Click **Start**, **Pause**, or **Reset** to control the timer. Watch the dock icon badge update dynamically.
-3. **Plugin Manager:**
-   - Click **🧩** in the header or **⚙️ Plugins** in the dock to open the sandboxed Plugin Manager.
-   - Inspect active permissions, verify sandbox isolation, and clear individual plugin storage databases.
+1. **0ms Cached Notes & Schnorr Publishing**:
+   - On first load, Omni initializes a guest Schnorr keypair via Noble secp256k1.
+   - Type a note in the composer and click **Publish Note**. The note is signed in WebCrypto, stored in local IndexedDB (0ms query), and broadcast to connected relays (`wss://relay.damus.io`, `wss://relay.ditto.pub`).
+2. **Multi-Page App Switching**:
+   - The navigation dock provides direct launcher links for all installed full-page applications (e.g. Feed).
+   - Switching pages swaps the center viewport cleanly and resets scroll position.
+3. **Widgets Dashboard**:
+   - Click the **Widgets** button in the navigation dock to open the multi-column tools dashboard containing active widgets (Focus Timer, Daily Checklist, Relay Inspector).
+4. **Installed Plugins & User Viewports**:
+   - Open **Settings (⚙️) -> Plugins**.
+   - Change any app's navigation viewport dynamically via the dropdown (Full-Page App, Navigation Dock Shortcut, Workspace Widget, or Header Quick Action).
+   - Notice how the layout instantly adapts.
+5. **NIP-78 Workspace Cloud Sync**:
+   - View your workspace synchronization status at the top of the Plugins manager.
+   - Click **Sync to Nostr** to publish your layout state to relays (`kind: 30078`, `omni/workspace/v1`), or click **Restore** to retrieve it on a new device.
 
 ---
 
-## Issues & Roadmap
+## Active Roadmap
 
-For active tracked issues, UX enhancements, and feature roadmaps (including custom slot layouts, relay management, profile view, and refined iconography), see **[ISSUES_AND_ROADMAP.md](ISSUES_AND_ROADMAP.md)**.
+For active tracked issues and future roadmap items (NIP-46 Remote Bunker, NIP-65 Outbox routing, PWA offline caching), see **[ISSUES_AND_ROADMAP.md](ISSUES_AND_ROADMAP.md)**.
 
 ---
 
