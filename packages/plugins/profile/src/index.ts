@@ -1,11 +1,31 @@
 /// <reference types="@omni/types" />
 
+function getCurrentView(): string {
+  if (typeof omni !== "undefined" && (omni as any).session?.viewId) {
+    return (omni as any).session.viewId;
+  }
+  const route =
+    (typeof window !== "undefined" && (window as any).__OMNI_ROUTE__) ||
+    (typeof omni !== "undefined" && (omni as any).session?.route) ||
+    (typeof window !== "undefined" && window.location?.search) ||
+    (typeof window !== "undefined" && window.location?.hash?.replace("#", "?")) ||
+    "";
+  if (route) {
+    try {
+      const q = route.includes("?") ? route.slice(route.indexOf("?")) : `?${route.replace(/^#/, "")}`;
+      const params = new URLSearchParams(q);
+      const v = params.get("view");
+      if (v) return v;
+    } catch (_) {}
+  }
+  return "main";
+}
+
 async function mountProfile(root: any) {
   const isRemote = typeof root.createElement === "function";
   const createElement = (tag: string) => (isRemote ? root.createElement(tag) : document.createElement(tag));
 
-  const urlParams = typeof window !== "undefined" && window.location ? new URLSearchParams(window.location.search) : new URLSearchParams();
-  const currentView = urlParams.get("view") || "main";
+  const currentView = getCurrentView();
 
   // Widget compact view
   if (currentView === "widget" || currentView === "pill" || currentView === "badge") {
@@ -27,37 +47,44 @@ async function mountProfileWidget(root: any, createElement: (tag: string) => any
   header.appendChild(title);
   card.appendChild(header);
 
-  let pubkey = "";
-  let npub = "";
-  let profileData: any = null;
-
-  try {
-    if (typeof omni !== "undefined" && omni.nostr) {
-      pubkey = await omni.nostr.getPublicKey();
-    }
-    if (typeof omni !== "undefined" && omni.auth) {
-      npub = await omni.auth.getNpub();
-    }
-    if (typeof omni !== "undefined" && omni.profile && pubkey) {
-      profileData = await omni.profile.get(pubkey);
-    }
-  } catch {}
-
   const infoRow = createElement("div");
   infoRow.setAttribute("style", "display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-size: 0.82rem;");
 
   const nameEl = createElement("div");
-  const displayName = profileData?.display_name || profileData?.name || "Anonymous Nostr User";
-  nameEl.innerHTML = `<strong>${displayName}</strong>`;
+  const strongEl = createElement("strong");
+  strongEl.textContent = "Loading identity...";
+  nameEl.appendChild(strongEl);
 
   const npubEl = createElement("div");
   npubEl.setAttribute("style", "font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted); word-break: break-all;");
-  npubEl.textContent = npub ? `${npub.slice(0, 12)}...${npub.slice(-8)}` : "No Key Loaded";
+  npubEl.textContent = "...";
 
   infoRow.appendChild(nameEl);
   infoRow.appendChild(npubEl);
   card.appendChild(infoRow);
   root.appendChild(card);
+
+  (async () => {
+    try {
+      let pubkey = "";
+      let npub = "";
+      let profileData: any = null;
+
+      if (typeof omni !== "undefined" && omni.nostr) {
+        pubkey = await omni.nostr.getPublicKey();
+      }
+      if (typeof omni !== "undefined" && omni.auth) {
+        npub = await omni.auth.getNpub();
+      }
+      if (typeof omni !== "undefined" && omni.profile && pubkey) {
+        profileData = await omni.profile.get(pubkey);
+      }
+
+      const displayName = profileData?.display_name || profileData?.name || (npub ? "Nostr User" : "Anonymous Nostr User");
+      strongEl.textContent = displayName;
+      npubEl.textContent = npub ? `${npub.slice(0, 12)}...${npub.slice(-8)}` : "No Key Loaded";
+    } catch (_) {}
+  })();
 }
 
 async function mountProfileFull(root: any, createElement: (tag: string) => any) {
@@ -84,22 +111,6 @@ async function mountProfileFull(root: any, createElement: (tag: string) => any) 
   const paneProfile = createElement("div");
   paneProfile.setAttribute("style", "display: flex; flex-direction: column; gap: 12px;");
 
-  let pubkey = "";
-  let npub = "";
-  let profileData: any = null;
-
-  try {
-    if (typeof omni !== "undefined" && omni.nostr) {
-      pubkey = await omni.nostr.getPublicKey();
-    }
-    if (typeof omni !== "undefined" && omni.auth) {
-      npub = await omni.auth.getNpub();
-    }
-    if (typeof omni !== "undefined" && omni.profile && pubkey) {
-      profileData = await omni.profile.get(pubkey);
-    }
-  } catch {}
-
   // Preview header
   const previewBox = createElement("div");
   previewBox.setAttribute("style", "display: flex; align-items: center; gap: 12px; background: var(--omni-bg-surface); padding: 10px 14px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);");
@@ -110,9 +121,17 @@ async function mountProfileFull(root: any, createElement: (tag: string) => any) 
 
   const previewText = createElement("div");
   previewText.setAttribute("style", "display: flex; flex-direction: column; gap: 2px; overflow: hidden;");
-  const pName = profileData?.display_name || profileData?.name || "Active Identity";
-  previewText.innerHTML = `<span style="font-weight: 600; font-size: 0.9rem;">${pName}</span><span style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted); text-overflow: ellipsis; overflow: hidden;">${npub || "No npub"}</span>`;
 
+  const spanName = createElement("span");
+  spanName.setAttribute("style", "font-weight: 600; font-size: 0.9rem;");
+  spanName.textContent = "Active Identity";
+
+  const spanNpub = createElement("span");
+  spanNpub.setAttribute("style", "font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted); text-overflow: ellipsis; overflow: hidden;");
+  spanNpub.textContent = "Loading identity...";
+
+  previewText.appendChild(spanName);
+  previewText.appendChild(spanNpub);
   previewBox.appendChild(avatar);
   previewBox.appendChild(previewText);
   paneProfile.appendChild(previewBox);
@@ -134,8 +153,8 @@ async function mountProfileFull(root: any, createElement: (tag: string) => any) 
     return { wrap, inp };
   };
 
-  const rowDName = createInputRow("Display Name:", "e.g. Alice Smith", profileData?.display_name || "");
-  const rowName = createInputRow("Username / Handle:", "e.g. alice", profileData?.name || "");
+  const rowDName = createInputRow("Display Name:", "e.g. Alice Smith");
+  const rowName = createInputRow("Username / Handle:", "e.g. alice");
 
   const rowAboutWrap = createElement("label");
   rowAboutWrap.setAttribute("style", "font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;");
@@ -144,12 +163,11 @@ async function mountProfileFull(root: any, createElement: (tag: string) => any) 
   inpAbout.setAttribute("rows", "2");
   inpAbout.setAttribute("placeholder", "Tell the Nostr network about yourself...");
   inpAbout.setAttribute("style", "background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 7px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none; resize: vertical;");
-  if (profileData?.about) inpAbout.value = profileData.about;
   rowAboutWrap.appendChild(inpAbout);
 
-  const rowPic = createInputRow("Avatar URL:", "https://example.com/avatar.jpg", profileData?.picture || "");
-  const rowNip05 = createInputRow("NIP-05 Identifier:", "alice@domain.com", profileData?.nip05 || "");
-  const rowLud16 = createInputRow("Lightning Address (lud16):", "alice@getalby.com", profileData?.lud16 || "");
+  const rowPic = createInputRow("Avatar URL:", "https://example.com/avatar.jpg");
+  const rowNip05 = createInputRow("NIP-05 Identifier:", "alice@domain.com");
+  const rowLud16 = createInputRow("Lightning Address (lud16):", "alice@getalby.com");
 
   formBox.appendChild(rowDName.wrap);
   formBox.appendChild(rowName.wrap);
@@ -197,7 +215,7 @@ async function mountProfileFull(root: any, createElement: (tag: string) => any) 
   const paneKeys = createElement("div");
   paneKeys.setAttribute("style", "display: none; flex-direction: column; gap: 14px;");
 
-  const createKeyRow = (label: string, value: string) => {
+  const createKeyRow = (label: string, initialValue: string = "Loading...") => {
     const wrap = createElement("div");
     wrap.setAttribute("style", "display: flex; flex-direction: column; gap: 4px;");
     const lbl = createElement("span");
@@ -209,14 +227,14 @@ async function mountProfileFull(root: any, createElement: (tag: string) => any) 
     inp.setAttribute("type", "text");
     inp.setAttribute("readonly", "true");
     inp.setAttribute("style", "flex: 1; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-family: var(--omni-font-mono); font-size: 0.74rem; outline: none;");
-    inp.value = value;
+    inp.value = initialValue;
     const btn = createElement("button");
     btn.className = "btn-secondary";
     btn.setAttribute("style", "font-size: 0.72rem; padding: 4px 10px;");
     btn.textContent = "Copy";
     btn.addEventListener("click", () => {
-      if (typeof navigator !== "undefined" && navigator.clipboard) {
-        navigator.clipboard.writeText(value);
+      if (typeof navigator !== "undefined" && navigator.clipboard && inp.value) {
+        navigator.clipboard.writeText(inp.value);
         btn.textContent = "Copied!";
         setTimeout(() => (btn.textContent = "Copy"), 1200);
       }
@@ -225,11 +243,14 @@ async function mountProfileFull(root: any, createElement: (tag: string) => any) 
     row.appendChild(btn);
     wrap.appendChild(lbl);
     wrap.appendChild(row);
-    return wrap;
+    return { wrap, inp };
   };
 
-  paneKeys.appendChild(createKeyRow("Public Key (npub):", npub || "Not available"));
-  paneKeys.appendChild(createKeyRow("Public Key (Hex):", pubkey || "Not available"));
+  const rowNpub = createKeyRow("Public Key (npub):", "Loading...");
+  const rowPubkey = createKeyRow("Public Key (Hex):", "Loading...");
+
+  paneKeys.appendChild(rowNpub.wrap);
+  paneKeys.appendChild(rowPubkey.wrap);
 
   // Private Key (nsec) reveal section
   const nsecSection = createElement("div");
@@ -350,18 +371,66 @@ async function mountProfileFull(root: any, createElement: (tag: string) => any) 
   });
 
   root.appendChild(container);
+
+  // Fetch identity asynchronously without blocking UI render
+  (async () => {
+    try {
+      let pubkey = "";
+      let npub = "";
+      let profileData: any = null;
+
+      if (typeof omni !== "undefined" && omni.nostr) {
+        pubkey = await omni.nostr.getPublicKey();
+        if (pubkey) {
+          rowPubkey.inp.value = pubkey;
+        }
+      }
+      if (typeof omni !== "undefined" && omni.auth) {
+        npub = await omni.auth.getNpub();
+        if (npub) {
+          spanNpub.textContent = npub;
+          rowNpub.inp.value = npub;
+        }
+      }
+      if (typeof omni !== "undefined" && omni.profile && pubkey) {
+        profileData = await omni.profile.get(pubkey);
+        if (profileData) {
+          spanName.textContent = profileData.display_name || profileData.name || "Active Identity";
+          if (profileData.display_name) rowDName.inp.value = profileData.display_name;
+          if (profileData.name) rowName.inp.value = profileData.name;
+          if (profileData.about) inpAbout.value = profileData.about;
+          if (profileData.picture) rowPic.inp.value = profileData.picture;
+          if (profileData.nip05) rowNip05.inp.value = profileData.nip05;
+          if (profileData.lud16) rowLud16.inp.value = profileData.lud16;
+        }
+      }
+    } catch (_) {}
+  })();
+}
+
+let mounted = false;
+function initMount(root: any) {
+  if (mounted) return;
+  mounted = true;
+  mountProfile(root);
 }
 
 if (typeof omni !== "undefined" && typeof (omni as any).registerComponent === "function") {
   (omni as any).registerComponent("profile-main", ({ root }: any) => {
-    mountProfile(root);
+    initMount(root);
   });
   (omni as any).registerComponent("profile-badge", ({ root }: any) => {
-    mountProfile(root);
+    initMount(root);
+  });
+  (omni as any).registerComponent("profile-settings", ({ root }: any) => {
+    initMount(root);
+  });
+  (omni as any).registerComponent("org.omni.plugin.profile-settings", ({ root }: any) => {
+    initMount(root);
   });
   (omni as any).registerComponent("org.omni.nsite.profile-main", ({ root }: any) => {
-    mountProfile(root);
+    initMount(root);
   });
 } else if (typeof document !== "undefined") {
-  mountProfile(document.body);
+  initMount(document.body);
 }

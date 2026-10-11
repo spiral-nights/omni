@@ -78,7 +78,7 @@ const initialPlugins: InstalledPluginEntry[] = [
     name: "Profile & Keys",
     description: "Decentralized Nostr profile metadata and key custody.",
     icon: "profile",
-    viewport: "sidebar",
+    viewport: "main",
     views: [
       { id: "main", title: "Profile & Keys Editor", path: "" },
       { id: "widget", title: "User Badge Pill", path: "?view=widget" },

@@ -778,7 +778,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       shell.closeSettings();
     });
 
-    it("auto-mounts settings view when a plugin's tab is selected and unmounts on modal close", async () => {
+    it("mounts settings view when 'Open Settings' is clicked and unmounts on modal close", async () => {
       // Add a plugin with custom settings view
       shell.installedPlugins.push({
         id: "org.omni.test.timer2",
@@ -795,7 +795,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
       shell.renderSettingsNavAndPanes();
 
-      // Open settings for this plugin
+      // Open settings tab for this plugin
       shell.openSettings("org.omni.test.timer2");
 
       const pane = root.querySelector("#settings-pane-org-omni-test-timer2") as HTMLElement;
@@ -804,10 +804,20 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
       const mountContainer = pane.querySelector(".plugin-settings-mount-container") as HTMLElement;
       expect(mountContainer).toBeTruthy();
+      expect(mountContainer.style.display).toBe("none");
+
+      const toggleBtn = pane.querySelector(".btn-plugin-settings") as HTMLButtonElement;
+      expect(toggleBtn).toBeTruthy();
+      expect(toggleBtn.textContent).toBe("Open Settings");
+
+      // Click "Open Settings"
+      toggleBtn.click();
 
       // Wait for async mount
       await new Promise((r) => setTimeout(r, 60));
       expect(kernel.getPluginSettingsSandbox("org.omni.test.timer2")).toBeTruthy();
+      expect(toggleBtn.textContent).toBe("Close Settings");
+      expect(mountContainer.style.display).toBe("block");
 
       // Close settings modal -> destroys mounted settings sandbox
       shell.closeSettings();
@@ -850,7 +860,61 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       const mountContainer = pane?.querySelector(".plugin-settings-mount-container") as HTMLElement;
       expect(mountContainer.style.display).toBe("none");
     });
+
+    it("preserves empty placements array and allows unassigning plugin placements", async () => {
+      const plugin: InstalledPluginEntry = {
+        id: "org.omni.plugin.test.placement",
+        name: "Test Placement",
+        viewport: "main",
+        scriptContent: "console.log('placement test');",
+        sourceUrl: "local:@omni/test-placement",
+        enabled: true,
+        placements: []
+      };
+
+      const placements = shell.getPluginPlacements(plugin);
+      expect(placements).toEqual([]);
+    });
+
+    it("restores placements, route, and viewId in loadInitialWorkspace", () => {
+      const savedState = {
+        version: 1,
+        updatedAt: Date.now(),
+        activePage: "org.omni.plugin.feed",
+        autoSync: true,
+        plugins: [
+          {
+            id: "org.omni.plugin.feed",
+            viewport: "main",
+            enabled: true,
+            placements: [
+              {
+                id: "main-primary",
+                viewport: "main",
+                route: "?view=compact",
+                viewId: "compact",
+                enabled: true
+              }
+            ]
+          }
+        ]
+      };
+
+      window.localStorage.setItem(shell.LOCAL_WORKSPACE_KEY, JSON.stringify(savedState));
+
+      try {
+        const restored = shell.loadInitialWorkspace();
+        expect(restored).not.toBeNull();
+        const feedPlugin = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.feed");
+        expect(feedPlugin?.placements).toHaveLength(1);
+        expect(feedPlugin?.placements?.[0].route).toBe("?view=compact");
+        expect(feedPlugin?.placements?.[0].viewId).toBe("compact");
+      } finally {
+        window.localStorage.removeItem(shell.LOCAL_WORKSPACE_KEY);
+      }
+    });
   });
 });
+
 
 

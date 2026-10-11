@@ -145,7 +145,7 @@ export class OmniShell {
   }
 
   public getPluginPlacements(p: InstalledPluginEntry): PluginPlacement[] {
-    if (p.placements && p.placements.length > 0) {
+    if (Array.isArray(p.placements)) {
       return p.placements;
     }
     const vp = p.viewport || (p.manifest?.components?.[0]?.slot) || "main";
@@ -450,6 +450,11 @@ export class OmniShell {
             if (plugin) {
               if (item.viewport) plugin.viewport = item.viewport;
               if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
+              if (item.placements && Array.isArray(item.placements)) {
+                plugin.placements = item.placements;
+              }
+              if (item.route !== undefined) plugin.route = item.route;
+              if (item.viewId) plugin.viewId = item.viewId;
             }
           }
           if (typeof state.autoSync === "boolean") {
@@ -763,43 +768,6 @@ export class OmniShell {
       pane.style.display = isActive ? (pane.classList.contains("plugin-pane") ? "flex" : "block") : "none";
     });
 
-    // Auto-mount sandboxed settings if the target plugin declares a settings view
-    const targetPlugin = this.installedPlugins.find(
-      (p) => p.id === targetTab || (tab === "relays" && p.id === "org.omni.plugin.relays") || (tab === "profile" && p.id === "org.omni.plugin.profile")
-    );
-    if (targetPlugin) {
-      const synthManifest = this.ensurePluginManifest(targetPlugin);
-      const pluginViews = (synthManifest.views && synthManifest.views.length > 0)
-        ? synthManifest.views
-        : (targetPlugin.views && targetPlugin.views.length > 0)
-        ? targetPlugin.views
-        : [{ id: "main", title: "Main App", path: "" }];
-      const settingsView = pluginViews.find((v: any) => v.id === "settings" || v.path.includes("settings"));
-      if (settingsView) {
-        const safeId = targetPlugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
-        const mountContainer = document.getElementById(`plugin-settings-mount-${safeId}`);
-        const btnToggle = document.getElementById(`btn-toggle-settings-${safeId}`) as HTMLButtonElement | null;
-        if (mountContainer) {
-          mountContainer.style.display = "block";
-          mountContainer.innerHTML = "";
-          if (btnToggle) btnToggle.textContent = "Close Settings";
-          this.kernel.mountPluginSettings(
-            targetPlugin.id,
-            synthManifest,
-            targetPlugin.htmlContent || targetPlugin.scriptContent,
-            mountContainer,
-            settingsView.path || "?view=settings"
-          ).then(() => {
-            this.currentMountedSettingsPluginId = targetPlugin.id;
-          }).catch((err) => {
-            console.error(`Failed to mount settings for ${targetPlugin.id}:`, err);
-            mountContainer.textContent = "Failed to load settings.";
-            if (btnToggle) btnToggle.textContent = "Open Settings";
-          });
-        }
-      }
-    }
-
     if (targetTab === "plugins") {
       this.renderPluginManager();
     }
@@ -990,9 +958,9 @@ export class OmniShell {
         btnToggleSettings.style.cssText = "font-size: 0.72rem; padding: 2px 8px;";
         btnToggleSettings.textContent = "Open Settings";
 
-        let isSettingsMounted = false;
         btnToggleSettings.addEventListener("click", async () => {
-          if (!isSettingsMounted) {
+          const isOpen = mountContainer.style.display !== "none";
+          if (!isOpen) {
             mountContainer.style.display = "block";
             btnToggleSettings.textContent = "Loading...";
             try {
@@ -1004,7 +972,6 @@ export class OmniShell {
                 settingsView.path || "?view=settings"
               );
               btnToggleSettings.textContent = "Close Settings";
-              isSettingsMounted = true;
               this.currentMountedSettingsPluginId = p.id;
             } catch (err) {
               console.error(`Failed to mount settings for ${p.id}:`, err);
@@ -1016,7 +983,6 @@ export class OmniShell {
             mountContainer.style.display = "none";
             mountContainer.innerHTML = "";
             btnToggleSettings.textContent = "Open Settings";
-            isSettingsMounted = false;
             if (this.currentMountedSettingsPluginId === p.id) {
               this.currentMountedSettingsPluginId = null;
             }
@@ -1144,25 +1110,23 @@ export class OmniShell {
         controlsLeft.appendChild(routeSelect);
         row.appendChild(controlsLeft);
 
-        if (placements.length > 1) {
-          const btnRemovePl = document.createElement("button");
-          btnRemovePl.className = "btn-secondary btn-remove-placement";
-          btnRemovePl.style.cssText = "font-size: 0.68rem; padding: 2px 6px; color: #f87171;";
-          btnRemovePl.textContent = "Remove";
-          btnRemovePl.title = "Remove this placement";
-          btnRemovePl.addEventListener("click", async () => {
-            p.placements = placements.filter((_, idx) => idx !== plIdx);
-            if (p.placements.length > 0) {
-              p.viewport = p.placements[0].viewport;
-              p.route = p.placements[0].route;
-              p.viewId = p.placements[0].viewId;
-            }
-            await this.remountPlugin(p);
-            this.renderSettingsNavAndPanes();
-            this.switchSettingsTab(p.id);
-          });
-          row.appendChild(btnRemovePl);
-        }
+        const btnRemovePl = document.createElement("button");
+        btnRemovePl.className = "btn-secondary btn-remove-placement";
+        btnRemovePl.style.cssText = "font-size: 0.68rem; padding: 2px 6px; color: #f87171;";
+        btnRemovePl.textContent = placements.length > 1 ? "Remove" : "Unassign";
+        btnRemovePl.title = "Remove this placement";
+        btnRemovePl.addEventListener("click", async () => {
+          p.placements = placements.filter((_, idx) => idx !== plIdx);
+          if (p.placements.length > 0) {
+            p.viewport = p.placements[0].viewport;
+            p.route = p.placements[0].route;
+            p.viewId = p.placements[0].viewId;
+          }
+          await this.remountPlugin(p);
+          this.renderSettingsNavAndPanes();
+          this.switchSettingsTab(p.id);
+        });
+        row.appendChild(btnRemovePl);
 
         placementsSection.appendChild(row);
       }
@@ -1521,23 +1485,21 @@ export class OmniShell {
         row.appendChild(controlsLeft);
 
         // Remove placement button (if multiple placements or allow unassign)
-        if (placements.length > 1) {
-          const btnRemovePl = document.createElement("button");
-          btnRemovePl.className = "btn-secondary btn-remove-placement";
-          btnRemovePl.style.cssText = "font-size: 0.68rem; padding: 2px 6px; color: #f87171;";
-          btnRemovePl.textContent = "Remove";
-          btnRemovePl.title = "Remove this placement";
-          btnRemovePl.addEventListener("click", async () => {
-            p.placements = placements.filter((_, idx) => idx !== plIdx);
-            if (p.placements.length > 0) {
-              p.viewport = p.placements[0].viewport;
-              p.route = p.placements[0].route;
-              p.viewId = p.placements[0].viewId;
-            }
-            await this.remountPlugin(p);
-          });
-          row.appendChild(btnRemovePl);
-        }
+        const btnRemovePl = document.createElement("button");
+        btnRemovePl.className = "btn-secondary btn-remove-placement";
+        btnRemovePl.style.cssText = "font-size: 0.68rem; padding: 2px 6px; color: #f87171;";
+        btnRemovePl.textContent = placements.length > 1 ? "Remove" : "Unassign";
+        btnRemovePl.title = "Remove this placement";
+        btnRemovePl.addEventListener("click", async () => {
+          p.placements = placements.filter((_, idx) => idx !== plIdx);
+          if (p.placements.length > 0) {
+            p.viewport = p.placements[0].viewport;
+            p.route = p.placements[0].route;
+            p.viewId = p.placements[0].viewId;
+          }
+          await this.remountPlugin(p);
+        });
+        row.appendChild(btnRemovePl);
 
         placementsSection.appendChild(row);
       }
@@ -1571,9 +1533,9 @@ export class OmniShell {
         btnToggleSettings.style.cssText = "font-size: 0.72rem; padding: 2px 8px;";
         btnToggleSettings.textContent = "Open Settings";
 
-        let isSettingsMounted = false;
         btnToggleSettings.addEventListener("click", async () => {
-          if (!isSettingsMounted) {
+          const isOpen = mountContainer.style.display !== "none";
+          if (!isOpen) {
             mountContainer.style.display = "block";
             btnToggleSettings.textContent = "Loading...";
             try {
@@ -1585,7 +1547,6 @@ export class OmniShell {
                 settingsView.path || "?view=settings"
               );
               btnToggleSettings.textContent = "Close Settings";
-              isSettingsMounted = true;
             } catch (err) {
               console.error(`Failed to mount settings for ${p.id}:`, err);
               mountContainer.textContent = "Failed to load settings.";
@@ -1596,7 +1557,6 @@ export class OmniShell {
             mountContainer.style.display = "none";
             mountContainer.innerHTML = "";
             btnToggleSettings.textContent = "Open Settings";
-            isSettingsMounted = false;
           }
         });
 

@@ -74,10 +74,8 @@
 
       initResolved();
 
-      // Trigger all registered components
-      for (const [id, renderFn] of registeredComponents.entries()) {
-        mountComponent(id, renderFn);
-      }
+      // Schedule component mount resolving best match for placement
+      scheduleComponentMount();
 
       // If no components were explicitly registered via omni.registerComponent, auto-mount DOM
       setTimeout(() => {
@@ -670,6 +668,68 @@
     };
   }
 
+  let mountScheduled = false;
+  function scheduleComponentMount() {
+    if (!portRemoteDom) return;
+    if (mountScheduled) return;
+    mountScheduled = true;
+    queueMicrotask(() => {
+      mountScheduled = false;
+      resolveAndMountComponents();
+    });
+  }
+
+  function resolveAndMountComponents() {
+    if (!portRemoteDom) return;
+    if (registeredComponents.size === 0) return;
+
+    const targetComponents = (sessionInfo && sessionInfo.components && sessionInfo.components.length > 0)
+      ? sessionInfo.components
+      : ["main"];
+    const currentView = (sessionInfo && sessionInfo.viewId) || "main";
+
+    for (const targetCompId of targetComponents) {
+      if (componentContexts.has(targetCompId)) {
+        continue;
+      }
+
+      let bestMatchFn = null;
+
+      if (registeredComponents.has(targetCompId)) {
+        bestMatchFn = registeredComponents.get(targetCompId);
+      } else if (registeredComponents.has(currentView)) {
+        bestMatchFn = registeredComponents.get(currentView);
+      } else if (sessionInfo && sessionInfo.pluginId && registeredComponents.has(`${sessionInfo.pluginId}-${currentView}`)) {
+        bestMatchFn = registeredComponents.get(`${sessionInfo.pluginId}-${currentView}`);
+      } else {
+        for (const [key, fn] of registeredComponents.entries()) {
+          if (key.endsWith(`-${currentView}`) || key.includes(currentView)) {
+            bestMatchFn = fn;
+            break;
+          }
+        }
+        if (!bestMatchFn && (currentView === "main" || !currentView)) {
+          for (const [key, fn] of registeredComponents.entries()) {
+            if (key.includes("main")) {
+              bestMatchFn = fn;
+              break;
+            }
+          }
+        }
+        if (!bestMatchFn) {
+          const firstEntry = registeredComponents.entries().next().value;
+          if (firstEntry) {
+            bestMatchFn = firstEntry[1];
+          }
+        }
+      }
+
+      if (bestMatchFn) {
+        mountComponent(targetCompId, bestMatchFn);
+      }
+    }
+  }
+
   function mountComponent(componentId, renderFn) {
     let ctx = componentContexts.get(componentId);
     if (!ctx) {
@@ -884,9 +944,7 @@
     },
     registerComponent(id, renderFn) {
       registeredComponents.set(id, renderFn);
-      if (portRemoteDom) {
-        mountComponent(id, renderFn);
-      }
+      scheduleComponentMount();
     },
     nostr: {
       async getPublicKey() {

@@ -98,7 +98,7 @@ export class SandboxInstance {
 
       if (data.type === "mutate") {
         const compId = data.componentId;
-        const host = compId ? this.remoteDomHosts.get(compId) : null;
+        const host = (compId ? this.remoteDomHosts.get(compId) : null) || (this.remoteDomHosts.size === 1 ? this.remoteDomHosts.values().next().value : null);
         if (host && Array.isArray(data.records)) {
           host.mutate(data.records);
         } else if (Array.isArray(data.records)) {
@@ -108,7 +108,7 @@ export class SandboxInstance {
         }
       } else if (data.type === "call" && data.id && data.method) {
         const compId = data.componentId;
-        const host = compId ? this.remoteDomHosts.get(compId) : null;
+        const host = (compId ? this.remoteDomHosts.get(compId) : null) || (this.remoteDomHosts.size === 1 ? this.remoteDomHosts.values().next().value : null);
         if (host) {
           host.call(data.id, data.method, data.args);
         }
@@ -270,10 +270,12 @@ export class SandboxInstance {
     }
 
     // 6. Append to document and perform handshake on load
-    document.body.appendChild(this.iframe);
-
     await new Promise<void>((resolve) => {
-      this.iframe!.onload = () => {
+      let resolved = false;
+      const doHandshake = () => {
+        if (resolved) return;
+        resolved = true;
+
         const initMsg: OmniInitMessage = {
           type: "omni:init",
           payload: {
@@ -296,13 +298,33 @@ export class SandboxInstance {
         };
 
         // Transfer channel1 port2 (Remote DOM) and channel2 port2 (Kernel RPC) to iframe
-        this.iframe!.contentWindow?.postMessage(initMsg, "*", [
-          this.channel1!.port2,
-          this.channel2!.port2
-        ]);
+        try {
+          this.iframe?.contentWindow?.postMessage(initMsg, "*", [
+            this.channel1!.port2,
+            this.channel2!.port2
+          ]);
+        } catch (e) {
+          console.error(`[SandboxInstance] Failed to postMessage handshake:`, e);
+        }
 
         resolve();
       };
+
+      if (this.iframe) {
+        this.iframe.onload = doHandshake;
+        this.iframe.addEventListener("load", doHandshake, { once: true });
+        document.body.appendChild(this.iframe);
+      } else {
+        resolve();
+        return;
+      }
+
+      // Safety timeout: Ensure promise resolves even if browser load event was missed or delayed
+      setTimeout(() => {
+        if (!resolved) {
+          doHandshake();
+        }
+      }, 300);
     });
   }
 
