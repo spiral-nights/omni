@@ -76,6 +76,9 @@ function mountRelays(root: any) {
   card.appendChild(presetRow);
 
   async function renderRelays() {
+    while (listContainer.firstChild) {
+      listContainer.removeChild(listContainer.firstChild);
+    }
     listContainer.innerHTML = "";
     try {
       let relays: any[] = [];

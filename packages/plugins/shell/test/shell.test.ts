@@ -214,7 +214,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
     const openSettingsBtn = timerBox?.querySelector(".btn-plugin-settings") as HTMLButtonElement;
     expect(openSettingsBtn).toBeTruthy();
-    expect(openSettingsBtn.textContent).toBe("Open Settings Panel");
+    expect(openSettingsBtn.textContent).toBe("Open Settings");
 
     // Click to open settings
     openSettingsBtn.click();
@@ -228,7 +228,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     openSettingsBtn.click();
     expect(mountContainer.style.display).toBe("none");
     expect(mountContainer.children.length).toBe(0);
-    expect(openSettingsBtn.textContent).toBe("Open Settings Panel");
+    expect(openSettingsBtn.textContent).toBe("Open Settings");
   });
 
   it("organizes plugins in clean collapsible cards that toggle on header click", () => {
@@ -822,6 +822,33 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
       expect(root.querySelector("#settings-tab-btn-org-omni-plugin-timer")).toBeNull();
       expect(root.querySelector("#settings-pane-org-omni-plugin-timer")).toBeNull();
+    });
+
+    it("displays 'Open Settings' by default on plugin settings toggle button", () => {
+      shell.installedPlugins.push({
+        id: "org.omni.test.togglebtn",
+        name: "Toggle Test",
+        viewport: "sidebar",
+        scriptContent: "console.log('toggle');",
+        sourceUrl: "local:@omni/toggle",
+        enabled: true,
+        views: [
+          { id: "main", title: "Main", path: "" },
+          { id: "settings", title: "Settings View", path: "?view=settings" }
+        ]
+      });
+
+      shell.renderSettingsNavAndPanes();
+
+      const pane = root.querySelector("#settings-pane-org-omni-test-togglebtn");
+      expect(pane).toBeTruthy();
+
+      const toggleBtn = pane?.querySelector(".btn-plugin-settings") as HTMLButtonElement;
+      expect(toggleBtn).toBeTruthy();
+      expect(toggleBtn.textContent).toBe("Open Settings");
+
+      const mountContainer = pane?.querySelector(".plugin-settings-mount-container") as HTMLElement;
+      expect(mountContainer.style.display).toBe("none");
     });
   });
 });

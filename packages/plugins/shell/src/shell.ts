@@ -73,7 +73,16 @@ export class OmniShell {
   constructor(options: OmniShellOptions) {
     this.root = options.root;
     this.kernel = options.kernel;
-    this.installedPlugins = options.installedPlugins ? [...options.installedPlugins] : [];
+    if (options.installedPlugins) {
+      const seen = new Set<string>();
+      this.installedPlugins = options.installedPlugins.filter((p) => {
+        if (seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      });
+    } else {
+      this.installedPlugins = [];
+    }
   }
 
   public getPluginMeta(p: InstalledPluginEntry): {
@@ -688,6 +697,15 @@ export class OmniShell {
 
   public closeSettings(): void {
     if (this.currentMountedSettingsPluginId) {
+      const safeId = this.currentMountedSettingsPluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const mountContainer = document.getElementById(`plugin-settings-mount-${safeId}`);
+      if (mountContainer) {
+        mountContainer.style.display = "none";
+        mountContainer.innerHTML = "";
+      }
+      const btnToggle = document.getElementById(`btn-toggle-settings-${safeId}`) as HTMLButtonElement | null;
+      if (btnToggle) btnToggle.textContent = "Open Settings";
+
       this.kernel.destroyPluginSettings(this.currentMountedSettingsPluginId);
       this.currentMountedSettingsPluginId = null;
     }
@@ -711,6 +729,15 @@ export class OmniShell {
     }
 
     if (this.currentMountedSettingsPluginId && this.currentMountedSettingsPluginId !== targetTab) {
+      const prevSafeId = this.currentMountedSettingsPluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const prevContainer = document.getElementById(`plugin-settings-mount-${prevSafeId}`);
+      if (prevContainer) {
+        prevContainer.style.display = "none";
+        prevContainer.innerHTML = "";
+      }
+      const prevBtn = document.getElementById(`btn-toggle-settings-${prevSafeId}`) as HTMLButtonElement | null;
+      if (prevBtn) prevBtn.textContent = "Open Settings";
+
       this.kernel.destroyPluginSettings(this.currentMountedSettingsPluginId);
       this.currentMountedSettingsPluginId = null;
     }
@@ -751,9 +778,11 @@ export class OmniShell {
       if (settingsView) {
         const safeId = targetPlugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
         const mountContainer = document.getElementById(`plugin-settings-mount-${safeId}`);
+        const btnToggle = document.getElementById(`btn-toggle-settings-${safeId}`) as HTMLButtonElement | null;
         if (mountContainer) {
           mountContainer.style.display = "block";
           mountContainer.innerHTML = "";
+          if (btnToggle) btnToggle.textContent = "Close Settings";
           this.kernel.mountPluginSettings(
             targetPlugin.id,
             synthManifest,
@@ -765,6 +794,7 @@ export class OmniShell {
           }).catch((err) => {
             console.error(`Failed to mount settings for ${targetPlugin.id}:`, err);
             mountContainer.textContent = "Failed to load settings.";
+            if (btnToggle) btnToggle.textContent = "Open Settings";
           });
         }
       }
@@ -808,6 +838,17 @@ export class OmniShell {
     // Remove previous plugin panes from content (preserves #settings-pane-plugins)
     const oldPluginPanes = this.settingsContent.querySelectorAll(".settings-pane.plugin-pane");
     oldPluginPanes.forEach((el) => el.remove());
+
+    // Deduplicate installedPlugins by ID to ensure clean, unique rendering
+    const uniquePlugins: InstalledPluginEntry[] = [];
+    const seenPluginIds = new Set<string>();
+    for (const p of this.installedPlugins) {
+      if (!seenPluginIds.has(p.id)) {
+        seenPluginIds.add(p.id);
+        uniquePlugins.push(p);
+      }
+    }
+    this.installedPlugins = uniquePlugins;
 
     if (this.installedPlugins.length > 0) {
       const sectionTitle = document.createElement("div");
@@ -940,13 +981,14 @@ export class OmniShell {
       mountContainer.id = `plugin-settings-mount-${safeId}`;
       mountContainer.className = "plugin-settings-mount-container";
       mountContainer.style.cssText =
-        "display: block; margin-top: 6px; padding: 10px; background: var(--omni-bg-canvas); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
+        "display: none; margin-top: 6px; padding: 10px; background: var(--omni-bg-canvas); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
 
       if (settingsView) {
         const btnToggleSettings = document.createElement("button");
         btnToggleSettings.className = "btn-secondary btn-plugin-settings";
+        btnToggleSettings.id = `btn-toggle-settings-${safeId}`;
         btnToggleSettings.style.cssText = "font-size: 0.72rem; padding: 2px 8px;";
-        btnToggleSettings.textContent = "Close Settings";
+        btnToggleSettings.textContent = "Open Settings";
 
         let isSettingsMounted = false;
         btnToggleSettings.addEventListener("click", async () => {
@@ -963,17 +1005,21 @@ export class OmniShell {
               );
               btnToggleSettings.textContent = "Close Settings";
               isSettingsMounted = true;
+              this.currentMountedSettingsPluginId = p.id;
             } catch (err) {
               console.error(`Failed to mount settings for ${p.id}:`, err);
               mountContainer.textContent = "Failed to load settings.";
-              btnToggleSettings.textContent = "Open Settings Panel";
+              btnToggleSettings.textContent = "Open Settings";
             }
           } else {
             this.kernel.destroyPluginSettings(p.id);
             mountContainer.style.display = "none";
             mountContainer.innerHTML = "";
-            btnToggleSettings.textContent = "Open Settings Panel";
+            btnToggleSettings.textContent = "Open Settings";
             isSettingsMounted = false;
+            if (this.currentMountedSettingsPluginId === p.id) {
+              this.currentMountedSettingsPluginId = null;
+            }
           }
         });
 
@@ -1514,15 +1560,16 @@ export class OmniShell {
       const settingsView = pluginViews.find((v: any) => v.id === "settings" || v.path.includes("settings"));
 
       const mountContainer = document.createElement("div");
-      mountContainer.id = `plugin-settings-mount-${safeId}`;
+      mountContainer.id = `plugin-settings-mount-mgr-${safeId}`;
       mountContainer.className = "plugin-settings-mount-container";
       mountContainer.style.cssText = "display: none; margin-top: 6px; padding: 10px; background: var(--omni-bg-canvas); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
 
       if (settingsView) {
         const btnToggleSettings = document.createElement("button");
         btnToggleSettings.className = "btn-secondary btn-plugin-settings";
+        btnToggleSettings.id = `btn-toggle-settings-mgr-${safeId}`;
         btnToggleSettings.style.cssText = "font-size: 0.72rem; padding: 2px 8px;";
-        btnToggleSettings.textContent = "Open Settings Panel";
+        btnToggleSettings.textContent = "Open Settings";
 
         let isSettingsMounted = false;
         btnToggleSettings.addEventListener("click", async () => {
@@ -1542,13 +1589,13 @@ export class OmniShell {
             } catch (err) {
               console.error(`Failed to mount settings for ${p.id}:`, err);
               mountContainer.textContent = "Failed to load settings.";
-              btnToggleSettings.textContent = "Open Settings Panel";
+              btnToggleSettings.textContent = "Open Settings";
             }
           } else {
             this.kernel.destroyPluginSettings(p.id);
             mountContainer.style.display = "none";
             mountContainer.innerHTML = "";
-            btnToggleSettings.textContent = "Open Settings Panel";
+            btnToggleSettings.textContent = "Open Settings";
             isSettingsMounted = false;
           }
         });

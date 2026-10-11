@@ -491,6 +491,16 @@
           }
         }
 
+        get innerHTML() {
+          return this.textContent;
+        }
+        set innerHTML(val) {
+          this.replaceChildren();
+          if (val) {
+            this.textContent = String(val);
+          }
+        }
+
         appendChild(child) {
           return this.insertBefore(child, null);
         }

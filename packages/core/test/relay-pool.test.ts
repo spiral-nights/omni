@@ -166,4 +166,22 @@ describe("Relay Management ACL Enforcement (relays:manage)", () => {
     await kernel.registerPlugin(untrustedManifest as any, "console.log('malicious');", new Map());
     expect(kernel.capabilityStore.getGrant("com.untrusted.widget", "relays:manage")).toBeNull();
   });
+
+  it("normalizes relay URLs and prevents duplicates when adding relays", () => {
+    const pool = new RelayPool({ bootstrapRelays: ["wss://relay.damus.io"] });
+    expect(pool.getAllRelays()).toHaveLength(1);
+
+    // Add same relay with trailing slash
+    pool.addRelay("wss://relay.damus.io/");
+    expect(pool.getAllRelays()).toHaveLength(1);
+    expect(pool.getAllRelays()[0].url).toBe("wss://relay.damus.io");
+
+    // Add new relay
+    pool.addRelay("wss://relay.ditto.pub");
+    expect(pool.getAllRelays()).toHaveLength(2);
+
+    // Add new relay with trailing slash and whitespace
+    pool.addRelay("  wss://relay.ditto.pub/  ");
+    expect(pool.getAllRelays()).toHaveLength(2);
+  });
 });

@@ -41,10 +41,14 @@ export class RelayPool {
   }
 
   private connectRelay(url: string): void {
-    if (this.relays.has(url)) return;
+    const normalized = url.trim().replace(/\/+$/, "");
+    const existing = this.relays.get(normalized);
+    if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
 
     try {
-      const ws = new WebSocket(url);
+      const ws = new WebSocket(normalized);
 
       ws.onopen = () => {
         // Re-send existing subscriptions
@@ -54,20 +58,20 @@ export class RelayPool {
       };
 
       ws.onmessage = (event) => {
-        this.handleRelayMessage(event.data, url);
+        this.handleRelayMessage(event.data, normalized);
       };
 
       ws.onclose = () => {
-        this.relays.delete(url);
+        this.relays.delete(normalized);
         // Attempt reconnect after delay
-        setTimeout(() => this.connectRelay(url), 5000);
+        setTimeout(() => this.connectRelay(normalized), 5000);
       };
 
       ws.onerror = () => {
         ws.close();
       };
 
-      this.relays.set(url, ws);
+      this.relays.set(normalized, ws);
     } catch {
       // Failed to open socket
     }
@@ -158,12 +162,15 @@ export class RelayPool {
     for (const [url, ws] of this.relays.entries()) {
       if (ws.readyState === WebSocket.OPEN) urls.push(url);
     }
-    return urls.length > 0 ? urls : [...this.bootstrapUrls];
+    return urls.length > 0 ? Array.from(new Set(urls)) : Array.from(new Set(this.bootstrapUrls));
   }
 
   getAllRelays(): Array<{ url: string; status: "connected" | "connecting" | "disconnected" }> {
     const list: Array<{ url: string; status: "connected" | "connecting" | "disconnected" }> = [];
-    const allUrls = Array.from(new Set([...this.bootstrapUrls, ...this.relays.keys()]));
+    const allUrls = Array.from(new Set([
+      ...this.bootstrapUrls.map((u) => u.trim().replace(/\/+$/, "")),
+      ...Array.from(this.relays.keys()).map((u) => u.trim().replace(/\/+$/, ""))
+    ]));
     for (const url of allUrls) {
       const ws = this.relays.get(url);
       if (!ws) {
@@ -180,19 +187,21 @@ export class RelayPool {
   }
 
   addRelay(url: string): void {
-    if (!this.bootstrapUrls.includes(url)) {
-      this.bootstrapUrls.push(url);
+    const normalized = url.trim().replace(/\/+$/, "");
+    if (!this.bootstrapUrls.some((u) => u.trim().replace(/\/+$/, "") === normalized)) {
+      this.bootstrapUrls.push(normalized);
     }
-    this.connectRelay(url);
+    this.connectRelay(normalized);
   }
 
   removeRelay(url: string): void {
-    const ws = this.relays.get(url);
+    const normalized = url.trim().replace(/\/+$/, "");
+    const ws = this.relays.get(normalized);
     if (ws) {
       ws.close();
-      this.relays.delete(url);
+      this.relays.delete(normalized);
     }
-    const idx = this.bootstrapUrls.indexOf(url);
+    const idx = this.bootstrapUrls.findIndex((u) => u.trim().replace(/\/+$/, "") === normalized);
     if (idx !== -1) {
       this.bootstrapUrls.splice(idx, 1);
     }
