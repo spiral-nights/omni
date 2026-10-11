@@ -81,10 +81,22 @@ export class JsonRpcDispatcher {
           throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing or invalid draft event" };
         }
 
+        // Defense against NIP-78 host workspace tampering:
+        // Reserve the 'omni/*' and 'omni:*' d-tag namespace exclusively for the host shell.
+        if (draft.kind === 30078 && Array.isArray(draft.tags)) {
+          const dTag = draft.tags.find((t) => Array.isArray(t) && t[0] === "d")?.[1];
+          if (typeof dTag === "string" && (dTag === "omni" || dTag.startsWith("omni/") || dTag.startsWith("omni:"))) {
+            throw {
+              code: JsonRpcErrorCode.PERMISSION_DENIED,
+              message: `Permission denied: '${dTag}' NIP-78 identifier is reserved for Omni host workspace synchronization.`
+            };
+          }
+        }
+
         const allowed = await this.ctx.aclEngine.checkPermission(
           this.ctx.pluginId,
           "nostr:sign",
-          { kind: draft.kind }
+          { kind: draft.kind, tags: draft.tags }
         );
         if (!allowed) {
           throw {
@@ -103,10 +115,22 @@ export class JsonRpcDispatcher {
           throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing draft event" };
         }
 
+        // Defense against NIP-78 host workspace tampering:
+        // Reserve the 'omni/*' and 'omni:*' d-tag namespace exclusively for the host shell.
+        if (draft.kind === 30078 && Array.isArray(draft.tags)) {
+          const dTag = draft.tags.find((t) => Array.isArray(t) && t[0] === "d")?.[1];
+          if (typeof dTag === "string" && (dTag === "omni" || dTag.startsWith("omni/") || dTag.startsWith("omni:"))) {
+            throw {
+              code: JsonRpcErrorCode.PERMISSION_DENIED,
+              message: `Permission denied: '${dTag}' NIP-78 identifier is reserved for Omni host workspace synchronization.`
+            };
+          }
+        }
+
         const allowed = await this.ctx.aclEngine.checkPermission(
           this.ctx.pluginId,
           "nostr:write",
-          { kind: draft.kind }
+          { kind: draft.kind, tags: draft.tags }
         );
         if (!allowed) {
           throw {

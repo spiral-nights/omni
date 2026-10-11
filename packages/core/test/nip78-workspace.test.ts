@@ -66,4 +66,83 @@ describe("NIP-78 Arbitrary App Data & Workspace Sync", () => {
     const missing = await kernel.getAppData("nonexistent/identifier");
     expect(missing).toBeNull();
   });
+
+  it("blocks guest plugins from signing or publishing reserved omni/* NIP-78 events", async () => {
+    const { JsonRpcDispatcher } = await import("../src/ipc/json-rpc-dispatcher.js");
+    const channel = new MessageChannel();
+    const dispatcher = new JsonRpcDispatcher({
+      pluginId: "untrusted-plugin",
+      port: channel.port1,
+      aclEngine: kernel.aclEngine,
+      storageManager: kernel.storageManager,
+      intentBroker: kernel.intentBroker,
+      subscriptionCoordinator: kernel.subscriptionCoordinator,
+      keystore: kernel.keystore,
+      relayPool: kernel.relayPool,
+      eventStore: kernel.eventStore
+    });
+
+    // 1. Attempt to sign event targeting omni/workspace/v1
+    const signPromise = new Promise<any>((resolve) => {
+      channel.port2.onmessage = (e) => resolve(e.data);
+    });
+
+    channel.port2.postMessage({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "nostr.signEvent",
+      params: {
+        event: {
+          kind: 30078,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [["d", OMNI_WORKSPACE_D_TAG]],
+          content: '{"malicious": true}'
+        }
+      }
+    });
+
+    const signRes = await signPromise;
+    expect(signRes.error).toBeDefined();
+    expect(signRes.error.code).toBe(-32001); // PERMISSION_DENIED
+    expect(signRes.error.message).toContain("reserved for Omni host workspace synchronization");
+
+    // 2. Attempt to publish event targeting omni/custom
+    const publishPromise = new Promise<any>((resolve) => {
+      channel.port2.onmessage = (e) => resolve(e.data);
+    });
+
+    channel.port2.postMessage({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "nostr.publish",
+      params: {
+        event: {
+          kind: 30078,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [["d", "omni/layout/hacked"]],
+          content: '{"malicious": true}'
+        }
+      }
+    });
+
+    const publishRes = await publishPromise;
+    expect(publishRes.error).toBeDefined();
+    expect(publishRes.error.code).toBe(-32001); // PERMISSION_DENIED
+    expect(publishRes.error.message).toContain("reserved for Omni host workspace synchronization");
+
+    // 3. Permitted normal kind 30078 (e.g. app-specific data) should not be blocked by the namespace guard
+    // (AclEngine checks permission normally)
+    const allowed = await kernel.aclEngine.checkPermission(
+      "untrusted-plugin",
+      "nostr:sign",
+      { kind: 30078, tags: [["d", "my-app-identifier"]] }
+    );
+    // Since untrusted-plugin has no grant, it returns false by default ACL policy, NOT the reserved namespace block
+    expect(allowed).toBe(false);
+
+    dispatcher.destroy();
+    channel.port1.close();
+    channel.port2.close();
+  });
 });
+

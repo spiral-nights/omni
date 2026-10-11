@@ -27,6 +27,19 @@ export class AclEngine {
     category: string,
     details?: any
   ): Promise<boolean> {
+    // Defense against NIP-78 host workspace tampering:
+    // Any kind 30078 event with d-tag starting with 'omni/' or 'omni:' is reserved for the host shell.
+    if (
+      (category === "nostr:sign" || category === "nostr:write") &&
+      details?.kind === 30078 &&
+      Array.isArray(details?.tags)
+    ) {
+      const dTag = details.tags.find((t: any) => Array.isArray(t) && t[0] === "d")?.[1];
+      if (typeof dTag === "string" && (dTag === "omni" || dTag.startsWith("omni/") || dTag.startsWith("omni:"))) {
+        return false;
+      }
+    }
+
     const scope = details?.kind !== undefined ? String(details.kind) : undefined;
     const existing = this.store.getGrant(pluginId, category, scope);
 
