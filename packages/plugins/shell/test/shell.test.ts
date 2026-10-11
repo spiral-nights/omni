@@ -913,6 +913,44 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
         window.localStorage.removeItem(shell.LOCAL_WORKSPACE_KEY);
       }
     });
+
+    it("removes plugin launcher from dock slot (sidebar) when all placements are unassigned", async () => {
+      // Add profile plugin with a main placement
+      const profilePlugin: InstalledPluginEntry = {
+        id: "org.omni.plugin.profile",
+        name: "Profile",
+        description: "Profile management",
+        icon: "user",
+        viewport: "main",
+        enabled: true,
+        scriptContent: "console.log('profile');",
+        placements: [
+          {
+            id: "main-primary",
+            viewport: "main",
+            route: "",
+            viewId: "main",
+            enabled: true
+          }
+        ]
+      };
+      shell.installedPlugins.push(profilePlugin);
+      shell.renderDockLaunchers();
+
+      const dockSlot = root.querySelector("#dock-slot");
+      let profileBtn = dockSlot?.querySelector('[data-plugin-id="org.omni.plugin.profile"]');
+      expect(profileBtn).toBeTruthy();
+
+      // Now unassign all placements (empty array)
+      profilePlugin.placements = [];
+      await shell.remountPlugin(profilePlugin);
+
+      profileBtn = dockSlot?.querySelector('[data-plugin-id="org.omni.plugin.profile"]');
+      expect(profileBtn).toBeNull();
+
+      const meta = shell.getPluginMeta(profilePlugin);
+      expect(meta.viewport).toBe("unassigned");
+    });
   });
 });
 

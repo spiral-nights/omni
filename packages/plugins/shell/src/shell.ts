@@ -93,6 +93,16 @@ export class OmniShell {
     icon: string;
     viewport: string;
   } {
+    if (Array.isArray(p.placements) && p.placements.length === 0) {
+      return {
+        id: p.id,
+        name: p.name || p.manifest?.name || p.id,
+        version: p.version || p.manifest?.version || "1.0.0",
+        description: p.description || p.manifest?.description || "",
+        icon: p.icon || p.manifest?.icon || "widgets",
+        viewport: "unassigned"
+      };
+    }
     const primaryCompId = p.manifest?.components?.[0]?.id || `${p.id}-main`;
     const layoutSlot = this.kernel?.layoutManager?.getSlotForComponent(p.id, primaryCompId);
     return {
@@ -215,9 +225,12 @@ export class OmniShell {
       const pageEl = document.getElementById(`page-app-${safeId}`);
       if (pageEl) {
         if (pageEl.classList.contains("active")) {
-          this.showPage("widgets");
+          this.showPage("feed");
         }
         pageEl.remove();
+      }
+      if (this.getActivePageId() === plugin.id) {
+        this.showPage("feed");
       }
     }
 
@@ -320,6 +333,10 @@ export class OmniShell {
         }
         if (item.placements && Array.isArray(item.placements)) {
           plugin.placements = item.placements;
+          if (item.placements.length === 0) {
+            plugin.viewport = "";
+            this.kernel.layoutManager.unregisterPlugin(plugin.id);
+          }
         }
         if (item.viewport && item.viewport !== plugin.viewport) {
           plugin.viewport = item.viewport;
@@ -452,6 +469,10 @@ export class OmniShell {
               if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
               if (item.placements && Array.isArray(item.placements)) {
                 plugin.placements = item.placements;
+                if (item.placements.length === 0) {
+                  plugin.viewport = "";
+                  this.kernel.layoutManager?.unregisterPlugin(plugin.id);
+                }
               }
               if (item.route !== undefined) plugin.route = item.route;
               if (item.viewId) plugin.viewId = item.viewId;
@@ -556,7 +577,7 @@ export class OmniShell {
       const placements = this.getPluginPlacements(plugin);
       const hasDockOrMain = placements.some(
         (pl) => pl.enabled !== false && (pl.viewport === "main" || pl.viewport === "dock")
-      ) || (meta.viewport === "main" || meta.viewport === "dock");
+      );
       if (!hasDockOrMain) continue;
 
       if (plugin.id !== "org.omni.plugin.feed") {
@@ -1021,14 +1042,17 @@ export class OmniShell {
       btnAddPlacement.textContent = "+ Add Location";
       btnAddPlacement.addEventListener("click", async () => {
         const currentPlacements = this.getPluginPlacements(p);
-        currentPlacements.push({
+        const newPl: PluginPlacement = {
           id: `placement-${Date.now()}`,
           viewport: "sidebar",
-          route: "",
-          viewId: "main",
+          route: pluginViews[0]?.path || "",
+          viewId: pluginViews[0]?.id || "main",
           enabled: true
-        });
-        p.placements = currentPlacements;
+        };
+        p.placements = [...currentPlacements, newPl];
+        p.viewport = p.placements[0].viewport;
+        p.route = p.placements[0].route;
+        p.viewId = p.placements[0].viewId;
         await this.remountPlugin(p);
         this.renderSettingsNavAndPanes();
         this.switchSettingsTab(p.id);
@@ -1039,6 +1063,14 @@ export class OmniShell {
       placementsSection.appendChild(placementsHeader);
 
       const placements = this.getPluginPlacements(p);
+      if (placements.length === 0) {
+        const emptyPl = document.createElement("div");
+        emptyPl.className = "empty-placements-note";
+        emptyPl.style.cssText = "font-size: 0.75rem; color: var(--omni-text-muted); font-style: italic; padding: 6px 2px;";
+        emptyPl.textContent = "Unassigned — This plugin is not currently placed in any viewport or dock.";
+        placementsSection.appendChild(emptyPl);
+      }
+
       for (let plIdx = 0; plIdx < placements.length; plIdx++) {
         const pl = placements[plIdx];
         const row = document.createElement("div");
@@ -1121,6 +1153,11 @@ export class OmniShell {
             p.viewport = p.placements[0].viewport;
             p.route = p.placements[0].route;
             p.viewId = p.placements[0].viewId;
+          } else {
+            p.viewport = "";
+            p.route = "";
+            p.viewId = "";
+            this.kernel.layoutManager.unregisterPlugin(p.id);
           }
           await this.remountPlugin(p);
           this.renderSettingsNavAndPanes();
@@ -1294,6 +1331,11 @@ export class OmniShell {
           }
           placementsSummaryWrap.appendChild(badge);
         }
+      } else {
+        const badge = document.createElement("span");
+        badge.style.cssText = "font-size: 0.66rem; padding: 1px 6px; border-radius: var(--omni-radius-pill); border: 1px solid var(--omni-border-subtle); background: var(--omni-bg-subtle); color: var(--omni-text-muted);";
+        badge.textContent = "Unassigned";
+        placementsSummaryWrap.appendChild(badge);
       }
 
       headerLeft.appendChild(iconWrap);
@@ -1386,7 +1428,8 @@ export class OmniShell {
       btnAddPlacement.style.cssText = "font-size: 0.7rem; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;";
       btnAddPlacement.innerHTML = `<span>+</span> Add Location`;
       btnAddPlacement.addEventListener("click", async () => {
-        const nextVp = placements.some((pl) => pl.viewport === "main") ? "sidebar" : "main";
+        const currentPlacements = this.getPluginPlacements(p);
+        const nextVp = currentPlacements.some((pl) => pl.viewport === "main") ? "sidebar" : "main";
         const newPl: PluginPlacement = {
           id: `pl-${Date.now().toString(36)}`,
           viewport: nextVp,
@@ -1394,7 +1437,7 @@ export class OmniShell {
           viewId: pluginViews[0]?.id || "main",
           enabled: true
         };
-        p.placements = [...placements, newPl];
+        p.placements = [...currentPlacements, newPl];
         p.viewport = newPl.viewport;
         p.route = newPl.route;
         p.viewId = newPl.viewId;
@@ -1404,6 +1447,14 @@ export class OmniShell {
       placementsHeader.appendChild(placementsTitle);
       placementsHeader.appendChild(btnAddPlacement);
       placementsSection.appendChild(placementsHeader);
+
+      if (placements.length === 0) {
+        const emptyPl = document.createElement("div");
+        emptyPl.className = "empty-placements-note";
+        emptyPl.style.cssText = "font-size: 0.72rem; color: var(--omni-text-muted); font-style: italic; padding: 4px 2px;";
+        emptyPl.textContent = "Unassigned — This plugin is not currently placed in any viewport or dock.";
+        placementsSection.appendChild(emptyPl);
+      }
 
       const viewportOptions = [
         { id: "main", label: "Full-Page App" },
@@ -1496,6 +1547,11 @@ export class OmniShell {
             p.viewport = p.placements[0].viewport;
             p.route = p.placements[0].route;
             p.viewId = p.placements[0].viewId;
+          } else {
+            p.viewport = "";
+            p.route = "";
+            p.viewId = "";
+            this.kernel.layoutManager.unregisterPlugin(p.id);
           }
           await this.remountPlugin(p);
         });
