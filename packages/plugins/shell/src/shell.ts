@@ -20,7 +20,7 @@ export interface InstalledPluginEntry {
 }
 
 export type AppPage = "feed" | "widgets" | string;
-export type SettingsTab = "profile" | "relays" | "plugins" | "config";
+export type SettingsTab = "profile" | "relays" | "plugins";
 
 export interface OmniShellOptions {
   root: HTMLElement;
@@ -484,7 +484,6 @@ export class OmniShell {
     this.wireInstallModal();
     this.wireProfileControls();
     this.wireRelaysManager();
-    this.wirePluginConfig();
   }
 
   public getSlotContainers(): Map<string, Element> {
@@ -584,8 +583,6 @@ export class OmniShell {
       this.renderSettingsRelays();
     } else if (targetTab === "plugins") {
       this.renderPluginManager();
-    } else if (targetTab === "config") {
-      this.renderPluginConfig();
     }
   }
 
@@ -1138,29 +1135,6 @@ export class OmniShell {
     if (paneMan) paneMan.style.display = tab === "manifest" ? "flex" : "none";
   }
 
-  // --- Plugin Config ---
-  private renderPluginConfig(): void {
-    const cfgTimerWork = document.getElementById("cfg-timer-work") as HTMLInputElement | null;
-    const cfgTimerBreak = document.getElementById("cfg-timer-break") as HTMLInputElement | null;
-    const cfgTimerLongBreak = document.getElementById("cfg-timer-long-break") as HTMLInputElement | null;
-    const cfgFeedLimit = document.getElementById("cfg-feed-limit") as HTMLInputElement | null;
-
-    const savedTimer = localStorage.getItem("omni_timer_config");
-    if (savedTimer) {
-      try {
-        const parsed = JSON.parse(savedTimer);
-        if (cfgTimerWork && parsed.work) cfgTimerWork.value = String(parsed.work);
-        if (cfgTimerBreak && parsed.shortBreak) cfgTimerBreak.value = String(parsed.shortBreak);
-        if (cfgTimerLongBreak && parsed.longBreak) cfgTimerLongBreak.value = String(parsed.longBreak);
-      } catch {}
-    }
-
-    const savedLimit = localStorage.getItem("omni_feed_limit");
-    if (savedLimit && cfgFeedLimit) {
-      cfgFeedLimit.value = savedLimit;
-    }
-  }
-
   // --- Initial DOM Skeleton Rendering ---
   private renderSkeleton(): void {
     this.root.innerHTML = `
@@ -1243,10 +1217,6 @@ export class OmniShell {
               <button class="settings-nav-btn" id="settings-tab-btn-plugins" data-tab="plugins">
                 ${icon("plugins", 16)}
                 <span>Plugins & Viewports</span>
-              </button>
-              <button class="settings-nav-btn" id="settings-tab-btn-config" data-tab="config">
-                ${icon("sliders", 16)}
-                <span>Plugin Config</span>
               </button>
             </nav>
 
@@ -1425,62 +1395,6 @@ export class OmniShell {
 
                 <div id="plugins-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
               </div>
-
-              <!-- Pane 5: Plugin Config -->
-              <div class="settings-pane" id="settings-pane-config">
-                <div>
-                  <h3 style="font-size: 1.05rem; font-weight: 600;">Plugin Preferences</h3>
-                  <span style="font-size: 0.78rem; color: var(--omni-text-muted);">Configure options and behaviors for active first-class plugins</span>
-                </div>
-
-                <div style="background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
-                  <div style="display: flex; align-items: center; justify-content: space-between;">
-                    <span style="font-weight: 600; font-size: 0.88rem; color: var(--omni-text-primary);">Focus Timer (Pomodoro)</span>
-                    <span style="font-size: 0.7rem; color: var(--omni-text-muted);">@omni/plugin-timer</span>
-                  </div>
-                  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
-                    <label style="font-size: 0.75rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-                      Work (min):
-                      <input id="cfg-timer-work" type="number" min="1" max="120" value="25" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-                    </label>
-                    <label style="font-size: 0.75rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-                      Short Break:
-                      <input id="cfg-timer-break" type="number" min="1" max="30" value="5" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-                    </label>
-                    <label style="font-size: 0.75rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 3px;">
-                      Long Break:
-                      <input id="cfg-timer-long-break" type="number" min="1" max="60" value="15" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-size: 0.82rem; outline: none;" />
-                    </label>
-                  </div>
-                  <div style="display: flex; justify-content: flex-end;">
-                    <button id="btn-save-timer-cfg" class="btn-publish" style="font-size: 0.75rem; padding: 5px 12px;">Save Timer Settings</button>
-                  </div>
-                </div>
-
-                <div style="background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
-                  <div style="display: flex; align-items: center; justify-content: space-between;">
-                    <span style="font-weight: 600; font-size: 0.88rem; color: var(--omni-text-primary);">Daily Checklist</span>
-                    <span style="font-size: 0.7rem; color: var(--omni-text-muted);">@omni/plugin-checklist</span>
-                  </div>
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 0.78rem; color: var(--omni-text-secondary);">Manage Task Storage:</span>
-                    <button id="btn-clear-completed-tasks" class="btn-secondary" style="font-size: 0.75rem;">Clear Completed Tasks</button>
-                  </div>
-                </div>
-
-                <div style="background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
-                  <div style="display: flex; align-items: center; justify-content: space-between;">
-                    <span style="font-weight: 600; font-size: 0.88rem; color: var(--omni-text-primary);">Timeline Feed & Composer</span>
-                    <span style="font-size: 0.7rem; color: var(--omni-text-muted);">@omni/plugin-feed</span>
-                  </div>
-                  <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <label style="font-size: 0.78rem; color: var(--omni-text-secondary); display: flex; align-items: center; justify-content: space-between;">
-                      <span>Initial Notes Query Limit:</span>
-                      <input id="cfg-feed-limit" type="number" min="10" max="100" value="30" style="width: 70px; background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 4px 8px; border-radius: var(--omni-radius-sm); font-size: 0.78rem; outline: none;" />
-                    </label>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -1658,14 +1572,12 @@ export class OmniShell {
     this.settingsNavBtns = {
       profile: document.getElementById("settings-tab-btn-profile")!,
       relays: document.getElementById("settings-tab-btn-relays")!,
-      plugins: document.getElementById("settings-tab-btn-plugins")!,
-      config: document.getElementById("settings-tab-btn-config")!
+      plugins: document.getElementById("settings-tab-btn-plugins")!
     };
     this.settingsPanes = {
       profile: document.getElementById("settings-pane-profile")!,
       relays: document.getElementById("settings-pane-relays")!,
-      plugins: document.getElementById("settings-pane-plugins")!,
-      config: document.getElementById("settings-pane-config")!
+      plugins: document.getElementById("settings-pane-plugins")!
     };
 
     this.pluginInspectorModal = document.getElementById("plugin-inspector-modal")!;
@@ -2170,52 +2082,7 @@ export class OmniShell {
     });
   }
 
-  private wirePluginConfig(): void {
-    const btnSaveTimer = document.getElementById("btn-save-timer-cfg");
-    const btnClearTasks = document.getElementById("btn-clear-completed-tasks");
-    const cfgLimit = document.getElementById("cfg-feed-limit") as HTMLInputElement | null;
 
-    btnSaveTimer?.addEventListener("click", async () => {
-      const work = parseInt((document.getElementById("cfg-timer-work") as HTMLInputElement)?.value || "25", 10);
-      const shortBreak = parseInt((document.getElementById("cfg-timer-break") as HTMLInputElement)?.value || "5", 10);
-      const longBreak = parseInt((document.getElementById("cfg-timer-long-break") as HTMLInputElement)?.value || "15", 10);
-      const cfg = { work, shortBreak, longBreak };
-
-      localStorage.setItem("omni_timer_config", JSON.stringify(cfg));
-      await this.kernel.storageManager.set("org.omni.plugin.timer", "timer_config", cfg);
-
-      if (btnSaveTimer) {
-        btnSaveTimer.textContent = "Saved!";
-        setTimeout(() => {
-          btnSaveTimer.textContent = "Save Timer Settings";
-        }, 1500);
-      }
-    });
-
-    btnClearTasks?.addEventListener("click", async () => {
-      try {
-        const tasksRaw = await this.kernel.storageManager.get("org.omni.plugin.checklist", "checklist_tasks");
-        if (Array.isArray(tasksRaw)) {
-          const active = (tasksRaw as any[]).filter((t: any) => !t.done);
-          await this.kernel.storageManager.set("org.omni.plugin.checklist", "checklist_tasks", active);
-        }
-        if (btnClearTasks) {
-          btnClearTasks.textContent = "Completed Tasks Cleared!";
-          setTimeout(() => {
-            btnClearTasks.textContent = "Clear Completed Tasks";
-          }, 1500);
-        }
-      } catch (err) {
-        console.error("Failed to clear tasks:", err);
-      }
-    });
-
-    cfgLimit?.addEventListener("change", () => {
-      if (cfgLimit) {
-        localStorage.setItem("omni_feed_limit", cfgLimit.value);
-      }
-    });
-  }
 
   // --- Milestone 6: Transparent Cross-App Intents & Open With Chooser ---
 
