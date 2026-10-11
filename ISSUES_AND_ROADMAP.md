@@ -104,6 +104,8 @@ The primary objective was transitioning Omni from requiring proprietary SDKs and
 |  [MILESTONE 10] Multi-Account Management & Passphrase Encryption                      |
 |  [MILESTONE 11] NIP-44 End-to-End Encrypted Messaging                                 |
 |  [MILESTONE 12] Headless Web Worker Sandbox Mode                                      |
+|  [MILESTONE 13] Atomic Single-File nsite Support (x Tag & NIP-5D Compatibility)       |
+|  [MILESTONE 14] Host Security Hardening & Private Network SSRF Protection             |
 +---------------------------------------------------------------------------------------+
 ```
 
@@ -143,3 +145,20 @@ The primary objective was transitioning Omni from requiring proprietary SDKs and
   1. Add Web Worker execution backend to `SandboxInstance` using `@remote-dom/core/polyfill`.
   2. Permit background services to run headlessly without DOM frame overhead.
 * **Priority:** Low / P3
+
+### Milestone 13: Atomic Single-File nsite Support (`x` Tag & NIP-5D Compatibility)
+* **Goal:** Allow Omni to resolve, verify, and execute single-file HTML bundles via SHA-256 digests (`["x", "<sha256>"]`) in addition to multi-file NIP-5A trees.
+* **Scope:**
+  1. **`x` Tag Artifact Resolver:** Update `NostrPluginResolver` (`packages/core/src/plugins/nostr-plugin-resolver.ts`) to parse single-file artifact SHA-256 digests (`["x", "<sha256>"]`) from kind `35129`, `15129`, or `5129` manifest events.
+  2. **Atomic Blob Verification:** Fetch the single `/index.html` payload from Blossom servers, verify hash integrity, and cache directly in `LocalEventStore` / IndexedDB for 0ms offline execution.
+  3. **Direct Sandbox Injection:** Feed the verified single-file document directly into `SandboxInstance.iframe.srcdoc`, guaranteeing immunity to relative path / opaque-origin resolution failures.
+  4. **Ecosystem Interoperability:** Enable Omni to run standalone web applets published across both NIP-5A (nsites) and NIP-5D (napplets) ecosystems without code changes.
+* **Priority:** High / P1
+
+### Milestone 14: Host Security Hardening & Private Network SSRF Protection
+* **Goal:** Protect the host client and the user's private intranet from SSRF and confused-deputy attacks when proxying Blossom blob fetches and external media.
+* **Scope:**
+  1. **DNS-Time Private IP Filter:** Inspect resolved IP addresses before establishing HTTP socket connections; block RFC 1918 private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), loopback (`127.0.0.0/8`, `::1`), link-local, and cloud metadata endpoints (`169.254.169.254`).
+  2. **Redirect Re-Validation:** Enforce IP re-checking on every HTTP 3xx redirect to prevent DNS-rebinding and redirect bypasses.
+  3. **Safe Media Processing:** Isolate SVG and rich media parsing in unprivileged sandboxes to prevent embedded script execution and XXE attacks.
+* **Priority:** Medium / P2
