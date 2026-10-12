@@ -1,5 +1,6 @@
 import { OmniKernel } from "@omni/core";
-import { OmniShell, InstalledPluginEntry } from "@omni/plugin-shell";
+import { OmniShell, PanoramaShell, InstalledPluginEntry } from "@omni/plugin-shell";
+import { OmniShellHost } from "@omni/types";
 
 // Import compiled plugin scripts (using Vite ?raw import)
 import feedScript from "../../../packages/plugins/feed/dist/index.js?raw";
@@ -10,7 +11,9 @@ import timerScript from "../../../packages/plugins/timer/dist/index.js?raw";
 import omniRuntimeScript from "../public/omni-runtime.js?raw";
 
 const STORAGE_KEY_NSEC = "omni_privkey";
+const STORAGE_KEY_SHELL = "omni_active_shell";
 const savedPrivkey = localStorage.getItem(STORAGE_KEY_NSEC) || undefined;
+const activeShellType = localStorage.getItem(STORAGE_KEY_SHELL) || "classic";
 
 // Initial First-Class Core System Standalone nsites (Zero Manifests)
 const initialPlugins: InstalledPluginEntry[] = [
@@ -90,7 +93,7 @@ const initialPlugins: InstalledPluginEntry[] = [
   }
 ];
 
-let shell: OmniShell;
+let shell: OmniShell | PanoramaShell;
 
 // 1. Initialize Host Orchestration Kernel
 const kernel = new OmniKernel({
@@ -98,16 +101,16 @@ const kernel = new OmniKernel({
   bootstrapRelays: ["wss://relay.damus.io", "wss://relay.ditto.pub"],
   runtimeScript: omniRuntimeScript,
   slotResolver: (pluginId, compId, slot) => {
-    return shell?.getContainerForPluginSlot(pluginId, slot, compId);
+    return (shell as any)?.getContainerForPluginSlot(pluginId, slot, compId);
   },
   onSlotAction: (action, slot) => {
-    shell?.handleSlotAction(action, slot);
+    (shell as any)?.handleSlotAction?.(action, slot);
   },
   onHandleUri: (uri, srcId) => {
-    return shell?.handleUri(uri, srcId);
+    return (shell as any)?.handleUri?.(uri, srcId);
   },
   onHandleShare: (payload, srcId) => {
-    return shell?.handleShare(payload, srcId);
+    return (shell as any)?.handleShare?.(payload, srcId);
   }
 });
 
@@ -118,12 +121,22 @@ async function startApp() {
   const rootEl = document.getElementById("omni-root");
   if (!rootEl) throw new Error("Missing #omni-root container in DOM");
 
-  // Mount Shell UI Plugin into root container
-  shell = new OmniShell({
-    root: rootEl,
-    kernel,
-    installedPlugins: initialPlugins
-  });
+  // Mount Shell UI Plugin into root container (PanoramaShell or OmniShell Classic)
+  if (activeShellType === "panorama") {
+    console.log("✦ [Omni Web] Activating PanoramaShell (People Hub Modern UI)...");
+    shell = new PanoramaShell({
+      root: rootEl,
+      kernel,
+      installedPlugins: initialPlugins
+    });
+  } else {
+    console.log("✦ [Omni Web] Activating OmniShell (Classic Dock & Viewports)...");
+    shell = new OmniShell({
+      root: rootEl,
+      kernel,
+      installedPlugins: initialPlugins
+    });
+  }
 
   // Restore local workspace customizations (0ms instant startup)
   shell.loadInitialWorkspace();

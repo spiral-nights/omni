@@ -36,6 +36,7 @@ export interface OmniWorkspaceState {
   updatedAt: number;
   activePage?: string;
   autoSync?: boolean;
+  shellType?: "classic" | "panorama" | string;
   plugins: OmniWorkspacePluginConfig[];
 }
 

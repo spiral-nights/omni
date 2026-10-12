@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import "fake-indexeddb/auto";
 import { OmniKernel } from "@omni/core";
-import { OmniShell, InstalledPluginEntry } from "../src/index.js";
+import { OmniShell, PanoramaShell, InstalledPluginEntry } from "../src/index.js";
 
 describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
   let root: HTMLElement;
@@ -1113,7 +1113,88 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(profileCard?.innerHTML).toContain('circle cx="12" cy="7" r="4"');
     });
   });
+
+  describe("PanoramaShell (Windows Phone People Hub Experience)", () => {
+    let panoramaRoot: HTMLElement;
+    let panoramaKernel: OmniKernel;
+    let panoramaShell: PanoramaShell;
+
+    beforeEach(() => {
+      panoramaRoot = document.createElement("div");
+      document.body.appendChild(panoramaRoot);
+      panoramaKernel = new OmniKernel({ bootstrapRelays: [] });
+      panoramaShell = new PanoramaShell({
+        root: panoramaRoot,
+        kernel: panoramaKernel,
+        installedPlugins: [...mockPlugins]
+      });
+      panoramaShell.mount();
+    });
+
+    it("renders the signature hero title 'omni' and horizontal pivot headers", () => {
+      const heroTitle = panoramaRoot.querySelector(".panorama-hero-title");
+      expect(heroTitle).toBeTruthy();
+      expect(heroTitle?.textContent).toBe("omni");
+
+      const pivotNav = panoramaRoot.querySelector(".panorama-pivot-nav");
+      expect(pivotNav).toBeTruthy();
+      const pivotItems = Array.from(panoramaRoot.querySelectorAll(".panorama-pivot-item")).map(
+        (el) => el.textContent?.trim()
+      );
+      expect(pivotItems).toContain("what's new");
+      expect(pivotItems).toContain("apps");
+      expect(pivotItems).toContain("widgets");
+      expect(pivotItems).toContain("system");
+    });
+
+    it("renders live accent tiles for installed apps in the apps section", () => {
+      const tilesGrid = panoramaRoot.querySelector("#panorama-tiles-grid");
+      expect(tilesGrid).toBeTruthy();
+      const tiles = Array.from(panoramaRoot.querySelectorAll(".panorama-tile"));
+      expect(tiles.length).toBe(mockPlugins.length);
+
+      const feedTile = tiles.find((t) => t.textContent?.includes("Timeline Feed"));
+      expect(feedTile).toBeTruthy();
+      const timerTile = tiles.find((t) => t.textContent?.includes("Focus Timer"));
+      expect(timerTile).toBeTruthy();
+    });
+
+    it("opens full-page apps in the slide-in overlay and allows back navigation", () => {
+      const overlay = panoramaRoot.querySelector("#panorama-full-app-overlay");
+      expect(overlay?.classList.contains("open")).toBe(false);
+
+      panoramaShell.openApp("org.omni.plugin.feed");
+      expect(overlay?.classList.contains("open")).toBe(true);
+
+      const title = panoramaRoot.querySelector("#panorama-overlay-title");
+      expect(title?.textContent).toBe("Timeline Feed");
+
+      panoramaShell.closeApp();
+      expect(overlay?.classList.contains("open")).toBe(false);
+    });
+
+    it("exports and applies workspace state with shellType: 'panorama'", () => {
+      const state = panoramaShell.exportWorkspaceState();
+      expect(state.shellType).toBe("panorama");
+      expect(state.plugins.length).toBe(mockPlugins.length);
+
+      // Disable a plugin and verify state application
+      state.plugins[1].enabled = false;
+      panoramaShell.applyWorkspaceState(state);
+      expect(panoramaShell.installedPlugins[1].enabled).toBe(false);
+    });
+
+    it("renders the Windows Phone ApplicationBar with back, home, search, and more buttons", () => {
+      const appBar = panoramaRoot.querySelector("#panorama-app-bar");
+      expect(appBar).toBeTruthy();
+      expect(panoramaRoot.querySelector("#btn-bar-back")).toBeTruthy();
+      expect(panoramaRoot.querySelector("#btn-bar-home")).toBeTruthy();
+      expect(panoramaRoot.querySelector("#btn-bar-search")).toBeTruthy();
+      expect(panoramaRoot.querySelector("#btn-bar-more")).toBeTruthy();
+    });
+  });
 });
+
 
 
 

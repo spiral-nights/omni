@@ -2476,6 +2476,26 @@ export class OmniShell implements OmniShellHost {
                   </div>
                 </div>
 
+                <!-- Shell Experience Switcher -->
+                <div id="shell-experience-box" style="display: flex; flex-direction: column; gap: 8px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 12px 14px; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                    <div>
+                      <strong style="font-size: 0.85rem; color: var(--omni-text-primary); display: flex; align-items: center; gap: 6px;">
+                        ${icon("layout", 15)} Shell Experience
+                      </strong>
+                      <span style="font-size: 0.72rem; color: var(--omni-text-muted);">Switch between Omni Classic dock layout and the Windows Phone Panorama Hub.</span>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                      <button id="btn-shell-classic" class="btn-secondary active" style="font-size: 0.72rem; padding: 3px 8px; border-color: var(--omni-accent-primary); color: var(--omni-accent-primary);">
+                        Omni Classic
+                      </button>
+                      <button id="btn-shell-panorama" class="btn-secondary" style="font-size: 0.72rem; padding: 3px 8px;">
+                        Panorama Hub
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <p style="font-size: 0.78rem; color: var(--omni-text-muted); margin: 0;">
                   Manage installed Nostr nsites, assign their navigation viewports (Full-Page App, Dock Shortcut, or Widget), and configure permissions.
                 </p>
@@ -2758,6 +2778,21 @@ export class OmniShell implements OmniShellHost {
     chkAutoSync?.addEventListener("change", () => {
       this.autoSyncNip78 = !!chkAutoSync.checked;
       this.saveLocalWorkspace();
+    });
+
+    const btnShellClassic = document.getElementById("btn-shell-classic");
+    const btnShellPanorama = document.getElementById("btn-shell-panorama");
+    btnShellClassic?.addEventListener("click", () => {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("omni_active_shell", "classic");
+        window.location.reload();
+      }
+    });
+    btnShellPanorama?.addEventListener("click", () => {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("omni_active_shell", "panorama");
+        window.location.reload();
+      }
     });
   }
 

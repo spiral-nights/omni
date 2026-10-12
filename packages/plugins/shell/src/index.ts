@@ -1,4 +1,6 @@
 export { OmniShell } from "./shell.js";
+export { PanoramaShell } from "./panorama-shell.js";
+export type { PanoramaPivot } from "./panorama-shell.js";
 export type {
   OmniShellOptions,
   InstalledPluginEntry,

@@ -32,9 +32,36 @@ export type IconName =
   | "grid"
   | "apps"
   | "pin"
-  | "help-circle";
+  | "help-circle"
+  | "arrow-left"
+  | "search"
+  | "more"
+  | "windows";
 
 export const ICONS: Record<IconName, string> = {
+  "arrow-left": `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="19" y1="12" x2="5" y2="12"/>
+    <polyline points="12 19 5 12 12 5"/>
+  </svg>`,
+
+  search: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="8"/>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>`,
+
+  more: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+    <circle cx="19" cy="12" r="1.5" fill="currentColor"/>
+    <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
+  </svg>`,
+
+  windows: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="7" height="7"/>
+    <rect x="14" y="3" width="7" height="7"/>
+    <rect x="14" y="14" width="7" height="7"/>
+    <rect x="3" y="14" width="7" height="7"/>
+  </svg>`,
+
   apps: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
     <rect x="3" y="3" width="7" height="7" rx="1.5"/>
     <rect x="14" y="3" width="7" height="7" rx="1.5"/>
