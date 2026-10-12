@@ -602,6 +602,17 @@ export class PanoramaShell implements OmniShellHost {
             --radius-lg: 0px;
             --radius-pill: 0px;
           }
+          .panorama-shell-root,
+          .panorama-shell-root * {
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
+          }
+          .panorama-shell-root::-webkit-scrollbar,
+          .panorama-shell-root *::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+          }
           .panorama-shell-root .composer-card,
           .panorama-shell-root .timer-widget-card,
           .panorama-shell-root .checklist-widget-card,

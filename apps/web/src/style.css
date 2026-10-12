@@ -1302,6 +1302,19 @@ body.theme-panorama,
   user-select: none;
 }
 
+.panorama-shell-root,
+.panorama-shell-root * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.panorama-shell-root::-webkit-scrollbar,
+.panorama-shell-root *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* 1. Panorama Hero Header & Pivot Navigation */
 .panorama-hero-header {
   padding: 24px 24px 8px 24px;
@@ -1384,6 +1397,14 @@ body.theme-panorama,
   display: flex;
   flex-direction: column;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.panorama-section::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 @media (min-width: 768px) {
@@ -1610,6 +1631,14 @@ body.theme-panorama,
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.panorama-full-app-container::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .panorama-app-page {
