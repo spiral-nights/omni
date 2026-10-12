@@ -36,15 +36,10 @@ export type IconName =
 
 export const ICONS: Record<IconName, string> = {
   apps: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="3" width="4.5" height="4.5" rx="1"/>
-    <rect x="9.75" y="3" width="4.5" height="4.5" rx="1"/>
-    <rect x="16.5" y="3" width="4.5" height="4.5" rx="1"/>
-    <rect x="3" y="9.75" width="4.5" height="4.5" rx="1"/>
-    <rect x="9.75" y="9.75" width="4.5" height="4.5" rx="1"/>
-    <rect x="16.5" y="9.75" width="4.5" height="4.5" rx="1"/>
-    <rect x="3" y="16.5" width="4.5" height="4.5" rx="1"/>
-    <rect x="9.75" y="16.5" width="4.5" height="4.5" rx="1"/>
-    <rect x="16.5" y="16.5" width="4.5" height="4.5" rx="1"/>
+    <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+    <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+    <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+    <rect x="3" y="14" width="7" height="7" rx="1.5"/>
   </svg>`,
 
   grid: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
