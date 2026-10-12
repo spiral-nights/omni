@@ -1,2 +1,1040 @@
-// Auto-generated from panorama.css. Do not edit directly.
-export const PANORAMA_SHELL_CSS = "/* ==========================================================================\n   PanoramaShell — Windows Phone Modern / People Hub Design System\n   ========================================================================== */\n\n:root.theme-panorama,\nbody.theme-panorama,\n.panorama-shell-root {\n  --omni-bg-canvas: #000000;\n  --omni-bg-surface: #111111;\n  --omni-bg-elevated: #161616;\n  --omni-bg-subtle: #222222;\n\n  --omni-text-primary: #ffffff;\n  --omni-text-secondary: #aaaaaa;\n  --omni-text-muted: #666666;\n\n  --omni-border-subtle: #1e1e1e;\n  --omni-border-strong: #333333;\n  --omni-border-focus: #00a4ef;\n\n  --omni-accent-primary: #00a4ef;\n  --omni-accent-hover: #0078d7;\n  --omni-accent-contrast: #ffffff;\n\n  --omni-status-online: #00a4ef;\n  --omni-status-badge: #00a4ef;\n\n  --omni-radius-sm: 0px;\n  --omni-radius-md: 0px;\n  --omni-radius-lg: 0px;\n  --omni-radius-pill: 0px;\n\n  /* Standard Generic Tokens used by standalone plugins */\n  --bg-canvas: #000000;\n  --bg-surface: #111111;\n  --bg-elevated: #161616;\n  --bg-subtle: #222222;\n\n  --text-primary: #ffffff;\n  --text-secondary: #aaaaaa;\n  --text-muted: #666666;\n\n  --border-subtle: #1e1e1e;\n  --border-strong: #333333;\n  --border-focus: #00a4ef;\n\n  --accent-primary: #00a4ef;\n  --accent-hover: #0078d7;\n  --accent-contrast: #ffffff;\n\n  --status-online: #00a4ef;\n  --status-badge: #00a4ef;\n\n  --radius-sm: 0px;\n  --radius-md: 0px;\n  --radius-lg: 0px;\n  --radius-pill: 0px;\n}\n\n.panorama-shell-root {\n  display: flex;\n  flex-direction: column;\n  width: 100vw;\n  height: 100vh;\n  background-color: #000000;\n  color: #ffffff;\n  overflow: hidden;\n  position: relative;\n  font-family: -apple-system, \"Segoe UI\", \"Segoe UI Web Light\", \"Segoe UI Light\", Roboto, Helvetica, Arial, sans-serif;\n  user-select: none;\n}\n\n.panorama-shell-root,\n.panorama-shell-root * {\n  scrollbar-width: none;\n  -ms-overflow-style: none;\n}\n\n.panorama-shell-root::-webkit-scrollbar,\n.panorama-shell-root *::-webkit-scrollbar {\n  display: none;\n  width: 0;\n  height: 0;\n}\n\n/* 1. Panorama Hero Header & Pivot Navigation */\n.panorama-hero-header {\n  padding: 24px 24px 8px 24px;\n  flex-shrink: 0;\n  background: #000000;\n  z-index: 10;\n}\n\n.panorama-hero-title {\n  font-size: 3.2rem;\n  font-weight: 200;\n  letter-spacing: -0.04em;\n  line-height: 1;\n  color: #ffffff;\n  margin: 0 0 12px 0;\n  text-transform: lowercase;\n}\n\n.panorama-pivot-nav {\n  display: flex;\n  gap: 28px;\n  overflow-x: auto;\n  scrollbar-width: none;\n  white-space: nowrap;\n  scroll-behavior: smooth;\n  padding-right: calc(100vw - 120px);\n}\n\n.panorama-pivot-nav::-webkit-scrollbar {\n  display: none;\n}\n\n.panorama-pivot-item {\n  background: transparent;\n  border: none;\n  color: #666666;\n  font-size: 1.55rem;\n  font-weight: 300;\n  letter-spacing: -0.03em;\n  cursor: pointer;\n  padding: 0;\n  text-transform: lowercase;\n  transition: color 0.15s ease;\n  font-family: inherit;\n  flex-shrink: 0;\n}\n\n.panorama-pivot-item:hover {\n  color: #aaaaaa;\n}\n\n.panorama-pivot-item.active {\n  color: #ffffff;\n  font-weight: 400;\n}\n\n/* 2. Panorama Horizontal Canvas */\n.panorama-canvas {\n  flex: 1;\n  display: flex;\n  overflow-x: auto;\n  overflow-y: hidden;\n  scroll-snap-type: x mandatory;\n  scrollbar-width: none;\n  -webkit-overflow-scrolling: touch;\n}\n\n.panorama-canvas::-webkit-scrollbar {\n  display: none;\n}\n\n.panorama-section {\n  flex: 0 0 100vw;\n  max-width: 100vw;\n  height: 100%;\n  scroll-snap-align: start;\n  overflow-y: auto;\n  overflow-x: hidden;\n  padding: 8px 24px 24px 24px;\n  display: flex;\n  flex-direction: column;\n  -webkit-overflow-scrolling: touch;\n  scrollbar-width: none;\n  -ms-overflow-style: none;\n}\n\n.panorama-section::-webkit-scrollbar {\n  display: none;\n  width: 0;\n  height: 0;\n}\n\n@media (min-width: 768px) {\n  .panorama-section {\n    flex: 0 0 540px;\n    max-width: 540px;\n  }\n}\n\n.panorama-section-content {\n  display: flex;\n  flex-direction: column;\n  gap: 16px;\n  width: 100%;\n  min-height: 100%;\n  height: auto;\n  flex: 1;\n}\n\n/* Full page vertical scroll effect: prevent slots from clipping or trapping inner scrollbars */\n.panorama-section .omni-slot,\n.panorama-feed-slot,\n.panorama-main-viewport-slot {\n  overflow: visible !important;\n  height: auto !important;\n  min-height: 100% !important;\n  contain: none !important;\n  flex: 1;\n}\n\n.panorama-section-title-bar {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  margin-bottom: 4px;\n}\n\n.panorama-section-title-bar h2 {\n  font-size: 1.25rem;\n  font-weight: 300;\n  color: #ffffff;\n  letter-spacing: -0.02em;\n  text-transform: lowercase;\n}\n\n.panorama-badge {\n  font-size: 0.72rem;\n  color: #888888;\n  font-weight: 400;\n}\n\n/* 3. Live Accent Tiles (Windows Phone Tile Grid) */\n.panorama-tiles-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));\n  gap: 12px;\n}\n\n.panorama-tile {\n  aspect-ratio: 1 / 1;\n  background-color: #00a4ef;\n  color: #ffffff;\n  padding: 14px;\n  display: flex;\n  flex-direction: column;\n  justify-content: space-between;\n  position: relative;\n  cursor: pointer;\n  transition: transform 0.12s ease, opacity 0.12s ease;\n  user-select: none;\n}\n\n.panorama-tile:hover {\n  transform: scale(0.97);\n}\n\n.panorama-tile:active {\n  transform: scale(0.94);\n  opacity: 0.85;\n}\n\n.panorama-tile-icon {\n  width: 32px;\n  height: 32px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  color: #ffffff;\n}\n\n.panorama-tile-title {\n  font-size: 0.85rem;\n  font-weight: 600;\n  line-height: 1.2;\n  letter-spacing: -0.01em;\n  word-break: break-word;\n}\n\n.panorama-tile-pin {\n  position: absolute;\n  top: 8px;\n  right: 8px;\n  opacity: 0.6;\n}\n\n/* 4. Panorama Widgets & System Cards */\n.panorama-widgets-grid {\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n.panorama-system-card {\n  background: #111111;\n  border: 1px solid #222222;\n  padding: 14px 16px;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.panorama-system-card-header {\n  display: flex;\n  align-items: center;\n  gap: 14px;\n}\n\n.panorama-system-avatar {\n  width: 48px;\n  height: 48px;\n  background: #00a4ef;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  font-size: 1.2rem;\n  color: #ffffff;\n}\n\n.panorama-system-identity {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n}\n\n.panorama-system-identity strong {\n  font-size: 1rem;\n  font-weight: 500;\n  color: #ffffff;\n}\n\n.panorama-system-identity code {\n  font-size: 0.72rem;\n  color: #888888;\n  font-family: var(--omni-font-mono);\n}\n\n.btn-panorama-action {\n  background: #222222;\n  border: 1px solid #333333;\n  color: #ffffff;\n  padding: 6px 12px;\n  font-size: 0.75rem;\n  cursor: pointer;\n  transition: all 0.15s ease;\n  font-family: inherit;\n}\n\n.btn-panorama-action:hover {\n  background: #333333;\n}\n\n.btn-panorama-action.active {\n  background: #00a4ef;\n  border-color: #00a4ef;\n  color: #ffffff;\n  font-weight: 600;\n}\n\n.panorama-system-plugin-row {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  padding: 8px 0;\n  border-bottom: 1px solid #1a1a1a;\n}\n\n/* 5. Embedded Active Application in Applications Section */\n.panorama-full-app-overlay {\n  position: relative;\n  width: 100%;\n  min-height: 100%;\n  flex: 1;\n  background: transparent;\n  display: none;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.panorama-full-app-overlay.open {\n  display: flex;\n}\n\n.panorama-section.has-active-app {\n  flex: 0 0 90vw;\n  max-width: 90vw;\n}\n\n@media (min-width: 768px) {\n  .panorama-section.has-active-app {\n    flex: 0 0 620px;\n    max-width: 620px;\n  }\n}\n\n.panorama-full-app-header {\n  height: 56px;\n  padding: 0 16px;\n  display: flex;\n  align-items: center;\n  gap: 16px;\n  border-bottom: 1px solid #1a1a1a;\n  background: #000000;\n  flex-shrink: 0;\n}\n\n.panorama-full-app-header h2 {\n  font-size: 1.2rem;\n  font-weight: 400;\n  color: #ffffff;\n  letter-spacing: -0.02em;\n}\n\n.panorama-full-app-container {\n  flex: 1;\n  overflow-y: auto;\n  overflow-x: hidden;\n  -webkit-overflow-scrolling: touch;\n  scrollbar-width: none;\n  -ms-overflow-style: none;\n}\n\n.panorama-full-app-container::-webkit-scrollbar {\n  display: none;\n  width: 0;\n  height: 0;\n}\n\n.panorama-app-page {\n  width: 100%;\n  min-height: 100%;\n  height: auto;\n  overflow: visible !important;\n}\n\n.panorama-app-page .omni-slot {\n  overflow: visible !important;\n  height: auto !important;\n  min-height: 100% !important;\n  contain: none !important;\n}\n\n/* 6. Action Circle Buttons (Header / Inspector / Dialogs) */\n.btn-app-bar-circle {\n  width: 44px;\n  height: 44px;\n  border-radius: 50%;\n  border: 2px solid #ffffff;\n  background: transparent;\n  color: #ffffff;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  cursor: pointer;\n  transition: all 0.15s ease;\n  padding: 0;\n}\n\n.btn-app-bar-circle:hover {\n  background: #ffffff;\n  color: #000000;\n}\n\n.btn-app-bar-circle:active {\n  transform: scale(0.92);\n}\n\n.panorama-drawer-item:hover {\n  background: #2a2a2a;\n}\n\n/* 8. Panorama Feed, Composer & Companion Widget Styles */\n\n/* Feed Container */\n.feed-container {\n  width: 100%;\n  max-width: 100%;\n  margin: 0;\n  display: flex;\n  flex-direction: column;\n  min-height: 100%;\n  height: auto;\n  background: transparent;\n  padding: 0;\n  box-sizing: border-box;\n}\n\n.feed-top-header {\n  display: flex;\n  justify-content: flex-end;\n  align-items: center;\n  padding: 4px 0 12px 0;\n  background: transparent;\n  border-bottom: 1px solid #1a1a1a;\n}\n\n.feed-top-header .feed-title {\n  display: none;\n}\n\n.btn-refresh-feed {\n  background: #111111;\n  border: 1px solid #222222;\n  color: #aaaaaa;\n  font-size: 0.76rem;\n  font-weight: 500;\n  padding: 4px 10px;\n  border-radius: 0px;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  transition: all 0.15s ease;\n}\n\n.btn-refresh-feed:hover {\n  color: #ffffff;\n  border-color: #00a4ef;\n  background: #161616;\n}\n\n.btn-refresh-feed.spinning svg {\n  animation: omni-spin 0.8s linear infinite;\n}\n\n@keyframes omni-spin {\n  from { transform: rotate(0deg); }\n  to { transform: rotate(360deg); }\n}\n\n/* Note Composer */\n.feed-composer,\n.composer-card {\n  display: flex;\n  gap: 14px;\n  padding: 14px 0;\n  border: none;\n  background: transparent;\n  border-radius: 0;\n  margin-bottom: 0;\n  border-bottom: 1px solid #1a1a1a;\n  box-sizing: border-box;\n}\n\n.composer-avatar-col {\n  flex-shrink: 0;\n}\n\n.composer-avatar {\n  width: 40px;\n  height: 40px;\n  border-radius: 0px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  color: #ffffff;\n  font-weight: 700;\n  font-size: 0.95rem;\n  background: #00a4ef;\n  user-select: none;\n}\n\n.composer-main-col {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n  min-width: 0;\n}\n\n.composer-input {\n  width: 100%;\n  background: transparent;\n  border: none;\n  color: #ffffff;\n  font-family: inherit;\n  font-size: 1.05rem;\n  line-height: 1.45;\n  resize: vertical;\n  min-height: 52px;\n  outline: none;\n  padding: 4px 0;\n  box-sizing: border-box;\n}\n\n.composer-input::placeholder {\n  color: #666666;\n}\n\n.composer-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  padding-top: 6px;\n}\n\n.btn-publish {\n  background: #00a4ef;\n  color: #ffffff;\n  font-weight: 600;\n  border: none;\n  padding: 6px 18px;\n  border-radius: 0px;\n  cursor: pointer;\n  font-size: 0.84rem;\n  transition: all 0.15s ease;\n  margin-left: auto;\n}\n\n.btn-publish:hover {\n  background: #0078d7;\n}\n\n.btn-publish:disabled {\n  opacity: 0.4;\n  cursor: not-allowed;\n}\n\n/* Timeline Notes Stream */\n.notes-list {\n  display: flex;\n  flex-direction: column;\n  width: 100%;\n  overflow: visible;\n  padding: 0;\n  margin: 0;\n}\n\n.feed-container .notes-list {\n  display: flex;\n  flex-direction: column;\n  gap: 0;\n  overflow: visible;\n  flex: 1;\n}\n\n.loading-state {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 10px;\n  padding: 32px 16px;\n  color: #666666;\n  font-size: 0.88rem;\n}\n\n.loading-spinner {\n  width: 18px;\n  height: 18px;\n  border: 2px solid #333333;\n  border-top-color: #00a4ef;\n  border-radius: 50%;\n  animation: omni-spin 0.8s linear infinite;\n}\n\n.empty-state {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  padding: 48px 16px;\n  gap: 8px;\n  text-align: center;\n  color: #777777;\n}\n\n.empty-icon-wrap {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 44px;\n  height: 44px;\n  background: #111111;\n  border: 1px solid #222222;\n  margin-bottom: 4px;\n  color: #00a4ef;\n}\n\n.empty-state-title {\n  font-size: 1.1rem;\n  font-weight: 300;\n  letter-spacing: -0.01em;\n  color: #ffffff;\n}\n\n.empty-state-subtitle {\n  font-size: 0.85rem;\n  color: #777777;\n  max-width: 340px;\n  line-height: 1.4;\n}\n\n\n/* Individual Post / Note Card */\n.feed-post,\n.note-card {\n  display: flex;\n  gap: 14px;\n  padding: 14px 0;\n  border: none;\n  border-bottom: 1px solid #161616;\n  background: transparent;\n  transition: background 0.12s ease;\n  text-decoration: none;\n  box-sizing: border-box;\n}\n\n.feed-post:hover,\n.note-card:hover {\n  background: transparent;\n}\n\n.feed-post-avatar-col {\n  flex-shrink: 0;\n}\n\n.feed-avatar {\n  width: 40px;\n  height: 40px;\n  border-radius: 0px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  color: #ffffff;\n  font-weight: 700;\n  font-size: 0.9rem;\n  user-select: none;\n  background: #1f1f1f;\n}\n\n.feed-post-body {\n  flex: 1;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n}\n\n.feed-post-header,\n.note-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 2px;\n}\n\n.feed-post-author-info {\n  display: flex;\n  align-items: baseline;\n  gap: 6px;\n  flex-wrap: wrap;\n  line-height: 1.3;\n}\n\n.feed-author-name,\n.note-author {\n  font-weight: 600;\n  font-size: 0.94rem;\n  color: #ffffff;\n  white-space: nowrap;\n}\n\n.feed-author-handle {\n  font-size: 0.82rem;\n  color: #666666;\n  white-space: nowrap;\n}\n\n.feed-dot {\n  font-size: 0.8rem;\n  color: #666666;\n}\n\n.feed-time,\n.note-meta {\n  font-size: 0.82rem;\n  color: #666666;\n  white-space: nowrap;\n}\n\n.feed-reply-badge {\n  font-size: 0.76rem;\n  color: #888888;\n  margin-bottom: 4px;\n  display: flex;\n  align-items: center;\n  gap: 4px;\n}\n\n.feed-post-content,\n.note-content {\n  font-size: 0.95rem;\n  line-height: 1.5;\n  color: #eeeeee;\n  margin: 6px 0 10px 0;\n  word-break: break-word;\n  white-space: pre-wrap;\n}\n\n.feed-link {\n  color: #00a4ef;\n  text-decoration: none;\n  word-break: break-all;\n}\n\n.feed-link:hover {\n  text-decoration: underline;\n}\n\n.feed-post-actions,\n.note-actions {\n  display: flex;\n  align-items: center;\n  gap: 24px;\n  margin-top: 2px;\n  border-top: none;\n  padding-top: 0;\n}\n\n.feed-action-btn,\n.note-action-btn {\n  background: transparent;\n  border: none;\n  outline: none;\n  box-shadow: none;\n  padding: 0;\n  margin: 0;\n  border-radius: 0;\n  color: #888888;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 0.82rem;\n  line-height: 1;\n  cursor: pointer;\n  transition: color 0.15s ease;\n}\n\n.feed-action-btn:hover,\n.note-action-btn:hover {\n  color: #00a4ef;\n}\n\n.new-posts-pill {\n  position: sticky;\n  top: 10px;\n  align-self: center;\n  background: #00a4ef;\n  color: #ffffff;\n  font-size: 0.8rem;\n  font-weight: 600;\n  padding: 6px 16px;\n  border-radius: 0px;\n  border: none;\n  cursor: pointer;\n  z-index: 25;\n}\n\n.cache-indicator {\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  font-size: 0.74rem;\n  color: #00a4ef;\n  font-weight: 500;\n}\n\n/* Companion Widgets (Timer, Checklist, etc.) */\n.widget-card,\n.timer-widget-card,\n.checklist-widget-card,\n.checklist-card {\n  background: #111111;\n  border: 1px solid #222222;\n  border-radius: 0px;\n  padding: 16px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  box-sizing: border-box;\n}\n\n.timer-digits {\n  color: #00a4ef;\n  font-size: 2.5rem;\n  font-weight: 200;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n  margin: 8px 0;\n}\n\n.btn-timer-start,\n.btn-add-task {\n  background: #00a4ef;\n  color: #ffffff;\n  border: none;\n  border-radius: 0px;\n  padding: 8px 16px;\n  font-weight: 600;\n  cursor: pointer;\n  transition: background 0.15s ease;\n}\n\n.btn-timer-start:hover,\n.btn-add-task:hover {\n  background: #0078d7;\n}\n\n.btn-timer-pause,\n.btn-timer-reset {\n  background: #1a1a1a;\n  border: 1px solid #333333;\n  color: #ffffff;\n  border-radius: 0px;\n  padding: 8px 16px;\n  cursor: pointer;\n}\n\n.btn-timer-pause:hover,\n.btn-timer-reset:hover {\n  background: #252525;\n}\n\n/* Form Controls in Panorama Theme */\n.panorama-shell-root textarea:not(.composer-input),\n.panorama-shell-root input[type=\"text\"],\n.panorama-shell-root input[type=\"number\"],\n.panorama-shell-root select {\n  border-radius: 0px;\n  background: #161616;\n  border: 1px solid #333333;\n  color: #ffffff;\n  padding: 6px 10px;\n  font-size: 0.88rem;\n  box-sizing: border-box;\n}\n\n.panorama-shell-root input[type=\"checkbox\"] {\n  accent-color: #00a4ef;\n  cursor: pointer;\n}\n\n.panorama-shell-root .omni-toggle {\n  position: relative;\n  display: inline-block;\n  width: 44px;\n  height: 22px;\n  flex-shrink: 0;\n}\n\n.panorama-shell-root .omni-toggle input {\n  opacity: 0;\n  width: 0;\n  height: 0;\n  position: absolute;\n  margin: 0;\n  padding: 0;\n  pointer-events: none;\n}\n\n.panorama-shell-root .toggle-slider {\n  position: absolute;\n  cursor: pointer;\n  inset: 0;\n  border-radius: 0px;\n  border: 2px solid #555555;\n  background-color: transparent;\n  transition: 0.15s ease;\n}\n\n.panorama-shell-root .toggle-slider:before {\n  position: absolute;\n  content: \"\";\n  border-radius: 0px;\n  width: 14px;\n  height: 14px;\n  left: 2px;\n  bottom: 2px;\n  background-color: #ffffff;\n  transition: 0.15s ease;\n}\n\n.panorama-shell-root .omni-toggle input:checked + .toggle-slider {\n  background-color: #00a4ef;\n  border-color: #00a4ef;\n}\n\n.panorama-shell-root .omni-toggle input:checked + .toggle-slider:before {\n  transform: translateX(22px);\n  background-color: #000000;\n}\n\n/* 9. Panorama Plugin Configuration & Inspector */\n.panorama-plugin-config-card {\n  background: #111111;\n  border: 1px solid #222222;\n  transition: border-color 0.15s ease;\n}\n\n.panorama-plugin-config-card:hover {\n  border-color: #333333;\n}\n\n.panorama-inspector-modal {\n  position: absolute;\n  top: 0;\n  left: 0;\n  width: 100vw;\n  height: 100vh;\n  background: rgba(0, 0, 0, 0.85);\n  z-index: 200;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  padding: 20px;\n}\n\n.panorama-inspector-content {\n  background: #111111;\n  border: 2px solid #00a4ef;\n  max-width: 560px;\n  width: 100%;\n  max-height: 80vh;\n  display: flex;\n  flex-direction: column;\n  overflow: hidden;\n}\n\n.panorama-inspector-header {\n  padding: 14px 18px;\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  border-bottom: 1px solid #222222;\n}\n\n.panorama-inspector-body {\n  padding: 18px;\n  overflow-y: auto;\n}\n\n";
+/**
+ * Panorama Shell Stylesheet (Windows Phone Metro / People Hub theme)
+ */
+export const PANORAMA_SHELL_CSS = /* css */ `
+/* ==========================================================================
+   PanoramaShell — Windows Phone Modern / People Hub Design System
+   ========================================================================== */
+
+:root.theme-panorama,
+body.theme-panorama,
+.panorama-shell-root {
+  --omni-bg-canvas: #000000;
+  --omni-bg-surface: #111111;
+  --omni-bg-elevated: #161616;
+  --omni-bg-subtle: #222222;
+
+  --omni-text-primary: #ffffff;
+  --omni-text-secondary: #aaaaaa;
+  --omni-text-muted: #666666;
+
+  --omni-border-subtle: #1e1e1e;
+  --omni-border-strong: #333333;
+  --omni-border-focus: #00a4ef;
+
+  --omni-accent-primary: #00a4ef;
+  --omni-accent-hover: #0078d7;
+  --omni-accent-contrast: #ffffff;
+
+  --omni-status-online: #00a4ef;
+  --omni-status-badge: #00a4ef;
+
+  --omni-radius-sm: 0px;
+  --omni-radius-md: 0px;
+  --omni-radius-lg: 0px;
+  --omni-radius-pill: 0px;
+
+  /* Standard Generic Tokens used by standalone plugins */
+  --bg-canvas: #000000;
+  --bg-surface: #111111;
+  --bg-elevated: #161616;
+  --bg-subtle: #222222;
+
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --text-muted: #666666;
+
+  --border-subtle: #1e1e1e;
+  --border-strong: #333333;
+  --border-focus: #00a4ef;
+
+  --accent-primary: #00a4ef;
+  --accent-hover: #0078d7;
+  --accent-contrast: #ffffff;
+
+  --status-online: #00a4ef;
+  --status-badge: #00a4ef;
+
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-pill: 0px;
+}
+
+.panorama-shell-root {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  background-color: #000000;
+  color: #ffffff;
+  overflow: hidden;
+  position: relative;
+  font-family: -apple-system, "Segoe UI", "Segoe UI Web Light", "Segoe UI Light", Roboto, Helvetica, Arial, sans-serif;
+  user-select: none;
+}
+
+.panorama-shell-root,
+.panorama-shell-root * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.panorama-shell-root::-webkit-scrollbar,
+.panorama-shell-root *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* 1. Panorama Hero Header & Pivot Navigation */
+.panorama-hero-header {
+  padding: 24px 24px 8px 24px;
+  flex-shrink: 0;
+  background: #000000;
+  z-index: 10;
+}
+
+.panorama-hero-title {
+  font-size: 3.2rem;
+  font-weight: 200;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: #ffffff;
+  margin: 0 0 12px 0;
+  text-transform: lowercase;
+}
+
+.panorama-pivot-nav {
+  display: flex;
+  gap: 28px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+  scroll-behavior: smooth;
+  padding-right: calc(100vw - 120px);
+}
+
+.panorama-pivot-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.panorama-pivot-item {
+  background: transparent;
+  border: none;
+  color: #666666;
+  font-size: 1.55rem;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  cursor: pointer;
+  padding: 0;
+  text-transform: lowercase;
+  transition: color 0.15s ease;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.panorama-pivot-item:hover {
+  color: #aaaaaa;
+}
+
+.panorama-pivot-item.active {
+  color: #ffffff;
+  font-weight: 400;
+}
+
+/* 2. Panorama Horizontal Canvas */
+.panorama-canvas {
+  flex: 1;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.panorama-canvas::-webkit-scrollbar {
+  display: none;
+}
+
+.panorama-section {
+  flex: 0 0 100vw;
+  max-width: 100vw;
+  height: 100%;
+  scroll-snap-align: start;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 24px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.panorama-section::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+@media (min-width: 768px) {
+  .panorama-section {
+    flex: 0 0 540px;
+    max-width: 540px;
+  }
+}
+
+.panorama-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  min-height: 100%;
+  height: auto;
+  flex: 1;
+}
+
+/* Full page vertical scroll effect: prevent slots from clipping or trapping inner scrollbars */
+.panorama-section .omni-slot,
+.panorama-feed-slot,
+.panorama-main-viewport-slot {
+  overflow: visible !important;
+  height: auto !important;
+  min-height: 100% !important;
+  contain: none !important;
+  flex: 1;
+}
+
+.panorama-section-title-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.panorama-section-title-bar h2 {
+  font-size: 1.25rem;
+  font-weight: 300;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
+
+.panorama-badge {
+  font-size: 0.72rem;
+  color: #888888;
+  font-weight: 400;
+}
+
+/* 3. Live Accent Tiles (Windows Phone Tile Grid) */
+.panorama-tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.panorama-tile {
+  aspect-ratio: 1 / 1;
+  background-color: #00a4ef;
+  color: #ffffff;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+  user-select: none;
+}
+
+.panorama-tile:hover {
+  transform: scale(0.97);
+}
+
+.panorama-tile:active {
+  transform: scale(0.94);
+  opacity: 0.85;
+}
+
+.panorama-tile-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+
+.panorama-tile-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  word-break: break-word;
+}
+
+.panorama-tile-pin {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0.6;
+}
+
+/* 4. Panorama Widgets & System Cards */
+.panorama-widgets-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panorama-system-card {
+  background: #111111;
+  border: 1px solid #222222;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panorama-system-card-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.panorama-system-avatar {
+  width: 48px;
+  height: 48px;
+  background: #00a4ef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: #ffffff;
+}
+
+.panorama-system-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.panorama-system-identity strong {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.panorama-system-identity code {
+  font-size: 0.72rem;
+  color: #888888;
+  font-family: var(--omni-font-mono);
+}
+
+.btn-panorama-action {
+  background: #222222;
+  border: 1px solid #333333;
+  color: #ffffff;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.btn-panorama-action:hover {
+  background: #333333;
+}
+
+.btn-panorama-action.active {
+  background: #00a4ef;
+  border-color: #00a4ef;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.panorama-system-plugin-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+/* 5. Embedded Active Application in Applications Section */
+.panorama-full-app-overlay {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+  flex: 1;
+  background: transparent;
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panorama-full-app-overlay.open {
+  display: flex;
+}
+
+.panorama-section.has-active-app {
+  flex: 0 0 90vw;
+  max-width: 90vw;
+}
+
+@media (min-width: 768px) {
+  .panorama-section.has-active-app {
+    flex: 0 0 620px;
+    max-width: 620px;
+  }
+}
+
+.panorama-full-app-header {
+  height: 56px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid #1a1a1a;
+  background: #000000;
+  flex-shrink: 0;
+}
+
+.panorama-full-app-header h2 {
+  font-size: 1.2rem;
+  font-weight: 400;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+}
+
+.panorama-full-app-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.panorama-full-app-container::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.panorama-app-page {
+  width: 100%;
+  min-height: 100%;
+  height: auto;
+  overflow: visible !important;
+}
+
+.panorama-app-page .omni-slot {
+  overflow: visible !important;
+  height: auto !important;
+  min-height: 100% !important;
+  contain: none !important;
+}
+
+/* 6. Action Circle Buttons (Header / Inspector / Dialogs) */
+.btn-app-bar-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  background: transparent;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.btn-app-bar-circle:hover {
+  background: #ffffff;
+  color: #000000;
+}
+
+.btn-app-bar-circle:active {
+  transform: scale(0.92);
+}
+
+.panorama-drawer-item:hover {
+  background: #2a2a2a;
+}
+
+/* 8. Panorama Feed, Composer & Companion Widget Styles */
+
+/* Feed Container */
+.feed-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: auto;
+  background: transparent;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.feed-top-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 4px 0 12px 0;
+  background: transparent;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.feed-top-header .feed-title {
+  display: none;
+}
+
+.btn-refresh-feed {
+  background: #111111;
+  border: 1px solid #222222;
+  color: #aaaaaa;
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 0px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.btn-refresh-feed:hover {
+  color: #ffffff;
+  border-color: #00a4ef;
+  background: #161616;
+}
+
+.btn-refresh-feed.spinning svg {
+  animation: omni-spin 0.8s linear infinite;
+}
+
+@keyframes omni-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Note Composer */
+.feed-composer,
+.composer-card {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  margin-bottom: 0;
+  border-bottom: 1px solid #1a1a1a;
+  box-sizing: border-box;
+}
+
+.composer-avatar-col {
+  flex-shrink: 0;
+}
+
+.composer-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 0px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  background: #00a4ef;
+  user-select: none;
+}
+
+.composer-main-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.composer-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 52px;
+  outline: none;
+  padding: 4px 0;
+  box-sizing: border-box;
+}
+
+.composer-input::placeholder {
+  color: #666666;
+}
+
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+}
+
+.btn-publish {
+  background: #00a4ef;
+  color: #ffffff;
+  font-weight: 600;
+  border: none;
+  padding: 6px 18px;
+  border-radius: 0px;
+  cursor: pointer;
+  font-size: 0.84rem;
+  transition: all 0.15s ease;
+  margin-left: auto;
+}
+
+.btn-publish:hover {
+  background: #0078d7;
+}
+
+.btn-publish:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Timeline Notes Stream */
+.notes-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: visible;
+  padding: 0;
+  margin: 0;
+}
+
+.feed-container .notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: visible;
+  flex: 1;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 16px;
+  color: #666666;
+  font-size: 0.88rem;
+}
+
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #333333;
+  border-top-color: #00a4ef;
+  border-radius: 50%;
+  animation: omni-spin 0.8s linear infinite;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  gap: 8px;
+  text-align: center;
+  color: #777777;
+}
+
+.empty-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: #111111;
+  border: 1px solid #222222;
+  margin-bottom: 4px;
+  color: #00a4ef;
+}
+
+.empty-state-title {
+  font-size: 1.1rem;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+}
+
+.empty-state-subtitle {
+  font-size: 0.85rem;
+  color: #777777;
+  max-width: 340px;
+  line-height: 1.4;
+}
+
+
+/* Individual Post / Note Card */
+.feed-post,
+.note-card {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border: none;
+  border-bottom: 1px solid #161616;
+  background: transparent;
+  transition: background 0.12s ease;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.feed-post:hover,
+.note-card:hover {
+  background: transparent;
+}
+
+.feed-post-avatar-col {
+  flex-shrink: 0;
+}
+
+.feed-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 0px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  user-select: none;
+  background: #1f1f1f;
+}
+
+.feed-post-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.feed-post-header,
+.note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.feed-post-author-info {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  line-height: 1.3;
+}
+
+.feed-author-name,
+.note-author {
+  font-weight: 600;
+  font-size: 0.94rem;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.feed-author-handle {
+  font-size: 0.82rem;
+  color: #666666;
+  white-space: nowrap;
+}
+
+.feed-dot {
+  font-size: 0.8rem;
+  color: #666666;
+}
+
+.feed-time,
+.note-meta {
+  font-size: 0.82rem;
+  color: #666666;
+  white-space: nowrap;
+}
+
+.feed-reply-badge {
+  font-size: 0.76rem;
+  color: #888888;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.feed-post-content,
+.note-content {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #eeeeee;
+  margin: 6px 0 10px 0;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.feed-link {
+  color: #00a4ef;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.feed-link:hover {
+  text-decoration: underline;
+}
+
+.feed-post-actions,
+.note-actions {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 2px;
+  border-top: none;
+  padding-top: 0;
+}
+
+.feed-action-btn,
+.note-action-btn {
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+  color: #888888;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.feed-action-btn:hover,
+.note-action-btn:hover {
+  color: #00a4ef;
+}
+
+.new-posts-pill {
+  position: sticky;
+  top: 10px;
+  align-self: center;
+  background: #00a4ef;
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 16px;
+  border-radius: 0px;
+  border: none;
+  cursor: pointer;
+  z-index: 25;
+}
+
+.cache-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.74rem;
+  color: #00a4ef;
+  font-weight: 500;
+}
+
+/* Companion Widgets (Timer, Checklist, etc.) */
+.widget-card,
+.timer-widget-card,
+.checklist-widget-card,
+.checklist-card {
+  background: #111111;
+  border: 1px solid #222222;
+  border-radius: 0px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+.timer-digits {
+  color: #00a4ef;
+  font-size: 2.5rem;
+  font-weight: 200;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  margin: 8px 0;
+}
+
+.btn-timer-start,
+.btn-add-task {
+  background: #00a4ef;
+  color: #ffffff;
+  border: none;
+  border-radius: 0px;
+  padding: 8px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-timer-start:hover,
+.btn-add-task:hover {
+  background: #0078d7;
+}
+
+.btn-timer-pause,
+.btn-timer-reset {
+  background: #1a1a1a;
+  border: 1px solid #333333;
+  color: #ffffff;
+  border-radius: 0px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.btn-timer-pause:hover,
+.btn-timer-reset:hover {
+  background: #252525;
+}
+
+/* Form Controls in Panorama Theme */
+.panorama-shell-root textarea:not(.composer-input),
+.panorama-shell-root input[type="text"],
+.panorama-shell-root input[type="number"],
+.panorama-shell-root select {
+  border-radius: 0px;
+  background: #161616;
+  border: 1px solid #333333;
+  color: #ffffff;
+  padding: 6px 10px;
+  font-size: 0.88rem;
+  box-sizing: border-box;
+}
+
+.panorama-shell-root input[type="checkbox"] {
+  accent-color: #00a4ef;
+  cursor: pointer;
+}
+
+.panorama-shell-root .omni-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.panorama-shell-root .omni-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+
+.panorama-shell-root .toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  border-radius: 0px;
+  border: 2px solid #555555;
+  background-color: transparent;
+  transition: 0.15s ease;
+}
+
+.panorama-shell-root .toggle-slider:before {
+  position: absolute;
+  content: "";
+  border-radius: 0px;
+  width: 14px;
+  height: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #ffffff;
+  transition: 0.15s ease;
+}
+
+.panorama-shell-root .omni-toggle input:checked + .toggle-slider {
+  background-color: #00a4ef;
+  border-color: #00a4ef;
+}
+
+.panorama-shell-root .omni-toggle input:checked + .toggle-slider:before {
+  transform: translateX(22px);
+  background-color: #000000;
+}
+
+/* 9. Panorama Plugin Configuration & Inspector */
+.panorama-plugin-config-card {
+  background: #111111;
+  border: 1px solid #222222;
+  transition: border-color 0.15s ease;
+}
+
+.panorama-plugin-config-card:hover {
+  border-color: #333333;
+}
+
+.panorama-inspector-modal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.panorama-inspector-content {
+  background: #111111;
+  border: 2px solid #00a4ef;
+  max-width: 560px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panorama-inspector-header {
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #222222;
+}
+
+.panorama-inspector-body {
+  padding: 18px;
+  overflow-y: auto;
+}
+
+
+`;

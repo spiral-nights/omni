@@ -266,9 +266,9 @@ All existing plugins (`@omni/plugin-feed`, `@omni/plugin-timer`, `@omni/plugin-r
 #### 1. Per-Shell Style Ownership
 - The host bootloader (`apps/web/src/style.css`) is strictly a minimal microkernel reset (~25 lines) defining box-sizing, background, and `#omni-root` bounds.
 - The active Shell owns all visual styling, layout rules, typography, and standard design tokens (`--bg-canvas`, `--bg-surface`, `--text-primary`, `--accent-primary`).
-- Each shell encapsulates its own stylesheet inside `packages/plugins/shell/src/styles/`:
-  - `classic.css`: Warm Paper Dark design system, dock navigation, and multi-viewport workbench.
-  - `panorama.css`: Windows Phone Metro / People Hub panoramic canvas, flat live tiles, and fluid horizontal swipe.
+- Each shell encapsulates its own stylesheet self-contained in `packages/plugins/shell/src/styles/`:
+  - `classic-styles.ts` (`CLASSIC_SHELL_CSS`): Warm Paper Dark design system, dock navigation, and multi-viewport workbench.
+  - `panorama-styles.ts` (`PANORAMA_SHELL_CSS`): Windows Phone Metro / People Hub panoramic canvas, flat live tiles, and fluid horizontal swipe.
 - Upon `shell.mount()`, the active shell calls `mountShellStyles(css)` which dynamically injects `<style id="omni-active-shell-style">` into `<head>`. Calling `shell.destroy()` removes it cleanly, preventing style conflicts or cross-contamination.
 
 #### 2. First-Class Swappable Shell Registry (`ShellRegistry`)

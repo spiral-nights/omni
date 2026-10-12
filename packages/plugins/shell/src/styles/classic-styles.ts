@@ -1,2 +1,1278 @@
-// Auto-generated from classic.css. Do not edit directly.
-export const CLASSIC_SHELL_CSS = "/* Omni Web App - Warm Paper Dark Design System */\n:root {\n  --omni-bg-canvas: #141312;\n  --omni-bg-surface: #191816;\n  --omni-bg-elevated: #22201d;\n  --omni-bg-subtle: #2a2824;\n\n  --omni-text-primary: #ede8df;\n  --omni-text-secondary: #a8a29e;\n  --omni-text-muted: #78716c;\n\n  --omni-border-subtle: #272522;\n  --omni-border-strong: #383530;\n  --omni-border-focus: #c89666;\n\n  --omni-accent-primary: #d4a373;\n  --omni-accent-hover: #c89666;\n  --omni-accent-contrast: #141312;\n\n  --omni-status-online: #4ade80;\n  --omni-status-badge: #d4a373;\n\n  --omni-font-sans: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif;\n  --omni-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;\n\n  --omni-radius-sm: 6px;\n  --omni-radius-md: 10px;\n  --omni-radius-lg: 16px;\n  --omni-radius-pill: 9999px;\n\n  /* Generic Standard Theme Tokens for Standalone Plugins & Nsites */\n  --bg-canvas: var(--omni-bg-canvas);\n  --bg-surface: var(--omni-bg-surface);\n  --bg-elevated: var(--omni-bg-elevated);\n  --bg-subtle: var(--omni-bg-subtle);\n\n  --text-primary: var(--omni-text-primary);\n  --text-secondary: var(--omni-text-secondary);\n  --text-muted: var(--omni-text-muted);\n\n  --border-subtle: var(--omni-border-subtle);\n  --border-strong: var(--omni-border-strong);\n  --border-focus: var(--omni-border-focus);\n\n  --accent-primary: var(--omni-accent-primary);\n  --accent-hover: var(--omni-accent-hover);\n  --accent-contrast: var(--omni-accent-contrast);\n\n  --status-online: var(--omni-status-online);\n  --status-badge: var(--omni-status-badge);\n\n  --font-sans: var(--omni-font-sans);\n  --font-mono: var(--omni-font-mono);\n\n  --radius-sm: var(--omni-radius-sm);\n  --radius-md: var(--omni-radius-md);\n  --radius-lg: var(--omni-radius-lg);\n  --radius-pill: var(--omni-radius-pill);\n}\n\n* {\n  box-sizing: border-box;\n  margin: 0;\n  padding: 0;\n  -webkit-tap-highlight-color: transparent;\n}\n\nhtml, body {\n  height: 100%;\n  margin: 0;\n  padding: 0;\n  overflow: hidden;\n}\n\nbody {\n  background-color: var(--omni-bg-canvas);\n  color: var(--omni-text-primary);\n  font-family: var(--omni-font-sans);\n  overflow: hidden;\n  line-height: 1.5;\n  display: flex;\n  flex-direction: column;\n  height: 100vh;\n  width: 100vw;\n}\n\n#omni-root {\n  display: flex;\n  flex-direction: column;\n  height: 100vh;\n  width: 100vw;\n  overflow: hidden;\n  position: relative;\n}\n\n/* 1. Header */\n.app-header {\n  height: 52px;\n  flex-shrink: 0;\n  background-color: var(--omni-bg-surface);\n  border-bottom: 1px solid var(--omni-border-subtle);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  padding: 0 16px;\n  position: relative;\n  z-index: 100;\n}\n\n.brand-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.brand-logo {\n  font-weight: 700;\n  font-size: 1.2rem;\n  letter-spacing: -0.02em;\n  color: var(--omni-text-primary);\n}\n\n.header-actions {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n}\n\n.relay-status-pill {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 0.8rem;\n  background: var(--omni-bg-subtle);\n  padding: 4px 10px;\n  border-radius: var(--omni-radius-pill);\n  color: var(--omni-text-secondary);\n}\n\n.status-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 50%;\n  background-color: var(--omni-status-online);\n}\n\n.user-profile-badge {\n  font-family: var(--omni-font-mono);\n  font-size: 0.8rem;\n  color: var(--omni-text-muted);\n  cursor: pointer;\n  background: var(--omni-bg-subtle);\n  padding: 4px 10px;\n  border-radius: var(--omni-radius-pill);\n}\n\n/* 2. Main App Content Layout */\n.app-layout {\n  display: flex;\n  flex: 1;\n  min-height: 0;\n  height: calc(100vh - 52px);\n  overflow: hidden;\n  position: relative;\n}\n\n/* 3. Center Viewport (Composer & Feed) */\n.main-viewport {\n  flex: 1;\n  min-height: 0;\n  height: 100%;\n  overflow-y: auto;\n  overflow-x: hidden;\n  padding-bottom: 72px; /* space for mobile dock */\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  width: 100%;\n}\n\n/* App Multi-Page System */\n.app-page {\n  display: none;\n  width: 100%;\n  flex-direction: column;\n  align-items: center;\n}\n\n.app-page.active {\n  display: flex;\n}\n\n.main-viewport-slot {\n  width: 100%;\n  max-width: 680px;\n  padding: 20px 16px;\n  display: flex;\n  flex-direction: column;\n  gap: 16px;\n}\n\n/* Full-Page Widgets Dashboard */\n.widgets-page-header {\n  width: 100%;\n  max-width: 1100px;\n  padding: 24px 20px 8px 20px;\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.widgets-page-title-row {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n}\n\n.widgets-page-title {\n  font-size: 1.15rem;\n  font-weight: 600;\n  color: var(--omni-text-primary);\n  margin: 0;\n}\n\n.widgets-page-badge {\n  font-size: 0.7rem;\n  background: var(--omni-bg-subtle);\n  color: var(--omni-accent-primary);\n  padding: 2px 8px;\n  border-radius: var(--omni-radius-pill);\n  font-family: var(--omni-font-mono);\n}\n\n.widgets-page-desc {\n  font-size: 0.8rem;\n  color: var(--omni-text-muted);\n  margin: 0;\n}\n\n.widgets-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));\n  gap: 20px;\n  width: 100%;\n  max-width: 1100px;\n  padding: 16px 20px 80px 20px;\n}\n\n@media (max-width: 768px) {\n  .widgets-grid {\n    grid-template-columns: 1fr;\n    padding: 12px 14px 72px 14px;\n    gap: 16px;\n  }\n  .widgets-page-header {\n    padding: 16px 14px 4px 14px;\n  }\n}\n\n/* ========================================================\n   Timeline Feed (Bluesky-Inspired Modern Social Timeline)\n   ======================================================== */\n\n.feed-container {\n  width: 100%;\n  max-width: 620px;\n  margin: 0 auto;\n  display: flex;\n  flex-direction: column;\n  min-height: 100%;\n  height: auto;\n  max-height: none; /* Full page scroll: unconstrained */\n  box-shadow: none;\n  border: none;\n  background: transparent;\n  padding: 0;\n  box-sizing: border-box;\n}\n\n/* Top Sticky Navigation Header */\n.feed-top-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  padding: 12px 16px;\n  border-bottom: 1px solid var(--omni-border-subtle);\n  background: var(--omni-bg-canvas);\n  position: sticky;\n  top: 0;\n  z-index: 20;\n}\n\n.feed-title {\n  font-size: 1.05rem;\n  font-weight: 700;\n  letter-spacing: -0.01em;\n  color: var(--omni-text-primary);\n  margin: 0;\n}\n\n.btn-refresh-feed {\n  background: var(--omni-bg-subtle);\n  border: 1px solid var(--omni-border-subtle);\n  color: var(--omni-text-secondary);\n  font-size: 0.76rem;\n  font-weight: 500;\n  padding: 5px 10px;\n  border-radius: var(--omni-radius-pill);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  transition: all 0.15s ease;\n}\n\n.btn-refresh-feed:hover {\n  color: var(--omni-text-primary);\n  border-color: var(--omni-border-strong);\n  background: var(--omni-bg-elevated);\n}\n\n.btn-refresh-feed.spinning svg {\n  animation: omni-spin 0.8s linear infinite;\n}\n\n@keyframes omni-spin {\n  from { transform: rotate(0deg); }\n  to { transform: rotate(360deg); }\n}\n\n/* Note Composer (Bluesky Seamless Post Box) */\n.feed-composer,\n.composer-card {\n  display: flex;\n  gap: 14px;\n  padding: 14px 16px;\n  border: none !important;\n  border-bottom: none !important;\n  border-top: none !important;\n  border-left: none !important;\n  border-right: none !important;\n  background: transparent !important;\n  border-radius: 0;\n  margin-bottom: 0;\n  box-shadow: none !important;\n}\n\n.composer-avatar-col {\n  flex-shrink: 0;\n}\n\n.composer-avatar {\n  width: 42px;\n  height: 42px;\n  border-radius: 50%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  color: #ffffff;\n  font-weight: 700;\n  font-size: 0.95rem;\n  background: linear-gradient(135deg, #00a4ef, #0078d7);\n  user-select: none;\n}\n\n.composer-main-col {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n  min-width: 0;\n}\n\n.composer-input {\n  width: 100%;\n  background: transparent;\n  border: none;\n  color: var(--omni-text-primary);\n  font-family: inherit;\n  font-size: 1.0rem;\n  line-height: 1.5;\n  resize: vertical;\n  min-height: 52px;\n  outline: none;\n  padding: 4px 0;\n}\n\n.composer-input::placeholder {\n  color: var(--omni-text-muted);\n}\n\n.composer-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  border-top: none !important;\n  padding-top: 6px;\n}\n\n.btn-publish {\n  background: var(--omni-accent-primary);\n  color: var(--omni-accent-contrast);\n  font-weight: 600;\n  border: none;\n  padding: 6px 18px;\n  border-radius: var(--omni-radius-pill);\n  cursor: pointer;\n  font-size: 0.84rem;\n  transition: all 0.15s ease;\n  margin-left: auto;\n}\n\n.btn-publish:hover {\n  background: var(--omni-accent-hover);\n  transform: translateY(-1px);\n}\n\n.btn-publish:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n  transform: none;\n}\n\n/* Timeline Notes List (Unconstrained stream) */\n.notes-list {\n  display: flex;\n  flex-direction: column;\n  width: 100%;\n  overflow: visible;\n}\n\n.feed-container .notes-list {\n  display: flex;\n  flex-direction: column;\n  gap: 0;\n  overflow: visible;\n  flex: 1;\n  padding: 0;\n}\n\n/* Individual Post (Bluesky Style Stream Item) */\n.feed-post,\n.note-card {\n  display: flex;\n  gap: 14px;\n  padding: 14px 16px;\n  border: none !important;\n  border-top: none !important;\n  border-left: none !important;\n  border-right: none !important;\n  border-bottom: none !important;\n  border-radius: 0 !important;\n  background: transparent !important;\n  box-shadow: none !important;\n  transition: opacity 0.12s ease;\n  text-decoration: none;\n}\n\n.feed-post:hover,\n.note-card:hover {\n  background: transparent !important;\n}\n\n.feed-post-avatar-col {\n  flex-shrink: 0;\n}\n\n.feed-avatar {\n  width: 40px;\n  height: 40px;\n  border-radius: 50%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  color: #ffffff;\n  font-weight: 700;\n  font-size: 0.9rem;\n  user-select: none;\n  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);\n}\n\n.feed-post-body {\n  flex: 1;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n}\n\n.feed-post-header,\n.note-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 2px;\n}\n\n.feed-post-author-info {\n  display: flex;\n  align-items: baseline;\n  gap: 6px;\n  flex-wrap: wrap;\n  line-height: 1.3;\n}\n\n.feed-author-name,\n.note-author {\n  font-weight: 600;\n  font-size: 0.94rem;\n  color: var(--omni-text-primary);\n  white-space: nowrap;\n}\n\n.feed-author-handle {\n  font-size: 0.82rem;\n  color: var(--omni-text-muted);\n  white-space: nowrap;\n}\n\n.feed-dot {\n  font-size: 0.8rem;\n  color: var(--omni-text-muted);\n}\n\n.feed-time,\n.note-meta {\n  font-size: 0.82rem;\n  color: var(--omni-text-muted);\n  white-space: nowrap;\n}\n\n.feed-reply-badge {\n  font-size: 0.76rem;\n  color: var(--omni-text-muted);\n  margin-bottom: 4px;\n  display: flex;\n  align-items: center;\n  gap: 4px;\n}\n\n.feed-post-content,\n.note-content {\n  font-size: 0.95rem;\n  line-height: 1.5;\n  color: var(--omni-text-primary);\n  margin: 6px 0 10px 0;\n  word-break: break-word;\n  white-space: pre-wrap;\n}\n\n.feed-link {\n  color: var(--omni-accent-primary);\n  text-decoration: none;\n  word-break: break-all;\n}\n\n.feed-link:hover {\n  text-decoration: underline;\n}\n\n.feed-post-actions,\n.note-actions {\n  display: flex;\n  align-items: center;\n  gap: 24px;\n  margin-top: 2px;\n  border-top: none;\n  padding-top: 0;\n}\n\n.omni-slot .feed-action-btn,\n.omni-slot .note-action-btn,\n.feed-post .feed-action-btn,\n.note-card .note-action-btn,\n.feed-action-btn,\n.note-action-btn {\n  background: transparent !important;\n  border: none !important;\n  outline: none !important;\n  box-shadow: none !important;\n  padding: 0 !important;\n  margin: 0 !important;\n  border-radius: 0 !important;\n  color: var(--omni-accent-primary, #00a4ef) !important;\n  display: inline-flex !important;\n  align-items: center !important;\n  gap: 6px !important;\n  font-size: 0.82rem !important;\n  line-height: 1 !important;\n  cursor: pointer !important;\n  transition: opacity 0.15s ease, transform 0.1s ease !important;\n}\n\n.feed-action-btn:hover,\n.note-action-btn:hover {\n  opacity: 0.75 !important;\n  background: transparent !important;\n  color: var(--omni-accent-hover, #0078d7) !important;\n}\n\n.feed-action-btn:active,\n.note-action-btn:active {\n  transform: scale(0.92) !important;\n}\n\n.feed-action-btn svg,\n.note-action-btn svg {\n  stroke: currentColor !important;\n  fill: none !important;\n  width: 16px !important;\n  height: 16px !important;\n  display: inline-block !important;\n  vertical-align: middle !important;\n}\n\n.feed-action-btn .action-count,\n.note-action-btn .action-count {\n  color: inherit !important;\n  font-size: 0.78rem !important;\n  font-weight: 500 !important;\n  line-height: 1 !important;\n}\n\n.feed-action-btn.active-liked,\n.btn-like.active-liked {\n  color: #f43f5e !important;\n}\n\n.feed-action-btn.active-liked svg {\n  fill: #f43f5e !important;\n  stroke: #f43f5e !important;\n}\n\n.feed-action-btn.active-reposted {\n  color: #4ade80 !important;\n}\n\n.action-count {\n  font-size: 0.75rem;\n  font-weight: 500;\n}\n\n/* Loading & Sentinel States */\n.loading-state {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  padding: 48px 16px;\n  gap: 12px;\n  color: var(--omni-text-muted);\n  font-size: 0.88rem;\n}\n\n.loading-spinner {\n  width: 24px;\n  height: 24px;\n  border: 2px solid var(--omni-border-subtle);\n  border-top-color: var(--omni-accent-primary);\n  border-radius: 50%;\n  animation: omni-spin 0.8s linear infinite;\n}\n\n.feed-sentinel {\n  height: 60px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n.empty-state {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  padding: 48px 16px;\n  gap: 10px;\n  text-align: center;\n  color: var(--omni-text-muted);\n}\n\n.empty-icon-wrap {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 48px;\n  height: 48px;\n  border-radius: 50%;\n  background: var(--omni-bg-surface);\n  border: 1px solid var(--omni-border-subtle);\n  margin-bottom: 6px;\n  color: var(--omni-accent-primary);\n}\n\n.empty-state-title {\n  font-size: 0.95rem;\n  font-weight: 600;\n  color: var(--omni-text-primary);\n}\n\n.empty-state-subtitle {\n  font-size: 0.82rem;\n  color: var(--omni-text-muted);\n  max-width: 320px;\n  line-height: 1.4;\n}\n\n\n/* 4. Mobile Bottom Navigation Dock */\n.mobile-dock {\n  position: fixed;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  height: 58px;\n  background: var(--omni-bg-surface);\n  border-top: 1px solid var(--omni-border-strong);\n  display: flex;\n  align-items: center;\n  justify-content: space-around;\n  z-index: 60;\n}\n\n.dock-slot-container {\n  display: flex;\n  align-items: center;\n  justify-content: space-around;\n  gap: 8px;\n}\n\n.dock-slot-container .omni-component-slot {\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  overflow: visible !important;\n}\n\n.dock-item,\n.dock-icon-btn {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  background: transparent;\n  border: none;\n  color: var(--omni-text-secondary);\n  font-size: 0.72rem;\n  gap: 2px;\n  cursor: pointer;\n  position: relative;\n  min-width: 60px;\n  padding: 4px 0;\n  transition: color 0.15s ease;\n}\n\n.dock-item:hover,\n.dock-icon-btn:hover {\n  color: var(--omni-text-primary);\n}\n\n.dock-item.active,\n.dock-icon-btn.active {\n  color: var(--omni-accent-primary);\n}\n\n.dock-icon-wrapper {\n  position: relative;\n  font-size: 1.15rem;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n/* Desktop layout scaling (>= 768px) */\n@media (min-width: 768px) {\n  .mobile-dock {\n    position: relative;\n    top: 0;\n    left: 0;\n    width: 64px;\n    height: 100%;\n    flex-shrink: 0;\n    flex-direction: column;\n    justify-content: flex-start;\n    padding-top: 24px;\n    padding-bottom: 24px;\n    gap: 24px;\n    border-top: none;\n    border-right: 1px solid var(--omni-border-subtle);\n    z-index: 40;\n    overflow-y: auto;\n    overflow-x: hidden;\n  }\n\n  .dock-slot-container {\n    flex-direction: column;\n    gap: 24px;\n    width: 100%;\n  }\n\n  .dock-slot-container .omni-component-slot {\n    width: 100%;\n  }\n\n  .main-viewport {\n    padding-bottom: 24px;\n  }\n}\n\n/* 7. Scoped Styling for .omni-slot Standard HTML Elements */\n.omni-slot {\n  position: relative;\n  contain: layout paint;\n  overflow: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.omni-slot button {\n  background: var(--omni-accent-primary);\n  color: var(--omni-accent-contrast);\n  border: none;\n  border-radius: var(--omni-radius-sm);\n  padding: 7px 14px;\n  font-family: var(--omni-font-sans);\n  font-weight: 500;\n  cursor: pointer;\n  font-size: 0.88rem;\n  transition: opacity 0.15s ease;\n}\n\n.omni-slot button:hover {\n  opacity: 0.9;\n}\n\n.omni-slot button > *,\n.omni-slot button *,\n.dock-item > *,\n.dock-item * {\n  pointer-events: none;\n}\n\n.omni-slot input[type=\"text\"] {\n  background: var(--omni-bg-subtle);\n  border: 1px solid var(--omni-border-strong);\n  color: var(--omni-text-primary);\n  border-radius: var(--omni-radius-sm);\n  padding: 8px 12px;\n  font-size: 0.88rem;\n  font-family: var(--omni-font-sans);\n  outline: none;\n  width: 100%;\n}\n\n.omni-slot input[type=\"text\"]:focus {\n  border-color: var(--omni-border-focus);\n}\n\n.omni-slot input[type=\"checkbox\"] {\n  accent-color: var(--omni-accent-primary);\n  width: 18px;\n  height: 18px;\n  cursor: pointer;\n}\n\n.omni-slot ul {\n  list-style: none;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n/* Checklist widget styling inside slot */\n.checklist-widget-card,\n.timer-widget-card {\n  background: var(--omni-bg-surface);\n  border: 1px solid var(--omni-border-strong);\n  border-radius: var(--omni-radius-md);\n  padding: 16px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.widget-header h3 {\n  font-size: 0.95rem;\n  font-weight: 600;\n  color: var(--omni-text-primary);\n}\n\n.task-input-row {\n  display: flex;\n  gap: 8px;\n}\n\n.task-input-row button {\n  min-width: 40px;\n  font-size: 1.1rem;\n  padding: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n.task-item {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  padding: 6px 0;\n  border-bottom: 1px solid var(--omni-border-subtle);\n  font-size: 0.9rem;\n}\n\n.task-item span {\n  flex: 1;\n  margin-left: 10px;\n}\n\n.delete-task-btn {\n  background: transparent !important;\n  color: var(--omni-text-muted) !important;\n  font-size: 1.1rem !important;\n  padding: 2px 6px !important;\n}\n\n/* Timer widget styling inside slot */\n.timer-display-container {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  padding: 16px 0;\n}\n\n.timer-digits {\n  font-size: 2.4rem;\n  font-weight: 700;\n  font-family: var(--omni-font-mono);\n  color: var(--omni-accent-primary);\n  letter-spacing: 0.05em;\n}\n\n.timer-status {\n  font-size: 0.85rem;\n  color: var(--omni-text-secondary);\n  margin-top: 4px;\n}\n\n.timer-buttons-row {\n  display: flex;\n  justify-content: center;\n  gap: 10px;\n}\n\n.btn-timer-reset {\n  background: var(--omni-bg-subtle) !important;\n  color: var(--omni-text-primary) !important;\n  border: 1px solid var(--omni-border-strong) !important;\n}\n\n/* Dock badges */\n.dock-badge {\n  background: var(--omni-status-badge);\n  color: var(--omni-accent-contrast);\n  font-size: 0.65rem;\n  font-weight: bold;\n  padding: 1px 5px;\n  border-radius: var(--omni-radius-pill);\n  position: absolute;\n  top: -4px;\n  right: -8px;\n}\n\n/* 8. Plugin Manager Modal */\n.modal-overlay {\n  position: fixed;\n  inset: 0;\n  background: rgba(0, 0, 0, 0.7);\n  backdrop-filter: blur(4px);\n  z-index: 100;\n  display: none;\n  align-items: center;\n  justify-content: center;\n  padding: 16px;\n}\n\n.modal-overlay.open {\n  display: flex;\n}\n\n.modal-card {\n  background: var(--omni-bg-elevated);\n  border: 1px solid var(--omni-border-strong);\n  border-radius: var(--omni-radius-lg);\n  width: 100%;\n  max-width: 480px;\n  max-height: 90vh;\n  overflow-y: auto;\n  padding: 20px;\n  display: flex;\n  flex-direction: column;\n  gap: 16px;\n}\n\n.modal-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.plugin-item-row {\n  background: var(--omni-bg-surface);\n  border: 1px solid var(--omni-border-subtle);\n  border-radius: var(--omni-radius-md);\n  padding: 14px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n/* Secondary & Danger Buttons */\n.btn-secondary {\n  background: var(--omni-bg-subtle);\n  border: 1px solid var(--omni-border-strong);\n  color: var(--omni-text-primary);\n  padding: 5px 12px;\n  border-radius: var(--omni-radius-sm);\n  font-size: 0.82rem;\n  font-weight: 500;\n  cursor: pointer;\n  transition: background 0.15s ease;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.btn-secondary:hover {\n  background: var(--omni-border-strong);\n}\n\n.btn-danger {\n  background: transparent;\n  border: 1px solid rgba(239, 68, 68, 0.4);\n  color: #f87171;\n  padding: 5px 12px;\n  border-radius: var(--omni-radius-sm);\n  font-size: 0.82rem;\n  cursor: pointer;\n  transition: background 0.15s ease;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.btn-danger:hover {\n  background: rgba(239, 68, 68, 0.15);\n}\n\n/* Toggle Switch */\n.omni-toggle {\n  position: relative;\n  display: inline-block;\n  width: 36px;\n  height: 20px;\n}\n\n.omni-toggle input {\n  opacity: 0;\n  width: 0;\n  height: 0;\n}\n\n.toggle-slider {\n  position: absolute;\n  cursor: pointer;\n  inset: 0;\n  background-color: var(--omni-bg-subtle);\n  border: 1px solid var(--omni-border-strong);\n  transition: 0.2s;\n  border-radius: var(--omni-radius-pill);\n}\n\n.toggle-slider:before {\n  position: absolute;\n  content: \"\";\n  height: 12px;\n  width: 12px;\n  left: 3px;\n  bottom: 3px;\n  background-color: var(--omni-text-muted);\n  transition: 0.2s;\n  border-radius: 50%;\n}\n\n.omni-toggle input:checked + .toggle-slider {\n  background-color: var(--omni-accent-primary);\n  border-color: var(--omni-accent-hover);\n}\n\n.omni-toggle input:checked + .toggle-slider:before {\n  transform: translateX(16px);\n  background-color: var(--omni-accent-contrast);\n}\n\n/* Manifest Code Block */\n.manifest-code-block {\n  background: var(--omni-bg-canvas);\n  border: 1px solid var(--omni-border-subtle);\n  border-radius: var(--omni-radius-sm);\n  padding: 12px;\n  font-family: var(--omni-font-mono);\n  font-size: 0.75rem;\n  color: var(--omni-text-secondary);\n  overflow-x: auto;\n  max-height: 260px;\n  white-space: pre;\n}\n\n/* Tabs */\n.modal-tabs {\n  display: flex;\n  gap: 4px;\n  border-bottom: 1px solid var(--omni-border-subtle);\n  padding-bottom: 8px;\n}\n\n.modal-tab-btn {\n  background: transparent;\n  border: none;\n  color: var(--omni-text-muted);\n  font-size: 0.82rem;\n  font-weight: 500;\n  padding: 4px 10px;\n  border-radius: var(--omni-radius-sm);\n  cursor: pointer;\n}\n\n.modal-tab-btn.active {\n  background: var(--omni-bg-subtle);\n  color: var(--omni-text-primary);\n}\n\n/* ==========================================================================\n   Unified Settings Modal & Visual Layout Configurator\n   ========================================================================== */\n.settings-modal-card {\n  background: var(--omni-bg-elevated);\n  border: 1px solid var(--omni-border-strong);\n  border-radius: var(--omni-radius-lg);\n  width: 95vw;\n  max-width: 920px;\n  height: 85vh;\n  max-height: 850px;\n  display: flex;\n  flex-direction: column;\n  overflow: hidden;\n  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);\n}\n\n.settings-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  padding: 16px 20px;\n  border-bottom: 1px solid var(--omni-border-subtle);\n  background: var(--omni-bg-surface);\n}\n\n.settings-body {\n  flex: 1;\n  display: flex;\n  overflow: hidden;\n}\n\n.settings-nav {\n  width: 220px;\n  border-right: 1px solid var(--omni-border-subtle);\n  background: var(--omni-bg-surface);\n  padding: 12px 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  flex-shrink: 0;\n  overflow-y: auto;\n}\n\n.settings-nav-btn {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  padding: 10px 12px;\n  border-radius: var(--omni-radius-sm);\n  background: transparent;\n  border: none;\n  color: var(--omni-text-secondary);\n  font-size: 0.85rem;\n  font-weight: 500;\n  cursor: pointer;\n  text-align: left;\n  transition: all 0.15s ease;\n  width: 100%;\n}\n\n.settings-nav-btn:hover {\n  background: var(--omni-bg-subtle);\n  color: var(--omni-text-primary);\n}\n\n.settings-nav-btn.active {\n  background: var(--omni-bg-subtle);\n  color: var(--omni-accent-primary);\n  font-weight: 600;\n}\n\n.settings-content {\n  flex: 1;\n  padding: 24px;\n  overflow-y: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 18px;\n  background: var(--omni-bg-elevated);\n}\n\n.settings-pane {\n  display: none;\n  flex-direction: column;\n  gap: 16px;\n}\n\n.settings-pane.active {\n  display: flex;\n}\n\n\n\n/* Responsive Mobile Settings */\n@media (max-width: 768px) {\n  .settings-modal-card {\n    width: 100vw;\n    height: 100vh;\n    max-height: 100vh;\n    border-radius: 0;\n    border: none;\n  }\n\n  .settings-body {\n    flex-direction: column;\n  }\n\n  .settings-nav {\n    width: 100%;\n    flex-direction: row;\n    overflow-x: auto;\n    border-right: none;\n    border-bottom: 1px solid var(--omni-border-subtle);\n    padding: 8px 12px;\n    gap: 6px;\n  }\n\n  .settings-nav-btn {\n    white-space: nowrap;\n    width: auto;\n    padding: 6px 12px;\n    font-size: 0.8rem;\n  }\n\n  .settings-content {\n    padding: 16px;\n  }\n}\n\n";
+/**
+ * Omni Classic Shell Stylesheet (Warm Paper Dark theme)
+ */
+export const CLASSIC_SHELL_CSS = /* css */ `
+/* Omni Web App - Warm Paper Dark Design System */
+:root {
+  --omni-bg-canvas: #141312;
+  --omni-bg-surface: #191816;
+  --omni-bg-elevated: #22201d;
+  --omni-bg-subtle: #2a2824;
+
+  --omni-text-primary: #ede8df;
+  --omni-text-secondary: #a8a29e;
+  --omni-text-muted: #78716c;
+
+  --omni-border-subtle: #272522;
+  --omni-border-strong: #383530;
+  --omni-border-focus: #c89666;
+
+  --omni-accent-primary: #d4a373;
+  --omni-accent-hover: #c89666;
+  --omni-accent-contrast: #141312;
+
+  --omni-status-online: #4ade80;
+  --omni-status-badge: #d4a373;
+
+  --omni-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --omni-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --omni-radius-sm: 6px;
+  --omni-radius-md: 10px;
+  --omni-radius-lg: 16px;
+  --omni-radius-pill: 9999px;
+
+  /* Generic Standard Theme Tokens for Standalone Plugins & Nsites */
+  --bg-canvas: var(--omni-bg-canvas);
+  --bg-surface: var(--omni-bg-surface);
+  --bg-elevated: var(--omni-bg-elevated);
+  --bg-subtle: var(--omni-bg-subtle);
+
+  --text-primary: var(--omni-text-primary);
+  --text-secondary: var(--omni-text-secondary);
+  --text-muted: var(--omni-text-muted);
+
+  --border-subtle: var(--omni-border-subtle);
+  --border-strong: var(--omni-border-strong);
+  --border-focus: var(--omni-border-focus);
+
+  --accent-primary: var(--omni-accent-primary);
+  --accent-hover: var(--omni-accent-hover);
+  --accent-contrast: var(--omni-accent-contrast);
+
+  --status-online: var(--omni-status-online);
+  --status-badge: var(--omni-status-badge);
+
+  --font-sans: var(--omni-font-sans);
+  --font-mono: var(--omni-font-mono);
+
+  --radius-sm: var(--omni-radius-sm);
+  --radius-md: var(--omni-radius-md);
+  --radius-lg: var(--omni-radius-lg);
+  --radius-pill: var(--omni-radius-pill);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  background-color: var(--omni-bg-canvas);
+  color: var(--omni-text-primary);
+  font-family: var(--omni-font-sans);
+  overflow: hidden;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+#omni-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 1. Header */
+.app-header {
+  height: 52px;
+  flex-shrink: 0;
+  background-color: var(--omni-bg-surface);
+  border-bottom: 1px solid var(--omni-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  position: relative;
+  z-index: 100;
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-logo {
+  font-weight: 700;
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+  color: var(--omni-text-primary);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.relay-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  background: var(--omni-bg-subtle);
+  padding: 4px 10px;
+  border-radius: var(--omni-radius-pill);
+  color: var(--omni-text-secondary);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--omni-status-online);
+}
+
+.user-profile-badge {
+  font-family: var(--omni-font-mono);
+  font-size: 0.8rem;
+  color: var(--omni-text-muted);
+  cursor: pointer;
+  background: var(--omni-bg-subtle);
+  padding: 4px 10px;
+  border-radius: var(--omni-radius-pill);
+}
+
+/* 2. Main App Content Layout */
+.app-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: calc(100vh - 52px);
+  overflow: hidden;
+  position: relative;
+}
+
+/* 3. Center Viewport (Composer & Feed) */
+.main-viewport {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 72px; /* space for mobile dock */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+/* App Multi-Page System */
+.app-page {
+  display: none;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.app-page.active {
+  display: flex;
+}
+
+.main-viewport-slot {
+  width: 100%;
+  max-width: 680px;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Full-Page Widgets Dashboard */
+.widgets-page-header {
+  width: 100%;
+  max-width: 1100px;
+  padding: 24px 20px 8px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.widgets-page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.widgets-page-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--omni-text-primary);
+  margin: 0;
+}
+
+.widgets-page-badge {
+  font-size: 0.7rem;
+  background: var(--omni-bg-subtle);
+  color: var(--omni-accent-primary);
+  padding: 2px 8px;
+  border-radius: var(--omni-radius-pill);
+  font-family: var(--omni-font-mono);
+}
+
+.widgets-page-desc {
+  font-size: 0.8rem;
+  color: var(--omni-text-muted);
+  margin: 0;
+}
+
+.widgets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  width: 100%;
+  max-width: 1100px;
+  padding: 16px 20px 80px 20px;
+}
+
+@media (max-width: 768px) {
+  .widgets-grid {
+    grid-template-columns: 1fr;
+    padding: 12px 14px 72px 14px;
+    gap: 16px;
+  }
+  .widgets-page-header {
+    padding: 16px 14px 4px 14px;
+  }
+}
+
+/* ========================================================
+   Timeline Feed (Bluesky-Inspired Modern Social Timeline)
+   ======================================================== */
+
+.feed-container {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: auto;
+  max-height: none; /* Full page scroll: unconstrained */
+  box-shadow: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Top Sticky Navigation Header */
+.feed-top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--omni-border-subtle);
+  background: var(--omni-bg-canvas);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.feed-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--omni-text-primary);
+  margin: 0;
+}
+
+.btn-refresh-feed {
+  background: var(--omni-bg-subtle);
+  border: 1px solid var(--omni-border-subtle);
+  color: var(--omni-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: var(--omni-radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.btn-refresh-feed:hover {
+  color: var(--omni-text-primary);
+  border-color: var(--omni-border-strong);
+  background: var(--omni-bg-elevated);
+}
+
+.btn-refresh-feed.spinning svg {
+  animation: omni-spin 0.8s linear infinite;
+}
+
+@keyframes omni-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Note Composer (Bluesky Seamless Post Box) */
+.feed-composer,
+.composer-card {
+  display: flex;
+  gap: 14px;
+  padding: 14px 16px;
+  border: none !important;
+  border-bottom: none !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  background: transparent !important;
+  border-radius: 0;
+  margin-bottom: 0;
+  box-shadow: none !important;
+}
+
+.composer-avatar-col {
+  flex-shrink: 0;
+}
+
+.composer-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  background: linear-gradient(135deg, #00a4ef, #0078d7);
+  user-select: none;
+}
+
+.composer-main-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.composer-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--omni-text-primary);
+  font-family: inherit;
+  font-size: 1.0rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 52px;
+  outline: none;
+  padding: 4px 0;
+}
+
+.composer-input::placeholder {
+  color: var(--omni-text-muted);
+}
+
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: none !important;
+  padding-top: 6px;
+}
+
+.btn-publish {
+  background: var(--omni-accent-primary);
+  color: var(--omni-accent-contrast);
+  font-weight: 600;
+  border: none;
+  padding: 6px 18px;
+  border-radius: var(--omni-radius-pill);
+  cursor: pointer;
+  font-size: 0.84rem;
+  transition: all 0.15s ease;
+  margin-left: auto;
+}
+
+.btn-publish:hover {
+  background: var(--omni-accent-hover);
+  transform: translateY(-1px);
+}
+
+.btn-publish:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Timeline Notes List (Unconstrained stream) */
+.notes-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: visible;
+}
+
+.feed-container .notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: visible;
+  flex: 1;
+  padding: 0;
+}
+
+/* Individual Post (Bluesky Style Stream Item) */
+.feed-post,
+.note-card {
+  display: flex;
+  gap: 14px;
+  padding: 14px 16px;
+  border: none !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: opacity 0.12s ease;
+  text-decoration: none;
+}
+
+.feed-post:hover,
+.note-card:hover {
+  background: transparent !important;
+}
+
+.feed-post-avatar-col {
+  flex-shrink: 0;
+}
+
+.feed-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  user-select: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.feed-post-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.feed-post-header,
+.note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.feed-post-author-info {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  line-height: 1.3;
+}
+
+.feed-author-name,
+.note-author {
+  font-weight: 600;
+  font-size: 0.94rem;
+  color: var(--omni-text-primary);
+  white-space: nowrap;
+}
+
+.feed-author-handle {
+  font-size: 0.82rem;
+  color: var(--omni-text-muted);
+  white-space: nowrap;
+}
+
+.feed-dot {
+  font-size: 0.8rem;
+  color: var(--omni-text-muted);
+}
+
+.feed-time,
+.note-meta {
+  font-size: 0.82rem;
+  color: var(--omni-text-muted);
+  white-space: nowrap;
+}
+
+.feed-reply-badge {
+  font-size: 0.76rem;
+  color: var(--omni-text-muted);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.feed-post-content,
+.note-content {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--omni-text-primary);
+  margin: 6px 0 10px 0;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.feed-link {
+  color: var(--omni-accent-primary);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.feed-link:hover {
+  text-decoration: underline;
+}
+
+.feed-post-actions,
+.note-actions {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 2px;
+  border-top: none;
+  padding-top: 0;
+}
+
+.omni-slot .feed-action-btn,
+.omni-slot .note-action-btn,
+.feed-post .feed-action-btn,
+.note-card .note-action-btn,
+.feed-action-btn,
+.note-action-btn {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  color: var(--omni-accent-primary, #00a4ef) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 0.82rem !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  transition: opacity 0.15s ease, transform 0.1s ease !important;
+}
+
+.feed-action-btn:hover,
+.note-action-btn:hover {
+  opacity: 0.75 !important;
+  background: transparent !important;
+  color: var(--omni-accent-hover, #0078d7) !important;
+}
+
+.feed-action-btn:active,
+.note-action-btn:active {
+  transform: scale(0.92) !important;
+}
+
+.feed-action-btn svg,
+.note-action-btn svg {
+  stroke: currentColor !important;
+  fill: none !important;
+  width: 16px !important;
+  height: 16px !important;
+  display: inline-block !important;
+  vertical-align: middle !important;
+}
+
+.feed-action-btn .action-count,
+.note-action-btn .action-count {
+  color: inherit !important;
+  font-size: 0.78rem !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+}
+
+.feed-action-btn.active-liked,
+.btn-like.active-liked {
+  color: #f43f5e !important;
+}
+
+.feed-action-btn.active-liked svg {
+  fill: #f43f5e !important;
+  stroke: #f43f5e !important;
+}
+
+.feed-action-btn.active-reposted {
+  color: #4ade80 !important;
+}
+
+.action-count {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Loading & Sentinel States */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  gap: 12px;
+  color: var(--omni-text-muted);
+  font-size: 0.88rem;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--omni-border-subtle);
+  border-top-color: var(--omni-accent-primary);
+  border-radius: 50%;
+  animation: omni-spin 0.8s linear infinite;
+}
+
+.feed-sentinel {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  gap: 10px;
+  text-align: center;
+  color: var(--omni-text-muted);
+}
+
+.empty-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--omni-bg-surface);
+  border: 1px solid var(--omni-border-subtle);
+  margin-bottom: 6px;
+  color: var(--omni-accent-primary);
+}
+
+.empty-state-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--omni-text-primary);
+}
+
+.empty-state-subtitle {
+  font-size: 0.82rem;
+  color: var(--omni-text-muted);
+  max-width: 320px;
+  line-height: 1.4;
+}
+
+
+/* 4. Mobile Bottom Navigation Dock */
+.mobile-dock {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 58px;
+  background: var(--omni-bg-surface);
+  border-top: 1px solid var(--omni-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 60;
+}
+
+.dock-slot-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 8px;
+}
+
+.dock-slot-container .omni-component-slot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: visible !important;
+}
+
+.dock-item,
+.dock-icon-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--omni-text-secondary);
+  font-size: 0.72rem;
+  gap: 2px;
+  cursor: pointer;
+  position: relative;
+  min-width: 60px;
+  padding: 4px 0;
+  transition: color 0.15s ease;
+}
+
+.dock-item:hover,
+.dock-icon-btn:hover {
+  color: var(--omni-text-primary);
+}
+
+.dock-item.active,
+.dock-icon-btn.active {
+  color: var(--omni-accent-primary);
+}
+
+.dock-icon-wrapper {
+  position: relative;
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Desktop layout scaling (>= 768px) */
+@media (min-width: 768px) {
+  .mobile-dock {
+    position: relative;
+    top: 0;
+    left: 0;
+    width: 64px;
+    height: 100%;
+    flex-shrink: 0;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-top: 24px;
+    padding-bottom: 24px;
+    gap: 24px;
+    border-top: none;
+    border-right: 1px solid var(--omni-border-subtle);
+    z-index: 40;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .dock-slot-container {
+    flex-direction: column;
+    gap: 24px;
+    width: 100%;
+  }
+
+  .dock-slot-container .omni-component-slot {
+    width: 100%;
+  }
+
+  .main-viewport {
+    padding-bottom: 24px;
+  }
+}
+
+/* 7. Scoped Styling for .omni-slot Standard HTML Elements */
+.omni-slot {
+  position: relative;
+  contain: layout paint;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.omni-slot button {
+  background: var(--omni-accent-primary);
+  color: var(--omni-accent-contrast);
+  border: none;
+  border-radius: var(--omni-radius-sm);
+  padding: 7px 14px;
+  font-family: var(--omni-font-sans);
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 0.88rem;
+  transition: opacity 0.15s ease;
+}
+
+.omni-slot button:hover {
+  opacity: 0.9;
+}
+
+.omni-slot button > *,
+.omni-slot button *,
+.dock-item > *,
+.dock-item * {
+  pointer-events: none;
+}
+
+.omni-slot input[type="text"] {
+  background: var(--omni-bg-subtle);
+  border: 1px solid var(--omni-border-strong);
+  color: var(--omni-text-primary);
+  border-radius: var(--omni-radius-sm);
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  font-family: var(--omni-font-sans);
+  outline: none;
+  width: 100%;
+}
+
+.omni-slot input[type="text"]:focus {
+  border-color: var(--omni-border-focus);
+}
+
+.omni-slot input[type="checkbox"] {
+  accent-color: var(--omni-accent-primary);
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.omni-slot ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Checklist widget styling inside slot */
+.checklist-widget-card,
+.timer-widget-card {
+  background: var(--omni-bg-surface);
+  border: 1px solid var(--omni-border-strong);
+  border-radius: var(--omni-radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.widget-header h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--omni-text-primary);
+}
+
+.task-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.task-input-row button {
+  min-width: 40px;
+  font-size: 1.1rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--omni-border-subtle);
+  font-size: 0.9rem;
+}
+
+.task-item span {
+  flex: 1;
+  margin-left: 10px;
+}
+
+.delete-task-btn {
+  background: transparent !important;
+  color: var(--omni-text-muted) !important;
+  font-size: 1.1rem !important;
+  padding: 2px 6px !important;
+}
+
+/* Timer widget styling inside slot */
+.timer-display-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.timer-digits {
+  font-size: 2.4rem;
+  font-weight: 700;
+  font-family: var(--omni-font-mono);
+  color: var(--omni-accent-primary);
+  letter-spacing: 0.05em;
+}
+
+.timer-status {
+  font-size: 0.85rem;
+  color: var(--omni-text-secondary);
+  margin-top: 4px;
+}
+
+.timer-buttons-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.btn-timer-reset {
+  background: var(--omni-bg-subtle) !important;
+  color: var(--omni-text-primary) !important;
+  border: 1px solid var(--omni-border-strong) !important;
+}
+
+/* Dock badges */
+.dock-badge {
+  background: var(--omni-status-badge);
+  color: var(--omni-accent-contrast);
+  font-size: 0.65rem;
+  font-weight: bold;
+  padding: 1px 5px;
+  border-radius: var(--omni-radius-pill);
+  position: absolute;
+  top: -4px;
+  right: -8px;
+}
+
+/* 8. Plugin Manager Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.modal-overlay.open {
+  display: flex;
+}
+
+.modal-card {
+  background: var(--omni-bg-elevated);
+  border: 1px solid var(--omni-border-strong);
+  border-radius: var(--omni-radius-lg);
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.plugin-item-row {
+  background: var(--omni-bg-surface);
+  border: 1px solid var(--omni-border-subtle);
+  border-radius: var(--omni-radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Secondary & Danger Buttons */
+.btn-secondary {
+  background: var(--omni-bg-subtle);
+  border: 1px solid var(--omni-border-strong);
+  color: var(--omni-text-primary);
+  padding: 5px 12px;
+  border-radius: var(--omni-radius-sm);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-secondary:hover {
+  background: var(--omni-border-strong);
+}
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  padding: 5px 12px;
+  border-radius: var(--omni-radius-sm);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* Toggle Switch */
+.omni-toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.omni-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: var(--omni-bg-subtle);
+  border: 1px solid var(--omni-border-strong);
+  transition: 0.2s;
+  border-radius: var(--omni-radius-pill);
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 12px;
+  width: 12px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--omni-text-muted);
+  transition: 0.2s;
+  border-radius: 50%;
+}
+
+.omni-toggle input:checked + .toggle-slider {
+  background-color: var(--omni-accent-primary);
+  border-color: var(--omni-accent-hover);
+}
+
+.omni-toggle input:checked + .toggle-slider:before {
+  transform: translateX(16px);
+  background-color: var(--omni-accent-contrast);
+}
+
+/* Manifest Code Block */
+.manifest-code-block {
+  background: var(--omni-bg-canvas);
+  border: 1px solid var(--omni-border-subtle);
+  border-radius: var(--omni-radius-sm);
+  padding: 12px;
+  font-family: var(--omni-font-mono);
+  font-size: 0.75rem;
+  color: var(--omni-text-secondary);
+  overflow-x: auto;
+  max-height: 260px;
+  white-space: pre;
+}
+
+/* Tabs */
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--omni-border-subtle);
+  padding-bottom: 8px;
+}
+
+.modal-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--omni-text-muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: var(--omni-radius-sm);
+  cursor: pointer;
+}
+
+.modal-tab-btn.active {
+  background: var(--omni-bg-subtle);
+  color: var(--omni-text-primary);
+}
+
+/* ==========================================================================
+   Unified Settings Modal & Visual Layout Configurator
+   ========================================================================== */
+.settings-modal-card {
+  background: var(--omni-bg-elevated);
+  border: 1px solid var(--omni-border-strong);
+  border-radius: var(--omni-radius-lg);
+  width: 95vw;
+  max-width: 920px;
+  height: 85vh;
+  max-height: 850px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--omni-border-subtle);
+  background: var(--omni-bg-surface);
+}
+
+.settings-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.settings-nav {
+  width: 220px;
+  border-right: 1px solid var(--omni-border-subtle);
+  background: var(--omni-bg-surface);
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.settings-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--omni-radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--omni-text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.settings-nav-btn:hover {
+  background: var(--omni-bg-subtle);
+  color: var(--omni-text-primary);
+}
+
+.settings-nav-btn.active {
+  background: var(--omni-bg-subtle);
+  color: var(--omni-accent-primary);
+  font-weight: 600;
+}
+
+.settings-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: var(--omni-bg-elevated);
+}
+
+.settings-pane {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-pane.active {
+  display: flex;
+}
+
+
+
+/* Responsive Mobile Settings */
+@media (max-width: 768px) {
+  .settings-modal-card {
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+
+  .settings-body {
+    flex-direction: column;
+  }
+
+  .settings-nav {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--omni-border-subtle);
+    padding: 8px 12px;
+    gap: 6px;
+  }
+
+  .settings-nav-btn {
+    white-space: nowrap;
+    width: auto;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+
+  .settings-content {
+    padding: 16px;
+  }
+}
+
+
+`;
