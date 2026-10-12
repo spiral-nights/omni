@@ -2,6 +2,11 @@ import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STAN
 import { OmniWorkspaceState, OmniWorkspacePluginConfig, PluginPlacement, OMNI_WORKSPACE_D_TAG, NostrEvent, PluginViewDeclaration, OmniShellHost } from "@omni/types";
 import { ICONS, icon, IconName } from "./icons.js";
 import { InstalledPluginEntry, OmniShellOptions } from "./shell.js";
+import {
+  renderNostrWritePermissionsSection,
+  renderHandledIntentsSection,
+  showIntentEnableToast
+} from "./permissions-intents-ui.js";
 
 export type PanoramaPivot = "feed" | "apps" | "widgets" | "system" | string;
 
@@ -423,6 +428,7 @@ export class PanoramaShell implements OmniShellHost {
       activePage: this.activePivot,
       autoSync: this.autoSyncNip78,
       shellType: "panorama",
+      defaultIntents: this.kernel.intentBroker.getAllDefaultHandlers(),
       plugins: this.installedPlugins.map((p) => {
         const meta = this.getPluginMeta(p);
         const placements = this.getPluginPlacements(p);
@@ -433,6 +439,8 @@ export class PanoramaShell implements OmniShellHost {
           viewId: p.viewId,
           pinned: p.pinned,
           relays: p.relays,
+          handledIntents: p.handledIntents,
+          disabledIntents: p.disabledIntents,
           placements,
           enabled: p.enabled,
           name: meta.name,
@@ -452,12 +460,26 @@ export class PanoramaShell implements OmniShellHost {
       this.autoSyncNip78 = state.autoSync;
     }
 
+    if (state.defaultIntents) {
+      for (const [action, pId] of Object.entries(state.defaultIntents)) {
+        this.kernel.intentBroker.setDefaultHandler(action, pId);
+      }
+    }
+
     for (const item of state.plugins) {
       const plugin = this.installedPlugins.find((p) => p.id === item.id);
       if (plugin) {
         if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
         if (typeof item.pinned === "boolean") plugin.pinned = item.pinned;
         if (item.relays !== undefined) plugin.relays = item.relays;
+        if (item.handledIntents !== undefined) plugin.handledIntents = item.handledIntents;
+        if (item.disabledIntents !== undefined) {
+          plugin.disabledIntents = item.disabledIntents;
+          for (const act of (plugin.handledIntents || [])) {
+            const isDis = plugin.disabledIntents.includes(act);
+            this.kernel.intentBroker.setPluginIntentEnabled(plugin.id, act, !isDis);
+          }
+        }
         if (item.route !== undefined) plugin.route = item.route;
         if (item.viewId !== undefined) plugin.viewId = item.viewId;
         if (item.placements) plugin.placements = item.placements;
@@ -551,6 +573,17 @@ export class PanoramaShell implements OmniShellHost {
     this.wireNavigation();
     this.wireGlobalEvents();
     this.updateProfileUi();
+
+    // Wire intent broker callbacks for conflict resolution & single candidate flow
+    this.kernel.intentBroker.setPromptEnableCandidateCallback(async (action, candidate) => {
+      return new Promise<boolean>((resolve) => {
+        this.showEnableCandidateToast(action, candidate, resolve);
+      });
+    });
+
+    this.kernel.intentBroker.setDisambiguateCallback(async (action, candidates, data) => {
+      return this.promptDisambiguateIntent(action, candidates, data);
+    });
   }
 
   public getActivePageId(): string {
@@ -808,6 +841,32 @@ export class PanoramaShell implements OmniShellHost {
             <div class="panorama-inspector-body" id="panorama-inspector-body"></div>
           </div>
         </div>
+
+        <!-- 5. "Open With..." System Chooser Modal -->
+        <div class="panorama-inspector-modal" id="panorama-open-with-modal" style="display: none; align-items: center; justify-content: center;">
+          <div class="panorama-inspector-content" style="max-width: 440px; width: 90%;">
+            <div class="panorama-inspector-header">
+              <h3 id="panorama-open-with-title" style="margin: 0; font-size: 1rem; color: #fff;">Open With...</h3>
+              <button class="btn-app-bar-circle" id="btn-panorama-open-with-close" style="width: 32px; height: 32px; border: 1px solid #666;" title="Close">
+                ${icon("close", 16)}
+              </button>
+            </div>
+            <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+              <div style="background: #111; padding: 8px 10px; border: 1px solid #222;">
+                <span id="panorama-open-with-target" style="font-size: 0.75rem; color: #00a4ef; word-break: break-all; font-family: var(--omni-font-mono);"></span>
+              </div>
+              <div id="panorama-open-with-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto;"></div>
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #aaa; cursor: pointer; padding-top: 4px; border-top: 1px solid #222;">
+                <input id="panorama-open-with-always" type="checkbox" />
+                <span id="panorama-open-with-always-label">Always use this application</span>
+              </label>
+              <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+                <button id="btn-panorama-open-with-cancel" class="btn-panorama-action" style="padding: 6px 12px;">Cancel</button>
+                <button id="btn-panorama-open-with-confirm" class="btn-panorama-action" style="padding: 6px 12px; border-color: #00a4ef; color: #00a4ef;" disabled>Open</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -887,7 +946,7 @@ export class PanoramaShell implements OmniShellHost {
   }
 
   public renderSystemPluginList(): void {
-    const list = this.root.querySelector("#panorama-plugins-list") || document.getElementById("panorama-plugins-list");
+    const list = (this.root.querySelector("#panorama-plugins-list") || document.getElementById("panorama-plugins-list")) as HTMLElement | null;
     const count = this.root.querySelector("#panorama-plugin-count") || document.getElementById("panorama-plugin-count");
     if (!list) return;
 
@@ -1319,6 +1378,24 @@ export class PanoramaShell implements OmniShellHost {
         relayAccessBox.appendChild(relayOptionsWrap);
         details.appendChild(relayAccessBox);
 
+        // Section C2: Nostr Write Permissions (Collapsible Section)
+        const writeSection = renderNostrWritePermissionsSection({
+          kernel: this.kernel,
+          pluginId: plugin.id,
+          theme: "panorama",
+          onUpdate: () => this.saveLocalWorkspace()
+        });
+        details.appendChild(writeSection);
+
+        // Section C3: Handled Intents & Capabilities
+        const intentsSection = renderHandledIntentsSection({
+          kernel: this.kernel,
+          plugin,
+          theme: "panorama",
+          onUpdate: () => this.saveLocalWorkspace()
+        });
+        details.appendChild(intentsSection);
+
         // Section D: Actions Row
         const actionsRow = document.createElement("div");
         actionsRow.style.cssText = "display: flex; gap: 8px; align-items: center; margin-top: 4px;";
@@ -1361,6 +1438,8 @@ export class PanoramaShell implements OmniShellHost {
 
       list.appendChild(card);
     }
+
+    this.renderDefaultApplicationsSettings(list);
   }
 
   public openPluginInspector(plugin: InstalledPluginEntry): void {
@@ -1384,12 +1463,26 @@ export class PanoramaShell implements OmniShellHost {
             ${(synthManifest.views || []).map((v: any) => `<li><code>${v.id}</code>: "${v.title}" (${v.path || "/"})</li>`).join("")}
           </ul>
         </div>
-        <div>
-          <strong>Permissions:</strong>
-          <pre style="background: #000; padding: 8px; border: 1px solid #222; margin-top: 4px; overflow: auto; font-size: 0.75rem; color: #aaa;">${JSON.stringify(synthManifest.permissions || {}, null, 2)}</pre>
-        </div>
       </div>
     `;
+
+    // Collapsible Nostr Write Permissions Section
+    const writeSection = renderNostrWritePermissionsSection({
+      kernel: this.kernel,
+      pluginId: plugin.id,
+      theme: "panorama",
+      onUpdate: () => this.saveLocalWorkspace()
+    });
+    body.appendChild(writeSection);
+
+    // Handled Intents Section
+    const intentsSection = renderHandledIntentsSection({
+      kernel: this.kernel,
+      plugin,
+      theme: "panorama",
+      onUpdate: () => this.saveLocalWorkspace()
+    });
+    body.appendChild(intentsSection);
 
     modal.style.display = "flex";
   }
@@ -1754,5 +1847,254 @@ export class PanoramaShell implements OmniShellHost {
         }
       }
     } catch (_) {}
+  }
+
+  public showEnableCandidateToast(
+    action: string,
+    candidate: { pluginId: string; name?: string; icon?: string; description?: string },
+    resolve: (enabled: boolean) => void
+  ): void {
+    showIntentEnableToast({
+      action,
+      candidateName: candidate.name || candidate.pluginId,
+      theme: "panorama",
+      onEnable: () => {
+        this.kernel.intentBroker.setPluginIntentEnabled(candidate.pluginId, action, true);
+        const p = this.installedPlugins.find((x) => x.id === candidate.pluginId);
+        if (p) {
+          if (!p.disabledIntents) p.disabledIntents = [];
+          p.disabledIntents = p.disabledIntents.filter((a) => a !== action);
+        }
+        this.saveLocalWorkspace();
+        resolve(true);
+      },
+      onDismiss: () => {
+        resolve(false);
+      }
+    });
+  }
+
+  public async promptDisambiguateIntent(
+    action: string,
+    candidates: Array<{ pluginId: string; name?: string; icon?: string; description?: string }>,
+    data?: any
+  ): Promise<string | null> {
+    return new Promise((resolve) => {
+      const modal = document.getElementById("panorama-open-with-modal");
+      const targetEl = document.getElementById("panorama-open-with-target");
+      const listEl = document.getElementById("panorama-open-with-list");
+      const alwaysChk = document.getElementById("panorama-open-with-always") as HTMLInputElement | null;
+      const alwaysLabel = document.getElementById("panorama-open-with-always-label");
+      const btnConfirm = document.getElementById("btn-panorama-open-with-confirm") as HTMLButtonElement | null;
+      const btnCancel = document.getElementById("btn-panorama-open-with-cancel");
+      const btnClose = document.getElementById("btn-panorama-open-with-close");
+
+      if (!modal || !listEl) return resolve(null);
+
+      if (targetEl) targetEl.textContent = `Intent Action: "${action}"`;
+      if (alwaysLabel) alwaysLabel.textContent = `Always use this application for "${action}"`;
+      if (alwaysChk) alwaysChk.checked = false;
+      if (btnConfirm) btnConfirm.disabled = true;
+
+      listEl.innerHTML = "";
+      let selectedHandlerId: string | null = null;
+
+      for (const c of candidates) {
+        const row = document.createElement("div");
+        row.style.cssText =
+          "display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #141414; border: 1px solid #222; cursor: pointer; transition: border-color 0.15s;";
+
+        const left = document.createElement("div");
+        left.style.cssText = "display: flex; align-items: center; gap: 8px;";
+        left.innerHTML = `<span style="color: #00a4ef; font-size: 0.9rem;">✦</span><span style="font-size: 0.82rem; color: #fff; font-weight: 500;">${c.name || c.pluginId}</span>`;
+
+        const badge = document.createElement("span");
+        badge.style.cssText = "font-size: 0.68rem; padding: 1px 6px; background: #222; color: #aaa;";
+        badge.textContent = "Handler";
+
+        row.appendChild(left);
+        row.appendChild(badge);
+
+        row.addEventListener("click", () => {
+          listEl.querySelectorAll("div").forEach((el: any) => {
+            el.style.borderColor = "#222";
+          });
+          row.style.borderColor = "#00a4ef";
+          selectedHandlerId = c.pluginId;
+          if (btnConfirm) btnConfirm.disabled = false;
+        });
+
+        listEl.appendChild(row);
+      }
+
+      const cleanup = () => {
+        modal.style.display = "none";
+        btnCancel?.removeEventListener("click", onCancel);
+        btnClose?.removeEventListener("click", onCancel);
+        btnConfirm?.removeEventListener("click", onConfirm);
+      };
+
+      const onCancel = () => {
+        cleanup();
+        resolve(null);
+      };
+
+      const onConfirm = () => {
+        if (!selectedHandlerId) return;
+        if (alwaysChk?.checked) {
+          this.kernel.intentBroker.setDefaultHandler(action, selectedHandlerId);
+          this.saveLocalWorkspace();
+        }
+        cleanup();
+        resolve(selectedHandlerId);
+      };
+
+      btnCancel?.addEventListener("click", onCancel);
+      btnClose?.addEventListener("click", onCancel);
+      btnConfirm?.addEventListener("click", onConfirm);
+
+      modal.style.display = "flex";
+    });
+  }
+
+  public renderDefaultApplicationsSettings(container: HTMLElement): void {
+    const existing = container.querySelector(".panorama-default-applications-box");
+    if (existing) existing.remove();
+
+    const box = document.createElement("div");
+    box.className = "panorama-config-section panorama-default-applications-box";
+    box.style.cssText =
+      "display: flex; flex-direction: column; gap: 8px; background: #141414; padding: 12px 14px; border: 1px solid #222; margin-top: 10px;";
+
+    box.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="font-size: 0.85rem; font-weight: 600; color: #fff;">Default Applications</strong>
+        <span style="font-size: 0.7rem; color: #00a4ef;">Intent Routing</span>
+      </div>
+      <p style="font-size: 0.72rem; color: #888; margin: 0;">
+        Assign default applications to handle common actions across plugins without prompting every time.
+      </p>
+    `;
+
+    const standardActions = [
+      { action: "create_note", label: "Create Note / Composer" },
+      { action: "view_note", label: "View Note / Thread" },
+      { action: "view_profile", label: "View Identity Profile" },
+      { action: "share", label: "Web Share Target" },
+      { action: "pay_invoice", label: "Lightning Payment" }
+    ];
+
+    const actionsList = document.createElement("div");
+    actionsList.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 4px;";
+
+    for (const sa of standardActions) {
+      const row = document.createElement("div");
+      row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0;";
+
+      const label = document.createElement("span");
+      label.style.cssText = "font-size: 0.75rem; color: #aaa;";
+      label.textContent = sa.label;
+
+      const select = document.createElement("select");
+      select.style.cssText =
+        "background: #000; border: 1px solid #444; color: #fff; font-size: 0.72rem; padding: 4px 8px; outline: none;";
+
+      const optNone = document.createElement("option");
+      optNone.value = "";
+      optNone.textContent = "Prompt every time (None)";
+      select.appendChild(optNone);
+
+      const candidates = this.installedPlugins.filter((p) =>
+        (p.handledIntents || []).includes(sa.action) ||
+        this.kernel.intentBroker.getHandlers(sa.action).some((h) => h.pluginId === p.id)
+      );
+
+      for (const cand of candidates) {
+        const meta = this.getPluginMeta(cand);
+        const opt = document.createElement("option");
+        opt.value = cand.id;
+        opt.textContent = meta.name;
+        select.appendChild(opt);
+      }
+
+      const currentDefault = this.kernel.intentBroker.getDefaultHandler(sa.action);
+      if (currentDefault) {
+        select.value = currentDefault;
+      }
+
+      select.addEventListener("change", () => {
+        if (!select.value) {
+          this.kernel.intentBroker.clearDefaultHandler(sa.action);
+        } else {
+          this.kernel.intentBroker.setDefaultHandler(sa.action, select.value);
+        }
+        this.saveLocalWorkspace();
+      });
+
+      row.appendChild(label);
+      row.appendChild(select);
+      actionsList.appendChild(row);
+    }
+
+    box.appendChild(actionsList);
+    container.appendChild(box);
+  }
+
+  public async handleUri(uri: string, sourcePluginId?: string): Promise<any> {
+    const scheme = uri.split(":")[0]?.toLowerCase() || "unknown";
+    const defaultHandlerId = this.kernel.getDefaultHandler(scheme);
+    if (defaultHandlerId && this.installedPlugins.some((p) => p.id === defaultHandlerId)) {
+      if (defaultHandlerId.includes("feed") || defaultHandlerId === "org.omni.plugin.feed") {
+        this.showPivot("feed");
+      } else {
+        this.openApp(defaultHandlerId);
+      }
+      return { handled: true, uri, handlerId: defaultHandlerId };
+    }
+
+    const handlers = await this.kernel.resolveAppHandlers(uri, this.installedPlugins);
+    if (handlers.length === 0) {
+      if (typeof alert === "function") alert(`No installed apps found for URI scheme: ${scheme}:`);
+      return { handled: false, uri };
+    }
+
+    if (handlers.length === 1 && handlers[0].isInstalled) {
+      const chosenId = handlers[0].id;
+      if (chosenId.includes("feed") || chosenId === "org.omni.plugin.feed") {
+        this.showPivot("feed");
+      } else {
+        this.openApp(chosenId);
+      }
+      return { handled: true, uri, handlerId: chosenId };
+    }
+
+    const chosenId = await this.promptDisambiguateIntent(
+      scheme,
+      handlers.map((h) => ({ pluginId: h.id, name: h.name, description: h.description }))
+    );
+
+    if (chosenId) {
+      if (chosenId.includes("feed") || chosenId === "org.omni.plugin.feed") {
+        this.showPivot("feed");
+      } else {
+        this.openApp(chosenId);
+      }
+      return { handled: true, uri, handlerId: chosenId };
+    }
+    return { handled: false, uri };
+  }
+
+  public async handleShare(
+    payload: { title?: string; text?: string; url?: string },
+    sourcePluginId?: string
+  ): Promise<any> {
+    this.showPivot("feed");
+    const draftText = [payload.title, payload.text, payload.url].filter(Boolean).join("\n\n");
+    if (draftText) {
+      try {
+        await this.kernel.intentBroker.dispatch("shell", "create_note", { content: draftText });
+      } catch (_) {}
+    }
+    return { handled: true, payload };
   }
 }

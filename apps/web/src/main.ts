@@ -27,6 +27,7 @@ const initialPlugins: InstalledPluginEntry[] = [
       { id: "main", title: "Feed", path: "" },
       { id: "widget", title: "Feed Widget", path: "?view=widget" }
     ],
+    handledIntents: ["create_note", "view_note", "share"],
     scriptContent: feedScript,
     sourceUrl: "local:@omni/plugin-feed",
     enabled: true
@@ -57,6 +58,7 @@ const initialPlugins: InstalledPluginEntry[] = [
       { id: "widget", title: "Checklist Card", path: "?view=widget" },
       { id: "settings", title: "Checklist Settings", path: "?view=settings" }
     ],
+    handledIntents: ["create_task"],
     scriptContent: checklistScript,
     sourceUrl: "local:@omni/plugin-checklist",
     enabled: true
@@ -85,6 +87,7 @@ const initialPlugins: InstalledPluginEntry[] = [
       { id: "widget", title: "User Badge Pill", path: "?view=widget" },
       { id: "settings", title: "Profile Settings", path: "?view=settings" }
     ],
+    handledIntents: ["view_profile", "edit_profile"],
     scriptContent: profileScript,
     sourceUrl: "local:@omni/plugin-profile",
     enabled: true

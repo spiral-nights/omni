@@ -145,7 +145,16 @@ export class OmniKernel {
         if (this.capabilityStore.getGrant(manifest.id, "nostr:read") === null) {
           this.capabilityStore.setGrant(manifest.id, "nostr:read", "always");
         }
-        if (this.capabilityStore.getGrant(manifest.id, "nostr:write") === null) {
+        if (manifest.permissions.nostr.write?.kinds && Array.isArray(manifest.permissions.nostr.write.kinds)) {
+          for (const k of manifest.permissions.nostr.write.kinds) {
+            if (this.capabilityStore.getGrant(manifest.id, "nostr:write", String(k), false) === null) {
+              this.capabilityStore.setGrant(manifest.id, "nostr:write", "always", String(k));
+            }
+          }
+          if (manifest.permissions.nostr.write.allKinds && this.capabilityStore.getGrant(manifest.id, "nostr:write", "*") === null) {
+            this.capabilityStore.setGrant(manifest.id, "nostr:write", "always", "*");
+          }
+        } else if (this.capabilityStore.getGrant(manifest.id, "nostr:write") === null) {
           this.capabilityStore.setGrant(manifest.id, "nostr:write", "always");
         }
         if (this.capabilityStore.getGrant(manifest.id, "nostr:sign") === null) {
@@ -327,13 +336,34 @@ export class OmniKernel {
     return this.settingsSandboxes.get(pluginId);
   }
 
-  setPluginPermission(pluginId: string, category: string, granted: boolean): void {
-    this.capabilityStore.setGrant(pluginId, category, granted ? "always" : "deny");
+  setPluginPermission(pluginId: string, category: string, granted: boolean, scope?: string): void {
+    this.capabilityStore.setGrant(pluginId, category, granted ? "always" : "deny", scope);
   }
 
-  getPluginPermission(pluginId: string, category: string): boolean {
-    const grant = this.capabilityStore.getGrant(pluginId, category);
+  getPluginPermission(pluginId: string, category: string, scope?: string): boolean {
+    const grant = this.capabilityStore.getGrant(pluginId, category, scope);
     return grant === "always" || grant === "session";
+  }
+
+  getPluginKindPermissions(pluginId: string): { allKinds: boolean; kinds: number[] } {
+    const allGrant = this.capabilityStore.getGrant(pluginId, "nostr:write", "*");
+    const allKinds = allGrant === "always" || allGrant === "session";
+    const allGrants = this.capabilityStore.getAllGrants(pluginId);
+    const kinds: number[] = [];
+    for (const [key, grant] of Object.entries(allGrants)) {
+      if (key.startsWith("nostr:write:") && (grant === "always" || grant === "session")) {
+        const scope = key.split(":")[2];
+        if (scope && scope !== "*") {
+          const num = parseInt(scope, 10);
+          if (!isNaN(num)) kinds.push(num);
+        }
+      }
+    }
+    return { allKinds, kinds };
+  }
+
+  setPluginKindPermission(pluginId: string, kind: number, granted: boolean): void {
+    this.capabilityStore.setGrant(pluginId, "nostr:write", granted ? "always" : "deny", String(kind));
   }
 
   uninstallPlugin(pluginId: string): void {

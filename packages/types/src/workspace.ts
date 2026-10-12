@@ -29,6 +29,8 @@ export interface OmniWorkspacePluginConfig {
   viewId?: string; // View identifier (e.g. "main", "widget", "settings")
   relays?: string[]; // Custom relay URLs allowed for this plugin. If undefined or empty, uses all configured relays.
   placements?: PluginPlacement[]; // Multi-viewport placements
+  handledIntents?: string[]; // List of intent actions this plugin is enabled to handle
+  disabledIntents?: string[]; // Specific intent actions user explicitly disabled for this plugin
 }
 
 export interface OmniWorkspaceState {
@@ -37,6 +39,7 @@ export interface OmniWorkspaceState {
   activePage?: string;
   autoSync?: boolean;
   shellType?: "classic" | "panorama" | string;
+  defaultIntents?: Record<string, string>; // Maps intent action (e.g. "create_note", "view_profile") to default pluginId
   plugins: OmniWorkspacePluginConfig[];
 }
 

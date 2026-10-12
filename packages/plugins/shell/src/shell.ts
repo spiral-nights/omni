@@ -1,6 +1,11 @@
 import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STANDARD_SLOTS } from "@omni/core";
 import { OmniWorkspaceState, OmniWorkspacePluginConfig, PluginPlacement, OMNI_WORKSPACE_D_TAG, NostrEvent, PluginViewDeclaration, OmniShellHost } from "@omni/types";
 import { ICONS, icon, IconName } from "./icons.js";
+import {
+  renderNostrWritePermissionsSection,
+  renderHandledIntentsSection,
+  showIntentEnableToast
+} from "./permissions-intents-ui.js";
 
 export interface InstalledPluginEntry {
   id: string;
@@ -20,6 +25,8 @@ export interface InstalledPluginEntry {
   enabled: boolean;
   pinned?: boolean;
   relays?: string[]; // Custom relay URLs allowed for this plugin. If undefined or empty, uses all configured relays.
+  handledIntents?: string[]; // Intents this plugin can handle
+  disabledIntents?: string[]; // Intents user explicitly turned off for this plugin
   naddr?: string;
   authorNpub?: string;
   event?: any;
@@ -290,6 +297,7 @@ export class OmniShell implements OmniShellHost {
       updatedAt: Date.now(),
       activePage: this.getActivePageId(),
       autoSync: this.autoSyncNip78,
+      defaultIntents: this.kernel.intentBroker.getAllDefaultHandlers(),
       plugins: this.installedPlugins.map((p) => {
         const meta = this.getPluginMeta(p);
         const placements = this.getPluginPlacements(p);
@@ -300,6 +308,8 @@ export class OmniShell implements OmniShellHost {
           viewId: p.viewId,
           pinned: p.pinned,
           relays: p.relays,
+          handledIntents: p.handledIntents,
+          disabledIntents: p.disabledIntents,
           placements,
           enabled: p.enabled,
           name: meta.name,
@@ -367,6 +377,12 @@ export class OmniShell implements OmniShellHost {
       if (chk) chk.checked = this.autoSyncNip78;
     }
 
+    if (state.defaultIntents) {
+      for (const [action, pId] of Object.entries(state.defaultIntents)) {
+        this.kernel.intentBroker.setDefaultHandler(action, pId);
+      }
+    }
+
     for (const item of state.plugins) {
       const plugin = this.installedPlugins.find((p) => p.id === item.id);
       if (plugin) {
@@ -378,6 +394,16 @@ export class OmniShell implements OmniShellHost {
         }
         if (item.relays !== undefined) {
           plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
+        }
+        if (item.handledIntents !== undefined) {
+          plugin.handledIntents = item.handledIntents;
+        }
+        if (item.disabledIntents !== undefined) {
+          plugin.disabledIntents = item.disabledIntents;
+          for (const act of (plugin.handledIntents || [])) {
+            const isDis = plugin.disabledIntents.includes(act);
+            this.kernel.intentBroker.setPluginIntentEnabled(plugin.id, act, !isDis);
+          }
         }
         if (item.route !== undefined) {
           plugin.route = item.route;
@@ -832,6 +858,17 @@ export class OmniShell implements OmniShellHost {
     this.wireProfileControls();
     this.wireRelaysManager();
     this.renderSettingsNavAndPanes();
+
+    // Wire intent broker callbacks for conflict resolution & single candidate flow
+    this.kernel.intentBroker.setPromptEnableCandidateCallback(async (action, candidate) => {
+      return new Promise<boolean>((resolve) => {
+        this.showEnableCandidateToast(action, candidate, resolve);
+      });
+    });
+
+    this.kernel.intentBroker.setDisambiguateCallback(async (action, candidates, data) => {
+      return this.promptDisambiguateIntent(action, candidates, data);
+    });
   }
 
   public getSlotContainers(): Map<string, Element> {
@@ -1560,6 +1597,24 @@ export class OmniShell implements OmniShellHost {
       relayAccessBox.appendChild(relayOptionsWrap);
       pane.appendChild(relayAccessBox);
 
+      // Nostr Write Permissions (Collapsible Section)
+      const writeSection = renderNostrWritePermissionsSection({
+        kernel: this.kernel,
+        pluginId: p.id,
+        theme: "classic",
+        onUpdate: () => this.saveLocalWorkspace()
+      });
+      pane.appendChild(writeSection);
+
+      // Handled Intents & Capabilities
+      const intentsSection = renderHandledIntentsSection({
+        kernel: this.kernel,
+        plugin: p,
+        theme: "classic",
+        onUpdate: () => this.saveLocalWorkspace()
+      });
+      pane.appendChild(intentsSection);
+
       // Actions Row
       const actionsRow = document.createElement("div");
       actionsRow.style.cssText = "display: flex; gap: 8px; align-items: center; margin-top: 4px;";
@@ -1777,6 +1832,8 @@ export class OmniShell implements OmniShellHost {
 
       container.appendChild(card);
     }
+
+    this.renderDefaultApplicationsSettings(container);
   }
 
   public uninstallPlugin(pluginId: string): void {
@@ -1892,11 +1949,6 @@ export class OmniShell implements OmniShellHost {
         name: "Nostr Subscriptions (Read)",
         desc: "Subscribe to public notes, profiles, and live timeline streams"
       });
-      declaredPerms.push({
-        key: "nostr:write",
-        name: "Nostr Event Signing (Write)",
-        desc: "Draft and request signing of Nostr notes and custom events"
-      });
       if (
         synthManifest.permissions?.relays ||
         this.kernel.getPluginPermission(plugin.id, "relays:manage") ||
@@ -1956,6 +2008,24 @@ export class OmniShell implements OmniShellHost {
         row.appendChild(toggle);
         permList.appendChild(row);
       }
+
+      // Collapsible Nostr Write Permissions Section
+      const writeSection = renderNostrWritePermissionsSection({
+        kernel: this.kernel,
+        pluginId: plugin.id,
+        theme: "classic",
+        onUpdate: () => this.saveLocalWorkspace()
+      });
+      permList.appendChild(writeSection);
+
+      // Handled Intents Section
+      const intentsSection = renderHandledIntentsSection({
+        kernel: this.kernel,
+        plugin,
+        theme: "classic",
+        onUpdate: () => this.saveLocalWorkspace()
+      });
+      permList.appendChild(intentsSection);
     }
 
     if (rawPre) {
@@ -2910,6 +2980,211 @@ export class OmniShell implements OmniShellHost {
 
       modal.classList.add("open");
     });
+  }
+
+  public showEnableCandidateToast(
+    action: string,
+    candidate: { pluginId: string; name?: string; icon?: string; description?: string },
+    resolve: (enabled: boolean) => void
+  ): void {
+    showIntentEnableToast({
+      action,
+      candidateName: candidate.name || candidate.pluginId,
+      theme: "classic",
+      onEnable: () => {
+        this.kernel.intentBroker.setPluginIntentEnabled(candidate.pluginId, action, true);
+        const p = this.installedPlugins.find((x) => x.id === candidate.pluginId);
+        if (p) {
+          if (!p.disabledIntents) p.disabledIntents = [];
+          p.disabledIntents = p.disabledIntents.filter((a) => a !== action);
+        }
+        this.saveLocalWorkspace();
+        resolve(true);
+      },
+      onDismiss: () => {
+        resolve(false);
+      }
+    });
+  }
+
+  public async promptDisambiguateIntent(
+    action: string,
+    candidates: Array<{ pluginId: string; name?: string; icon?: string; description?: string }>,
+    data?: any
+  ): Promise<string | null> {
+    return new Promise((resolve) => {
+      const modal = document.getElementById("open-with-modal");
+      const uriEl = document.getElementById("open-with-target-uri");
+      const listEl = document.getElementById("open-with-handlers-list");
+      const alwaysChk = document.getElementById("open-with-always-checkbox") as HTMLInputElement | null;
+      const alwaysLabel = document.getElementById("open-with-always-label");
+      const btnConfirm = document.getElementById("btn-confirm-open-with") as HTMLButtonElement | null;
+      const btnCancel = document.getElementById("btn-cancel-open-with");
+      const btnClose = document.getElementById("btn-close-open-with");
+
+      if (!modal || !listEl) return resolve(null);
+
+      if (uriEl) uriEl.textContent = `Intent Action: "${action}"`;
+      if (alwaysLabel) alwaysLabel.textContent = `Always use this app for "${action}"`;
+      if (alwaysChk) alwaysChk.checked = false;
+      if (btnConfirm) btnConfirm.disabled = true;
+
+      listEl.innerHTML = "";
+      let selectedHandlerId: string | null = null;
+
+      for (const c of candidates) {
+        const row = document.createElement("div");
+        row.className = "open-with-handler-item";
+        row.style.cssText =
+          "display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); cursor: pointer; transition: border-color 0.15s;";
+
+        const left = document.createElement("div");
+        left.style.cssText = "display: flex; align-items: center; gap: 10px;";
+
+        const iconEl = document.createElement("div");
+        iconEl.style.cssText =
+          "width: 32px; height: 32px; border-radius: var(--omni-radius-sm); background: var(--omni-bg-subtle); display: flex; align-items: center; justify-content: center; font-size: 1rem; color: var(--omni-accent-primary);";
+        iconEl.textContent = "✦";
+
+        const textCol = document.createElement("div");
+        textCol.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+        textCol.innerHTML = `<span style="font-weight: 600; font-size: 0.85rem; color: var(--omni-text-primary);">${c.name || c.pluginId}</span><span style="font-size: 0.72rem; color: var(--omni-text-muted);">${c.description || ""}</span>`;
+
+        left.appendChild(iconEl);
+        left.appendChild(textCol);
+
+        const badge = document.createElement("span");
+        badge.style.cssText =
+          "font-size: 0.68rem; background: var(--omni-bg-subtle); color: var(--omni-accent-primary); padding: 2px 6px; border-radius: var(--omni-radius-pill);";
+        badge.textContent = "Handler";
+
+        row.appendChild(left);
+        row.appendChild(badge);
+
+        row.addEventListener("click", () => {
+          listEl.querySelectorAll(".open-with-handler-item").forEach((el: any) => {
+            el.style.borderColor = "var(--omni-border-subtle)";
+          });
+          row.style.borderColor = "var(--omni-accent-primary)";
+          selectedHandlerId = c.pluginId;
+          if (btnConfirm) btnConfirm.disabled = false;
+        });
+
+        listEl.appendChild(row);
+      }
+
+      const cleanup = () => {
+        modal.classList.remove("open");
+        btnCancel?.removeEventListener("click", onCancel);
+        btnClose?.removeEventListener("click", onCancel);
+        btnConfirm?.removeEventListener("click", onConfirm);
+      };
+
+      const onCancel = () => {
+        cleanup();
+        resolve(null);
+      };
+
+      const onConfirm = () => {
+        if (!selectedHandlerId) return;
+        if (alwaysChk?.checked) {
+          this.kernel.intentBroker.setDefaultHandler(action, selectedHandlerId);
+          this.saveLocalWorkspace();
+        }
+        cleanup();
+        resolve(selectedHandlerId);
+      };
+
+      btnCancel?.addEventListener("click", onCancel);
+      btnClose?.addEventListener("click", onCancel);
+      btnConfirm?.addEventListener("click", onConfirm);
+
+      modal.classList.add("open");
+    });
+  }
+
+  public renderDefaultApplicationsSettings(container: HTMLElement): void {
+    const existing = container.querySelector(".default-applications-box");
+    if (existing) existing.remove();
+
+    const box = document.createElement("div");
+    box.className = "default-applications-box";
+    box.style.cssText =
+      "display: flex; flex-direction: column; gap: 8px; background: var(--omni-bg-surface); padding: 12px 14px; border-radius: var(--omni-radius-md); border: 1px solid var(--omni-border-subtle); margin-top: 10px;";
+
+    box.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="font-size: 0.85rem; font-weight: 600; color: var(--omni-text-primary);">Default Applications</strong>
+        <span style="font-size: 0.7rem; color: var(--omni-text-muted);">Standard Intent Routing</span>
+      </div>
+      <p style="font-size: 0.72rem; color: var(--omni-text-muted); margin: 0;">
+        Assign default applications to handle common actions across plugins without prompting every time.
+      </p>
+    `;
+
+    const standardActions = [
+      { action: "create_note", label: "Create Note / Composer" },
+      { action: "view_note", label: "View Note / Thread" },
+      { action: "view_profile", label: "View Identity Profile" },
+      { action: "share", label: "Web Share Target" },
+      { action: "pay_invoice", label: "Lightning Payment" }
+    ];
+
+    const actionsList = document.createElement("div");
+    actionsList.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 4px;";
+
+    for (const sa of standardActions) {
+      const row = document.createElement("div");
+      row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0;";
+
+      const label = document.createElement("span");
+      label.style.cssText = "font-size: 0.75rem; color: var(--omni-text-secondary);";
+      label.textContent = sa.label;
+
+      const select = document.createElement("select");
+      select.style.cssText =
+        "background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 4px 8px; border-radius: var(--omni-radius-sm); outline: none;";
+
+      const optNone = document.createElement("option");
+      optNone.value = "";
+      optNone.textContent = "Prompt every time (None)";
+      select.appendChild(optNone);
+
+      // Find all plugins supporting this intent
+      const candidates = this.installedPlugins.filter((p) =>
+        (p.handledIntents || []).includes(sa.action) ||
+        this.kernel.intentBroker.getHandlers(sa.action).some((h) => h.pluginId === p.id)
+      );
+
+      for (const cand of candidates) {
+        const meta = this.getPluginMeta(cand);
+        const opt = document.createElement("option");
+        opt.value = cand.id;
+        opt.textContent = meta.name;
+        select.appendChild(opt);
+      }
+
+      const currentDefault = this.kernel.intentBroker.getDefaultHandler(sa.action);
+      if (currentDefault) {
+        select.value = currentDefault;
+      }
+
+      select.addEventListener("change", () => {
+        if (!select.value) {
+          this.kernel.intentBroker.clearDefaultHandler(sa.action);
+        } else {
+          this.kernel.intentBroker.setDefaultHandler(sa.action, select.value);
+        }
+        this.saveLocalWorkspace();
+      });
+
+      row.appendChild(label);
+      row.appendChild(select);
+      actionsList.appendChild(row);
+    }
+
+    box.appendChild(actionsList);
+    container.appendChild(box);
   }
 
   public async handleUri(uri: string, sourcePluginId?: string): Promise<any> {
