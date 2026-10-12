@@ -28,10 +28,23 @@ export type IconName =
   | "chevron-down"
   | "chevron-up"
   | "grid"
+  | "apps"
   | "pin"
   | "help-circle";
 
 export const ICONS: Record<IconName, string> = {
+  apps: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="4.5" height="4.5" rx="1"/>
+    <rect x="9.75" y="3" width="4.5" height="4.5" rx="1"/>
+    <rect x="16.5" y="3" width="4.5" height="4.5" rx="1"/>
+    <rect x="3" y="9.75" width="4.5" height="4.5" rx="1"/>
+    <rect x="9.75" y="9.75" width="4.5" height="4.5" rx="1"/>
+    <rect x="16.5" y="9.75" width="4.5" height="4.5" rx="1"/>
+    <rect x="3" y="16.5" width="4.5" height="4.5" rx="1"/>
+    <rect x="9.75" y="16.5" width="4.5" height="4.5" rx="1"/>
+    <rect x="16.5" y="16.5" width="4.5" height="4.5" rx="1"/>
+  </svg>`,
+
   grid: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
     <rect x="3" y="3" width="7" height="7" rx="1.5"/>
     <rect x="14" y="3" width="7" height="7" rx="1.5"/>
@@ -78,10 +91,10 @@ export const ICONS: Record<IconName, string> = {
   </svg>`,
 
   widgets: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="3" width="7" height="9" rx="1.5"/>
-    <rect x="14" y="3" width="7" height="5" rx="1.5"/>
-    <rect x="14" y="12" width="7" height="9" rx="1.5"/>
-    <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+    <rect x="3" y="3" width="18" height="7" rx="1.5"/>
+    <line x1="7" y1="6.5" x2="13" y2="6.5"/>
+    <rect x="3" y="13" width="8" height="8" rx="1.5"/>
+    <rect x="13" y="13" width="8" height="8" rx="1.5"/>
   </svg>`,
 
   plugins: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">

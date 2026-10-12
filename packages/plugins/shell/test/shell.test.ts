@@ -976,14 +976,15 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(meta.viewport).toBe("unassigned");
     });
 
-    it("navigates cleanly between Feed, Dashboard, and Apps Launcher", () => {
+    it("navigates cleanly between Feed, Widgets, and Apps Launcher", () => {
       // 1. Initially feed is active
       expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
 
-      // 2. Navigate to Dashboard (via 'dashboard' or 'widgets')
-      shell.showPage("dashboard");
+      // 2. Navigate to Widgets
+      shell.showPage("widgets");
       expect(root.querySelector("#page-widgets")?.classList.contains("active")).toBe(true);
       expect(root.querySelector("#dock-btn-widgets")?.classList.contains("active")).toBe(true);
+      expect(root.querySelector("#dock-btn-widgets")?.textContent).toContain("Widgets");
 
       // 3. Navigate to Apps Launcher
       shell.showPage("apps");
@@ -1053,7 +1054,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(guideBox?.style.display).toBe("flex");
       expect(guideBox?.textContent).toContain("Full-Page App (main)");
       expect(guideBox?.textContent).toContain("Dock Shortcut (dock)");
-      expect(guideBox?.textContent).toContain("Dashboard Card (sidebar)");
+      expect(guideBox?.textContent).toContain("Widget (sidebar)");
 
       const btnClose = root.querySelector<HTMLButtonElement>("#btn-close-viewport-guide");
       btnClose?.click();

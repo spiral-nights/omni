@@ -1553,7 +1553,7 @@ export class OmniShell implements OmniShellHost {
           } else if (pl.viewport === "dock") {
             badge.textContent = "Dock Shortcut";
           } else if (pl.viewport === "sidebar") {
-            badge.textContent = "Dashboard Card";
+            badge.textContent = "Widget";
           } else if (pl.viewport === "header-actions") {
             badge.textContent = "Header Action";
           } else {
@@ -2180,16 +2180,16 @@ export class OmniShell implements OmniShellHost {
 
           <button class="dock-item" id="dock-btn-apps" title="All Applications">
             <div class="dock-icon-wrapper">
-              ${icon("grid", 20)}
+              ${icon("apps", 20)}
             </div>
             <span>Apps</span>
           </button>
 
-          <button class="dock-item" id="dock-btn-widgets" title="Workspace Dashboard">
+          <button class="dock-item" id="dock-btn-widgets" title="Workspace Widgets & Tools">
             <div class="dock-icon-wrapper">
               ${icon("widgets", 20)}
             </div>
-            <span>Dashboard</span>
+            <span>Widgets</span>
           </button>
 
           <button class="dock-item" id="dock-btn-settings" title="Settings & System Control">
@@ -2239,12 +2239,12 @@ export class OmniShell implements OmniShellHost {
             </div>
           </section>
 
-          <!-- Page 3: Dedicated Full Workspace Dashboard -->
+          <!-- Page 3: Dedicated Full Widgets View -->
           <section class="app-page" id="page-widgets">
             <div class="widgets-page-header">
               <div class="widgets-page-title-row">
-                <h2 class="widgets-page-title">Workspace Dashboard</h2>
-                <span class="widgets-page-badge">Dashboard</span>
+                <h2 class="widgets-page-title">Workspace Widgets & Tools</h2>
+                <span class="widgets-page-badge">Full View</span>
               </div>
               <p class="widgets-page-desc">All active modular widgets, tools, and productivity plugins.</p>
             </div>
@@ -2320,8 +2320,8 @@ export class OmniShell implements OmniShellHost {
                       Quick launcher button pinned directly to the navigation dock for instant opening.
                     </div>
                     <div style="background: var(--omni-bg-subtle); padding: 8px 10px; border-radius: var(--omni-radius-xs);">
-                      <strong style="color: var(--omni-text-primary); display: block; margin-bottom: 2px;">Dashboard Card (sidebar)</strong>
-                      Modular companion card or widget embedded inside the multi-column Workspace Dashboard page.
+                      <strong style="color: var(--omni-text-primary); display: block; margin-bottom: 2px;">Widget (sidebar)</strong>
+                      Modular companion card or widget embedded inside the Workspace Widgets view.
                     </div>
                     <div style="background: var(--omni-bg-subtle); padding: 8px 10px; border-radius: var(--omni-radius-xs);">
                       <strong style="color: var(--omni-text-primary); display: block; margin-bottom: 2px;">Header Action (header-actions)</strong>
@@ -2561,7 +2561,7 @@ export class OmniShell implements OmniShellHost {
 
   private wireNavigation(): void {
     this.dockBtnApps?.addEventListener("click", () => this.showPage("apps"));
-    this.dockBtnWidgets?.addEventListener("click", () => this.showPage("dashboard"));
+    this.dockBtnWidgets?.addEventListener("click", () => this.showPage("widgets"));
     this.dockBtnSettings?.addEventListener("click", () => this.openSettings("plugins"));
 
     const btnToggleGuide = document.getElementById("btn-toggle-viewport-guide");
