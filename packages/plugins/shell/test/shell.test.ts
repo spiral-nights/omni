@@ -1119,15 +1119,30 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(timerTile).toBeTruthy();
     });
 
-    it("opens full-page apps in the slide-in overlay and allows back navigation", () => {
+    it("opens full-page apps in the slide-in overlay and mounts app container without blank screen", async () => {
       const overlay = panoramaRoot.querySelector("#panorama-full-app-overlay");
       expect(overlay?.classList.contains("open")).toBe(false);
 
-      panoramaShell.openApp("org.omni.plugin.feed");
+      await panoramaShell.openApp("org.omni.plugin.feed");
       expect(overlay?.classList.contains("open")).toBe(true);
 
       const title = panoramaRoot.querySelector("#panorama-overlay-title");
       expect(title?.textContent).toBe("Timeline Feed");
+
+      // Verify app page and overlay slot exist in the overlay container
+      const feedPage = panoramaRoot.querySelector("#panorama-page-app-org-omni-plugin-feed") as HTMLElement;
+      expect(feedPage).toBeTruthy();
+      expect(feedPage?.style.display).toBe("block");
+      const overlaySlot = feedPage?.querySelector(".panorama-main-viewport-slot");
+      expect(overlaySlot).toBeTruthy();
+
+      // Open a second app (e.g. Focus Timer) and verify it switches active page in overlay
+      await panoramaShell.openApp("org.omni.plugin.timer");
+      expect(title?.textContent).toBe("Focus Timer");
+      const timerPage = panoramaRoot.querySelector("#panorama-page-app-org-omni-plugin-timer") as HTMLElement;
+      expect(timerPage).toBeTruthy();
+      expect(timerPage?.style.display).toBe("block");
+      expect(feedPage?.style.display).toBe("none");
 
       panoramaShell.closeApp();
       expect(overlay?.classList.contains("open")).toBe(false);

@@ -261,10 +261,6 @@ export class PanoramaShell implements OmniShellHost {
   }
 
   public ensureAppPage(pluginId: string): HTMLElement {
-    if (pluginId === "org.omni.plugin.feed") {
-      return document.getElementById("panorama-feed-slot") || this.sectionFeed;
-    }
-
     const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
     let pageEl = document.getElementById(`panorama-page-app-${safeId}`);
     if (!pageEl) {
@@ -276,7 +272,7 @@ export class PanoramaShell implements OmniShellHost {
 
       const slotEl = document.createElement("div");
       slotEl.className = "omni-slot panorama-main-viewport-slot";
-      slotEl.id = `panorama-slot-main-${safeId}`;
+      slotEl.id = `panorama-slot-overlay-${safeId}`;
       slotEl.style.cssText = "width: 100%; min-height: 100%; overflow: visible;";
       pageEl.appendChild(slotEl);
 
@@ -319,6 +315,12 @@ export class PanoramaShell implements OmniShellHost {
 
   public async remountPlugin(plugin: InstalledPluginEntry): Promise<void> {
     this.kernel.disablePlugin(plugin.id);
+    const safeId = plugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const pageEl = document.getElementById(`panorama-page-app-${safeId}`);
+    if (pageEl) {
+      const slot = pageEl.querySelector(".panorama-main-viewport-slot");
+      if (slot) slot.innerHTML = "";
+    }
     this.ensureMainAppSections();
     this.renderPivotNavigation();
     if (plugin.enabled !== false) {
@@ -1436,30 +1438,21 @@ export class PanoramaShell implements OmniShellHost {
     }
   }
 
-  public openApp(pluginId: string): void {
+  public async openApp(pluginId: string): Promise<void> {
     const plugin = this.installedPlugins.find((p) => p.id === pluginId);
     if (!plugin) return;
-
-    // If it has a dedicated section in panorama canvas, scroll right to it
-    const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
-    const section = document.getElementById(`panorama-section-${safeId}`);
-    if (section) {
-      this.closeApp();
-      this.showPivot(pluginId);
-      return;
-    }
 
     this.currentOpenedAppId = pluginId;
     const meta = this.getPluginMeta(plugin);
     const titleEl = document.getElementById("panorama-overlay-title");
     if (titleEl) titleEl.textContent = meta.name;
 
-    // Ensure app container is mounted
-    if (!this.kernel.getSandbox(plugin.id)) {
-      this.mountPlugin(plugin).catch(console.warn);
-    }
+    const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
 
-    // Hide other pages in overlay, show target page
+    // 1. Ensure the overlay page container element exists in fullAppContainer
+    const slotEl = this.ensureAppPage(plugin.id);
+
+    // 2. Hide other app pages in overlay, and display this target page
     const allPages = this.fullAppContainer?.querySelectorAll<HTMLElement>(".panorama-app-page") || [];
     allPages.forEach((p) => (p.style.display = "none"));
 
@@ -1468,7 +1461,55 @@ export class PanoramaShell implements OmniShellHost {
       target.style.display = "block";
     }
 
+    if (this.fullAppContainer) {
+      this.fullAppContainer.scrollTop = 0;
+    }
+
     this.fullAppOverlay.classList.add("open");
+
+    // 3. Ensure the full app view is mounted into the overlay slot container
+    const overlayInstanceKey = `${plugin.id}::overlay`;
+    if (!this.kernel.getSandbox(overlayInstanceKey)) {
+      try {
+        const synthManifest = this.ensurePluginManifest(plugin);
+        const overlayManifest = {
+          ...synthManifest,
+          components: [
+            {
+              id: `${plugin.id}-overlay`,
+              type: "main",
+              title: plugin.name || meta.name || plugin.id,
+              slot: "main"
+            }
+          ]
+        };
+
+        const customSlotContainers = new Map(this.getSlotContainers());
+        customSlotContainers.set("main", slotEl);
+        customSlotContainers.set("dock", slotEl);
+        customSlotContainers.set("sidebar", slotEl);
+        if (synthManifest.components) {
+          for (const comp of synthManifest.components) {
+            if (comp.slot) customSlotContainers.set(comp.slot, slotEl);
+          }
+        }
+
+        await this.kernel.registerPlugin(
+          overlayManifest,
+          plugin.htmlContent || plugin.scriptContent,
+          customSlotContainers,
+          {
+            instanceId: overlayInstanceKey,
+            route: "",
+            viewId: "main",
+            targetSlot: "main",
+            relays: plugin.relays
+          }
+        );
+      } catch (err) {
+        console.error(`Failed to mount overlay app for ${plugin.id}:`, err);
+      }
+    }
   }
 
   public closeApp(): void {
