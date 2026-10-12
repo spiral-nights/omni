@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from "vitest";
+import omniRuntimeScript from "../../../core/src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
 import { OmniKernel } from "@omni/core";
 import {
@@ -82,7 +83,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
     document.body.innerHTML = '<div id="omni-root"></div>';
     root = document.getElementById("omni-root")!;
-    kernel = new OmniKernel({
+    kernel = new OmniKernel({ runtimeScript: omniRuntimeScript,
       bootstrapRelays: []
     });
     shell = new OmniShell({
@@ -1113,7 +1114,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       document.body.innerHTML = "";
       panoramaRoot = document.createElement("div");
       document.body.appendChild(panoramaRoot);
-      panoramaKernel = new OmniKernel({ bootstrapRelays: [] });
+      panoramaKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
       panoramaShell = new PanoramaShell({
         root: panoramaRoot,
         kernel: panoramaKernel,
@@ -1333,7 +1334,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     it("automatically pins and adds app to navigation dock when assigned to main in OmniShell", async () => {
       const classicRoot = document.createElement("div");
       document.body.appendChild(classicRoot);
-      const classicKernel = new OmniKernel({ bootstrapRelays: [] });
+      const classicKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
       const classicShell = new OmniShell({
         root: classicRoot,
         kernel: classicKernel,
@@ -1400,7 +1401,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(shellRegistry.list().some((s) => s.id === "minimalist")).toBe(true);
 
       const testRoot = document.createElement("div");
-      const testKernel = new OmniKernel({ bootstrapRelays: [] });
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
       const created = shellRegistry.create("minimalist", {
         root: testRoot,
         kernel: testKernel,
@@ -1416,7 +1417,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     it("injects classic stylesheet upon OmniShell mount and removes it on destroy", () => {
       const testRoot = document.createElement("div");
       document.body.appendChild(testRoot);
-      const testKernel = new OmniKernel({ bootstrapRelays: [] });
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
       const testShell = new OmniShell({
         root: testRoot,
         kernel: testKernel,
@@ -1437,7 +1438,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     it("injects panorama stylesheet upon PanoramaShell mount and removes it on destroy", () => {
       const testRoot = document.createElement("div");
       document.body.appendChild(testRoot);
-      const testKernel = new OmniKernel({ bootstrapRelays: [] });
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
       const testShell = new PanoramaShell({
         root: testRoot,
         kernel: testKernel,
@@ -1459,7 +1460,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     it("renders dynamic shell buttons from shellRegistry in settings", () => {
       const testRoot = document.createElement("div");
       document.body.appendChild(testRoot);
-      const testKernel = new OmniKernel({ bootstrapRelays: [] });
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
       const testShell = new OmniShell({
         root: testRoot,
         kernel: testKernel,

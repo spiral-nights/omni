@@ -3,13 +3,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import "fake-indexeddb/auto";
 import { OmniKernel } from "../src/kernel/omni-kernel.js";
 import { JsonRpcDispatcher } from "../src/ipc/json-rpc-dispatcher.js";
-import { DEFAULT_OMNI_RUNTIME } from "../src/sandbox/default-runtime.js";
+import omniRuntimeScript from "../src/sandbox/omni-runtime.js?raw";
 
 describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto-Mount)", () => {
   let kernel: OmniKernel;
 
   beforeEach(async () => {
-    kernel = new OmniKernel({ bootstrapRelays: [] });
+    kernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
     await kernel.boot();
   });
 
@@ -111,7 +111,7 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
   });
 
   it("injected runtime exposes Virtual WebSocket and standard window.nostr", async () => {
-    // Setup isolated fake window environment to test DEFAULT_OMNI_RUNTIME
+    // Setup isolated fake window environment to test the runtime bridge
     const fakeWindow: any = {
       addEventListener: vi.fn(),
       localStorage: {
@@ -122,7 +122,7 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
       }
     };
 
-    const fn = new Function("window", "document", "EventTarget", "Event", "MessageEvent", "CloseEvent", DEFAULT_OMNI_RUNTIME);
+    const fn = new Function("window", "document", "EventTarget", "Event", "MessageEvent", "CloseEvent", omniRuntimeScript);
     fn(fakeWindow, document, EventTarget, Event, MessageEvent, CloseEvent);
 
     // Verify WebSocket class was injected onto window
@@ -177,7 +177,7 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
       localStorage: { getItem: vi.fn(), setItem: vi.fn() }
     };
 
-    const fn = new Function("window", "document", "EventTarget", "Event", "MessageEvent", "CloseEvent", DEFAULT_OMNI_RUNTIME);
+    const fn = new Function("window", "document", "EventTarget", "Event", "MessageEvent", "CloseEvent", omniRuntimeScript);
     fn(fakeWindow, document, EventTarget, Event, MessageEvent, CloseEvent);
 
     // Simulate omni:init message with ports
@@ -245,7 +245,7 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
       localStorage: { getItem: vi.fn(), setItem: vi.fn() }
     };
 
-    const fn = new Function("window", "document", "EventTarget", "Event", "MessageEvent", "CloseEvent", DEFAULT_OMNI_RUNTIME);
+    const fn = new Function("window", "document", "EventTarget", "Event", "MessageEvent", "CloseEvent", omniRuntimeScript);
     fn(fakeWindow, fakeDoc, EventTarget, Event, MessageEvent, CloseEvent);
 
     const messageListener = fakeWindow.addEventListener.mock.calls.find(

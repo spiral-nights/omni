@@ -612,7 +612,7 @@ export class PanoramaShell implements OmniShellHost {
       if (this.workspaceSyncStatus === "syncing") {
         statusText.textContent = "Syncing with relays...";
       } else if (this.workspaceSyncStatus === "synced") {
-        statusText.textContent = "NIP-78 Synced";
+        statusText.textContent = "Synced";
       } else {
         statusText.textContent = "Unsynced changes";
       }

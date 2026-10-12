@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from "vitest";
+import omniRuntimeScript from "../src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
 import { OmniKernel } from "../src/index.js";
 import { OMNI_WORKSPACE_D_TAG, OmniWorkspaceState } from "@omni/types";
@@ -8,7 +9,7 @@ describe("NIP-78 Arbitrary App Data & Workspace Sync", () => {
   let kernel: OmniKernel;
 
   beforeEach(async () => {
-    kernel = new OmniKernel({
+    kernel = new OmniKernel({ runtimeScript: omniRuntimeScript,
       bootstrapRelays: []
     });
     await kernel.boot();

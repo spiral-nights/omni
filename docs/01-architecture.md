@@ -48,7 +48,6 @@ omni/
 ├── apps/
 │   └── web/                               # Host Web Shell & Bootloader (~30 lines)
 │       ├── index.html                     # Minimal HTML skeleton (<div id="omni-root">)
-│       ├── public/omni-runtime.js         # Injected guest sandbox runtime bridge
 │       └── src/
 │           ├── main.ts                    # Host microkernel bootloader & shell mount
 │           └── style.css                  # Minimal host microkernel skeleton reset (~25 lines)
@@ -66,7 +65,7 @@ omni/
 │   │   │   ├── nostr/                     # LocalEventStore (0ms hits), RelayPool, Coordinator
 │   │   │   ├── plugins/                   # NostrPluginResolver (NIP-5A nsites, Blossom, naddr)
 │   │   │   ├── remote-dom/                # RemoteDomHost (@remote-dom/core host receiver)
-│   │   │   └── sandbox/                   # SandboxInstance & default-runtime.ts
+│   │   │   └── sandbox/                   # SandboxInstance & omni-runtime.js (guest runtime bridge)
 │   │   └── test/                          # Unit & integration tests (vitest + happy-dom)
 │   │
 │   └── plugins/                           # Modular First-Class System Plugins

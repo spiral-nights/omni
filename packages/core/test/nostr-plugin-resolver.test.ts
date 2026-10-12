@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from "vitest";
+import omniRuntimeScript from "../src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
 import {
   WebCryptoKeystore,
@@ -34,7 +35,7 @@ describe("NIP-19 naddr Codec & NIP-5A Nostr Plugin Resolver", () => {
   });
 
   it("publishes and resolves a plugin via Nostr NIP-5A manifest event", async () => {
-    const kernel = new OmniKernel({ bootstrapRelays: [] });
+    const kernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
     await kernel.boot();
 
     const manifest: OmniManifest = {
@@ -91,7 +92,7 @@ describe("NIP-19 naddr Codec & NIP-5A Nostr Plugin Resolver", () => {
   });
 
   it("rejects manifest events with tampered Schnorr signatures", async () => {
-    const kernel = new OmniKernel({ bootstrapRelays: [] });
+    const kernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
     await kernel.boot();
 
     const manifest: OmniManifest = {
@@ -115,7 +116,7 @@ describe("NIP-19 naddr Codec & NIP-5A Nostr Plugin Resolver", () => {
   });
 
   it("publishes and resolves a zero-manifest pure standalone nsite (index.html)", async () => {
-    const kernel = new OmniKernel({ bootstrapRelays: [] });
+    const kernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
     await kernel.boot();
 
     const pureNsiteHtml = `<!DOCTYPE html>

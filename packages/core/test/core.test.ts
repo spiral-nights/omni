@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import omniRuntimeScript from "../src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
 import { WebCryptoKeystore, LocalEventStore, CapabilityStore, AclEngine, OmniKernel } from "../src/index.js";
 
@@ -254,7 +255,7 @@ describe("CapabilityStore & AclEngine", () => {
 
 describe("OmniKernel Profile Management", () => {
   it("publishes and retrieves kind-0 profile metadata", async () => {
-    const kernel = new OmniKernel({ bootstrapRelays: [] });
+    const kernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
     await kernel.boot();
 
     const profileData = {

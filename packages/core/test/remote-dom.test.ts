@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi } from "vitest";
+import omniRuntimeScript from "../src/sandbox/omni-runtime.js?raw";
 import { RemoteDomHost } from "../src/remote-dom/remote-dom-host.js";
 
 describe("RemoteDomHost Standard HTML Projection", () => {
@@ -119,16 +120,15 @@ describe("RemoteDomHost Standard HTML Projection", () => {
     host.destroy();
   });
 
-  it("DEFAULT_OMNI_RUNTIME executes and creates remote elements without TypeError", async () => {
-    const { DEFAULT_OMNI_RUNTIME } = await import("../src/sandbox/default-runtime.js");
+  it("runtime bridge executes and creates remote elements without TypeError", async () => {
     
-    // Create an iframe to execute DEFAULT_OMNI_RUNTIME in a fresh window context
+    // Create an iframe to execute the runtime bridge in a fresh window context
     const iframe = document.createElement("iframe");
     document.body.appendChild(iframe);
     const win = iframe.contentWindow as any;
     
     // Execute runtime script
-    win.eval(DEFAULT_OMNI_RUNTIME);
+    win.eval(omniRuntimeScript);
 
     expect(win.omni).toBeDefined();
     expect(typeof win.omni.registerComponent).toBe("function");
@@ -203,7 +203,6 @@ describe("RemoteDomHost Standard HTML Projection", () => {
   });
 
   it("handles detached element creation followed by appendChild without premature property mutations", async () => {
-    const { DEFAULT_OMNI_RUNTIME } = await import("../src/sandbox/default-runtime.js");
     const container = document.createElement("div");
     document.body.appendChild(container);
 
@@ -216,7 +215,7 @@ describe("RemoteDomHost Standard HTML Projection", () => {
     const iframe = document.createElement("iframe");
     document.body.appendChild(iframe);
     const win = iframe.contentWindow as any;
-    win.eval(DEFAULT_OMNI_RUNTIME);
+    win.eval(omniRuntimeScript);
 
     const channelDom = new MessageChannel();
     const channelRpc = new MessageChannel();

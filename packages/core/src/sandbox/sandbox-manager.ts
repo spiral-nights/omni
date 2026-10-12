@@ -8,7 +8,6 @@ import { SubscriptionCoordinator } from "../nostr/subscription-coordinator.js";
 import { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import { RelayPool } from "../nostr/relay-pool.js";
 import { LocalEventStore } from "../nostr/event-store.js";
-import { DEFAULT_OMNI_RUNTIME } from "./default-runtime.js";
 
 export interface SandboxInstanceOptions {
   manifest: OmniManifest;
@@ -225,8 +224,14 @@ export class SandboxInstance {
       ? `${window.location.origin}/`
       : "/";
 
+    if (!this.options.runtimeScript) {
+      throw new Error(
+        "SandboxManager requires options.runtimeScript: the sandbox runtime bridge source (import packages/core/src/sandbox/omni-runtime.js as raw text in the host)."
+      );
+    }
+
     // Strip any sourceMappingURL and sourceURL comments to prevent DevTools URL constructor errors on about:srcdoc
-    const runtimeCode = (this.options.runtimeScript || DEFAULT_OMNI_RUNTIME)
+    const runtimeCode = this.options.runtimeScript
       .replace(/\/\/[#@]\s*sourceMappingURL=[^\r\n]*/gi, "")
       .replace(/\/\*#\s*sourceMappingURL=[\s\S]*?\*\//gi, "")
       .replace(/\/\/[#@]\s*sourceURL=[^\r\n]*/gi, "");

@@ -9,7 +9,7 @@ import profileScript from "../../../packages/plugins/profile/dist/index.js?raw";
 import profileViewerScript from "../../../packages/plugins/profile-viewer/dist/index.js?raw";
 import checklistScript from "../../../packages/plugins/checklist/dist/index.js?raw";
 import timerScript from "../../../packages/plugins/timer/dist/index.js?raw";
-import omniRuntimeScript from "../public/omni-runtime.js?raw";
+import omniRuntimeScript from "../../../packages/core/src/sandbox/omni-runtime.js?raw";
 
 const STORAGE_KEY_NSEC = "omni_privkey";
 const STORAGE_KEY_SHELL = "omni_active_shell";

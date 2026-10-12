@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from "vitest";
+import omniRuntimeScript from "../src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
 import { RelayPool } from "../src/nostr/relay-pool.js";
 import { JsonRpcDispatcher } from "../src/ipc/json-rpc-dispatcher.js";
@@ -135,7 +136,7 @@ describe("Relay Management ACL Enforcement (relays:manage)", () => {
   });
 
   it("OmniKernel automatically pre-grants relays:manage to org.omni.plugin.relays", async () => {
-    const kernel = new OmniKernel({
+    const kernel = new OmniKernel({ runtimeScript: omniRuntimeScript,
       bootstrapRelays: [],
       eventStoreName: `test_db_relays_${Date.now()}`,
       storageName: `test_storage_relays_${Date.now()}`

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from "vitest";
+import omniRuntimeScript from "../src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
 import { OmniKernel } from "../src/kernel/omni-kernel.js";
 import { JsonRpcDispatcher } from "../src/ipc/json-rpc-dispatcher.js";
@@ -10,7 +11,7 @@ describe("Milestone 2: Subscription Namespacing & Cache Isolation", () => {
 
   beforeEach(async () => {
     const uniqueId = `iso_${Math.random().toString(36).slice(2, 9)}`;
-    kernel = new OmniKernel({
+    kernel = new OmniKernel({ runtimeScript: omniRuntimeScript,
       bootstrapRelays: [],
       eventStoreName: `test_event_store_${uniqueId}`,
       storageName: `test_storage_${uniqueId}`

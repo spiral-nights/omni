@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from "vitest";
+import omniRuntimeScript from "../../../core/src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
 import { OmniKernel } from "@omni/core";
 import { OmniShell, PanoramaShell, InstalledPluginEntry } from "../src/index.js";
@@ -70,7 +71,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
     document.body.innerHTML = "";
     document.body.appendChild(root);
 
-    kernel = new OmniKernel({
+    kernel = new OmniKernel({ runtimeScript: omniRuntimeScript,
       defaultRelays: ["wss://relay.damus.io"]
     });
   });
