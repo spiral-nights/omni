@@ -320,5 +320,70 @@ describe("RemoteDomHost Standard HTML Projection", () => {
     host.destroy();
     document.body.removeChild(container);
   });
+
+  it("handles removeChild followed by insertChild in same mutation batch without preserving stale elements", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const host = new RemoteDomHost({
+      container,
+      componentId: "feed-test",
+      onEvent: () => {}
+    });
+
+    // 1. Initial render: container has a list with a loading-state child at index 0
+    host.mutate([
+      [
+        0,
+        "~",
+        {
+          id: "list-1",
+          type: 1,
+          element: "div",
+          attributes: { class: "notes-list" },
+          children: [
+            {
+              id: "loading-1",
+              type: 1,
+              element: "div",
+              attributes: { class: "loading-state" },
+              children: [{ id: "txt-loading", type: 3, data: "Loading timeline notes..." }]
+            }
+          ]
+        },
+        0
+      ]
+    ]);
+
+    expect(container.querySelector(".loading-state")).not.toBeNull();
+    expect(container.textContent).toContain("Loading timeline notes...");
+
+    // 2. Incoming note batch: removeChild (index 0) and insertChild (note card at index 0)
+    host.mutate([
+      [1, "list-1", 0], // removeChild at index 0 (loading-state)
+      [
+        0,
+        "list-1",
+        {
+          id: "note-1",
+          type: 1,
+          element: "article",
+          attributes: { class: "note-card" },
+          children: [{ id: "txt-note", type: 3, data: "First Nostr note content!" }]
+        },
+        0
+      ]
+    ]);
+
+    // Verify loading-state is completely removed and note-card is rendered
+    expect(container.querySelector(".loading-state")).toBeNull();
+    const noteCard = container.querySelector(".note-card");
+    expect(noteCard).not.toBeNull();
+    expect(noteCard?.textContent).toContain("First Nostr note content!");
+
+    host.destroy();
+    document.body.removeChild(container);
+  });
 });
+
 

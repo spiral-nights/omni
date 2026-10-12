@@ -138,10 +138,12 @@ export class RemoteDomHost {
       };
     }
 
-    // Ensure all insertChild (0) operations are executed before updateProperty (3)
+    // Ensure all structural DOM operations (0: insertChild, 1: removeChild, 2: updateText)
+    // are executed before property updates (3: updateProperty), while strictly preserving
+    // the relative sequence of structural operations so child indices remain consistent.
     filteredRecords.sort((a, b) => {
-      const orderA = a[0] === 0 ? 0 : 1;
-      const orderB = b[0] === 0 ? 0 : 1;
+      const orderA = a[0] === 3 ? 1 : 0;
+      const orderB = b[0] === 3 ? 1 : 0;
       return orderA - orderB;
     });
 

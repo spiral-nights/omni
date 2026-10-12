@@ -667,6 +667,44 @@ body {
   justify-content: center;
 }
 
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  gap: 10px;
+  text-align: center;
+  color: var(--omni-text-muted);
+}
+
+.empty-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--omni-bg-surface);
+  border: 1px solid var(--omni-border-subtle);
+  margin-bottom: 6px;
+  color: var(--omni-accent-primary);
+}
+
+.empty-state-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--omni-text-primary);
+}
+
+.empty-state-subtitle {
+  font-size: 0.82rem;
+  color: var(--omni-text-muted);
+  max-width: 320px;
+  line-height: 1.4;
+}
+
+
 /* 4. Mobile Bottom Navigation Dock */
 .mobile-dock {
   position: fixed;

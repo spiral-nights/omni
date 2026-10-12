@@ -173,12 +173,44 @@ function mountFeed(root: any) {
   let isLoadingOlder = false;
   let activeWs: any = null;
 
+  function showEmptyState() {
+    if (loadingState.parentElement) {
+      loadingState.remove();
+    }
+    if (renderedIds.size === 0 && !notesList.querySelector(".empty-state")) {
+      const emptyEl = html<HTMLDivElement>`
+        <div class="empty-state">
+          <div class="empty-icon-wrap">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <div class="empty-state-title">No timeline notes yet</div>
+          <div class="empty-state-subtitle">Be the first to share an update or follow relays in Settings.</div>
+        </div>
+      `;
+      notesList.appendChild(emptyEl);
+    }
+  }
+
+  const initialLoadTimeout = setTimeout(() => {
+    if (renderedIds.size === 0) {
+      showEmptyState();
+    }
+  }, 3000);
+
   function renderNote(event: any, prepend = false) {
     if (renderedIds.has(event.id)) return;
     renderedIds.add(event.id);
 
+    clearTimeout(initialLoadTimeout);
+
     if (loadingState.parentElement) {
       loadingState.remove();
+    }
+    const existingEmpty = notesList.querySelector(".empty-state");
+    if (existingEmpty) {
+      existingEmpty.remove();
     }
 
     if (event.created_at && event.created_at < oldestTimestamp) {
@@ -410,10 +442,15 @@ function mountFeed(root: any) {
           const subId = data[1];
 
           if (type === "EVENT" && data[2]) {
+            clearTimeout(initialLoadTimeout);
             const isRefresh = subId?.startsWith("refresh-");
             handleIncomingEvent(data[2], isRefresh);
           } else if (type === "EOSE") {
             if (subId === "feed-initial") {
+              clearTimeout(initialLoadTimeout);
+              if (renderedIds.size === 0) {
+                showEmptyState();
+              }
               // Close initial subscription to prevent continuous noisy background firehose
               ws.send(JSON.stringify(["CLOSE", "feed-initial"]));
             } else if (subId?.startsWith("older-")) {
@@ -423,16 +460,32 @@ function mountFeed(root: any) {
               btnRefresh.classList.remove("spinning");
               ws.send(JSON.stringify(["CLOSE", subId]));
             }
+          } else if (type === "NOTICE") {
+            if (renderedIds.size === 0) {
+              showEmptyState();
+            }
           }
         } catch {}
+      };
+
+      ws.onerror = () => {
+        if (renderedIds.size === 0) {
+          showEmptyState();
+        }
       };
     } else if (typeof omni !== "undefined" && (omni as any).nostr?.subscribe) {
       (omni as any).nostr.subscribe(
         [{ kinds: [1], limit: 40 }],
         (ev: any) => {
+          clearTimeout(initialLoadTimeout);
           handleIncomingEvent(ev);
         },
-        () => {}
+        () => {
+          clearTimeout(initialLoadTimeout);
+          if (renderedIds.size === 0) {
+            showEmptyState();
+          }
+        }
       );
     }
   } catch (err) {
