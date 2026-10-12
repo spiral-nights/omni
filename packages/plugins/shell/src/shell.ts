@@ -2056,7 +2056,7 @@ export class OmniShell implements OmniShellHost {
 
         <!-- Center Viewport with Multi-Page Views -->
         <main class="main-viewport" id="main-viewport">
-          <!-- Page 1: Timeline Feed & Main Slot -->
+          <!-- Page 1: Feed & Main Slot -->
           <section class="app-page active" id="page-feed" data-plugin-id="org.omni.plugin.feed" data-page="feed">
             <div id="main-slot" class="omni-slot main-viewport-slot"></div>
           </section>

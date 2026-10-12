@@ -19,12 +19,12 @@ const activeShellType = localStorage.getItem(STORAGE_KEY_SHELL) || "classic";
 const initialPlugins: InstalledPluginEntry[] = [
   {
     id: "org.omni.plugin.feed",
-    name: "Timeline Feed & Composer",
+    name: "Feed",
     description: "Decentralized Nostr timeline notes and Schnorr-signed publishing.",
     icon: "feed",
     viewport: "main",
     views: [
-      { id: "main", title: "Timeline Feed", path: "" },
+      { id: "main", title: "Feed", path: "" },
       { id: "widget", title: "Feed Widget", path: "?view=widget" }
     ],
     scriptContent: feedScript,

@@ -14,7 +14,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       id: "org.omni.plugin.feed",
       manifest: {
         id: "org.omni.plugin.feed",
-        name: "Timeline Feed",
+        name: "Feed",
         version: "1.0.0",
         entry: "dist/index.js",
         components: [
@@ -1007,7 +1007,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       const unpinnedGrid = root.querySelector("#apps-unpinned-grid");
 
       // Feed is pinned to dock
-      expect(pinnedGrid?.textContent).toContain("Timeline Feed");
+      expect(pinnedGrid?.textContent).toContain("Feed");
       // Focus Timer is in All Apps (unpinned grid) even though its placement was sidebar
       expect(unpinnedGrid?.textContent).toContain("Focus Timer");
 
@@ -1136,7 +1136,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       const tiles = Array.from(panoramaRoot.querySelectorAll(".panorama-tile"));
       expect(tiles.length).toBe(mockPlugins.length);
 
-      const feedTile = tiles.find((t) => t.textContent?.includes("Timeline Feed")) as HTMLElement;
+      const feedTile = tiles.find((t) => t.textContent?.includes("Feed")) as HTMLElement;
       expect(feedTile).toBeTruthy();
       const timerTile = tiles.find((t) => t.textContent?.includes("Focus Timer")) as HTMLElement;
       expect(timerTile).toBeTruthy();
@@ -1156,7 +1156,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(overlay?.classList.contains("open")).toBe(true);
 
       const title = panoramaRoot.querySelector("#panorama-overlay-title");
-      expect(title?.textContent).toBe("Timeline Feed");
+      expect(title?.textContent).toBe("Feed");
 
       // Verify app page and overlay slot exist in the overlay container
       const feedPage = panoramaRoot.querySelector("#panorama-page-app-org-omni-plugin-feed") as HTMLElement;
