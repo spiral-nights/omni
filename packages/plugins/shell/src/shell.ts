@@ -1273,6 +1273,7 @@ export class OmniShell implements OmniShellHost {
         p.route = p.placements[0].route;
         p.viewId = p.placements[0].viewId;
         await this.remountPlugin(p);
+        this.renderDockLaunchers();
         this.renderSettingsNavAndPanes();
         this.switchSettingsTab(p.id);
       });
@@ -1320,11 +1321,17 @@ export class OmniShell implements OmniShellHost {
         vpSelect.addEventListener("change", async () => {
           pl.viewport = vpSelect.value;
           p.viewport = pl.viewport;
+          if (pl.viewport === "main" || pl.viewport === "dock") {
+            p.pinned = true;
+          }
           const primaryComp = synthManifest.components?.[0];
           if (primaryComp) {
             this.layoutManager.setComponentSlot(p.id, primaryComp.id, pl.viewport);
           }
           await this.remountPlugin(p);
+          this.renderDockLaunchers();
+          this.renderSettingsNavAndPanes();
+          this.switchSettingsTab(p.id);
         });
 
         const routeLabel = document.createElement("span");
@@ -1403,6 +1410,7 @@ export class OmniShell implements OmniShellHost {
             this.layoutManager.unregisterPlugin(p.id);
           }
           await this.remountPlugin(p);
+          this.renderDockLaunchers();
           this.renderSettingsNavAndPanes();
           this.switchSettingsTab(p.id);
         });
@@ -1687,6 +1695,8 @@ export class OmniShell implements OmniShellHost {
         p.route = newPl.route;
         p.viewId = newPl.viewId;
         await this.remountPlugin(p);
+        this.renderDockLaunchers();
+        this.renderPluginManager();
       });
 
       placementsHeader.appendChild(placementsTitle);
@@ -1733,11 +1743,16 @@ export class OmniShell implements OmniShellHost {
         vpSelect.addEventListener("change", async () => {
           pl.viewport = vpSelect.value;
           p.viewport = pl.viewport;
+          if (pl.viewport === "main" || pl.viewport === "dock") {
+            p.pinned = true;
+          }
           const primaryComp = synthManifest.components?.[0];
           if (primaryComp) {
             this.layoutManager.setComponentSlot(p.id, primaryComp.id, pl.viewport);
           }
           await this.remountPlugin(p);
+          this.renderDockLaunchers();
+          this.renderPluginManager();
         });
 
         // Route selector
@@ -1816,6 +1831,8 @@ export class OmniShell implements OmniShellHost {
             this.layoutManager.unregisterPlugin(p.id);
           }
           await this.remountPlugin(p);
+          this.renderDockLaunchers();
+          this.renderPluginManager();
         });
         row.appendChild(btnRemovePl);
 
@@ -2669,23 +2686,24 @@ export class OmniShell implements OmniShellHost {
   }
 
   private cacheElementReferences(): void {
-    this.mainViewport = document.getElementById("main-viewport") || this.root.querySelector(".main-viewport")!;
-    this.headerActionsSlot = document.getElementById("header-actions-slot")!;
-    this.dockSlot = document.getElementById("dock-slot")!;
-    this.mainSlot = document.getElementById("main-slot")!;
-    this.widgetsSlot = document.getElementById("widgets-slot")!;
-    this.pageFeed = document.getElementById("page-feed")!;
-    this.pageWidgets = document.getElementById("page-widgets")!;
-    this.pageApps = document.getElementById("page-apps")!;
-    this.dockBtnApps = document.getElementById("dock-btn-apps")!;
-    this.dockBtnWidgets = document.getElementById("dock-btn-widgets")!;
-    this.dockBtnSettings = document.getElementById("dock-btn-settings")!;
+    const q = (sel: string) => (this.root.querySelector(sel) || document.querySelector(sel)) as HTMLElement;
+    this.mainViewport = q("#main-viewport") || q(".main-viewport");
+    this.headerActionsSlot = q("#header-actions-slot");
+    this.dockSlot = q("#dock-slot");
+    this.mainSlot = q("#main-slot");
+    this.widgetsSlot = q("#widgets-slot");
+    this.pageFeed = q("#page-feed");
+    this.pageWidgets = q("#page-widgets");
+    this.pageApps = q("#page-apps");
+    this.dockBtnApps = q("#dock-btn-apps");
+    this.dockBtnWidgets = q("#dock-btn-widgets");
+    this.dockBtnSettings = q("#dock-btn-settings");
 
-    this.settingsModal = document.getElementById("settings-modal")!;
-    this.settingsNav = document.getElementById("settings-nav")!;
-    this.settingsContent = document.getElementById("settings-content")!;
-    const pluginsBtn = document.getElementById("settings-tab-btn-plugins");
-    const pluginsPane = document.getElementById("settings-pane-plugins");
+    this.settingsModal = q("#settings-modal");
+    this.settingsNav = q("#settings-nav");
+    this.settingsContent = q("#settings-content");
+    const pluginsBtn = q("#settings-tab-btn-plugins");
+    const pluginsPane = q("#settings-pane-plugins");
     this.settingsNavBtns = {
       plugins: pluginsBtn!
     };
@@ -2693,8 +2711,8 @@ export class OmniShell implements OmniShellHost {
       plugins: pluginsPane!
     };
 
-    this.pluginInspectorModal = document.getElementById("plugin-inspector-modal")!;
-    this.installPluginModal = document.getElementById("install-plugin-modal")!;
+    this.pluginInspectorModal = q("#plugin-inspector-modal");
+    this.installPluginModal = q("#install-plugin-modal");
   }
 
   private initSlotContainers(): void {

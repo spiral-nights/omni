@@ -3,14 +3,14 @@ import { OmniWorkspaceState, OmniWorkspacePluginConfig, PluginPlacement, OMNI_WO
 import { ICONS, icon, IconName } from "./icons.js";
 import { InstalledPluginEntry, OmniShellOptions } from "./shell.js";
 
-export type PanoramaPivot = "feed" | "apps" | "widgets" | "system";
+export type PanoramaPivot = "feed" | "apps" | "widgets" | "system" | string;
 
 /**
  * PanoramaShell: Windows Phone "People Hub" Inspired Modern Typography & Panorama Runtime.
  *
  * Visual & Operational Characteristics:
  * - Huge lowercase hero title: "omni"
- * - Horizontal panorama header track: "what's new", "apps", "widgets", "system"
+ * - Horizontal panorama header track: "feed", dynamic main apps, "apps", "widgets", "system"
  * - Horizontal smooth swipe / panning viewport canvas
  * - Live Flat Accent Tiles for Full-Page Apps (Windows Phone square & wide tiles)
  * - Pure pitch-black canvas (#000000) with warm paper / cobalt / cyan accent colors
@@ -34,6 +34,9 @@ export class PanoramaShell implements OmniShellHost {
   // Active navigation state
   private activePivot: PanoramaPivot = "feed";
   private currentOpenedAppId: string | null = null;
+  private isProgrammaticScroll: boolean = false;
+  private programmaticScrollTimer: any = null;
+  private scrollDebounceTimer: any = null;
 
   // Internal element references
   private panoramaContainer!: HTMLElement;
@@ -176,6 +179,18 @@ export class PanoramaShell implements OmniShellHost {
     return this.slotContainers;
   }
 
+  public getMainAppPlugins(): InstalledPluginEntry[] {
+    return this.installedPlugins.filter((p) => {
+      if (p.enabled === false) return false;
+      const placements = this.getPluginPlacements(p);
+      return (
+        p.viewport === "main" ||
+        placements.some((pl) => pl.enabled !== false && pl.viewport === "main") ||
+        p.id === "org.omni.plugin.feed"
+      );
+    });
+  }
+
   // --- Mounting & Container Resolution ---
 
   public getContainerForPluginSlot(pluginId: string, slotId: string, compId?: string): Element {
@@ -188,6 +203,11 @@ export class PanoramaShell implements OmniShellHost {
       if (pluginId === "org.omni.plugin.feed") {
         return document.getElementById("panorama-feed-slot") || this.sectionFeed;
       }
+      const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const canvasSlot = document.getElementById(`panorama-slot-main-${safeId}`);
+      if (canvasSlot) {
+        return canvasSlot;
+      }
       return this.ensureAppPage(pluginId);
     }
 
@@ -196,6 +216,50 @@ export class PanoramaShell implements OmniShellHost {
     }
 
     return this.slotContainers.get(slotId) || this.sectionFeed;
+  }
+
+  public ensureMainAppSections(): void {
+    if (!this.panoramaContainer) return;
+    const mainApps = this.getMainAppPlugins().filter((p) => p.id !== "org.omni.plugin.feed");
+    const appsSection = document.getElementById("panorama-section-apps");
+
+    // Remove any main app canvas sections for plugins no longer assigned to main
+    const currentSections = this.panoramaContainer.querySelectorAll<HTMLElement>(".panorama-section-custom-main");
+    currentSections.forEach((sec) => {
+      const pId = sec.dataset.pluginId;
+      if (!mainApps.some((a) => a.id === pId)) {
+        sec.remove();
+      }
+    });
+
+    for (const app of mainApps) {
+      const safeId = app.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+      let sec = document.getElementById(`panorama-section-${safeId}`) as HTMLElement | null;
+      if (!sec) {
+        sec = document.createElement("section");
+        sec.className = "panorama-section panorama-section-custom-main";
+        sec.id = `panorama-section-${safeId}`;
+        sec.dataset.pivot = app.id;
+        sec.dataset.pluginId = app.id;
+
+        const meta = this.getPluginMeta(app);
+        sec.innerHTML = `
+          <div class="panorama-section-content">
+            <div class="panorama-section-title-bar">
+              <h2>${(app.name || meta.name).toLowerCase()}</h2>
+              <span class="panorama-badge">application</span>
+            </div>
+            <div id="panorama-slot-main-${safeId}" class="omni-slot panorama-main-viewport-slot" style="flex: 1; width: 100%; height: 100%; overflow: auto;"></div>
+          </div>
+        `;
+
+        if (appsSection && appsSection.parentNode === this.panoramaContainer) {
+          this.panoramaContainer.insertBefore(sec, appsSection);
+        } else {
+          this.panoramaContainer.appendChild(sec);
+        }
+      }
+    }
   }
 
   public ensureAppPage(pluginId: string): HTMLElement {
@@ -257,7 +321,9 @@ export class PanoramaShell implements OmniShellHost {
 
   public async remountPlugin(plugin: InstalledPluginEntry): Promise<void> {
     this.kernel.disablePlugin(plugin.id);
-    if (plugin.enabled) {
+    this.ensureMainAppSections();
+    this.renderPivotNavigation();
+    if (plugin.enabled !== false) {
       await this.mountPlugin(plugin);
     }
     this.renderAppsTiles();
@@ -481,6 +547,7 @@ export class PanoramaShell implements OmniShellHost {
     this.renderSkeleton();
     this.cacheElementReferences();
     this.initSlotContainers();
+    this.ensureMainAppSections();
     this.renderAppsTiles();
     this.renderSystemPluginList();
     this.wireNavigation();
@@ -495,6 +562,92 @@ export class PanoramaShell implements OmniShellHost {
   private renderSkeleton(): void {
     this.root.innerHTML = `
       <div class="panorama-shell-root" id="panorama-shell-root">
+        <style id="panorama-embedded-theme">
+          .panorama-shell-root {
+            --omni-bg-canvas: #000000;
+            --omni-bg-surface: #111111;
+            --omni-bg-elevated: #161616;
+            --omni-bg-subtle: #222222;
+            --omni-text-primary: #ffffff;
+            --omni-text-secondary: #aaaaaa;
+            --omni-text-muted: #666666;
+            --omni-border-subtle: #1e1e1e;
+            --omni-border-strong: #333333;
+            --omni-border-focus: #00a4ef;
+            --omni-accent-primary: #00a4ef;
+            --omni-accent-hover: #0078d7;
+            --omni-accent-contrast: #ffffff;
+            --omni-status-online: #00a4ef;
+            --omni-status-badge: #00a4ef;
+            --omni-radius-sm: 0px;
+            --omni-radius-md: 0px;
+            --omni-radius-lg: 0px;
+            --omni-radius-pill: 0px;
+
+            --bg-canvas: #000000;
+            --bg-surface: #111111;
+            --bg-elevated: #161616;
+            --bg-subtle: #222222;
+            --text-primary: #ffffff;
+            --text-secondary: #aaaaaa;
+            --text-muted: #666666;
+            --border-subtle: #1e1e1e;
+            --border-strong: #333333;
+            --border-focus: #00a4ef;
+            --accent-primary: #00a4ef;
+            --accent-hover: #0078d7;
+            --accent-contrast: #ffffff;
+            --status-online: #00a4ef;
+            --status-badge: #00a4ef;
+            --radius-sm: 0px;
+            --radius-md: 0px;
+            --radius-lg: 0px;
+            --radius-pill: 0px;
+          }
+          .panorama-shell-root .composer-card,
+          .panorama-shell-root .note-card,
+          .panorama-shell-root .timer-widget-card,
+          .panorama-shell-root .checklist-widget-card,
+          .panorama-shell-root .checklist-card,
+          .panorama-shell-root .widget-card {
+            background: #111111 !important;
+            border-color: #222222 !important;
+            border-radius: 0px !important;
+          }
+          .panorama-shell-root .btn-publish,
+          .panorama-shell-root .btn-timer-start,
+          .panorama-shell-root .btn-add-task {
+            background: #00a4ef !important;
+            color: #ffffff !important;
+            border: none !important;
+            border-radius: 0px !important;
+          }
+          .panorama-shell-root .btn-refresh-feed,
+          .panorama-shell-root .btn-timer-pause,
+          .panorama-shell-root .btn-timer-reset {
+            border-radius: 0px !important;
+          }
+          .panorama-shell-root .new-posts-pill {
+            background: #00a4ef !important;
+            color: #ffffff !important;
+            border-radius: 0px !important;
+          }
+          .panorama-shell-root .cache-indicator,
+          .panorama-shell-root .note-author,
+          .panorama-shell-root .timer-digits {
+            color: #00a4ef !important;
+          }
+          .panorama-shell-root .omni-toggle input:checked + .toggle-slider {
+            background-color: #00a4ef !important;
+            border-color: #00a4ef !important;
+          }
+          .panorama-shell-root .toggle-slider {
+            border-radius: 0px !important;
+          }
+          .panorama-shell-root .toggle-slider:before {
+            border-radius: 0px !important;
+          }
+        </style>
         <!-- 1. Panorama Hero Header -->
         <header class="panorama-hero-header">
           <div class="panorama-brand-row">
@@ -646,22 +799,23 @@ export class PanoramaShell implements OmniShellHost {
   }
 
   private cacheElementReferences(): void {
-    this.panoramaContainer = document.getElementById("panorama-canvas")!;
-    this.pivotHeadersTrack = document.getElementById("panorama-pivot-nav")!;
-    this.sectionFeed = document.getElementById("panorama-section-feed")!;
-    this.sectionApps = document.getElementById("panorama-section-apps")!;
-    this.sectionWidgets = document.getElementById("panorama-section-widgets")!;
-    this.sectionSystem = document.getElementById("panorama-section-system")!;
-    this.fullAppOverlay = document.getElementById("panorama-full-app-overlay")!;
-    this.fullAppContainer = document.getElementById("panorama-full-app-container")!;
-    this.appBar = document.getElementById("panorama-app-bar")!;
-    this.appDrawerSheet = document.getElementById("panorama-drawer-sheet")!;
+    const q = (sel: string) => (this.root.querySelector(sel) || document.querySelector(sel)) as HTMLElement;
+    this.panoramaContainer = q("#panorama-canvas");
+    this.pivotHeadersTrack = q("#panorama-pivot-nav");
+    this.sectionFeed = q("#panorama-section-feed");
+    this.sectionApps = q("#panorama-section-apps");
+    this.sectionWidgets = q("#panorama-section-widgets");
+    this.sectionSystem = q("#panorama-section-system");
+    this.fullAppOverlay = q("#panorama-full-app-overlay");
+    this.fullAppContainer = q("#panorama-full-app-container");
+    this.appBar = q("#panorama-app-bar");
+    this.appDrawerSheet = q("#panorama-drawer-sheet");
   }
 
   private initSlotContainers(): void {
     this.slotContainers.clear();
-    const feedSlot = document.getElementById("panorama-feed-slot");
-    const widgetsSlot = document.getElementById("panorama-widgets-slot");
+    const feedSlot = this.root.querySelector("#panorama-feed-slot") || document.getElementById("panorama-feed-slot");
+    const widgetsSlot = this.root.querySelector("#panorama-widgets-slot") || document.getElementById("panorama-widgets-slot");
     if (feedSlot) {
       this.slotContainers.set("main", feedSlot);
       this.slotContainers.set("dock", feedSlot);
@@ -675,12 +829,12 @@ export class PanoramaShell implements OmniShellHost {
   // --- Live Accent Tiles (Windows Phone Tile Grid) ---
 
   public renderAppsTiles(): void {
-    const grid = document.getElementById("panorama-tiles-grid");
-    const countEl = document.getElementById("panorama-apps-count");
+    const grid = this.root.querySelector("#panorama-tiles-grid") || document.getElementById("panorama-tiles-grid");
+    const countEl = this.root.querySelector("#panorama-apps-count") || document.getElementById("panorama-apps-count");
     if (!grid) return;
 
     grid.innerHTML = "";
-    const apps = this.installedPlugins.filter((p) => p.enabled);
+    const apps = this.installedPlugins.filter((p) => p.enabled !== false);
     if (countEl) countEl.textContent = `${apps.length} app${apps.length === 1 ? "" : "s"}`;
 
     // Color palette inspired by Windows Phone signature accent colors
@@ -727,8 +881,8 @@ export class PanoramaShell implements OmniShellHost {
   }
 
   public renderSystemPluginList(): void {
-    const list = document.getElementById("panorama-plugins-list");
-    const count = document.getElementById("panorama-plugin-count");
+    const list = this.root.querySelector("#panorama-plugins-list") || document.getElementById("panorama-plugins-list");
+    const count = this.root.querySelector("#panorama-plugin-count") || document.getElementById("panorama-plugin-count");
     if (!list) return;
 
     list.innerHTML = "";
@@ -965,6 +1119,9 @@ export class PanoramaShell implements OmniShellHost {
           vpSelect.addEventListener("change", async () => {
             pl.viewport = vpSelect.value;
             plugin.viewport = pl.viewport;
+            if (pl.viewport === "main" || pl.viewport === "dock") {
+              plugin.pinned = true;
+            }
             const primaryComp = synthManifest.components?.[0];
             if (primaryComp) {
               this.layoutManager.setComponentSlot(plugin.id, primaryComp.id, pl.viewport);
@@ -1258,9 +1415,63 @@ export class PanoramaShell implements OmniShellHost {
 
   // --- App Overlay & Navigation ---
 
+  public renderPivotNavigation(): void {
+    if (!this.pivotHeadersTrack) return;
+    this.pivotHeadersTrack.innerHTML = "";
+
+    // 1. Feed pivot
+    const feedBtn = document.createElement("button");
+    feedBtn.className = "panorama-pivot-item";
+    feedBtn.dataset.pivot = "feed";
+    feedBtn.textContent = "feed";
+    if (this.activePivot === "feed" || this.activePivot === "org.omni.plugin.feed") {
+      feedBtn.classList.add("active");
+    }
+    feedBtn.addEventListener("click", () => this.showPivot("feed"));
+    this.pivotHeadersTrack.appendChild(feedBtn);
+
+    // 2. Dynamic Main App Pivots (e.g. Focus Timer, Daily Tasks)
+    const otherMainApps = this.getMainAppPlugins().filter((p) => p.id !== "org.omni.plugin.feed");
+    for (const app of otherMainApps) {
+      const meta = this.getPluginMeta(app);
+      const btn = document.createElement("button");
+      btn.className = "panorama-pivot-item";
+      btn.dataset.pivot = app.id;
+      btn.textContent = (app.name || meta.name).toLowerCase();
+      if (this.activePivot === app.id) {
+        btn.classList.add("active");
+      }
+      btn.addEventListener("click", () => this.showPivot(app.id));
+      this.pivotHeadersTrack.appendChild(btn);
+    }
+
+    // 3. Apps, Widgets, System pivots
+    const standardPivots = ["apps", "widgets", "system"];
+    for (const sp of standardPivots) {
+      const btn = document.createElement("button");
+      btn.className = "panorama-pivot-item";
+      btn.dataset.pivot = sp;
+      btn.textContent = sp;
+      if (this.activePivot === sp) {
+        btn.classList.add("active");
+      }
+      btn.addEventListener("click", () => this.showPivot(sp));
+      this.pivotHeadersTrack.appendChild(btn);
+    }
+  }
+
   public openApp(pluginId: string): void {
     const plugin = this.installedPlugins.find((p) => p.id === pluginId);
     if (!plugin) return;
+
+    // If it has a dedicated section in panorama canvas, scroll right to it
+    const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const section = document.getElementById(`panorama-section-${safeId}`);
+    if (section) {
+      this.closeApp();
+      this.showPivot(pluginId);
+      return;
+    }
 
     this.currentOpenedAppId = pluginId;
     const meta = this.getPluginMeta(plugin);
@@ -1273,7 +1484,6 @@ export class PanoramaShell implements OmniShellHost {
     }
 
     // Hide other pages in overlay, show target page
-    const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
     const allPages = this.fullAppContainer?.querySelectorAll<HTMLElement>(".panorama-app-page") || [];
     allPages.forEach((p) => (p.style.display = "none"));
 
@@ -1297,9 +1507,23 @@ export class PanoramaShell implements OmniShellHost {
       btn.classList.toggle("active", btn.dataset.pivot === pivot);
     });
 
-    const targetSection = document.getElementById(`panorama-section-${pivot}`);
+    const safeId = pivot.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const targetSection = document.getElementById(`panorama-section-${pivot}`) ||
+      document.getElementById(`panorama-section-${safeId}`) ||
+      (this.panoramaContainer?.querySelector<HTMLElement>(`.panorama-section[data-pivot="${pivot}"]`));
+
     if (targetSection && this.panoramaContainer) {
-      targetSection.scrollIntoView({ behavior: "smooth", inline: "start" });
+      this.isProgrammaticScroll = true;
+      if (this.programmaticScrollTimer) clearTimeout(this.programmaticScrollTimer);
+
+      this.panoramaContainer.scrollTo({
+        left: targetSection.offsetLeft,
+        behavior: "smooth"
+      });
+
+      this.programmaticScrollTimer = setTimeout(() => {
+        this.isProgrammaticScroll = false;
+      }, 600);
     }
   }
 
@@ -1317,42 +1541,50 @@ export class PanoramaShell implements OmniShellHost {
       this.closeApp();
       this.showPivot("system");
     } else {
-      this.openApp(page);
+      const safeId = page.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const section = document.getElementById(`panorama-section-${safeId}`);
+      if (section) {
+        this.closeApp();
+        this.showPivot(page);
+      } else {
+        this.openApp(page);
+      }
     }
   }
 
   // --- Interactive Controllers Wiring ---
 
   private wireNavigation(): void {
-    const pivotBtns = this.pivotHeadersTrack?.querySelectorAll<HTMLElement>(".panorama-pivot-item") || [];
-    pivotBtns.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const pivot = btn.dataset.pivot as PanoramaPivot;
-        if (pivot) this.showPivot(pivot);
-      });
-    });
+    this.renderPivotNavigation();
 
-    // IntersectionObserver to auto-update active pivot on horizontal swipe
-    if (typeof IntersectionObserver !== "undefined" && this.panoramaContainer) {
-      const observer = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-              const pivot = (entry.target as HTMLElement).dataset.pivot as PanoramaPivot;
-              if (pivot && this.activePivot !== pivot) {
-                this.activePivot = pivot;
-                const buttons = this.pivotHeadersTrack?.querySelectorAll<HTMLElement>(".panorama-pivot-item") || [];
-                buttons.forEach((b) => b.classList.toggle("active", b.dataset.pivot === pivot));
-              }
-            }
+    // Scroll listener with programmatic guard and closest-offset detection
+    this.panoramaContainer?.addEventListener("scroll", () => {
+      if (this.isProgrammaticScroll) return;
+      if (this.scrollDebounceTimer) clearTimeout(this.scrollDebounceTimer);
+      this.scrollDebounceTimer = setTimeout(() => {
+        if (this.isProgrammaticScroll) return;
+        const scrollLeft = this.panoramaContainer.scrollLeft;
+        const sections = Array.from(this.panoramaContainer.querySelectorAll<HTMLElement>(".panorama-section"));
+        if (sections.length === 0) return;
+
+        let closestSection = sections[0];
+        let minDiff = Infinity;
+        for (const sec of sections) {
+          const diff = Math.abs(sec.offsetLeft - scrollLeft);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestSection = sec;
           }
-        },
-        { root: this.panoramaContainer, threshold: 0.5 }
-      );
+        }
 
-      const sections = this.panoramaContainer.querySelectorAll(".panorama-section");
-      sections.forEach((s) => observer.observe(s));
-    }
+        const pivot = (closestSection.dataset.pivot || closestSection.dataset.pluginId) as PanoramaPivot;
+        if (pivot && this.activePivot !== pivot) {
+          this.activePivot = pivot;
+          const buttons = this.pivotHeadersTrack?.querySelectorAll<HTMLElement>(".panorama-pivot-item") || [];
+          buttons.forEach((b) => b.classList.toggle("active", b.dataset.pivot === pivot));
+        }
+      }, 60);
+    });
   }
 
   private wireAppBar(): void {

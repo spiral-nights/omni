@@ -1124,13 +1124,15 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     let panoramaShell: PanoramaShell;
 
     beforeEach(() => {
+      localStorage.clear();
+      document.body.innerHTML = "";
       panoramaRoot = document.createElement("div");
       document.body.appendChild(panoramaRoot);
       panoramaKernel = new OmniKernel({ bootstrapRelays: [] });
       panoramaShell = new PanoramaShell({
         root: panoramaRoot,
         kernel: panoramaKernel,
-        installedPlugins: [...mockPlugins]
+        installedPlugins: mockPlugins.map((p) => ({ ...p, placements: p.placements ? [...p.placements] : undefined }))
       });
       panoramaShell.mount();
     });
@@ -1240,6 +1242,85 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       const btnCloseInspector = panoramaRoot.querySelector("#btn-inspector-close") as HTMLButtonElement | null;
       btnCloseInspector?.click();
       expect(inspectorModal?.style.display).toBe("none");
+    });
+
+    it("dynamically updates top pivot navigation and canvas sections when assigning an app to main", async () => {
+      // Initially, timer is in sidebar, pivots are feed, apps, widgets, system
+      const pivotNav = panoramaRoot.querySelector("#panorama-pivot-nav");
+      expect(pivotNav?.textContent).toContain("feed");
+      expect(pivotNav?.textContent).toContain("apps");
+      expect(pivotNav?.textContent).not.toContain("focus timer");
+
+      // Now configure timer to main viewport
+      const timerPlugin = panoramaShell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer")!;
+      expect(timerPlugin).toBeTruthy();
+      timerPlugin.viewport = "main";
+      timerPlugin.placements = [{ id: "main-pl", viewport: "main", route: "", viewId: "main", enabled: true }];
+      await panoramaShell.remountPlugin(timerPlugin);
+
+      // Verify dynamic pivot is added to top menu
+      expect(pivotNav?.textContent).toContain("focus timer");
+
+      // Verify canvas contains dedicated main section
+      const timerCanvasSection = panoramaRoot.querySelector("#panorama-section-org-omni-plugin-timer");
+      expect(timerCanvasSection).toBeTruthy();
+      const timerSlot = timerCanvasSection?.querySelector("#panorama-slot-main-org-omni-plugin-timer");
+      expect(timerSlot).toBeTruthy();
+
+      // Verify getContainerForPluginSlot resolves directly to the canvas slot
+      const resolved = panoramaShell.getContainerForPluginSlot("org.omni.plugin.timer", "main");
+      expect(resolved).toBe(timerSlot);
+
+      // Verify showPivot("apps") sets activePivot to "apps"
+      panoramaShell.showPivot("apps");
+      expect(panoramaShell.getActivePageId()).toBe("apps");
+    });
+
+    it("automatically pins and adds app to navigation dock when assigned to main in OmniShell", async () => {
+      const classicRoot = document.createElement("div");
+      document.body.appendChild(classicRoot);
+      const classicKernel = new OmniKernel({ bootstrapRelays: [] });
+      const classicShell = new OmniShell({
+        root: classicRoot,
+        kernel: classicKernel,
+        installedPlugins: [
+          {
+            id: "org.omni.plugin.feed",
+            name: "Feed",
+            viewport: "main",
+            enabled: true,
+            scriptContent: "console.log('feed')"
+          },
+          {
+            id: "org.omni.plugin.timer",
+            name: "Focus Timer",
+            viewport: "sidebar",
+            enabled: true,
+            scriptContent: "console.log('timer')"
+          }
+        ]
+      });
+      classicShell.mount();
+
+      // Focus timer initially not in dock
+      let timerDockBtn = classicRoot.querySelector(".dock-item[data-plugin-id='org.omni.plugin.timer']");
+      expect(timerDockBtn).toBeFalsy();
+
+      // Open settings and change viewport of timer to main
+      classicShell.openSettings("org.omni.plugin.timer");
+      const vpSelect = classicRoot.querySelector("#settings-pane-org-omni-plugin-timer .plugin-viewport-select") as HTMLSelectElement;
+      expect(vpSelect).toBeTruthy();
+
+      vpSelect.value = "main";
+      vpSelect.dispatchEvent(new Event("change"));
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Verify timer is automatically pinned and rendered in dock
+      const timerPlugin = classicShell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer")!;
+      expect(timerPlugin.pinned).toBe(true);
+
+      timerDockBtn = classicRoot.querySelector(".dock-item[data-plugin-id='org.omni.plugin.timer']");
+      expect(timerDockBtn).toBeTruthy();
     });
   });
 });
