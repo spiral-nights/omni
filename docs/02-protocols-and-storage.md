@@ -23,11 +23,17 @@ Omni operates on a local-first principle: all reads hit persistent local storage
 └──────────────────────────────┘ └────────────────────────────┘
 ```
 
-### 1.1 `LocalEventStore` (IndexedDB Embedded Cache)
+### 1.1 `LocalEventStore` (IndexedDB Embedded Cache & In-Memory LRU)
 - **Database**: `omni_event_store` (IndexedDB).
 - **Indices**:
   - `pubkey`, `kind`, `created_at`, compound `["kind", "created_at"]`.
   - Tag index store `event_tags` indexing single-letter tags (`#p`, `#e`, `#d`, `#t`).
+- **Selective Persistence & Bounded Caching**:
+  - **In-Memory LRU Cache**: Fast memory ring-buffer (up to 500 events) for 0ms queries without disk transactions.
+  - **Ephemeral Events (`kind: 20000..29999`)**: Dispatched to live subscribers and cached in memory, but never written to disk per Nostr standard (NIP-01/16).
+  - **Replaceable Events (`kind: 0, 3, 10000..19999`)**: Older versions from the same author are automatically pruned to prevent stale profiles and data bloat (NIP-16).
+  - **Parameterized Replaceable Events (`kind: 30000..39999`)**: Older versions matching `(kind, pubkey, d-tag)` are pruned so only the latest workspace states or nsite definitions persist.
+  - **Bounded Feed Notes (`kind: 1, 6, 7`)**: Public timeline notes are capped to `maxFeedNotes` (default: 100) via background LRU pruning to prevent storage quota exhaustion, while preserving the user's own authored notes permanently.
 - **Guarantees**:
   - Every note, profile metadata, or NIP-78 workspace state published through the kernel is written to `LocalEventStore` **before** relay broadcast.
   - Subscriptions query `LocalEventStore` first, providing instant 0ms rendering even completely offline.

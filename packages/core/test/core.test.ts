@@ -105,6 +105,136 @@ describe("LocalEventStore", () => {
     expect(results).toHaveLength(1);
     expect(results[0].content).toBe("Test note");
   });
+
+  it("handles in-memory cache and ephemeral events (kind 20000-29999) without disk storage", async () => {
+    const keystore = new WebCryptoKeystore();
+    const ephemeralEvent = await keystore.signEvent({
+      kind: 20001,
+      content: "Ephemeral typing status",
+      tags: [],
+      created_at: 1700000050
+    });
+
+    const saved = await store.saveEvent(ephemeralEvent);
+    expect(saved).toBe(true);
+    expect(store.getMemoryCacheSize()).toBeGreaterThan(0);
+
+    // Ephemeral event should resolve via in-memory cache
+    const byId = await store.getEventById(ephemeralEvent.id);
+    expect(byId).not.toBeNull();
+    expect(byId?.content).toBe("Ephemeral typing status");
+
+    const events = await store.getEvents({ kinds: [20001] });
+    expect(events).toHaveLength(1);
+    expect(events[0].id).toBe(ephemeralEvent.id);
+  });
+
+  it("cleans older versions of replaceable events (kind 0)", async () => {
+    const keystore = new WebCryptoKeystore();
+    const pubkey = await keystore.getPublicKey();
+
+    const profileV1 = await keystore.signEvent({
+      kind: 0,
+      content: JSON.stringify({ name: "Alice v1" }),
+      tags: [],
+      created_at: 1000
+    });
+    const profileV2 = await keystore.signEvent({
+      kind: 0,
+      content: JSON.stringify({ name: "Alice v2" }),
+      tags: [],
+      created_at: 2000
+    });
+
+    await store.saveEvent(profileV1);
+    await store.saveEvent(profileV2);
+
+    // Allow background replaceable cleanup
+    await new Promise((r) => setTimeout(r, 50));
+
+    const profiles = await store.getEvents({ kinds: [0], authors: [pubkey] });
+    expect(profiles).toHaveLength(1);
+    expect(JSON.parse(profiles[0].content).name).toBe("Alice v2");
+  });
+
+  it("cleans older versions of parameterized replaceable events (kind 30078)", async () => {
+    const keystore = new WebCryptoKeystore();
+    const pubkey = await keystore.getPublicKey();
+
+    const appDataV1 = await keystore.signEvent({
+      kind: 30078,
+      content: JSON.stringify({ version: 1 }),
+      tags: [["d", "workspace"]],
+      created_at: 1000
+    });
+    const appDataV2 = await keystore.signEvent({
+      kind: 30078,
+      content: JSON.stringify({ version: 2 }),
+      tags: [["d", "workspace"]],
+      created_at: 2000
+    });
+
+    await store.saveEvent(appDataV1);
+    await store.saveEvent(appDataV2);
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const states = await store.getEvents({ kinds: [30078], authors: [pubkey] });
+    expect(states).toHaveLength(1);
+    expect(JSON.parse(states[0].content).version).toBe(2);
+  });
+
+  it("bounds public feed notes to max limit while preserving user's own authored notes", async () => {
+    const userKeystore = new WebCryptoKeystore();
+    const userPub = await userKeystore.getPublicKey();
+
+    const extKeystore = new WebCryptoKeystore();
+
+    const boundedStore = new LocalEventStore({
+      dbName: `test_bounded_${Date.now()}`,
+      maxFeedNotes: 3,
+      userPubkey: userPub
+    });
+    await boundedStore.init();
+
+    // 5 external feed notes with increasing timestamps
+    for (let i = 1; i <= 5; i++) {
+      const extNote = await extKeystore.signEvent({
+        kind: 1,
+        content: `External note ${i}`,
+        tags: [],
+        created_at: 1000 + i
+      });
+      await boundedStore.saveEvent(extNote);
+    }
+
+    // 1 user note with an older timestamp
+    const userNote = await userKeystore.signEvent({
+      kind: 1,
+      content: "My own user note",
+      tags: [],
+      created_at: 900
+    });
+    await boundedStore.saveEvent(userNote);
+
+    // Prune feed notes to max 3
+    const deletedCount = await boundedStore.pruneFeedNotes(3);
+    expect(deletedCount).toBe(2); // 5 external - 3 kept = 2 deleted
+
+    const remaining = await boundedStore.getEvents({ kinds: [1] });
+    // Total remaining: 3 external + 1 user note = 4
+    expect(remaining).toHaveLength(4);
+
+    const hasUserNote = remaining.some((n) => n.id === userNote.id);
+    expect(hasUserNote).toBe(true);
+
+    const extNotes = remaining.filter((n) => n.pubkey !== userPub);
+    expect(extNotes).toHaveLength(3);
+    // Should be the newest external notes (3, 4, 5)
+    expect(extNotes.map((n) => n.content)).toEqual(
+      expect.arrayContaining(["External note 3", "External note 4", "External note 5"])
+    );
+  });
 });
 
 describe("CapabilityStore & AclEngine", () => {

@@ -24,6 +24,7 @@ export interface OmniKernelOptions {
   slotResolver?: (pluginId: string, componentId: string, slot: string) => Element | undefined;
   eventStoreName?: string;
   storageName?: string;
+  maxFeedNotes?: number;
 }
 
 export class OmniKernel {
@@ -48,7 +49,10 @@ export class OmniKernel {
 
   constructor(options: OmniKernelOptions = {}) {
     this.keystore = new WebCryptoKeystore(options.privateKeyHex);
-    this.eventStore = new LocalEventStore(options.eventStoreName);
+    this.eventStore = new LocalEventStore({
+      dbName: options.eventStoreName,
+      maxFeedNotes: options.maxFeedNotes ?? 100
+    });
     this.relayPool = new RelayPool({ bootstrapRelays: options.bootstrapRelays });
     this.capabilityStore = new CapabilityStore();
     this.aclEngine = new AclEngine(this.capabilityStore, options.promptHandler);
@@ -65,6 +69,10 @@ export class OmniKernel {
 
   async boot(): Promise<void> {
     await this.eventStore.init();
+    try {
+      const pubkey = await this.getUserPubkey();
+      this.eventStore.setUserPubkey(pubkey);
+    } catch {}
     await this.storageManager.init();
     this.relayPool.connect().catch(() => {});
   }
@@ -337,6 +345,9 @@ export class OmniKernel {
 
   switchPrivateKey(keyHexOrNsec: string): void {
     this.keystore.setPrivateKey(keyHexOrNsec);
+    this.getUserPubkey().then((pubkey) => {
+      this.eventStore.setUserPubkey(pubkey);
+    }).catch(() => {});
   }
 
   async getProfile(pubkey?: string): Promise<Record<string, any> | null> {
