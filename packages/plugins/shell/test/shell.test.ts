@@ -1136,10 +1136,16 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       const tiles = Array.from(panoramaRoot.querySelectorAll(".panorama-tile"));
       expect(tiles.length).toBe(mockPlugins.length);
 
-      const feedTile = tiles.find((t) => t.textContent?.includes("Timeline Feed"));
+      const feedTile = tiles.find((t) => t.textContent?.includes("Timeline Feed")) as HTMLElement;
       expect(feedTile).toBeTruthy();
-      const timerTile = tiles.find((t) => t.textContent?.includes("Focus Timer"));
+      const timerTile = tiles.find((t) => t.textContent?.includes("Focus Timer")) as HTMLElement;
       expect(timerTile).toBeTruthy();
+
+      // Clicking a pinned canvas app smoothly navigates to its section without opening an overlay
+      const overlay = panoramaRoot.querySelector("#panorama-full-app-overlay");
+      feedTile.click();
+      expect(overlay?.classList.contains("open")).toBe(false);
+      expect(panoramaShell.getActivePageId()).toBe("org.omni.plugin.feed");
     });
 
     it("opens full-page apps in the slide-in overlay and mounts app container without blank screen", async () => {

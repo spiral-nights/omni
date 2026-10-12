@@ -1371,7 +1371,6 @@ body.theme-panorama,
   .panorama-section {
     flex: 0 0 540px;
     max-width: 540px;
-    border-right: 1px solid #1a1a1a;
   }
 }
 

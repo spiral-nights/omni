@@ -192,6 +192,9 @@ export class PanoramaShell implements OmniShellHost {
   public getContainerForPluginSlot(pluginId: string, slotId: string, compId?: string): Element {
     if (slotId === "main" || slotId === "dock") {
       const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+      if (compId?.includes("overlay")) {
+        return this.ensureAppPage(pluginId);
+      }
       const canvasSlot = document.getElementById(`panorama-slot-main-${safeId}`);
       if (canvasSlot) {
         return canvasSlot;
@@ -828,7 +831,7 @@ export class PanoramaShell implements OmniShellHost {
       `;
 
       tile.addEventListener("click", () => {
-        this.openApp(plugin.id);
+        this.showPage(plugin.id);
       });
 
       grid.appendChild(tile);
