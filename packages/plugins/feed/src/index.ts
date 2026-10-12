@@ -106,6 +106,83 @@ const ICONS = {
 function mountFeed(root: any) {
   const container = html<HTMLDivElement>`
     <div class="feed-container">
+      <style>
+        .feed-container {
+          background: transparent !important;
+          border: none !important;
+        }
+        .feed-post,
+        .note-card {
+          background: transparent !important;
+          border: none !important;
+          border-top: none !important;
+          border-left: none !important;
+          border-right: none !important;
+          border-bottom: none !important;
+          box-shadow: none !important;
+        }
+        .feed-post:hover,
+        .note-card:hover {
+          background: transparent !important;
+        }
+        .feed-action-btn,
+        .note-action-btn,
+        .feed-post-actions button {
+          background: transparent !important;
+          border: none !important;
+          outline: none !important;
+          box-shadow: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          border-radius: 0 !important;
+          color: var(--omni-accent-primary, var(--accent-primary, #00a4ef)) !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 6px !important;
+          font-size: 0.82rem !important;
+          line-height: 1 !important;
+          cursor: pointer !important;
+          transition: opacity 0.15s ease, transform 0.1s ease !important;
+        }
+        .feed-action-btn:hover,
+        .note-action-btn:hover,
+        .feed-post-actions button:hover {
+          opacity: 0.75 !important;
+          background: transparent !important;
+        }
+        .feed-action-btn:active,
+        .note-action-btn:active,
+        .feed-post-actions button:active {
+          transform: scale(0.92) !important;
+        }
+        .feed-action-btn svg,
+        .note-action-btn svg,
+        .feed-post-actions button svg {
+          stroke: currentColor !important;
+          fill: none !important;
+          width: 16px !important;
+          height: 16px !important;
+          display: inline-block !important;
+        }
+        .feed-action-btn .action-count,
+        .note-action-btn .action-count,
+        .feed-post-actions button .action-count {
+          color: inherit !important;
+          font-size: 0.78rem !important;
+          font-weight: 500 !important;
+          line-height: 1 !important;
+        }
+        .feed-action-btn.active-liked,
+        .feed-action-btn.active-liked svg {
+          color: #f43f5e !important;
+          fill: #f43f5e !important;
+          stroke: #f43f5e !important;
+        }
+        .feed-action-btn.active-reposted {
+          color: #4ade80 !important;
+        }
+      </style>
+
       <!-- Top Timeline Navigation Header -->
       <div class="feed-top-header">
         <h2 class="feed-title">Feed</h2>
