@@ -87,7 +87,8 @@ omni/
 └── docs/                                  # Consolidated System Documentation
     ├── 01-architecture.md                 # System Architecture & Core Runtime
     ├── 02-protocols-and-storage.md        # Nostr Protocols, Storage & Decentralized Distribution
-    └── 03-plugin-developer-guide.md       # Plugin & nsite Developer Guide
+    ├── 03-plugin-developer-guide.md       # Plugin & nsite Developer Guide
+    └── 04-intents-and-permissions.md      # Standardized Intents, Discovery & Kind-Level ACL
 ```
 
 ---
