@@ -42,6 +42,8 @@ export class OmniKernel {
 
   private sandboxes: Map<string, SandboxInstance> = new Map();
   private settingsSandboxes: Map<string, SandboxInstance> = new Map();
+  private pendingRegistrations: Map<string, Promise<SandboxInstance>> = new Map();
+  private pendingNotifications: Map<string, Array<{ method: string; params?: any }>> = new Map();
   private runtimeScript?: string;
   private slotResolver?: (pluginId: string, componentId: string, slot: string) => Element | undefined;
   private onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
@@ -82,9 +84,30 @@ export class OmniKernel {
 
   async seedInitialNotesIfEmpty(): Promise<void> {
     try {
+      const now = Math.floor(Date.now() / 1000);
+
+      // 1. Always ensure demo author Kind 0 profile metadata exists so author inspection is rich
+      const existingProfile = await this.eventStore.getEvents({ kinds: [0], limit: 1 });
+      if (existingProfile.length === 0) {
+        const profileDraft = {
+          kind: 0,
+          content: JSON.stringify({
+            name: "spiralnights",
+            display_name: "Spiral Nights",
+            about: "Omni modular Nostr workspace explorer & local-first client.",
+            picture: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+            nip05: "spiralnights@omni.local"
+          }),
+          tags: [],
+          created_at: now - 300
+        };
+        const signedProfile = await this.keystore.signEvent(profileDraft);
+        await this.eventStore.saveEvent(signedProfile);
+      }
+
       const existing = await this.eventStore.getEvents({ kinds: [1], limit: 1 });
       if (existing.length === 0) {
-        const now = Math.floor(Date.now() / 1000);
+
         const demoNotes = [
           {
             kind: 1,
@@ -126,94 +149,123 @@ export class OmniKernel {
     slotContainers: Map<string, Element>,
     options?: { route?: string; viewId?: string; instanceId?: string; targetSlot?: string; relays?: string[] }
   ): Promise<SandboxInstance> {
-    this.aclEngine.registerManifest(manifest);
-
-    // Initialize default permissions in capabilityStore if not already explicitly configured
-    if (manifest.permissions) {
-      if (manifest.permissions.storage && this.capabilityStore.getGrant(manifest.id, "storage:kv") === null) {
-        this.capabilityStore.setGrant(manifest.id, "storage:kv", "always");
-      }
-      if (manifest.permissions.intents) {
-        if (this.capabilityStore.getGrant(manifest.id, "intents:dispatch") === null) {
-          this.capabilityStore.setGrant(manifest.id, "intents:dispatch", "always");
-        }
-        if (this.capabilityStore.getGrant(manifest.id, "intents:handle") === null) {
-          this.capabilityStore.setGrant(manifest.id, "intents:handle", "always");
-        }
-      }
-      if (manifest.permissions.nostr) {
-        if (this.capabilityStore.getGrant(manifest.id, "nostr:read") === null) {
-          this.capabilityStore.setGrant(manifest.id, "nostr:read", "always");
-        }
-        if (manifest.permissions.nostr.write?.kinds && Array.isArray(manifest.permissions.nostr.write.kinds)) {
-          for (const k of manifest.permissions.nostr.write.kinds) {
-            if (this.capabilityStore.getGrant(manifest.id, "nostr:write", String(k), false) === null) {
-              this.capabilityStore.setGrant(manifest.id, "nostr:write", "always", String(k));
-            }
-          }
-          if (manifest.permissions.nostr.write.allKinds && this.capabilityStore.getGrant(manifest.id, "nostr:write", "*") === null) {
-            this.capabilityStore.setGrant(manifest.id, "nostr:write", "always", "*");
-          }
-        } else if (this.capabilityStore.getGrant(manifest.id, "nostr:write") === null) {
-          this.capabilityStore.setGrant(manifest.id, "nostr:write", "always");
-        }
-        if (this.capabilityStore.getGrant(manifest.id, "nostr:sign") === null) {
-          this.capabilityStore.setGrant(manifest.id, "nostr:sign", "always");
-        }
-      }
-      if (
-        (manifest.id === "org.omni.plugin.relays" || manifest.permissions?.relays?.manage) &&
-        (manifest.trusted || manifest.id.startsWith("org.omni."))
-      ) {
-        if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null) {
-          this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
-        }
-      }
-    } else if (manifest.id === "org.omni.plugin.relays" || manifest.trusted || manifest.id.startsWith("org.omni.")) {
-      if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null && manifest.id === "org.omni.plugin.relays") {
-        this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
-      }
+    const instanceKey = options?.instanceId || manifest.id;
+    if (this.sandboxes.has(instanceKey)) {
+      return this.sandboxes.get(instanceKey)!;
+    }
+    if (this.pendingRegistrations.has(instanceKey)) {
+      return this.pendingRegistrations.get(instanceKey)!;
     }
 
-    this.layoutManager.registerPlugin(manifest);
+    const registrationPromise = (async () => {
+      try {
+        this.aclEngine.registerManifest(manifest);
 
-    const userPubkey = await this.getUserPubkey();
-    const sandbox = new SandboxInstance({
-      manifest,
-      scriptContent,
-      runtimeScript: this.runtimeScript,
-      trusted: manifest.trusted || manifest.id.startsWith("org.omni."),
-      userPubkey,
-      slotContainers,
-      theme: this.theme,
-      route: options?.route,
-      viewId: options?.viewId,
-      instanceId: options?.instanceId,
-      allowedRelays: options?.relays,
-      slotResolver: (pluginId: string, componentId: string, defaultSlot: string) => {
-        const targetSlot = options?.targetSlot || this.layoutManager.getSlotForComponent(pluginId, componentId) || defaultSlot;
-        if (this.slotResolver) {
-          const custom = this.slotResolver(pluginId, componentId, targetSlot);
-          if (custom) return custom;
+        // Initialize default permissions in capabilityStore if not already explicitly configured
+        if (manifest.permissions) {
+          if (manifest.permissions.storage && this.capabilityStore.getGrant(manifest.id, "storage:kv") === null) {
+            this.capabilityStore.setGrant(manifest.id, "storage:kv", "always");
+          }
+          const isTrusted = manifest.trusted === true || manifest.id.startsWith("org.omni.");
+          if (manifest.permissions.intents || isTrusted) {
+            if (this.capabilityStore.getGrant(manifest.id, "intents:dispatch") === null) {
+              this.capabilityStore.setGrant(manifest.id, "intents:dispatch", "always");
+            }
+            if (this.capabilityStore.getGrant(manifest.id, "intents:handle") === null) {
+              this.capabilityStore.setGrant(manifest.id, "intents:handle", "always");
+            }
+          }
+          if (manifest.permissions.nostr) {
+            if (this.capabilityStore.getGrant(manifest.id, "nostr:read") === null) {
+              this.capabilityStore.setGrant(manifest.id, "nostr:read", "always");
+            }
+            if (manifest.permissions.nostr.write?.kinds && Array.isArray(manifest.permissions.nostr.write.kinds)) {
+              for (const k of manifest.permissions.nostr.write.kinds) {
+                if (this.capabilityStore.getGrant(manifest.id, "nostr:write", String(k), false) === null) {
+                  this.capabilityStore.setGrant(manifest.id, "nostr:write", "always", String(k));
+                }
+              }
+              if (manifest.permissions.nostr.write.allKinds && this.capabilityStore.getGrant(manifest.id, "nostr:write", "*") === null) {
+                this.capabilityStore.setGrant(manifest.id, "nostr:write", "always", "*");
+              }
+            } else if (this.capabilityStore.getGrant(manifest.id, "nostr:write") === null) {
+              this.capabilityStore.setGrant(manifest.id, "nostr:write", "always");
+            }
+            if (this.capabilityStore.getGrant(manifest.id, "nostr:sign") === null) {
+              this.capabilityStore.setGrant(manifest.id, "nostr:sign", "always");
+            }
+          }
+          if (
+            (manifest.id === "org.omni.plugin.relays" || manifest.permissions?.relays?.manage) &&
+            (manifest.trusted || manifest.id.startsWith("org.omni."))
+          ) {
+            if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null) {
+              this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
+            }
+          }
+        } else if (manifest.id === "org.omni.plugin.relays" || manifest.trusted || manifest.id.startsWith("org.omni.")) {
+          if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null && manifest.id === "org.omni.plugin.relays") {
+            this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
+          }
         }
-        return slotContainers.get(targetSlot) || slotContainers.get(defaultSlot);
-      },
-      aclEngine: this.aclEngine,
-      storageManager: this.storageManager,
-      intentBroker: this.intentBroker,
-      subscriptionCoordinator: this.subscriptionCoordinator,
-      keystore: this.keystore,
-      relayPool: this.relayPool,
-      eventStore: this.eventStore,
-      onSlotAction: this.onSlotAction,
-      onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
-      onHandleShare: (payload, srcId) => this.handleShare(payload, srcId)
-    });
 
-    await sandbox.mount();
-    const instanceKey = options?.instanceId || manifest.id;
-    this.sandboxes.set(instanceKey, sandbox);
-    return sandbox;
+        this.layoutManager.registerPlugin(manifest);
+
+        const userPubkey = await this.getUserPubkey();
+        const sandbox = new SandboxInstance({
+          manifest,
+          scriptContent,
+          runtimeScript: this.runtimeScript,
+          trusted: manifest.trusted || manifest.id.startsWith("org.omni."),
+          userPubkey,
+          slotContainers,
+          theme: this.theme,
+          route: options?.route,
+          viewId: options?.viewId,
+          instanceId: options?.instanceId,
+          allowedRelays: options?.relays,
+          slotResolver: (pluginId: string, componentId: string, defaultSlot: string) => {
+            const targetSlot = options?.targetSlot || this.layoutManager.getSlotForComponent(pluginId, componentId) || defaultSlot;
+            if (this.slotResolver) {
+              const custom = this.slotResolver(pluginId, componentId, targetSlot);
+              if (custom) return custom;
+            }
+            return slotContainers.get(targetSlot) || slotContainers.get(defaultSlot);
+          },
+          aclEngine: this.aclEngine,
+          storageManager: this.storageManager,
+          intentBroker: this.intentBroker,
+          subscriptionCoordinator: this.subscriptionCoordinator,
+          keystore: this.keystore,
+          relayPool: this.relayPool,
+          eventStore: this.eventStore,
+          onSlotAction: this.onSlotAction,
+          onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
+          onHandleShare: (payload, srcId) => this.handleShare(payload, srcId)
+        });
+
+        await sandbox.mount();
+        this.sandboxes.set(instanceKey, sandbox);
+
+        // Drain any pending buffered notifications for this plugin or instance
+        const pendingForPlugin = this.pendingNotifications.get(manifest.id) || [];
+        const pendingForInstance = this.pendingNotifications.get(instanceKey) || [];
+        const allPending = [...pendingForPlugin, ...pendingForInstance];
+        this.pendingNotifications.delete(manifest.id);
+        this.pendingNotifications.delete(instanceKey);
+
+        for (const notif of allPending) {
+          sandbox.postRpcNotification(notif.method, notif.params);
+        }
+
+        return sandbox;
+      } finally {
+        this.pendingRegistrations.delete(instanceKey);
+      }
+    })();
+
+    this.pendingRegistrations.set(instanceKey, registrationPromise);
+    return registrationPromise;
   }
 
   isPluginEnabled(pluginId: string): boolean {
@@ -237,6 +289,29 @@ export class OmniKernel {
     return undefined;
   }
 
+  notifyPlugin(pluginId: string, method: string, params?: any): void {
+    let notified = false;
+    for (const [key, sandbox] of this.sandboxes.entries()) {
+      if (key === pluginId || key.startsWith(`${pluginId}::`)) {
+        sandbox.postRpcNotification(method, params);
+        notified = true;
+      }
+    }
+    if (!notified) {
+      const sandbox = this.getSandbox(pluginId);
+      if (sandbox) {
+        sandbox.postRpcNotification(method, params);
+        notified = true;
+      }
+    }
+    if (!notified) {
+      if (!this.pendingNotifications.has(pluginId)) {
+        this.pendingNotifications.set(pluginId, []);
+      }
+      this.pendingNotifications.get(pluginId)!.push({ method, params });
+    }
+  }
+
   reparentPluginComponent(
     pluginId: string,
     componentId: string,
@@ -258,6 +333,12 @@ export class OmniKernel {
         this.sandboxes.delete(key);
       }
     }
+    for (const key of Array.from(this.pendingRegistrations.keys())) {
+      if (key === pluginId || key.startsWith(`${pluginId}::`)) {
+        this.pendingRegistrations.delete(key);
+      }
+    }
+    this.pendingNotifications.delete(pluginId);
     this.destroyPluginSettings(pluginId);
   }
 

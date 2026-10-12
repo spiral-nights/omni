@@ -5,7 +5,8 @@ export const ALLOWED_HTML_ELEMENTS = [
   "button", "input", "label", "form", "textarea", "select", "option",
   "ul", "ol", "li", "article", "section", "header", "footer", "nav",
   "svg", "path", "circle", "rect", "line", "polyline", "polygon",
-  "img", "small", "strong", "em", "b", "i", "time", "blockquote"
+  "img", "small", "strong", "em", "b", "i", "time", "blockquote",
+  "a", "code", "pre"
 ];
 
 export interface RemoteDomHostOptions {

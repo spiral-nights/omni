@@ -13,6 +13,7 @@ import { shellRegistry } from "./shell-registry.js";
 export interface InstalledPluginEntry {
   id: string;
   name?: string;
+  displayName?: string;
   description?: string;
   version?: string;
   icon?: string;
@@ -51,6 +52,7 @@ export class OmniShell implements OmniShellHost {
   public readonly layoutManager: LayoutManager;
   private slotContainers: Map<string, Element> = new Map();
   private expandedPluginId: string | null = null;
+  private pendingAppMounts: Set<string> = new Set();
 
   // NIP-78 Workspace sync state
   public workspaceSyncStatus: "synced" | "unsynced" | "syncing" = "synced";
@@ -99,20 +101,71 @@ export class OmniShell implements OmniShellHost {
     } else {
       this.installedPlugins = [];
     }
+    this.registerHandledIntents();
+    this.setupIntentListener();
+  }
+
+  private setupIntentListener(): void {
+    if (!this.kernel?.intentBroker) return;
+    this.kernel.intentBroker.on("intent:dispatched", (event: any) => {
+      const targetPluginId = event?.targetPluginId;
+      if (!targetPluginId) return;
+
+      if (event?.action === "view_profile" && event?.data?.pubkey) {
+        try {
+          localStorage.setItem("omni_active_profile_pubkey", event.data.pubkey);
+        } catch (_) {}
+      }
+
+      this.showPage(targetPluginId);
+      if (!event?.isRpc) {
+        this.kernel.notifyPlugin(targetPluginId, "intent.invoke", {
+          action: event.action,
+          data: event.data
+        });
+      }
+    });
+  }
+
+  private registerHandledIntents(): void {
+    if (!this.kernel?.intentBroker) return;
+    for (const p of this.installedPlugins) {
+      if (p.handledIntents) {
+        for (const action of p.handledIntents) {
+          this.kernel.intentBroker.registerHandler(
+            p.id,
+            action,
+            async (data) => {
+              if (action === "view_profile" && data?.pubkey) {
+                try {
+                  localStorage.setItem("omni_active_profile_pubkey", data.pubkey);
+                } catch (_) {}
+              }
+              // Page activation and notification are handled centrally via intent:dispatched
+              return { handled: true };
+            },
+            { name: p.displayName || p.name, description: p.description }
+          );
+        }
+      }
+    }
   }
 
   public getPluginMeta(p: InstalledPluginEntry): {
     id: string;
     name: string;
+    displayName: string;
     version: string;
     description: string;
     icon: string;
     viewport: string;
   } {
+    const displayName = p.displayName || p.manifest?.displayName || p.name || p.manifest?.name || p.id;
     if (Array.isArray(p.placements) && p.placements.length === 0) {
       return {
         id: p.id,
         name: p.name || p.manifest?.name || p.id,
+        displayName,
         version: p.version || p.manifest?.version || "1.0.0",
         description: p.description || p.manifest?.description || "",
         icon: p.icon || p.manifest?.icon || "widgets",
@@ -124,6 +177,7 @@ export class OmniShell implements OmniShellHost {
     return {
       id: p.id,
       name: p.name || p.manifest?.name || p.id,
+      displayName,
       version: p.version || p.manifest?.version || "1.0.0",
       description: p.description || p.manifest?.description || "",
       icon: p.icon || p.manifest?.icon || (p.viewport === "main" ? "feed" : "widgets"),
@@ -165,6 +219,7 @@ export class OmniShell implements OmniShellHost {
       permissions: {
         nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true },
         storage: { quotaMb: 5 },
+        intents: { call: ["*"], handle: ["*"] },
         relays: p.id === "org.omni.plugin.relays" ? { manage: true, read: true } : undefined
       }
     };
@@ -173,6 +228,9 @@ export class OmniShell implements OmniShellHost {
   public getPluginPlacements(p: InstalledPluginEntry): PluginPlacement[] {
     if (Array.isArray(p.placements)) {
       return p.placements;
+    }
+    if (p.viewport === "") {
+      return [];
     }
     const vp = p.viewport || (p.manifest?.components?.[0]?.slot) || "main";
     return [
@@ -316,6 +374,7 @@ export class OmniShell implements OmniShellHost {
           placements,
           enabled: p.enabled,
           name: meta.name,
+          displayName: p.displayName || meta.displayName,
           description: meta.description,
           icon: meta.icon,
           naddr: p.naddr,
@@ -394,6 +453,9 @@ export class OmniShell implements OmniShellHost {
         }
         if (typeof item.pinned === "boolean") {
           plugin.pinned = item.pinned;
+        }
+        if (item.displayName !== undefined) {
+          plugin.displayName = item.displayName;
         }
         if (item.relays !== undefined) {
           plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
@@ -551,6 +613,7 @@ export class OmniShell implements OmniShellHost {
               if (item.viewport) plugin.viewport = item.viewport;
               if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
               if (typeof item.pinned === "boolean") plugin.pinned = item.pinned;
+              if (item.displayName !== undefined) plugin.displayName = item.displayName;
               if (item.relays !== undefined) {
                 plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
               }
@@ -694,12 +757,16 @@ export class OmniShell implements OmniShellHost {
         iconSvg = icon("feed", 20);
       }
 
-      let label = meta.name.split(" ")[0];
-      if (plugin.id === "org.omni.plugin.feed") label = "Feed";
-      else if (plugin.id === "org.omni.plugin.timer") label = "Timer";
-      else if (plugin.id === "org.omni.plugin.checklist") label = "Daily";
-      else if (plugin.id === "org.omni.plugin.relays") label = "Relays";
-      else if (plugin.id === "org.omni.plugin.profile") label = "Profile";
+      let label = plugin.displayName || meta.displayName;
+      if (!label) {
+        if (plugin.id === "org.omni.plugin.feed") label = "Feed";
+        else if (plugin.id === "org.omni.plugin.timer") label = "Timer";
+        else if (plugin.id === "org.omni.plugin.checklist") label = "Daily";
+        else if (plugin.id === "org.omni.plugin.relays") label = "Relays";
+        else if (plugin.id === "org.omni.plugin.profile") label = "My Profile";
+        else if (plugin.id === "org.omni.plugin.profile-viewer") label = "Profile";
+        else label = meta.name.split(" ")[0];
+      }
 
       btn.innerHTML = `
         <div class="dock-icon-wrapper">
@@ -939,7 +1006,8 @@ export class OmniShell implements OmniShellHost {
             (pl) => pl.enabled !== false && pl.viewport === "main" && this.kernel.getSandbox(`${plugin.id}::${pl.id}`)
           );
 
-          if (!hasMainRunning && !this.kernel.getSandbox(appInstanceKey)) {
+          if (!hasMainRunning && !this.kernel.getSandbox(appInstanceKey) && !this.pendingAppMounts.has(appInstanceKey)) {
+            this.pendingAppMounts.add(appInstanceKey);
             const synthManifest = this.ensurePluginManifest(plugin);
             const appManifest = {
               ...synthManifest,
@@ -961,18 +1029,22 @@ export class OmniShell implements OmniShellHost {
               }
             }
 
+            const activePubkey = localStorage.getItem("omni_active_profile_pubkey") || "";
             this.kernel.registerPlugin(
               appManifest,
               plugin.htmlContent || plugin.scriptContent,
               customSlotContainers,
               {
                 instanceId: appInstanceKey,
-                route: "",
+                route: (plugin.id === "org.omni.plugin.profile-viewer" && activePubkey) ? `?pubkey=${activePubkey}` : "",
                 viewId: "main",
                 targetSlot: "main",
                 relays: plugin.relays
               }
-            ).catch((err) => console.error(`Failed to register app instance for ${plugin.id}:`, err));
+            ).catch((err) => console.error(`Failed to register app instance for ${plugin.id}:`, err))
+             .finally(() => {
+               this.pendingAppMounts.delete(appInstanceKey);
+             });
           }
         }
       }

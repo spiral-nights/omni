@@ -7,6 +7,7 @@ export interface RegisteredIntentHandler {
   name?: string;
   icon?: string;
   description?: string;
+  isRpc?: boolean;
   handler: IntentHandler;
 }
 
@@ -82,7 +83,7 @@ export class IntentBroker {
     pluginId: string,
     action: string,
     handler: IntentHandler,
-    meta?: { name?: string; icon?: string; description?: string }
+    meta?: { name?: string; icon?: string; description?: string; isRpc?: boolean }
   ): void {
     let list = this.handlers.get(action);
     if (!list) {
@@ -97,6 +98,7 @@ export class IntentBroker {
       name: meta?.name,
       icon: meta?.icon,
       description: meta?.description,
+      isRpc: meta?.isRpc,
       handler
     };
     if (existingIdx !== -1) {
@@ -160,44 +162,64 @@ export class IntentBroker {
       throw new Error(`Intent unresolved: No enabled handler registered for action "${action}"`);
     }
 
+    let chosen: RegisteredIntentHandler | undefined;
+
     // Case 2: Exactly 1 enabled candidate
     if (enabledCandidates.length === 1) {
-      return enabledCandidates[0].handler(data, callerPluginId);
-    }
-
-    // Case 3: Multiple enabled candidates
-    // Check default handler first
-    const defaultPluginId = this.defaultHandlers.get(action);
-    if (defaultPluginId) {
-      const defHandler = enabledCandidates.find((h) => h.pluginId === defaultPluginId);
-      if (defHandler) {
-        return defHandler.handler(data, callerPluginId);
-      }
-    }
-
-    // Disambiguate with user modal if callback registered
-    if (this.disambiguateCallback) {
-      const chosenPluginId = await this.disambiguateCallback(
-        action,
-        enabledCandidates.map((c) => ({
-          pluginId: c.pluginId,
-          name: c.name,
-          icon: c.icon,
-          description: c.description
-        })),
-        data,
-        callerPluginId
-      );
-      if (chosenPluginId) {
-        const matched = enabledCandidates.find((h) => h.pluginId === chosenPluginId);
-        if (matched) {
-          return matched.handler(data, callerPluginId);
+      chosen = enabledCandidates[0];
+    } else {
+      // Case 3: Multiple enabled candidates
+      // Check default handler first
+      const defaultPluginId = this.defaultHandlers.get(action);
+      if (defaultPluginId) {
+        const defHandler = enabledCandidates.find((h) => h.pluginId === defaultPluginId);
+        if (defHandler) {
+          chosen = defHandler;
         }
       }
+
+      // Disambiguate with user modal if callback registered
+      if (!chosen && this.disambiguateCallback) {
+        const chosenPluginId = await this.disambiguateCallback(
+          action,
+          enabledCandidates.map((c) => ({
+            pluginId: c.pluginId,
+            name: c.name,
+            icon: c.icon,
+            description: c.description
+          })),
+          data,
+          callerPluginId
+        );
+        if (chosenPluginId) {
+          const matched = enabledCandidates.find((h) => h.pluginId === chosenPluginId);
+          if (matched) {
+            chosen = matched;
+          }
+        }
+      }
+
+      // Fallback to the first candidate if disambiguation cancelled or returned nothing
+      if (!chosen) {
+        chosen = enabledCandidates[0];
+      }
     }
 
-    // Fallback to the first candidate if disambiguation cancelled or returned nothing
-    return enabledCandidates[0].handler(data, callerPluginId);
+    console.log(`🔍 [IntentBroker] dispatching action "${action}" from "${callerPluginId}", candidates:`, enabledCandidates.map((c) => c.pluginId));
+    console.log(`🔍 [IntentBroker] chosen candidate: "${chosen.pluginId}" (isRpc: ${Boolean(chosen.isRpc)}) for action: "${action}"`);
+
+    this.emit("intent:dispatched", {
+      action,
+      callerPluginId,
+      targetPluginId: chosen.pluginId,
+      isRpc: Boolean(chosen.isRpc),
+      data
+    });
+
+    console.log(`🔍 [IntentBroker] executing chosen handler for "${chosen.pluginId}"...`);
+    const res = await chosen.handler(data, callerPluginId);
+    console.log(`🔍 [IntentBroker] chosen handler finished for "${chosen.pluginId}" with:`, res);
+    return res;
   }
 
   emit<T = any>(event: string, data?: T, emitterPluginId?: string): void {

@@ -22,6 +22,7 @@ export interface OmniWorkspacePluginConfig {
   order?: number;
   naddr?: string;
   sourceUrl?: string;
+  displayName?: string; // Human-facing display name for dock, app tiles, and nav
   name?: string;
   description?: string;
   icon?: string;

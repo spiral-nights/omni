@@ -6,6 +6,7 @@ import { OmniShellHost } from "@omni/types";
 import feedScript from "../../../packages/plugins/feed/dist/index.js?raw";
 import relaysScript from "../../../packages/plugins/relays/dist/index.js?raw";
 import profileScript from "../../../packages/plugins/profile/dist/index.js?raw";
+import profileViewerScript from "../../../packages/plugins/profile-viewer/dist/index.js?raw";
 import checklistScript from "../../../packages/plugins/checklist/dist/index.js?raw";
 import timerScript from "../../../packages/plugins/timer/dist/index.js?raw";
 import omniRuntimeScript from "../public/omni-runtime.js?raw";
@@ -78,7 +79,8 @@ const initialPlugins: InstalledPluginEntry[] = [
   },
   {
     id: "org.omni.plugin.profile",
-    name: "Profile",
+    name: "Profile Editor",
+    displayName: "My Profile",
     description: "Decentralized Nostr profile metadata and key custody.",
     icon: "profile",
     viewport: "main",
@@ -87,9 +89,24 @@ const initialPlugins: InstalledPluginEntry[] = [
       { id: "widget", title: "User Badge Pill", path: "?view=widget" },
       { id: "settings", title: "Profile Settings", path: "?view=settings" }
     ],
-    handledIntents: ["view_profile", "edit_profile"],
+    handledIntents: ["edit_profile"],
     scriptContent: profileScript,
     sourceUrl: "local:@omni/plugin-profile",
+    enabled: true
+  },
+  {
+    id: "org.omni.plugin.profile-viewer",
+    name: "Profile Viewer",
+    displayName: "Profile",
+    description: "View decentralized Nostr user profiles and recent notes.",
+    icon: "user",
+    viewport: "main",
+    views: [
+      { id: "main", title: "Profile Viewer", path: "" }
+    ],
+    handledIntents: ["view_profile"],
+    scriptContent: profileViewerScript,
+    sourceUrl: "local:@omni/plugin-profile-viewer",
     enabled: true
   }
 ];

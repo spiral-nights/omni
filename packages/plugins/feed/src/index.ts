@@ -53,21 +53,28 @@ function getAvatarGradient(pubkey: string): string {
   return AVATAR_GRADIENTS[idx];
 }
 
+const profileCache = new Map<string, { name?: string; display_name?: string; picture?: string; nip05?: string }>();
+const pendingProfileFetches = new Set<string>();
+
 function getAuthorMeta(pubkey: string) {
-  if (!pubkey) return { name: "anonymous", handle: "@anon", initial: "?" };
-  const shortPub = `${pubkey.slice(0, 8)}...${pubkey.slice(-4)}`;
-  const initial = (pubkey[0] || "?").toUpperCase();
+  if (!pubkey) return { name: "anonymous", handle: "@anon", initial: "?", picture: "" };
+  const cached = profileCache.get(pubkey);
+  const initial = ((cached?.display_name || cached?.name || pubkey)[0] || "?").toUpperCase();
+  const name = cached?.display_name || cached?.name || `nostr:${pubkey.slice(0, 6)}`;
+  const handle = cached?.nip05 ? `@${cached.nip05}` : `@npub1${pubkey.slice(0, 6)}`;
   return {
-    name: `nostr:${pubkey.slice(0, 6)}`,
-    handle: `@npub1${pubkey.slice(0, 6)}`,
-    initial
+    name,
+    handle,
+    initial,
+    picture: cached?.picture || ""
   };
 }
 
 function formatContent(text: string): string {
   const escaped = escapeHtml(text || "");
   const urlRegex = /(https?:\/\/[^\s<]+)/g;
-  return escaped.replace(urlRegex, (url) => {
+  return escaped.replace(urlRegex, (rawUrl) => {
+    const url = rawUrl.replace(/^http:\/\//i, "https://");
     return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="feed-link">${url}</a>`;
   });
 }
@@ -220,10 +227,16 @@ function mountFeed(root: any) {
       latestTimestamp = event.created_at;
     }
 
-    const { name, handle, initial } = getAuthorMeta(event.pubkey);
+    const { name, handle, initial, picture } = getAuthorMeta(event.pubkey);
     const avatarGradient = getAvatarGradient(event.pubkey || "");
     const timeStr = event.created_at ? formatTime(event.created_at) : "just now";
     const isReply = (event.tags || []).some((t: any[]) => t[0] === "e");
+
+    let sanitizedPic = picture ? picture.trim() : "";
+    if (sanitizedPic.startsWith("http://")) sanitizedPic = sanitizedPic.replace(/^http:\/\//i, "https://");
+    const avatarInner = (sanitizedPic && (sanitizedPic.startsWith("https://") || sanitizedPic.startsWith("data:image/")))
+      ? `<img src="${escapeHtml(sanitizedPic)}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
+      : `<span>${escapeHtml(initial)}</span>`;
 
     // Deterministic counts based on note id to give authentic social feed feel
     const pseudoRand = (event.id || "").split("").reduce((acc: number, ch: string) => acc + ch.charCodeAt(0), 0);
@@ -232,17 +245,17 @@ function mountFeed(root: any) {
     const initReplies = pseudoRand % 5;
 
     const card = html<HTMLElement>`
-      <article class="feed-post note-card" data-note-id="${escapeHtml(event.id || "")}">
+      <article class="feed-post note-card" data-note-id="${escapeHtml(event.id || "")}" data-author-pubkey="${escapeHtml(event.pubkey || "")}">
         <div class="feed-post-avatar-col">
-          <div class="feed-avatar" style="background: ${avatarGradient};">
-            <span>${escapeHtml(initial)}</span>
+          <div class="feed-avatar" role="button" tabindex="0" style="background: ${avatarGradient}; cursor: pointer;" title="View profile">
+            ${avatarInner}
           </div>
         </div>
         <div class="feed-post-body">
           <div class="feed-post-header note-header">
             <div class="feed-post-author-info">
-              <strong class="feed-author-name note-author">${escapeHtml(name)}</strong>
-              <span class="feed-author-handle">${escapeHtml(handle)}</span>
+              <strong class="feed-author-name note-author" role="button" tabindex="0" style="cursor: pointer;" title="View profile">${escapeHtml(name)}</strong>
+              <span class="feed-author-handle" role="button" tabindex="0" style="cursor: pointer;" title="View profile">${escapeHtml(handle)}</span>
               <span class="feed-dot">·</span>
               <span class="feed-time note-meta">${escapeHtml(timeStr)}</span>
             </div>
@@ -325,6 +338,43 @@ function mountFeed(root: any) {
         textarea.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     });
+
+    // Profile intent trigger when clicking author avatar or name
+    const avatarEl = card.querySelector<HTMLElement>(".feed-avatar");
+    const authorNameEl = card.querySelector<HTMLElement>(".feed-author-name");
+    const authorHandleEl = card.querySelector<HTMLElement>(".feed-author-handle");
+
+    const onProfileClick = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log("🔍 [Feed Plugin] onProfileClick triggered for pubkey:", event.pubkey);
+      const omni = (window as any).omni;
+      if (omni?.intents?.dispatch && event.pubkey) {
+        console.log("🔍 [Feed Plugin] Dispatching view_profile intent with pubkey:", event.pubkey);
+        omni.intents.dispatch("view_profile", { pubkey: event.pubkey }).then((res: any) => {
+          console.log("🔍 [Feed Plugin] view_profile intent resolved with:", res);
+        }).catch((err: any) => {
+          console.error("🔍 [Feed Plugin] view_profile intent failed:", err);
+        });
+      } else {
+        console.warn("🔍 [Feed Plugin] omni.intents.dispatch not available or no event.pubkey", { omni: Boolean(omni), pubkey: event.pubkey });
+      }
+    };
+
+    avatarEl?.addEventListener("click", onProfileClick);
+    authorNameEl?.addEventListener("click", onProfileClick);
+    authorHandleEl?.addEventListener("click", onProfileClick);
+
+    // Queue author metadata lookup if not in cache
+    if (event.pubkey && !profileCache.has(event.pubkey) && !pendingProfileFetches.has(event.pubkey)) {
+      pendingProfileFetches.add(event.pubkey);
+      if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+        const subId = `prof_${event.pubkey.slice(0, 8)}`;
+        try {
+          activeWs.send(JSON.stringify(["REQ", subId, { kinds: [0], authors: [event.pubkey], limit: 1 }]));
+        } catch (_) {}
+      }
+    }
 
     if (prepend && notesList.firstChild) {
       notesList.insertBefore(card, notesList.firstChild);
@@ -442,9 +492,36 @@ function mountFeed(root: any) {
           const subId = data[1];
 
           if (type === "EVENT" && data[2]) {
+            const ev = data[2];
+            if (ev.kind === 0) {
+              try {
+                const parsed = JSON.parse(ev.content);
+                profileCache.set(ev.pubkey, parsed);
+                const cards = notesList.querySelectorAll(`[data-author-pubkey="${ev.pubkey}"]`);
+                for (const c of Array.from(cards)) {
+                  const nEl = c.querySelector<HTMLElement>(".feed-author-name");
+                  const hEl = c.querySelector<HTMLElement>(".feed-author-handle");
+                  const aEl = c.querySelector<HTMLElement>(".feed-avatar");
+                  if (nEl && (parsed.display_name || parsed.name)) {
+                    nEl.textContent = parsed.display_name || parsed.name;
+                  }
+                  if (hEl && parsed.nip05) {
+                    hEl.textContent = `@${parsed.nip05}`;
+                  }
+                  if (aEl && parsed.picture) {
+                    let pic = String(parsed.picture).trim();
+                    if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
+                    if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
+                      aEl.innerHTML = `<img src="${escapeHtml(pic)}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                    }
+                  }
+                }
+              } catch (_) {}
+              return;
+            }
             clearTimeout(initialLoadTimeout);
             const isRefresh = subId?.startsWith("refresh-");
-            handleIncomingEvent(data[2], isRefresh);
+            handleIncomingEvent(ev, isRefresh);
           } else if (type === "EOSE") {
             if (subId === "feed-initial") {
               clearTimeout(initialLoadTimeout);

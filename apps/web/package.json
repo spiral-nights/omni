@@ -13,6 +13,7 @@
     "@omni/plugin-shell": "workspace:*",
     "@omni/plugin-checklist": "workspace:*",
     "@omni/plugin-timer": "workspace:*",
+    "@omni/plugin-profile-viewer": "workspace:*",
     "@remote-dom/core": "^1.12.0"
   },
   "devDependencies": {

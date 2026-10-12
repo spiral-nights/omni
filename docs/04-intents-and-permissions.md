@@ -165,6 +165,15 @@ If more than one active handler is available and no default is configured:
 - Users select their preferred application from a list displaying geometric monochrome icons and titles.
 - Checking **"Always use this app"** saves the preference to `defaultIntents[action]` in the user's NIP-78 workspace settings (`kind: 30078`).
 
+### 5.3 Automatic Cross-App Navigation & Sandbox Delivery
+When an intent is resolved and dispatched (e.g. clicking an author's name or avatar in `@omni/plugin-feed` fires `view_profile` with `{ pubkey }`):
+1. `IntentBroker` matches the target application (e.g. `@omni/plugin-profile-viewer`) and emits `intent:dispatched`.
+2. The active shell (`OmniShell` or `PanoramaShell`) listens for `intent:dispatched` and automatically transitions viewports:
+   - In **Omni Classic**, invokes `showPage(targetPluginId)`.
+   - In **Panorama Hub**, invokes `openApp(targetPluginId)`.
+3. The host notifies the target sandbox over the RPC channel via `intent.invoke` with `{ action, data }`.
+4. If the target application was not already mounted, the host saves the active payload in local state so the nsite loads the target entity immediately upon initial boot.
+
 ---
 
 ## 6. Granular Kind-Level Publishing ACL

@@ -70,6 +70,16 @@ export class SandboxInstance {
     }
   }
 
+  postRpcNotification(method: string, params?: any): void {
+    if (this.channel2 && this.channel2.port1) {
+      this.channel2.port1.postMessage({
+        jsonrpc: "2.0",
+        method,
+        params
+      });
+    }
+  }
+
   async mount(): Promise<void> {
     if (typeof document === "undefined") return;
 
@@ -128,6 +138,12 @@ export class SandboxInstance {
       }
 
       if (slotContainer) {
+        // Clean up any stale existing containers for this component ID in the slot
+        const existing = slotContainer.querySelector(`.omni-comp-${comp.id}`);
+        if (existing) {
+          existing.remove();
+        }
+
         const compContainer = document.createElement("div");
         compContainer.className = `omni-component-slot omni-comp-${comp.id}`;
         slotContainer.appendChild(compContainer);
@@ -157,6 +173,11 @@ export class SandboxInstance {
            this.options.slotContainers.values().next().value);
 
       if (fallbackContainer) {
+        const existingFallback = fallbackContainer.querySelector(".omni-comp-fallback");
+        if (existingFallback) {
+          existingFallback.remove();
+        }
+
         const compContainer = document.createElement("div");
         compContainer.className = `omni-component-slot omni-comp-fallback`;
         fallbackContainer.appendChild(compContainer);
@@ -224,33 +245,70 @@ export class SandboxInstance {
     const viewIdVal = this.options.viewId || "main";
 
     const routeInjectionScript = `
-    // Transparent Sub-View & Route Injection for Pure nsites
+    // Transparent Sub-View & Route Injection for Pure nsites using standard Web APIs
+    var __search = "";
+    var __hash = "";
+    function __parseRoute(routeStr) {
+      if (!routeStr) return;
+      if (routeStr.includes("?")) {
+        var qIdx = routeStr.indexOf("?");
+        var hIdx = routeStr.indexOf("#", qIdx);
+        __search = hIdx !== -1 ? routeStr.slice(qIdx, hIdx) : routeStr.slice(qIdx);
+      }
+      if (routeStr.includes("#")) {
+        __hash = routeStr.slice(routeStr.indexOf("#"));
+      }
+      if (!__search && !__hash) {
+        if (routeStr.startsWith("?")) __search = routeStr;
+        else if (routeStr.startsWith("#")) __hash = routeStr;
+      }
+    }
+
     try {
       window.__omniPendingInit = null;
       window.addEventListener("message", function(e) {
         if (e.data && e.data.type === "omni:init") {
           window.__omniPendingInit = e;
+          if (e.data.payload && e.data.payload.route) {
+            __parseRoute(e.data.payload.route);
+            try {
+              window.dispatchEvent(new HashChangeEvent("hashchange"));
+            } catch (_) {}
+            try {
+              window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
+            } catch (_) {}
+          }
         }
       });
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: "omni:guest-ready", pluginId: ${JSON.stringify(this.manifest.id)} }, "*");
       }
     } catch (_) {}
+
     try {
-      var __omniRoute = ${JSON.stringify(routeVal)};
-      if (__omniRoute) {
-        window.__OMNI_ROUTE__ = __omniRoute;
-        if (__omniRoute.startsWith("#")) {
-          window.location.hash = __omniRoute;
-        } else if (__omniRoute.startsWith("?")) {
-          window.location.hash = __omniRoute.replace("?", "#");
-        }
+      var __initialRoute = ${JSON.stringify(routeVal)};
+      if (__initialRoute) {
+        __parseRoute(__initialRoute);
       }
+      try {
+        Object.defineProperty(window.location, "search", {
+          get: function() { return __search; },
+          configurable: true
+        });
+        Object.defineProperty(window.location, "hash", {
+          get: function() { return __hash; },
+          configurable: true
+        });
+        Object.defineProperty(window.location, "href", {
+          get: function() { return "about:srcdoc" + __search + __hash; },
+          configurable: true
+        });
+      } catch (_) {}
     } catch (_) {}
     `;
 
     if (isHtmlDoc) {
-      const injectedHead = `\n  <base href="${baseHref}">\n  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  <script>\n    window.addEventListener("error", function(e) {\n      console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);\n    });\n    ${routeInjectionScript}\n  </script>\n  <script>\n    ${runtimeCode}\n  </script>\n`;
+      const injectedHead = `\n  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  <script>\n    window.addEventListener("error", function(e) {\n      console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);\n    });\n    ${routeInjectionScript}\n  </script>\n  <script>\n    ${runtimeCode}\n  </script>\n`;
 
       if (/<head\b[^>]*>/i.test(pluginCode)) {
         this.iframe.srcdoc = pluginCode.replace(/<head\b[^>]*>/i, (match) => `${match}${injectedHead}`);
@@ -263,7 +321,6 @@ export class SandboxInstance {
       this.iframe.srcdoc = `<!DOCTYPE html>
 <html>
 <head>
-  <base href="${baseHref}">
   <meta http-equiv="Content-Security-Policy" content="${csp}">
   <script>
     window.addEventListener("error", function(e) {

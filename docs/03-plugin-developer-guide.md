@@ -184,7 +184,13 @@ if (view === "settings") {
 ```
 *Both `localStorage` and `indexedDB` are automatically shared across all routes of your nsite because they run within the same origin sandbox partition.*
 
-### 4.4 Viewport & Route Assignment in Omni
+### 4.4 App Names & Display Names (`displayName`)
+Applications can define an internal or formal `name` alongside an optional, concise `displayName`:
+- **`name`**: The formal app title used in Settings, app management, and metadata inspectors (e.g. `"Profile Editor"` or `"Profile Viewer"`).
+- **`displayName`**: The concise label displayed on navigation docks, live tiles, and mobile launchers (e.g. `"My Profile"` for the editor and `"Profile"` for the viewer).
+If `displayName` is omitted, Omni falls back cleanly to `name`.
+
+### 4.5 Viewport & Route Assignment in Omni
 When a user assigns your plugin to a viewport in Omni:
 1. They select the **Target Viewport** (e.g. *Full-Page App*, *Widgets Dashboard*, *Dock Shortcut*, or *Header Action*).
 2. They select the **Assigned Route** (e.g. `Main App (/)` or `Countdown Card (/?view=widget)`).

@@ -304,4 +304,268 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
       expect(kernel.intentBroker.isPluginIntentEnabled("org.omni.plugin.feed", "view_note")).toBe(false);
     });
   });
+
+  describe("5. Display Name vs Actual Name Resolution", () => {
+    it("renders displayName on OmniShell dock launchers and preserves it in workspace export", () => {
+      const plugins: InstalledPluginEntry[] = [
+        {
+          id: "org.omni.plugin.profile",
+          name: "Profile Editor",
+          displayName: "My Profile",
+          version: "1.0.0",
+          scriptContent: "console.log('profile editor');",
+          sourceUrl: "local:@omni/plugin-profile",
+          enabled: true,
+          viewport: "main"
+        },
+        {
+          id: "org.omni.plugin.profile-viewer",
+          name: "Profile Viewer",
+          displayName: "Profile",
+          version: "1.0.0",
+          scriptContent: "console.log('profile viewer');",
+          sourceUrl: "local:@omni/plugin-profile-viewer",
+          enabled: true,
+          viewport: "main"
+        }
+      ];
+
+      const shell = new OmniShell({ root, kernel, installedPlugins: plugins });
+      shell.mount();
+
+      const metaEditor = shell.getPluginMeta(plugins[0]);
+      expect(metaEditor.name).toBe("Profile Editor");
+      expect(metaEditor.displayName).toBe("My Profile");
+
+      const metaViewer = shell.getPluginMeta(plugins[1]);
+      expect(metaViewer.name).toBe("Profile Viewer");
+      expect(metaViewer.displayName).toBe("Profile");
+
+      // Verify dock items display the distinct displayNames
+      const dockItems = Array.from(root.querySelectorAll<HTMLElement>(".dock-item"));
+      const editorDock = dockItems.find((el) => el.textContent?.includes("My Profile"));
+      const viewerDock = dockItems.find((el) => el.textContent?.includes("Profile"));
+
+      expect(editorDock).toBeDefined();
+      expect(viewerDock).toBeDefined();
+
+      // Verify export preserves displayName
+      const exported = shell.exportWorkspaceState();
+      expect(exported.plugins.find((p) => p.id === "org.omni.plugin.profile")?.displayName).toBe("My Profile");
+      expect(exported.plugins.find((p) => p.id === "org.omni.plugin.profile-viewer")?.displayName).toBe("Profile");
+    });
+
+    it("renders displayName on PanoramaShell and round-trips through workspace", () => {
+      const plugins: InstalledPluginEntry[] = [
+        {
+          id: "org.omni.plugin.profile",
+          name: "Profile Editor",
+          displayName: "My Profile",
+          version: "1.0.0",
+          scriptContent: "console.log('profile editor');",
+          sourceUrl: "local:@omni/plugin-profile",
+          enabled: true,
+          viewport: "main"
+        }
+      ];
+
+      const panorama = new PanoramaShell({ root, kernel, installedPlugins: plugins });
+      panorama.mount();
+
+      const meta = panorama.getPluginMeta(plugins[0]);
+      expect(meta.displayName).toBe("My Profile");
+
+      const exported = panorama.exportWorkspaceState();
+      expect(exported.plugins[0].displayName).toBe("My Profile");
+    });
+  });
+
+  describe("6. Profile Viewer Intent Dispatching & Navigation", () => {
+    it("automatically opens profile viewer when view_profile intent is dispatched", async () => {
+      const plugins: InstalledPluginEntry[] = [
+        {
+          id: "org.omni.plugin.feed",
+          name: "Feed",
+          version: "1.0.0",
+          handledIntents: ["create_note"],
+          scriptContent: "console.log('feed');",
+          sourceUrl: "local:@omni/plugin-feed",
+          enabled: true,
+          viewport: "main"
+        },
+        {
+          id: "org.omni.plugin.profile-viewer",
+          name: "Profile Viewer",
+          displayName: "Profile",
+          version: "1.0.0",
+          handledIntents: ["view_profile"],
+          scriptContent: "console.log('viewer');",
+          sourceUrl: "local:@omni/plugin-profile-viewer",
+          enabled: true,
+          viewport: "main"
+        }
+      ];
+
+      const shell = new OmniShell({ root, kernel, installedPlugins: plugins });
+      shell.mount();
+
+      // Dispatch view_profile intent
+      const testPubkey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+      await kernel.intentBroker.dispatch("org.omni.plugin.feed", "view_profile", { pubkey: testPubkey });
+
+      // Verify active page is now profile-viewer and target active profile key is saved in storage
+      expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
+      expect(localStorage.getItem("omni_active_profile_pubkey")).toBe(testPubkey);
+    });
+
+    it("PanoramaShell opens profile viewer when view_profile intent is dispatched", async () => {
+      const plugins: InstalledPluginEntry[] = [
+        {
+          id: "org.omni.plugin.feed",
+          name: "Feed",
+          version: "1.0.0",
+          handledIntents: ["create_note"],
+          scriptContent: "console.log('feed');",
+          sourceUrl: "local:@omni/plugin-feed",
+          enabled: true,
+          viewport: "main"
+        },
+        {
+          id: "org.omni.plugin.profile-viewer",
+          name: "Profile Viewer",
+          displayName: "Profile",
+          version: "1.0.0",
+          handledIntents: ["view_profile"],
+          scriptContent: "console.log('viewer');",
+          sourceUrl: "local:@omni/plugin-profile-viewer",
+          enabled: true,
+          viewport: "main"
+        }
+      ];
+
+      const panorama = new PanoramaShell({ root, kernel, installedPlugins: plugins });
+      panorama.mount();
+
+      const testPubkey = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+      await kernel.intentBroker.dispatch("org.omni.plugin.feed", "view_profile", { pubkey: testPubkey });
+
+      expect(localStorage.getItem("omni_active_profile_pubkey")).toBe(testPubkey);
+      expect(panorama.getActivePageId() === "org.omni.plugin.profile-viewer" || panorama.getCurrentOpenedAppId() === "org.omni.plugin.profile-viewer").toBe(true);
+    });
+
+    it("synthesizes manifests with intents permissions and grants ACL checks", async () => {
+      const shell = new OmniShell({ root, kernel, installedPlugins: mockPlugins });
+      const manifest = shell.ensurePluginManifest(mockPlugins[0]);
+      expect(manifest.permissions.intents).toBeDefined();
+      expect(manifest.permissions.intents.call).toContain("*");
+
+      const panorama = new PanoramaShell({ root, kernel, installedPlugins: mockPlugins });
+      const pManifest = panorama.ensurePluginManifest(mockPlugins[0]);
+      expect(pManifest.permissions.intents).toBeDefined();
+      expect(pManifest.permissions.intents.call).toContain("*");
+    });
+
+    it("does not create duplicate component slots or instances when view_profile is dispatched repeatedly", async () => {
+      const plugins: InstalledPluginEntry[] = [
+        {
+          id: "org.omni.plugin.feed",
+          name: "Feed",
+          version: "1.0.0",
+          handledIntents: ["create_note"],
+          scriptContent: "console.log('feed');",
+          sourceUrl: "local:@omni/plugin-feed",
+          enabled: true,
+          viewport: "main"
+        },
+        {
+          id: "org.omni.plugin.profile-viewer",
+          name: "Profile Viewer",
+          displayName: "Profile",
+          version: "1.0.0",
+          handledIntents: ["view_profile"],
+          scriptContent: "console.log('viewer');",
+          sourceUrl: "local:@omni/plugin-profile-viewer",
+          enabled: true,
+          viewport: "" // Unassigned
+        }
+      ];
+
+      const shell = new OmniShell({ root, kernel, installedPlugins: plugins });
+      shell.mount();
+
+      const testPubkey = "1111111111111111111111111111111111111111111111111111111111111111";
+
+      // 1st dispatch
+      await kernel.intentBroker.dispatch("org.omni.plugin.feed", "view_profile", { pubkey: testPubkey });
+      expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
+
+      // Go back to feed
+      shell.showPage("feed");
+      expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+
+      // 2nd dispatch for same or different profile
+      await kernel.intentBroker.dispatch("org.omni.plugin.feed", "view_profile", { pubkey: testPubkey });
+      expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
+
+      // Verify slot container has only ONE component container for profile viewer, never duplicates
+      const slotContainer = document.getElementById("slot-main-org-omni-plugin-profile-viewer");
+      expect(slotContainer).not.toBeNull();
+      const compSlots = slotContainer?.querySelectorAll(".omni-component-slot");
+      expect(compSlots?.length).toBe(1);
+    });
+
+    it("PanoramaShell does not duplicate overlay instances when view_profile is dispatched repeatedly", async () => {
+      const plugins: InstalledPluginEntry[] = [
+        {
+          id: "org.omni.plugin.feed",
+          name: "Feed",
+          version: "1.0.0",
+          handledIntents: ["create_note"],
+          scriptContent: "console.log('feed');",
+          sourceUrl: "local:@omni/plugin-feed",
+          enabled: true,
+          viewport: "main"
+        },
+        {
+          id: "org.omni.plugin.profile-viewer",
+          name: "Profile Viewer",
+          displayName: "Profile",
+          version: "1.0.0",
+          handledIntents: ["view_profile"],
+          scriptContent: "console.log('viewer');",
+          sourceUrl: "local:@omni/plugin-profile-viewer",
+          enabled: true,
+          viewport: "" // Unassigned
+        }
+      ];
+
+      const panorama = new PanoramaShell({ root, kernel, installedPlugins: plugins });
+      panorama.mount();
+
+      const testPubkey = "1111111111111111111111111111111111111111111111111111111111111111";
+
+      // 1st dispatch
+      await kernel.intentBroker.dispatch("org.omni.plugin.feed", "view_profile", { pubkey: testPubkey });
+      await new Promise((r) => setTimeout(r, 20));
+      expect(panorama.getCurrentOpenedAppId()).toBe("org.omni.plugin.profile-viewer");
+
+      // Go back to feed
+      await panorama.showPage("feed");
+      expect(panorama.getCurrentOpenedAppId()).toBeNull();
+
+      // 2nd dispatch
+      await kernel.intentBroker.dispatch("org.omni.plugin.feed", "view_profile", { pubkey: testPubkey });
+      await new Promise((r) => setTimeout(r, 20));
+      expect(panorama.getCurrentOpenedAppId()).toBe("org.omni.plugin.profile-viewer");
+
+      // Check overlay slot
+      const overlaySlot = document.getElementById("panorama-slot-overlay-org-omni-plugin-profile-viewer");
+      expect(overlaySlot).not.toBeNull();
+      // Ensure only 1 sandbox was registered for the overlay
+      const sandboxes = Array.from((kernel as any).sandboxes.keys()).filter((k: any) =>
+        k.startsWith("org.omni.plugin.profile-viewer")
+      );
+      expect(sandboxes.length).toBe(1);
+    });
+  });
 });

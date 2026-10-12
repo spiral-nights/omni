@@ -17,6 +17,7 @@
   const wsActiveSubscriptions = new Map();
   // Intent handlers
   const intentHandlers = new Map();
+  const pendingIntentInvocations = new Map();
   // Component registrations and instances
   const registeredComponents = new Map();
   const componentContexts = new Map();
@@ -189,6 +190,32 @@
             try { ws.onmessage(ev); } catch (e) { console.error(e); }
           }
           ws.dispatchEvent(ev);
+        }
+      } else if (msg.method === "intent.invoke") {
+        const action = msg.params && msg.params.action;
+        const data = msg.params && msg.params.data;
+        console.log(`🔍 [OmniRuntime] intent.invoke received: action="${action}", data=`, data, "hasHandler:", intentHandlers.has(action));
+        const handler = intentHandlers.get(action);
+        if (handler) {
+          try {
+            console.log(`🔍 [OmniRuntime] Executing registered handler for action="${action}"`);
+            handler(data);
+          } catch (e) {
+            console.error("Error executing intent handler:", e);
+          }
+        } else {
+          console.log(`🔍 [OmniRuntime] No direct handler yet for action="${action}". Dispatching omni:intent and queueing.`);
+          try {
+            if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+              window.dispatchEvent(new CustomEvent("omni:intent", { detail: { action, data } }));
+            }
+          } catch (_) {}
+          if (action) {
+            if (!pendingIntentInvocations.has(action)) {
+              pendingIntentInvocations.set(action, []);
+            }
+            pendingIntentInvocations.get(action).push(data);
+          }
         }
       }
     };
@@ -804,6 +831,19 @@
     const nativeToRemote = new WeakMap();
     const remoteIdToNative = new Map();
 
+    // Ensure any user interaction listener registered on any native element
+    // (avatars, author handles, cards, buttons) is projected to host Remote DOM
+    const origAddEventListener = Element.prototype.addEventListener;
+    Element.prototype.addEventListener = function(type, listener, options) {
+      if (!this.__omniListeners) this.__omniListeners = new Set();
+      this.__omniListeners.add(type);
+      const remoteEl = nativeToRemote.get(this);
+      if (remoteEl) {
+        remoteEl.addEventListener(type, () => {});
+      }
+      return origAddEventListener.call(this, type, listener, options);
+    };
+
     function mirrorNode(nativeNode) {
       if (!nativeNode) return null;
       if (nativeToRemote.has(nativeNode)) return nativeToRemote.get(nativeNode);
@@ -838,6 +878,12 @@
           remoteEl.addEventListener("click", () => {});
           remoteEl.addEventListener("input", () => {});
           remoteEl.addEventListener("change", () => {});
+        }
+
+        if (nativeNode.__omniListeners) {
+          for (const evType of nativeNode.__omniListeners) {
+            remoteEl.addEventListener(evType, () => {});
+          }
         }
 
         for (const child of nativeNode.childNodes) {
@@ -1067,7 +1113,20 @@
         return callRpc("intent.dispatch", { action, data });
       },
       handle(action, handler) {
+        console.log(`🔍 [OmniRuntime] omni.intents.handle registered for action="${action}"`);
         intentHandlers.set(action, handler);
+        const pending = pendingIntentInvocations.get(action);
+        if (pending && pending.length > 0) {
+          console.log(`🔍 [OmniRuntime] Draining ${pending.length} pending invocations for action="${action}"`);
+          pendingIntentInvocations.delete(action);
+          for (const d of pending) {
+            try {
+              handler(d);
+            } catch (e) {
+              console.error("Error executing pending intent handler:", e);
+            }
+          }
+        }
         initPromise.then(() => {
           callRpc("intent.handle", { action });
         });

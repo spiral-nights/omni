@@ -198,6 +198,7 @@ body.theme-panorama,
 
 /* Full page vertical scroll effect: prevent slots from clipping or trapping inner scrollbars */
 .panorama-section .omni-slot,
+.panorama-slot-main,
 .panorama-feed-slot,
 .panorama-main-viewport-slot {
   overflow: visible !important;

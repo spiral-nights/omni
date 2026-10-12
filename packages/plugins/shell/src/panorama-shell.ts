@@ -31,6 +31,7 @@ export class PanoramaShell implements OmniShellHost {
   public readonly layoutManager: LayoutManager;
   private slotContainers: Map<string, Element> = new Map();
   private expandedPluginId: string | null = null;
+  private pendingOverlayMounts: Set<string> = new Set();
 
   // NIP-78 Workspace sync state
   public workspaceSyncStatus: "synced" | "unsynced" | "syncing" = "synced";
@@ -69,6 +70,59 @@ export class PanoramaShell implements OmniShellHost {
     } else {
       this.installedPlugins = [];
     }
+    this.registerHandledIntents();
+    this.setupIntentListener();
+  }
+
+  private setupIntentListener(): void {
+    if (!this.kernel?.intentBroker) return;
+    this.kernel.intentBroker.on("intent:dispatched", async (event: any) => {
+      console.log("🔍 [PanoramaShell] intent:dispatched received:", event);
+      const targetPluginId = event?.targetPluginId;
+      if (!targetPluginId) return;
+
+      if (event?.action === "view_profile" && event?.data?.pubkey) {
+        try {
+          localStorage.setItem("omni_active_profile_pubkey", event.data.pubkey);
+        } catch (_) {}
+      }
+
+      console.log(`🔍 [PanoramaShell] Calling showPage("${targetPluginId}")`);
+      await this.showPage(targetPluginId);
+      if (!event?.isRpc) {
+        console.log(`🔍 [PanoramaShell] Target is non-RPC fallback. Notifying via notifyPlugin("${targetPluginId}")`);
+        this.kernel.notifyPlugin(targetPluginId, "intent.invoke", {
+          action: event.action,
+          data: event.data
+        });
+      } else {
+        console.log(`🔍 [PanoramaShell] Target is RPC handler. Skipping notifyPlugin.`);
+      }
+    });
+  }
+
+  private registerHandledIntents(): void {
+    if (!this.kernel?.intentBroker) return;
+    for (const p of this.installedPlugins) {
+      if (p.handledIntents) {
+        for (const action of p.handledIntents) {
+          this.kernel.intentBroker.registerHandler(
+            p.id,
+            action,
+            async (data) => {
+              if (action === "view_profile" && data?.pubkey) {
+                try {
+                  localStorage.setItem("omni_active_profile_pubkey", data.pubkey);
+                } catch (_) {}
+              }
+              // Page activation and notification are handled centrally via intent:dispatched
+              return { handled: true };
+            },
+            { name: p.displayName || p.name, description: p.description }
+          );
+        }
+      }
+    }
   }
 
   // --- Meta & Manifest Helpers (100% compatible with OmniShell) ---
@@ -76,15 +130,18 @@ export class PanoramaShell implements OmniShellHost {
   public getPluginMeta(p: InstalledPluginEntry): {
     id: string;
     name: string;
+    displayName: string;
     version: string;
     description: string;
     icon: string;
     viewport: string;
   } {
+    const displayName = p.displayName || p.manifest?.displayName || p.name || p.manifest?.name || p.id;
     if (Array.isArray(p.placements) && p.placements.length === 0) {
       return {
         id: p.id,
         name: p.name || p.manifest?.name || p.id,
+        displayName,
         version: p.version || p.manifest?.version || "1.0.0",
         description: p.description || p.manifest?.description || "",
         icon: p.icon || p.manifest?.icon || "widgets",
@@ -96,6 +153,7 @@ export class PanoramaShell implements OmniShellHost {
     return {
       id: p.id,
       name: p.name || p.manifest?.name || p.id,
+      displayName,
       version: p.version || p.manifest?.version || "1.0.0",
       description: p.description || p.manifest?.description || "",
       icon: p.icon || p.manifest?.icon || (p.viewport === "main" ? "feed" : "widgets"),
@@ -137,6 +195,7 @@ export class PanoramaShell implements OmniShellHost {
       permissions: {
         nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true },
         storage: { quotaMb: 5 },
+        intents: { call: ["*"], handle: ["*"] },
         relays: p.id === "org.omni.plugin.relays" ? { manage: true, read: true } : undefined
       }
     };
@@ -145,6 +204,9 @@ export class PanoramaShell implements OmniShellHost {
   public getPluginPlacements(p: InstalledPluginEntry): PluginPlacement[] {
     if (Array.isArray(p.placements)) {
       return p.placements;
+    }
+    if (p.viewport === "") {
+      return [];
     }
     const vp = p.viewport || (p.manifest?.components?.[0]?.slot) || "main";
     return [
@@ -402,6 +464,7 @@ export class PanoramaShell implements OmniShellHost {
               if (item.viewport) plugin.viewport = item.viewport;
               if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
               if (typeof item.pinned === "boolean") plugin.pinned = item.pinned;
+              if (item.displayName !== undefined) plugin.displayName = item.displayName;
               if (item.relays !== undefined) {
                 plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
               }
@@ -447,6 +510,7 @@ export class PanoramaShell implements OmniShellHost {
           placements,
           enabled: p.enabled,
           name: meta.name,
+          displayName: p.displayName || meta.displayName,
           description: meta.description,
           icon: meta.icon,
           naddr: p.naddr,
@@ -474,6 +538,7 @@ export class PanoramaShell implements OmniShellHost {
       if (plugin) {
         if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
         if (typeof item.pinned === "boolean") plugin.pinned = item.pinned;
+        if (item.displayName !== undefined) plugin.displayName = item.displayName;
         if (item.relays !== undefined) plugin.relays = item.relays;
         if (item.handledIntents !== undefined) plugin.handledIntents = item.handledIntents;
         if (item.disabledIntents !== undefined) {
@@ -1561,10 +1626,14 @@ export class PanoramaShell implements OmniShellHost {
 
   public async openApp(pluginId: string): Promise<void> {
     const plugin = this.installedPlugins.find((p) => p.id === pluginId);
-    if (!plugin) return;
+    if (!plugin) {
+      console.warn(`🔍 [PanoramaShell.openApp] plugin not found: "${pluginId}"`);
+      return;
+    }
 
     this.currentOpenedAppId = pluginId;
     const meta = this.getPluginMeta(plugin);
+    console.log(`🔍 [PanoramaShell.openApp] opening app "${pluginId}" (${meta.name})`);
     const titleEl = document.getElementById("panorama-overlay-title");
     if (titleEl) titleEl.textContent = meta.name;
 
@@ -1600,8 +1669,19 @@ export class PanoramaShell implements OmniShellHost {
 
     // 3. Ensure the full app view is mounted into the overlay slot container
     const overlayInstanceKey = `${plugin.id}::overlay`;
-    if (!this.kernel.getSandbox(overlayInstanceKey)) {
+    const placements = this.getPluginPlacements(plugin);
+    const hasRunningInstance =
+      Boolean(this.kernel.getSandbox(overlayInstanceKey)) ||
+      Boolean(this.kernel.getSandbox(plugin.id)) ||
+      placements.some((pl) => Boolean(this.kernel.getSandbox(`${plugin.id}::${pl.id}`)));
+
+    console.log(`🔍 [PanoramaShell.openApp] hasRunningInstance: ${hasRunningInstance} for "${pluginId}"`);
+
+    if (!hasRunningInstance && !this.pendingOverlayMounts.has(overlayInstanceKey)) {
+      console.log(`🔍 [PanoramaShell.openApp] Mounting fresh overlay sandbox "${overlayInstanceKey}"...`);
+      this.pendingOverlayMounts.add(overlayInstanceKey);
       try {
+        slotEl.innerHTML = "";
         const synthManifest = this.ensurePluginManifest(plugin);
         const overlayManifest = {
           ...synthManifest,
@@ -1625,13 +1705,14 @@ export class PanoramaShell implements OmniShellHost {
           }
         }
 
+        const activePubkey = localStorage.getItem("omni_active_profile_pubkey") || "";
         await this.kernel.registerPlugin(
           overlayManifest,
           plugin.htmlContent || plugin.scriptContent,
           customSlotContainers,
           {
             instanceId: overlayInstanceKey,
-            route: "",
+            route: (plugin.id === "org.omni.plugin.profile-viewer" && activePubkey) ? `?pubkey=${activePubkey}` : "",
             viewId: "main",
             targetSlot: "main",
             relays: plugin.relays
@@ -1639,6 +1720,8 @@ export class PanoramaShell implements OmniShellHost {
         );
       } catch (err) {
         console.error(`Failed to mount overlay app for ${plugin.id}:`, err);
+      } finally {
+        this.pendingOverlayMounts.delete(overlayInstanceKey);
       }
     }
   }
@@ -1652,6 +1735,10 @@ export class PanoramaShell implements OmniShellHost {
       this.fullAppOverlay.classList.remove("open");
       this.fullAppOverlay.style.display = "none";
     }
+  }
+
+  public getCurrentOpenedAppId(): string | null {
+    return this.currentOpenedAppId;
   }
 
   public showPivot(pivot: PanoramaPivot): void {
@@ -1695,7 +1782,7 @@ export class PanoramaShell implements OmniShellHost {
     }
   }
 
-  public showPage(page: string): void {
+  public async showPage(page: string): Promise<void> {
     if (page === "apps") {
       this.closeApp();
       this.showPivot("apps");
@@ -1713,8 +1800,17 @@ export class PanoramaShell implements OmniShellHost {
       if (section) {
         this.closeApp();
         this.showPivot(page);
+        const plugin = this.installedPlugins.find(
+          (p) => p.id === page || p.id === `org.omni.plugin.${page}`
+        );
+        if (plugin && plugin.enabled) {
+          const isMounted = Boolean(this.kernel.getSandbox(plugin.id));
+          if (!isMounted) {
+            await this.mountPlugin(plugin);
+          }
+        }
       } else {
-        this.openApp(page);
+        await this.openApp(page);
       }
     }
   }

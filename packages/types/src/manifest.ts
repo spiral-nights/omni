@@ -77,6 +77,7 @@ export const OmniManifestSchema = z.object({
   $schema: z.string().optional(),
   id: z.string().regex(/^[a-zA-Z0-9_.-]+$/),
   name: z.string().min(1),
+  displayName: z.string().optional(),
   version: z.string().regex(/^\d+\.\d+\.\d+/),
   description: z.string().optional(),
   author: AuthorSchema.optional(),

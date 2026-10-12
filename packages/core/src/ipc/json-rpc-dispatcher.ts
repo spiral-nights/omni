@@ -326,6 +326,26 @@ export class JsonRpcDispatcher {
         return { success: true };
       }
 
+      case "intent.handle": {
+        const action = params?.action;
+        if (!action) throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing action" };
+        this.ctx.intentBroker.registerHandler(
+          this.ctx.pluginId,
+          action,
+          async (data) => {
+            const notification: JsonRpcNotification = {
+              jsonrpc: "2.0",
+              method: "intent.invoke",
+              params: { action, data }
+            };
+            this.ctx.port.postMessage(notification);
+            return { handled: true };
+          },
+          { name: this.ctx.manifest?.name, description: this.ctx.manifest?.description, isRpc: true }
+        );
+        return { success: true };
+      }
+
       // 7b. Transparent Cross-App Protocol Link & Intent Interception (NIP-21, Lightning, Cashu)
       case "kernel.handleUri": {
         const uri = params?.uri;
