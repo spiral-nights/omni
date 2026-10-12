@@ -2,7 +2,15 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import "fake-indexeddb/auto";
 import { OmniKernel } from "@omni/core";
-import { OmniShell, PanoramaShell, InstalledPluginEntry } from "../src/index.js";
+import {
+  OmniShell,
+  PanoramaShell,
+  InstalledPluginEntry,
+  shellRegistry,
+  OMNI_SHELL_STYLE_ELEMENT_ID,
+  CLASSIC_SHELL_CSS,
+  PANORAMA_SHELL_CSS
+} from "../src/index.js";
 
 describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
   let root: HTMLElement;
@@ -1367,6 +1375,107 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
       timerDockBtn = classicRoot.querySelector(".dock-item[data-plugin-id='org.omni.plugin.timer']");
       expect(timerDockBtn).toBeTruthy();
+    });
+  });
+
+  describe("Decoupled Shell Styling & Dynamic Shell Registry", () => {
+    it("lists default built-in shells (classic and panorama)", () => {
+      const shells = shellRegistry.list();
+      expect(shells.length).toBeGreaterThanOrEqual(2);
+      expect(shells.some((s) => s.id === "classic")).toBe(true);
+      expect(shells.some((s) => s.id === "panorama")).toBe(true);
+    });
+
+    it("registers and creates a custom user-installed shell", () => {
+      const customShellFactory = {
+        id: "minimalist",
+        name: "Minimalist Shell",
+        description: "An ultra-minimalist terminal-style shell",
+        create: (options: any) => {
+          return new OmniShell(options);
+        }
+      };
+      shellRegistry.register(customShellFactory);
+      expect(shellRegistry.get("minimalist")?.name).toBe("Minimalist Shell");
+      expect(shellRegistry.list().some((s) => s.id === "minimalist")).toBe(true);
+
+      const testRoot = document.createElement("div");
+      const testKernel = new OmniKernel({ bootstrapRelays: [] });
+      const created = shellRegistry.create("minimalist", {
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: []
+      });
+      expect(created).toBeInstanceOf(OmniShell);
+
+      // Clean up
+      shellRegistry.unregister("minimalist");
+      expect(shellRegistry.get("minimalist")).toBeUndefined();
+    });
+
+    it("injects classic stylesheet upon OmniShell mount and removes it on destroy", () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ bootstrapRelays: [] });
+      const testShell = new OmniShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: []
+      });
+
+      testShell.mount();
+      const styleEl = document.getElementById(OMNI_SHELL_STYLE_ELEMENT_ID);
+      expect(styleEl).toBeTruthy();
+      expect(styleEl?.textContent).toContain("--omni-bg-canvas: #141312");
+      expect(document.documentElement.classList.contains("theme-panorama")).toBe(false);
+
+      testShell.destroy();
+      expect(document.getElementById(OMNI_SHELL_STYLE_ELEMENT_ID)).toBeNull();
+      testRoot.remove();
+    });
+
+    it("injects panorama stylesheet upon PanoramaShell mount and removes it on destroy", () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ bootstrapRelays: [] });
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: []
+      });
+
+      testShell.mount();
+      const styleEl = document.getElementById(OMNI_SHELL_STYLE_ELEMENT_ID);
+      expect(styleEl).toBeTruthy();
+      expect(styleEl?.textContent).toContain("--omni-bg-canvas: #000000");
+      expect(document.documentElement.classList.contains("theme-panorama")).toBe(true);
+
+      testShell.destroy();
+      expect(document.getElementById(OMNI_SHELL_STYLE_ELEMENT_ID)).toBeNull();
+      expect(document.documentElement.classList.contains("theme-panorama")).toBe(false);
+      testRoot.remove();
+    });
+
+    it("renders dynamic shell buttons from shellRegistry in settings", () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ bootstrapRelays: [] });
+      const testShell = new OmniShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: []
+      });
+
+      testShell.mount();
+      const classicBtn = testRoot.querySelector("#btn-shell-classic");
+      const panoramaBtn = testRoot.querySelector("#btn-shell-panorama");
+      expect(classicBtn).toBeTruthy();
+      expect(panoramaBtn).toBeTruthy();
+      expect(classicBtn?.textContent).toBe("Omni Classic");
+      expect(panoramaBtn?.textContent).toBe("Panorama");
+
+      testShell.destroy();
+      testRoot.remove();
     });
   });
 });

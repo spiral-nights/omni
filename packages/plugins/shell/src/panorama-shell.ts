@@ -7,6 +7,9 @@ import {
   renderHandledIntentsSection,
   showIntentEnableToast
 } from "./permissions-intents-ui.js";
+import { mountShellStyles, unmountShellStyles } from "./styles/loader.js";
+import { PANORAMA_SHELL_CSS } from "./styles/panorama-styles.js";
+import { shellRegistry } from "./shell-registry.js";
 
 export type PanoramaPivot = "feed" | "apps" | "widgets" | "system" | string;
 
@@ -554,6 +557,7 @@ export class PanoramaShell implements OmniShellHost {
   // --- Mounting the Panorama DOM ---
 
   public mount(): void {
+    mountShellStyles(PANORAMA_SHELL_CSS);
     if (typeof document !== "undefined") {
       document.documentElement.classList.add("theme-panorama");
       document.body?.classList.add("theme-panorama");
@@ -584,6 +588,17 @@ export class PanoramaShell implements OmniShellHost {
     this.kernel.intentBroker.setDisambiguateCallback(async (action, candidates, data) => {
       return this.promptDisambiguateIntent(action, candidates, data);
     });
+  }
+
+  public destroy(): void {
+    unmountShellStyles();
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.remove("theme-panorama");
+      document.body?.classList.remove("theme-panorama");
+    }
+    if (this.root) {
+      this.root.innerHTML = "";
+    }
   }
 
   public getActivePageId(): string {
@@ -800,10 +815,7 @@ export class PanoramaShell implements OmniShellHost {
                     <strong>Shell Experience</strong>
                     <p style="font-size: 0.75rem; color: #888; margin-top: 2px;">Switch layout and navigation style.</p>
                   </div>
-                  <div style="display: flex; gap: 6px;">
-                    <button id="btn-switch-classic" class="btn-panorama-action">Omni Classic</button>
-                    <button id="btn-switch-panorama" class="btn-panorama-action active">Panorama</button>
-                  </div>
+                  <div id="panorama-shell-switcher-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
                 </div>
               </div>
 
@@ -1803,16 +1815,26 @@ export class PanoramaShell implements OmniShellHost {
       }
     });
 
-    // Shell Switcher to Omni Classic
-    const handleSwitchClassic = () => {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("omni_active_shell", "classic");
-        document.documentElement.classList.remove("theme-panorama");
-        document.body?.classList.remove("theme-panorama");
-        window.location.reload();
+    // Shell Switcher
+    const shellButtonsContainer = (this.root.querySelector("#panorama-shell-switcher-buttons") || document.getElementById("panorama-shell-switcher-buttons")) as HTMLElement | null;
+    if (shellButtonsContainer) {
+      shellButtonsContainer.innerHTML = "";
+      const currentActive = (typeof window !== "undefined" ? window.localStorage.getItem("omni_active_shell") : null) || "panorama";
+      for (const s of shellRegistry.list()) {
+        const btn = document.createElement("button");
+        btn.id = `btn-switch-${s.id}`;
+        btn.className = `btn-panorama-action ${currentActive === s.id ? "active" : ""}`;
+        btn.textContent = s.name;
+        btn.title = s.description;
+        btn.addEventListener("click", () => {
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem("omni_active_shell", s.id);
+            window.location.reload();
+          }
+        });
+        shellButtonsContainer.appendChild(btn);
       }
-    };
-    document.getElementById("btn-switch-classic")?.addEventListener("click", handleSwitchClassic);
+    }
 
     // Nostr Cloud Workspace Sync
     document.getElementById("btn-panorama-sync")?.addEventListener("click", async () => {

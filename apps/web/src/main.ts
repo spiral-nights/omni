@@ -1,5 +1,5 @@
 import { OmniKernel } from "@omni/core";
-import { OmniShell, PanoramaShell, InstalledPluginEntry } from "@omni/plugin-shell";
+import { OmniShell, PanoramaShell, InstalledPluginEntry, shellRegistry } from "@omni/plugin-shell";
 import { OmniShellHost } from "@omni/types";
 
 // Import compiled plugin scripts (using Vite ?raw import)
@@ -132,26 +132,13 @@ async function startApp() {
   const rootEl = document.getElementById("omni-root");
   if (!rootEl) throw new Error("Missing #omni-root container in DOM");
 
-  // Mount Shell UI Plugin into root container (PanoramaShell or OmniShell Classic)
-  if (activeShellType === "panorama") {
-    console.log("✦ [Omni Web] Activating PanoramaShell (People Hub Modern UI)...");
-    document.documentElement.classList.add("theme-panorama");
-    document.body?.classList.add("theme-panorama");
-    shell = new PanoramaShell({
-      root: rootEl,
-      kernel,
-      installedPlugins: initialPlugins
-    });
-  } else {
-    console.log("✦ [Omni Web] Activating OmniShell (Classic Dock & Viewports)...");
-    document.documentElement.classList.remove("theme-panorama");
-    document.body?.classList.remove("theme-panorama");
-    shell = new OmniShell({
-      root: rootEl,
-      kernel,
-      installedPlugins: initialPlugins
-    });
-  }
+  // Mount active Shell UI Plugin into root container via shellRegistry
+  console.log(`✦ [Omni Web] Activating Shell: ${activeShellType}...`);
+  shell = shellRegistry.create(activeShellType, {
+    root: rootEl,
+    kernel,
+    installedPlugins: initialPlugins
+  }) as OmniShell | PanoramaShell;
 
   // Restore local workspace customizations (0ms instant startup)
   shell.loadInitialWorkspace();

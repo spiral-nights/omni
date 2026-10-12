@@ -6,6 +6,9 @@ import {
   renderHandledIntentsSection,
   showIntentEnableToast
 } from "./permissions-intents-ui.js";
+import { mountShellStyles, unmountShellStyles } from "./styles/loader.js";
+import { CLASSIC_SHELL_CSS } from "./styles/classic-styles.js";
+import { shellRegistry } from "./shell-registry.js";
 
 export interface InstalledPluginEntry {
   id: string;
@@ -847,6 +850,11 @@ export class OmniShell implements OmniShellHost {
    * Mounts the complete shell DOM and wires all interactive controllers
    */
   public mount(): void {
+    mountShellStyles(CLASSIC_SHELL_CSS);
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.remove("theme-panorama");
+      document.body?.classList.remove("theme-panorama");
+    }
     this.renderSkeleton();
     this.cacheElementReferences();
     this.initSlotContainers();
@@ -869,6 +877,13 @@ export class OmniShell implements OmniShellHost {
     this.kernel.intentBroker.setDisambiguateCallback(async (action, candidates, data) => {
       return this.promptDisambiguateIntent(action, candidates, data);
     });
+  }
+
+  public destroy(): void {
+    unmountShellStyles();
+    if (this.root) {
+      this.root.innerHTML = "";
+    }
   }
 
   public getSlotContainers(): Map<string, Element> {
@@ -2279,16 +2294,9 @@ export class OmniShell implements OmniShellHost {
                       <strong style="font-size: 0.85rem; color: var(--omni-text-primary); display: flex; align-items: center; gap: 6px;">
                         ${icon("layout", 15)} Shell Experience
                       </strong>
-                      <span style="font-size: 0.72rem; color: var(--omni-text-muted);">Switch between Omni Classic dock layout and the Windows Phone Panorama Hub.</span>
+                      <span style="font-size: 0.72rem; color: var(--omni-text-muted);">Select or switch between installed shell layout experiences.</span>
                     </div>
-                    <div style="display: flex; gap: 6px;">
-                      <button id="btn-shell-classic" class="btn-secondary active" style="font-size: 0.72rem; padding: 3px 8px; border-color: var(--omni-accent-primary); color: var(--omni-accent-primary);">
-                        Omni Classic
-                      </button>
-                      <button id="btn-shell-panorama" class="btn-secondary" style="font-size: 0.72rem; padding: 3px 8px;">
-                        Panorama Hub
-                      </button>
-                    </div>
+                    <div id="shell-switcher-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
                   </div>
                 </div>
 
@@ -2577,20 +2585,26 @@ export class OmniShell implements OmniShellHost {
       this.saveLocalWorkspace();
     });
 
-    const btnShellClassic = document.getElementById("btn-shell-classic");
-    const btnShellPanorama = document.getElementById("btn-shell-panorama");
-    btnShellClassic?.addEventListener("click", () => {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("omni_active_shell", "classic");
-        window.location.reload();
+    const shellButtonsContainer = (this.root.querySelector("#shell-switcher-buttons") || document.getElementById("shell-switcher-buttons")) as HTMLElement | null;
+    if (shellButtonsContainer) {
+      shellButtonsContainer.innerHTML = "";
+      const currentActive = (typeof window !== "undefined" ? window.localStorage.getItem("omni_active_shell") : null) || "classic";
+      for (const s of shellRegistry.list()) {
+        const btn = document.createElement("button");
+        btn.id = `btn-shell-${s.id}`;
+        btn.className = `btn-secondary ${currentActive === s.id ? "active" : ""}`;
+        btn.style.cssText = `font-size: 0.72rem; padding: 3px 8px; ${currentActive === s.id ? "border-color: var(--omni-accent-primary); color: var(--omni-accent-primary);" : ""}`;
+        btn.textContent = s.name;
+        btn.title = s.description;
+        btn.addEventListener("click", () => {
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem("omni_active_shell", s.id);
+            window.location.reload();
+          }
+        });
+        shellButtonsContainer.appendChild(btn);
       }
-    });
-    btnShellPanorama?.addEventListener("click", () => {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("omni_active_shell", "panorama");
-        window.location.reload();
-      }
-    });
+    }
   }
 
   private wireSettingsModal(): void {
