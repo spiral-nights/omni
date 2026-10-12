@@ -975,6 +975,112 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       const meta = shell.getPluginMeta(profilePlugin);
       expect(meta.viewport).toBe("unassigned");
     });
+
+    it("navigates cleanly between Feed, Dashboard, and Apps Launcher", () => {
+      // 1. Initially feed is active
+      expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+
+      // 2. Navigate to Dashboard (via 'dashboard' or 'widgets')
+      shell.showPage("dashboard");
+      expect(root.querySelector("#page-widgets")?.classList.contains("active")).toBe(true);
+      expect(root.querySelector("#dock-btn-widgets")?.classList.contains("active")).toBe(true);
+
+      // 3. Navigate to Apps Launcher
+      shell.showPage("apps");
+      expect(shell.getActivePageId()).toBe("apps");
+      expect(root.querySelector("#page-apps")?.classList.contains("active")).toBe(true);
+      expect(root.querySelector("#dock-btn-apps")?.classList.contains("active")).toBe(true);
+
+      // 4. Return to Feed
+      shell.showPage("feed");
+      expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+      expect(root.querySelector("#page-feed")?.classList.contains("active")).toBe(true);
+    });
+
+    it("pins and unpins full-page apps to/from dock slot and updates Apps Launcher", () => {
+      // Add a third-party app with main placement
+      const customApp: InstalledPluginEntry = {
+        id: "com.example.notes",
+        name: "Notes App",
+        description: "Decentralized notes",
+        icon: "edit",
+        viewport: "main",
+        enabled: true,
+        pinned: true,
+        scriptContent: "console.log('notes');",
+        placements: [
+          {
+            id: "pl-notes",
+            viewport: "main",
+            route: "",
+            viewId: "main",
+            enabled: true
+          }
+        ]
+      };
+      shell.installedPlugins.push(customApp);
+      shell.renderDockLaunchers();
+
+      const dockSlot = root.querySelector("#dock-slot");
+      expect(dockSlot?.querySelector('[data-plugin-id="com.example.notes"]')).toBeTruthy();
+
+      // Unpin app
+      shell.setAppPinned("com.example.notes", false);
+      expect(shell.isAppPinned(customApp)).toBe(false);
+      expect(dockSlot?.querySelector('[data-plugin-id="com.example.notes"]')).toBeNull();
+
+      // Verify it appears in the Apps Launcher under Additional Apps
+      shell.showPage("apps");
+      const unpinnedGrid = root.querySelector("#apps-unpinned-grid");
+      expect(unpinnedGrid?.textContent).toContain("Notes App");
+
+      // Pin it back
+      shell.setAppPinned("com.example.notes", true);
+      expect(shell.isAppPinned(customApp)).toBe(true);
+      expect(dockSlot?.querySelector('[data-plugin-id="com.example.notes"]')).toBeTruthy();
+      const pinnedGrid = root.querySelector("#apps-pinned-grid");
+      expect(pinnedGrid?.textContent).toContain("Notes App");
+    });
+
+    it("toggles the Viewport Guide drawer in Workspace settings", () => {
+      const btnToggle = root.querySelector<HTMLButtonElement>("#btn-toggle-viewport-guide");
+      const guideBox = root.querySelector<HTMLElement>("#viewport-guide-box");
+      expect(btnToggle).toBeTruthy();
+      expect(guideBox).toBeTruthy();
+      expect(guideBox?.style.display).toBe("none");
+
+      btnToggle?.click();
+      expect(guideBox?.style.display).toBe("flex");
+      expect(guideBox?.textContent).toContain("Full-Page App (main)");
+      expect(guideBox?.textContent).toContain("Dock Shortcut (dock)");
+      expect(guideBox?.textContent).toContain("Dashboard Card (sidebar)");
+
+      const btnClose = root.querySelector<HTMLButtonElement>("#btn-close-viewport-guide");
+      btnClose?.click();
+      expect(guideBox?.style.display).toBe("none");
+    });
+
+    it("exports and imports pinned state in OmniWorkspaceState (NIP-78)", () => {
+      const customApp: InstalledPluginEntry = {
+        id: "com.example.draw",
+        name: "Draw App",
+        viewport: "main",
+        enabled: true,
+        pinned: false,
+        scriptContent: "console.log('draw');",
+        placements: [{ id: "pl-draw", viewport: "main", route: "", viewId: "main", enabled: true }]
+      };
+      shell.installedPlugins.push(customApp);
+
+      const state = shell.exportWorkspaceState();
+      const exportedApp = state.plugins.find((p) => p.id === "com.example.draw");
+      expect(exportedApp?.pinned).toBe(false);
+
+      // Re-import with pinned true
+      exportedApp!.pinned = true;
+      shell.applyWorkspaceState(state);
+      expect(shell.isAppPinned(customApp)).toBe(true);
+    });
   });
 });
 

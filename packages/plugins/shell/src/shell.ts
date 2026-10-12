@@ -18,12 +18,13 @@ export interface InstalledPluginEntry {
   scriptContent: string;
   sourceUrl: string;
   enabled: boolean;
+  pinned?: boolean;
   naddr?: string;
   authorNpub?: string;
   event?: any;
 }
 
-export type AppPage = "feed" | "widgets" | string;
+export type AppPage = "feed" | "widgets" | "dashboard" | "apps" | string;
 export type SettingsTab = "profile" | "relays" | "plugins" | "workspace" | string;
 
 export interface OmniShellOptions {
@@ -55,6 +56,8 @@ export class OmniShell implements OmniShellHost {
   private widgetsSlot!: HTMLElement;
   private pageFeed!: HTMLElement;
   private pageWidgets!: HTMLElement;
+  private pageApps!: HTMLElement;
+  private dockBtnApps!: HTMLElement;
   private dockBtnWidgets!: HTMLElement;
   private dockBtnSettings!: HTMLElement;
 
@@ -244,6 +247,38 @@ export class OmniShell implements OmniShellHost {
     this.saveLocalWorkspace();
   }
 
+  public isAppPinned(p: InstalledPluginEntry): boolean {
+    if (p.id === "org.omni.plugin.feed") return true;
+    if (p.pinned !== undefined) return p.pinned;
+    const placements = this.getPluginPlacements(p);
+    const mainPl = placements.find((pl) => pl.viewport === "main");
+    if (mainPl && mainPl.pinned !== undefined) return mainPl.pinned;
+    const dockPl = placements.find((pl) => pl.viewport === "dock");
+    if (dockPl) return true;
+    return p.pinned !== false;
+  }
+
+  public setAppPinned(pluginId: string, pinned: boolean): void {
+    const plugin = this.installedPlugins.find((p) => p.id === pluginId);
+    if (!plugin) return;
+    plugin.pinned = pinned;
+
+    const placements = this.getPluginPlacements(plugin);
+    for (const pl of placements) {
+      if (pl.viewport === "main") {
+        pl.pinned = pinned;
+      }
+    }
+
+    this.renderDockLaunchers();
+    this.renderAppsLauncher();
+    this.saveLocalWorkspace();
+  }
+
+  public renderDock(): void {
+    this.renderDockLaunchers();
+  }
+
   // --- NIP-78 Workspace State Export & Import ---
 
   public exportWorkspaceState(): OmniWorkspaceState {
@@ -260,6 +295,7 @@ export class OmniShell implements OmniShellHost {
           viewport: meta.viewport,
           route: p.route,
           viewId: p.viewId,
+          pinned: p.pinned,
           placements,
           enabled: p.enabled,
           name: meta.name,
@@ -332,6 +368,9 @@ export class OmniShell implements OmniShellHost {
       if (plugin) {
         if (typeof item.enabled === "boolean") {
           plugin.enabled = item.enabled;
+        }
+        if (typeof item.pinned === "boolean") {
+          plugin.pinned = item.pinned;
         }
         if (item.route !== undefined) {
           plugin.route = item.route;
@@ -475,6 +514,7 @@ export class OmniShell implements OmniShellHost {
             if (plugin) {
               if (item.viewport) plugin.viewport = item.viewport;
               if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
+              if (typeof item.pinned === "boolean") plugin.pinned = item.pinned;
               if (item.placements && Array.isArray(item.placements)) {
                 plugin.placements = item.placements;
                 if (item.placements.length === 0) {
@@ -552,12 +592,17 @@ export class OmniShell implements OmniShellHost {
   }
 
   public getActivePageId(): string {
+    if (this.pageApps?.classList.contains("active")) {
+      return "apps";
+    }
     if (this.pageWidgets?.classList.contains("active")) {
       return "widgets";
     }
     const mainVp = this.mainViewport || this.root.querySelector(".main-viewport");
     const activeEl = mainVp?.querySelector<HTMLElement>(".app-page.active");
     if (activeEl) {
+      if (activeEl.id === "page-apps") return "apps";
+      if (activeEl.id === "page-widgets") return "widgets";
       if (activeEl.id === "page-feed") return "org.omni.plugin.feed";
       if (activeEl.dataset.pluginId) return activeEl.dataset.pluginId;
       if (activeEl.dataset.page) return activeEl.dataset.page;
@@ -579,14 +624,17 @@ export class OmniShell implements OmniShellHost {
       if (!plugin.enabled) continue;
       const meta = this.getPluginMeta(plugin);
 
-      // Primary applications in "main" or items assigned to "dock" ("Navigation Dock Shortcut")
+      // Primary applications in "main" (if pinned) or items assigned to "dock" ("Navigation Dock Shortcut")
       // get a dedicated navigation dock launcher button.
-      // Modular companion widgets ("sidebar") live inside the Widgets & Tools Dashboard (#page-widgets).
+      // Unpinned full-page apps are accessible via the Apps launcher (#page-apps).
       const placements = this.getPluginPlacements(plugin);
-      const hasDockOrMain = placements.some(
-        (pl) => pl.enabled !== false && (pl.viewport === "main" || pl.viewport === "dock")
-      );
-      if (!hasDockOrMain) continue;
+      const hasDockSlot = placements.some((pl) => pl.enabled !== false && pl.viewport === "dock");
+      const hasMainSlot = placements.some((pl) => pl.enabled !== false && pl.viewport === "main");
+
+      if (plugin.id !== "org.omni.plugin.feed") {
+        if (!hasDockSlot && !hasMainSlot) continue;
+        if (!hasDockSlot && hasMainSlot && !this.isAppPinned(plugin)) continue;
+      }
 
       if (plugin.id !== "org.omni.plugin.feed") {
         this.ensureAppPage(plugin.id);
@@ -634,6 +682,148 @@ export class OmniShell implements OmniShellHost {
     }
   }
 
+  public renderAppsLauncher(): void {
+    const pinnedGrid = document.getElementById("apps-pinned-grid");
+    const unpinnedGrid = document.getElementById("apps-unpinned-grid");
+    const pinnedCountEl = document.getElementById("apps-pinned-count");
+    const unpinnedCountEl = document.getElementById("apps-unpinned-count");
+    if (!pinnedGrid || !unpinnedGrid) return;
+
+    pinnedGrid.innerHTML = "";
+    unpinnedGrid.innerHTML = "";
+
+    const appCandidates: InstalledPluginEntry[] = [];
+    for (const plugin of this.installedPlugins) {
+      if (!plugin.enabled) continue;
+      const placements = this.getPluginPlacements(plugin);
+      const hasMain = placements.some((pl) => pl.enabled !== false && pl.viewport === "main");
+      if (hasMain || plugin.id === "org.omni.plugin.feed") {
+        appCandidates.push(plugin);
+      }
+    }
+
+    let pinnedCount = 0;
+    let unpinnedCount = 0;
+
+    for (const plugin of appCandidates) {
+      const isPinned = this.isAppPinned(plugin);
+      const meta = this.getPluginMeta(plugin);
+      const isFeed = plugin.id === "org.omni.plugin.feed";
+
+      const card = document.createElement("div");
+      card.className = "app-card";
+      card.style.cssText =
+        "display: flex; flex-direction: column; justify-content: space-between; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; gap: 12px; transition: border-color 0.15s ease;";
+
+      const topRow = document.createElement("div");
+      topRow.style.cssText = "display: flex; align-items: flex-start; gap: 10px;";
+
+      let iconSvg = "";
+      if (meta.icon && ICONS[meta.icon as IconName]) {
+        iconSvg = icon(meta.icon as IconName, 22);
+      } else {
+        iconSvg = icon("feed", 22);
+      }
+
+      const iconWrap = document.createElement("div");
+      iconWrap.style.cssText =
+        "display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--omni-radius-sm); background: var(--omni-bg-subtle); color: var(--omni-accent-primary); flex-shrink: 0;";
+      iconWrap.innerHTML = iconSvg;
+
+      const titleCol = document.createElement("div");
+      titleCol.style.cssText = "display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;";
+
+      const nameRow = document.createElement("div");
+      nameRow.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 6px;";
+
+      const nameEl = document.createElement("span");
+      nameEl.style.cssText =
+        "font-weight: 600; font-size: 0.88rem; color: var(--omni-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
+      nameEl.textContent = meta.name;
+
+      const badgeEl = document.createElement("span");
+      badgeEl.style.cssText =
+        "font-size: 0.65rem; padding: 1px 6px; border-radius: var(--omni-radius-pill); background: var(--omni-bg-subtle); color: var(--omni-text-muted); font-family: var(--omni-font-mono);";
+      badgeEl.textContent = `v${meta.version}`;
+
+      nameRow.appendChild(nameEl);
+      nameRow.appendChild(badgeEl);
+
+      const descEl = document.createElement("p");
+      descEl.style.cssText =
+        "font-size: 0.74rem; color: var(--omni-text-secondary); margin: 0; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;";
+      descEl.textContent = meta.description || "Standalone Nostr web application.";
+
+      titleCol.appendChild(nameRow);
+      titleCol.appendChild(descEl);
+
+      topRow.appendChild(iconWrap);
+      topRow.appendChild(titleCol);
+      card.appendChild(topRow);
+
+      const bottomRow = document.createElement("div");
+      bottomRow.style.cssText =
+        "display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--omni-border-subtle); padding-top: 10px;";
+
+      const btnPin = document.createElement("button");
+      btnPin.className = "btn-secondary btn-app-pin";
+      btnPin.style.cssText = `font-size: 0.72rem; padding: 4px 8px; display: inline-flex; align-items: center; gap: 5px; color: ${
+        isPinned ? "var(--omni-accent-primary)" : "var(--omni-text-secondary)"
+      };`;
+      btnPin.innerHTML = `${icon("pin", 13)} <span>${isPinned ? "Pinned" : "Pin to Dock"}</span>`;
+
+      if (isFeed) {
+        btnPin.title = "Feed is permanently pinned to the dock";
+        btnPin.disabled = true;
+        btnPin.style.opacity = "0.7";
+      } else {
+        btnPin.title = isPinned ? "Unpin from navigation dock" : "Pin to navigation dock";
+        btnPin.addEventListener("click", () => {
+          this.setAppPinned(plugin.id, !isPinned);
+        });
+      }
+
+      const btnOpen = document.createElement("button");
+      btnOpen.className = "btn-publish btn-app-launch";
+      btnOpen.style.cssText = "font-size: 0.72rem; padding: 4px 12px;";
+      btnOpen.textContent = "Open App";
+      btnOpen.addEventListener("click", () => {
+        this.showPage(plugin.id);
+      });
+
+      bottomRow.appendChild(btnPin);
+      bottomRow.appendChild(btnOpen);
+      card.appendChild(bottomRow);
+
+      if (isPinned) {
+        pinnedGrid.appendChild(card);
+        pinnedCount++;
+      } else {
+        unpinnedGrid.appendChild(card);
+        unpinnedCount++;
+      }
+    }
+
+    if (pinnedCountEl) pinnedCountEl.textContent = `${pinnedCount} app${pinnedCount === 1 ? "" : "s"}`;
+    if (unpinnedCountEl) unpinnedCountEl.textContent = `${unpinnedCount} app${unpinnedCount === 1 ? "" : "s"}`;
+
+    if (pinnedCount === 0) {
+      const emptyNote = document.createElement("div");
+      emptyNote.style.cssText =
+        "grid-column: 1 / -1; padding: 18px; text-align: center; color: var(--omni-text-muted); font-size: 0.78rem; background: var(--omni-bg-surface); border: 1px dashed var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
+      emptyNote.textContent = "No pinned applications. Pin apps to keep them in your navigation dock.";
+      pinnedGrid.appendChild(emptyNote);
+    }
+
+    if (unpinnedCount === 0) {
+      const emptyNote = document.createElement("div");
+      emptyNote.style.cssText =
+        "grid-column: 1 / -1; padding: 18px; text-align: center; color: var(--omni-text-muted); font-size: 0.78rem; background: var(--omni-bg-surface); border: 1px dashed var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
+      emptyNote.textContent = "All installed full-page applications are currently pinned to your navigation dock.";
+      unpinnedGrid.appendChild(emptyNote);
+    }
+  }
+
   /**
    * Mounts the complete shell DOM and wires all interactive controllers
    */
@@ -666,9 +856,14 @@ export class OmniShell implements OmniShellHost {
     this.dockSlot?.querySelectorAll(".dock-item").forEach((btn: any) => {
       btn.classList.remove("active");
     });
+    this.dockBtnApps?.classList.remove("active");
     this.dockBtnWidgets?.classList.remove("active");
 
-    if (page === "widgets") {
+    if (page === "apps") {
+      this.pageApps?.classList.add("active");
+      this.dockBtnApps?.classList.add("active");
+      this.renderAppsLauncher();
+    } else if (page === "widgets" || page === "dashboard") {
       this.pageWidgets.classList.add("active");
       this.dockBtnWidgets?.classList.add("active");
       for (const p of this.installedPlugins) {
@@ -700,6 +895,9 @@ export class OmniShell implements OmniShellHost {
       } else if (page === "feed" || page === "org.omni.plugin.feed") {
         const feedBtn = this.dockSlot?.querySelector<HTMLElement>(`[data-plugin-id="org.omni.plugin.feed"]`);
         if (feedBtn) feedBtn.classList.add("active");
+      } else {
+        // App opened from Apps Launcher that has no dedicated dock button
+        this.dockBtnApps?.classList.add("active");
       }
     }
 
@@ -715,7 +913,7 @@ export class OmniShell implements OmniShellHost {
    * Handle slot action dispatched from plugins or kernel
    */
   public handleSlotAction(action: string, slot: string): void {
-    if (slot === "sidebar" || slot === "widgets") {
+    if (slot === "sidebar" || slot === "widgets" || slot === "dashboard") {
       if (action === "toggle") {
         const isWidgets = this.pageWidgets.classList.contains("active");
         this.showPage(isWidgets ? "feed" : "widgets");
@@ -1148,6 +1346,30 @@ export class OmniShell implements OmniShellHost {
         controlsLeft.appendChild(vpSelect);
         controlsLeft.appendChild(routeLabel);
         controlsLeft.appendChild(routeSelect);
+
+        if (pl.viewport === "main") {
+          const isPinned = this.isAppPinned(p);
+          const pinBtn = document.createElement("button");
+          pinBtn.className = "btn-secondary btn-pin-dock";
+          pinBtn.style.cssText = `font-size: 0.7rem; padding: 2px 7px; display: inline-flex; align-items: center; gap: 4px; color: ${
+            isPinned ? "var(--omni-accent-primary)" : "var(--omni-text-muted)"
+          };`;
+          pinBtn.innerHTML = `${icon("pin", 12)} <span>${isPinned ? "Pinned to Dock" : "Pin to Dock"}</span>`;
+          if (p.id === "org.omni.plugin.feed") {
+            pinBtn.title = "Feed is always pinned";
+            pinBtn.style.opacity = "0.7";
+            pinBtn.disabled = true;
+          } else {
+            pinBtn.title = isPinned ? "Unpin from navigation dock" : "Pin to navigation dock";
+            pinBtn.addEventListener("click", () => {
+              this.setAppPinned(p.id, !isPinned);
+              this.renderSettingsNavAndPanes();
+              this.switchSettingsTab(p.id);
+            });
+          }
+          controlsLeft.appendChild(pinBtn);
+        }
+
         row.appendChild(controlsLeft);
 
         const btnRemovePl = document.createElement("button");
@@ -1331,7 +1553,7 @@ export class OmniShell implements OmniShellHost {
           } else if (pl.viewport === "dock") {
             badge.textContent = "Dock Shortcut";
           } else if (pl.viewport === "sidebar") {
-            badge.textContent = "Widgets Dashboard";
+            badge.textContent = "Dashboard Card";
           } else if (pl.viewport === "header-actions") {
             badge.textContent = "Header Action";
           } else {
@@ -1535,6 +1757,28 @@ export class OmniShell implements OmniShellHost {
         controlsLeft.appendChild(vpSelect);
         controlsLeft.appendChild(routeLabel);
         controlsLeft.appendChild(routeSelect);
+
+        if (pl.viewport === "main") {
+          const isPinned = this.isAppPinned(p);
+          const pinBtn = document.createElement("button");
+          pinBtn.className = "btn-secondary btn-pin-dock";
+          pinBtn.style.cssText = `font-size: 0.7rem; padding: 2px 7px; display: inline-flex; align-items: center; gap: 4px; color: ${
+            isPinned ? "var(--omni-accent-primary)" : "var(--omni-text-muted)"
+          };`;
+          pinBtn.innerHTML = `${icon("pin", 12)} <span>${isPinned ? "Pinned to Dock" : "Pin to Dock"}</span>`;
+          if (p.id === "org.omni.plugin.feed") {
+            pinBtn.title = "Feed is always pinned";
+            pinBtn.style.opacity = "0.7";
+            pinBtn.disabled = true;
+          } else {
+            pinBtn.title = isPinned ? "Unpin from navigation dock" : "Pin to navigation dock";
+            pinBtn.addEventListener("click", () => {
+              this.setAppPinned(p.id, !isPinned);
+              this.renderPluginManager();
+            });
+          }
+          controlsLeft.appendChild(pinBtn);
+        }
 
         row.appendChild(controlsLeft);
 
@@ -1934,11 +2178,18 @@ export class OmniShell implements OmniShellHost {
         <nav class="mobile-dock" id="app-dock">
           <div id="dock-slot" class="dock-slot-container"></div>
 
-          <button class="dock-item" id="dock-btn-widgets" title="Workspace Widgets & Tools">
+          <button class="dock-item" id="dock-btn-apps" title="All Applications">
+            <div class="dock-icon-wrapper">
+              ${icon("grid", 20)}
+            </div>
+            <span>Apps</span>
+          </button>
+
+          <button class="dock-item" id="dock-btn-widgets" title="Workspace Dashboard">
             <div class="dock-icon-wrapper">
               ${icon("widgets", 20)}
             </div>
-            <span>Widgets</span>
+            <span>Dashboard</span>
           </button>
 
           <button class="dock-item" id="dock-btn-settings" title="Settings & System Control">
@@ -1956,12 +2207,44 @@ export class OmniShell implements OmniShellHost {
             <div id="main-slot" class="omni-slot main-viewport-slot"></div>
           </section>
 
-          <!-- Page 2: Dedicated Full Widgets Dashboard -->
+          <!-- Page 2: Applications Launcher (Pinned + Additional Apps) -->
+          <section class="app-page" id="page-apps" data-page="apps">
+            <div class="widgets-page-header">
+              <div class="widgets-page-title-row">
+                <h2 class="widgets-page-title">Applications</h2>
+                <span class="widgets-page-badge">Launcher</span>
+              </div>
+              <p class="widgets-page-desc">All installed full-page applications. Pin your favorites to the navigation dock for instant access.</p>
+            </div>
+            <div class="apps-launcher-content" style="display: flex; flex-direction: column; gap: 20px;">
+              <div class="apps-section">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                  <h3 style="font-size: 0.88rem; font-weight: 600; color: var(--omni-text-primary); margin: 0; display: flex; align-items: center; gap: 6px;">
+                    ${icon("pin", 15)} Pinned to Dock
+                  </h3>
+                  <span id="apps-pinned-count" style="font-size: 0.72rem; color: var(--omni-text-muted);">0 apps</span>
+                </div>
+                <div id="apps-pinned-grid" class="apps-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px;"></div>
+              </div>
+
+              <div class="apps-section">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                  <h3 style="font-size: 0.88rem; font-weight: 600; color: var(--omni-text-primary); margin: 0; display: flex; align-items: center; gap: 6px;">
+                    ${icon("grid", 15)} Additional Apps
+                  </h3>
+                  <span id="apps-unpinned-count" style="font-size: 0.72rem; color: var(--omni-text-muted);">0 apps</span>
+                </div>
+                <div id="apps-unpinned-grid" class="apps-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px;"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Page 3: Dedicated Full Workspace Dashboard -->
           <section class="app-page" id="page-widgets">
             <div class="widgets-page-header">
               <div class="widgets-page-title-row">
-                <h2 class="widgets-page-title">Workspace Widgets & Tools</h2>
-                <span class="widgets-page-badge">Full View</span>
+                <h2 class="widgets-page-title">Workspace Dashboard</h2>
+                <span class="widgets-page-badge">Dashboard</span>
               </div>
               <p class="widgets-page-desc">All active modular widgets, tools, and productivity plugins.</p>
             </div>
@@ -2000,6 +2283,9 @@ export class OmniShell implements OmniShellHost {
                     <span id="plugins-count-badge" style="font-size: 0.72rem; background: var(--omni-bg-subtle); color: var(--omni-accent-primary); padding: 1px 6px; border-radius: var(--omni-radius-pill);">0</span>
                   </div>
                   <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <button id="btn-toggle-viewport-guide" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;" title="Learn about viewport locations">
+                      ${icon("help-circle", 14)} Viewport Guide
+                    </button>
                     <button id="btn-sync-workspace" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;" title="Sync workspace layout to Nostr relays (NIP-78)">
                       ${icon("cloud", 14)} Sync to Nostr
                     </button>
@@ -2010,6 +2296,37 @@ export class OmniShell implements OmniShellHost {
                     <button id="btn-show-install-modal" class="btn-publish" style="font-size: 0.75rem; padding: 4px 10px;">
                       + Install Plugin
                     </button>
+                  </div>
+                </div>
+
+                <!-- Viewport Locations Guide Drawer -->
+                <div id="viewport-guide-box" style="display: none; flex-direction: column; gap: 8px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 12px 14px; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <span style="color: var(--omni-accent-primary); font-size: 0.85rem;">✦</span>
+                      <strong style="font-size: 0.82rem; color: var(--omni-text-primary);">Viewport & Location Guide</strong>
+                    </div>
+                    <button id="btn-close-viewport-guide" class="btn-drawer-close" style="padding: 2px 4px;" title="Close guide">
+                      ${icon("close", 12)}
+                    </button>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; font-size: 0.74rem; color: var(--omni-text-secondary); line-height: 1.4;">
+                    <div style="background: var(--omni-bg-subtle); padding: 8px 10px; border-radius: var(--omni-radius-xs);">
+                      <strong style="color: var(--omni-text-primary); display: block; margin-bottom: 2px;">Full-Page App (main)</strong>
+                      Primary application view taking up the center stage. Pinned apps stay directly on your dock; unpinned apps remain accessible anytime via the Apps launcher.
+                    </div>
+                    <div style="background: var(--omni-bg-subtle); padding: 8px 10px; border-radius: var(--omni-radius-xs);">
+                      <strong style="color: var(--omni-text-primary); display: block; margin-bottom: 2px;">Dock Shortcut (dock)</strong>
+                      Quick launcher button pinned directly to the navigation dock for instant opening.
+                    </div>
+                    <div style="background: var(--omni-bg-subtle); padding: 8px 10px; border-radius: var(--omni-radius-xs);">
+                      <strong style="color: var(--omni-text-primary); display: block; margin-bottom: 2px;">Dashboard Card (sidebar)</strong>
+                      Modular companion card or widget embedded inside the multi-column Workspace Dashboard page.
+                    </div>
+                    <div style="background: var(--omni-bg-subtle); padding: 8px 10px; border-radius: var(--omni-radius-xs);">
+                      <strong style="color: var(--omni-text-primary); display: block; margin-bottom: 2px;">Header Action (header-actions)</strong>
+                      Compact status icon or quick button in the top navigation bar.
+                    </div>
                   </div>
                 </div>
 
@@ -2211,6 +2528,8 @@ export class OmniShell implements OmniShellHost {
     this.widgetsSlot = document.getElementById("widgets-slot")!;
     this.pageFeed = document.getElementById("page-feed")!;
     this.pageWidgets = document.getElementById("page-widgets")!;
+    this.pageApps = document.getElementById("page-apps")!;
+    this.dockBtnApps = document.getElementById("dock-btn-apps")!;
     this.dockBtnWidgets = document.getElementById("dock-btn-widgets")!;
     this.dockBtnSettings = document.getElementById("dock-btn-settings")!;
 
@@ -2237,11 +2556,26 @@ export class OmniShell implements OmniShellHost {
     this.slotContainers.set("icon", this.dockSlot);
     this.slotContainers.set("sidebar", this.widgetsSlot);
     this.slotContainers.set("widgets", this.widgetsSlot);
+    this.slotContainers.set("dashboard", this.widgetsSlot);
   }
 
   private wireNavigation(): void {
-    this.dockBtnWidgets?.addEventListener("click", () => this.showPage("widgets"));
+    this.dockBtnApps?.addEventListener("click", () => this.showPage("apps"));
+    this.dockBtnWidgets?.addEventListener("click", () => this.showPage("dashboard"));
     this.dockBtnSettings?.addEventListener("click", () => this.openSettings("plugins"));
+
+    const btnToggleGuide = document.getElementById("btn-toggle-viewport-guide");
+    const guideBox = document.getElementById("viewport-guide-box");
+    const btnCloseGuide = document.getElementById("btn-close-viewport-guide");
+    btnToggleGuide?.addEventListener("click", () => {
+      if (guideBox) {
+        const isHidden = guideBox.style.display === "none";
+        guideBox.style.display = isHidden ? "flex" : "none";
+      }
+    });
+    btnCloseGuide?.addEventListener("click", () => {
+      if (guideBox) guideBox.style.display = "none";
+    });
 
     const btnResetLayout = document.getElementById("btn-reset-layout");
     btnResetLayout?.addEventListener("click", () => {

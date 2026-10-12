@@ -10,12 +10,14 @@ export interface PluginPlacement {
   route?: string; // target route (e.g. "?view=widget", "" or "?view=settings")
   viewId?: string; // matched view ID
   enabled?: boolean;
+  pinned?: boolean; // Whether pinned directly to navigation dock (for main full-page apps)
 }
 
 export interface OmniWorkspacePluginConfig {
   id: string;
   viewport?: string; // "main" | "dock" | "sidebar" | "header-actions"
   enabled: boolean;
+  pinned?: boolean;
   order?: number;
   naddr?: string;
   sourceUrl?: string;
