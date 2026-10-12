@@ -24,7 +24,7 @@ export interface InstalledPluginEntry {
 }
 
 export type AppPage = "feed" | "widgets" | string;
-export type SettingsTab = "profile" | "relays" | "plugins" | string;
+export type SettingsTab = "profile" | "relays" | "plugins" | "workspace" | string;
 
 export interface OmniShellOptions {
   root: HTMLElement;
@@ -729,7 +729,7 @@ export class OmniShell implements OmniShellHost {
     }
   }
 
-  public openSettings(tab: SettingsTab | "layout" = "profile"): void {
+  public openSettings(tab: SettingsTab | "layout" | "workspace" = "plugins"): void {
     this.switchSettingsTab(tab);
     this.settingsModal.classList.add("open");
   }
@@ -763,7 +763,7 @@ export class OmniShell implements OmniShellHost {
       if (relayPlugin) {
         targetTab = relayPlugin.id;
       }
-    } else if (targetTab === "layout") {
+    } else if (targetTab === "layout" || targetTab === "workspace") {
       targetTab = "plugins";
     }
 
@@ -2241,7 +2241,7 @@ export class OmniShell implements OmniShellHost {
 
   private wireNavigation(): void {
     this.dockBtnWidgets?.addEventListener("click", () => this.showPage("widgets"));
-    this.dockBtnSettings?.addEventListener("click", () => this.openSettings("profile"));
+    this.dockBtnSettings?.addEventListener("click", () => this.openSettings("plugins"));
 
     const btnResetLayout = document.getElementById("btn-reset-layout");
     btnResetLayout?.addEventListener("click", () => {

@@ -133,18 +133,37 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     expect(pageWidgets?.classList.contains("active")).toBe(true);
   });
 
-  it("opens and closes settings tabs cleanly", () => {
+  it("opens and closes settings tabs cleanly and defaults to workspace tab", () => {
     const settingsModal = root.querySelector("#settings-modal");
     expect(settingsModal?.classList.contains("open")).toBe(false);
 
-    shell.openSettings("relays");
+    // Default openSettings() should open workspace tab
+    shell.openSettings();
     expect(settingsModal?.classList.contains("open")).toBe(true);
+    const pluginsPane = root.querySelector("#settings-pane-plugins");
+    const pluginsBtn = root.querySelector("#settings-tab-btn-plugins");
+    expect(pluginsPane?.classList.contains("active")).toBe(true);
+    expect(pluginsBtn?.classList.contains("active")).toBe(true);
 
+    shell.openSettings("relays");
     const relaysPane = root.querySelector("#settings-pane-relays");
     expect(relaysPane?.classList.contains("active")).toBe(true);
+    expect(pluginsPane?.classList.contains("active")).toBe(false);
+
+    // openSettings("workspace") alias
+    shell.openSettings("workspace");
+    expect(pluginsPane?.classList.contains("active")).toBe(true);
 
     shell.closeSettings();
     expect(settingsModal?.classList.contains("open")).toBe(false);
+
+    // Clicking dock settings button should open workspace tab
+    const dockSettingsBtn = root.querySelector("#dock-btn-settings") as HTMLButtonElement;
+    dockSettingsBtn?.click();
+    expect(settingsModal?.classList.contains("open")).toBe(true);
+    expect(pluginsPane?.classList.contains("active")).toBe(true);
+
+    shell.closeSettings();
   });
 
   it("uninstalls plugins and updates plugin manager registry", () => {
