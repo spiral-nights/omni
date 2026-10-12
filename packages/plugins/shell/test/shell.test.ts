@@ -1001,6 +1001,29 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(pinnedGrid?.textContent).toContain("Notes App");
     });
 
+    it("shows all installed plugins in the Apps launcher including unpinned/sidebar apps under All Apps", () => {
+      shell.showPage("apps");
+      const pinnedGrid = root.querySelector("#apps-pinned-grid");
+      const unpinnedGrid = root.querySelector("#apps-unpinned-grid");
+
+      // Feed is pinned to dock
+      expect(pinnedGrid?.textContent).toContain("Timeline Feed");
+      // Focus Timer is in All Apps (unpinned grid) even though its placement was sidebar
+      expect(unpinnedGrid?.textContent).toContain("Focus Timer");
+
+      // Opening Focus Timer from Apps launcher mounts its standalone app page
+      shell.showPage("org.omni.plugin.timer");
+      const timerPage = root.querySelector("#page-app-org-omni-plugin-timer");
+      expect(timerPage).toBeTruthy();
+      expect(timerPage?.classList.contains("active")).toBe(true);
+
+      // Pin Focus Timer to dock
+      shell.setAppPinned("org.omni.plugin.timer", true);
+      const dockSlot = root.querySelector("#dock-slot");
+      expect(dockSlot?.querySelector('[data-plugin-id="org.omni.plugin.timer"]')).toBeTruthy();
+      expect(root.querySelector("#apps-pinned-grid")?.textContent).toContain("Focus Timer");
+    });
+
     it("toggles the Viewport Guide drawer in Workspace settings", () => {
       const btnToggle = root.querySelector<HTMLButtonElement>("#btn-toggle-viewport-guide");
       const guideBox = root.querySelector<HTMLElement>("#viewport-guide-box");

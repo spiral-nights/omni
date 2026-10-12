@@ -250,14 +250,15 @@ export class OmniShell implements OmniShellHost {
   }
 
   public isAppPinned(p: InstalledPluginEntry): boolean {
-    if (p.id === "org.omni.plugin.feed") return true;
+    if (p.id === "org.omni.plugin.feed" && p.pinned === undefined) return true;
     if (p.pinned !== undefined) return p.pinned;
     const placements = this.getPluginPlacements(p);
     const mainPl = placements.find((pl) => pl.viewport === "main");
     if (mainPl && mainPl.pinned !== undefined) return mainPl.pinned;
+    if (mainPl) return true;
     const dockPl = placements.find((pl) => pl.viewport === "dock");
     if (dockPl) return true;
-    return p.pinned !== false;
+    return false;
   }
 
   public setAppPinned(pluginId: string, pinned: boolean): void {
@@ -636,14 +637,7 @@ export class OmniShell implements OmniShellHost {
       // Primary applications in "main" (if pinned) or items assigned to "dock" ("Navigation Dock Shortcut")
       // get a dedicated navigation dock launcher button.
       // Unpinned full-page apps are accessible via the Apps launcher (#page-apps).
-      const placements = this.getPluginPlacements(plugin);
-      const hasDockSlot = placements.some((pl) => pl.enabled !== false && pl.viewport === "dock");
-      const hasMainSlot = placements.some((pl) => pl.enabled !== false && pl.viewport === "main");
-
-      if (plugin.id !== "org.omni.plugin.feed") {
-        if (!hasDockSlot && !hasMainSlot) continue;
-        if (!hasDockSlot && hasMainSlot && !this.isAppPinned(plugin)) continue;
-      }
+      if (!this.isAppPinned(plugin)) continue;
 
       if (plugin.id !== "org.omni.plugin.feed") {
         this.ensureAppPage(plugin.id);
@@ -703,15 +697,7 @@ export class OmniShell implements OmniShellHost {
     pinnedGrid.innerHTML = "";
     unpinnedGrid.innerHTML = "";
 
-    const appCandidates: InstalledPluginEntry[] = [];
-    for (const plugin of this.installedPlugins) {
-      if (!plugin.enabled) continue;
-      const placements = this.getPluginPlacements(plugin);
-      const hasMain = placements.some((pl) => pl.enabled !== false && pl.viewport === "main");
-      if (hasMain || plugin.id === "org.omni.plugin.feed") {
-        appCandidates.push(plugin);
-      }
-    }
+    const appCandidates: InstalledPluginEntry[] = this.installedPlugins.filter((p) => p.enabled !== false);
 
     let pinnedCount = 0;
     let unpinnedCount = 0;
@@ -785,16 +771,10 @@ export class OmniShell implements OmniShellHost {
       };`;
       btnPin.innerHTML = `${icon("pin", 13)} <span>${isPinned ? "Pinned" : "Pin to Dock"}</span>`;
 
-      if (isFeed) {
-        btnPin.title = "Feed is permanently pinned to the dock";
-        btnPin.disabled = true;
-        btnPin.style.opacity = "0.7";
-      } else {
-        btnPin.title = isPinned ? "Unpin from navigation dock" : "Pin to navigation dock";
-        btnPin.addEventListener("click", () => {
-          this.setAppPinned(plugin.id, !isPinned);
-        });
-      }
+      btnPin.title = isPinned ? "Unpin from navigation dock" : "Pin to navigation dock";
+      btnPin.addEventListener("click", () => {
+        this.setAppPinned(plugin.id, !isPinned);
+      });
 
       const btnOpen = document.createElement("button");
       btnOpen.className = "btn-publish btn-app-launch";
@@ -832,7 +812,7 @@ export class OmniShell implements OmniShellHost {
       const emptyNote = document.createElement("div");
       emptyNote.style.cssText =
         "grid-column: 1 / -1; padding: 18px; text-align: center; color: var(--omni-text-muted); font-size: 0.78rem; background: var(--omni-bg-surface); border: 1px dashed var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
-      emptyNote.textContent = "All installed full-page applications are currently pinned to your navigation dock.";
+      emptyNote.textContent = "All installed applications are currently pinned to your navigation dock.";
       unpinnedGrid.appendChild(emptyNote);
     }
   }
@@ -893,6 +873,55 @@ export class OmniShell implements OmniShellHost {
         targetPage = document.getElementById(`page-app-${safeId}`) as HTMLElement | null;
         if (!targetPage) {
           targetPage = mainVp?.querySelector<HTMLElement>(`[data-plugin-id="${page}"], [data-page="${page}"]`) || null;
+        }
+
+        const plugin = this.installedPlugins.find((p) => p.id === page);
+        if (plugin && plugin.enabled) {
+          const slotEl = this.ensureAppPage(plugin.id);
+          targetPage = document.getElementById(`page-app-${safeId}`) as HTMLElement | null;
+
+          // If no sandbox instance has been mounted to slot-main-${safeId}, mount the standalone app
+          const appInstanceKey = `${plugin.id}::app`;
+          const placements = this.getPluginPlacements(plugin);
+          const hasMainRunning = placements.some(
+            (pl) => pl.enabled !== false && pl.viewport === "main" && this.kernel.getSandbox(`${plugin.id}::${pl.id}`)
+          );
+
+          if (!hasMainRunning && !this.kernel.getSandbox(appInstanceKey)) {
+            const synthManifest = this.ensurePluginManifest(plugin);
+            const appManifest = {
+              ...synthManifest,
+              components: [
+                {
+                  id: `${plugin.id}-app-main`,
+                  type: "main",
+                  title: plugin.name || plugin.id,
+                  slot: "main"
+                }
+              ]
+            };
+            const customSlotContainers = new Map(this.getSlotContainers());
+            customSlotContainers.set("main", slotEl);
+            customSlotContainers.set("sidebar", slotEl);
+            if (synthManifest.components) {
+              for (const comp of synthManifest.components) {
+                if (comp.slot) customSlotContainers.set(comp.slot, slotEl);
+              }
+            }
+
+            this.kernel.registerPlugin(
+              appManifest,
+              plugin.htmlContent || plugin.scriptContent,
+              customSlotContainers,
+              {
+                instanceId: appInstanceKey,
+                route: "",
+                viewId: "main",
+                targetSlot: "main",
+                relays: plugin.relays
+              }
+            ).catch((err) => console.error(`Failed to register app instance for ${plugin.id}:`, err));
+          }
         }
       }
 
@@ -2039,7 +2068,7 @@ export class OmniShell implements OmniShellHost {
                 <h2 class="widgets-page-title">Applications</h2>
                 <span class="widgets-page-badge">Launcher</span>
               </div>
-              <p class="widgets-page-desc">All installed full-page applications. Pin your favorites to the navigation dock for instant access.</p>
+              <p class="widgets-page-desc">All installed applications. Pin your favorites to the navigation dock for instant access.</p>
             </div>
             <div class="apps-launcher-content" style="display: flex; flex-direction: column; gap: 20px;">
               <div class="apps-section">
@@ -2055,7 +2084,7 @@ export class OmniShell implements OmniShellHost {
               <div class="apps-section">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                   <h3 style="font-size: 0.88rem; font-weight: 600; color: var(--omni-text-primary); margin: 0; display: flex; align-items: center; gap: 6px;">
-                    ${icon("grid", 15)} Additional Apps
+                    ${icon("grid", 15)} All Apps
                   </h3>
                   <span id="apps-unpinned-count" style="font-size: 0.72rem; color: var(--omni-text-muted);">0 apps</span>
                 </div>
