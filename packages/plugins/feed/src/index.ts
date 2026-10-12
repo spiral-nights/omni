@@ -181,8 +181,8 @@ function mountFeed(root: any) {
     if (renderedIds.has(event.id)) return;
 
     if (!isInitialBatchComplete || fromCache) {
-      // During initial fetch or from local store, display immediately
-      renderNote(event, true);
+      // Initial chronological notes appended cleanly
+      renderNote(event, false);
     } else {
       // Like Bluesky: buffer live notes so reading isn't interrupted by jumping DOM
       if (!pendingNewNotes.some((n) => n.id === event.id)) {
@@ -293,6 +293,11 @@ function mountFeed(root: any) {
       ws.onopen = () => {
         // 1. Bounded initial query: fetch the latest 30 notes
         ws.send(JSON.stringify(["REQ", "feed-initial", { kinds: [1], limit: 30 }]));
+        setTimeout(() => {
+          if (!isInitialBatchComplete) {
+            isInitialBatchComplete = true;
+          }
+        }, 500);
       };
 
       ws.onmessage = (msg) => {

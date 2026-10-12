@@ -168,13 +168,17 @@ async function startApp() {
     console.warn("Could not check local NIP-78 workspace store:", err);
   });
 
-  // Mount remaining background plugins concurrently without blocking active feed
-  const backgroundPlugins = shell.installedPlugins.filter(
-    (p) => p.id !== primaryPlugin?.id && p.enabled
-  );
-  Promise.all(backgroundPlugins.map((p) => shell.mountPlugin(p))).catch((err) => {
-    console.warn("Background plugin mount:", err);
-  });
+  // Mount background plugins quietly after the primary feed view has rendered
+  setTimeout(() => {
+    const backgroundPlugins = shell.installedPlugins.filter(
+      (p) => p.id !== primaryPlugin?.id && p.enabled
+    );
+    for (const p of backgroundPlugins) {
+      shell.mountPlugin(p).catch((err) => {
+        console.warn("Background plugin mount:", err);
+      });
+    }
+  }, 1000);
 
   // Background fetch of remote NIP-78 workspace state from connected relays
   kernel

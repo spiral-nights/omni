@@ -58,8 +58,8 @@ export class SubscriptionCoordinator {
         const isNew = !seenEventIds.has(event.id);
         seenEventIds.add(event.id);
 
-        // Ingest into local store for future 0ms hits
-        await this.eventStore.saveEvent(event);
+        // Ingest into local store in background so UI rendering is never delayed
+        this.eventStore.saveEvent(event).catch(() => {});
 
         if (isNew) {
           onEvent(event, { fromCache: false, relay: relayUrl });

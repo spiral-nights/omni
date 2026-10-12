@@ -671,6 +671,11 @@ export class OmniShell implements OmniShellHost {
     if (page === "widgets") {
       this.pageWidgets.classList.add("active");
       this.dockBtnWidgets?.classList.add("active");
+      for (const p of this.installedPlugins) {
+        if (p.enabled && !this.kernel.getSandbox(p.id)) {
+          this.mountPlugin(p).catch(console.warn);
+        }
+      }
     } else {
       let targetPage: HTMLElement | null = null;
       if (page === "feed" || page === "org.omni.plugin.feed") {
@@ -1948,41 +1953,7 @@ export class OmniShell implements OmniShellHost {
         <main class="main-viewport" id="main-viewport">
           <!-- Page 1: Timeline Feed & Main Slot -->
           <section class="app-page active" id="page-feed" data-plugin-id="org.omni.plugin.feed" data-page="feed">
-            <div id="main-slot" class="omni-slot main-viewport-slot">
-              <div class="feed-skeleton">
-                <div class="skeleton-composer">
-                  <div class="skeleton-shimmer skeleton-input"></div>
-                  <div class="skeleton-footer">
-                    <div class="skeleton-shimmer skeleton-btn"></div>
-                  </div>
-                </div>
-                <div class="skeleton-header-row">
-                  <div class="skeleton-shimmer skeleton-title"></div>
-                  <div class="skeleton-shimmer skeleton-badge"></div>
-                </div>
-                <div class="skeleton-card">
-                  <div class="skeleton-card-header">
-                    <div class="skeleton-shimmer skeleton-author"></div>
-                  </div>
-                  <div class="skeleton-shimmer skeleton-line"></div>
-                  <div class="skeleton-shimmer skeleton-line short"></div>
-                </div>
-                <div class="skeleton-card">
-                  <div class="skeleton-card-header">
-                    <div class="skeleton-shimmer skeleton-author"></div>
-                  </div>
-                  <div class="skeleton-shimmer skeleton-line"></div>
-                  <div class="skeleton-shimmer skeleton-line short"></div>
-                </div>
-                <div class="skeleton-card">
-                  <div class="skeleton-card-header">
-                    <div class="skeleton-shimmer skeleton-author"></div>
-                  </div>
-                  <div class="skeleton-shimmer skeleton-line"></div>
-                  <div class="skeleton-shimmer skeleton-line short"></div>
-                </div>
-              </div>
-            </div>
+            <div id="main-slot" class="omni-slot main-viewport-slot"></div>
           </section>
 
           <!-- Page 2: Dedicated Full Widgets Dashboard -->

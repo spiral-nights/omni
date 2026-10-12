@@ -67,10 +67,6 @@ export class RemoteDomHost {
   }
 
   mutate(records: any[]): void {
-    if (this.container.querySelector && this.container.querySelector(".feed-skeleton")) {
-      this.container.querySelectorAll(".feed-skeleton").forEach((el) => el.remove());
-    }
-
     const wrappedRecords = records.map((rec) => {
       // Mutation 0 (MUTATION_TYPE_INSERT_CHILD): wrap all eventListeners in inserted tree
       if (rec[0] === 0 && rec[2]) {
