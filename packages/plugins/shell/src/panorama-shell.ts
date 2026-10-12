@@ -41,7 +41,6 @@ export class PanoramaShell implements OmniShellHost {
   // Internal element references
   private panoramaContainer!: HTMLElement;
   private pivotHeadersTrack!: HTMLElement;
-  private sectionFeed!: HTMLElement;
   private sectionApps!: HTMLElement;
   private sectionWidgets!: HTMLElement;
   private sectionSystem!: HTMLElement;
@@ -183,8 +182,7 @@ export class PanoramaShell implements OmniShellHost {
       const placements = this.getPluginPlacements(p);
       return (
         p.viewport === "main" ||
-        placements.some((pl) => pl.enabled !== false && pl.viewport === "main") ||
-        p.id === "org.omni.plugin.feed"
+        placements.some((pl) => pl.enabled !== false && pl.viewport === "main")
       );
     });
   }
@@ -192,15 +190,7 @@ export class PanoramaShell implements OmniShellHost {
   // --- Mounting & Container Resolution ---
 
   public getContainerForPluginSlot(pluginId: string, slotId: string, compId?: string): Element {
-    if (pluginId === "org.omni.plugin.feed") {
-      const feedSlot = document.getElementById("panorama-feed-slot");
-      if (feedSlot) return feedSlot;
-    }
-
     if (slotId === "main" || slotId === "dock") {
-      if (pluginId === "org.omni.plugin.feed") {
-        return document.getElementById("panorama-feed-slot") || this.sectionFeed;
-      }
       const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
       const canvasSlot = document.getElementById(`panorama-slot-main-${safeId}`);
       if (canvasSlot) {
@@ -213,12 +203,12 @@ export class PanoramaShell implements OmniShellHost {
       return document.getElementById("panorama-widgets-slot") || this.sectionWidgets;
     }
 
-    return this.slotContainers.get(slotId) || this.sectionFeed;
+    return this.slotContainers.get(slotId) || document.getElementById("panorama-widgets-slot") || this.root;
   }
 
   public ensureMainAppSections(): void {
     if (!this.panoramaContainer) return;
-    const mainApps = this.getMainAppPlugins().filter((p) => p.id !== "org.omni.plugin.feed");
+    const mainApps = this.getMainAppPlugins();
     const appsSection = document.getElementById("panorama-section-apps");
 
     // Remove any main app canvas sections for plugins no longer assigned to main
@@ -332,7 +322,6 @@ export class PanoramaShell implements OmniShellHost {
   }
 
   public isAppPinned(p: InstalledPluginEntry): boolean {
-    if (p.id === "org.omni.plugin.feed") return true;
     if (typeof p.pinned === "boolean") return p.pinned;
     return true; // Default pinned in panorama for bold live tiles
   }
@@ -548,6 +537,12 @@ export class PanoramaShell implements OmniShellHost {
     this.cacheElementReferences();
     this.initSlotContainers();
     this.ensureMainAppSections();
+    const mainApps = this.getMainAppPlugins();
+    if (mainApps.length > 0) {
+      this.activePivot = mainApps[0].id;
+    } else {
+      this.activePivot = "apps";
+    }
     this.renderAppsTiles();
     this.renderSystemPluginList();
     this.wireNavigation();
@@ -653,24 +648,12 @@ export class PanoramaShell implements OmniShellHost {
           <div class="panorama-brand-row">
             <h1 class="panorama-hero-title">omni</h1>
           </div>
-          <nav class="panorama-pivot-nav" id="panorama-pivot-nav">
-            <button class="panorama-pivot-item active" data-pivot="feed">feed</button>
-            <button class="panorama-pivot-item" data-pivot="apps">apps</button>
-            <button class="panorama-pivot-item" data-pivot="widgets">widgets</button>
-            <button class="panorama-pivot-item" data-pivot="system">system</button>
-          </nav>
+          <nav class="panorama-pivot-nav" id="panorama-pivot-nav"></nav>
         </header>
 
         <!-- 2. Horizontal Panorama Canvas -->
         <div class="panorama-canvas" id="panorama-canvas">
-          <!-- Section 1: Feed (Timeline Feed) -->
-          <section class="panorama-section" id="panorama-section-feed" data-pivot="feed">
-            <div class="panorama-section-content">
-              <div id="panorama-feed-slot" class="omni-slot panorama-feed-slot"></div>
-            </div>
-          </section>
-
-          <!-- Section 2: Apps (Live Tiles Mosaic) -->
+          <!-- Section: Apps (Live Tiles Mosaic) -->
           <section class="panorama-section" id="panorama-section-apps" data-pivot="apps">
             <div class="panorama-section-content">
               <div class="panorama-section-title-bar">
@@ -782,7 +765,6 @@ export class PanoramaShell implements OmniShellHost {
     const q = (sel: string) => (this.root.querySelector(sel) || document.querySelector(sel)) as HTMLElement;
     this.panoramaContainer = q("#panorama-canvas");
     this.pivotHeadersTrack = q("#panorama-pivot-nav");
-    this.sectionFeed = q("#panorama-section-feed");
     this.sectionApps = q("#panorama-section-apps");
     this.sectionWidgets = q("#panorama-section-widgets");
     this.sectionSystem = q("#panorama-section-system");
@@ -792,12 +774,7 @@ export class PanoramaShell implements OmniShellHost {
 
   private initSlotContainers(): void {
     this.slotContainers.clear();
-    const feedSlot = this.root.querySelector("#panorama-feed-slot") || document.getElementById("panorama-feed-slot");
     const widgetsSlot = this.root.querySelector("#panorama-widgets-slot") || document.getElementById("panorama-widgets-slot");
-    if (feedSlot) {
-      this.slotContainers.set("main", feedSlot);
-      this.slotContainers.set("dock", feedSlot);
-    }
     if (widgetsSlot) {
       this.slotContainers.set("sidebar", widgetsSlot);
       this.slotContainers.set("widgets", widgetsSlot);
@@ -1147,17 +1124,11 @@ export class PanoramaShell implements OmniShellHost {
               isPinned ? "var(--omni-accent-primary, #00a4ef)" : "#888"
             };`;
             pinBtn.innerHTML = `${icon("pin", 12)} <span>${isPinned ? "Pinned to Tiles" : "Pin to Tiles"}</span>`;
-            if (plugin.id === "org.omni.plugin.feed") {
-              pinBtn.title = "Feed is always pinned";
-              pinBtn.style.opacity = "0.7";
-              pinBtn.disabled = true;
-            } else {
-              pinBtn.title = isPinned ? "Unpin tile" : "Pin live tile";
-              pinBtn.addEventListener("click", () => {
-                this.setAppPinned(plugin.id, !isPinned);
-                this.renderSystemPluginList();
-              });
-            }
+            pinBtn.title = isPinned ? "Unpin tile" : "Pin live tile";
+            pinBtn.addEventListener("click", () => {
+              this.setAppPinned(plugin.id, !isPinned);
+              this.renderSystemPluginList();
+            });
             controlsLeft.appendChild(pinBtn);
           }
 
@@ -1397,33 +1368,23 @@ export class PanoramaShell implements OmniShellHost {
     if (!this.pivotHeadersTrack) return;
     this.pivotHeadersTrack.innerHTML = "";
 
-    // 1. Feed pivot
-    const feedBtn = document.createElement("button");
-    feedBtn.className = "panorama-pivot-item";
-    feedBtn.dataset.pivot = "feed";
-    feedBtn.textContent = "feed";
-    if (this.activePivot === "feed" || this.activePivot === "org.omni.plugin.feed") {
-      feedBtn.classList.add("active");
-    }
-    feedBtn.addEventListener("click", () => this.showPivot("feed"));
-    this.pivotHeadersTrack.appendChild(feedBtn);
-
-    // 2. Dynamic Main App Pivots (e.g. Focus Timer, Daily Tasks)
-    const otherMainApps = this.getMainAppPlugins().filter((p) => p.id !== "org.omni.plugin.feed");
-    for (const app of otherMainApps) {
+    // 1. Dynamic Main App Pivots (Feed, or whatever apps are assigned to main)
+    const mainApps = this.getMainAppPlugins();
+    for (const app of mainApps) {
       const meta = this.getPluginMeta(app);
       const btn = document.createElement("button");
       btn.className = "panorama-pivot-item";
       btn.dataset.pivot = app.id;
-      btn.textContent = (app.name || meta.name).toLowerCase();
-      if (this.activePivot === app.id) {
+      const label = app.id === "org.omni.plugin.feed" ? "feed" : (app.name || meta.name).toLowerCase();
+      btn.textContent = label;
+      if (this.activePivot === app.id || (app.id === "org.omni.plugin.feed" && this.activePivot === "feed")) {
         btn.classList.add("active");
       }
       btn.addEventListener("click", () => this.showPivot(app.id));
       this.pivotHeadersTrack.appendChild(btn);
     }
 
-    // 3. Apps, Widgets, System pivots
+    // 2. Standard Panorama Pivots: Apps, Widgets, System
     const standardPivots = ["apps", "widgets", "system"];
     for (const sp of standardPivots) {
       const btn = document.createElement("button");
@@ -1527,6 +1488,8 @@ export class PanoramaShell implements OmniShellHost {
     const safeId = pivot.replace(/[^a-zA-Z0-9_-]/g, "-");
     const targetSection = document.getElementById(`panorama-section-${pivot}`) ||
       document.getElementById(`panorama-section-${safeId}`) ||
+      (pivot === "feed" ? document.getElementById("panorama-section-org-omni-plugin-feed") : null) ||
+      (pivot === "org.omni.plugin.feed" ? document.getElementById("panorama-section-feed") : null) ||
       (this.panoramaContainer?.querySelector<HTMLElement>(`.panorama-section[data-pivot="${pivot}"]`));
 
     if (targetSection && this.panoramaContainer) {
@@ -1538,7 +1501,9 @@ export class PanoramaShell implements OmniShellHost {
         behavior: "smooth"
       });
 
-      const btn = this.pivotHeadersTrack?.querySelector<HTMLElement>(`.panorama-pivot-item[data-pivot="${pivot}"]`);
+      const btn = this.pivotHeadersTrack?.querySelector<HTMLElement>(`.panorama-pivot-item[data-pivot="${pivot}"]`) ||
+        (pivot === "feed" ? this.pivotHeadersTrack?.querySelector<HTMLElement>(`.panorama-pivot-item[data-pivot="org.omni.plugin.feed"]`) : null) ||
+        (pivot === "org.omni.plugin.feed" ? this.pivotHeadersTrack?.querySelector<HTMLElement>(`.panorama-pivot-item[data-pivot="feed"]`) : null);
       if (btn && this.pivotHeadersTrack) {
         const firstOffset = this.pivotHeadersTrack.querySelector<HTMLElement>(".panorama-pivot-item")?.offsetLeft || 0;
         this.pivotHeadersTrack.scrollTo({
@@ -1555,10 +1520,7 @@ export class PanoramaShell implements OmniShellHost {
   }
 
   public showPage(page: string): void {
-    if (page === "feed" || page === "org.omni.plugin.feed") {
-      this.closeApp();
-      this.showPivot("feed");
-    } else if (page === "apps") {
+    if (page === "apps") {
       this.closeApp();
       this.showPivot("apps");
     } else if (page === "widgets" || page === "dashboard") {
@@ -1569,7 +1531,9 @@ export class PanoramaShell implements OmniShellHost {
       this.showPivot("system");
     } else {
       const safeId = page.replace(/[^a-zA-Z0-9_-]/g, "-");
-      const section = document.getElementById(`panorama-section-${safeId}`);
+      const section = document.getElementById(`panorama-section-${safeId}`) ||
+        (page === "feed" ? document.getElementById("panorama-section-org-omni-plugin-feed") : null) ||
+        (page === "org.omni.plugin.feed" ? document.getElementById("panorama-section-feed") : null);
       if (section) {
         this.closeApp();
         this.showPivot(page);

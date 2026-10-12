@@ -1190,14 +1190,31 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(pivotNav.scrollLeft).toBeGreaterThan(0);
     });
 
-    it("provides full-page vertical scrolling layout for feed without middle-only trapped scroll containment", () => {
-      const feedSection = panoramaRoot.querySelector("#panorama-section-feed") as HTMLElement;
+    it("provides full-page vertical scrolling layout for main apps without middle-only trapped scroll containment", () => {
+      const feedSection = panoramaRoot.querySelector("#panorama-section-org-omni-plugin-feed") as HTMLElement;
       expect(feedSection).toBeTruthy();
-      const feedSlot = panoramaRoot.querySelector("#panorama-feed-slot") as HTMLElement;
+      const feedSlot = panoramaRoot.querySelector("#panorama-slot-main-org-omni-plugin-feed") as HTMLElement;
       expect(feedSlot).toBeTruthy();
 
       // feedSlot should not force an inner trapped scrollbar inline
       expect(feedSlot.style.overflow).not.toBe("auto");
+    });
+
+    it("dynamically adds and removes main app canvas sections and pivots (feed is not hardcoded)", async () => {
+      // Feed is initially in main, so it has a dynamic section and pivot header
+      expect(panoramaRoot.querySelector("#panorama-section-org-omni-plugin-feed")).toBeTruthy();
+      const pivotNav = panoramaRoot.querySelector("#panorama-pivot-nav");
+      expect(pivotNav?.textContent).toContain("feed");
+
+      // Reassign feed to sidebar
+      const feedPlugin = panoramaShell.installedPlugins.find((p) => p.id === "org.omni.plugin.feed")!;
+      feedPlugin.viewport = "sidebar";
+      feedPlugin.placements = [{ id: "feed-pl", viewport: "sidebar", route: "?view=widget", viewId: "widget", enabled: true }];
+      await panoramaShell.remountPlugin(feedPlugin);
+
+      // Dynamic canvas section and pivot header for feed are removed
+      expect(panoramaRoot.querySelector("#panorama-section-org-omni-plugin-feed")).toBeFalsy();
+      expect(panoramaRoot.querySelector("#panorama-pivot-nav")?.textContent).not.toContain("feed");
     });
 
     it("allows configuring plugins (settings, viewports, relays, inspector) in the system pivot", async () => {
