@@ -1421,6 +1421,116 @@ export class OmniShell implements OmniShellHost {
 
       pane.appendChild(placementsSection);
 
+      // Relay Access Scoping Section
+      const relayAccessBox = document.createElement("div");
+      relayAccessBox.className = "plugin-relay-access-box";
+      relayAccessBox.style.cssText =
+        "display: flex; flex-direction: column; gap: 8px; background: var(--omni-bg-surface); padding: 12px 14px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);";
+
+      const relayHeader = document.createElement("div");
+      relayHeader.style.cssText = "display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;";
+
+      const relayTitle = document.createElement("div");
+      relayTitle.style.cssText = "display: flex; align-items: center; gap: 6px;";
+      relayTitle.innerHTML = `<span style="font-weight: 600; font-size: 0.82rem; color: var(--omni-text-primary);">Relay Access</span>`;
+
+      const allRelays = this.kernel.relayPool.getAllRelays().map((r) => r.url);
+      const isCustomRelays = Array.isArray(p.relays) && p.relays.length > 0;
+
+      const relayModePill = document.createElement("span");
+      relayModePill.style.cssText = "font-size: 0.68rem; padding: 1px 6px; border-radius: var(--omni-radius-pill); background: var(--omni-bg-subtle); color: var(--omni-text-secondary);";
+      relayModePill.textContent = isCustomRelays
+        ? `Custom (${p.relays!.length} relay${p.relays!.length === 1 ? "" : "s"})`
+        : "All Relays (Default)";
+
+      relayHeader.appendChild(relayTitle);
+      relayHeader.appendChild(relayModePill);
+      relayAccessBox.appendChild(relayHeader);
+
+      const relayDesc = document.createElement("div");
+      relayDesc.style.cssText = "font-size: 0.72rem; color: var(--omni-text-muted);";
+      relayDesc.textContent = "Restrict this plugin to specific relays, or allow it to use all configured relays.";
+      relayAccessBox.appendChild(relayDesc);
+
+      const relayOptionsWrap = document.createElement("div");
+      relayOptionsWrap.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 2px;";
+
+      const radAllLabel = document.createElement("label");
+      radAllLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--omni-text-primary); cursor: pointer;";
+      const radAll = document.createElement("input");
+      radAll.type = "radio";
+      radAll.name = `pane-relay-scope-${safeId}`;
+      radAll.checked = !isCustomRelays;
+      radAllLabel.appendChild(radAll);
+      radAllLabel.appendChild(document.createTextNode("All Configured Relays (Default)"));
+      relayOptionsWrap.appendChild(radAllLabel);
+
+      const radCustomLabel = document.createElement("label");
+      radCustomLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--omni-text-primary); cursor: pointer;";
+      const radCustom = document.createElement("input");
+      radCustom.type = "radio";
+      radCustom.name = `pane-relay-scope-${safeId}`;
+      radCustom.checked = isCustomRelays;
+      radCustomLabel.appendChild(radCustom);
+      radCustomLabel.appendChild(document.createTextNode("Custom Relays"));
+      relayOptionsWrap.appendChild(radCustomLabel);
+
+      const customCheckboxesContainer = document.createElement("div");
+      customCheckboxesContainer.style.cssText = `display: ${isCustomRelays ? "flex" : "none"}; flex-direction: column; gap: 5px; margin-left: 18px; padding-top: 4px;`;
+
+      const selectedCustomRelays = new Set<string>(p.relays || []);
+
+      for (const rUrl of allRelays) {
+        const cbLabel = document.createElement("label");
+        cbLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--omni-text-secondary); cursor: pointer;";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = selectedCustomRelays.has(rUrl);
+        cb.addEventListener("change", async () => {
+          if (cb.checked) {
+            selectedCustomRelays.add(rUrl);
+          } else {
+            selectedCustomRelays.delete(rUrl);
+          }
+          p.relays = Array.from(selectedCustomRelays);
+          relayModePill.textContent = `Custom (${p.relays.length} relay${p.relays.length === 1 ? "" : "s"})`;
+          await this.remountPlugin(p);
+        });
+        cbLabel.appendChild(cb);
+        const codeSpan = document.createElement("code");
+        codeSpan.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.7rem;";
+        codeSpan.textContent = rUrl;
+        cbLabel.appendChild(codeSpan);
+        customCheckboxesContainer.appendChild(cbLabel);
+      }
+
+      radAll.addEventListener("change", async () => {
+        if (radAll.checked) {
+          customCheckboxesContainer.style.display = "none";
+          p.relays = undefined;
+          relayModePill.textContent = "All Relays (Default)";
+          await this.remountPlugin(p);
+        }
+      });
+
+      radCustom.addEventListener("change", async () => {
+        if (radCustom.checked) {
+          customCheckboxesContainer.style.display = "flex";
+          if (selectedCustomRelays.size === 0 && allRelays.length > 0) {
+            selectedCustomRelays.add(allRelays[0]);
+            const firstCb = customCheckboxesContainer.querySelector("input[type=checkbox]") as HTMLInputElement | null;
+            if (firstCb) firstCb.checked = true;
+          }
+          p.relays = Array.from(selectedCustomRelays);
+          relayModePill.textContent = `Custom (${p.relays.length} relay${p.relays.length === 1 ? "" : "s"})`;
+          await this.remountPlugin(p);
+        }
+      });
+
+      relayOptionsWrap.appendChild(customCheckboxesContainer);
+      relayAccessBox.appendChild(relayOptionsWrap);
+      pane.appendChild(relayAccessBox);
+
       // Actions Row
       const actionsRow = document.createElement("div");
       actionsRow.style.cssText = "display: flex; gap: 8px; align-items: center; margin-top: 4px;";
@@ -1522,17 +1632,17 @@ export class OmniShell implements OmniShellHost {
         ? p.views
         : [{ id: "main", title: "Main App", path: "" }];
       const placements = this.getPluginPlacements(p);
-      const isExpanded = this.expandedPluginId === p.id;
+      const safeId = p.id.replace(/[^a-zA-Z0-9_-]/g, "-");
 
       const card = document.createElement("div");
       card.className = "plugin-item-row plugin-card-collapsible";
       card.dataset.pluginId = p.id;
-      card.style.cssText = `margin-bottom: 8px; background: var(--omni-bg-surface); border: 1px solid ${isExpanded ? "var(--omni-border-strong)" : "var(--omni-border-subtle)"}; border-radius: var(--omni-radius-md); overflow: hidden; transition: border-color 0.15s ease;`;
+      card.style.cssText = `margin-bottom: 8px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); overflow: hidden; transition: border-color 0.15s ease;`;
 
-      // 1. Collapsible Header Row (Compact & informative on load)
+      // Compact Directory Row
       const header = document.createElement("div");
       header.className = "plugin-card-header plugin-card-collapsible-header";
-      header.style.cssText = `display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; user-select: none; gap: 10px; background: ${isExpanded ? "var(--omni-bg-elevated)" : "transparent"}; transition: background 0.15s ease;`;
+      header.style.cssText = `display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; gap: 12px; flex-wrap: wrap;`;
 
       const headerLeft = document.createElement("div");
       headerLeft.style.cssText = "display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; flex-wrap: wrap;";
@@ -1600,11 +1710,10 @@ export class OmniShell implements OmniShellHost {
       const headerRight = document.createElement("div");
       headerRight.style.cssText = "display: flex; align-items: center; gap: 10px; flex-shrink: 0;";
 
-      // Enable/disable master toggle
+      // Master enable/disable toggle
       const toggleLabel = document.createElement("label");
       toggleLabel.className = "omni-toggle";
       toggleLabel.title = p.enabled ? "Click to disable plugin" : "Click to enable plugin";
-      toggleLabel.addEventListener("click", (e) => e.stopPropagation());
 
       const toggleInput = document.createElement("input");
       toggleInput.type = "checkbox";
@@ -1620,451 +1729,22 @@ export class OmniShell implements OmniShellHost {
       toggleLabel.appendChild(toggleInput);
       toggleLabel.appendChild(toggleSlider);
 
-      // Expand/Collapse Chevron Indicator
-      const chevronWrap = document.createElement("div");
-      chevronWrap.className = "plugin-expand-chevron";
-      chevronWrap.style.cssText = "color: var(--omni-text-muted); display: flex; align-items: center; justify-content: center; width: 18px; height: 18px;";
-      chevronWrap.innerHTML = isExpanded ? icon("chevron-up", 14) : icon("chevron-down", 14);
+      // Dedicated Configure Tab Navigation Button
+      const btnConfigure = document.createElement("button");
+      btnConfigure.className = "btn-secondary btn-configure-plugin";
+      btnConfigure.style.cssText = "font-size: 0.72rem; padding: 3px 10px; display: inline-flex; align-items: center; gap: 5px; color: var(--omni-accent-primary); border-color: var(--omni-border-strong);";
+      btnConfigure.innerHTML = `<span>Configure</span> <span>→</span>`;
+      btnConfigure.title = `Open dedicated settings tab for ${meta.name}`;
+      btnConfigure.addEventListener("click", () => {
+        this.switchSettingsTab(p.id);
+      });
 
       headerRight.appendChild(toggleLabel);
-      headerRight.appendChild(chevronWrap);
+      headerRight.appendChild(btnConfigure);
 
       header.appendChild(headerLeft);
       header.appendChild(headerRight);
-
-      // Header click toggles expand/collapse (accordion: only 1 section open at a time)
-      header.addEventListener("click", () => {
-        if (this.expandedPluginId) {
-          this.kernel.destroyPluginSettings(this.expandedPluginId);
-        }
-        this.expandedPluginId = this.expandedPluginId === p.id ? null : p.id;
-        this.renderPluginManager();
-      });
-
       card.appendChild(header);
-
-      // 2. Collapsible Details Panel (Hidden on load, shown when expanded)
-      const details = document.createElement("div");
-      details.className = "plugin-details-panel plugin-card-details";
-      details.style.cssText = `display: ${isExpanded ? "flex" : "none"}; flex-direction: column; padding: 12px 14px; gap: 12px; border-top: 1px solid var(--omni-border-subtle); background: var(--omni-bg-canvas);`;
-
-      // Description & provenance
-      const descRow = document.createElement("div");
-      descRow.style.cssText = "display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap;";
-
-      const desc = document.createElement("div");
-      desc.style.cssText = "font-size: 0.8rem; color: var(--omni-text-secondary); max-width: 650px;";
-      desc.textContent = meta.description || "No description provided.";
-
-      const sourcePill = document.createElement("div");
-      sourcePill.style.cssText = "font-size: 0.7rem; font-family: var(--omni-font-mono); color: var(--omni-text-muted); background: var(--omni-bg-surface); padding: 2px 6px; border-radius: var(--omni-radius-xs); border: 1px solid var(--omni-border-subtle);";
-      sourcePill.textContent = p.sourceUrl;
-
-      descRow.appendChild(desc);
-      descRow.appendChild(sourcePill);
-      details.appendChild(descRow);
-
-      // 3. Placements & Routes Section (Multi-viewport assignment)
-      const placementsSection = document.createElement("div");
-      placementsSection.className = "plugin-placements-section";
-      placementsSection.style.cssText = "display: flex; flex-direction: column; gap: 8px; background: var(--omni-bg-surface); padding: 10px 12px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);";
-
-      const placementsHeader = document.createElement("div");
-      placementsHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center; gap: 8px;";
-
-      const placementsTitle = document.createElement("span");
-      placementsTitle.style.cssText = "font-weight: 600; font-size: 0.78rem; color: var(--omni-text-primary);";
-      placementsTitle.textContent = "Placements & Assigned Routes";
-
-      const btnAddPlacement = document.createElement("button");
-      btnAddPlacement.className = "btn-secondary btn-add-placement";
-      btnAddPlacement.style.cssText = "font-size: 0.7rem; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;";
-      btnAddPlacement.innerHTML = `<span>+</span> Add Location`;
-      btnAddPlacement.addEventListener("click", async () => {
-        const currentPlacements = this.getPluginPlacements(p);
-        const nextVp = currentPlacements.some((pl) => pl.viewport === "main") ? "sidebar" : "main";
-        const newPl: PluginPlacement = {
-          id: `pl-${Date.now().toString(36)}`,
-          viewport: nextVp,
-          route: pluginViews[0]?.path || "",
-          viewId: pluginViews[0]?.id || "main",
-          enabled: true
-        };
-        p.placements = [...currentPlacements, newPl];
-        p.viewport = newPl.viewport;
-        p.route = newPl.route;
-        p.viewId = newPl.viewId;
-        await this.remountPlugin(p);
-        this.renderDockLaunchers();
-        this.renderPluginManager();
-      });
-
-      placementsHeader.appendChild(placementsTitle);
-      placementsHeader.appendChild(btnAddPlacement);
-      placementsSection.appendChild(placementsHeader);
-
-      if (placements.length === 0) {
-        const emptyPl = document.createElement("div");
-        emptyPl.className = "empty-placements-note";
-        emptyPl.style.cssText = "font-size: 0.72rem; color: var(--omni-text-muted); font-style: italic; padding: 4px 2px;";
-        emptyPl.textContent = "Unassigned — This plugin is not currently placed in any viewport or dock.";
-        placementsSection.appendChild(emptyPl);
-      }
-
-      const viewportOptions = this.getAvailableViewports();
-
-      // Render each placement row
-      for (let plIdx = 0; plIdx < placements.length; plIdx++) {
-        const pl = placements[plIdx];
-        const row = document.createElement("div");
-        row.className = "plugin-placement-row";
-        row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; background: var(--omni-bg-subtle); border-radius: var(--omni-radius-xs); font-size: 0.74rem; flex-wrap: wrap;";
-
-        const controlsLeft = document.createElement("div");
-        controlsLeft.style.cssText = "display: flex; align-items: center; gap: 8px; flex: 1; flex-wrap: wrap;";
-
-        // Viewport selector
-        const vpLabel = document.createElement("span");
-        vpLabel.style.cssText = "font-weight: 500; color: var(--omni-text-secondary);";
-        vpLabel.textContent = "Location:";
-
-        const vpSelect = document.createElement("select");
-        vpSelect.className = "plugin-viewport-select";
-        vpSelect.style.cssText = "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none; cursor: pointer;";
-
-        for (const optDef of viewportOptions) {
-          const opt = document.createElement("option");
-          opt.value = optDef.id;
-          opt.textContent = optDef.label;
-          if (optDef.id === pl.viewport) opt.selected = true;
-          vpSelect.appendChild(opt);
-        }
-
-        vpSelect.addEventListener("change", async () => {
-          pl.viewport = vpSelect.value;
-          p.viewport = pl.viewport;
-          if (pl.viewport === "main" || pl.viewport === "dock") {
-            p.pinned = true;
-          }
-          const primaryComp = synthManifest.components?.[0];
-          if (primaryComp) {
-            this.layoutManager.setComponentSlot(p.id, primaryComp.id, pl.viewport);
-          }
-          await this.remountPlugin(p);
-          this.renderDockLaunchers();
-          this.renderPluginManager();
-        });
-
-        // Route selector
-        const routeLabel = document.createElement("span");
-        routeLabel.style.cssText = "font-weight: 500; color: var(--omni-text-secondary); margin-left: 6px;";
-        routeLabel.textContent = "View:";
-
-        const routeSelect = document.createElement("select");
-        routeSelect.className = "plugin-route-select";
-        routeSelect.style.cssText = "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none; cursor: pointer;";
-
-        for (const v of pluginViews) {
-          const opt = document.createElement("option");
-          opt.value = v.path;
-          opt.textContent = `${v.title} (${v.path || "/"})`;
-          if ((pl.route !== undefined && pl.route === v.path) || (!pl.route && v.id === "main")) {
-            opt.selected = true;
-          }
-          routeSelect.appendChild(opt);
-        }
-
-        routeSelect.addEventListener("change", async () => {
-          pl.route = routeSelect.value;
-          const matchedView = pluginViews.find((v: any) => v.path === routeSelect.value);
-          pl.viewId = matchedView?.id || "main";
-          p.route = pl.route;
-          p.viewId = pl.viewId;
-          await this.remountPlugin(p);
-        });
-
-        controlsLeft.appendChild(vpLabel);
-        controlsLeft.appendChild(vpSelect);
-        controlsLeft.appendChild(routeLabel);
-        controlsLeft.appendChild(routeSelect);
-
-        if (pl.viewport === "main") {
-          const isPinned = this.isAppPinned(p);
-          const pinBtn = document.createElement("button");
-          pinBtn.className = "btn-secondary btn-pin-dock";
-          pinBtn.style.cssText = `font-size: 0.7rem; padding: 2px 7px; display: inline-flex; align-items: center; gap: 4px; color: ${
-            isPinned ? "var(--omni-accent-primary)" : "var(--omni-text-muted)"
-          };`;
-          pinBtn.innerHTML = `${icon("pin", 12)} <span>${isPinned ? "Pinned to Dock" : "Pin to Dock"}</span>`;
-          if (p.id === "org.omni.plugin.feed") {
-            pinBtn.title = "Feed is always pinned";
-            pinBtn.style.opacity = "0.7";
-            pinBtn.disabled = true;
-          } else {
-            pinBtn.title = isPinned ? "Unpin from navigation dock" : "Pin to navigation dock";
-            pinBtn.addEventListener("click", () => {
-              this.setAppPinned(p.id, !isPinned);
-              this.renderPluginManager();
-            });
-          }
-          controlsLeft.appendChild(pinBtn);
-        }
-
-        row.appendChild(controlsLeft);
-
-        // Remove placement button (if multiple placements or allow unassign)
-        const btnRemovePl = document.createElement("button");
-        btnRemovePl.className = "btn-secondary btn-remove-placement";
-        btnRemovePl.style.cssText = "font-size: 0.68rem; padding: 2px 6px; color: #f87171;";
-        btnRemovePl.textContent = placements.length > 1 ? "Remove" : "Unassign";
-        btnRemovePl.title = "Remove this placement";
-        btnRemovePl.addEventListener("click", async () => {
-          p.placements = placements.filter((_, idx) => idx !== plIdx);
-          if (p.placements.length > 0) {
-            p.viewport = p.placements[0].viewport;
-            p.route = p.placements[0].route;
-            p.viewId = p.placements[0].viewId;
-          } else {
-            p.viewport = "";
-            p.route = "";
-            p.viewId = "";
-            this.layoutManager.unregisterPlugin(p.id);
-          }
-          await this.remountPlugin(p);
-          this.renderDockLaunchers();
-          this.renderPluginManager();
-        });
-        row.appendChild(btnRemovePl);
-
-        placementsSection.appendChild(row);
-      }
-
-      details.appendChild(placementsSection);
-
-      // 4. Plugin Settings Section (Clean, no extraneous syntax spam)
-      const safeId = p.id.replace(/[^a-zA-Z0-9_-]/g, "-");
-      const settingsBox = document.createElement("div");
-      settingsBox.className = "plugin-settings-box";
-      settingsBox.style.cssText = "display: flex; flex-direction: column; gap: 6px; background: var(--omni-bg-surface); padding: 10px 12px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);";
-
-      const settingsHeader = document.createElement("div");
-      settingsHeader.style.cssText = "display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;";
-
-      const settingsTitle = document.createElement("span");
-      settingsTitle.style.cssText = "font-weight: 600; font-size: 0.78rem; color: var(--omni-text-primary);";
-      settingsTitle.textContent = "Plugin Settings";
-
-      const settingsView = pluginViews.find((v: any) => v.id === "settings" || v.path.includes("settings"));
-
-      const mountContainer = document.createElement("div");
-      mountContainer.id = `plugin-settings-mount-mgr-${safeId}`;
-      mountContainer.className = "plugin-settings-mount-container";
-      mountContainer.style.cssText = "display: none; margin-top: 6px; padding: 10px; background: var(--omni-bg-canvas); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
-
-      if (settingsView) {
-        const btnToggleSettings = document.createElement("button");
-        btnToggleSettings.className = "btn-secondary btn-plugin-settings";
-        btnToggleSettings.id = `btn-toggle-settings-mgr-${safeId}`;
-        btnToggleSettings.style.cssText = "font-size: 0.72rem; padding: 2px 8px;";
-        btnToggleSettings.textContent = "Open Settings";
-
-        btnToggleSettings.addEventListener("click", async () => {
-          const isOpen = mountContainer.style.display !== "none";
-          if (!isOpen) {
-            mountContainer.style.display = "block";
-            btnToggleSettings.textContent = "Loading...";
-            try {
-              await this.kernel.mountPluginSettings(
-                p.id,
-                synthManifest,
-                p.htmlContent || p.scriptContent,
-                mountContainer,
-                settingsView.path || "?view=settings"
-              );
-              btnToggleSettings.textContent = "Close Settings";
-            } catch (err) {
-              console.error(`Failed to mount settings for ${p.id}:`, err);
-              mountContainer.textContent = "Failed to load settings.";
-              btnToggleSettings.textContent = "Open Settings";
-            }
-          } else {
-            this.kernel.destroyPluginSettings(p.id);
-            mountContainer.style.display = "none";
-            mountContainer.innerHTML = "";
-            btnToggleSettings.textContent = "Open Settings";
-          }
-        });
-
-        settingsHeader.appendChild(settingsTitle);
-        settingsHeader.appendChild(btnToggleSettings);
-        settingsBox.appendChild(settingsHeader);
-        settingsBox.appendChild(mountContainer);
-      } else {
-        const noSettingsNote = document.createElement("div");
-        noSettingsNote.style.cssText = "font-size: 0.72rem; color: var(--omni-text-muted);";
-        noSettingsNote.textContent = "No custom settings available.";
-
-        settingsHeader.appendChild(settingsTitle);
-        settingsBox.appendChild(settingsHeader);
-        settingsBox.appendChild(noSettingsNote);
-      }
-
-      details.appendChild(settingsBox);
-
-      // 4b. Relay Access Scoping Section
-      const relayAccessBox = document.createElement("div");
-      relayAccessBox.className = "plugin-relay-access-box";
-      relayAccessBox.style.cssText = "display: flex; flex-direction: column; gap: 8px; background: var(--omni-bg-surface); padding: 10px 12px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);";
-
-      const relayHeader = document.createElement("div");
-      relayHeader.style.cssText = "display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;";
-
-      const relayTitle = document.createElement("div");
-      relayTitle.style.cssText = "display: flex; align-items: center; gap: 6px;";
-      relayTitle.innerHTML = `<span style="font-weight: 600; font-size: 0.78rem; color: var(--omni-text-primary);">Relay Access</span>`;
-
-      const allRelays = this.kernel.relayPool.getAllRelays().map((r) => r.url);
-      const isCustomRelays = Array.isArray(p.relays) && p.relays.length > 0;
-
-      const relayModePill = document.createElement("span");
-      relayModePill.style.cssText = "font-size: 0.68rem; padding: 1px 6px; border-radius: var(--omni-radius-pill); background: var(--omni-bg-subtle); color: var(--omni-text-secondary);";
-      relayModePill.textContent = isCustomRelays
-        ? `Custom (${p.relays!.length} relay${p.relays!.length === 1 ? "" : "s"})`
-        : "All Relays (Default)";
-
-      relayHeader.appendChild(relayTitle);
-      relayHeader.appendChild(relayModePill);
-      relayAccessBox.appendChild(relayHeader);
-
-      const relayDesc = document.createElement("div");
-      relayDesc.style.cssText = "font-size: 0.72rem; color: var(--omni-text-muted);";
-      relayDesc.textContent = "Restrict this plugin to specific relays, or allow it to use all configured relays.";
-      relayAccessBox.appendChild(relayDesc);
-
-      const relayOptionsWrap = document.createElement("div");
-      relayOptionsWrap.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 2px;";
-
-      // Radio: All relays
-      const radAllLabel = document.createElement("label");
-      radAllLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--omni-text-primary); cursor: pointer;";
-      const radAll = document.createElement("input");
-      radAll.type = "radio";
-      radAll.name = `relay-scope-${safeId}`;
-      radAll.checked = !isCustomRelays;
-      radAllLabel.appendChild(radAll);
-      radAllLabel.appendChild(document.createTextNode("All Configured Relays (Default)"));
-      relayOptionsWrap.appendChild(radAllLabel);
-
-      // Radio: Custom relays
-      const radCustomLabel = document.createElement("label");
-      radCustomLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--omni-text-primary); cursor: pointer;";
-      const radCustom = document.createElement("input");
-      radCustom.type = "radio";
-      radCustom.name = `relay-scope-${safeId}`;
-      radCustom.checked = isCustomRelays;
-      radCustomLabel.appendChild(radCustom);
-      radCustomLabel.appendChild(document.createTextNode("Custom Relays"));
-      relayOptionsWrap.appendChild(radCustomLabel);
-
-      // Container for custom checkboxes
-      const customCheckboxesContainer = document.createElement("div");
-      customCheckboxesContainer.style.cssText = `display: ${isCustomRelays ? "flex" : "none"}; flex-direction: column; gap: 5px; margin-left: 18px; padding-top: 4px;`;
-
-      const selectedCustomRelays = new Set<string>(p.relays || []);
-
-      for (const rUrl of allRelays) {
-        const cbLabel = document.createElement("label");
-        cbLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--omni-text-secondary); cursor: pointer;";
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = selectedCustomRelays.has(rUrl);
-        cb.addEventListener("change", async () => {
-          if (cb.checked) {
-            selectedCustomRelays.add(rUrl);
-          } else {
-            selectedCustomRelays.delete(rUrl);
-          }
-          p.relays = Array.from(selectedCustomRelays);
-          relayModePill.textContent = `Custom (${p.relays.length} relay${p.relays.length === 1 ? "" : "s"})`;
-          await this.remountPlugin(p);
-        });
-        cbLabel.appendChild(cb);
-        const codeSpan = document.createElement("code");
-        codeSpan.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.7rem;";
-        codeSpan.textContent = rUrl;
-        cbLabel.appendChild(codeSpan);
-        customCheckboxesContainer.appendChild(cbLabel);
-      }
-
-      radAll.addEventListener("change", async () => {
-        if (radAll.checked) {
-          customCheckboxesContainer.style.display = "none";
-          p.relays = undefined;
-          relayModePill.textContent = "All Relays (Default)";
-          await this.remountPlugin(p);
-        }
-      });
-
-      radCustom.addEventListener("change", async () => {
-        if (radCustom.checked) {
-          customCheckboxesContainer.style.display = "flex";
-          if (selectedCustomRelays.size === 0 && allRelays.length > 0) {
-            // Default select the first relay if none selected yet
-            selectedCustomRelays.add(allRelays[0]);
-            const firstCb = customCheckboxesContainer.querySelector("input[type=checkbox]") as HTMLInputElement | null;
-            if (firstCb) firstCb.checked = true;
-          }
-          p.relays = Array.from(selectedCustomRelays);
-          relayModePill.textContent = `Custom (${p.relays.length} relay${p.relays.length === 1 ? "" : "s"})`;
-          await this.remountPlugin(p);
-        }
-      });
-
-      relayOptionsWrap.appendChild(customCheckboxesContainer);
-      relayAccessBox.appendChild(relayOptionsWrap);
-      details.appendChild(relayAccessBox);
-
-      // 5. Actions Row (Inspect, Clear DB, Uninstall)
-      const actionsRow = document.createElement("div");
-      actionsRow.style.cssText = "display: flex; gap: 8px; align-items: center; margin-top: 2px;";
-
-      const btnInspect = document.createElement("button");
-      btnInspect.className = "btn-secondary";
-      btnInspect.style.cssText = "font-size: 0.72rem; padding: 3px 8px;";
-      btnInspect.textContent = "Inspect Plugin";
-      btnInspect.addEventListener("click", () => {
-        this.openPluginInspector(p);
-      });
-
-      const btnClearDb = document.createElement("button");
-      btnClearDb.className = "btn-secondary";
-      btnClearDb.style.cssText = "font-size: 0.72rem; padding: 3px 8px;";
-      btnClearDb.textContent = "Clear DB";
-      btnClearDb.addEventListener("click", async () => {
-        await this.kernel.storageManager.clear(p.id);
-        btnClearDb.textContent = "Cleared!";
-        setTimeout(() => {
-          btnClearDb.textContent = "Clear DB";
-        }, 1500);
-      });
-
-      const btnUninstall = document.createElement("button");
-      btnUninstall.className = "btn-danger";
-      btnUninstall.style.cssText = "font-size: 0.72rem; padding: 3px 8px;";
-      btnUninstall.textContent = "Uninstall";
-      btnUninstall.addEventListener("click", () => {
-        if (confirm(`Uninstall ${meta.name}? Its components and storage will be removed.`)) {
-          this.uninstallPlugin(p.id);
-        }
-      });
-
-      actionsRow.appendChild(btnInspect);
-      actionsRow.appendChild(btnClearDb);
-      actionsRow.appendChild(btnUninstall);
-
-      details.appendChild(actionsRow);
-
-      card.appendChild(details);
 
       container.appendChild(card);
     }

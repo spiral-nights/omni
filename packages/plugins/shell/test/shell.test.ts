@@ -177,12 +177,12 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     expect(shell.installedPlugins[0].id).toBe("org.omni.plugin.feed");
   });
 
-  it("Milestone 5: supports user-defined viewport reassignment via plugin manager card", () => {
-    shell.openSettings("plugins");
-    const container = root.querySelector("#plugins-list");
-    expect(container).toBeTruthy();
+  it("Milestone 5: supports user-defined viewport reassignment via dedicated plugin settings pane", () => {
+    shell.openSettings("org.omni.plugin.feed");
+    const pane = root.querySelector("#settings-pane-org-omni-plugin-feed");
+    expect(pane).toBeTruthy();
 
-    const select = container?.querySelector(".plugin-viewport-select") as HTMLSelectElement | null;
+    const select = pane?.querySelector(".plugin-viewport-select") as HTMLSelectElement | null;
     expect(select).toBeTruthy();
 
     // Reassign feed to widgets grid
@@ -195,26 +195,22 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
   });
 
   it("supports route assignment and per-plugin settings sections", async () => {
-    shell.openSettings("plugins");
-    const container = root.querySelector("#plugins-list");
-    expect(container).toBeTruthy();
+    // Check that route selector is rendered in dedicated pane
+    shell.openSettings("org.omni.plugin.feed");
+    const feedPane = root.querySelector("#settings-pane-org-omni-plugin-feed");
+    expect(feedPane).toBeTruthy();
 
-    // Check that route selector is rendered
-    const routeSelects = container?.querySelectorAll(".plugin-route-select");
+    const routeSelects = feedPane?.querySelectorAll(".plugin-route-select");
     expect(routeSelects?.length).toBeGreaterThanOrEqual(1);
 
     const firstRouteSelect = routeSelects?.[0] as HTMLSelectElement;
     expect(firstRouteSelect).toBeTruthy();
 
-    // Check per-plugin settings boxes
-    const settingsBoxes = container?.querySelectorAll(".plugin-settings-box");
-    expect(settingsBoxes?.length).toBe(shell.installedPlugins.length);
+    // Check per-plugin settings box in dedicated pane
+    const feedSettingsBox = feedPane?.querySelector(".plugin-settings-box");
+    expect(feedSettingsBox?.textContent).toContain("Settings & Preferences");
 
-    // Feed plugin does not declare settings
-    const feedBox = settingsBoxes?.[0];
-    expect(feedBox?.textContent).toContain("Plugin Settings");
-
-    // Add a plugin that has a settings route and check toggle button
+    // Add a plugin that has a settings route and check toggle button in its dedicated pane
     shell.installedPlugins.push({
       id: "org.omni.test.timer",
       name: "Test Timer App",
@@ -229,20 +225,20 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       ]
     });
 
-    shell.renderPluginManager();
+    shell.renderSettingsNavAndPanes();
+    shell.openSettings("org.omni.test.timer");
 
-    const updatedBoxes = container?.querySelectorAll(".plugin-settings-box");
-    const timerBox = Array.from(updatedBoxes || []).find((b) => b.querySelector(".btn-plugin-settings"));
-    expect(timerBox).toBeTruthy();
+    const timerPane = root.querySelector("#settings-pane-org-omni-test-timer");
+    expect(timerPane).toBeTruthy();
 
-    const openSettingsBtn = timerBox?.querySelector(".btn-plugin-settings") as HTMLButtonElement;
+    const openSettingsBtn = timerPane?.querySelector(".btn-plugin-settings") as HTMLButtonElement;
     expect(openSettingsBtn).toBeTruthy();
     expect(openSettingsBtn.textContent).toBe("Open Settings");
 
     // Click to open settings
     openSettingsBtn.click();
     await new Promise((r) => setTimeout(r, 50));
-    const mountContainer = timerBox?.querySelector(".plugin-settings-mount-container") as HTMLElement;
+    const mountContainer = timerPane?.querySelector(".plugin-settings-mount-container") as HTMLElement;
     expect(mountContainer.style.display).toBe("block");
     expect(mountContainer.querySelector(".omni-component-slot")).toBeTruthy();
     expect(openSettingsBtn.textContent).toBe("Close Settings");
@@ -254,93 +250,54 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     expect(openSettingsBtn.textContent).toBe("Open Settings");
   });
 
-  it("organizes plugins in clean collapsible cards that toggle on header click", () => {
+  it("organizes installed plugins in a clean directory overview that links to dedicated tabs", () => {
     shell.openSettings("plugins");
     const container = root.querySelector("#plugins-list");
     expect(container).toBeTruthy();
 
-    const firstCard = container?.querySelector(".plugin-card-collapsible") as HTMLElement;
-    expect(firstCard).toBeTruthy();
-
-    const header = firstCard.querySelector(".plugin-card-collapsible-header") as HTMLElement;
-    const details = firstCard.querySelector(".plugin-card-details") as HTMLElement;
-    expect(header).toBeTruthy();
-    expect(details).toBeTruthy();
-
-    // Collapsed by default
-    expect(details.style.display).toBe("none");
-
-    // Click header to expand
-    header.click();
-    const firstCardAfterClick = container?.querySelector(".plugin-card-collapsible") as HTMLElement;
-    const detailsAfterClick = firstCardAfterClick.querySelector(".plugin-card-details") as HTMLElement;
-    expect(detailsAfterClick.style.display).toBe("flex");
-
-    // Click again to collapse
-    const headerAfterClick = firstCardAfterClick.querySelector(".plugin-card-collapsible-header") as HTMLElement;
-    headerAfterClick.click();
-    const firstCardAfterSecondClick = container?.querySelector(".plugin-card-collapsible") as HTMLElement;
-    const detailsAfterSecondClick = firstCardAfterSecondClick.querySelector(".plugin-card-details") as HTMLElement;
-    expect(detailsAfterSecondClick.style.display).toBe("none");
-
-    // Accordion behavior: expanding second card closes the first
-    const cards = container?.querySelectorAll(".plugin-card-collapsible") || [];
+    const cards = container?.querySelectorAll(".plugin-item-row") || [];
     expect(cards.length).toBeGreaterThanOrEqual(2);
 
-    const card0Header = cards[0].querySelector(".plugin-card-collapsible-header") as HTMLElement;
-    card0Header.click();
+    const firstCard = cards[0] as HTMLElement;
+    expect(firstCard).toBeTruthy();
 
-    const cardsAfter0 = container?.querySelectorAll(".plugin-card-collapsible") || [];
-    const details0 = cardsAfter0[0].querySelector(".plugin-card-details") as HTMLElement;
-    const details1 = cardsAfter0[1].querySelector(".plugin-card-details") as HTMLElement;
-    expect(details0.style.display).toBe("flex");
-    expect(details1.style.display).toBe("none");
+    // Check Configure button
+    const btnConfigure = firstCard.querySelector(".btn-configure-plugin") as HTMLButtonElement | null;
+    expect(btnConfigure).toBeTruthy();
+    expect(btnConfigure?.textContent).toContain("Configure");
 
-    // Click card 1 header -> card 0 closes, card 1 opens
-    const card1Header = cardsAfter0[1].querySelector(".plugin-card-collapsible-header") as HTMLElement;
-    card1Header.click();
-
-    const cardsAfter1 = container?.querySelectorAll(".plugin-card-collapsible") || [];
-    const details0After1 = cardsAfter1[0].querySelector(".plugin-card-details") as HTMLElement;
-    const details1After1 = cardsAfter1[1].querySelector(".plugin-card-details") as HTMLElement;
-    expect(details0After1.style.display).toBe("none");
-    expect(details1After1.style.display).toBe("flex");
+    // Click Configure button -> switches directly to dedicated plugin pane
+    btnConfigure?.click();
+    const activePane = root.querySelector(".settings-pane.active") as HTMLElement | null;
+    expect(activePane).toBeTruthy();
+    expect(activePane?.id).toBe("settings-pane-org-omni-plugin-feed");
   });
 
-  it("supports assigning the same plugin to multiple locations and routes simultaneously", async () => {
-    shell.openSettings("plugins");
-    const container = root.querySelector("#plugins-list");
-    const timerCard = Array.from(container?.querySelectorAll(".plugin-card-collapsible") || []).find((c) =>
-      c.textContent?.includes("Timer")
-    ) as HTMLElement;
-    expect(timerCard).toBeTruthy();
-
-    // Expand timer card
-    const header = timerCard.querySelector(".plugin-card-collapsible-header") as HTMLElement;
-    header.click();
+  it("supports assigning the same plugin to multiple locations and routes simultaneously in dedicated pane", async () => {
+    shell.openSettings("org.omni.plugin.timer");
+    const timerPane = root.querySelector("#settings-pane-org-omni-plugin-timer") as HTMLElement;
+    expect(timerPane).toBeTruthy();
 
     // Initial placements
-    const initialRows = timerCard.querySelectorAll(".plugin-placement-row");
+    const initialRows = timerPane.querySelectorAll(".plugin-placement-row");
     expect(initialRows.length).toBe(1);
 
     // Click "+ Add Location"
-    const addBtn = timerCard.querySelector(".btn-add-placement") as HTMLButtonElement;
+    const addBtn = timerPane.querySelector(".btn-add-placement") as HTMLButtonElement;
     expect(addBtn).toBeTruthy();
     addBtn.click();
     await new Promise((r) => setTimeout(r, 60));
 
     // Should now have 2 placement rows
-    const updatedTimerCard = Array.from(container?.querySelectorAll(".plugin-card-collapsible") || []).find((c) =>
-      c.textContent?.includes("Timer")
-    ) as HTMLElement;
-    const rowsAfterAdd = updatedTimerCard.querySelectorAll(".plugin-placement-row");
+    const updatedTimerPane = root.querySelector("#settings-pane-org-omni-plugin-timer") as HTMLElement;
+    const rowsAfterAdd = updatedTimerPane.querySelectorAll(".plugin-placement-row");
     expect(rowsAfterAdd.length).toBe(2);
 
     const timerPlugin = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer")!;
     expect(timerPlugin.placements?.length).toBe(2);
 
     // First placement in sidebar, second placement in main
-    const selects = updatedTimerCard.querySelectorAll(".plugin-viewport-select") as NodeListOf<HTMLSelectElement>;
+    const selects = updatedTimerPane.querySelectorAll(".plugin-viewport-select") as NodeListOf<HTMLSelectElement>;
     expect(selects.length).toBe(2);
     selects[1].value = "main";
     selects[1].dispatchEvent(new Event("change"));
@@ -354,15 +311,13 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     expect(exportedTimer?.placements?.length).toBe(2);
 
     // Remove the second placement
-    const removeBtns = updatedTimerCard.querySelectorAll(".btn-remove-placement") as NodeListOf<HTMLButtonElement>;
+    const removeBtns = updatedTimerPane.querySelectorAll(".btn-remove-placement") as NodeListOf<HTMLButtonElement>;
     expect(removeBtns.length).toBe(2);
     removeBtns[1].click();
     await new Promise((r) => setTimeout(r, 60));
 
-    const timerCardAfterRemove = Array.from(container?.querySelectorAll(".plugin-card-collapsible") || []).find((c) =>
-      c.textContent?.includes("Timer")
-    ) as HTMLElement;
-    const rowsAfterRemove = timerCardAfterRemove.querySelectorAll(".plugin-placement-row");
+    const timerPaneAfterRemove = root.querySelector("#settings-pane-org-omni-plugin-timer") as HTMLElement;
+    const rowsAfterRemove = timerPaneAfterRemove.querySelectorAll(".plugin-placement-row");
     expect(rowsAfterRemove.length).toBe(1);
     expect(timerPlugin.placements?.length).toBe(1);
   });
