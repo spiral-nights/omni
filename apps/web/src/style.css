@@ -333,14 +333,16 @@ body {
 .composer-card {
   display: flex;
   gap: 14px;
-  padding: 16px;
-  border-bottom: 1px solid var(--omni-border-subtle);
-  background: var(--omni-bg-surface);
-  border-top: none;
-  border-left: none;
-  border-right: none;
+  padding: 14px 16px;
+  border: none !important;
+  border-bottom: none !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  background: transparent !important;
   border-radius: 0;
   margin-bottom: 0;
+  box-shadow: none !important;
 }
 
 .composer-avatar-col {
@@ -391,8 +393,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--omni-border-subtle);
-  padding-top: 10px;
+  border-top: none !important;
+  padding-top: 6px;
 }
 
 .btn-publish {
@@ -1717,12 +1719,14 @@ body.theme-panorama,
 .panorama-shell-root .feed-composer,
 .theme-panorama .composer-card,
 .panorama-shell-root .composer-card {
-  background: #0d0d0d !important;
-  border-bottom: 1px solid #1a1a1a !important;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: none !important;
   border-top: none !important;
   border-left: none !important;
   border-right: none !important;
   border-radius: 0px !important;
+  box-shadow: none !important;
 }
 
 .theme-panorama .feed-post,
@@ -1785,8 +1789,18 @@ body.theme-panorama,
 
 .theme-panorama .composer-input,
 .panorama-shell-root .composer-input,
-.theme-panorama textarea,
-.panorama-shell-root textarea,
+.feed-composer .composer-input {
+  border-radius: 0px !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+  padding: 4px 0 !important;
+}
+
+.theme-panorama textarea:not(.composer-input),
+.panorama-shell-root textarea:not(.composer-input),
 .theme-panorama input[type="text"],
 .panorama-shell-root input[type="text"],
 .theme-panorama input[type="number"],

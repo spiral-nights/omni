@@ -125,6 +125,29 @@ function mountFeed(root: any) {
         .note-card:hover {
           background: transparent !important;
         }
+        .feed-composer,
+        .composer-card {
+          background: transparent !important;
+          border: none !important;
+          border-top: none !important;
+          border-left: none !important;
+          border-right: none !important;
+          border-bottom: none !important;
+          box-shadow: none !important;
+          padding: 14px 16px !important;
+        }
+        .composer-input,
+        .feed-composer textarea.composer-input {
+          background: transparent !important;
+          border: none !important;
+          outline: none !important;
+          box-shadow: none !important;
+          color: var(--omni-text-primary, #ffffff) !important;
+          padding: 4px 0 !important;
+        }
+        .composer-toolbar {
+          border-top: none !important;
+        }
         .feed-action-btn,
         .note-action-btn,
         .feed-post-actions button {

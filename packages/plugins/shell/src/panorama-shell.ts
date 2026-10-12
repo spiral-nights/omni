@@ -613,7 +613,6 @@ export class PanoramaShell implements OmniShellHost {
             width: 0 !important;
             height: 0 !important;
           }
-          .panorama-shell-root .composer-card,
           .panorama-shell-root .timer-widget-card,
           .panorama-shell-root .checklist-widget-card,
           .panorama-shell-root .checklist-card,
@@ -621,6 +620,26 @@ export class PanoramaShell implements OmniShellHost {
             background: #111111 !important;
             border-color: #222222 !important;
             border-radius: 0px !important;
+          }
+          .panorama-shell-root .feed-composer,
+          .panorama-shell-root .composer-card {
+            background: transparent !important;
+            border: none !important;
+            border-bottom: none !important;
+            border-top: none !important;
+            border-left: none !important;
+            border-right: none !important;
+            box-shadow: none !important;
+          }
+          .panorama-shell-root .composer-input,
+          .panorama-shell-root textarea.composer-input {
+            background: transparent !important;
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
+          }
+          .panorama-shell-root .composer-toolbar {
+            border-top: none !important;
           }
           .panorama-shell-root .feed-post,
           .panorama-shell-root .note-card {
