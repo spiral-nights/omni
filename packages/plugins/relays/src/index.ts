@@ -33,7 +33,7 @@ function mountRelays(root: any) {
   const card = html<HTMLDivElement>`
     <div class="checklist-widget-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 10px; color: var(--text-primary, #ede8df);">
       <div class="widget-header" style="display: flex; justify-content: space-between; align-items: center;">
-        <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary, #ede8df);">✦ Connected Relays</h3>
+        <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary, #ede8df);">✦ Relays</h3>
       </div>
       <p style="font-size: 0.78rem; color: var(--text-muted, #78716c); margin: 0 0 4px 0;">Live WebSocket connections to decentralized Nostr relays.</p>
       

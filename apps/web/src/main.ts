@@ -63,14 +63,12 @@ const initialPlugins: InstalledPluginEntry[] = [
   },
   {
     id: "org.omni.plugin.relays",
-    name: "Relay Inspector",
+    name: "Relays",
     description: "Manage connected relays and monitor live WebSocket pool status.",
     icon: "relays",
     viewport: "sidebar",
     views: [
-      { id: "main", title: "Relay Pool Manager", path: "" },
-      { id: "widget", title: "Relay Status Pill", path: "?view=widget" },
-      { id: "settings", title: "Relay Settings", path: "?view=settings" }
+      { id: "main", title: "Relays", path: "" }
     ],
     scriptContent: relaysScript,
     sourceUrl: "local:@omni/plugin-relays",
@@ -78,12 +76,12 @@ const initialPlugins: InstalledPluginEntry[] = [
   },
   {
     id: "org.omni.plugin.profile",
-    name: "Profile & Keys",
+    name: "Profile",
     description: "Decentralized Nostr profile metadata and key custody.",
     icon: "profile",
     viewport: "main",
     views: [
-      { id: "main", title: "Profile & Keys Editor", path: "" },
+      { id: "main", title: "Profile", path: "" },
       { id: "widget", title: "User Badge Pill", path: "?view=widget" },
       { id: "settings", title: "Profile Settings", path: "?view=settings" }
     ],

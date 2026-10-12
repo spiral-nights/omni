@@ -145,7 +145,7 @@ describe("Relay Management ACL Enforcement (relays:manage)", () => {
     // 1. First-party relay plugin
     const relayManifest = {
       id: "org.omni.plugin.relays",
-      name: "Relay Inspector",
+      name: "Relays",
       version: "1.0.0",
       entry: "index.html",
       components: [],

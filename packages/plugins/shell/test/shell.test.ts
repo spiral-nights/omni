@@ -447,7 +447,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     await kernel.boot();
     const relayPlugin: InstalledPluginEntry = {
       id: "org.omni.plugin.relays",
-      name: "Relay Inspector",
+      name: "Relays",
       viewport: "sidebar",
       enabled: true,
       scriptContent: "console.log('relays');",
@@ -711,20 +711,19 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       shell.installedPlugins.push(
         {
           id: "org.omni.plugin.relays",
-          name: "Connected Relays",
+          name: "Relays",
           icon: "relays",
           viewport: "sidebar",
           scriptContent: "console.log('relays');",
           sourceUrl: "local:@omni/plugin-relays",
           enabled: true,
           views: [
-            { id: "main", title: "Relay Pool", path: "" },
-            { id: "settings", title: "Relay Settings", path: "?view=settings" }
+            { id: "main", title: "Relays", path: "" }
           ]
         },
         {
           id: "org.omni.plugin.profile",
-          name: "Profile & Keys",
+          name: "Profile",
           icon: "profile",
           viewport: "sidebar",
           scriptContent: "console.log('profile');",
@@ -1042,10 +1041,10 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(shell.isAppPinned(customApp)).toBe(true);
     });
 
-    it("renders a person icon for the Profile & Keys plugin", () => {
+    it("renders a person icon for the Profile plugin", () => {
       const profilePlugin: InstalledPluginEntry = {
         id: "org.omni.plugin.profile",
-        name: "Profile & Keys",
+        name: "Profile",
         icon: "profile",
         viewport: "main",
         enabled: true,
@@ -1067,7 +1066,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       // Verify in Apps Launcher as well
       shell.showPage("apps");
       const appCards = Array.from(root.querySelectorAll('#apps-pinned-grid .app-card'));
-      const profileCard = appCards.find((c) => c.textContent?.includes("Profile & Keys"));
+      const profileCard = appCards.find((c) => c.textContent?.includes("Profile"));
       expect(profileCard).toBeTruthy();
       expect(profileCard?.innerHTML).toContain('circle cx="12" cy="7" r="4"');
     });

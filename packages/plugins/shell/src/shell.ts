@@ -1029,11 +1029,11 @@ export class OmniShell implements OmniShellHost {
       const displayName = profile.display_name || profile.name || shortNpub;
       if (userBadge) {
         userBadge.textContent = displayName;
-        userBadge.title = `${displayName}\n${npub}\nClick to manage profile & keys`;
+        userBadge.title = `${displayName}\n${npub}\nClick to manage profile`;
       }
     } else if (userBadge) {
       userBadge.textContent = shortNpub;
-      userBadge.title = `Your Nostr Identity: ${npub}\nClick to manage profile & keys`;
+      userBadge.title = `Your Nostr Identity: ${npub}\nClick to manage profile`;
     }
   }
 
