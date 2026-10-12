@@ -185,3 +185,94 @@ describe("Relay Management ACL Enforcement (relays:manage)", () => {
     expect(pool.getAllRelays()).toHaveLength(2);
   });
 });
+
+describe("Per-Plugin Relay Scoping & Isolation", () => {
+  it("restricts nostr.getRelays to the plugin's allowed relays", async () => {
+    const pool = new RelayPool({
+      bootstrapRelays: ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.ditto.pub"]
+    });
+    const capStore = new CapabilityStore(`test_cap_scope_${Date.now()}`);
+    const aclEngine = new AclEngine(capStore);
+
+    // 1. Unrestricted plugin (allowedRelays undefined / empty) gets all pool relays
+    const channelAll = new MessageChannel();
+    new JsonRpcDispatcher({
+      pluginId: "plugin-default",
+      port: channelAll.port1,
+      aclEngine,
+      relayPool: pool,
+      storageManager: {} as any,
+      intentBroker: {} as any,
+      subscriptionCoordinator: {} as any,
+      keystore: {} as any,
+      eventStore: {} as any
+    });
+
+    const resAll = await sendRpc(channelAll.port2, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "nostr.getRelays"
+    });
+    expect(Object.keys(resAll.result)).toHaveLength(3);
+    expect(resAll.result["wss://relay.damus.io"]).toBeDefined();
+    expect(resAll.result["wss://nos.lol"]).toBeDefined();
+    expect(resAll.result["wss://relay.ditto.pub"]).toBeDefined();
+
+    // 2. Restricted plugin (scoped strictly to wss://nos.lol)
+    const channelRestricted = new MessageChannel();
+    new JsonRpcDispatcher({
+      pluginId: "plugin-scoped",
+      port: channelRestricted.port1,
+      aclEngine,
+      relayPool: pool,
+      storageManager: {} as any,
+      intentBroker: {} as any,
+      subscriptionCoordinator: {} as any,
+      keystore: {} as any,
+      eventStore: {} as any,
+      allowedRelays: ["wss://nos.lol"]
+    });
+
+    const resRestricted = await sendRpc(channelRestricted.port2, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "nostr.getRelays"
+    });
+    expect(Object.keys(resRestricted.result)).toEqual(["wss://nos.lol"]);
+    expect(resRestricted.result["wss://relay.damus.io"]).toBeUndefined();
+    expect(resRestricted.result["wss://relay.ditto.pub"]).toBeUndefined();
+  });
+
+  it("filters publish targets when targetRelays are specified", async () => {
+    const pool = new RelayPool({
+      bootstrapRelays: ["wss://relay.damus.io", "wss://nos.lol"]
+    });
+
+    // Mock WebSocket instances in relays map
+    const mockDamusWs: any = { readyState: 1, send: () => {} };
+    const mockNosWs: any = { readyState: 1, send: () => {} };
+    (pool as any).relays.set("wss://relay.damus.io", mockDamusWs);
+    (pool as any).relays.set("wss://nos.lol", mockNosWs);
+
+    const testEvent = {
+      id: "ev1",
+      pubkey: "pk1",
+      created_at: 1000,
+      kind: 1,
+      tags: [],
+      content: "Hello",
+      sig: "sig1"
+    };
+
+    // Publish to all
+    const allPublished = await pool.publish(testEvent);
+    expect(allPublished).toHaveLength(2);
+    expect(allPublished).toContain("wss://relay.damus.io");
+    expect(allPublished).toContain("wss://nos.lol");
+
+    // Publish scoped strictly to wss://nos.lol
+    const scopedPublished = await pool.publish(testEvent, ["wss://nos.lol"]);
+    expect(scopedPublished).toEqual(["wss://nos.lol"]);
+  });
+});
+

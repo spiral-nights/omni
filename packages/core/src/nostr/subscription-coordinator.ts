@@ -21,7 +21,8 @@ export class SubscriptionCoordinator {
     subId: string,
     filters: NostrFilter[],
     onEvent: CoordinatorEventCallback,
-    onEose?: CoordinatorEoseCallback
+    onEose?: CoordinatorEoseCallback,
+    targetRelays?: string[]
   ): Promise<() => void> {
     const seenEventIds = new Set<string>();
     const pluginId = subId.includes(":") ? subId.slice(0, subId.indexOf(":")) : undefined;
@@ -67,7 +68,8 @@ export class SubscriptionCoordinator {
       },
       () => {
         if (onEose) onEose();
-      }
+      },
+      targetRelays
     );
 
     if (this.relayPool.getAllRelays().length === 0 && onEose) {

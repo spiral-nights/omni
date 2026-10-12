@@ -29,6 +29,7 @@ export interface SandboxInstanceOptions {
   route?: string;
   viewId?: string;
   instanceId?: string;
+  allowedRelays?: string[];
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
   onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
   onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
@@ -187,6 +188,7 @@ export class SandboxInstance {
       keystore: this.options.keystore,
       relayPool: this.options.relayPool,
       eventStore: this.options.eventStore,
+      allowedRelays: this.options.allowedRelays,
       onSlotAction: this.options.onSlotAction,
       onHandleUri: this.options.onHandleUri,
       onHandleShare: this.options.onHandleShare

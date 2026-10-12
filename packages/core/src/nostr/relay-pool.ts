@@ -77,11 +77,18 @@ export class RelayPool {
     }
   }
 
-  async publish(event: NostrEvent): Promise<string[]> {
+  async publish(event: NostrEvent, targetRelays?: string[]): Promise<string[]> {
     const acceptedRelays: string[] = [];
     const message = JSON.stringify(["EVENT", event]);
 
+    const normalizedTargets = targetRelays && targetRelays.length > 0
+      ? new Set(targetRelays.map((u) => u.trim().replace(/\/+$/, "")))
+      : null;
+
     for (const [url, ws] of this.relays.entries()) {
+      if (normalizedTargets && !normalizedTargets.has(url)) {
+        continue;
+      }
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(message);
         acceptedRelays.push(url);
@@ -95,13 +102,21 @@ export class RelayPool {
     subId: string,
     filters: NostrFilter[],
     onEvent: EventCallback,
-    onEose?: EoseCallback
+    onEose?: EoseCallback,
+    targetRelays?: string[]
   ): () => void {
     const sub: ActiveSubscription = { subId, filters, onEvent, onEose };
     this.subscriptions.set(subId, sub);
 
+    const normalizedTargets = targetRelays && targetRelays.length > 0
+      ? new Set(targetRelays.map((u) => u.trim().replace(/\/+$/, "")))
+      : null;
+
     const message = JSON.stringify(["REQ", subId, ...filters]);
-    for (const ws of this.relays.values()) {
+    for (const [url, ws] of this.relays.entries()) {
+      if (normalizedTargets && !normalizedTargets.has(url)) {
+        continue;
+      }
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(message);
       }
@@ -110,7 +125,10 @@ export class RelayPool {
     return () => {
       this.subscriptions.delete(subId);
       const closeMsg = JSON.stringify(["CLOSE", subId]);
-      for (const ws of this.relays.values()) {
+      for (const [url, ws] of this.relays.entries()) {
+        if (normalizedTargets && !normalizedTargets.has(url)) {
+          continue;
+        }
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(closeMsg);
         }

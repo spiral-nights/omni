@@ -25,6 +25,7 @@ export interface DispatcherContext {
   keystore: WebCryptoKeystore;
   relayPool: RelayPool;
   eventStore: LocalEventStore;
+  allowedRelays?: string[];
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
   onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
   onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
@@ -37,6 +38,13 @@ export class JsonRpcDispatcher {
   constructor(ctx: DispatcherContext) {
     this.ctx = ctx;
     this.setupPortListener();
+  }
+
+  private getAllowedRelays(): string[] | undefined {
+    if (this.ctx.allowedRelays && this.ctx.allowedRelays.length > 0) {
+      return this.ctx.allowedRelays;
+    }
+    return undefined;
   }
 
   private setupPortListener(): void {
@@ -140,7 +148,7 @@ export class JsonRpcDispatcher {
         }
 
         const signed = await this.ctx.keystore.signEvent(draft);
-        const acceptedRelays = await this.ctx.relayPool.publish(signed);
+        const acceptedRelays = await this.ctx.relayPool.publish(signed, this.getAllowedRelays());
 
         return {
           id: signed.id,
@@ -197,7 +205,8 @@ export class JsonRpcDispatcher {
               params: { subscriptionId: subId }
             };
             this.ctx.port.postMessage(notification);
-          }
+          },
+          this.getAllowedRelays()
         );
 
         this.activeSubscriptions.set(subId, unsub);
@@ -216,11 +225,31 @@ export class JsonRpcDispatcher {
 
       // 5b. Nostr Get Relays (NIP-07)
       case "nostr.getRelays": {
+        const allowed = this.getAllowedRelays();
+        const normalizedAllowed = allowed && allowed.length > 0
+          ? new Set(allowed.map((u) => u.trim().replace(/\/+$/, "")))
+          : null;
+
         const relays = this.ctx.relayPool.getAllRelays();
         const map: Record<string, { read: boolean; write: boolean }> = {};
         for (const r of relays) {
+          const norm = r.url.trim().replace(/\/+$/, "");
+          if (normalizedAllowed && !normalizedAllowed.has(norm)) {
+            continue;
+          }
           map[r.url] = { read: true, write: true };
         }
+
+        // If the plugin has explicitly specified custom relays that aren't yet in the pool
+        if (normalizedAllowed) {
+          for (const u of allowed!) {
+            const norm = u.trim().replace(/\/+$/, "");
+            if (!map[norm]) {
+              map[norm] = { read: true, write: true };
+            }
+          }
+        }
+
         return map;
       }
 

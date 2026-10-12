@@ -19,6 +19,7 @@ export interface InstalledPluginEntry {
   sourceUrl: string;
   enabled: boolean;
   pinned?: boolean;
+  relays?: string[]; // Custom relay URLs allowed for this plugin. If undefined or empty, uses all configured relays.
   naddr?: string;
   authorNpub?: string;
   event?: any;
@@ -213,7 +214,8 @@ export class OmniShell implements OmniShellHost {
           instanceId: `${plugin.id}::${pl.id}`,
           route: pl.route,
           viewId: pl.viewId,
-          targetSlot: pl.viewport
+          targetSlot: pl.viewport,
+          relays: plugin.relays
         }
       );
     }
@@ -296,6 +298,7 @@ export class OmniShell implements OmniShellHost {
           route: p.route,
           viewId: p.viewId,
           pinned: p.pinned,
+          relays: p.relays,
           placements,
           enabled: p.enabled,
           name: meta.name,
@@ -371,6 +374,9 @@ export class OmniShell implements OmniShellHost {
         }
         if (typeof item.pinned === "boolean") {
           plugin.pinned = item.pinned;
+        }
+        if (item.relays !== undefined) {
+          plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
         }
         if (item.route !== undefined) {
           plugin.route = item.route;
@@ -515,6 +521,9 @@ export class OmniShell implements OmniShellHost {
               if (item.viewport) plugin.viewport = item.viewport;
               if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
               if (typeof item.pinned === "boolean") plugin.pinned = item.pinned;
+              if (item.relays !== undefined) {
+                plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
+              }
               if (item.placements && Array.isArray(item.placements)) {
                 plugin.placements = item.placements;
                 if (item.placements.length === 0) {
@@ -1884,6 +1893,119 @@ export class OmniShell implements OmniShellHost {
       }
 
       details.appendChild(settingsBox);
+
+      // 4b. Relay Access Scoping Section
+      const relayAccessBox = document.createElement("div");
+      relayAccessBox.className = "plugin-relay-access-box";
+      relayAccessBox.style.cssText = "display: flex; flex-direction: column; gap: 8px; background: var(--omni-bg-surface); padding: 10px 12px; border-radius: var(--omni-radius-sm); border: 1px solid var(--omni-border-subtle);";
+
+      const relayHeader = document.createElement("div");
+      relayHeader.style.cssText = "display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;";
+
+      const relayTitle = document.createElement("div");
+      relayTitle.style.cssText = "display: flex; align-items: center; gap: 6px;";
+      relayTitle.innerHTML = `<span style="font-weight: 600; font-size: 0.78rem; color: var(--omni-text-primary);">Relay Access</span>`;
+
+      const allRelays = this.kernel.relayPool.getAllRelays().map((r) => r.url);
+      const isCustomRelays = Array.isArray(p.relays) && p.relays.length > 0;
+
+      const relayModePill = document.createElement("span");
+      relayModePill.style.cssText = "font-size: 0.68rem; padding: 1px 6px; border-radius: var(--omni-radius-pill); background: var(--omni-bg-subtle); color: var(--omni-text-secondary);";
+      relayModePill.textContent = isCustomRelays
+        ? `Custom (${p.relays!.length} relay${p.relays!.length === 1 ? "" : "s"})`
+        : "All Relays (Default)";
+
+      relayHeader.appendChild(relayTitle);
+      relayHeader.appendChild(relayModePill);
+      relayAccessBox.appendChild(relayHeader);
+
+      const relayDesc = document.createElement("div");
+      relayDesc.style.cssText = "font-size: 0.72rem; color: var(--omni-text-muted);";
+      relayDesc.textContent = "Restrict this plugin to specific relays, or allow it to use all configured relays.";
+      relayAccessBox.appendChild(relayDesc);
+
+      const relayOptionsWrap = document.createElement("div");
+      relayOptionsWrap.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 2px;";
+
+      // Radio: All relays
+      const radAllLabel = document.createElement("label");
+      radAllLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--omni-text-primary); cursor: pointer;";
+      const radAll = document.createElement("input");
+      radAll.type = "radio";
+      radAll.name = `relay-scope-${safeId}`;
+      radAll.checked = !isCustomRelays;
+      radAllLabel.appendChild(radAll);
+      radAllLabel.appendChild(document.createTextNode("All Configured Relays (Default)"));
+      relayOptionsWrap.appendChild(radAllLabel);
+
+      // Radio: Custom relays
+      const radCustomLabel = document.createElement("label");
+      radCustomLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--omni-text-primary); cursor: pointer;";
+      const radCustom = document.createElement("input");
+      radCustom.type = "radio";
+      radCustom.name = `relay-scope-${safeId}`;
+      radCustom.checked = isCustomRelays;
+      radCustomLabel.appendChild(radCustom);
+      radCustomLabel.appendChild(document.createTextNode("Custom Relays"));
+      relayOptionsWrap.appendChild(radCustomLabel);
+
+      // Container for custom checkboxes
+      const customCheckboxesContainer = document.createElement("div");
+      customCheckboxesContainer.style.cssText = `display: ${isCustomRelays ? "flex" : "none"}; flex-direction: column; gap: 5px; margin-left: 18px; padding-top: 4px;`;
+
+      const selectedCustomRelays = new Set<string>(p.relays || []);
+
+      for (const rUrl of allRelays) {
+        const cbLabel = document.createElement("label");
+        cbLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--omni-text-secondary); cursor: pointer;";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = selectedCustomRelays.has(rUrl);
+        cb.addEventListener("change", async () => {
+          if (cb.checked) {
+            selectedCustomRelays.add(rUrl);
+          } else {
+            selectedCustomRelays.delete(rUrl);
+          }
+          p.relays = Array.from(selectedCustomRelays);
+          relayModePill.textContent = `Custom (${p.relays.length} relay${p.relays.length === 1 ? "" : "s"})`;
+          await this.remountPlugin(p);
+        });
+        cbLabel.appendChild(cb);
+        const codeSpan = document.createElement("code");
+        codeSpan.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.7rem;";
+        codeSpan.textContent = rUrl;
+        cbLabel.appendChild(codeSpan);
+        customCheckboxesContainer.appendChild(cbLabel);
+      }
+
+      radAll.addEventListener("change", async () => {
+        if (radAll.checked) {
+          customCheckboxesContainer.style.display = "none";
+          p.relays = undefined;
+          relayModePill.textContent = "All Relays (Default)";
+          await this.remountPlugin(p);
+        }
+      });
+
+      radCustom.addEventListener("change", async () => {
+        if (radCustom.checked) {
+          customCheckboxesContainer.style.display = "flex";
+          if (selectedCustomRelays.size === 0 && allRelays.length > 0) {
+            // Default select the first relay if none selected yet
+            selectedCustomRelays.add(allRelays[0]);
+            const firstCb = customCheckboxesContainer.querySelector("input[type=checkbox]") as HTMLInputElement | null;
+            if (firstCb) firstCb.checked = true;
+          }
+          p.relays = Array.from(selectedCustomRelays);
+          relayModePill.textContent = `Custom (${p.relays.length} relay${p.relays.length === 1 ? "" : "s"})`;
+          await this.remountPlugin(p);
+        }
+      });
+
+      relayOptionsWrap.appendChild(customCheckboxesContainer);
+      relayAccessBox.appendChild(relayOptionsWrap);
+      details.appendChild(relayAccessBox);
 
       // 5. Actions Row (Inspect, Clear DB, Uninstall)
       const actionsRow = document.createElement("div");

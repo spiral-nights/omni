@@ -11,6 +11,7 @@ export interface PluginPlacement {
   viewId?: string; // matched view ID
   enabled?: boolean;
   pinned?: boolean; // Whether pinned directly to navigation dock (for main full-page apps)
+  relays?: string[]; // Custom relay URLs allowed for this placement/plugin. If undefined or empty, uses all configured relays.
 }
 
 export interface OmniWorkspacePluginConfig {
@@ -26,6 +27,7 @@ export interface OmniWorkspacePluginConfig {
   icon?: string;
   route?: string; // Target route/query (e.g. "?view=widget", "?view=settings", or "")
   viewId?: string; // View identifier (e.g. "main", "widget", "settings")
+  relays?: string[]; // Custom relay URLs allowed for this plugin. If undefined or empty, uses all configured relays.
   placements?: PluginPlacement[]; // Multi-viewport placements
 }
 

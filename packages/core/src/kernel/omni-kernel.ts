@@ -121,7 +121,7 @@ export class OmniKernel {
     manifest: OmniManifest,
     scriptContent: string,
     slotContainers: Map<string, Element>,
-    options?: { route?: string; viewId?: string; instanceId?: string; targetSlot?: string }
+    options?: { route?: string; viewId?: string; instanceId?: string; targetSlot?: string; relays?: string[] }
   ): Promise<SandboxInstance> {
     this.aclEngine.registerManifest(manifest);
 
@@ -176,6 +176,7 @@ export class OmniKernel {
       route: options?.route,
       viewId: options?.viewId,
       instanceId: options?.instanceId,
+      allowedRelays: options?.relays,
       slotResolver: (pluginId: string, componentId: string, defaultSlot: string) => {
         const targetSlot = options?.targetSlot || this.layoutManager.getSlotForComponent(pluginId, componentId) || defaultSlot;
         if (this.slotResolver) {
@@ -251,7 +252,7 @@ export class OmniKernel {
     manifest: OmniManifest,
     scriptContent: string,
     slotContainers: Map<string, Element>,
-    options?: { route?: string; viewId?: string; instanceId?: string; targetSlot?: string }
+    options?: { route?: string; viewId?: string; instanceId?: string; targetSlot?: string; relays?: string[] }
   ): Promise<SandboxInstance> {
     this.disablePlugin(manifest.id);
     return this.registerPlugin(manifest, scriptContent, slotContainers, options);
@@ -262,7 +263,8 @@ export class OmniKernel {
     manifest: OmniManifest,
     scriptContent: string,
     container: Element,
-    route: string = "?view=settings"
+    route: string = "?view=settings",
+    relays?: string[]
   ): Promise<SandboxInstance> {
     this.destroyPluginSettings(pluginId);
 
@@ -290,6 +292,7 @@ export class OmniKernel {
       slotResolver: () => container,
       route,
       viewId: "settings",
+      allowedRelays: relays,
       aclEngine: this.aclEngine,
       storageManager: this.storageManager,
       intentBroker: this.intentBroker,
