@@ -47,8 +47,6 @@ export class PanoramaShell implements OmniShellHost {
   private sectionSystem!: HTMLElement;
   private fullAppOverlay!: HTMLElement;
   private fullAppContainer!: HTMLElement;
-  private appBar!: HTMLElement;
-  private appDrawerSheet!: HTMLElement;
 
   constructor(options: OmniShellOptions) {
     this.root = options.root;
@@ -249,7 +247,7 @@ export class PanoramaShell implements OmniShellHost {
               <h2>${(app.name || meta.name).toLowerCase()}</h2>
               <span class="panorama-badge">application</span>
             </div>
-            <div id="panorama-slot-main-${safeId}" class="omni-slot panorama-main-viewport-slot" style="flex: 1; width: 100%; height: 100%; overflow: auto;"></div>
+            <div id="panorama-slot-main-${safeId}" class="omni-slot panorama-main-viewport-slot" style="flex: 1; width: 100%; min-height: 100%; overflow: visible;"></div>
           </div>
         `;
 
@@ -274,12 +272,12 @@ export class PanoramaShell implements OmniShellHost {
       pageEl.className = "panorama-app-page";
       pageEl.id = `panorama-page-app-${safeId}`;
       pageEl.dataset.pluginId = pluginId;
-      pageEl.style.cssText = "display: none; width: 100%; height: 100%; overflow: auto; padding: 16px 20px;";
+      pageEl.style.cssText = "display: none; width: 100%; min-height: 100%; overflow: visible; padding: 16px 24px;";
 
       const slotEl = document.createElement("div");
       slotEl.className = "omni-slot panorama-main-viewport-slot";
       slotEl.id = `panorama-slot-main-${safeId}`;
-      slotEl.style.cssText = "width: 100%; height: 100%;";
+      slotEl.style.cssText = "width: 100%; min-height: 100%; overflow: visible;";
       pageEl.appendChild(slotEl);
 
       if (this.fullAppContainer) {
@@ -551,7 +549,7 @@ export class PanoramaShell implements OmniShellHost {
     this.renderAppsTiles();
     this.renderSystemPluginList();
     this.wireNavigation();
-    this.wireAppBar();
+    this.wireGlobalEvents();
     this.updateProfileUi();
   }
 
@@ -762,27 +760,7 @@ export class PanoramaShell implements OmniShellHost {
           <div class="panorama-full-app-container" id="panorama-full-app-container"></div>
         </div>
 
-        <!-- 4. Windows Phone ApplicationBar -->
-        <footer class="panorama-app-bar" id="panorama-app-bar">
-          <div class="panorama-app-bar-buttons">
-            <button class="btn-app-bar-circle" id="btn-bar-back" title="Back">
-              ${icon("arrow-left", 18)}
-            </button>
-            <button class="btn-app-bar-circle" id="btn-bar-more" title="More options">
-              ${icon("more", 18)}
-            </button>
-          </div>
-        </footer>
-
-        <!-- 5. Slide-Up Menu Sheet -->
-        <div class="panorama-drawer-sheet" id="panorama-drawer-sheet">
-          <div class="panorama-drawer-item" id="sheet-item-switch-classic">Switch to Omni Classic Shell</div>
-          <div class="panorama-drawer-item" id="sheet-item-sync">Sync Workspace (NIP-78)</div>
-          <div class="panorama-drawer-item" id="sheet-item-restore">Restore Workspace from Relays</div>
-          <div class="panorama-drawer-item" id="sheet-item-close">Close Menu</div>
-        </div>
-
-        <!-- 6. Plugin Inspector Modal -->
+        <!-- 4. Plugin Inspector Modal -->
         <div class="panorama-inspector-modal" id="panorama-inspector-modal" style="display: none;">
           <div class="panorama-inspector-content">
             <div class="panorama-inspector-header">
@@ -808,8 +786,6 @@ export class PanoramaShell implements OmniShellHost {
     this.sectionSystem = q("#panorama-section-system");
     this.fullAppOverlay = q("#panorama-full-app-overlay");
     this.fullAppContainer = q("#panorama-full-app-container");
-    this.appBar = q("#panorama-app-bar");
-    this.appDrawerSheet = q("#panorama-drawer-sheet");
   }
 
   private initSlotContainers(): void {
@@ -1521,8 +1497,18 @@ export class PanoramaShell implements OmniShellHost {
         behavior: "smooth"
       });
 
+      const btn = this.pivotHeadersTrack?.querySelector<HTMLElement>(`.panorama-pivot-item[data-pivot="${pivot}"]`);
+      if (btn && this.pivotHeadersTrack) {
+        const firstOffset = this.pivotHeadersTrack.querySelector<HTMLElement>(".panorama-pivot-item")?.offsetLeft || 0;
+        this.pivotHeadersTrack.scrollTo({
+          left: Math.max(0, btn.offsetLeft - firstOffset),
+          behavior: "smooth"
+        });
+      }
+
       this.programmaticScrollTimer = setTimeout(() => {
         this.isProgrammaticScroll = false;
+        this.syncPivotScrollFromCanvas();
       }, 600);
     }
   }
@@ -1554,57 +1540,88 @@ export class PanoramaShell implements OmniShellHost {
 
   // --- Interactive Controllers Wiring ---
 
+  public syncPivotScrollFromCanvas(): void {
+    if (!this.panoramaContainer || !this.pivotHeadersTrack) return;
+
+    const scrollLeft = this.panoramaContainer.scrollLeft;
+    const sections = Array.from(this.panoramaContainer.querySelectorAll<HTMLElement>(".panorama-section"));
+    const buttons = Array.from(this.pivotHeadersTrack.querySelectorAll<HTMLElement>(".panorama-pivot-item"));
+    if (sections.length === 0 || buttons.length === 0) return;
+
+    // 1. Calculate continuous scroll position for the top pivot navigation
+    const maxCanvas = this.panoramaContainer.scrollWidth - this.panoramaContainer.clientWidth;
+    const maxPivot = this.pivotHeadersTrack.scrollWidth - this.pivotHeadersTrack.clientWidth;
+
+    if (maxCanvas > 0 && maxPivot > 0) {
+      let targetPivotScroll = 0;
+      let matched = false;
+
+      for (let i = 0; i < sections.length - 1; i++) {
+        const secA = sections[i];
+        const secB = sections[i + 1];
+        if (secA && secB && scrollLeft >= secA.offsetLeft && scrollLeft <= secB.offsetLeft) {
+          const btnA = buttons[i];
+          const btnB = buttons[i + 1];
+          const span = secB.offsetLeft - secA.offsetLeft;
+          const t = span > 0 ? (scrollLeft - secA.offsetLeft) / span : 0;
+          const firstOffset = buttons[0]?.offsetLeft || 0;
+          const start = (btnA?.offsetLeft ?? 0) - firstOffset;
+          const end = (btnB?.offsetLeft ?? 0) - firstOffset;
+          targetPivotScroll = start + t * (end - start);
+          matched = true;
+          break;
+        }
+      }
+
+      if (!matched) {
+        if (scrollLeft <= (sections[0]?.offsetLeft ?? 0)) {
+          targetPivotScroll = 0;
+        } else {
+          const lastBtn = buttons[buttons.length - 1];
+          const firstOffset = buttons[0]?.offsetLeft || 0;
+          targetPivotScroll = (lastBtn?.offsetLeft ?? 0) - firstOffset;
+        }
+      }
+
+      if (targetPivotScroll === 0 && scrollLeft > 0) {
+        targetPivotScroll = (scrollLeft / maxCanvas) * maxPivot;
+      }
+
+      this.pivotHeadersTrack.scrollLeft = Math.max(0, targetPivotScroll);
+    }
+
+    // 2. Highlight closest pivot button
+    let closestSection = sections[0];
+    let minDiff = Infinity;
+    for (const sec of sections) {
+      const diff = Math.abs(sec.offsetLeft - scrollLeft);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestSection = sec;
+      }
+    }
+
+    const pivot = (closestSection.dataset.pivot || closestSection.dataset.pluginId) as PanoramaPivot;
+    if (pivot && this.activePivot !== pivot) {
+      this.activePivot = pivot;
+      buttons.forEach((b) => b.classList.toggle("active", b.dataset.pivot === pivot));
+    }
+  }
+
   private wireNavigation(): void {
     this.renderPivotNavigation();
 
-    // Scroll listener with programmatic guard and closest-offset detection
+    // Continuous horizontal scroll tracking: pivot headers follow swiping 1:1
     this.panoramaContainer?.addEventListener("scroll", () => {
-      if (this.isProgrammaticScroll) return;
-      if (this.scrollDebounceTimer) clearTimeout(this.scrollDebounceTimer);
-      this.scrollDebounceTimer = setTimeout(() => {
-        if (this.isProgrammaticScroll) return;
-        const scrollLeft = this.panoramaContainer.scrollLeft;
-        const sections = Array.from(this.panoramaContainer.querySelectorAll<HTMLElement>(".panorama-section"));
-        if (sections.length === 0) return;
-
-        let closestSection = sections[0];
-        let minDiff = Infinity;
-        for (const sec of sections) {
-          const diff = Math.abs(sec.offsetLeft - scrollLeft);
-          if (diff < minDiff) {
-            minDiff = diff;
-            closestSection = sec;
-          }
-        }
-
-        const pivot = (closestSection.dataset.pivot || closestSection.dataset.pluginId) as PanoramaPivot;
-        if (pivot && this.activePivot !== pivot) {
-          this.activePivot = pivot;
-          const buttons = this.pivotHeadersTrack?.querySelectorAll<HTMLElement>(".panorama-pivot-item") || [];
-          buttons.forEach((b) => b.classList.toggle("active", b.dataset.pivot === pivot));
-        }
-      }, 60);
-    });
+      this.syncPivotScrollFromCanvas();
+    }, { passive: true });
   }
 
-  private wireAppBar(): void {
-    // Back button
-    const btnBack = document.getElementById("btn-bar-back");
+  private wireGlobalEvents(): void {
+    // Back button on full app slide-in overlay
     const btnOverlayBack = document.getElementById("btn-overlay-back");
-    const handleBack = () => {
-      if (this.currentOpenedAppId) {
-        this.closeApp();
-      } else if (this.activePivot !== "feed") {
-        this.showPivot("feed");
-      }
-    };
-    btnBack?.addEventListener("click", handleBack);
-    btnOverlayBack?.addEventListener("click", handleBack);
-
-    // More ... button (toggle slide-up sheet)
-    const btnMore = document.getElementById("btn-bar-more");
-    btnMore?.addEventListener("click", () => {
-      this.appDrawerSheet.classList.toggle("open");
+    btnOverlayBack?.addEventListener("click", () => {
+      this.closeApp();
     });
 
     // Inspector Modal Close
@@ -1617,11 +1634,7 @@ export class PanoramaShell implements OmniShellHost {
       }
     });
 
-    // Sheet items
-    document.getElementById("sheet-item-close")?.addEventListener("click", () => {
-      this.appDrawerSheet.classList.remove("open");
-    });
-
+    // Shell Switcher to Omni Classic
     const handleSwitchClassic = () => {
       if (typeof window !== "undefined") {
         window.localStorage.setItem("omni_active_shell", "classic");
@@ -1630,10 +1643,9 @@ export class PanoramaShell implements OmniShellHost {
         window.location.reload();
       }
     };
-
-    document.getElementById("sheet-item-switch-classic")?.addEventListener("click", handleSwitchClassic);
     document.getElementById("btn-switch-classic")?.addEventListener("click", handleSwitchClassic);
 
+    // Nostr Cloud Workspace Sync
     document.getElementById("btn-panorama-sync")?.addEventListener("click", async () => {
       try {
         await this.syncWorkspaceToNostr();
@@ -1652,6 +1664,18 @@ export class PanoramaShell implements OmniShellHost {
         alert(`Restore failed: ${err.message || String(err)}`);
       }
     });
+
+    // Escape key closes modals / overlay
+    if (typeof window !== "undefined") {
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          if (this.currentOpenedAppId) {
+            this.closeApp();
+          }
+          this.closePluginInspector();
+        }
+      });
+    }
   }
 
   public async updateProfileUi(): Promise<void> {

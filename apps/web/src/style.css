@@ -1123,6 +1123,8 @@ body.theme-panorama,
   overflow-x: auto;
   scrollbar-width: none;
   white-space: nowrap;
+  scroll-behavior: smooth;
+  padding-right: calc(100vw - 120px);
 }
 
 .panorama-pivot-nav::-webkit-scrollbar {
@@ -1141,6 +1143,7 @@ body.theme-panorama,
   text-transform: lowercase;
   transition: color 0.15s ease;
   font-family: inherit;
+  flex-shrink: 0;
 }
 
 .panorama-pivot-item:hover {
@@ -1173,9 +1176,11 @@ body.theme-panorama,
   height: 100%;
   scroll-snap-align: start;
   overflow-y: auto;
-  padding: 8px 24px 80px 24px;
+  overflow-x: hidden;
+  padding: 8px 24px 24px 24px;
   display: flex;
   flex-direction: column;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (min-width: 768px) {
@@ -1191,7 +1196,20 @@ body.theme-panorama,
   flex-direction: column;
   gap: 16px;
   width: 100%;
-  height: 100%;
+  min-height: 100%;
+  height: auto;
+  flex: 1;
+}
+
+/* Full page vertical scroll effect: prevent slots from clipping or trapping inner scrollbars */
+.panorama-section .omni-slot,
+.panorama-feed-slot,
+.panorama-main-viewport-slot {
+  overflow: visible !important;
+  height: auto !important;
+  min-height: 100% !important;
+  contain: none !important;
+  flex: 1;
 }
 
 .panorama-section-title-bar {
@@ -1356,7 +1374,7 @@ body.theme-panorama,
   top: 0;
   left: 0;
   width: 100vw;
-  height: calc(100vh - 64px);
+  height: 100vh;
   background: #000000;
   z-index: 100;
   display: none;
@@ -1387,28 +1405,26 @@ body.theme-panorama,
 
 .panorama-full-app-container {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* 6. Windows Phone ApplicationBar (Bottom) */
-.panorama-app-bar {
-  height: 64px;
-  background: #111111;
-  border-top: 1px solid #1a1a1a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 110;
-  flex-shrink: 0;
+.panorama-app-page {
+  width: 100%;
+  min-height: 100%;
+  height: auto;
+  overflow: visible !important;
 }
 
-.panorama-app-bar-buttons {
-  display: flex;
-  align-items: center;
-  gap: 28px;
+.panorama-app-page .omni-slot {
+  overflow: visible !important;
+  height: auto !important;
+  min-height: 100% !important;
+  contain: none !important;
 }
 
+/* 6. Action Circle Buttons (Header / Inspector / Dialogs) */
 .btn-app-bar-circle {
   width: 44px;
   height: 44px;
@@ -1431,33 +1447,6 @@ body.theme-panorama,
 
 .btn-app-bar-circle:active {
   transform: scale(0.92);
-}
-
-/* 7. Slide-Up Menu Sheet */
-.panorama-drawer-sheet {
-  position: absolute;
-  bottom: 64px;
-  left: 0;
-  width: 100%;
-  background: #191919;
-  border-top: 2px solid #00a4ef;
-  display: none;
-  flex-direction: column;
-  z-index: 120;
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.7);
-}
-
-.panorama-drawer-sheet.open {
-  display: flex;
-}
-
-.panorama-drawer-item {
-  padding: 14px 24px;
-  color: #ffffff;
-  font-size: 0.92rem;
-  border-bottom: 1px solid #242424;
-  cursor: pointer;
-  transition: background 0.15s ease;
 }
 
 .panorama-drawer-item:hover {

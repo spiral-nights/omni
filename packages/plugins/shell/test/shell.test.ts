@@ -1144,14 +1144,45 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(panoramaShell.installedPlugins[1].enabled).toBe(false);
     });
 
-    it("renders the simplified Windows Phone ApplicationBar with back and more options buttons without redundant navigation", () => {
+    it("removes redundant bottom ApplicationBar and sheet since management is handled via the system pivot", () => {
       const appBar = panoramaRoot.querySelector("#panorama-app-bar");
-      expect(appBar).toBeTruthy();
-      expect(panoramaRoot.querySelector("#btn-bar-back")).toBeTruthy();
-      expect(panoramaRoot.querySelector("#btn-bar-more")).toBeTruthy();
-      // Ensure redundant navigation buttons that duplicate horizontal pivots are removed
-      expect(panoramaRoot.querySelector("#btn-bar-home")).toBeFalsy();
-      expect(panoramaRoot.querySelector("#btn-bar-search")).toBeFalsy();
+      expect(appBar).toBeFalsy();
+      const drawerSheet = panoramaRoot.querySelector("#panorama-drawer-sheet");
+      expect(drawerSheet).toBeFalsy();
+
+      // Back navigation for full-screen apps is supported directly via the overlay header back button
+      const overlayBack = panoramaRoot.querySelector("#btn-overlay-back");
+      expect(overlayBack).toBeTruthy();
+    });
+
+    it("synchronizes top pivot navigation horizontally when swiping left-to-right across the canvas", () => {
+      const canvas = panoramaRoot.querySelector("#panorama-canvas") as HTMLElement;
+      const pivotNav = panoramaRoot.querySelector("#panorama-pivot-nav") as HTMLElement;
+      expect(canvas).toBeTruthy();
+      expect(pivotNav).toBeTruthy();
+
+      // Mock scrollWidth and clientWidth for test environment
+      Object.defineProperty(canvas, "scrollWidth", { value: 2000, configurable: true });
+      Object.defineProperty(canvas, "clientWidth", { value: 500, configurable: true });
+      Object.defineProperty(pivotNav, "scrollWidth", { value: 600, configurable: true });
+      Object.defineProperty(pivotNav, "clientWidth", { value: 300, configurable: true });
+
+      // Simulate swiping halfway across the canvas
+      canvas.scrollLeft = 750;
+      panoramaShell.syncPivotScrollFromCanvas();
+
+      // Verify pivotNav scrolled proportionally
+      expect(pivotNav.scrollLeft).toBeGreaterThan(0);
+    });
+
+    it("provides full-page vertical scrolling layout for feed without middle-only trapped scroll containment", () => {
+      const feedSection = panoramaRoot.querySelector("#panorama-section-feed") as HTMLElement;
+      expect(feedSection).toBeTruthy();
+      const feedSlot = panoramaRoot.querySelector("#panorama-feed-slot") as HTMLElement;
+      expect(feedSlot).toBeTruthy();
+
+      // feedSlot should not force an inner trapped scrollbar inline
+      expect(feedSlot.style.overflow).not.toBe("auto");
     });
 
     it("allows configuring plugins (settings, viewports, relays, inspector) in the system pivot", async () => {
