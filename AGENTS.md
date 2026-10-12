@@ -32,7 +32,8 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
    - Sub-views and routes are declared via standard Nostr tags (`["view", "<id>", "<title>", "<path>"]`) or HTML `<link rel="alternate">` / Web Manifest shortcuts.
 4. **Strict Shell vs. Kernel Separation**:
    - **Kernel (`@omni/core`) is Headless**: Manages sandboxes, WebCrypto keystore, relay pooling, 0ms local event caching, capability store (ACL), and Remote DOM transport. It has zero knowledge of UI layouts, slot semantics, or user pages.
-   - **Shell (`@omni/plugin-shell`) Owns Presentation**: Manages viewport slots (`main`, `dock`, `sidebar`, `header-actions`), layout mapping (`LayoutManager`), desktop/mobile navigation docks, widgets dashboard grid, settings tabs, and NIP-78 workspace synchronization.
+   - **Shell (`@omni/plugin-shell`) Owns Presentation & Styling**: Manages viewport slots (`main`, `dock`, `sidebar`, `header-actions`), layout mapping (`LayoutManager`), desktop/mobile navigation docks, widgets dashboard grid, settings tabs, and NIP-78 workspace synchronization. Each shell bundles its own stylesheet in `packages/plugins/shell/src/styles/` (`classic.css`, `panorama.css`), injected dynamically into the host DOM upon `mount()`.
+   - **User-Swappable Shell Registry (`ShellRegistry`)**: Shells are swappable first-class plugins registered in `shellRegistry`. Users can select between Omni Classic, Panorama Hub, or custom installed shells dynamically in Settings.
 5. **User-Defined Viewports & Route Assignment (Zero Hardcoded Slots)**:
    - Developers never declare or configure "slots".
    - Users assign apps and choose specific routes directly in Settings:
@@ -58,7 +59,7 @@ omni/
 │       ├── public/omni-runtime.js         # Injected guest sandbox runtime bridge
 │       └── src/
 │           ├── main.ts                    # Host microkernel bootloader & shell mount
-│           └── style.css                  # Design tokens and responsive styles
+│           └── style.css                  # Minimal host microkernel skeleton reset (~25 lines)
 │
 ├── packages/
 │   ├── types/                             # Canonical TypeScript interfaces

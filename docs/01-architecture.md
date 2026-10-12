@@ -51,7 +51,7 @@ omni/
 │       ├── public/omni-runtime.js         # Injected guest sandbox runtime bridge
 │       └── src/
 │           ├── main.ts                    # Host microkernel bootloader & shell mount
-│           └── style.css                  # Design tokens and responsive CSS
+│           └── style.css                  # Minimal host microkernel skeleton reset (~25 lines)
 │
 ├── packages/
 │   ├── types/                             # Canonical TypeScript interfaces
@@ -258,6 +258,30 @@ All existing plugins (`@omni/plugin-feed`, `@omni/plugin-timer`, `@omni/plugin-r
    - Backed by 0ms local storage fallback in host `localStorage` (`omni_workspace_state`).
 2. **Security Reservation**:
    - `AclEngine` and `JsonRpcDispatcher` restrict the `omni/*` NIP-78 namespace to the host Shell. Untrusted guest plugins cannot sign or publish `kind: 30078` events tagged `omni/*`.
+
+---
+
+### 3.6 Decoupled Shell Styling & Dynamic Shell Registry
+
+#### 1. Per-Shell Style Ownership
+- The host bootloader (`apps/web/src/style.css`) is strictly a minimal microkernel reset (~25 lines) defining box-sizing, background, and `#omni-root` bounds.
+- The active Shell owns all visual styling, layout rules, typography, and standard design tokens (`--bg-canvas`, `--bg-surface`, `--text-primary`, `--accent-primary`).
+- Each shell encapsulates its own stylesheet inside `packages/plugins/shell/src/styles/`:
+  - `classic.css`: Warm Paper Dark design system, dock navigation, and multi-viewport workbench.
+  - `panorama.css`: Windows Phone Metro / People Hub panoramic canvas, flat live tiles, and fluid horizontal swipe.
+- Upon `shell.mount()`, the active shell calls `mountShellStyles(css)` which dynamically injects `<style id="omni-active-shell-style">` into `<head>`. Calling `shell.destroy()` removes it cleanly, preventing style conflicts or cross-contamination.
+
+#### 2. First-Class Swappable Shell Registry (`ShellRegistry`)
+- Shells are registered in `shellRegistry` with metadata (`id`, `name`, `description`, `author`, `version`, `create` factory).
+- The bootloader dynamically instantiates the user's active shell via:
+  ```typescript
+  const shell = shellRegistry.create(activeShellType, {
+    root: rootEl,
+    kernel,
+    installedPlugins: initialPlugins
+  });
+  ```
+- The shell selector in Settings automatically enumerates all registered shells from `shellRegistry.list()`, enabling users to install new shell plugins and switch experiences dynamically without code changes.
 
 ---
 
