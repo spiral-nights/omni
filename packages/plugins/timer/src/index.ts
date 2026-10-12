@@ -1,5 +1,17 @@
 /// <reference types="@omni/types" />
 
+/**
+ * Native zero-dependency HTML template helper using standard <template>.
+ */
+function html<T extends HTMLElement = HTMLElement>(
+  strings: TemplateStringsArray,
+  ...values: any[]
+): T {
+  const template = document.createElement("template");
+  template.innerHTML = strings.reduce((acc, str, i) => acc + str + (values[i] ?? ""), "").trim();
+  return template.content.firstElementChild as T;
+}
+
 let totalSeconds = 25 * 60;
 let remainingSeconds = totalSeconds;
 let isRunning = false;
@@ -62,56 +74,32 @@ function formatTime(sec: number): string {
 }
 
 function mountTimer(root: any) {
-  const isRemote = typeof root.createElement === "function";
-  const createElement = (tag: string) => isRemote ? root.createElement(tag) : document.createElement(tag);
+  const card = html<HTMLDivElement>`
+    <div class="timer-widget-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 12px; color: var(--text-primary, #ede8df);">
+      <div class="widget-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary, #ede8df);">Focus Timer (Pomodoro)</h3>
+      </div>
+      <div class="timer-display-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px 0;">
+        <div class="timer-digits" style="font-size: 2.2rem; font-weight: 700; letter-spacing: 0.05em; font-family: var(--font-mono, monospace); color: var(--accent-primary, #d4a373);">${formatTime(remainingSeconds)}</div>
+        <div class="timer-status" style="font-size: 0.75rem; color: var(--text-muted, #78716c); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px;">${isRunning ? "Focusing..." : remainingSeconds === 0 ? "Done!" : "Paused"}</div>
+      </div>
+      <div class="timer-buttons-row" style="display: flex; gap: 8px; justify-content: center;">
+        <button class="btn-timer-start" style="display: ${isRunning ? "none" : "inline-block"}; background: var(--accent-primary, #d4a373); color: var(--accent-contrast, #141312); border: none; border-radius: var(--radius-sm, 6px); padding: 7px 16px; font-weight: 600; cursor: pointer;">Start</button>
+        <button class="btn-timer-pause" style="display: ${isRunning ? "inline-block" : "none"}; background: var(--bg-subtle, #2a2824); color: var(--text-primary, #ede8df); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-sm, 6px); padding: 7px 16px; font-weight: 600; cursor: pointer;">Pause</button>
+        <button class="btn-timer-reset" style="background: transparent; color: var(--text-secondary, #a8a29e); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-sm, 6px); padding: 7px 14px; cursor: pointer;">Reset</button>
+      </div>
+    </div>
+  `;
 
-  const card = createElement("div");
-  card.className = "timer-widget-card";
+  const timeText = card.querySelector<HTMLElement>(".timer-digits")!;
+  const statusText = card.querySelector<HTMLElement>(".timer-status")!;
+  const startBtn = card.querySelector<HTMLButtonElement>(".btn-timer-start")!;
+  const pauseBtn = card.querySelector<HTMLButtonElement>(".btn-timer-pause")!;
+  const resetBtn = card.querySelector<HTMLButtonElement>(".btn-timer-reset")!;
 
-  const header = createElement("div");
-  header.className = "widget-header";
-  const title = createElement("h3");
-  title.textContent = "Focus Timer (Pomodoro)";
-  header.appendChild(title);
-  card.appendChild(header);
-
-  // Circular/Typographic Display
-  const displayContainer = createElement("div");
-  displayContainer.className = "timer-display-container";
-
-  const timeText = createElement("div");
-  timeText.className = "timer-digits";
-
-  const statusText = createElement("div");
-  statusText.className = "timer-status";
-
-  displayContainer.appendChild(timeText);
-  displayContainer.appendChild(statusText);
-  card.appendChild(displayContainer);
-
-  // Buttons Row
-  const btnRow = createElement("div");
-  btnRow.className = "timer-buttons-row";
-
-  const startBtn = createElement("button");
-  startBtn.textContent = "Start";
-  startBtn.className = "btn-timer-start";
   startBtn.addEventListener("click", startTimer);
-
-  const pauseBtn = createElement("button");
-  pauseBtn.textContent = "Pause";
-  pauseBtn.className = "btn-timer-pause";
   pauseBtn.addEventListener("click", pauseTimer);
-
-  const resetBtn = createElement("button");
-  resetBtn.textContent = "Reset";
-  resetBtn.className = "btn-timer-reset";
   resetBtn.addEventListener("click", () => resetTimer(totalSeconds));
-
-  btnRow.appendChild(startBtn);
-  btnRow.appendChild(pauseBtn);
-  btnRow.appendChild(resetBtn);
-  card.appendChild(btnRow);
 
   function updateWidget() {
     timeText.textContent = formatTime(remainingSeconds);
@@ -127,75 +115,40 @@ function mountTimer(root: any) {
 }
 
 function mountTimerSettings(root: any) {
-  const isRemote = typeof root.createElement === "function";
-  const createElement = (tag: string) => isRemote ? root.createElement(tag) : document.createElement(tag);
-
-  const container = createElement("div");
-  container.className = "timer-settings-container";
-  container.style.cssText = "display: flex; flex-direction: column; gap: 12px; font-family: var(--omni-font-sans, system-ui); color: var(--omni-text-primary, #ede8df);";
-
-  const title = createElement("h4");
-  title.textContent = "Focus Timer Preferences";
-  title.style.cssText = "margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--omni-accent-primary, #d4a373);";
-  container.appendChild(title);
-
-  const desc = createElement("p");
-  desc.textContent = "Customize focus intervals and break timers. Changes persist to local storage.";
-  desc.style.cssText = "margin: 0; font-size: 0.78rem; color: var(--omni-text-muted, #9e988f);";
-  container.appendChild(desc);
-
-  // Load existing config
   let savedCfg = { work: 25, shortBreak: 5, longBreak: 15 };
   try {
     const raw = localStorage.getItem("omni_timer_config");
     if (raw) savedCfg = JSON.parse(raw);
   } catch (_) {}
 
-  const formGrid = createElement("div");
-  formGrid.style.cssText = "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;";
+  const container = html<HTMLDivElement>`
+    <div class="timer-settings-container" style="display: flex; flex-direction: column; gap: 12px; font-family: inherit; color: var(--text-primary, #ede8df);">
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--accent-primary, #d4a373);">Focus Timer Preferences</h4>
+      <p style="margin: 0; font-size: 0.78rem; color: var(--text-muted, #78716c);">Customize focus intervals and break timers. Changes persist to local storage.</p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--text-secondary, #a8a29e);">
+          Focus (min):
+          <input id="timer-cfg-work" type="number" value="${savedCfg.work || 25}" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 6px 8px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem;" />
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--text-secondary, #a8a29e);">
+          Short Break (min):
+          <input id="timer-cfg-short" type="number" value="${savedCfg.shortBreak || 5}" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 6px 8px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem;" />
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--text-secondary, #a8a29e);">
+          Long Break (min):
+          <input id="timer-cfg-long" type="number" value="${savedCfg.longBreak || 15}" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 6px 8px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem;" />
+        </label>
+      </div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+        <button id="timer-btn-save" class="btn-publish" style="background: var(--accent-primary, #d4a373); color: var(--accent-contrast, #141312); border: none; padding: 6px 14px; border-radius: var(--radius-sm, 6px); font-size: 0.78rem; font-weight: 600; cursor: pointer;">Save Settings</button>
+      </div>
+    </div>
+  `;
 
-  // Work Duration
-  const workGroup = createElement("label");
-  workGroup.style.cssText = "display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--omni-text-secondary, #9e988f);";
-  workGroup.textContent = "Focus (min):";
-  const workInput = createElement("input");
-  workInput.type = "number";
-  workInput.value = String(savedCfg.work || 25);
-  workInput.style.cssText = "background: var(--omni-bg-subtle, #2a2723); border: 1px solid var(--omni-border-strong, #3d3933); color: var(--omni-text-primary, #ede8df); padding: 6px 8px; border-radius: 4px; font-size: 0.82rem;";
-  workGroup.appendChild(workInput);
-  formGrid.appendChild(workGroup);
-
-  // Short Break
-  const breakGroup = createElement("label");
-  breakGroup.style.cssText = "display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--omni-text-secondary, #9e988f);";
-  breakGroup.textContent = "Short Break (min):";
-  const breakInput = createElement("input");
-  breakInput.type = "number";
-  breakInput.value = String(savedCfg.shortBreak || 5);
-  breakInput.style.cssText = "background: var(--omni-bg-subtle, #2a2723); border: 1px solid var(--omni-border-strong, #3d3933); color: var(--omni-text-primary, #ede8df); padding: 6px 8px; border-radius: 4px; font-size: 0.82rem;";
-  breakGroup.appendChild(breakInput);
-  formGrid.appendChild(breakGroup);
-
-  // Long Break
-  const longGroup = createElement("label");
-  longGroup.style.cssText = "display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--omni-text-secondary, #9e988f);";
-  longGroup.textContent = "Long Break (min):";
-  const longInput = createElement("input");
-  longInput.type = "number";
-  longInput.value = String(savedCfg.longBreak || 15);
-  longInput.style.cssText = "background: var(--omni-bg-subtle, #2a2723); border: 1px solid var(--omni-border-strong, #3d3933); color: var(--omni-text-primary, #ede8df); padding: 6px 8px; border-radius: 4px; font-size: 0.82rem;";
-  longGroup.appendChild(longInput);
-  formGrid.appendChild(longGroup);
-
-  container.appendChild(formGrid);
-
-  // Save button
-  const btnRow = createElement("div");
-  btnRow.style.cssText = "display: flex; justify-content: flex-end; margin-top: 4px;";
-  const btnSave = createElement("button");
-  btnSave.textContent = "Save Settings";
-  btnSave.className = "btn-publish";
-  btnSave.style.cssText = "background: var(--omni-accent-primary, #d4a373); color: #141312; border: none; padding: 6px 14px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer;";
+  const workInput = container.querySelector<HTMLInputElement>("#timer-cfg-work")!;
+  const breakInput = container.querySelector<HTMLInputElement>("#timer-cfg-short")!;
+  const longInput = container.querySelector<HTMLInputElement>("#timer-cfg-long")!;
+  const btnSave = container.querySelector<HTMLButtonElement>("#timer-btn-save")!;
 
   btnSave.addEventListener("click", () => {
     const work = parseInt(workInput.value || "25", 10);
@@ -214,9 +167,6 @@ function mountTimerSettings(root: any) {
       btnSave.textContent = "Save Settings";
     }, 1500);
   });
-
-  btnRow.appendChild(btnSave);
-  container.appendChild(btnRow);
 
   root.appendChild(container);
 }

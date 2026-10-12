@@ -27,6 +27,35 @@
   --omni-radius-md: 10px;
   --omni-radius-lg: 16px;
   --omni-radius-pill: 9999px;
+
+  /* Generic Standard Theme Tokens for Standalone Plugins & Nsites */
+  --bg-canvas: var(--omni-bg-canvas);
+  --bg-surface: var(--omni-bg-surface);
+  --bg-elevated: var(--omni-bg-elevated);
+  --bg-subtle: var(--omni-bg-subtle);
+
+  --text-primary: var(--omni-text-primary);
+  --text-secondary: var(--omni-text-secondary);
+  --text-muted: var(--omni-text-muted);
+
+  --border-subtle: var(--omni-border-subtle);
+  --border-strong: var(--omni-border-strong);
+  --border-focus: var(--omni-border-focus);
+
+  --accent-primary: var(--omni-accent-primary);
+  --accent-hover: var(--omni-accent-hover);
+  --accent-contrast: var(--omni-accent-contrast);
+
+  --status-online: var(--omni-status-online);
+  --status-badge: var(--omni-status-badge);
+
+  --font-sans: var(--omni-font-sans);
+  --font-mono: var(--omni-font-mono);
+
+  --radius-sm: var(--omni-radius-sm);
+  --radius-md: var(--omni-radius-md);
+  --radius-lg: var(--omni-radius-lg);
+  --radius-pill: var(--omni-radius-pill);
 }
 
 * {

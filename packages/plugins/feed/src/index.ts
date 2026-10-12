@@ -1,5 +1,26 @@
 /// <reference types="@omni/types" />
 
+/**
+ * Native zero-dependency HTML template helper using standard <template>.
+ */
+function html<T extends HTMLElement = HTMLElement>(
+  strings: TemplateStringsArray,
+  ...values: any[]
+): T {
+  const template = document.createElement("template");
+  template.innerHTML = strings.reduce((acc, str, i) => acc + str + (values[i] ?? ""), "").trim();
+  return template.content.firstElementChild as T;
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function formatTime(unixSec: number): string {
   const now = Math.floor(Date.now() / 1000);
   const diff = now - unixSec;
@@ -11,80 +32,46 @@ function formatTime(unixSec: number): string {
 }
 
 function mountFeed(root: any) {
-  const isRemote = typeof root.createElement === "function";
-  const createElement = (tag: string) => isRemote ? root.createElement(tag) : document.createElement(tag);
+  const container = html<HTMLDivElement>`
+    <div class="feed-container" style="color: var(--text-primary, #ede8df);">
+      <!-- Note Composer Card -->
+      <div class="composer-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); padding: 14px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px;">
+        <textarea class="composer-input" placeholder="What's happening?" rows="2" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-subtle, #272522); color: var(--text-primary, #ede8df); padding: 10px 12px; border-radius: var(--radius-sm, 6px); font-family: inherit; font-size: 0.88rem; outline: none; resize: vertical;"></textarea>
+        <div class="composer-footer" style="display: flex; justify-content: flex-end;">
+          <button class="btn-publish" style="background: var(--accent-primary, #d4a373); color: var(--accent-contrast, #141312); border: none; border-radius: var(--radius-sm, 6px); padding: 7px 16px; font-weight: 600; font-size: 0.82rem; cursor: pointer;">Publish Note</button>
+        </div>
+      </div>
 
-  const container = createElement("div");
-  container.className = "feed-container";
+      <!-- Header Row -->
+      <div class="feed-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap;">
+        <h2 style="font-size: 0.95rem; font-weight: 600; color: var(--text-secondary, #a8a29e); text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Timeline Feed</h2>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="cache-indicator" style="font-size: 0.72rem; color: var(--accent-primary, #d4a373); display: flex; align-items: center; gap: 4px;">✦ 0ms Local Cache</span>
+          <button class="btn-refresh-feed" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-subtle, #272522); color: var(--text-primary, #ede8df); border-radius: var(--radius-sm, 6px); padding: 4px 10px; font-size: 0.75rem; cursor: pointer;">↻ Refresh</button>
+        </div>
+      </div>
 
-  // A. Note Composer Card
-  const composerCard = createElement("div");
-  composerCard.className = "composer-card";
+      <!-- New Posts Pill (Bluesky-style) -->
+      <button class="new-posts-pill" style="display: none; align-self: center; margin: 0 auto 12px auto; background: var(--accent-primary, #d4a373); color: var(--accent-contrast, #141312); border: none; border-radius: var(--radius-pill, 9999px); padding: 6px 16px; font-size: 0.78rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3);"></button>
 
-  const textarea = createElement("textarea");
-  textarea.className = "composer-input";
-  textarea.setAttribute("placeholder", "What's happening?");
-  textarea.setAttribute("rows", "2");
+      <!-- Notes List -->
+      <div class="notes-list" style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="loading-text" style="text-align: center; color: var(--text-muted, #78716c); padding: 24px 0; font-size: 0.85rem;">Loading timeline notes...</div>
+      </div>
 
-  const composerFooter = createElement("div");
-  composerFooter.className = "composer-footer";
+      <!-- Load Older Notes Button (Pagination) -->
+      <button class="btn-load-more" style="display: none; margin: 16px auto 0 auto; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-secondary, #a8a29e); border-radius: var(--radius-sm, 6px); padding: 8px 18px; font-size: 0.8rem; cursor: pointer;">Load Older Notes</button>
+    </div>
+  `;
 
-  const btnPublish = createElement("button");
-  btnPublish.className = "btn-publish";
-  btnPublish.textContent = "Publish Note";
-
-  composerFooter.appendChild(btnPublish);
-  composerCard.appendChild(textarea);
-  composerCard.appendChild(composerFooter);
-  container.appendChild(composerCard);
-
-  // B. Header Row
-  const headerRow = createElement("div");
-  headerRow.setAttribute("style", "display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap;");
-
-  const heading = createElement("h2");
-  heading.setAttribute("style", "font-size: 0.95rem; font-weight: 600; color: var(--omni-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin: 0;");
-  heading.textContent = "Timeline Feed";
-
-  const headerRight = createElement("div");
-  headerRight.setAttribute("style", "display: flex; align-items: center; gap: 8px;");
-
-  const cacheIndicator = createElement("span");
-  cacheIndicator.setAttribute("style", "font-size: 0.72rem; color: var(--omni-accent-primary); display: flex; align-items: center; gap: 4px;");
-  cacheIndicator.textContent = "✦ 0ms Local Cache";
-
-  const btnRefresh = createElement("button");
-  btnRefresh.className = "btn-refresh-feed";
-  btnRefresh.textContent = "↻ Refresh";
-
-  headerRight.appendChild(cacheIndicator);
-  headerRight.appendChild(btnRefresh);
-  headerRow.appendChild(heading);
-  headerRow.appendChild(headerRight);
-  container.appendChild(headerRow);
-
-  // C. New Posts Pill (Bluesky-style)
-  const newPostsPill = createElement("button");
-  newPostsPill.className = "new-posts-pill";
-  newPostsPill.setAttribute("style", "display: none;");
-  container.appendChild(newPostsPill);
-
-  // D. Notes List
-  const notesList = createElement("div");
-  notesList.className = "notes-list";
-
-  const loadingText = createElement("div");
-  loadingText.setAttribute("style", "text-align: center; color: var(--omni-text-muted); padding: 24px 0; font-size: 0.85rem;");
-  loadingText.textContent = "Loading timeline notes...";
-  notesList.appendChild(loadingText);
-  container.appendChild(notesList);
-
-  // E. Load Older Notes Button (Pagination)
-  const btnLoadMore = createElement("button");
-  btnLoadMore.className = "btn-load-more";
-  btnLoadMore.textContent = "Load Older Notes";
-  btnLoadMore.setAttribute("style", "display: none;");
-  container.appendChild(btnLoadMore);
+  const textarea = container.querySelector<HTMLTextAreaElement>(".composer-input")!;
+  const btnPublish = container.querySelector<HTMLButtonElement>(".btn-publish")!;
+  const cacheIndicator = container.querySelector<HTMLElement>(".cache-indicator")!;
+  const btnRefresh = container.querySelector<HTMLButtonElement>(".btn-refresh-feed")!;
+  const newPostsPill = container.querySelector<HTMLButtonElement>(".new-posts-pill")!;
+  const notesList = container.querySelector<HTMLDivElement>(".notes-list")!;
+  const loadingText = container.querySelector<HTMLDivElement>(".loading-text")!;
+  const btnLoadMore = container.querySelector<HTMLButtonElement>(".btn-load-more")!;
 
   root.appendChild(container);
 
@@ -99,9 +86,9 @@ function mountFeed(root: any) {
     const count = pendingNewNotes.length;
     if (count > 0) {
       newPostsPill.textContent = `✦ ${count} New Note${count > 1 ? "s" : ""} · Click to view`;
-      newPostsPill.setAttribute("style", "display: flex;");
+      newPostsPill.style.display = "flex";
     } else {
-      newPostsPill.setAttribute("style", "display: none;");
+      newPostsPill.style.display = "none";
     }
   }
 
@@ -112,7 +99,7 @@ function mountFeed(root: any) {
     if (loadingText.parentElement) {
       loadingText.remove();
     }
-    btnLoadMore.setAttribute("style", "display: block;");
+    btnLoadMore.style.display = "block";
 
     if (event.created_at && event.created_at < oldestTimestamp) {
       oldestTimestamp = event.created_at;
@@ -121,54 +108,30 @@ function mountFeed(root: any) {
       latestTimestamp = event.created_at;
     }
 
-    const card = createElement("article");
-    card.className = "note-card";
-
-    // Note Header
-    const noteHeader = createElement("div");
-    noteHeader.className = "note-header";
-
-    const authorSpan = createElement("span");
-    authorSpan.className = "note-author";
     const shortAuthor = event.pubkey ? `npub:${event.pubkey.slice(0, 6)}...${event.pubkey.slice(-4)}` : "anonymous";
-    authorSpan.textContent = shortAuthor;
+    const timeStr = event.created_at ? formatTime(event.created_at) : "just now";
 
-    const metaSpan = createElement("span");
-    metaSpan.className = "note-meta";
-    metaSpan.textContent = event.created_at ? formatTime(event.created_at) : "just now";
+    const card = html<HTMLElement>`
+      <article class="note-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 10px); padding: 14px; display: flex; flex-direction: column; gap: 8px; color: var(--text-primary, #ede8df);">
+        <div class="note-header" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem;">
+          <span class="note-author" style="font-family: var(--font-mono, monospace); font-weight: 600; color: var(--accent-primary, #d4a373);">${escapeHtml(shortAuthor)}</span>
+          <span class="note-meta" style="color: var(--text-muted, #78716c);">${escapeHtml(timeStr)}</span>
+        </div>
+        <div class="note-content" style="font-size: 0.88rem; line-height: 1.45; word-break: break-word; white-space: pre-wrap;">${escapeHtml(event.content || "")}</div>
+        <div class="note-actions" style="display: flex; gap: 12px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--border-subtle, #272522);">
+          <button class="note-action-btn btn-reply" style="background: transparent; border: none; color: var(--text-muted, #78716c); font-size: 0.75rem; cursor: pointer; padding: 2px 4px;">Reply</button>
+          <button class="note-action-btn btn-like" style="background: transparent; border: none; color: var(--text-muted, #78716c); font-size: 0.75rem; cursor: pointer; padding: 2px 4px;">Like</button>
+        </div>
+      </article>
+    `;
 
-    noteHeader.appendChild(authorSpan);
-    noteHeader.appendChild(metaSpan);
-
-    // Note Content
-    const noteContent = createElement("div");
-    noteContent.className = "note-content";
-    noteContent.textContent = event.content || "";
-
-    // Note Actions
-    const actions = createElement("div");
-    actions.className = "note-actions";
-
-    const btnReply = createElement("button");
-    btnReply.className = "note-action-btn";
-    btnReply.textContent = "Reply";
-
-    const btnLike = createElement("button");
-    btnLike.className = "note-action-btn";
+    const btnLike = card.querySelector<HTMLButtonElement>(".btn-like")!;
     let likes = 0;
-    btnLike.textContent = "Like";
     btnLike.addEventListener("click", () => {
       likes++;
       btnLike.textContent = `Liked (${likes})`;
-      btnLike.setAttribute("style", "color: var(--omni-accent-primary);");
+      btnLike.style.color = "var(--accent-primary, #d4a373)";
     });
-
-    actions.appendChild(btnReply);
-    actions.appendChild(btnLike);
-
-    card.appendChild(noteHeader);
-    card.appendChild(noteContent);
-    card.appendChild(actions);
 
     if (prepend && notesList.firstChild) {
       notesList.insertBefore(card, notesList.firstChild);
@@ -184,7 +147,7 @@ function mountFeed(root: any) {
       // Initial chronological notes appended cleanly
       renderNote(event, false);
     } else {
-      // Like Bluesky: buffer live notes so reading isn't interrupted by jumping DOM
+      // Buffer live notes so reading isn't interrupted by jumping DOM
       if (!pendingNewNotes.some((n) => n.id === event.id)) {
         pendingNewNotes.unshift(event);
         updateNewPostsPill();
@@ -202,14 +165,12 @@ function mountFeed(root: any) {
 
   // Refresh Feed button handler
   btnRefresh.addEventListener("click", () => {
-    // 1. Reveal any buffered notes
     while (pendingNewNotes.length > 0) {
       const note = pendingNewNotes.pop();
       renderNote(note, true);
     }
     updateNewPostsPill();
 
-    // 2. Query for new events since latestTimestamp
     if (activeWs && activeWs.readyState === WebSocket.OPEN) {
       const refreshSubId = `refresh-${Date.now()}`;
       const sinceTime = latestTimestamp > 0 ? latestTimestamp : Math.floor(Date.now() / 1000) - 120;
@@ -226,7 +187,7 @@ function mountFeed(root: any) {
     if (oldestTimestamp === Infinity) return;
     if (activeWs && activeWs.readyState === WebSocket.OPEN) {
       btnLoadMore.textContent = "Loading older notes...";
-      btnLoadMore.setAttribute("disabled", "true");
+      btnLoadMore.disabled = true;
       const olderSubId = `older-${Date.now()}`;
       activeWs.send(JSON.stringify(["REQ", olderSubId, { kinds: [1], until: oldestTimestamp - 1, limit: 25 }]));
     }
@@ -237,7 +198,7 @@ function mountFeed(root: any) {
     const text = textarea.value?.trim();
     if (!text) return;
 
-    btnPublish.setAttribute("disabled", "true");
+    btnPublish.disabled = true;
     btnPublish.textContent = "Signing...";
 
     try {
@@ -279,7 +240,7 @@ function mountFeed(root: any) {
     } catch (err: any) {
       console.error("Failed to publish note from plugin:", err);
     } finally {
-      btnPublish.removeAttribute("disabled");
+      btnPublish.disabled = false;
       btnPublish.textContent = "Publish Note";
     }
   });
@@ -291,7 +252,6 @@ function mountFeed(root: any) {
       activeWs = ws;
 
       ws.onopen = () => {
-        // 1. Bounded initial query: fetch the latest 30 notes
         ws.send(JSON.stringify(["REQ", "feed-initial", { kinds: [1], limit: 30 }]));
         setTimeout(() => {
           if (!isInitialBatchComplete) {
@@ -312,13 +272,11 @@ function mountFeed(root: any) {
             if (subId === "feed-initial") {
               isInitialBatchComplete = true;
               cacheIndicator.textContent = "✦ Connected Relays";
-              // Close the initial backfill query
               ws.send(JSON.stringify(["CLOSE", "feed-initial"]));
-              // Subscribe to live new notes going forward with a bounded timestamp
               ws.send(JSON.stringify(["REQ", "feed-live", { kinds: [1], since: Math.floor(Date.now() / 1000) }]));
             } else if (subId?.startsWith("older-")) {
               btnLoadMore.textContent = "Load Older Notes";
-              btnLoadMore.removeAttribute("disabled");
+              btnLoadMore.disabled = false;
               ws.send(JSON.stringify(["CLOSE", subId]));
             } else if (subId?.startsWith("refresh-")) {
               btnRefresh.textContent = "↻ Refresh";
