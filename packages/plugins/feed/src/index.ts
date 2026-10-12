@@ -106,19 +106,13 @@ const ICONS = {
 function mountFeed(root: any) {
   const container = html<HTMLDivElement>`
     <div class="feed-container">
-      <!-- Top Timeline Navigation Header (Bluesky Explore Style) -->
+      <!-- Top Timeline Navigation Header -->
       <div class="feed-top-header">
-        <div class="feed-tabs">
-          <button class="feed-tab active">Latest</button>
-          <button class="feed-tab">Discover</button>
-        </div>
-        <div class="feed-header-controls">
-          <span class="cache-indicator">✦ Relays Connected</span>
-          <button class="btn-refresh-feed" title="Refresh Feed">
-            ${ICONS.refresh}
-            <span>Refresh</span>
-          </button>
-        </div>
+        <h2 class="feed-title">Feed</h2>
+        <button class="btn-refresh-feed" title="Refresh Feed">
+          ${ICONS.refresh}
+          <span>Refresh</span>
+        </button>
       </div>
 
       <!-- Note Composer (Seamless Bluesky Post Box) -->
@@ -152,7 +146,6 @@ function mountFeed(root: any) {
 
   const textarea = container.querySelector<HTMLTextAreaElement>(".composer-input")!;
   const btnPublish = container.querySelector<HTMLButtonElement>(".btn-publish")!;
-  const cacheIndicator = container.querySelector<HTMLElement>(".cache-indicator")!;
   const btnRefresh = container.querySelector<HTMLButtonElement>(".btn-refresh-feed")!;
   const notesList = container.querySelector<HTMLDivElement>(".notes-list")!;
   const loadingState = container.querySelector<HTMLDivElement>(".loading-state")!;
@@ -421,7 +414,6 @@ function mountFeed(root: any) {
             handleIncomingEvent(data[2], isRefresh);
           } else if (type === "EOSE") {
             if (subId === "feed-initial") {
-              cacheIndicator.textContent = "✦ Relays Connected";
               // Close initial subscription to prevent continuous noisy background firehose
               ws.send(JSON.stringify(["CLOSE", "feed-initial"]));
             } else if (subId?.startsWith("older-")) {
@@ -440,9 +432,7 @@ function mountFeed(root: any) {
         (ev: any) => {
           handleIncomingEvent(ev);
         },
-        () => {
-          cacheIndicator.textContent = "✦ Relays Connected";
-        }
+        () => {}
       );
     }
   } catch (err) {

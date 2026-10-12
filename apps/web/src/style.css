@@ -277,12 +277,12 @@ body {
   box-sizing: border-box;
 }
 
-/* Top Sticky Navigation Header (Bluesky Explore Style) */
+/* Top Sticky Navigation Header */
 .feed-top-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--omni-border-subtle);
   background: var(--omni-bg-canvas);
   position: sticky;
@@ -290,47 +290,12 @@ body {
   z-index: 20;
 }
 
-.feed-tabs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.feed-tab {
-  background: transparent;
-  border: none;
-  color: var(--omni-text-secondary);
-  font-size: 0.92rem;
-  font-weight: 500;
-  padding: 6px 12px;
-  border-radius: var(--omni-radius-pill);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.feed-tab:hover {
-  color: var(--omni-text-primary);
-  background: var(--omni-bg-subtle);
-}
-
-.feed-tab.active {
-  color: var(--omni-text-primary);
+.feed-title {
+  font-size: 1.05rem;
   font-weight: 700;
-  background: var(--omni-bg-subtle);
-}
-
-.feed-header-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.cache-indicator {
-  font-size: 0.72rem;
-  color: var(--omni-text-muted);
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  letter-spacing: -0.01em;
+  color: var(--omni-text-primary);
+  margin: 0;
 }
 
 .btn-refresh-feed {
