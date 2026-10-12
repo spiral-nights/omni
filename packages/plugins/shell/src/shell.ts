@@ -656,6 +656,8 @@ export class OmniShell implements OmniShellHost {
       let iconSvg = "";
       if (meta.icon && ICONS[meta.icon as IconName]) {
         iconSvg = icon(meta.icon as IconName, 20);
+      } else if (plugin.id === "org.omni.plugin.profile" || meta.icon === "profile") {
+        iconSvg = icon("user", 20);
       } else {
         iconSvg = icon("feed", 20);
       }
@@ -721,6 +723,8 @@ export class OmniShell implements OmniShellHost {
       let iconSvg = "";
       if (meta.icon && ICONS[meta.icon as IconName]) {
         iconSvg = icon(meta.icon as IconName, 22);
+      } else if (plugin.id === "org.omni.plugin.profile" || meta.icon === "profile") {
+        iconSvg = icon("user", 22);
       } else {
         iconSvg = icon("feed", 22);
       }
@@ -1519,6 +1523,8 @@ export class OmniShell implements OmniShellHost {
       let iconSvg = "";
       if (meta.icon && ICONS[meta.icon as IconName]) {
         iconSvg = icon(meta.icon as IconName, 18);
+      } else if (p.id === "org.omni.plugin.profile" || meta.icon === "profile") {
+        iconSvg = icon("user", 18);
       } else {
         iconSvg = icon("plugins", 18);
       }

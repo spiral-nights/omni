@@ -1082,6 +1082,36 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       shell.applyWorkspaceState(state);
       expect(shell.isAppPinned(customApp)).toBe(true);
     });
+
+    it("renders a person icon for the Profile & Keys plugin", () => {
+      const profilePlugin: InstalledPluginEntry = {
+        id: "org.omni.plugin.profile",
+        name: "Profile & Keys",
+        icon: "profile",
+        viewport: "main",
+        enabled: true,
+        pinned: true,
+        scriptContent: "console.log('profile');",
+        placements: [{ id: "pl-profile", viewport: "main", route: "", viewId: "main", enabled: true }]
+      };
+      shell.installedPlugins.push(profilePlugin);
+      shell.renderDockLaunchers();
+
+      const profileDockBtn = root.querySelector('#dock-slot [data-plugin-id="org.omni.plugin.profile"]');
+      expect(profileDockBtn).toBeTruthy();
+      // Verify person icon geometry (head circle and shoulders path)
+      const svg = profileDockBtn?.querySelector("svg");
+      expect(svg).toBeTruthy();
+      expect(svg?.innerHTML).toContain('circle cx="12" cy="7" r="4"');
+      expect(svg?.innerHTML).toContain('M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2');
+
+      // Verify in Apps Launcher as well
+      shell.showPage("apps");
+      const appCards = Array.from(root.querySelectorAll('#apps-pinned-grid .app-card'));
+      const profileCard = appCards.find((c) => c.textContent?.includes("Profile & Keys"));
+      expect(profileCard).toBeTruthy();
+      expect(profileCard?.innerHTML).toContain('circle cx="12" cy="7" r="4"');
+    });
   });
 });
 

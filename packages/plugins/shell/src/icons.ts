@@ -6,6 +6,8 @@ export type IconName =
   | "plugins"
   | "settings"
   | "user"
+  | "profile"
+  | "timer"
   | "close"
   | "reply"
   | "like"
@@ -109,6 +111,19 @@ export const ICONS: Record<IconName, string> = {
   user: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
     <circle cx="12" cy="7" r="4"/>
+  </svg>`,
+
+  profile: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </svg>`,
+
+  timer: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="13" r="8"/>
+    <path d="M12 9v4l2 2"/>
+    <path d="M5 3L2 6"/>
+    <path d="M22 6l-3-3"/>
+    <path d="M10 2h4"/>
   </svg>`,
 
   close: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
