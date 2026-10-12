@@ -37,6 +37,10 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
         components: [
           { id: "timer-widget", type: "widget", title: "Timer", slot: "sidebar" }
         ],
+        views: [
+          { id: "main", title: "Timer", path: "" },
+          { id: "settings", title: "Timer Settings", path: "?view=settings" }
+        ],
         permissions: { storage: { quotaMb: 2 } }
       },
       scriptContent: "console.log('timer');",
@@ -1141,7 +1145,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       const pivotItems = Array.from(panoramaRoot.querySelectorAll(".panorama-pivot-item")).map(
         (el) => el.textContent?.trim()
       );
-      expect(pivotItems).toContain("what's new");
+      expect(pivotItems).toContain("feed");
       expect(pivotItems).toContain("apps");
       expect(pivotItems).toContain("widgets");
       expect(pivotItems).toContain("system");
@@ -1184,13 +1188,58 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(panoramaShell.installedPlugins[1].enabled).toBe(false);
     });
 
-    it("renders the Windows Phone ApplicationBar with back, home, search, and more buttons", () => {
+    it("renders the simplified Windows Phone ApplicationBar with back and more options buttons without redundant navigation", () => {
       const appBar = panoramaRoot.querySelector("#panorama-app-bar");
       expect(appBar).toBeTruthy();
       expect(panoramaRoot.querySelector("#btn-bar-back")).toBeTruthy();
-      expect(panoramaRoot.querySelector("#btn-bar-home")).toBeTruthy();
-      expect(panoramaRoot.querySelector("#btn-bar-search")).toBeTruthy();
       expect(panoramaRoot.querySelector("#btn-bar-more")).toBeTruthy();
+      // Ensure redundant navigation buttons that duplicate horizontal pivots are removed
+      expect(panoramaRoot.querySelector("#btn-bar-home")).toBeFalsy();
+      expect(panoramaRoot.querySelector("#btn-bar-search")).toBeFalsy();
+    });
+
+    it("allows configuring plugins (settings, viewports, relays, inspector) in the system pivot", async () => {
+      const pluginsList = panoramaRoot.querySelector("#panorama-plugins-list");
+      expect(pluginsList).toBeTruthy();
+
+      const cards = pluginsList?.querySelectorAll(".panorama-plugin-config-card");
+      expect(cards?.length).toBe(mockPlugins.length);
+
+      // Find timer plugin expand button
+      const timerBtn = panoramaRoot.querySelector("#btn-expand-plugin-org-omni-plugin-timer") as HTMLButtonElement | null;
+      expect(timerBtn).toBeTruthy();
+
+      // Click expand button to reveal full configuration
+      timerBtn?.click();
+
+      // Verify settings button and mount container
+      const btnSettings = panoramaRoot.querySelector("#btn-toggle-settings-org-omni-plugin-timer");
+      expect(btnSettings).toBeTruthy();
+
+      // Verify viewport and route selects
+      const vpSelect = panoramaRoot.querySelector(".plugin-viewport-select") as HTMLSelectElement | null;
+      expect(vpSelect).toBeTruthy();
+
+      const routeSelect = panoramaRoot.querySelector(".plugin-route-select") as HTMLSelectElement | null;
+      expect(routeSelect).toBeTruthy();
+
+      // Verify relay scoping controls
+      const radAll = panoramaRoot.querySelector("input[name='panorama-relay-scope-org-omni-plugin-timer'][type='radio']") as HTMLInputElement | null;
+      expect(radAll).toBeTruthy();
+
+      // Verify inspect button and modal
+      const btnInspect = panoramaRoot.querySelector("#btn-inspect-org-omni-plugin-timer") as HTMLButtonElement | null;
+      expect(btnInspect).toBeTruthy();
+      btnInspect?.click();
+
+      const inspectorModal = panoramaRoot.querySelector("#panorama-inspector-modal") as HTMLElement | null;
+      expect(inspectorModal?.style.display).toBe("flex");
+      expect(panoramaRoot.querySelector("#panorama-inspector-title")?.textContent).toContain("Focus Timer");
+
+      // Close inspector modal
+      const btnCloseInspector = panoramaRoot.querySelector("#btn-inspector-close") as HTMLButtonElement | null;
+      btnCloseInspector?.click();
+      expect(inspectorModal?.style.display).toBe("none");
     });
   });
 });

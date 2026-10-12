@@ -72,6 +72,38 @@
       setupKernelRpc();
       setupRemoteDom();
 
+      // Apply Host Theme Tokens to Guest DOM
+      if (sessionInfo && sessionInfo.theme && sessionInfo.theme.colors) {
+        try {
+          const docEl = document.documentElement;
+          if (docEl && docEl.style) {
+            const colors = sessionInfo.theme.colors;
+            if (colors.canvas) {
+              docEl.style.setProperty("--bg-canvas", colors.canvas);
+              docEl.style.setProperty("--omni-bg-canvas", colors.canvas);
+            }
+            if (colors.surface) {
+              docEl.style.setProperty("--bg-surface", colors.surface);
+              docEl.style.setProperty("--omni-bg-surface", colors.surface);
+            }
+            if (colors.accent) {
+              docEl.style.setProperty("--accent-primary", colors.accent);
+              docEl.style.setProperty("--omni-accent-primary", colors.accent);
+            }
+            if (colors.contrast) {
+              docEl.style.setProperty("--accent-contrast", colors.contrast);
+              docEl.style.setProperty("--omni-accent-contrast", colors.contrast);
+            }
+            if (colors.radius !== undefined) {
+              docEl.style.setProperty("--radius-sm", colors.radius);
+              docEl.style.setProperty("--radius-md", colors.radius);
+              docEl.style.setProperty("--omni-radius-sm", colors.radius);
+              docEl.style.setProperty("--omni-radius-md", colors.radius);
+            }
+          }
+        } catch (_) {}
+      }
+
       initResolved();
 
       // Schedule component mount resolving best match for placement

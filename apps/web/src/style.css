@@ -1031,6 +1031,61 @@ body {
    PanoramaShell — Windows Phone Modern / People Hub Design System
    ========================================================================== */
 
+:root.theme-panorama,
+body.theme-panorama,
+.panorama-shell-root {
+  --omni-bg-canvas: #000000;
+  --omni-bg-surface: #111111;
+  --omni-bg-elevated: #161616;
+  --omni-bg-subtle: #222222;
+
+  --omni-text-primary: #ffffff;
+  --omni-text-secondary: #aaaaaa;
+  --omni-text-muted: #666666;
+
+  --omni-border-subtle: #1e1e1e;
+  --omni-border-strong: #333333;
+  --omni-border-focus: #00a4ef;
+
+  --omni-accent-primary: #00a4ef;
+  --omni-accent-hover: #0078d7;
+  --omni-accent-contrast: #ffffff;
+
+  --omni-status-online: #00a4ef;
+  --omni-status-badge: #00a4ef;
+
+  --omni-radius-sm: 0px;
+  --omni-radius-md: 0px;
+  --omni-radius-lg: 0px;
+  --omni-radius-pill: 0px;
+
+  /* Standard Generic Tokens used by standalone plugins */
+  --bg-canvas: #000000;
+  --bg-surface: #111111;
+  --bg-elevated: #161616;
+  --bg-subtle: #222222;
+
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --text-muted: #666666;
+
+  --border-subtle: #1e1e1e;
+  --border-strong: #333333;
+  --border-focus: #00a4ef;
+
+  --accent-primary: #00a4ef;
+  --accent-hover: #0078d7;
+  --accent-contrast: #ffffff;
+
+  --status-online: #00a4ef;
+  --status-badge: #00a4ef;
+
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-pill: 0px;
+}
+
 .panorama-shell-root {
   display: flex;
   flex-direction: column;
@@ -1407,5 +1462,160 @@ body {
 
 .panorama-drawer-item:hover {
   background: #2a2a2a;
+}
+
+/* 8. Panorama Plugin & Component Overrides */
+.theme-panorama .composer-card,
+.panorama-shell-root .composer-card,
+.theme-panorama .note-card,
+.panorama-shell-root .note-card,
+.theme-panorama .timer-widget-card,
+.panorama-shell-root .timer-widget-card,
+.theme-panorama .checklist-widget-card,
+.panorama-shell-root .checklist-widget-card,
+.theme-panorama .checklist-card,
+.panorama-shell-root .checklist-card,
+.theme-panorama .widget-card,
+.panorama-shell-root .widget-card {
+  background: #111111 !important;
+  border-color: #222222 !important;
+  border-radius: 0px !important;
+}
+
+.theme-panorama .btn-publish,
+.panorama-shell-root .btn-publish,
+.theme-panorama .btn-timer-start,
+.panorama-shell-root .btn-timer-start,
+.theme-panorama .btn-add-task,
+.panorama-shell-root .btn-add-task {
+  background: #00a4ef !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 0px !important;
+}
+
+.theme-panorama .btn-refresh-feed,
+.panorama-shell-root .btn-refresh-feed,
+.theme-panorama .btn-timer-pause,
+.panorama-shell-root .btn-timer-pause,
+.theme-panorama .btn-timer-reset,
+.panorama-shell-root .btn-timer-reset {
+  border-radius: 0px !important;
+}
+
+.theme-panorama .new-posts-pill,
+.panorama-shell-root .new-posts-pill {
+  background: #00a4ef !important;
+  color: #ffffff !important;
+  border-radius: 0px !important;
+}
+
+.theme-panorama .cache-indicator,
+.panorama-shell-root .cache-indicator,
+.theme-panorama .note-author,
+.panorama-shell-root .note-author,
+.theme-panorama .timer-digits,
+.panorama-shell-root .timer-digits {
+  color: #00a4ef !important;
+}
+
+.theme-panorama .composer-input,
+.panorama-shell-root .composer-input,
+.theme-panorama textarea,
+.panorama-shell-root textarea,
+.theme-panorama input[type="text"],
+.panorama-shell-root input[type="text"],
+.theme-panorama input[type="number"],
+.panorama-shell-root input[type="number"],
+.theme-panorama select,
+.panorama-shell-root select {
+  border-radius: 0px !important;
+  background: #161616 !important;
+  border: 1px solid #333333 !important;
+  color: #ffffff !important;
+}
+
+.theme-panorama .omni-toggle,
+.panorama-shell-root .omni-toggle {
+  width: 44px;
+  height: 22px;
+}
+
+.theme-panorama .toggle-slider,
+.panorama-shell-root .toggle-slider {
+  border-radius: 0px !important;
+  border: 2px solid #555555;
+  background-color: transparent !important;
+}
+
+.theme-panorama .toggle-slider:before,
+.panorama-shell-root .toggle-slider:before {
+  border-radius: 0px !important;
+  width: 14px;
+  height: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #ffffff !important;
+}
+
+.theme-panorama .omni-toggle input:checked + .toggle-slider,
+.panorama-shell-root .omni-toggle input:checked + .toggle-slider {
+  background-color: #00a4ef !important;
+  border-color: #00a4ef !important;
+}
+
+.theme-panorama .omni-toggle input:checked + .toggle-slider:before,
+.panorama-shell-root .omni-toggle input:checked + .toggle-slider:before {
+  transform: translateX(22px);
+  background-color: #000000 !important;
+}
+
+/* 9. Panorama Plugin Configuration & Inspector */
+.panorama-plugin-config-card {
+  background: #111111;
+  border: 1px solid #222222;
+  transition: border-color 0.15s ease;
+}
+
+.panorama-plugin-config-card:hover {
+  border-color: #333333;
+}
+
+.panorama-inspector-modal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.panorama-inspector-content {
+  background: #111111;
+  border: 2px solid #00a4ef;
+  max-width: 560px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panorama-inspector-header {
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #222222;
+}
+
+.panorama-inspector-body {
+  padding: 18px;
+  overflow-y: auto;
 }
 

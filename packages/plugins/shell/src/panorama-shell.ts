@@ -474,6 +474,10 @@ export class PanoramaShell implements OmniShellHost {
   // --- Mounting the Panorama DOM ---
 
   public mount(): void {
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.add("theme-panorama");
+      document.body?.classList.add("theme-panorama");
+    }
     this.renderSkeleton();
     this.cacheElementReferences();
     this.initSlotContainers();
@@ -497,7 +501,7 @@ export class PanoramaShell implements OmniShellHost {
             <h1 class="panorama-hero-title">omni</h1>
           </div>
           <nav class="panorama-pivot-nav" id="panorama-pivot-nav">
-            <button class="panorama-pivot-item active" data-pivot="feed">what's new</button>
+            <button class="panorama-pivot-item active" data-pivot="feed">feed</button>
             <button class="panorama-pivot-item" data-pivot="apps">apps</button>
             <button class="panorama-pivot-item" data-pivot="widgets">widgets</button>
             <button class="panorama-pivot-item" data-pivot="system">system</button>
@@ -506,7 +510,7 @@ export class PanoramaShell implements OmniShellHost {
 
         <!-- 2. Horizontal Panorama Canvas -->
         <div class="panorama-canvas" id="panorama-canvas">
-          <!-- Section 1: What's New (Timeline Feed) -->
+          <!-- Section 1: Feed (Timeline Feed) -->
           <section class="panorama-section" id="panorama-section-feed" data-pivot="feed">
             <div class="panorama-section-content">
               <div id="panorama-feed-slot" class="omni-slot panorama-feed-slot"></div>
@@ -611,12 +615,6 @@ export class PanoramaShell implements OmniShellHost {
             <button class="btn-app-bar-circle" id="btn-bar-back" title="Back">
               ${icon("arrow-left", 18)}
             </button>
-            <button class="btn-app-bar-circle" id="btn-bar-home" title="Panorama Hub">
-              ${icon("windows", 16)}
-            </button>
-            <button class="btn-app-bar-circle" id="btn-bar-search" title="Search">
-              ${icon("search", 16)}
-            </button>
             <button class="btn-app-bar-circle" id="btn-bar-more" title="More options">
               ${icon("more", 18)}
             </button>
@@ -629,6 +627,19 @@ export class PanoramaShell implements OmniShellHost {
           <div class="panorama-drawer-item" id="sheet-item-sync">Sync Workspace (NIP-78)</div>
           <div class="panorama-drawer-item" id="sheet-item-restore">Restore Workspace from Relays</div>
           <div class="panorama-drawer-item" id="sheet-item-close">Close Menu</div>
+        </div>
+
+        <!-- 6. Plugin Inspector Modal -->
+        <div class="panorama-inspector-modal" id="panorama-inspector-modal" style="display: none;">
+          <div class="panorama-inspector-content">
+            <div class="panorama-inspector-header">
+              <h3 id="panorama-inspector-title" style="margin: 0; font-size: 1rem; color: #fff;">Plugin Inspector</h3>
+              <button class="btn-app-bar-circle" id="btn-inspector-close" style="width: 32px; height: 32px; border: 1px solid #666;" title="Close">
+                ${icon("close", 16)}
+              </button>
+            </div>
+            <div class="panorama-inspector-body" id="panorama-inspector-body"></div>
+          </div>
         </div>
       </div>
     `;
@@ -723,27 +734,70 @@ export class PanoramaShell implements OmniShellHost {
     list.innerHTML = "";
     if (count) count.textContent = `${this.installedPlugins.length} installed`;
 
+    const viewportOptions = this.getAvailableViewports();
+
     for (const plugin of this.installedPlugins) {
       const meta = this.getPluginMeta(plugin);
-      const row = document.createElement("div");
-      row.className = "panorama-system-plugin-row";
+      const safeId = plugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const synthManifest = this.ensurePluginManifest(plugin);
+      const pluginViews = (synthManifest.views && synthManifest.views.length > 0)
+        ? synthManifest.views
+        : (plugin.views && plugin.views.length > 0)
+        ? plugin.views
+        : [{ id: "main", title: "Main App", path: "" }];
+      const settingsView = pluginViews.find((v: any) => v.id === "settings" || v.path.includes("settings"));
+      const isExpanded = this.expandedPluginId === plugin.id;
+
+      const card = document.createElement("div");
+      card.className = "panorama-plugin-config-card";
+      card.dataset.pluginId = plugin.id;
+      card.style.cssText = "background: #111; border: 1px solid #222; margin-bottom: 8px;";
+
+      // 1. Header row
+      const header = document.createElement("div");
+      header.className = "panorama-plugin-config-header";
+      header.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; cursor: pointer;";
 
       const left = document.createElement("div");
-      left.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
-      left.innerHTML = `
-        <strong style="font-size: 0.85rem; color: #fff;">${meta.name}</strong>
+      left.style.cssText = "display: flex; align-items: center; gap: 10px; flex: 1;";
+
+      const safeIconName: IconName =
+        meta.icon === "relays" ? "relay" :
+        meta.icon === "profile" ? "user" :
+        meta.icon === "check-circle" || meta.icon === "checklist" ? "check" :
+        (ICONS[meta.icon as IconName] ? (meta.icon as IconName) : "plugins");
+
+      const iconBox = document.createElement("div");
+      iconBox.style.cssText = "width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary, #00a4ef); flex-shrink: 0;";
+      iconBox.innerHTML = icon(safeIconName, 18);
+
+      const titleCol = document.createElement("div");
+      titleCol.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+      titleCol.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <strong style="font-size: 0.88rem; color: #fff;">${meta.name}</strong>
+          <span style="font-size: 0.65rem; color: #888; background: #1a1a1a; padding: 1px 5px; border-radius: 0;">v${meta.version}</span>
+        </div>
         <span style="font-size: 0.7rem; color: #888;">${plugin.id} • ${plugin.enabled ? "Active" : "Disabled"}</span>
       `;
 
+      left.appendChild(iconBox);
+      left.appendChild(titleCol);
+      left.addEventListener("click", () => {
+        this.expandedPluginId = isExpanded ? null : plugin.id;
+        this.renderSystemPluginList();
+      });
+
       const right = document.createElement("div");
-      right.style.cssText = "display: flex; align-items: center; gap: 8px;";
+      right.style.cssText = "display: flex; align-items: center; gap: 10px;";
 
       const toggle = document.createElement("label");
       toggle.className = "omni-toggle";
       const input = document.createElement("input");
       input.type = "checkbox";
       input.checked = plugin.enabled;
-      input.addEventListener("change", async () => {
+      input.addEventListener("change", async (e) => {
+        e.stopPropagation();
         plugin.enabled = input.checked;
         await this.remountPlugin(plugin);
       });
@@ -753,10 +807,453 @@ export class PanoramaShell implements OmniShellHost {
       toggle.appendChild(slider);
       right.appendChild(toggle);
 
-      row.appendChild(left);
-      row.appendChild(right);
-      list.appendChild(row);
+      const btnExpand = document.createElement("button");
+      btnExpand.className = "btn-expand-plugin";
+      btnExpand.id = `btn-expand-plugin-${safeId}`;
+      btnExpand.style.cssText = "background: transparent; border: none; color: #aaa; cursor: pointer; padding: 4px; display: flex; align-items: center;";
+      btnExpand.title = isExpanded ? "Collapse settings" : "Configure plugin";
+      btnExpand.innerHTML = icon(isExpanded ? "chevron-up" : "chevron-down", 16);
+      btnExpand.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.expandedPluginId = isExpanded ? null : plugin.id;
+        this.renderSystemPluginList();
+      });
+      right.appendChild(btnExpand);
+
+      header.appendChild(left);
+      header.appendChild(right);
+      card.appendChild(header);
+
+      // 2. Expanded Details
+      if (isExpanded) {
+        const details = document.createElement("div");
+        details.className = "panorama-plugin-config-details";
+        details.style.cssText = "display: flex; flex-direction: column; gap: 12px; padding: 12px 14px 16px 14px; border-top: 1px solid #1a1a1a; background: #0c0c0c;";
+
+        // Section A: Sandboxed Settings
+        const settingsBox = document.createElement("div");
+        settingsBox.className = "panorama-config-section plugin-settings-box";
+        settingsBox.style.cssText = "display: flex; flex-direction: column; gap: 8px; background: #141414; padding: 10px 12px; border: 1px solid #222;";
+
+        const settingsHeader = document.createElement("div");
+        settingsHeader.className = "panorama-config-section-title";
+        settingsHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; font-weight: 600; color: #fff;";
+
+        const settingsTitle = document.createElement("span");
+        settingsTitle.textContent = "Settings & Preferences";
+        settingsHeader.appendChild(settingsTitle);
+
+        const mountContainer = document.createElement("div");
+        mountContainer.id = `panorama-settings-mount-${safeId}`;
+        mountContainer.className = "plugin-settings-mount-container";
+        mountContainer.style.cssText = "display: none; margin-top: 6px; padding: 10px; background: #000; border: 1px solid #222;";
+
+        if (settingsView) {
+          const btnToggleSettings = document.createElement("button");
+          btnToggleSettings.className = "btn-panorama-action btn-plugin-settings";
+          btnToggleSettings.id = `btn-toggle-settings-${safeId}`;
+          btnToggleSettings.textContent = "Open Settings";
+
+          btnToggleSettings.addEventListener("click", async () => {
+            const isOpen = mountContainer.style.display !== "none";
+            if (!isOpen) {
+              mountContainer.style.display = "block";
+              btnToggleSettings.textContent = "Loading...";
+              try {
+                await this.kernel.mountPluginSettings(
+                  plugin.id,
+                  synthManifest,
+                  plugin.htmlContent || plugin.scriptContent,
+                  mountContainer,
+                  settingsView.path || "?view=settings"
+                );
+                btnToggleSettings.textContent = "Close Settings";
+              } catch (err) {
+                console.error(`Failed to mount settings for ${plugin.id}:`, err);
+                mountContainer.textContent = "Failed to load settings.";
+                btnToggleSettings.textContent = "Open Settings";
+              }
+            } else {
+              this.kernel.destroyPluginSettings(plugin.id);
+              mountContainer.style.display = "none";
+              mountContainer.innerHTML = "";
+              btnToggleSettings.textContent = "Open Settings";
+            }
+          });
+
+          settingsHeader.appendChild(btnToggleSettings);
+          settingsBox.appendChild(settingsHeader);
+          settingsBox.appendChild(mountContainer);
+        } else {
+          const noSettingsNote = document.createElement("div");
+          noSettingsNote.style.cssText = "font-size: 0.72rem; color: #888; font-style: italic;";
+          noSettingsNote.textContent = "No custom settings view declared. Configure viewports and placements below.";
+          settingsBox.appendChild(settingsHeader);
+          settingsBox.appendChild(noSettingsNote);
+        }
+        details.appendChild(settingsBox);
+
+        // Section B: Assigned Viewports & Routes
+        const placementsBox = document.createElement("div");
+        placementsBox.className = "panorama-config-section plugin-placements-section";
+        placementsBox.style.cssText = "display: flex; flex-direction: column; gap: 8px; background: #141414; padding: 10px 12px; border: 1px solid #222;";
+
+        const placementsHeader = document.createElement("div");
+        placementsHeader.className = "panorama-config-section-title";
+        placementsHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; font-weight: 600; color: #fff;";
+
+        const placementsTitle = document.createElement("span");
+        placementsTitle.textContent = "Assigned Viewports & Routes";
+        placementsHeader.appendChild(placementsTitle);
+
+        const btnAddPlacement = document.createElement("button");
+        btnAddPlacement.className = "btn-panorama-action btn-add-placement";
+        btnAddPlacement.id = `btn-add-placement-${safeId}`;
+        btnAddPlacement.textContent = "+ Add Location";
+        btnAddPlacement.addEventListener("click", async () => {
+          const currentPlacements = this.getPluginPlacements(plugin);
+          const newPl: PluginPlacement = {
+            id: `placement-${Date.now()}`,
+            viewport: "sidebar",
+            route: pluginViews[0]?.path || "",
+            viewId: pluginViews[0]?.id || "main",
+            enabled: true
+          };
+          plugin.placements = [...currentPlacements, newPl];
+          plugin.viewport = plugin.placements[0].viewport;
+          plugin.route = plugin.placements[0].route;
+          plugin.viewId = plugin.placements[0].viewId;
+          await this.remountPlugin(plugin);
+        });
+        placementsHeader.appendChild(btnAddPlacement);
+        placementsBox.appendChild(placementsHeader);
+
+        const placements = this.getPluginPlacements(plugin);
+        if (placements.length === 0) {
+          const emptyPl = document.createElement("div");
+          emptyPl.className = "empty-placements-note";
+          emptyPl.style.cssText = "font-size: 0.72rem; color: #888; font-style: italic;";
+          emptyPl.textContent = "Unassigned — Not currently placed in any viewport.";
+          placementsBox.appendChild(emptyPl);
+        }
+
+        for (let plIdx = 0; plIdx < placements.length; plIdx++) {
+          const pl = placements[plIdx];
+          const row = document.createElement("div");
+          row.className = "plugin-placement-row";
+          row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: #0c0c0c; padding: 8px 10px; border: 1px solid #1e1e1e;";
+
+          const controlsLeft = document.createElement("div");
+          controlsLeft.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
+
+          const vpLabel = document.createElement("span");
+          vpLabel.style.cssText = "font-size: 0.72rem; color: #888;";
+          vpLabel.textContent = `Location #${plIdx + 1}:`;
+
+          const vpSelect = document.createElement("select");
+          vpSelect.className = "plugin-viewport-select";
+          vpSelect.style.cssText = "background: #191919; border: 1px solid #333; color: #fff; font-size: 0.72rem; padding: 3px 6px; outline: none; cursor: pointer;";
+
+          for (const optDef of viewportOptions) {
+            const opt = document.createElement("option");
+            opt.value = optDef.id;
+            opt.textContent = optDef.label;
+            if (optDef.id === pl.viewport) opt.selected = true;
+            vpSelect.appendChild(opt);
+          }
+
+          vpSelect.addEventListener("change", async () => {
+            pl.viewport = vpSelect.value;
+            plugin.viewport = pl.viewport;
+            const primaryComp = synthManifest.components?.[0];
+            if (primaryComp) {
+              this.layoutManager.setComponentSlot(plugin.id, primaryComp.id, pl.viewport);
+            }
+            await this.remountPlugin(plugin);
+          });
+
+          const routeLabel = document.createElement("span");
+          routeLabel.style.cssText = "font-size: 0.72rem; color: #888; margin-left: 4px;";
+          routeLabel.textContent = "View:";
+
+          const routeSelect = document.createElement("select");
+          routeSelect.className = "plugin-route-select";
+          routeSelect.style.cssText = "background: #191919; border: 1px solid #333; color: #fff; font-size: 0.72rem; padding: 3px 6px; outline: none; cursor: pointer;";
+
+          for (const v of pluginViews) {
+            const opt = document.createElement("option");
+            opt.value = v.path;
+            opt.textContent = `${v.title} (${v.path || "/"})`;
+            if ((pl.route !== undefined && pl.route === v.path) || (!pl.route && v.id === "main")) {
+              opt.selected = true;
+            }
+            routeSelect.appendChild(opt);
+          }
+
+          routeSelect.addEventListener("change", async () => {
+            pl.route = routeSelect.value;
+            const matchedView = pluginViews.find((v: any) => v.path === routeSelect.value);
+            pl.viewId = matchedView?.id || "main";
+            plugin.route = pl.route;
+            plugin.viewId = pl.viewId;
+            await this.remountPlugin(plugin);
+          });
+
+          controlsLeft.appendChild(vpLabel);
+          controlsLeft.appendChild(vpSelect);
+          controlsLeft.appendChild(routeLabel);
+          controlsLeft.appendChild(routeSelect);
+
+          if (pl.viewport === "main") {
+            const isPinned = this.isAppPinned(plugin);
+            const pinBtn = document.createElement("button");
+            pinBtn.className = "btn-panorama-action btn-pin-dock";
+            pinBtn.style.cssText = `font-size: 0.7rem; padding: 2px 7px; display: inline-flex; align-items: center; gap: 4px; color: ${
+              isPinned ? "var(--omni-accent-primary, #00a4ef)" : "#888"
+            };`;
+            pinBtn.innerHTML = `${icon("pin", 12)} <span>${isPinned ? "Pinned to Tiles" : "Pin to Tiles"}</span>`;
+            if (plugin.id === "org.omni.plugin.feed") {
+              pinBtn.title = "Feed is always pinned";
+              pinBtn.style.opacity = "0.7";
+              pinBtn.disabled = true;
+            } else {
+              pinBtn.title = isPinned ? "Unpin tile" : "Pin live tile";
+              pinBtn.addEventListener("click", () => {
+                this.setAppPinned(plugin.id, !isPinned);
+                this.renderSystemPluginList();
+              });
+            }
+            controlsLeft.appendChild(pinBtn);
+          }
+
+          row.appendChild(controlsLeft);
+
+          const btnRemovePl = document.createElement("button");
+          btnRemovePl.className = "btn-panorama-action btn-remove-placement";
+          btnRemovePl.style.cssText = "font-size: 0.68rem; padding: 2px 6px; color: #ff5555; border-color: #552222;";
+          btnRemovePl.textContent = placements.length > 1 ? "Remove" : "Unassign";
+          btnRemovePl.title = "Remove this placement";
+          btnRemovePl.addEventListener("click", async () => {
+            plugin.placements = placements.filter((_, idx) => idx !== plIdx);
+            if (plugin.placements.length > 0) {
+              plugin.viewport = plugin.placements[0].viewport;
+              plugin.route = plugin.placements[0].route;
+              plugin.viewId = plugin.placements[0].viewId;
+            } else {
+              plugin.viewport = "";
+              plugin.route = "";
+              plugin.viewId = "";
+              this.layoutManager.unregisterPlugin(plugin.id);
+            }
+            await this.remountPlugin(plugin);
+          });
+          row.appendChild(btnRemovePl);
+
+          placementsBox.appendChild(row);
+        }
+        details.appendChild(placementsBox);
+
+        // Section C: Relay Access Scoping
+        const relayAccessBox = document.createElement("div");
+        relayAccessBox.className = "panorama-config-section plugin-relay-access-box";
+        relayAccessBox.style.cssText = "display: flex; flex-direction: column; gap: 8px; background: #141414; padding: 10px 12px; border: 1px solid #222;";
+
+        const relayHeader = document.createElement("div");
+        relayHeader.className = "panorama-config-section-title";
+        relayHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; font-weight: 600; color: #fff;";
+
+        const relayTitle = document.createElement("span");
+        relayTitle.textContent = "Relay Access";
+
+        const allRelays = this.kernel.relayPool.getAllRelays().map((r) => r.url);
+        const isCustomRelays = Array.isArray(plugin.relays) && plugin.relays.length > 0;
+
+        const relayModePill = document.createElement("span");
+        relayModePill.style.cssText = "font-size: 0.68rem; padding: 1px 6px; background: #222; color: #aaa;";
+        relayModePill.textContent = isCustomRelays
+          ? `Custom (${plugin.relays!.length} relay${plugin.relays!.length === 1 ? "" : "s"})`
+          : "All Relays (Default)";
+
+        relayHeader.appendChild(relayTitle);
+        relayHeader.appendChild(relayModePill);
+        relayAccessBox.appendChild(relayHeader);
+
+        const relayDesc = document.createElement("div");
+        relayDesc.style.cssText = "font-size: 0.72rem; color: #888;";
+        relayDesc.textContent = "Restrict this plugin to specific relays, or allow it to use all configured relays.";
+        relayAccessBox.appendChild(relayDesc);
+
+        const relayOptionsWrap = document.createElement("div");
+        relayOptionsWrap.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 2px;";
+
+        const radAllLabel = document.createElement("label");
+        radAllLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #fff; cursor: pointer;";
+        const radAll = document.createElement("input");
+        radAll.type = "radio";
+        radAll.name = `panorama-relay-scope-${safeId}`;
+        radAll.checked = !isCustomRelays;
+        radAllLabel.appendChild(radAll);
+        radAllLabel.appendChild(document.createTextNode("All Configured Relays (Default)"));
+        relayOptionsWrap.appendChild(radAllLabel);
+
+        const radCustomLabel = document.createElement("label");
+        radCustomLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #fff; cursor: pointer;";
+        const radCustom = document.createElement("input");
+        radCustom.type = "radio";
+        radCustom.name = `panorama-relay-scope-${safeId}`;
+        radCustom.checked = isCustomRelays;
+        radCustomLabel.appendChild(radCustom);
+        radCustomLabel.appendChild(document.createTextNode("Custom Relays"));
+        relayOptionsWrap.appendChild(radCustomLabel);
+
+        const customCheckboxesContainer = document.createElement("div");
+        customCheckboxesContainer.style.cssText = `display: ${isCustomRelays ? "flex" : "none"}; flex-direction: column; gap: 5px; margin-left: 18px; padding-top: 4px;`;
+
+        const selectedCustomRelays = new Set<string>(plugin.relays || []);
+
+        for (const rUrl of allRelays) {
+          const cbLabel = document.createElement("label");
+          cbLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: #aaa; cursor: pointer;";
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.checked = selectedCustomRelays.has(rUrl);
+          cb.addEventListener("change", async () => {
+            if (cb.checked) {
+              selectedCustomRelays.add(rUrl);
+            } else {
+              selectedCustomRelays.delete(rUrl);
+            }
+            plugin.relays = Array.from(selectedCustomRelays);
+            relayModePill.textContent = `Custom (${plugin.relays.length} relay${plugin.relays.length === 1 ? "" : "s"})`;
+            await this.remountPlugin(plugin);
+          });
+          cbLabel.appendChild(cb);
+          const codeSpan = document.createElement("code");
+          codeSpan.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.7rem; color: #ddd;";
+          codeSpan.textContent = rUrl;
+          cbLabel.appendChild(codeSpan);
+          customCheckboxesContainer.appendChild(cbLabel);
+        }
+
+        radAll.addEventListener("change", async () => {
+          if (radAll.checked) {
+            customCheckboxesContainer.style.display = "none";
+            plugin.relays = undefined;
+            relayModePill.textContent = "All Relays (Default)";
+            await this.remountPlugin(plugin);
+          }
+        });
+
+        radCustom.addEventListener("change", async () => {
+          if (radCustom.checked) {
+            customCheckboxesContainer.style.display = "flex";
+            if (selectedCustomRelays.size === 0 && allRelays.length > 0) {
+              selectedCustomRelays.add(allRelays[0]);
+              const firstCb = customCheckboxesContainer.querySelector("input[type=checkbox]") as HTMLInputElement | null;
+              if (firstCb) firstCb.checked = true;
+            }
+            plugin.relays = Array.from(selectedCustomRelays);
+            relayModePill.textContent = `Custom (${plugin.relays.length} relay${plugin.relays.length === 1 ? "" : "s"})`;
+            await this.remountPlugin(plugin);
+          }
+        });
+
+        relayOptionsWrap.appendChild(customCheckboxesContainer);
+        relayAccessBox.appendChild(relayOptionsWrap);
+        details.appendChild(relayAccessBox);
+
+        // Section D: Actions Row
+        const actionsRow = document.createElement("div");
+        actionsRow.style.cssText = "display: flex; gap: 8px; align-items: center; margin-top: 4px;";
+
+        const btnInspect = document.createElement("button");
+        btnInspect.className = "btn-panorama-action";
+        btnInspect.id = `btn-inspect-${safeId}`;
+        btnInspect.textContent = "Inspect Plugin";
+        btnInspect.addEventListener("click", () => this.openPluginInspector(plugin));
+
+        const btnClearDb = document.createElement("button");
+        btnClearDb.className = "btn-panorama-action";
+        btnClearDb.id = `btn-clear-db-${safeId}`;
+        btnClearDb.textContent = "Clear Storage";
+        btnClearDb.addEventListener("click", async () => {
+          await this.kernel.storageManager.clear(plugin.id);
+          btnClearDb.textContent = "Cleared!";
+          setTimeout(() => { btnClearDb.textContent = "Clear Storage"; }, 1500);
+        });
+
+        const btnUninstall = document.createElement("button");
+        btnUninstall.className = "btn-panorama-action";
+        btnUninstall.id = `btn-uninstall-${safeId}`;
+        btnUninstall.style.color = "#ff5555";
+        btnUninstall.style.borderColor = "#662222";
+        btnUninstall.textContent = "Uninstall";
+        btnUninstall.addEventListener("click", () => {
+          if (confirm(`Uninstall ${meta.name}?`)) {
+            this.uninstallPlugin(plugin.id);
+          }
+        });
+
+        actionsRow.appendChild(btnInspect);
+        actionsRow.appendChild(btnClearDb);
+        actionsRow.appendChild(btnUninstall);
+        details.appendChild(actionsRow);
+
+        card.appendChild(details);
+      }
+
+      list.appendChild(card);
     }
+  }
+
+  public openPluginInspector(plugin: InstalledPluginEntry): void {
+    const modal = document.getElementById("panorama-inspector-modal");
+    const body = document.getElementById("panorama-inspector-body");
+    const title = document.getElementById("panorama-inspector-title");
+    if (!modal || !body) return;
+
+    const meta = this.getPluginMeta(plugin);
+    const synthManifest = this.ensurePluginManifest(plugin);
+    if (title) title.textContent = `${meta.name} Inspector`;
+
+    body.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 12px; font-size: 0.82rem; color: #fff;">
+        <div><strong>Plugin ID:</strong> <code style="color: #00a4ef;">${meta.id}</code></div>
+        <div><strong>Version:</strong> <span style="background: #222; padding: 2px 6px;">v${meta.version}</span></div>
+        <div><strong>Source:</strong> <code>${plugin.sourceUrl || "local"}</code></div>
+        <div>
+          <strong>Declared Views & Routes:</strong>
+          <ul style="margin: 4px 0 0 16px; padding: 0;">
+            ${(synthManifest.views || []).map((v: any) => `<li><code>${v.id}</code>: "${v.title}" (${v.path || "/"})</li>`).join("")}
+          </ul>
+        </div>
+        <div>
+          <strong>Permissions:</strong>
+          <pre style="background: #000; padding: 8px; border: 1px solid #222; margin-top: 4px; overflow: auto; font-size: 0.75rem; color: #aaa;">${JSON.stringify(synthManifest.permissions || {}, null, 2)}</pre>
+        </div>
+      </div>
+    `;
+
+    modal.style.display = "flex";
+  }
+
+  public closePluginInspector(): void {
+    const modal = document.getElementById("panorama-inspector-modal");
+    if (modal) modal.style.display = "none";
+  }
+
+  public uninstallPlugin(pluginId: string): void {
+    const plugin = this.installedPlugins.find((p) => p.id === pluginId);
+    if (!plugin) return;
+    this.kernel.disablePlugin(pluginId);
+    this.kernel.destroyPluginSettings(pluginId);
+    const idx = this.installedPlugins.findIndex((p) => p.id === pluginId);
+    if (idx !== -1) {
+      this.installedPlugins.splice(idx, 1);
+    }
+    this.renderAppsTiles();
+    this.renderSystemPluginList();
+    this.saveLocalWorkspace();
   }
 
   // --- App Overlay & Navigation ---
@@ -872,24 +1369,20 @@ export class PanoramaShell implements OmniShellHost {
     btnBack?.addEventListener("click", handleBack);
     btnOverlayBack?.addEventListener("click", handleBack);
 
-    // Windows Start / Hub Home button
-    const btnHome = document.getElementById("btn-bar-home");
-    btnHome?.addEventListener("click", () => {
-      this.closeApp();
-      this.showPivot("feed");
-    });
-
-    // Search button (jump to apps mosaic)
-    const btnSearch = document.getElementById("btn-bar-search");
-    btnSearch?.addEventListener("click", () => {
-      this.closeApp();
-      this.showPivot("apps");
-    });
-
     // More ... button (toggle slide-up sheet)
     const btnMore = document.getElementById("btn-bar-more");
     btnMore?.addEventListener("click", () => {
       this.appDrawerSheet.classList.toggle("open");
+    });
+
+    // Inspector Modal Close
+    document.getElementById("btn-inspector-close")?.addEventListener("click", () => {
+      this.closePluginInspector();
+    });
+    document.getElementById("panorama-inspector-modal")?.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).id === "panorama-inspector-modal") {
+        this.closePluginInspector();
+      }
     });
 
     // Sheet items
@@ -897,19 +1390,17 @@ export class PanoramaShell implements OmniShellHost {
       this.appDrawerSheet.classList.remove("open");
     });
 
-    document.getElementById("sheet-item-switch-classic")?.addEventListener("click", () => {
+    const handleSwitchClassic = () => {
       if (typeof window !== "undefined") {
         window.localStorage.setItem("omni_active_shell", "classic");
+        document.documentElement.classList.remove("theme-panorama");
+        document.body?.classList.remove("theme-panorama");
         window.location.reload();
       }
-    });
+    };
 
-    document.getElementById("btn-switch-classic")?.addEventListener("click", () => {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("omni_active_shell", "classic");
-        window.location.reload();
-      }
-    });
+    document.getElementById("sheet-item-switch-classic")?.addEventListener("click", handleSwitchClassic);
+    document.getElementById("btn-switch-classic")?.addEventListener("click", handleSwitchClassic);
 
     document.getElementById("btn-panorama-sync")?.addEventListener("click", async () => {
       try {

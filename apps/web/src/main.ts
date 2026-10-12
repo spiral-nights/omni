@@ -100,6 +100,16 @@ const kernel = new OmniKernel({
   privateKeyHex: savedPrivkey,
   bootstrapRelays: ["wss://relay.damus.io", "wss://relay.ditto.pub"],
   runtimeScript: omniRuntimeScript,
+  theme: activeShellType === "panorama" ? {
+    mode: "dark",
+    colors: {
+      canvas: "#000000",
+      surface: "#111111",
+      accent: "#00a4ef",
+      contrast: "#ffffff",
+      radius: "0px"
+    }
+  } : undefined,
   slotResolver: (pluginId, compId, slot) => {
     return (shell as any)?.getContainerForPluginSlot(pluginId, slot, compId);
   },
@@ -124,6 +134,8 @@ async function startApp() {
   // Mount Shell UI Plugin into root container (PanoramaShell or OmniShell Classic)
   if (activeShellType === "panorama") {
     console.log("✦ [Omni Web] Activating PanoramaShell (People Hub Modern UI)...");
+    document.documentElement.classList.add("theme-panorama");
+    document.body?.classList.add("theme-panorama");
     shell = new PanoramaShell({
       root: rootEl,
       kernel,
@@ -131,6 +143,8 @@ async function startApp() {
     });
   } else {
     console.log("✦ [Omni Web] Activating OmniShell (Classic Dock & Viewports)...");
+    document.documentElement.classList.remove("theme-panorama");
+    document.body?.classList.remove("theme-panorama");
     shell = new OmniShell({
       root: rootEl,
       kernel,

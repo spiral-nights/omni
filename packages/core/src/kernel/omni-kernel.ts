@@ -25,6 +25,7 @@ export interface OmniKernelOptions {
   eventStoreName?: string;
   storageName?: string;
   maxFeedNotes?: number;
+  theme?: any;
 }
 
 export class OmniKernel {
@@ -37,6 +38,7 @@ export class OmniKernel {
   readonly storageManager: PluginStorageManager;
   readonly intentBroker: IntentBroker;
   readonly layoutManager: LayoutManager;
+  public theme?: any;
 
   private sandboxes: Map<string, SandboxInstance> = new Map();
   private settingsSandboxes: Map<string, SandboxInstance> = new Map();
@@ -48,6 +50,7 @@ export class OmniKernel {
   private defaultHandlersMemory: Record<string, string> = {};
 
   constructor(options: OmniKernelOptions = {}) {
+    this.theme = options.theme;
     this.keystore = new WebCryptoKeystore(options.privateKeyHex);
     this.eventStore = new LocalEventStore({
       dbName: options.eventStoreName,
@@ -173,6 +176,7 @@ export class OmniKernel {
       trusted: manifest.trusted || manifest.id.startsWith("org.omni."),
       userPubkey,
       slotContainers,
+      theme: this.theme,
       route: options?.route,
       viewId: options?.viewId,
       instanceId: options?.instanceId,
@@ -289,6 +293,7 @@ export class OmniKernel {
       trusted: manifest.trusted || manifest.id.startsWith("org.omni."),
       userPubkey,
       slotContainers,
+      theme: this.theme,
       slotResolver: () => container,
       route,
       viewId: "settings",

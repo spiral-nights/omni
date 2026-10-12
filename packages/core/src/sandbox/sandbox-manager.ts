@@ -33,6 +33,7 @@ export interface SandboxInstanceOptions {
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
   onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
   onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
+  theme?: any;
 }
 
 export class SandboxInstance {
@@ -298,7 +299,7 @@ export class SandboxInstance {
             pluginId: this.manifest.id,
             instanceId: this.options.instanceId || `inst_${Math.random().toString(36).slice(2, 9)}`,
             userPubkey: this.options.userPubkey,
-            theme: {
+            theme: this.options.theme || {
               mode: "dark",
               colors: {
                 canvas: "#141312",
