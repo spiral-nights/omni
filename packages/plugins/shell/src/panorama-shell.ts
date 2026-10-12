@@ -737,14 +737,29 @@ export class PanoramaShell implements OmniShellHost {
 
         <!-- 2. Horizontal Panorama Canvas -->
         <div class="panorama-canvas" id="panorama-canvas">
-          <!-- Section: Apps (Live Tiles Mosaic) -->
+          <!-- Section: Apps (Live Tiles Mosaic & Embedded Application View) -->
           <section class="panorama-section" id="panorama-section-apps" data-pivot="apps">
-            <div class="panorama-section-content">
+            <!-- Grid of application tiles (default state) -->
+            <div class="panorama-section-content" id="panorama-apps-grid-view">
               <div class="panorama-section-title-bar">
                 <h2>applications</h2>
                 <span class="panorama-badge" id="panorama-apps-count">0 tiles</span>
               </div>
               <div class="panorama-tiles-grid" id="panorama-tiles-grid"></div>
+            </div>
+
+            <!-- Active Application View (opened within applications pane) -->
+            <div class="panorama-section-content panorama-apps-active-view panorama-full-app-overlay" id="panorama-full-app-overlay" style="display: none;">
+              <div class="panorama-section-title-bar" style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <button class="btn-app-bar-circle" id="btn-overlay-back" style="width: 28px; height: 28px; border: 1px solid #444;" title="Back to applications list">
+                    ${icon("arrow-left", 14)}
+                  </button>
+                  <h2 id="panorama-overlay-title" style="margin: 0; font-size: 1.15rem; font-weight: 400; color: #fff;">Application</h2>
+                </div>
+                <span class="panorama-badge">application</span>
+              </div>
+              <div class="panorama-full-app-container" id="panorama-full-app-container" style="flex: 1; width: 100%; min-height: 100%; overflow: visible;"></div>
             </div>
           </section>
 
@@ -816,17 +831,6 @@ export class PanoramaShell implements OmniShellHost {
               </div>
             </div>
           </section>
-        </div>
-
-        <!-- 3. Full-Page App Slide-In Overlay -->
-        <div class="panorama-full-app-overlay" id="panorama-full-app-overlay">
-          <div class="panorama-full-app-header">
-            <button class="btn-app-bar-circle" id="btn-overlay-back" title="Back to Panorama">
-              ${icon("arrow-left", 18)}
-            </button>
-            <h2 id="panorama-overlay-title">App Name</h2>
-          </div>
-          <div class="panorama-full-app-container" id="panorama-full-app-container"></div>
         </div>
 
         <!-- 4. Plugin Inspector Modal -->
@@ -1554,6 +1558,11 @@ export class PanoramaShell implements OmniShellHost {
 
     const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
 
+    // Toggle from live tiles grid to active application view inside apps section
+    const gridView = document.getElementById("panorama-apps-grid-view");
+    if (gridView) gridView.style.display = "none";
+    if (this.sectionApps) this.sectionApps.classList.add("has-active-app");
+
     // 1. Ensure the overlay page container element exists in fullAppContainer
     const slotEl = this.ensureAppPage(plugin.id);
 
@@ -1570,7 +1579,12 @@ export class PanoramaShell implements OmniShellHost {
       this.fullAppContainer.scrollTop = 0;
     }
 
-    this.fullAppOverlay.classList.add("open");
+    if (this.fullAppOverlay) {
+      this.fullAppOverlay.classList.add("open");
+      this.fullAppOverlay.style.display = "flex";
+    }
+
+    this.showPivot("apps");
 
     // 3. Ensure the full app view is mounted into the overlay slot container
     const overlayInstanceKey = `${plugin.id}::overlay`;
@@ -1619,7 +1633,13 @@ export class PanoramaShell implements OmniShellHost {
 
   public closeApp(): void {
     this.currentOpenedAppId = null;
-    this.fullAppOverlay.classList.remove("open");
+    const gridView = document.getElementById("panorama-apps-grid-view");
+    if (gridView) gridView.style.display = "flex";
+    if (this.sectionApps) this.sectionApps.classList.remove("has-active-app");
+    if (this.fullAppOverlay) {
+      this.fullAppOverlay.classList.remove("open");
+      this.fullAppOverlay.style.display = "none";
+    }
   }
 
   public showPivot(pivot: PanoramaPivot): void {

@@ -1593,21 +1593,32 @@ body.theme-panorama,
   border-bottom: 1px solid #1a1a1a;
 }
 
-/* 5. Full-Page App Slide-In Overlay */
+/* 5. Embedded Active Application in Applications Section */
 .panorama-full-app-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: #000000;
-  z-index: 100;
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+  flex: 1;
+  background: transparent;
   display: none;
   flex-direction: column;
+  gap: 12px;
 }
 
 .panorama-full-app-overlay.open {
   display: flex;
+}
+
+.panorama-section.has-active-app {
+  flex: 0 0 90vw;
+  max-width: 90vw;
+}
+
+@media (min-width: 768px) {
+  .panorama-section.has-active-app {
+    flex: 0 0 620px;
+    max-width: 620px;
+  }
 }
 
 .panorama-full-app-header {
