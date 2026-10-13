@@ -94,6 +94,9 @@ importers:
       '@omni/types':
         specifier: workspace:*
         version: link:../../types
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

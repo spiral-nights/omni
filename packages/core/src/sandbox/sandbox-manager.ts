@@ -53,6 +53,13 @@ export class SandboxInstance {
     return this.compContainersByCompId.get(componentId);
   }
 
+  getFirstPopulatedComponentContainer(): Element | null {
+    for (const container of this.compContainers.values()) {
+      if (container.childNodes.length > 0) return container;
+    }
+    return null;
+  }
+
   reparentComponent(componentId: string, newParent: Element): boolean {
     const container = this.compContainersByCompId.get(componentId);
     if (container && newParent) {
@@ -153,11 +160,20 @@ export class SandboxInstance {
           container: compContainer,
           componentId: comp.id,
           onEvent: (componentId, eventData) => {
-            this.channel1?.port1.postMessage({
-              type: "event",
-              componentId,
-              ...eventData
-            });
+            try {
+              this.channel1?.port1.postMessage({
+                type: "event",
+                componentId,
+                ...eventData
+              });
+            } catch (err) {
+              // A click that reaches a destroyed sandbox's mirror is silently
+              // dead in the UI; surface it instead of swallowing it.
+              console.warn(
+                `[Omni] Dropped ${eventData?.eventName} event for ${this.manifest.id}: sandbox channel closed`,
+                err
+              );
+            }
           }
         });
         this.remoteDomHosts.set(comp.id, domHost);
@@ -186,11 +202,18 @@ export class SandboxInstance {
           container: compContainer,
           componentId: "main",
           onEvent: (componentId, eventData) => {
-            this.channel1?.port1.postMessage({
-              type: "event",
-              componentId,
-              ...eventData
-            });
+            try {
+              this.channel1?.port1.postMessage({
+                type: "event",
+                componentId,
+                ...eventData
+              });
+            } catch (err) {
+              console.warn(
+                `[Omni] Dropped ${eventData?.eventName} event for ${this.manifest.id}: sandbox channel closed`,
+                err
+              );
+            }
           }
         });
         this.remoteDomHosts.set("main", domHost);

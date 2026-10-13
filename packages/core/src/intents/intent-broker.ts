@@ -205,8 +205,6 @@ export class IntentBroker {
       }
     }
 
-    console.log(`🔍 [IntentBroker] dispatching action "${action}" from "${callerPluginId}", candidates:`, enabledCandidates.map((c) => c.pluginId));
-    console.log(`🔍 [IntentBroker] chosen candidate: "${chosen.pluginId}" (isRpc: ${Boolean(chosen.isRpc)}) for action: "${action}"`);
 
     this.emit("intent:dispatched", {
       action,
@@ -216,9 +214,7 @@ export class IntentBroker {
       data
     });
 
-    console.log(`🔍 [IntentBroker] executing chosen handler for "${chosen.pluginId}"...`);
     const res = await chosen.handler(data, callerPluginId);
-    console.log(`🔍 [IntentBroker] chosen handler finished for "${chosen.pluginId}" with:`, res);
     return res;
   }
 

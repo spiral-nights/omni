@@ -279,7 +279,8 @@ const ICONS = {
   </svg>`
 };
 
-function mountFeed(root: any) {  const container = html<HTMLDivElement>`
+function mountFeed(root: any) {
+  const container = html<HTMLDivElement>`
     <div class="feed-container">
       <!-- Top Timeline Navigation Header -->
       <div class="feed-top-header">
@@ -560,17 +561,11 @@ function mountFeed(root: any) {  const container = html<HTMLDivElement>`
     const onProfileClick = (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      console.log("🔍 [Feed Plugin] onProfileClick triggered for pubkey:", event.pubkey);
       const omni = (window as any).omni;
       if (omni?.intents?.dispatch && event.pubkey) {
-        console.log("🔍 [Feed Plugin] Dispatching view_profile intent with pubkey:", event.pubkey);
-        omni.intents.dispatch("view_profile", { pubkey: event.pubkey }).then((res: any) => {
-          console.log("🔍 [Feed Plugin] view_profile intent resolved with:", res);
-        }).catch((err: any) => {
-          console.error("🔍 [Feed Plugin] view_profile intent failed:", err);
+        omni.intents.dispatch("view_profile", { pubkey: event.pubkey }).catch((err: any) => {
+          console.error("view_profile intent failed:", err);
         });
-      } else {
-        console.warn("🔍 [Feed Plugin] omni.intents.dispatch not available or no event.pubkey", { omni: Boolean(omni), pubkey: event.pubkey });
       }
     };
 
@@ -598,9 +593,11 @@ function mountFeed(root: any) {  const container = html<HTMLDivElement>`
   }
 
   // Refresh Feed
+  let lastRefreshStartCount = 0;
   function refreshFeed() {
     if (!activeWs || activeWs.readyState !== WebSocket.OPEN) return;
     btnRefresh.classList.add("spinning");
+    lastRefreshStartCount = renderedIds.size;
     const refreshSubId = `refresh-${Date.now()}`;
     const sinceTime = latestTimestamp > 0 ? latestTimestamp : Math.floor(Date.now() / 1000) - 120;
     activeWs.send(JSON.stringify(["REQ", refreshSubId, { kinds: [1], since: sinceTime, limit: 30 }]));
@@ -761,7 +758,6 @@ function mountFeed(root: any) {  const container = html<HTMLDivElement>`
   }
 
   function collectSubscription(ws: any, subId: string, filter: any, onEvent: (ev: any) => void, onDone: () => void) {
-    const collected: any[] = [];
     let settled = false;
     const finish = () => {
       if (settled) return;
@@ -770,27 +766,32 @@ function mountFeed(root: any) {  const container = html<HTMLDivElement>`
       try { ws.close(); } catch (_) {}
       onDone();
     };
-    const timer = setTimeout(finish, 8000);
+    // Hard cap for the whole subscription
+    const hardTimer = setTimeout(finish, 10000);
+    // The coordinator fires EOSE on the FIRST relay response; search-capable
+    // indexers (e.g. relay.nostr.band) are usually slower, so wait a grace
+    // period after the first EOSE before treating the result set as final.
+    let eoseTimer: any = null;
     ws.onmessage = (msg: any) => {
       try {
         const data = JSON.parse(msg.data);
         const [type, sid] = data;
         if (type === "EVENT" && sid === subId && data[2]) {
-          collected.push(data[2]);
           onEvent(data[2]);
         } else if (type === "EOSE" && sid === subId) {
-          clearTimeout(timer);
-          finish();
+          if (!eoseTimer) eoseTimer = setTimeout(() => {
+            clearTimeout(hardTimer);
+            finish();
+          }, 1500);
         }
       } catch (_) {}
     };
     try {
       ws.send(JSON.stringify(["REQ", subId, filter]));
     } catch (_) {
-      clearTimeout(timer);
+      clearTimeout(hardTimer);
       finish();
     }
-    return collected;
   }
 
   async function resolveNip05(raw: string): Promise<string | null> {
@@ -887,9 +888,20 @@ function mountFeed(root: any) {  const container = html<HTMLDivElement>`
     }
 
     // 6. NIP-50 relay search (network-wide)
+    const relayNotes = new Map<string, any>();
+    const renderMerged = () => {
+      const merged = new Map<string, any>();
+      for (const ev of localNotes) merged.set(ev.id, ev);
+      for (const ev of relayNotes.values()) merged.set(ev.id, ev);
+      const finalNotes = Array.from(merged.values())
+        .filter((ev) => matchesNote(ev, parsed.keyword, authorHexes, parsed.authors))
+        .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+      renderNotesSection(finalNotes);
+      return finalNotes;
+    };
+
     const ws = openSearchWebSocket((socket) => {
       let noteCount = 0;
-      const relayNotes = new Map<string, any>();
       const relayPeople = new Map<string, any>();
       let subsPending = 1;
 
@@ -897,13 +909,7 @@ function mountFeed(root: any) {  const container = html<HTMLDivElement>`
         subsPending -= 1;
         if (subsPending > 0) return;
         if (seq !== searchSeq) return;
-        const merged = new Map<string, any>();
-        for (const ev of localNotes) merged.set(ev.id, ev);
-        for (const ev of relayNotes.values()) merged.set(ev.id, ev);
-        const finalNotes = Array.from(merged.values())
-          .filter((ev) => matchesNote(ev, parsed.keyword, authorHexes, parsed.authors))
-          .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
-        renderNotesSection(finalNotes);
+        const finalNotes = renderMerged();
 
         for (const ev of relayPeople.values()) {
           try {
@@ -926,9 +932,9 @@ function mountFeed(root: any) {  const container = html<HTMLDivElement>`
       collectSubscription(socket, `search-notes-${seq}`, noteFilter, (ev) => {
         noteCount++;
         relayNotes.set(ev.id, ev);
-        if (seq === searchSeq && relayNotes.size % 5 === 1) {
-          setSearchStatus(`Searching relays... ${noteCount}+ notes`, true);
-        }
+        if (seq !== searchSeq) return;
+        renderMerged();
+        setSearchStatus(`Searching relays... ${noteCount} notes so far`, true);
       }, maybeFinish);
 
       if (parsed.authors.length > 0 && authorHexes.length === 0) {
@@ -1157,6 +1163,14 @@ function mountFeed(root: any) {  const container = html<HTMLDivElement>`
             } else if (subId?.startsWith("refresh-")) {
               btnRefresh.classList.remove("spinning");
               ws.send(JSON.stringify(["CLOSE", subId]));
+              if (renderedIds.size === lastRefreshStartCount) {
+                const label = btnRefresh.querySelector<HTMLElement>("span");
+                if (label) {
+                  const original = label.textContent;
+                  label.textContent = "None new";
+                  setTimeout(() => { label.textContent = original; }, 1500);
+                }
+              }
             }
           } else if (type === "NOTICE") {
             if (renderedIds.size === 0) {
@@ -1171,6 +1185,7 @@ function mountFeed(root: any) {  const container = html<HTMLDivElement>`
           showEmptyState();
         }
       };
+
     } else if (typeof omni !== "undefined" && (omni as any).nostr?.subscribe) {
       (omni as any).nostr.subscribe(
         [{ kinds: [1], limit: 40 }],

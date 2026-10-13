@@ -8,6 +8,7 @@
   },
   "devDependencies": {
     "@omni/types": "workspace:*",
+    "fake-indexeddb": "^6.2.5",
     "typescript": "^5.7.0"
   }
 }

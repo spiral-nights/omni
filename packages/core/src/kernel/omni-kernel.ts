@@ -326,6 +326,24 @@ export class OmniKernel {
     return false;
   }
 
+  /**
+   * Moves the first live (populated) mirrored component container of any sandbox
+   * belonging to pluginId into targetContainer. Used by shells to recover a live
+   * UI surface when a sandbox exists but its mirror is not in the visible slot.
+   */
+  reparentLiveComponent(pluginId: string, targetContainer: Element): boolean {
+    for (const [key, sandbox] of this.sandboxes.entries()) {
+      if (key === pluginId || key.startsWith(`${pluginId}::`)) {
+        const container = sandbox.getFirstPopulatedComponentContainer();
+        if (container) {
+          targetContainer.appendChild(container);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   disablePlugin(pluginId: string): void {
     for (const [key, sandbox] of Array.from(this.sandboxes.entries())) {
       if (key === pluginId || key.startsWith(`${pluginId}::`)) {

@@ -77,7 +77,6 @@ export class PanoramaShell implements OmniShellHost {
   private setupIntentListener(): void {
     if (!this.kernel?.intentBroker) return;
     this.kernel.intentBroker.on("intent:dispatched", async (event: any) => {
-      console.log("🔍 [PanoramaShell] intent:dispatched received:", event);
       const targetPluginId = event?.targetPluginId;
       if (!targetPluginId) return;
 
@@ -87,16 +86,13 @@ export class PanoramaShell implements OmniShellHost {
         } catch (_) {}
       }
 
-      console.log(`🔍 [PanoramaShell] Calling showPage("${targetPluginId}")`);
       await this.showPage(targetPluginId);
       if (!event?.isRpc) {
-        console.log(`🔍 [PanoramaShell] Target is non-RPC fallback. Notifying via notifyPlugin("${targetPluginId}")`);
         this.kernel.notifyPlugin(targetPluginId, "intent.invoke", {
           action: event.action,
           data: event.data
         });
       } else {
-        console.log(`🔍 [PanoramaShell] Target is RPC handler. Skipping notifyPlugin.`);
       }
     });
   }
@@ -268,6 +264,14 @@ export class PanoramaShell implements OmniShellHost {
       const canvasSlot = document.getElementById(`panorama-slot-main-${safeId}`);
       if (canvasSlot) {
         return canvasSlot;
+      }
+      // The section may not exist yet (mount racing section creation); create
+      // sections and retry before falling back to the overlay page, otherwise
+      // main viewport mounts silently land in a hidden overlay page.
+      this.ensureMainAppSections();
+      const retrySlot = document.getElementById(`panorama-slot-main-${safeId}`);
+      if (retrySlot) {
+        return retrySlot;
       }
       return this.ensureAppPage(pluginId);
     }
@@ -1627,13 +1631,11 @@ export class PanoramaShell implements OmniShellHost {
   public async openApp(pluginId: string): Promise<void> {
     const plugin = this.installedPlugins.find((p) => p.id === pluginId);
     if (!plugin) {
-      console.warn(`🔍 [PanoramaShell.openApp] plugin not found: "${pluginId}"`);
       return;
     }
 
     this.currentOpenedAppId = pluginId;
     const meta = this.getPluginMeta(plugin);
-    console.log(`🔍 [PanoramaShell.openApp] opening app "${pluginId}" (${meta.name})`);
     const titleEl = document.getElementById("panorama-overlay-title");
     if (titleEl) titleEl.textContent = meta.name;
 
@@ -1674,55 +1676,73 @@ export class PanoramaShell implements OmniShellHost {
       Boolean(this.kernel.getSandbox(overlayInstanceKey)) ||
       Boolean(this.kernel.getSandbox(plugin.id)) ||
       placements.some((pl) => Boolean(this.kernel.getSandbox(`${plugin.id}::${pl.id}`)));
+    const overlayHasMirror = Boolean(slotEl.querySelector(".omni-component-slot"));
 
-    console.log(`🔍 [PanoramaShell.openApp] hasRunningInstance: ${hasRunningInstance} for "${pluginId}"`);
 
     if (!hasRunningInstance && !this.pendingOverlayMounts.has(overlayInstanceKey)) {
-      console.log(`🔍 [PanoramaShell.openApp] Mounting fresh overlay sandbox "${overlayInstanceKey}"...`);
-      this.pendingOverlayMounts.add(overlayInstanceKey);
-      try {
-        slotEl.innerHTML = "";
-        const synthManifest = this.ensurePluginManifest(plugin);
-        const overlayManifest = {
-          ...synthManifest,
-          components: [
-            {
-              id: `${plugin.id}-overlay`,
-              type: "main",
-              title: plugin.name || meta.name || plugin.id,
-              slot: "main"
-            }
-          ]
-        };
-
-        const customSlotContainers = new Map(this.getSlotContainers());
-        customSlotContainers.set("main", slotEl);
-        customSlotContainers.set("dock", slotEl);
-        customSlotContainers.set("sidebar", slotEl);
-        if (synthManifest.components) {
-          for (const comp of synthManifest.components) {
-            if (comp.slot) customSlotContainers.set(comp.slot, slotEl);
-          }
-        }
-
-        const activePubkey = localStorage.getItem("omni_active_profile_pubkey") || "";
-        await this.kernel.registerPlugin(
-          overlayManifest,
-          plugin.htmlContent || plugin.scriptContent,
-          customSlotContainers,
-          {
-            instanceId: overlayInstanceKey,
-            route: (plugin.id === "org.omni.plugin.profile-viewer" && activePubkey) ? `?pubkey=${activePubkey}` : "",
-            viewId: "main",
-            targetSlot: "main",
-            relays: plugin.relays
-          }
-        );
-      } catch (err) {
-        console.error(`Failed to mount overlay app for ${plugin.id}:`, err);
-      } finally {
-        this.pendingOverlayMounts.delete(overlayInstanceKey);
+      await this.mountOverlayInstance(plugin, meta, slotEl, overlayInstanceKey);
+    } else if (hasRunningInstance && !overlayHasMirror && !this.pendingOverlayMounts.has(overlayInstanceKey)) {
+      // A sandbox exists but its live mirrored DOM is not in the overlay page
+      // (e.g. the main-viewport mount landed here, or a previous overlay was
+      // destroyed by a remount). Recover instead of showing a dead surface.
+      if (this.kernel.reparentLiveComponent(plugin.id, slotEl)) {
+      } else {
+        this.kernel.disablePlugin(plugin.id);
+        await this.mountPlugin(plugin);
+        await this.mountOverlayInstance(plugin, meta, slotEl, overlayInstanceKey);
       }
+    }
+  }
+
+  private async mountOverlayInstance(
+    plugin: InstalledPluginEntry,
+    meta: { name: string },
+    slotEl: HTMLElement,
+    overlayInstanceKey: string
+  ): Promise<void> {
+    this.pendingOverlayMounts.add(overlayInstanceKey);
+    try {
+      slotEl.innerHTML = "";
+      const synthManifest = this.ensurePluginManifest(plugin);
+      const overlayManifest = {
+        ...synthManifest,
+        components: [
+          {
+            id: `${plugin.id}-overlay`,
+            type: "main",
+            title: plugin.name || meta.name || plugin.id,
+            slot: "main"
+          }
+        ]
+      };
+
+      const customSlotContainers = new Map(this.getSlotContainers());
+      customSlotContainers.set("main", slotEl);
+      customSlotContainers.set("dock", slotEl);
+      customSlotContainers.set("sidebar", slotEl);
+      if (synthManifest.components) {
+        for (const comp of synthManifest.components) {
+          if (comp.slot) customSlotContainers.set(comp.slot, slotEl);
+        }
+      }
+
+      const activePubkey = localStorage.getItem("omni_active_profile_pubkey") || "";
+      await this.kernel.registerPlugin(
+        overlayManifest,
+        plugin.htmlContent || plugin.scriptContent,
+        customSlotContainers,
+        {
+          instanceId: overlayInstanceKey,
+          route: (plugin.id === "org.omni.plugin.profile-viewer" && activePubkey) ? `?pubkey=${activePubkey}` : "",
+          viewId: "main",
+          targetSlot: "main",
+          relays: plugin.relays
+        }
+      );
+    } catch (err) {
+      console.error(`Failed to mount overlay app for ${plugin.id}:`, err);
+    } finally {
+      this.pendingOverlayMounts.delete(overlayInstanceKey);
     }
   }
 
@@ -1805,8 +1825,14 @@ export class PanoramaShell implements OmniShellHost {
         );
         if (plugin && plugin.enabled) {
           const isMounted = Boolean(this.kernel.getSandbox(plugin.id));
+          const slotEl = document.getElementById(`panorama-slot-main-${safeId}`);
+          const hasLiveMirror = Boolean(slotEl && slotEl.querySelector(".omni-component-slot"));
           if (!isMounted) {
             await this.mountPlugin(plugin);
+          } else if (!hasLiveMirror) {
+            // Sandbox exists but its mirrored DOM is not in this section (e.g.
+            // the mount landed in the overlay page slot). Recover by remounting.
+            await this.remountPlugin(plugin);
           }
         }
       } else {

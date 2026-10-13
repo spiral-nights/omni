@@ -199,7 +199,6 @@ interface ProfileMetadata {
 }
 
 async function mountProfileViewer(root: HTMLElement) {
-  console.log("🔍 [Profile Viewer] mountProfileViewer initialized.");
   let activePubkey = "";
   let activeWs: WebSocket | null = null;
   let activeNotesSubId: string | null = null;
@@ -209,7 +208,6 @@ async function mountProfileViewer(root: HTMLElement) {
 
   function getWebSocket(): WebSocket {
     if (!activeWs || activeWs.readyState === WebSocket.CLOSED) {
-      console.log("🔍 [Profile Viewer] Opening WebSocket to wss://relay.damus.io");
       activeWs = new WebSocket("wss://relay.damus.io");
     }
     return activeWs;
@@ -465,10 +463,8 @@ async function mountProfileViewer(root: HTMLElement) {
   }
 
   function loadProfile(pubkey: string) {
-    console.log("🔍 [Profile Viewer] loadProfile called with pubkey:", pubkey, "current activePubkey:", activePubkey, "isLoading:", isLoading);
     if (!pubkey) return;
     if (pubkey === activePubkey && (isLoading || activeProfileSubId)) {
-      console.log("🔍 [Profile Viewer] Ignoring duplicate loadProfile for already loading/active pubkey:", pubkey);
       return;
     }
     activePubkey = pubkey;
@@ -488,13 +484,11 @@ async function mountProfileViewer(root: HTMLElement) {
     const ws = getWebSocket();
     if (activeProfileSubId && ws.readyState === WebSocket.OPEN) {
       try {
-        console.log("🔍 [Profile Viewer] Closing prior profile sub:", activeProfileSubId);
         ws.send(JSON.stringify(["CLOSE", activeProfileSubId]));
       } catch (_) {}
     }
     if (activeNotesSubId && ws.readyState === WebSocket.OPEN) {
       try {
-        console.log("🔍 [Profile Viewer] Closing prior notes sub:", activeNotesSubId);
         ws.send(JSON.stringify(["CLOSE", activeNotesSubId]));
       } catch (_) {}
     }
@@ -508,7 +502,6 @@ async function mountProfileViewer(root: HTMLElement) {
     let noteCount = 0;
 
     const startSubscriptions = () => {
-      console.log(`🔍 [Profile Viewer] Starting subscriptions: profileSubId=${profileSubId}, notesSubId=${notesSubId} for author=${pubkey}`);
       // 1. Request Kind 0 Metadata
       ws.send(JSON.stringify(["REQ", profileSubId, { kinds: [0], authors: [pubkey], limit: 1 }]));
       // 2. Request Author's Kind 1 Notes
@@ -522,7 +515,6 @@ async function mountProfileViewer(root: HTMLElement) {
     }
 
     eoseTimeout = setTimeout(() => {
-      console.log("🔍 [Profile Viewer] EOSE timeout reached (3s). Current noteCount:", noteCount);
       isLoading = false;
       if (noteCount === 0) {
         notesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">No public notes published by this user yet.</div>`;
@@ -540,14 +532,11 @@ async function mountProfileViewer(root: HTMLElement) {
         if (type === "EVENT" && frame[2]) {
           const ev = frame[2];
           const k = Number(ev.kind);
-          console.log(`🔍 [Profile Viewer] Received EVENT kind=${k} for subId=${subId}:`, ev.id);
           if ((subId === profileSubId || !subId) && k === 0) {
             try {
               const meta: ProfileMetadata = JSON.parse(ev.content);
-              console.log("🔍 [Profile Viewer] Parsed ProfileMetadata:", meta);
               renderProfileMetadata(pubkey, meta);
             } catch (err) {
-              console.error("🔍 [Profile Viewer] Failed to parse Kind 0 JSON:", err);
             }
           } else if ((subId === notesSubId || !subId) && k === 1) {
             if (eoseTimeout) {
@@ -565,7 +554,6 @@ async function mountProfileViewer(root: HTMLElement) {
             }
           }
         } else if (type === "EOSE") {
-          console.log(`🔍 [Profile Viewer] Received EOSE for subId=${subId}`);
           if (subId === notesSubId) {
             if (eoseTimeout) {
               clearTimeout(eoseTimeout);
@@ -579,28 +567,22 @@ async function mountProfileViewer(root: HTMLElement) {
           }
         }
       } catch (err) {
-        console.error("🔍 [Profile Viewer] Error handling ws frame:", err);
       }
     };
   }
 
   // Register Intent Handler for 'view_profile'
   const handleViewProfile = (data: any) => {
-    console.log("🔍 [Profile Viewer] handleViewProfile intent callback called with data:", data);
     if (data?.pubkey) {
       loadProfile(data.pubkey);
     } else {
-      console.warn("🔍 [Profile Viewer] handleViewProfile called without data.pubkey:", data);
     }
   };
 
   if (typeof (window as any).omni !== "undefined" && (window as any).omni.intents?.handle) {
-    console.log("🔍 [Profile Viewer] Registering with omni.intents.handle('view_profile')");
     (window as any).omni.intents.handle("view_profile", handleViewProfile);
   } else {
-    console.log("🔍 [Profile Viewer] Registering fallback window listener for 'omni:intent'");
     window.addEventListener("omni:intent", (e: any) => {
-      console.log("🔍 [Profile Viewer] omni:intent DOM event received:", e.detail);
       if (e.detail?.action === "view_profile" && e.detail?.data) {
         handleViewProfile(e.detail.data);
       }
@@ -634,7 +616,6 @@ async function mountProfileViewer(root: HTMLElement) {
     } catch (_) {}
   }
 
-  console.log("🔍 [Profile Viewer] Initial pubkey resolution result:", initialPubkey || "(none)");
   if (initialPubkey) {
     loadProfile(initialPubkey);
   } else {

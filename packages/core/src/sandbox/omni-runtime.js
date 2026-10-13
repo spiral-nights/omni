@@ -194,17 +194,14 @@
       } else if (msg.method === "intent.invoke") {
         const action = msg.params && msg.params.action;
         const data = msg.params && msg.params.data;
-        console.log(`🔍 [OmniRuntime] intent.invoke received: action="${action}", data=`, data, "hasHandler:", intentHandlers.has(action));
         const handler = intentHandlers.get(action);
         if (handler) {
           try {
-            console.log(`🔍 [OmniRuntime] Executing registered handler for action="${action}"`);
             handler(data);
           } catch (e) {
             console.error("Error executing intent handler:", e);
           }
         } else {
-          console.log(`🔍 [OmniRuntime] No direct handler yet for action="${action}". Dispatching omni:intent and queueing.`);
           try {
             if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
               window.dispatchEvent(new CustomEvent("omni:intent", { detail: { action, data } }));
@@ -1113,11 +1110,9 @@
         return callRpc("intent.dispatch", { action, data });
       },
       handle(action, handler) {
-        console.log(`🔍 [OmniRuntime] omni.intents.handle registered for action="${action}"`);
         intentHandlers.set(action, handler);
         const pending = pendingIntentInvocations.get(action);
         if (pending && pending.length > 0) {
-          console.log(`🔍 [OmniRuntime] Draining ${pending.length} pending invocations for action="${action}"`);
           pendingIntentInvocations.delete(action);
           for (const d of pending) {
             try {
