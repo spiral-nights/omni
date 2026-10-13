@@ -527,6 +527,198 @@ body.theme-panorama,
   to { transform: rotate(360deg); }
 }
 
+/* Feed Search Page */
+.feed-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-search-feed {
+  background: #111111;
+  border: 1px solid #222222;
+  color: #aaaaaa;
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 0px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.btn-search-feed:hover {
+  color: #ffffff;
+  border-color: #00a4ef;
+  background: #161616;
+}
+
+.btn-search-back {
+  background: transparent;
+  border: none;
+  color: #aaaaaa;
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 4px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.15s ease;
+}
+
+.btn-search-back:hover {
+  color: #ffffff;
+}
+
+.feed-search-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 0;
+  align-items: center;
+}
+
+.feed-search-input {
+  flex: 1;
+  background: #111111;
+  border: 1px solid #222222;
+  color: #ffffff;
+  border-radius: 0px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.feed-search-input:focus {
+  border-color: #00a4ef;
+}
+
+.feed-search-input::placeholder {
+  color: #555555;
+}
+
+.btn-do-search {
+  background: #00a4ef;
+  border: none;
+  color: #000000;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 0px;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.btn-do-search:hover {
+  filter: brightness(1.15);
+}
+
+.search-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px 0;
+  padding: 4px 6px 4px 10px;
+  font-size: 0.72rem;
+  color: #aaaaaa;
+  background: #161616;
+  border: 1px solid #222222;
+  border-radius: 0px;
+  width: fit-content;
+}
+
+.search-chip .chip-remove {
+  background: transparent;
+  border: none;
+  color: #666666;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.search-chip .chip-remove:hover {
+  color: #ffffff;
+}
+
+.search-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #666666;
+  padding: 12px 0 6px 0;
+}
+
+.search-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 0;
+  color: #666666;
+  font-size: 0.82rem;
+}
+
+.search-people-section,
+.search-notes-section {
+  padding-bottom: 8px;
+}
+
+.search-people-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.search-person-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #1a1a1a;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.search-person-row:hover {
+  background: #0d0d0d;
+}
+
+.search-person-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.search-person-name {
+  color: #ffffff;
+  font-size: 0.85rem;
+}
+
+.search-person-about {
+  color: #666666;
+  font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 420px;
+}
+
+.search-person-open {
+  margin-left: auto;
+  color: #555555;
+  display: inline-flex;
+}
+
+.search-notes-list {
+  display: flex;
+  flex-direction: column;
+}
+
 /* Note Composer */
 .feed-composer,
 .composer-card {

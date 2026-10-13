@@ -332,6 +332,198 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* Feed Search Page */
+.feed-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-search-feed {
+  background: var(--omni-bg-subtle);
+  border: 1px solid var(--omni-border-subtle);
+  color: var(--omni-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: var(--omni-radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.btn-search-feed:hover {
+  color: var(--omni-text-primary);
+  border-color: var(--omni-border-strong);
+  background: var(--omni-bg-elevated);
+}
+
+.btn-search-back {
+  background: transparent;
+  border: none;
+  color: var(--omni-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 5px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.15s ease;
+}
+
+.btn-search-back:hover {
+  color: var(--omni-text-primary);
+}
+
+.feed-search-bar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  align-items: center;
+}
+
+.feed-search-input {
+  flex: 1;
+  background: var(--omni-bg-subtle);
+  border: 1px solid var(--omni-border-subtle);
+  color: var(--omni-text-primary);
+  border-radius: var(--omni-radius-pill);
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.feed-search-input:focus {
+  border-color: var(--omni-accent, #d4a373);
+}
+
+.feed-search-input::placeholder {
+  color: var(--omni-text-muted);
+}
+
+.btn-do-search {
+  background: var(--omni-accent, #d4a373);
+  border: none;
+  color: #141312;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--omni-radius-pill);
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.btn-do-search:hover {
+  filter: brightness(1.1);
+}
+
+.search-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px 16px;
+  padding: 4px 6px 4px 10px;
+  font-size: 0.72rem;
+  color: var(--omni-text-secondary);
+  background: var(--omni-bg-elevated);
+  border: 1px solid var(--omni-border-subtle);
+  border-radius: var(--omni-radius-pill);
+  width: fit-content;
+}
+
+.search-chip .chip-remove {
+  background: transparent;
+  border: none;
+  color: var(--omni-text-muted);
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.search-chip .chip-remove:hover {
+  color: var(--omni-text-primary);
+}
+
+.search-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--omni-text-muted);
+  padding: 14px 16px 6px 16px;
+}
+
+.search-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px;
+  color: var(--omni-text-muted);
+  font-size: 0.82rem;
+}
+
+.search-people-section,
+.search-notes-section {
+  padding-bottom: 8px;
+}
+
+.search-people-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.search-person-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--omni-border-subtle);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.search-person-row:hover {
+  background: var(--omni-bg-surface);
+}
+
+.search-person-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.search-person-name {
+  color: var(--omni-text-primary);
+  font-size: 0.85rem;
+}
+
+.search-person-about {
+  color: var(--omni-text-muted);
+  font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 420px;
+}
+
+.search-person-open {
+  margin-left: auto;
+  color: var(--omni-text-muted);
+  display: inline-flex;
+}
+
+.search-notes-list {
+  display: flex;
+  flex-direction: column;
+}
+
 /* Note Composer (Bluesky Seamless Post Box) */
 .feed-composer,
 .composer-card {

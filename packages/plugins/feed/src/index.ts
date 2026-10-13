@@ -70,6 +70,163 @@ function getAuthorMeta(pubkey: string) {
   };
 }
 
+// Standard Bech32 decoding (NIP-19) for identifier resolution in search
+const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+function bech32Polymod(values: number[]): number {
+  const gen = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let chk = 1;
+  for (const v of values) {
+    const top = chk >> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ v;
+    for (let i = 0; i < 5; i++) {
+      chk ^= ((top >> i) & 1) ? gen[i] : 0;
+    }
+  }
+  return chk;
+}
+
+export function bech32Decode(str: string): { hrp: string; words: number[] } | null {
+  try {
+    const s = str.toLowerCase().trim();
+    const pos = s.lastIndexOf("1");
+    if (pos < 1 || pos + 7 > s.length || s.length > 5000) return null;
+    const hrp = s.slice(0, pos);
+    for (const ch of hrp) if (ch.charCodeAt(0) < 33 || ch.charCodeAt(0) > 126) return null;
+    const words: number[] = [];
+    for (const ch of s.slice(pos + 1)) {
+      const idx = BECH32_CHARSET.indexOf(ch);
+      if (idx === -1) return null;
+      words.push(idx);
+    }
+    if (bech32Polymod([
+      ...hrp.split("").map((c) => c.charCodeAt(0) >> 5),
+      0,
+      ...hrp.split("").map((c) => c.charCodeAt(0) & 31),
+      ...words
+    ]) !== 1) return null;
+    return { hrp, words: words.slice(0, -6) };
+  } catch (_) {
+    return null;
+  }
+}
+
+function convertBits(data: number[], fromBits: number, toBits: number): number[] {
+  let acc = 0;
+  let bits = 0;
+  const ret: number[] = [];
+  const maxv = (1 << toBits) - 1;
+  for (const v of data) {
+    acc = (acc << fromBits) | v;
+    bits += fromBits;
+    while (bits >= toBits) {
+      bits -= toBits;
+      ret.push((acc >> bits) & maxv);
+    }
+  }
+  if (bits > 0) ret.push((acc << (toBits - bits)) & maxv);
+  return ret;
+}
+
+export function wordsToBytes(words: number[]): number[] {
+  return convertBits(words, 5, 8).slice(0, Math.floor((words.length * 5) / 8));
+}
+
+export function bytesToHex(bytes: number[]): string {
+  return bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export interface DecodedNostrEntity {
+  type: "npub" | "nprofile" | "note" | "nevent" | "naddr";
+  hex?: string;
+  kind?: number;
+  pubkey?: string;
+  identifier?: string;
+}
+
+export function decodeNostrEntity(raw: string): DecodedNostrEntity | null {
+  const s = raw.trim().toLowerCase();
+  if (!/^(npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+$/.test(s)) return null;
+  const decoded = bech32Decode(s);
+  if (!decoded) return null;
+  const bytes = wordsToBytes(decoded.words);
+  const hex = bytesToHex(bytes);
+
+  switch (decoded.hrp) {
+    case "npub":
+      return bytes.length === 32 ? { type: "npub", hex } : null;
+    case "note":
+      return bytes.length === 32 ? { type: "note", hex } : null;
+    case "nprofile": {
+      let pubkey: string | undefined;
+      let i = 0;
+      while (i + 2 <= bytes.length) {
+        const tag = bytes[i];
+        const len = bytes[i + 1];
+        const val = bytes.slice(i + 2, i + 2 + len);
+        if (tag === 0 && len === 32) pubkey = bytesToHex(val);
+        i += 2 + len;
+      }
+      return pubkey ? { type: "nprofile", pubkey } : null;
+    }
+    case "nevent": {
+      let eventId: string | undefined;
+      let i = 0;
+      while (i + 2 <= bytes.length) {
+        const tag = bytes[i];
+        const len = bytes[i + 1];
+        if (tag === 0 && len === 32) eventId = bytesToHex(bytes.slice(i + 2, i + 2 + len));
+        i += 2 + bytes[i + 1];
+      }
+      return eventId ? { type: "nevent", hex: eventId } : null;
+    }
+    case "naddr": {
+      let kind: number | undefined;
+      let pubkey: string | undefined;
+      let identifier: string | undefined;
+      let i = 0;
+      while (i + 2 <= bytes.length) {
+        const tag = bytes[i];
+        const len = bytes[i + 1];
+        const val = bytes.slice(i + 2, i + 2 + len);
+        if (tag === 0 && len === 4) kind = (val[0] << 24) | (val[1] << 16) | (val[2] << 8) | val[3];
+        if (tag === 1 && len === 32) pubkey = bytesToHex(val);
+        if (tag === 2) identifier = String.fromCharCode(...val);
+        i += 2 + len;
+      }
+      return kind !== undefined && pubkey ? { type: "naddr", kind, pubkey, identifier } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+export interface ParsedSearchQuery {
+  authors: string[];
+  keyword: string;
+}
+
+export function parseSearchQuery(raw: string): ParsedSearchQuery {
+  const authors: string[] = [];
+  const keywords: string[] = [];
+  for (const token of (raw || "").trim().split(/\s+/).filter(Boolean)) {
+    if (token.startsWith("@") && token.length > 1) {
+      authors.push(token.slice(1));
+    } else {
+      keywords.push(token);
+    }
+  }
+  return { authors, keyword: keywords.join(" ").toLowerCase() };
+}
+
+export function isNostrIdentifier(raw: string): boolean {
+  const s = raw.trim();
+  if (!s) return false;
+  if (/^[0-9a-fA-F]{64}$/.test(s)) return true;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return true;
+  return decodeNostrEntity(s) !== null;
+}
+
 function formatContent(text: string): string {
   const escaped = escapeHtml(text || "");
   const urlRegex = /(https?:\/\/[^\s<]+)/g;
@@ -107,19 +264,36 @@ const ICONS = {
     <polyline points="23 4 23 10 17 10"/>
     <polyline points="1 20 1 14 7 14"/>
     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+  </svg>`,
+  search: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="7"/>
+    <line x1="21" y1="21" x2="16.2" y2="16.2"/>
+  </svg>`,
+  back: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="19" y1="12" x2="5" y2="12"/>
+    <polyline points="12 19 5 12 12 5"/>
+  </svg>`,
+  user: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
   </svg>`
 };
 
-function mountFeed(root: any) {
-  const container = html<HTMLDivElement>`
+function mountFeed(root: any) {  const container = html<HTMLDivElement>`
     <div class="feed-container">
       <!-- Top Timeline Navigation Header -->
       <div class="feed-top-header">
         <h2 class="feed-title">Feed</h2>
-        <button class="btn-refresh-feed" title="Refresh Feed">
-          ${ICONS.refresh}
-          <span>Refresh</span>
-        </button>
+        <div class="feed-header-actions">
+          <button class="btn-search-feed" title="Search Notes" aria-label="Search Notes">
+            ${ICONS.search}
+            <span>Search</span>
+          </button>
+          <button class="btn-refresh-feed" title="Refresh Feed">
+            ${ICONS.refresh}
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       <!-- Note Composer (Seamless Bluesky Post Box) -->
@@ -148,6 +322,24 @@ function mountFeed(root: any) {
 
       <!-- Infinite Scroll Sentinel -->
       <div class="feed-sentinel" id="feed-sentinel"></div>
+
+      <!-- Search Page (hidden until activated from the header) -->
+      <div class="feed-search-page" style="display: none;">
+        <div class="feed-top-header">
+          <button class="btn-search-back" title="Back to Feed">
+            ${ICONS.back}
+            <span>Back</span>
+          </button>
+          <h2 class="feed-title">Search</h2>
+        </div>
+        <div class="feed-search-bar">
+          <input class="feed-search-input" type="text" spellcheck="false"
+            placeholder="Search notes, @author, or paste npub / note / nevent" />
+          <button class="btn-do-search">Search</button>
+        </div>
+        <div class="feed-search-chips"></div>
+        <div class="feed-search-results"></div>
+      </div>
     </div>
   `;
 
@@ -158,6 +350,14 @@ function mountFeed(root: any) {
   const loadingState = container.querySelector<HTMLDivElement>(".loading-state")!;
   const myAvatarEl = container.querySelector<HTMLElement>("#my-composer-avatar")!;
   const sentinelEl = container.querySelector<HTMLElement>("#feed-sentinel")!;
+
+  const searchPage = container.querySelector<HTMLDivElement>(".feed-search-page")!;
+  const btnSearchBack = container.querySelector<HTMLButtonElement>(".btn-search-back")!;
+  const btnSearchOpen = container.querySelector<HTMLButtonElement>(".btn-search-feed")!;
+  const searchInput = container.querySelector<HTMLInputElement>(".feed-search-input")!;
+  const btnDoSearch = container.querySelector<HTMLButtonElement>(".btn-do-search")!;
+  const searchChips = container.querySelector<HTMLDivElement>(".feed-search-chips")!;
+  const searchResults = container.querySelector<HTMLDivElement>(".feed-search-results")!;
 
   root.appendChild(container);
 
@@ -175,6 +375,7 @@ function mountFeed(root: any) {
   } catch {}
 
   const renderedIds = new Set<string>();
+  const timelineNotes = new Map<string, any>();
   let oldestTimestamp = Infinity;
   let latestTimestamp = 0;
   let isLoadingOlder = false;
@@ -209,6 +410,7 @@ function mountFeed(root: any) {
   function renderNote(event: any, prepend = false) {
     if (renderedIds.has(event.id)) return;
     renderedIds.add(event.id);
+    timelineNotes.set(event.id, event);
 
     clearTimeout(initialLoadTimeout);
 
@@ -226,6 +428,17 @@ function mountFeed(root: any) {
     if (event.created_at && event.created_at > latestTimestamp) {
       latestTimestamp = event.created_at;
     }
+
+    const card = buildNoteCard(event);
+
+    if (prepend && notesList.firstChild) {
+      notesList.insertBefore(card, notesList.firstChild);
+    } else {
+      notesList.appendChild(card);
+    }
+  }
+
+  function buildNoteCard(event: any): HTMLElement {
 
     const { name, handle, initial, picture } = getAuthorMeta(event.pubkey);
     const avatarGradient = getAvatarGradient(event.pubkey || "");
@@ -376,11 +589,7 @@ function mountFeed(root: any) {
       }
     }
 
-    if (prepend && notesList.firstChild) {
-      notesList.insertBefore(card, notesList.firstChild);
-    } else {
-      notesList.appendChild(card);
-    }
+    return card;
   }
 
   function handleIncomingEvent(event: any, prepend = false) {
@@ -401,6 +610,418 @@ function mountFeed(root: any) {
   }
 
   btnRefresh.addEventListener("click", refreshFeed);
+
+  // ===== Search Page =====
+  const feedSections: HTMLElement[] = [
+    container.querySelector<HTMLElement>(":scope > .feed-top-header") as HTMLElement,
+    container.querySelector<HTMLElement>(".feed-composer") as HTMLElement,
+    notesList,
+    sentinelEl
+  ];
+
+  let searchSeq = 0;
+  let searchWs: any = null;
+
+  function showSearchPage() {
+    for (const el of feedSections) {
+      if (el) el.style.display = "none";
+    }
+    searchPage.style.display = "block";
+    try {
+      searchInput.focus();
+    } catch (_) {}
+  }
+
+  function showFeedPage() {
+    searchPage.style.display = "none";
+    for (const el of feedSections) {
+      if (el) el.style.display = "";
+    }
+  }
+
+  btnSearchOpen.addEventListener("click", showSearchPage);
+  btnSearchBack.addEventListener("click", showFeedPage);
+
+  function setSearchStatus(text: string, isloading = false) {
+    searchResults.querySelectorAll(".search-status").forEach((el) => el.remove());
+    if (!text) return;
+    const el = html<HTMLDivElement>`
+      <div class="search-status">
+        ${isloading ? `<div class="loading-spinner"></div>` : ""}
+        <span>${escapeHtml(text)}</span>
+      </div>
+    `;
+    searchResults.appendChild(el);
+  }
+
+  function renderPeopleSection(people: Array<{ pubkey: string; meta: any }>) {
+    const existing = searchResults.querySelector(".search-people-section");
+    if (existing) existing.remove();
+    if (people.length === 0) return;
+
+    const section = html<HTMLDivElement>`
+      <div class="search-people-section">
+        <div class="search-section-title">People</div>
+        <div class="search-people-list"></div>
+      </div>
+    `;
+    const list = section.querySelector<HTMLDivElement>(".search-people-list")!;
+
+    for (const person of people.slice(0, 8)) {
+      const meta = person.meta || {};
+      const name = meta.display_name || meta.name || `nostr:${person.pubkey.slice(0, 6)}`;
+      const handle = meta.nip05 ? `@${meta.nip05}` : `@npub1${person.pubkey.slice(0, 6)}`;
+      const about = (meta.about || "").slice(0, 120);
+      let pic = String(meta.picture || "").trim();
+      if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
+      const avatarInner = (pic && (pic.startsWith("https://") || pic.startsWith("data:image/")))
+        ? `<img src="${escapeHtml(pic)}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
+        : `<span>${escapeHtml(name[0] || "?").toUpperCase()}</span>`;
+
+      const row = html<HTMLDivElement>`
+        <div class="search-person-row" role="button" tabindex="0">
+          <div class="feed-avatar" style="background: ${getAvatarGradient(person.pubkey)};">${avatarInner}</div>
+          <div class="search-person-info">
+            <strong class="search-person-name">${escapeHtml(name)}</strong>
+            <span class="feed-author-handle">${escapeHtml(handle)}</span>
+            ${about ? `<div class="search-person-about">${escapeHtml(about)}</div>` : ""}
+          </div>
+          <span class="search-person-open">${ICONS.user}</span>
+        </div>
+      `;
+      row.addEventListener("click", () => dispatchViewProfile(person.pubkey));
+      row.addEventListener("keydown", (e) => {
+        if ((e as KeyboardEvent).key === "Enter") dispatchViewProfile(person.pubkey);
+      });
+      list.appendChild(row);
+    }
+    searchResults.insertBefore(section, searchResults.querySelector(".search-notes-section"));
+  }
+
+  function renderNotesSection(events: any[]) {
+    const existing = searchResults.querySelector(".search-notes-section");
+    if (existing) existing.remove();
+    if (events.length === 0) return;
+
+    const section = html<HTMLDivElement>`
+      <div class="search-notes-section">
+        <div class="search-section-title">Notes</div>
+        <div class="search-notes-list"></div>
+      </div>
+    `;
+    const list = section.querySelector<HTMLDivElement>(".search-notes-list")!;
+    for (const ev of events.slice(0, 30)) {
+      list.appendChild(buildNoteCard(ev));
+    }
+    searchResults.appendChild(section);
+  }
+
+  function dispatchViewProfile(pubkey: string) {
+    const omni = (window as any).omni;
+    if (omni?.intents?.dispatch && pubkey) {
+      omni.intents.dispatch("view_profile", { pubkey }).catch(() => {});
+    }
+  }
+
+  function matchesNote(ev: any, keyword: string, authorHexes: string[], authorTerms: string[]): boolean {
+    if (keyword && !(ev.content || "").toLowerCase().includes(keyword)) return false;
+    if (authorHexes.length > 0 && !authorHexes.includes(ev.pubkey)) return false;
+    if (authorHexes.length === 0 && authorTerms.length > 0) {
+      const meta = profileCache.get(ev.pubkey);
+      const hay = meta ? `${meta.display_name || ""} ${meta.name || ""} ${meta.nip05 || ""}`.toLowerCase() : "";
+      const matched = authorTerms.some((t) => t === ev.pubkey.slice(0, t.length) || (hay && hay.includes(t)));
+      if (!matched) return false;
+    }
+    return true;
+  }
+
+  function localPeopleMatches(term: string): Array<{ pubkey: string; meta: any }> {
+    const t = term.toLowerCase();
+    const results: Array<{ pubkey: string; meta: any }> = [];
+    for (const [pubkey, meta] of profileCache.entries()) {
+      const hay = `${meta.display_name || ""} ${meta.name || ""} ${meta.nip05 || ""}`.toLowerCase();
+      if (t && hay.includes(t)) results.push({ pubkey, meta });
+    }
+    return results;
+  }
+
+  function openSearchWebSocket(onReady: (ws: any) => void) {
+    try {
+      if (searchWs) {
+        try { searchWs.close(); } catch (_) {}
+      }
+      const ws = new WebSocket("wss://relay.nostr.band");
+      searchWs = ws;
+      ws.onopen = () => onReady(ws);
+      ws.onerror = () => {};
+      return ws;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function collectSubscription(ws: any, subId: string, filter: any, onEvent: (ev: any) => void, onDone: () => void) {
+    const collected: any[] = [];
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      try { ws.send(JSON.stringify(["CLOSE", subId])); } catch (_) {}
+      try { ws.close(); } catch (_) {}
+      onDone();
+    };
+    const timer = setTimeout(finish, 8000);
+    ws.onmessage = (msg: any) => {
+      try {
+        const data = JSON.parse(msg.data);
+        const [type, sid] = data;
+        if (type === "EVENT" && sid === subId && data[2]) {
+          collected.push(data[2]);
+          onEvent(data[2]);
+        } else if (type === "EOSE" && sid === subId) {
+          clearTimeout(timer);
+          finish();
+        }
+      } catch (_) {}
+    };
+    try {
+      ws.send(JSON.stringify(["REQ", subId, filter]));
+    } catch (_) {
+      clearTimeout(timer);
+      finish();
+    }
+    return collected;
+  }
+
+  async function resolveNip05(raw: string): Promise<string | null> {
+    const m = raw.trim().match(/^_?([^\s@]+)@([^\s@]+\.[^\s@]+)$/);
+    if (!m) return null;
+    try {
+      const res = await fetch(`https://${m[2]}/.well-known/nostr.json?name=${encodeURIComponent(m[1])}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const pk = data?.names?.[m[1]];
+      return typeof pk === "string" && /^[0-9a-fA-F]{64}$/.test(pk) ? pk.toLowerCase() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function runSearch(rawQuery: string) {
+    const query = rawQuery.trim();
+    if (!query) return;
+    const seq = ++searchSeq;
+    const parsed = parseSearchQuery(query);
+    searchChips.innerHTML = "";
+
+    // 1. Identifier resolution: pasting npub / note / nevent / naddr / hex / NIP-05 navigates directly
+    const decoded = decodeNostrEntity(query);
+    const isHex = /^[0-9a-fA-F]{64}$/.test(query);
+    if (decoded || isHex) {
+      setSearchStatus("Opening...");
+      if (decoded?.type === "npub" || decoded?.type === "nprofile" || isHex) {
+        setSearchStatus("");
+        dispatchViewProfile(decoded?.pubkey || decoded?.hex || query.toLowerCase());
+      } else if (decoded?.type === "note" || decoded?.type === "nevent") {
+        fetchNoteById(decoded.hex!, seq);
+      } else if (decoded?.type === "naddr") {
+        fetchNoteByAddress(decoded, seq);
+      }
+      return;
+    }
+    const nip05Match = query.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
+    if (nip05Match && !parsed.keyword && parsed.authors.length === 0) {
+      setSearchStatus("Resolving address...");
+      const pk = await resolveNip05(query);
+      if (seq !== searchSeq) return;
+      setSearchStatus("");
+      if (pk) {
+        dispatchViewProfile(pk);
+      } else {
+        setSearchStatus("Could not resolve that NIP-05 address.");
+      }
+      return;
+    }
+
+    // 2. Author filter chips
+    let authorHexes: string[] = [];
+    for (const term of parsed.authors) {
+      const d = decodeNostrEntity(term.startsWith("@") ? term : `@${term}`);
+      if (d?.hex && (d.type === "npub" || d.type === "nprofile")) {
+        authorHexes.push(d.hex);
+        addAuthorChip(`npub1${d.hex.slice(0, 8)}...`);
+      } else {
+        addAuthorChip(term);
+      }
+    }
+
+    setSearchStatus("Searching local cache and relays...", true);
+
+    // 3. Resolve author tokens to pubkeys via local profile cache
+    for (const term of parsed.authors) {
+      const local = localPeopleMatches(term);
+      for (const p of local) {
+        if (!authorHexes.includes(p.pubkey)) authorHexes.push(p.pubkey);
+      }
+    }
+
+    // 4. Local results (0ms) render immediately
+    const localNotes: any[] = [];
+    for (const ev of timelineNotes.values()) {
+      if (matchesNote(ev, parsed.keyword, authorHexes, parsed.authors)) localNotes.push(ev);
+    }
+    localNotes.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    if (seq !== searchSeq) return;
+    if (localNotes.length > 0) {
+      renderNotesSection(localNotes);
+      if (!parsed.keyword || parsed.keyword.length === 0) setSearchStatus("");
+    }
+
+    // 5. People results: local profiles + NIP-50 kind:0 relay search
+    const people = new Map<string, any>();
+    for (const term of parsed.authors) {
+      for (const p of localPeopleMatches(term)) people.set(p.pubkey, p.meta);
+    }
+    if (people.size > 0) {
+      renderPeopleSection(Array.from(people.entries()).map(([pubkey, meta]) => ({ pubkey, meta })));
+    }
+
+    // 6. NIP-50 relay search (network-wide)
+    const ws = openSearchWebSocket((socket) => {
+      let noteCount = 0;
+      const relayNotes = new Map<string, any>();
+      const relayPeople = new Map<string, any>();
+      let subsPending = 1;
+
+      const maybeFinish = () => {
+        subsPending -= 1;
+        if (subsPending > 0) return;
+        if (seq !== searchSeq) return;
+        const merged = new Map<string, any>();
+        for (const ev of localNotes) merged.set(ev.id, ev);
+        for (const ev of relayNotes.values()) merged.set(ev.id, ev);
+        const finalNotes = Array.from(merged.values())
+          .filter((ev) => matchesNote(ev, parsed.keyword, authorHexes, parsed.authors))
+          .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+        renderNotesSection(finalNotes);
+
+        for (const ev of relayPeople.values()) {
+          try {
+            const meta = JSON.parse(ev.content || "{}");
+            if (!people.has(ev.pubkey)) people.set(ev.pubkey, meta);
+          } catch (_) {}
+        }
+        renderPeopleSection(Array.from(people.entries()).map(([pubkey, meta]) => ({ pubkey, meta })));
+
+        if (finalNotes.length === 0 && people.size === 0) {
+          setSearchStatus("No results. Try a keyword, @author, or paste an npub / note / nevent.");
+        } else {
+          setSearchStatus("");
+        }
+      };
+
+      const noteFilter: any = { kinds: [1], limit: 60 };
+      if (parsed.keyword) noteFilter.search = parsed.keyword;
+      if (authorHexes.length > 0) noteFilter.authors = authorHexes;
+      collectSubscription(socket, `search-notes-${seq}`, noteFilter, (ev) => {
+        noteCount++;
+        relayNotes.set(ev.id, ev);
+        if (seq === searchSeq && relayNotes.size % 5 === 1) {
+          setSearchStatus(`Searching relays... ${noteCount}+ notes`, true);
+        }
+      }, maybeFinish);
+
+      if (parsed.authors.length > 0 && authorHexes.length === 0) {
+        subsPending = 2;
+        collectSubscription(socket, `search-people-${seq}`, {
+          kinds: [0], search: parsed.authors[0], limit: 12
+        }, (ev) => {
+          relayPeople.set(ev.pubkey, ev);
+        }, maybeFinish);
+      }
+    });
+    if (!ws) {
+      if (localNotes.length === 0 && people.size === 0) {
+        setSearchStatus("Relay search unavailable. No local matches. Try a keyword or @author.");
+      } else {
+        setSearchStatus("");
+      }
+    }
+  }
+
+  function addAuthorChip(label: string) {
+    const chip = html<HTMLSpanElement>`
+      <span class="search-chip">Author: ${escapeHtml(label)}<button class="chip-remove" title="Clear author filter" aria-label="Clear author filter">&times;</button></span>
+    `;
+    chip.querySelector<HTMLButtonElement>(".chip-remove")?.addEventListener("click", () => {
+      const remaining = searchInput.value
+        .split(/\s+/)
+        .filter((t) => !(t.startsWith("@") && t.slice(1) === label));
+      searchInput.value = remaining.join(" ").trim();
+      runSearch(searchInput.value);
+    });
+    searchChips.appendChild(chip);
+  }
+
+  function fetchNoteById(hexId: string, seq: number) {
+    const local = timelineNotes.get(hexId);
+    if (local) {
+      if (seq === searchSeq) {
+        setSearchStatus("");
+        renderNotesSection([local]);
+      }
+      return;
+    }
+    const ws = openSearchWebSocket((socket) => {
+      collectSubscription(socket, `note-${seq}`, { ids: [hexId], limit: 1 }, (ev) => {
+        timelineNotes.set(ev.id, ev);
+        if (ev.id === hexId && seq === searchSeq) {
+          setSearchStatus("");
+          renderNotesSection([ev]);
+        }
+      }, () => {
+        if (seq !== searchSeq) return;
+        if (!timelineNotes.has(hexId)) {
+          setSearchStatus("Note not found in local cache or relays.");
+        }
+      });
+    });
+    if (!ws) setSearchStatus("Relay search unavailable.");
+  }
+
+  function fetchNoteByAddress(decoded: DecodedNostrEntity, seq: number) {
+    const ws = openSearchWebSocket((socket) => {
+      let foundEv: any = null;
+      collectSubscription(
+        socket,
+        `addr-${seq}`,
+        { kinds: [decoded.kind!], authors: [decoded.pubkey!], "#d": [decoded.identifier || ""], limit: 1 },
+        (ev) => {
+          foundEv = ev;
+          timelineNotes.set(ev.id, ev);
+        },
+        () => {
+          if (seq !== searchSeq) return;
+          if (foundEv) {
+            setSearchStatus("");
+            renderNotesSection([foundEv]);
+          } else {
+            setSearchStatus("Addressed note not found.");
+          }
+        }
+      );
+    });
+    if (!ws) setSearchStatus("Relay search unavailable.");
+  }
+
+  function triggerSearch() {
+    runSearch(searchInput.value);
+  }
+
+  btnDoSearch.addEventListener("click", triggerSearch);
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") triggerSearch();
+  });
 
   // Seamless Infinite Scrolling (Load Older Notes)
   function loadOlderNotes() {
@@ -497,7 +1118,7 @@ function mountFeed(root: any) {
               try {
                 const parsed = JSON.parse(ev.content);
                 profileCache.set(ev.pubkey, parsed);
-                const cards = notesList.querySelectorAll(`[data-author-pubkey="${ev.pubkey}"]`);
+                const cards = container.querySelectorAll(`[data-author-pubkey="${ev.pubkey}"]`);
                 for (const c of Array.from(cards)) {
                   const nEl = c.querySelector<HTMLElement>(".feed-author-name");
                   const hEl = c.querySelector<HTMLElement>(".feed-author-handle");
@@ -568,11 +1189,31 @@ function mountFeed(root: any) {
   } catch (err) {
     console.error("Feed subscription failed:", err);
   }
+
+  return {
+    showSearchPage,
+    showFeedPage
+  };
+}
+
+function isSearchRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const search = window.location.search || "";
+    if (new URLSearchParams(search).get("view") === "search") return true;
+    if (window.location.hash.includes("view=search")) return true;
+    if ((window as any).__OMNI_ROUTE__?.includes("view=search")) return true;
+  } catch (_) {}
+  return false;
 }
 
 function init() {
   if (typeof document !== "undefined") {
-    mountFeed(document.body);
+    const root = document.body;
+    const feed = mountFeed(root);
+    if (isSearchRoute()) {
+      feed.showSearchPage();
+    }
   }
 }
 
