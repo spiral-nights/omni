@@ -21,11 +21,15 @@ export class RemoteDomHost {
   readonly componentId: string;
   readonly container: Element;
   private onEvent: (componentId: string, data: { id: string; eventName: string; detail: any }) => void;
+  private clickHandled = false;
 
   constructor(options: RemoteDomHostOptions) {
     this.container = options.container;
     this.componentId = options.componentId;
-    this.onEvent = options.onEvent;
+    this.onEvent = (componentId, data) => {
+      this.clickHandled = true;
+      options.onEvent(componentId, data);
+    };
 
     const allowed = options.allowedElements || ALLOWED_HTML_ELEMENTS;
 
@@ -64,6 +68,29 @@ export class RemoteDomHost {
 
       this.container.addEventListener("input", enrichInputEvent, true);
       this.container.addEventListener("change", enrichInputEvent, true);
+
+      // DOMRemoteReceiver only fires a remote listener when `event.target === element`
+      // (it deliberately skips bubbled events, expecting the remote side to re-run
+      // capture/bubble). The guest only registers listeners on the interactive element
+      // itself (button, role=button div, ...), so a click landing on a child such as
+      // the label <span> or icon <svg> never reached the guest -- only clicks on the
+      // element's own padding did. Emulate bubbling here: if nothing handled the click
+      // at its real target, re-dispatch it to the nearest ancestor that has a remote
+      // listener. Only that ancestor is targeted because the guest re-dispatches a
+      // bubbling click natively, which already reaches further-up guest listeners.
+      const container = this.container;
+      container.addEventListener("click", () => {
+        this.clickHandled = false;
+      }, true);
+      container.addEventListener("click", (e: Event) => {
+        if (this.clickHandled) return;
+        let el = (e.target as Element | null)?.parentElement || null;
+        while (el && el !== container && !this.clickHandled) {
+          const retargeted = new CustomEvent("click", { detail: {}, bubbles: false });
+          el.dispatchEvent(retargeted);
+          el = el.parentElement;
+        }
+      });
     }
   }
 
