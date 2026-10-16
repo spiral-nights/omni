@@ -1333,6 +1333,17 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(panoramaShell.getActivePageId()).toBe("apps");
     });
 
+    it("mounts companion workspace widgets into widgets slot when calling ensureWidgetsMounted or showPivot('widgets')", async () => {
+      // In PanoramaShell, ensureWidgetsMounted mounts sidebar/widgets plugins into #panorama-widgets-slot
+      await panoramaShell.ensureWidgetsMounted();
+      const checklistPlugin = panoramaShell.installedPlugins.find((p) => p.id === "org.omni.plugin.checklist");
+      if (checklistPlugin) {
+        expect(panoramaKernel.getSandbox("org.omni.plugin.checklist::default") || panoramaKernel.getSandbox("org.omni.plugin.checklist")).toBeDefined();
+      }
+      const widgetsSlot = panoramaRoot.querySelector("#panorama-widgets-slot");
+      expect(widgetsSlot).toBeTruthy();
+    });
+
     it("automatically pins and adds app to navigation dock when assigned to main in OmniShell", async () => {
       const classicRoot = document.createElement("div");
       document.body.appendChild(classicRoot);

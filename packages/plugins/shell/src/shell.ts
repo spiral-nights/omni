@@ -398,11 +398,7 @@ export class OmniShell extends BaseShell {
     } else if (page === "widgets" || page === "dashboard") {
       this.pageWidgets.classList.add("active");
       this.dockBtnWidgets?.classList.add("active");
-      for (const p of this.installedPlugins) {
-        if (p.enabled && !this.kernel.getSandbox(p.id)) {
-          this.mountPlugin(p).catch(console.warn);
-        }
-      }
+      this.ensureWidgetsMounted().catch(console.warn);
     } else {
       let targetPage: HTMLElement | null = null;
       if (page === "feed" || page === "org.omni.plugin.feed") {

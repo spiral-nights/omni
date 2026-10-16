@@ -298,13 +298,17 @@ export abstract class BaseShell implements OmniShellHost {
 
   // --- Mounting & Remounting Lifecycle ---
 
-  public async mountPlugin(plugin: InstalledPluginEntry): Promise<void> {
+  public async mountPlugin(plugin: InstalledPluginEntry, placementId?: string): Promise<void> {
     if (!plugin.enabled) return;
     const placements = this.getPluginPlacements(plugin);
     const slotContainers = this.getSlotContainers();
 
     for (const pl of placements) {
       if (pl.enabled === false) continue;
+      if (placementId && pl.id !== placementId) continue;
+      const instanceKey = `${plugin.id}::${pl.id}`;
+      if (this.kernel.getSandbox(instanceKey)) continue;
+
       const synth = this.ensurePlacementManifest(plugin, pl);
       const targetContainer = this.getContainerForPluginSlot(plugin.id, pl.viewport, synth.components?.[0]?.id);
       const customSlotContainers = new Map(slotContainers);
@@ -317,13 +321,29 @@ export abstract class BaseShell implements OmniShellHost {
         plugin.htmlContent || plugin.scriptContent,
         customSlotContainers,
         {
-          instanceId: `${plugin.id}::${pl.id}`,
+          instanceId: instanceKey,
           route: pl.route,
           viewId: pl.viewId,
           targetSlot: pl.viewport,
           relays: plugin.relays
         }
       );
+    }
+  }
+
+  public async ensureWidgetsMounted(): Promise<void> {
+    for (const p of this.installedPlugins) {
+      if (!p.enabled) continue;
+      const placements = this.getPluginPlacements(p);
+      for (const pl of placements) {
+        if (pl.enabled === false) continue;
+        if (pl.viewport === "sidebar" || pl.viewport === "widgets") {
+          const instanceKey = `${p.id}::${pl.id}`;
+          if (!this.kernel.getSandbox(instanceKey) && !this.kernel.getSandbox(p.id)) {
+            await this.mountPlugin(p, pl.id).catch(console.warn);
+          }
+        }
+      }
     }
   }
 

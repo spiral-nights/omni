@@ -76,6 +76,11 @@ export interface OmniShellHost {
   handleShare?(payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string): Promise<any>;
 
   /**
+   * Ensures companion widgets mapped to sidebar/widgets slots are mounted
+   */
+  ensureWidgetsMounted?(): Promise<void>;
+
+  /**
    * Exports the current workspace layout state for NIP-78 and local persistence
    */
   exportWorkspaceState(): OmniWorkspaceState;

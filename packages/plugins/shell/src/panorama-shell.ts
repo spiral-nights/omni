@@ -1290,6 +1290,9 @@ export class PanoramaShell extends BaseShell {
 
   public showPivot(pivot: PanoramaPivot): void {
     this.activePivot = pivot;
+    if (pivot === "widgets") {
+      this.ensureWidgetsMounted().catch(console.warn);
+    }
     const buttons = this.pivotHeadersTrack?.querySelectorAll<HTMLElement>(".panorama-pivot-item") || [];
     buttons.forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.pivot === pivot);
@@ -1336,6 +1339,7 @@ export class PanoramaShell extends BaseShell {
     } else if (page === "widgets" || page === "dashboard") {
       this.closeApp();
       this.showPivot("widgets");
+      await this.ensureWidgetsMounted().catch(console.warn);
     } else if (page === "system" || page === "settings") {
       this.closeApp();
       this.showPivot("system");
@@ -1435,6 +1439,9 @@ export class PanoramaShell extends BaseShell {
     if (pivot && this.activePivot !== pivot) {
       this.activePivot = pivot;
       buttons.forEach((b) => b.classList.toggle("active", b.dataset.pivot === pivot));
+      if (pivot === "widgets") {
+        this.ensureWidgetsMounted().catch(console.warn);
+      }
     }
   }
 

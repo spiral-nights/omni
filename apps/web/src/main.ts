@@ -184,6 +184,11 @@ async function startApp() {
     });
   }
 
+  // Ensure workspace widgets (companion cards in sidebar/widgets slots) are mounted
+  shell.ensureWidgetsMounted?.().catch((err: any) => {
+    console.warn("Failed to mount workspace widgets:", err);
+  });
+
   // Sync active user identity and profile in background
   shell.updateProfileUi().catch((err) => {
     console.warn("Could not update profile UI:", err);
