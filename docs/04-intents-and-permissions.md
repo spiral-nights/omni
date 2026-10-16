@@ -61,16 +61,15 @@ In the app's published Nostr event (`kind: 31990` Handler Info or `kind: 35129` 
 - **`["k", "<kind>"]`**: Declares handling of Nostr event kinds (e.g. `1` for short notes, `0` for profiles, `31924` for calendar).
 - **`["intent", "<action>", "<route_template>"]`**: Explicitly maps standard intents to URL route templates within the app bundle.
 
-### 3.2 Web Standard Declaration (Web App Manifest & HTML Links)
-For standard web apps (PWAs / nsites):
+### 3.2 Web Standard Declaration (W3C Web App Manifest)
+For standard web apps (PWAs / nsites), handlers are declared strictly via the standard W3C Web App Manifest (`manifest.webmanifest` or `manifest.json`), linked from `index.html`:
 
 ```html
 <!-- Inside index.html <head> -->
-<link rel="alternate" data-intent="create_note" href="?view=compose" title="Compose Note" />
-<link rel="alternate" data-intent="view_profile" href="?view=profile" title="View Profile" />
+<link rel="manifest" href="manifest.webmanifest" />
 ```
 
-Or inside `manifest.webmanifest`:
+Inside `manifest.webmanifest`:
 
 ```json
 {
