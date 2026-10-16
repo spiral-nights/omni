@@ -1,3 +1,4 @@
+export { BaseShell } from "./base-shell.js";
 export { OmniShell } from "./shell.js";
 export { PanoramaShell } from "./panorama-shell.js";
 export type { PanoramaPivot } from "./panorama-shell.js";
