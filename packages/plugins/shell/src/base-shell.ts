@@ -217,7 +217,7 @@ export abstract class BaseShell implements OmniShellHost {
       version: p.version || p.manifest?.version || "1.0.0",
       description: p.description || p.manifest?.description || "",
       icon: p.icon || p.manifest?.icon || (p.viewport === "main" ? "feed" : "widgets"),
-      viewport: layoutSlot || p.viewport || p.manifest?.components?.[0]?.slot || "main"
+      viewport: p.viewport || layoutSlot || p.manifest?.components?.[0]?.slot || "main"
     };
   }
 

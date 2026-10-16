@@ -27,15 +27,18 @@ export const STANDARD_VIEWPORTS = STANDARD_SLOTS;
 export class LayoutManager {
   private mappings: SlotMapping[] = [];
   private listeners: Set<(mappings: SlotMapping[]) => void> = new Set();
-  private storageKey: string;
+  private storageKey: string | null;
 
-  constructor(storageKey = "omni_slot_layout") {
+  constructor(storageKey: string | null = null) {
     this.storageKey = storageKey;
-    this.load();
+    if (this.storageKey) {
+      this.load();
+    }
   }
 
   private load(): void {
-    if (typeof localStorage !== "undefined") {
+    if (!this.storageKey) return;
+    if (typeof localStorage !== "undefined" && typeof localStorage.getItem === "function") {
       try {
         const raw = localStorage.getItem(this.storageKey);
         if (raw) {
@@ -51,7 +54,7 @@ export class LayoutManager {
   }
 
   private save(): void {
-    if (typeof localStorage !== "undefined") {
+    if (this.storageKey && typeof localStorage !== "undefined" && typeof localStorage.setItem === "function") {
       try {
         localStorage.setItem(this.storageKey, JSON.stringify(this.mappings));
       } catch (err) {
