@@ -553,7 +553,9 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       shell.installedPlugins.push(readerPlugin);
 
       const handlePromise = shell.handleUri("nostr:nevent1xyz");
-      await new Promise((r) => setTimeout(r, 60));
+      for (let i = 0; i < 20 && !root.querySelector("#open-with-modal")?.classList.contains("open"); i++) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
 
       // Modal should now be open
       const modal = root.querySelector("#open-with-modal");
