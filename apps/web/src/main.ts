@@ -201,17 +201,8 @@ async function startApp() {
     console.warn("Could not check local NIP-78 workspace store:", err);
   });
 
-  // Mount background plugins quietly after the primary feed view has rendered
-  setTimeout(() => {
-    const backgroundPlugins = shell.installedPlugins.filter(
-      (p) => p.id !== primaryPlugin?.id && p.enabled
-    );
-    for (const p of backgroundPlugins) {
-      shell.mountPlugin(p).catch((err) => {
-        console.warn("Background plugin mount:", err);
-      });
-    }
-  }, 1000);
+  // Background plugins and full-page apps are loaded lazily on-demand when the user
+  // navigates to them (via dock launcher or app tile) or when an intent is dispatched.
 
   // Background fetch of remote NIP-78 workspace state from connected relays
   kernel
