@@ -358,13 +358,13 @@ export class PanoramaShell extends BaseShell {
         <header class="panorama-hero-header">
           <div class="panorama-brand-row">
             <h1 class="panorama-hero-title">omni</h1>
+            <!-- Metro Left Pane Peek Affordance -->
+            <button class="panorama-left-peek-hint" id="panorama-left-peek-hint" title="Previous pane" aria-label="Previous pane" style="opacity: 0; pointer-events: none;">
+              <span class="panorama-left-peek-arrow">${icon("arrow-left", 14)}</span>
+              <span class="panorama-left-peek-label" id="panorama-left-peek-label"></span>
+            </button>
           </div>
           <nav class="panorama-pivot-nav" id="panorama-pivot-nav"></nav>
-          <!-- Left Pane Peek Affordance -->
-          <button class="panorama-left-peek-hint" id="panorama-left-peek-hint" title="Previous pane" aria-label="Previous pane" style="opacity: 0; pointer-events: none;">
-            ${icon("arrow-left", 12)}
-            <span class="panorama-left-peek-label" id="panorama-left-peek-label"></span>
-          </button>
         </header>
 
         <!-- 2. Horizontal Panorama Canvas -->

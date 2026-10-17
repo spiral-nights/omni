@@ -96,13 +96,20 @@ body.theme-panorama,
   position: relative;
 }
 
+.panorama-brand-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
 .panorama-hero-title {
   font-size: 3.2rem;
   font-weight: 200;
   letter-spacing: -0.04em;
   line-height: 1;
   color: #ffffff;
-  margin: 0 0 12px 0;
+  margin: 0;
   text-transform: lowercase;
   will-change: transform;
   transition: transform 0.08s linear;
@@ -148,35 +155,36 @@ body.theme-panorama,
   font-weight: 400;
 }
 
-/* Left Pane Peek Hint Indicator */
+/* Left Pane Peek Hint Indicator (Pure Metro Typography) */
 .panorama-left-peek-hint {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  z-index: 20;
-  background: rgba(18, 18, 18, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid #333333;
-  color: #aaaaaa;
-  padding: 4px 10px 4px 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #666666;
   font-family: inherit;
-  font-size: 0.72rem;
+  font-size: 1.15rem;
+  font-weight: 300;
+  letter-spacing: -0.03em;
   text-transform: lowercase;
-  letter-spacing: -0.01em;
-  transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.15s ease, opacity 0.2s ease;
   user-select: none;
 }
 
 .panorama-left-peek-hint:hover {
-  background: #222222;
   color: #ffffff;
-  border-color: #555555;
-  transform: translateX(2px);
+}
+
+.panorama-left-peek-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: inherit;
 }
 
 /* 2. Panorama Horizontal Canvas */
@@ -496,17 +504,6 @@ body.theme-panorama,
   }
 }
 
-.panorama-section.has-active-app {
-  flex: 0 0 calc(100vw - 36px);
-  max-width: calc(100vw - 36px);
-}
-
-@media (min-width: 768px) {
-  .panorama-section.has-active-app {
-    flex: 0 0 620px;
-    max-width: 620px;
-  }
-}
 
 .panorama-full-app-header {
   height: 56px;
