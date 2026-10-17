@@ -172,6 +172,19 @@ async function startApp() {
     localStorage.setItem(STORAGE_KEY_NSEC, kernel.keystore.getPrivateKey());
   }
 
+  // Persist private key when switched or updated, and refresh shell profile UI
+  kernel.onKeyChange((newPrivkeyHex) => {
+    try {
+      localStorage.setItem(STORAGE_KEY_NSEC, newPrivkeyHex);
+      console.log("✦ [Omni Web] Persisted updated private key to storage.");
+    } catch (err) {
+      console.warn("Failed to persist updated private key:", err);
+    }
+    shell.updateProfileUi().catch((err) => {
+      console.warn("Could not update profile UI on key switch:", err);
+    });
+  });
+
   // Mount primary active plugin immediately so the user sees the feed in <30ms!
   const activePluginId = shell.getActivePageId() || "org.omni.plugin.feed";
   const primaryPlugin =

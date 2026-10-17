@@ -259,6 +259,46 @@ async function mountProfileFull(root: any) {
     }
   });
 
+  const refreshIdentity = async () => {
+    try {
+      let pubkey = "";
+      let npub = "";
+      let profileData: any = null;
+
+      if (typeof omni !== "undefined" && omni.nostr) {
+        pubkey = await omni.nostr.getPublicKey();
+        if (pubkey) inpPubkey.value = pubkey;
+      }
+      if (typeof omni !== "undefined" && omni.auth) {
+        npub = await omni.auth.getNpub();
+        if (npub) {
+          spanNpub.textContent = npub;
+          inpNpub.value = npub;
+        }
+      }
+      if (typeof omni !== "undefined" && omni.profile && pubkey) {
+        profileData = await omni.profile.get(pubkey);
+        if (profileData) {
+          spanName.textContent = profileData.display_name || profileData.name || "Active Identity";
+          rowDName.value = profileData.display_name || "";
+          rowName.value = profileData.name || "";
+          inpAbout.value = profileData.about || "";
+          rowPic.value = profileData.picture || "";
+          rowNip05.value = profileData.nip05 || "";
+          rowLud16.value = profileData.lud16 || "";
+        } else {
+          spanName.textContent = "Active Identity";
+          rowDName.value = "";
+          rowName.value = "";
+          inpAbout.value = "";
+          rowPic.value = "";
+          rowNip05.value = "";
+          rowLud16.value = "";
+        }
+      }
+    } catch (_) {}
+  };
+
   btnImport.addEventListener("click", async () => {
     const val = inpImport.value?.trim();
     if (!val) return alert("Please enter private key");
@@ -267,6 +307,7 @@ async function mountProfileFull(root: any) {
         await omni.auth.switchKey(val);
         alert("Account switched successfully!");
         inpImport.value = "";
+        await refreshIdentity();
       }
     } catch (err: any) {
       alert(`Failed to import key: ${err?.message || String(err)}`);
@@ -303,37 +344,7 @@ async function mountProfileFull(root: any) {
   root.appendChild(container);
 
   // Fetch identity asynchronously
-  (async () => {
-    try {
-      let pubkey = "";
-      let npub = "";
-      let profileData: any = null;
-
-      if (typeof omni !== "undefined" && omni.nostr) {
-        pubkey = await omni.nostr.getPublicKey();
-        if (pubkey) inpPubkey.value = pubkey;
-      }
-      if (typeof omni !== "undefined" && omni.auth) {
-        npub = await omni.auth.getNpub();
-        if (npub) {
-          spanNpub.textContent = npub;
-          inpNpub.value = npub;
-        }
-      }
-      if (typeof omni !== "undefined" && omni.profile && pubkey) {
-        profileData = await omni.profile.get(pubkey);
-        if (profileData) {
-          spanName.textContent = profileData.display_name || profileData.name || "Active Identity";
-          if (profileData.display_name) rowDName.value = profileData.display_name;
-          if (profileData.name) rowName.value = profileData.name;
-          if (profileData.about) inpAbout.value = profileData.about;
-          if (profileData.picture) rowPic.value = profileData.picture;
-          if (profileData.nip05) rowNip05.value = profileData.nip05;
-          if (profileData.lud16) rowLud16.value = profileData.lud16;
-        }
-      }
-    } catch (_) {}
-  })();
+  refreshIdentity();
 }
 
 let mounted = false;

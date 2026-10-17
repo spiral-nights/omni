@@ -72,12 +72,22 @@ export class OmniKernel {
     this.onHandleShare = options.onHandleShare;
   }
 
+  onKeyChange(listener: (privkeyHex: string) => void): () => void {
+    return this.keystore.onKeyChange(listener);
+  }
+
   async boot(): Promise<void> {
     await this.eventStore.init();
     try {
       const pubkey = await this.getUserPubkey();
       this.eventStore.setUserPubkey(pubkey);
     } catch {}
+    this.keystore.onKeyChange(async () => {
+      try {
+        const pubkey = await this.getUserPubkey();
+        this.eventStore.setUserPubkey(pubkey);
+      } catch {}
+    });
     await this.storageManager.init();
     this.relayPool.connect().catch(() => {});
   }

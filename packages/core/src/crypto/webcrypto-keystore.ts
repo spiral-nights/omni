@@ -85,9 +85,30 @@ export function fromBech32(str: string): { hrp: string; hex: string } {
 
 export class WebCryptoKeystore {
   private privateKeyHex: string;
+  private keyChangeListeners: Set<(privkeyHex: string) => void> = new Set();
 
   constructor(privateKeyHex?: string) {
-    this.privateKeyHex = privateKeyHex || WebCryptoKeystore.generatePrivateKey();
+    if (privateKeyHex) {
+      this.privateKeyHex = "";
+      this.setPrivateKey(privateKeyHex);
+    } else {
+      this.privateKeyHex = WebCryptoKeystore.generatePrivateKey();
+    }
+  }
+
+  onKeyChange(listener: (privkeyHex: string) => void): () => void {
+    this.keyChangeListeners.add(listener);
+    return () => this.keyChangeListeners.delete(listener);
+  }
+
+  private notifyKeyChange(): void {
+    for (const listener of this.keyChangeListeners) {
+      try {
+        listener(this.privateKeyHex);
+      } catch (err) {
+        console.warn("Error in key change listener:", err);
+      }
+    }
   }
 
   static generatePrivateKey(): string {
@@ -212,6 +233,7 @@ export class WebCryptoKeystore {
       throw new Error("Invalid private key format (expected nsec1... or 64-char hex string)");
     }
     this.privateKeyHex = hex.toLowerCase();
+    this.notifyKeyChange();
   }
 
   static serializeEvent(event: UnsignedEvent, pubkey: string): string {

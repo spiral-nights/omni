@@ -65,6 +65,21 @@ describe("WebCryptoKeystore", () => {
     expect(keystore.getPrivateKey()).toBe(privHex);
   });
 
+  it("notifies listeners on key change", async () => {
+    const keystore = new WebCryptoKeystore();
+    let notifiedKey = "";
+    const unsub = keystore.onKeyChange((newKey) => {
+      notifiedKey = newKey;
+    });
+
+    const privHex = "ba46c053d87948f076895950ef09286723dbe84e906fbb01f2aeae6fff374058";
+    keystore.setPrivateKey(privHex);
+    expect(notifiedKey).toBe(privHex);
+
+    unsub();
+    keystore.setPrivateKey("ba46c053d87948f076895950ef09286723dbe84e906fbb01f2aeae6fff374058");
+  });
+
   it("encrypts and decrypts NIP-04 direct messages", async () => {
     const alice = new WebCryptoKeystore();
     const bob = new WebCryptoKeystore();
