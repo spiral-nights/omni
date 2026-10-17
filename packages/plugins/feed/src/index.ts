@@ -276,8 +276,215 @@ const ICONS = {
   user: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
     <circle cx="12" cy="7" r="4"/>
+  </svg>`,
+  settings: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>`,
+  trash: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
   </svg>`
 };
+
+// Configurable regex filter patterns for timeline notes.
+// By default, filters out JSON payloads (beginning with { and ending with }, ignoring whitespace).
+export const DEFAULT_FILTER_PATTERNS = [
+  "^\\s*\\{[\\s\\S]*\\}\\s*$"
+];
+
+export const STORAGE_KEY_FEED_FILTERS = "omni_feed_filter_patterns";
+
+export function loadFilterPatterns(): string[] {
+  if (typeof localStorage === "undefined") {
+    return [...DEFAULT_FILTER_PATTERNS];
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_FEED_FILTERS);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((p) => String(p).trim()).filter((p) => p.length > 0);
+      }
+    }
+  } catch (_) {}
+  return [...DEFAULT_FILTER_PATTERNS];
+}
+
+export function saveFilterPatterns(patterns: string[]): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY_FEED_FILTERS, JSON.stringify(patterns));
+  } catch (_) {}
+}
+
+export function compileFilterRegex(pattern: string): RegExp | null {
+  try {
+    const trimmed = pattern.trim();
+    if (!trimmed) return null;
+    const match = trimmed.match(/^\/(.+)\/([gimsuy]*)$/);
+    if (match) {
+      return new RegExp(match[1], match[2]);
+    }
+    return new RegExp(trimmed);
+  } catch (_) {
+    return null;
+  }
+}
+
+export function isContentFiltered(content: string, patterns: string[]): boolean {
+  if (typeof content !== "string" || !content) return false;
+  for (const pat of patterns) {
+    const rx = compileFilterRegex(pat);
+    if (rx && rx.test(content)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function renderFilterSettings(container: HTMLElement, onFiltersChanged?: (patterns: string[]) => void) {
+  let patterns = loadFilterPatterns();
+
+  const wrapper = html<HTMLDivElement>`
+    <div class="feed-filter-settings" style="display: flex; flex-direction: column; gap: 14px; font-family: inherit; color: var(--text-primary, #ede8df);">
+      <div class="filter-header-row">
+        <h3 style="margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary, #ede8df);">Content Filters</h3>
+        <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: var(--text-muted, #78716c);">
+          Filter notes out of your feed using regular expressions. By default, raw JSON payloads (starting with { and ending with }, ignoring whitespace) are filtered out.
+        </p>
+      </div>
+
+      <!-- Add Pattern Box -->
+      <div class="filter-add-box" style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-subtle, #22201d); padding: 12px; border-radius: var(--radius-sm, 6px); border: 1px solid var(--border-subtle, #33312c);">
+        <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary, #9e988f);" for="input-filter-pattern">
+          Add Regex Pattern
+        </label>
+        <div style="display: flex; gap: 8px;">
+          <input id="input-filter-pattern" class="filter-pattern-input" type="text" spellcheck="false" placeholder="e.g. ^\\s*\\{[\\s\\S]*\\}\\s*$ or \\b(spam|bot)\\b" style="flex: 1; background: var(--bg-canvas, #141312); border: 1px solid var(--border-strong, #44413c); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-family: monospace; font-size: 0.82rem;" />
+          <button class="btn-add-pattern" style="background: var(--accent-primary, #d4a373); color: var(--accent-contrast, #141312); border: none; padding: 7px 14px; border-radius: var(--radius-sm, 6px); font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+            Add Filter
+          </button>
+        </div>
+        <div class="filter-status-message" style="font-size: 0.75rem; min-height: 16px; color: var(--text-muted, #78716c);"></div>
+      </div>
+
+      <!-- Active Patterns List -->
+      <div class="filter-list-section" style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong style="font-size: 0.82rem; color: var(--text-secondary, #9e988f);">Active Patterns (<span class="pattern-count">${patterns.length}</span>)</strong>
+          <button class="btn-reset-patterns" style="background: transparent; border: 1px solid var(--border-subtle, #33312c); color: var(--text-muted, #78716c); padding: 4px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.72rem; cursor: pointer;">
+            Reset to Defaults
+          </button>
+        </div>
+        <div class="filter-patterns-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+      </div>
+    </div>
+  `;
+
+  const input = wrapper.querySelector<HTMLInputElement>(".filter-pattern-input")!;
+  const btnAdd = wrapper.querySelector<HTMLButtonElement>(".btn-add-pattern")!;
+  const btnReset = wrapper.querySelector<HTMLButtonElement>(".btn-reset-patterns")!;
+  const statusMsg = wrapper.querySelector<HTMLDivElement>(".filter-status-message")!;
+  const patternCount = wrapper.querySelector<HTMLElement>(".pattern-count")!;
+  const listEl = wrapper.querySelector<HTMLDivElement>(".filter-patterns-list")!;
+
+  function setStatus(text: string, isError = false) {
+    if (!statusMsg) return;
+    statusMsg.textContent = text;
+    statusMsg.style.color = isError ? "var(--accent-danger, #e11d48)" : "var(--accent-primary, #d4a373)";
+    if (text && !isError) {
+      setTimeout(() => {
+        if (statusMsg.textContent === text) {
+          statusMsg.textContent = "";
+        }
+      }, 3000);
+    }
+  }
+
+  function renderPatterns() {
+    listEl.innerHTML = "";
+    patternCount.textContent = String(patterns.length);
+
+    if (patterns.length === 0) {
+      const emptyEl = html<HTMLDivElement>`
+        <div class="empty-patterns" style="font-size: 0.78rem; color: var(--text-muted, #78716c); font-style: italic; padding: 8px 0;">
+          No active filters. All notes will be displayed in the feed.
+        </div>
+      `;
+      listEl.appendChild(emptyEl);
+      return;
+    }
+
+    for (let i = 0; i < patterns.length; i++) {
+      const pat = patterns[i];
+      const isJsonDefault = pat === "^\\s*\\{[\\s\\S]*\\}\\s*$";
+      const row = html<HTMLDivElement>`
+        <div class="pattern-item" data-index="${i}" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #2a2824); padding: 8px 12px; border-radius: var(--radius-sm, 6px);">
+          <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; min-width: 0;">
+            <code class="feed-pattern-code" style="font-family: monospace; font-size: 0.82rem; color: var(--accent-primary, #d4a373); word-break: break-all;">${escapeHtml(pat)}</code>
+            ${isJsonDefault ? `<span class="pattern-badge-default" style="font-size: 0.7rem; color: var(--text-muted, #78716c); white-space: nowrap;">(JSON payloads default)</span>` : ""}
+          </div>
+          <button class="btn-remove-pattern" data-index="${i}" title="Remove pattern" aria-label="Remove pattern" style="background: transparent; border: none; color: var(--text-muted, #78716c); cursor: pointer; padding: 4px; display: flex; align-items: center;">
+            ${ICONS.trash}
+          </button>
+        </div>
+      `;
+
+      row.querySelector<HTMLButtonElement>(".btn-remove-pattern")?.addEventListener("click", () => {
+        patterns.splice(i, 1);
+        saveFilterPatterns(patterns);
+        renderPatterns();
+        setStatus("Filter pattern removed.");
+        onFiltersChanged?.(patterns);
+      });
+
+      listEl.appendChild(row);
+    }
+  }
+
+  function handleAddPattern() {
+    const rawVal = input.value.trim();
+    if (!rawVal) {
+      setStatus("Please enter a regular expression.", true);
+      return;
+    }
+
+    const compiled = compileFilterRegex(rawVal);
+    if (!compiled) {
+      setStatus("Invalid regular expression syntax.", true);
+      return;
+    }
+
+    if (patterns.includes(rawVal)) {
+      setStatus("This filter pattern already exists.", true);
+      return;
+    }
+
+    patterns.push(rawVal);
+    saveFilterPatterns(patterns);
+    input.value = "";
+    renderPatterns();
+    setStatus("Filter pattern added successfully.");
+    onFiltersChanged?.(patterns);
+  }
+
+  btnAdd.addEventListener("click", handleAddPattern);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleAddPattern();
+  });
+
+  btnReset.addEventListener("click", () => {
+    patterns = [...DEFAULT_FILTER_PATTERNS];
+    saveFilterPatterns(patterns);
+    renderPatterns();
+    setStatus("Reset to default filters.");
+    onFiltersChanged?.(patterns);
+  });
+
+  renderPatterns();
+  container.appendChild(wrapper);
+}
 
 function mountFeed(root: any) {
   const container = html<HTMLDivElement>`
@@ -289,6 +496,10 @@ function mountFeed(root: any) {
           <button class="btn-search-feed" title="Search Notes" aria-label="Search Notes">
             ${ICONS.search}
             <span>Search</span>
+          </button>
+          <button class="btn-settings-feed" title="Feed Settings" aria-label="Feed Settings">
+            ${ICONS.settings}
+            <span>Settings</span>
           </button>
           <button class="btn-refresh-feed" title="Refresh Feed">
             ${ICONS.refresh}
@@ -341,6 +552,18 @@ function mountFeed(root: any) {
         <div class="feed-search-chips"></div>
         <div class="feed-search-results"></div>
       </div>
+
+      <!-- Settings Page (hidden until activated from the header) -->
+      <div class="feed-settings-page" style="display: none;">
+        <div class="feed-top-header">
+          <button class="btn-settings-back" title="Back to Feed">
+            ${ICONS.back}
+            <span>Back</span>
+          </button>
+          <h2 class="feed-title">Feed Settings</h2>
+        </div>
+        <div class="feed-settings-content" style="padding: 16px 20px;"></div>
+      </div>
     </div>
   `;
 
@@ -360,6 +583,11 @@ function mountFeed(root: any) {
   const searchChips = container.querySelector<HTMLDivElement>(".feed-search-chips")!;
   const searchResults = container.querySelector<HTMLDivElement>(".feed-search-results")!;
 
+  const settingsPage = container.querySelector<HTMLDivElement>(".feed-settings-page")!;
+  const btnSettingsBack = container.querySelector<HTMLButtonElement>(".btn-settings-back")!;
+  const btnSettingsOpen = container.querySelector<HTMLButtonElement>(".btn-settings-feed")!;
+  const settingsContent = container.querySelector<HTMLDivElement>(".feed-settings-content")!;
+
   root.appendChild(container);
 
   // Initialize composer avatar with user pubkey if available
@@ -377,6 +605,8 @@ function mountFeed(root: any) {
 
   const renderedIds = new Set<string>();
   const timelineNotes = new Map<string, any>();
+  const allKnownNotes = new Map<string, any>();
+  let filterPatterns = loadFilterPatterns();
   let oldestTimestamp = Infinity;
   let latestTimestamp = 0;
   let isLoadingOlder = false;
@@ -409,7 +639,9 @@ function mountFeed(root: any) {
   }, 3000);
 
   function renderNote(event: any, prepend = false) {
+    if (!event || !event.id) return;
     if (renderedIds.has(event.id)) return;
+    if (isContentFiltered(event.content || "", filterPatterns)) return;
     renderedIds.add(event.id);
     timelineNotes.set(event.id, event);
 
@@ -588,8 +820,32 @@ function mountFeed(root: any) {
   }
 
   function handleIncomingEvent(event: any, prepend = false) {
+    if (!event || !event.id) return;
+    allKnownNotes.set(event.id, event);
     if (renderedIds.has(event.id)) return;
+    if (isContentFiltered(event.content || "", filterPatterns)) return;
     renderNote(event, prepend);
+  }
+
+  function reapplyFilters() {
+    filterPatterns = loadFilterPatterns();
+    renderedIds.clear();
+    timelineNotes.clear();
+    notesList.innerHTML = "";
+    oldestTimestamp = Infinity;
+    latestTimestamp = 0;
+
+    const remaining = Array.from(allKnownNotes.values())
+      .filter((ev) => !isContentFiltered(ev.content || "", filterPatterns))
+      .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+
+    if (remaining.length === 0) {
+      showEmptyState();
+    } else {
+      for (const ev of remaining) {
+        renderNote(ev, false);
+      }
+    }
   }
 
   // Refresh Feed
@@ -608,7 +864,7 @@ function mountFeed(root: any) {
 
   btnRefresh.addEventListener("click", refreshFeed);
 
-  // ===== Search Page =====
+  // ===== Search & Settings Pages =====
   const feedSections: HTMLElement[] = [
     container.querySelector<HTMLElement>(":scope > .feed-top-header") as HTMLElement,
     container.querySelector<HTMLElement>(".feed-composer") as HTMLElement,
@@ -623,14 +879,24 @@ function mountFeed(root: any) {
     for (const el of feedSections) {
       if (el) el.style.display = "none";
     }
+    settingsPage.style.display = "none";
     searchPage.style.display = "block";
     try {
       searchInput.focus();
     } catch (_) {}
   }
 
+  function showSettingsPage() {
+    for (const el of feedSections) {
+      if (el) el.style.display = "none";
+    }
+    searchPage.style.display = "none";
+    settingsPage.style.display = "block";
+  }
+
   function showFeedPage() {
     searchPage.style.display = "none";
+    settingsPage.style.display = "none";
     for (const el of feedSections) {
       if (el) el.style.display = "";
     }
@@ -638,6 +904,17 @@ function mountFeed(root: any) {
 
   btnSearchOpen.addEventListener("click", showSearchPage);
   btnSearchBack.addEventListener("click", showFeedPage);
+
+  btnSettingsOpen.addEventListener("click", showSettingsPage);
+  btnSettingsBack.addEventListener("click", () => {
+    showFeedPage();
+    reapplyFilters();
+  });
+
+  renderFilterSettings(settingsContent, (newPatterns) => {
+    filterPatterns = newPatterns;
+    reapplyFilters();
+  });
 
   function setSearchStatus(text: string, isloading = false) {
     searchResults.querySelectorAll(".search-status").forEach((el) => el.remove());
@@ -1207,11 +1484,13 @@ function mountFeed(root: any) {
 
   return {
     showSearchPage,
-    showFeedPage
+    showSettingsPage,
+    showFeedPage,
+    reapplyFilters
   };
 }
 
-function isSearchRoute(): boolean {
+export function isSearchRoute(): boolean {
   if (typeof window === "undefined") return false;
   try {
     const search = window.location.search || "";
@@ -1222,12 +1501,39 @@ function isSearchRoute(): boolean {
   return false;
 }
 
+export function isSettingsRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const search = window.location.search || "";
+    if (new URLSearchParams(search).get("view") === "settings") return true;
+    if (window.location.hash.includes("settings")) return true;
+    if ((window as any).__OMNI_ROUTE__?.includes("settings")) return true;
+  } catch (_) {}
+  return false;
+}
+
+export function mountFeedSettings(root: any) {
+  const container = html<HTMLDivElement>`
+    <div class="feed-standalone-settings" style="padding: 16px 20px; font-family: inherit; color: var(--text-primary, #ede8df);">
+      <div class="feed-settings-content"></div>
+    </div>
+  `;
+  const content = container.querySelector<HTMLDivElement>(".feed-settings-content")!;
+  renderFilterSettings(content);
+  root.appendChild(container);
+  return container;
+}
+
 function init() {
   if (typeof document !== "undefined") {
     const root = document.body;
-    const feed = mountFeed(root);
-    if (isSearchRoute()) {
-      feed.showSearchPage();
+    if (isSettingsRoute()) {
+      mountFeedSettings(root);
+    } else {
+      const feed = mountFeed(root);
+      if (isSearchRoute()) {
+        feed.showSearchPage();
+      }
     }
   }
 }

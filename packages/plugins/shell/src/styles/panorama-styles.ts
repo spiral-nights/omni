@@ -641,7 +641,8 @@ body.theme-panorama,
   gap: 6px;
 }
 
-.btn-search-feed {
+.btn-search-feed,
+.btn-settings-feed {
   background: #111111;
   border: 1px solid #222222;
   color: #aaaaaa;
@@ -656,13 +657,15 @@ body.theme-panorama,
   transition: all 0.15s ease;
 }
 
-.btn-search-feed:hover {
+.btn-search-feed:hover,
+.btn-settings-feed:hover {
   color: #ffffff;
   border-color: #00a4ef;
   background: #161616;
 }
 
-.btn-search-back {
+.btn-search-back,
+.btn-settings-back {
   background: transparent;
   border: none;
   color: #aaaaaa;
@@ -676,7 +679,8 @@ body.theme-panorama,
   transition: color 0.15s ease;
 }
 
-.btn-search-back:hover {
+.btn-search-back:hover,
+.btn-settings-back:hover {
   color: #ffffff;
 }
 

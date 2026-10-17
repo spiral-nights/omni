@@ -27,6 +27,7 @@ const initialPlugins: InstalledPluginEntry[] = [
     views: [
       { id: "main", title: "Feed", path: "" },
       { id: "search", title: "Search", path: "?view=search" },
+      { id: "settings", title: "Feed Settings", path: "?view=settings" },
       { id: "widget", title: "Feed Widget", path: "?view=widget" }
     ],
     handledIntents: ["create_note", "view_note", "share"],
