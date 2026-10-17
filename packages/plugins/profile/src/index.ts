@@ -402,6 +402,10 @@ async function mountProfileFull(root: any) {
         }
       }
 
+      if (!npub && pubkey) {
+        spanNpub.textContent = `${pubkey.slice(0, 10)}...${pubkey.slice(-4)}`;
+      }
+
       if (typeof omni !== "undefined" && omni.profile && pubkey) {
         profileData = await (omni.profile.get as any)(pubkey, { syncRemote: forceRemote });
         if (profileData) {
@@ -424,16 +428,24 @@ async function mountProfileFull(root: any) {
           updateLiveAvatar("");
         }
       }
-    } catch (_) {}
+      return profileData;
+    } catch (_) {
+      return null;
+    }
   };
 
   btnSync.addEventListener("click", async () => {
     btnSync.disabled = true;
     btnSync.innerHTML = `${ICONS.refresh} Syncing...`;
     try {
-      await refreshIdentity(true);
-      btnSync.innerHTML = `${ICONS.check} Synced!`;
-      showToast("Profile metadata synchronized from relays!");
+      const profile = await refreshIdentity(true);
+      if (profile) {
+        btnSync.innerHTML = `${ICONS.check} Synced!`;
+        showToast("Profile metadata synchronized from relays!");
+      } else {
+        btnSync.innerHTML = `${ICONS.refresh} No update`;
+        showToast("No new profile metadata found on relays");
+      }
       setTimeout(() => {
         btnSync.disabled = false;
         btnSync.innerHTML = `${ICONS.refresh} Sync from Relays`;
@@ -451,15 +463,43 @@ async function mountProfileFull(root: any) {
       showToast("Please enter a private key (nsec or hex)", true);
       return;
     }
+    btnImport.disabled = true;
+    const origText = btnImport.textContent;
+    btnImport.textContent = "Switching & Fetching Profile...";
     try {
       if (typeof omni !== "undefined" && omni.auth) {
-        await omni.auth.switchKey(val);
-        showToast("Account switched successfully!");
+        const switchRes = await omni.auth.switchKey(val);
+        if (switchRes?.pubkey) {
+          inpPubkey.value = switchRes.pubkey;
+        }
+        if (switchRes?.npub) {
+          inpNpub.value = switchRes.npub;
+          spanNpub.textContent = switchRes.npub;
+        }
         inpImport.value = "";
-        await refreshIdentity();
+
+        // Reset private key reveal state for safety
+        if (nsecBox) nsecBox.style.display = "none";
+        if (inpNsec) inpNsec.value = "";
+        if (btnReveal) btnReveal.textContent = "Reveal Private Key";
+        if (nsecConfirmBox) nsecConfirmBox.style.display = "none";
+
+        // Query relays for profile metadata of the switched identity
+        const profile = await refreshIdentity(true);
+        if (profile) {
+          showToast("Switched identity and synced profile!");
+        } else {
+          showToast("Switched identity! (No remote profile found on relays)");
+        }
+
+        // Switch to the Profile Info tab so the user immediately sees their profile
+        btnTabProfile.click();
       }
     } catch (err: any) {
       showToast(`Failed to import key: ${err?.message || String(err)}`, true);
+    } finally {
+      btnImport.disabled = false;
+      btnImport.textContent = origText || "Import & Switch";
     }
   });
 
@@ -517,3 +557,5 @@ if (typeof document !== "undefined") {
     init();
   }
 }
+
+export { mountProfile };

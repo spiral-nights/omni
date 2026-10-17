@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import omniRuntimeScript from "../src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
 import { WebCryptoKeystore, LocalEventStore, CapabilityStore, AclEngine, OmniKernel } from "../src/index.js";
@@ -291,5 +291,51 @@ describe("OmniKernel Profile Management", () => {
     expect(loadedProfile?.display_name).toBe("Alice in Wonderland");
     expect(loadedProfile?.nip05).toBe("alice@example.com");
     expect(loadedProfile?.lud16).toBe("alice@getalby.com");
+  });
+
+  it("does not abort on first EOSE when multiple relays are queried for remote profile", async () => {
+    const kernel = new OmniKernel({
+      runtimeScript: omniRuntimeScript,
+      bootstrapRelays: ["wss://relay1.com", "wss://relay2.com"]
+    });
+    await kernel.boot();
+
+    // Mock two connected relays in pool
+    const mockWs1: any = { readyState: 1, send: vi.fn() };
+    const mockWs2: any = { readyState: 1, send: vi.fn() };
+    (kernel.relayPool as any).relays.set("wss://relay1.com", mockWs1);
+    (kernel.relayPool as any).relays.set("wss://relay2.com", mockWs2);
+
+    const testPubkey = "d020d220a06692cdbeba6858e8ea47183354cb7b7ea08d277dd8354c0e66d3a4";
+    const profilePromise = kernel.fetchRemoteProfile(testPubkey, 2000);
+
+    const subId = (kernel.relayPool as any).subscriptions.keys().next().value;
+
+    // Relay 1 sends EOSE with no events
+    (kernel.relayPool as any).handleRelayMessage(JSON.stringify(["EOSE", subId]), "wss://relay1.com");
+
+    // Profile promise should NOT have resolved null yet
+    let resolvedEarly = false;
+    profilePromise.then(() => { resolvedEarly = true; });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(resolvedEarly).toBe(false);
+
+    // Relay 2 sends Kind 0 event and EOSE
+    const kind0Event = {
+      id: "ev_kind0",
+      pubkey: testPubkey,
+      created_at: 1700000000,
+      kind: 0,
+      tags: [],
+      content: JSON.stringify({ name: "bob", display_name: "Bob Nostr" }),
+      sig: "sig_mock"
+    };
+    (kernel.relayPool as any).handleRelayMessage(JSON.stringify(["EVENT", subId, kind0Event]), "wss://relay2.com");
+    (kernel.relayPool as any).handleRelayMessage(JSON.stringify(["EOSE", subId]), "wss://relay2.com");
+
+    const result = await profilePromise;
+    expect(result).not.toBeNull();
+    expect(result?.metadata?.name).toBe("bob");
+    expect(result?.metadata?.display_name).toBe("Bob Nostr");
   });
 });

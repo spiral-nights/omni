@@ -532,10 +532,14 @@ export class OmniKernel {
     return new Promise((resolve) => {
       let resolved = false;
       let latestEvent: NostrEvent | null = null;
+      let debounceTimer: any = null;
+      const eosedRelays = new Set<string>();
 
       const finish = async () => {
         if (resolved) return;
         resolved = true;
+        if (debounceTimer) clearTimeout(debounceTimer);
+        clearTimeout(timer);
         unsubscribe();
         if (latestEvent) {
           await this.eventStore.saveEvent(latestEvent);
@@ -565,10 +569,20 @@ export class OmniKernel {
           if (!latestEvent || ev.created_at > latestEvent.created_at) {
             latestEvent = ev;
           }
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            finish();
+          }, 300);
         },
-        () => {
-          clearTimeout(timer);
-          finish();
+        (relayUrl) => {
+          if (relayUrl) eosedRelays.add(relayUrl);
+          const connectedCount = this.relayPool.getConnectedRelayCount();
+          const targetCount = connectedCount > 0 ? connectedCount : 1;
+          if (eosedRelays.size >= targetCount) {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            clearTimeout(timer);
+            finish();
+          }
         }
       );
     });
@@ -668,10 +682,14 @@ export class OmniKernel {
     return new Promise((resolve) => {
       let resolved = false;
       let latestEvent: NostrEvent | null = null;
+      let debounceTimer: any = null;
+      const eosedRelays = new Set<string>();
 
       const finish = async () => {
         if (resolved) return;
         resolved = true;
+        if (debounceTimer) clearTimeout(debounceTimer);
+        clearTimeout(timer);
         unsubscribe();
         if (latestEvent) {
           await this.eventStore.saveEvent(latestEvent);
@@ -697,10 +715,20 @@ export class OmniKernel {
           if (!latestEvent || ev.created_at > latestEvent.created_at) {
             latestEvent = ev;
           }
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            finish();
+          }, 300);
         },
-        () => {
-          clearTimeout(timer);
-          finish();
+        (relayUrl) => {
+          if (relayUrl) eosedRelays.add(relayUrl);
+          const connectedCount = this.relayPool.getConnectedRelayCount();
+          const targetCount = connectedCount > 0 ? connectedCount : 1;
+          if (eosedRelays.size >= targetCount) {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            clearTimeout(timer);
+            finish();
+          }
         }
       );
     });
