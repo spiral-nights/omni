@@ -1490,24 +1490,50 @@ function mountFeed(root: any) {
   };
 }
 
-export function isSearchRoute(): boolean {
-  if (typeof window === "undefined") return false;
+export function getAppRoute(): string {
+  if (typeof window === "undefined") return "";
   try {
-    const search = window.location.search || "";
-    if (new URLSearchParams(search).get("view") === "search") return true;
-    if (window.location.hash.includes("view=search")) return true;
-    if ((window as any).__OMNI_ROUTE__?.includes("view=search")) return true;
+    if (window.location?.search && window.location.search !== "") {
+      return window.location.search;
+    }
+    if (window.location?.hash && window.location.hash !== "") {
+      return window.location.hash;
+    }
+    if ((window as any).__OMNI_ROUTE__) {
+      return String((window as any).__OMNI_ROUTE__);
+    }
+    if ((window as any).__OMNI_SEARCH__) {
+      return String((window as any).__OMNI_SEARCH__);
+    }
+    if ((window as any).__OMNI_VIEW__) {
+      return `?view=${(window as any).__OMNI_VIEW__}`;
+    }
+  } catch (_) {}
+  return "";
+}
+
+export function isSearchRoute(): boolean {
+  try {
+    const route = getAppRoute();
+    if (!route) return false;
+    const qIdx = route.indexOf("?");
+    const query = qIdx !== -1 ? route.slice(qIdx) : route;
+    const params = new URLSearchParams(query);
+    if (params.get("view") === "search") return true;
+    if (route.includes("view=search") || route === "search") return true;
   } catch (_) {}
   return false;
 }
 
 export function isSettingsRoute(): boolean {
-  if (typeof window === "undefined") return false;
   try {
-    const search = window.location.search || "";
-    if (new URLSearchParams(search).get("view") === "settings") return true;
-    if (window.location.hash.includes("settings")) return true;
-    if ((window as any).__OMNI_ROUTE__?.includes("settings")) return true;
+    const route = getAppRoute();
+    if (!route) return false;
+    const qIdx = route.indexOf("?");
+    const query = qIdx !== -1 ? route.slice(qIdx) : route;
+    const params = new URLSearchParams(query);
+    if (params.get("view") === "settings") return true;
+    if (route.includes("view=settings") || route.includes("settings")) return true;
   } catch (_) {}
   return false;
 }

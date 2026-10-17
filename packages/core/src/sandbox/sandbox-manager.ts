@@ -290,15 +290,33 @@ export class SandboxInstance {
         if (routeStr.startsWith("?")) __search = routeStr;
         else if (routeStr.startsWith("#")) __hash = routeStr;
       }
+      try {
+        window.__OMNI_SEARCH__ = __search;
+        window.__OMNI_HASH__ = __hash;
+      } catch (_) {}
     }
+
+    try {
+      window.__OMNI_ROUTE__ = ${JSON.stringify(routeVal)};
+      window.__OMNI_VIEW__ = ${JSON.stringify(viewIdVal)};
+      if (window.__OMNI_ROUTE__) {
+        __parseRoute(window.__OMNI_ROUTE__);
+      }
+    } catch (_) {}
 
     try {
       window.__omniPendingInit = null;
       window.addEventListener("message", function(e) {
         if (e.data && e.data.type === "omni:init") {
           window.__omniPendingInit = e;
-          if (e.data.payload && e.data.payload.route) {
-            __parseRoute(e.data.payload.route);
+          if (e.data.payload) {
+            if (e.data.payload.route) {
+              window.__OMNI_ROUTE__ = e.data.payload.route;
+              __parseRoute(e.data.payload.route);
+            }
+            if (e.data.payload.viewId) {
+              window.__OMNI_VIEW__ = e.data.payload.viewId;
+            }
             try {
               window.dispatchEvent(new HashChangeEvent("hashchange"));
             } catch (_) {}
@@ -314,24 +332,37 @@ export class SandboxInstance {
     } catch (_) {}
 
     try {
-      var __initialRoute = ${JSON.stringify(routeVal)};
-      if (__initialRoute) {
-        __parseRoute(__initialRoute);
-      }
       try {
         Object.defineProperty(window.location, "search", {
-          get: function() { return __search; },
+          get: function() { return __search || window.__OMNI_SEARCH__ || ""; },
           configurable: true
         });
         Object.defineProperty(window.location, "hash", {
-          get: function() { return __hash; },
+          get: function() { return __hash || window.__OMNI_HASH__ || ""; },
           configurable: true
         });
         Object.defineProperty(window.location, "href", {
-          get: function() { return "about:srcdoc" + __search + __hash; },
+          get: function() { return "about:srcdoc" + (__search || window.__OMNI_SEARCH__ || "") + (__hash || window.__OMNI_HASH__ || ""); },
           configurable: true
         });
-      } catch (_) {}
+      } catch (_) {
+        try {
+          if (window.Location && window.Location.prototype) {
+            Object.defineProperty(window.Location.prototype, "search", {
+              get: function() { return __search || window.__OMNI_SEARCH__ || ""; },
+              configurable: true
+            });
+            Object.defineProperty(window.Location.prototype, "hash", {
+              get: function() { return __hash || window.__OMNI_HASH__ || ""; },
+              configurable: true
+            });
+            Object.defineProperty(window.Location.prototype, "href", {
+              get: function() { return "about:srcdoc" + (__search || window.__OMNI_SEARCH__ || "") + (__hash || window.__OMNI_HASH__ || ""); },
+              configurable: true
+            });
+          }
+        } catch (_) {}
+      }
     } catch (_) {}
     `;
 

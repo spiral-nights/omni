@@ -271,7 +271,7 @@ describe("Feed Regex Content Filtering", () => {
       expect(feed().querySelector<HTMLElement>(".notes-list")!.style.display).toBe("");
     });
 
-    it("mounts standalone settings view when route has ?view=settings", async () => {
+    it("mounts standalone settings view when route has ?view=settings and does not mount the feed", async () => {
       (window as any).__OMNI_ROUTE__ = "?view=settings";
       new Function(feedCode)();
       await flush();
@@ -279,6 +279,21 @@ describe("Feed Regex Content Filtering", () => {
       const standalone = document.body.querySelector(".feed-standalone-settings");
       expect(standalone).not.toBeNull();
       expect(standalone!.querySelector(".feed-filter-settings")).not.toBeNull();
+      // Verify main feed is NOT mounted in the settings view
+      expect(document.body.querySelector(".feed-container")).toBeNull();
+      expect(document.body.querySelector(".feed-composer")).toBeNull();
+    });
+
+    it("mounts standalone settings view when __OMNI_VIEW__ is settings", async () => {
+      (window as any).__OMNI_ROUTE__ = "";
+      (window as any).__OMNI_VIEW__ = "settings";
+      new Function(feedCode)();
+      await flush();
+
+      const standalone = document.body.querySelector(".feed-standalone-settings");
+      expect(standalone).not.toBeNull();
+      expect(standalone!.querySelector(".feed-filter-settings")).not.toBeNull();
+      expect(document.body.querySelector(".feed-container")).toBeNull();
     });
   });
 });

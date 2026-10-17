@@ -67,6 +67,14 @@
     const data = event.data;
     if (data && data.type === "omni:init") {
       sessionInfo = data.payload;
+      if (sessionInfo) {
+        if (sessionInfo.route) {
+          window.__OMNI_ROUTE__ = sessionInfo.route;
+        }
+        if (sessionInfo.viewId) {
+          window.__OMNI_VIEW__ = sessionInfo.viewId;
+        }
+      }
       portRemoteDom = event.ports ? event.ports[0] : null;
       portKernelRpc = event.ports ? event.ports[1] : null;
 

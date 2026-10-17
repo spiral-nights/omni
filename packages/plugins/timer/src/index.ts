@@ -178,6 +178,7 @@ function isSettingsRoute(): boolean {
     if (new URLSearchParams(search).get("view") === "settings") return true;
     if (window.location.hash.includes("settings")) return true;
     if ((window as any).__OMNI_ROUTE__?.includes("settings")) return true;
+    if ((window as any).__OMNI_VIEW__ === "settings") return true;
   } catch (_) {}
   return false;
 }
