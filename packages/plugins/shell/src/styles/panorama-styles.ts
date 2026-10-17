@@ -272,12 +272,6 @@ body.theme-panorama,
   text-transform: lowercase;
 }
 
-.panorama-badge {
-  font-size: 0.72rem;
-  color: #888888;
-  font-weight: 400;
-}
-
 /* 3. Live Accent Tiles (Windows Phone Tile Grid) */
 .panorama-tiles-grid {
   display: grid;

@@ -129,7 +129,6 @@ export class PanoramaShell extends BaseShell {
           <div class="panorama-section-content">
             <div class="panorama-section-title-bar">
               <h2>${(app.name || meta.name).toLowerCase()}</h2>
-              <span class="panorama-badge">application</span>
             </div>
             <div id="panorama-slot-main-${safeId}" class="omni-slot panorama-main-viewport-slot" style="flex: 1; width: 100%; min-height: 100%; overflow: visible;"></div>
           </div>
@@ -375,7 +374,6 @@ export class PanoramaShell extends BaseShell {
             <div class="panorama-section-content" id="panorama-apps-grid-view">
               <div class="panorama-section-title-bar">
                 <h2>applications</h2>
-                <span class="panorama-badge" id="panorama-apps-count">0 tiles</span>
               </div>
               <div class="panorama-tiles-grid" id="panorama-tiles-grid"></div>
             </div>
@@ -389,7 +387,6 @@ export class PanoramaShell extends BaseShell {
                   </button>
                   <h2 id="panorama-overlay-title" style="margin: 0; font-size: 1.15rem; font-weight: 400; color: #fff;">Application</h2>
                 </div>
-                <span class="panorama-badge">application</span>
               </div>
               <div class="panorama-full-app-container" id="panorama-full-app-container" style="flex: 1; width: 100%; min-height: 100%; overflow: visible;"></div>
             </div>
@@ -400,7 +397,6 @@ export class PanoramaShell extends BaseShell {
             <div class="panorama-section-content">
               <div class="panorama-section-title-bar">
                 <h2>workspace widgets</h2>
-                <span class="panorama-badge">companion cards</span>
               </div>
               <div class="panorama-widgets-grid" id="panorama-widgets-slot"></div>
             </div>
@@ -411,7 +407,6 @@ export class PanoramaShell extends BaseShell {
             <div class="panorama-section-content">
               <div class="panorama-section-title-bar">
                 <h2>system & control</h2>
-                <span class="panorama-badge" id="panorama-sync-status">NIP-78 Synced</span>
               </div>
 
               <!-- Identity Card -->
@@ -528,12 +523,10 @@ export class PanoramaShell extends BaseShell {
 
   public renderAppsTiles(): void {
     const grid = this.root.querySelector("#panorama-tiles-grid") || document.getElementById("panorama-tiles-grid");
-    const countEl = this.root.querySelector("#panorama-apps-count") || document.getElementById("panorama-apps-count");
     if (!grid) return;
 
     grid.innerHTML = "";
     const apps = this.installedPlugins.filter((p) => p.enabled !== false);
-    if (countEl) countEl.textContent = `${apps.length} app${apps.length === 1 ? "" : "s"}`;
 
     // Color palette inspired by Windows Phone signature accent colors
     const tileColors = [
