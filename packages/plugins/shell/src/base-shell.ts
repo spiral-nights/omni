@@ -708,33 +708,57 @@ export abstract class BaseShell implements OmniShellHost {
         }).catch(() => {});
       }
 
-      const avatarEl = document.getElementById("header-profile-avatar") || document.getElementById("panorama-header-avatar");
-      const nameEl = document.getElementById("header-profile-name") || document.getElementById("panorama-header-name");
-      const npubEl = document.getElementById("header-profile-npub") || document.getElementById("panorama-header-npub");
+      const displayName = profile?.display_name || profile?.name || shortNpub;
 
-      if (avatarEl) {
+      // Update Classic header profile elements
+      const classicAvatar = document.getElementById("header-profile-avatar");
+      const classicName = document.getElementById("header-profile-name");
+      const classicNpub = document.getElementById("header-profile-npub");
+      if (classicAvatar) {
         if (profile?.picture) {
-          avatarEl.innerHTML = `<img src="${profile.picture}" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--omni-radius-full, 50%);" alt="Avatar">`;
+          classicAvatar.innerHTML = `<img src="${profile.picture}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
         } else {
-          avatarEl.innerHTML = ICONS.profile;
+          classicAvatar.innerHTML = ICONS.user || ICONS.profile;
         }
       }
-      if (nameEl) {
-        nameEl.textContent = profile?.display_name || profile?.name || shortNpub;
+      if (classicName) classicName.textContent = displayName;
+      if (classicNpub) classicNpub.textContent = shortNpub;
+
+      // Update Panorama header profile elements
+      const panoAvatar = document.getElementById("panorama-header-avatar");
+      const panoName = document.getElementById("panorama-header-name");
+      const panoNpub = document.getElementById("panorama-header-npub");
+      if (panoAvatar) {
+        if (profile?.picture) {
+          panoAvatar.innerHTML = `<img src="${profile.picture}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0px;" alt="Avatar">`;
+        } else {
+          panoAvatar.innerHTML = ICONS.user || ICONS.profile;
+        }
       }
-      if (npubEl) {
-        npubEl.textContent = shortNpub;
+      if (panoName) panoName.textContent = displayName;
+      if (panoNpub) panoNpub.textContent = shortNpub;
+
+      // Update Panorama system card elements
+      const panoSysAvatar = document.getElementById("panorama-avatar");
+      const panoSysName = document.getElementById("panorama-display-name");
+      const panoSysNpub = document.getElementById("panorama-npub");
+      if (panoSysAvatar) {
+        if (profile?.picture) {
+          panoSysAvatar.innerHTML = `<img src="${profile.picture}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0px;" alt="Avatar">`;
+        } else {
+          panoSysAvatar.innerHTML = ICONS.user || ICONS.profile;
+        }
       }
+      if (panoSysName) panoSysName.textContent = displayName;
+      if (panoSysNpub) panoSysNpub.textContent = shortNpub;
+
       const userBadge = document.getElementById("user-badge");
       if (userBadge) {
-        if (profile) {
-          const displayName = profile.display_name || profile.name || shortNpub;
-          userBadge.textContent = displayName;
-          userBadge.title = `${displayName}\n${npub}\nClick to manage profile`;
-        } else {
-          userBadge.textContent = shortNpub;
-          userBadge.title = `Your Nostr Identity: ${npub}\nClick to manage profile`;
-        }
+        userBadge.title = `${displayName}\n${npub}\nClick to manage profile`;
+      }
+      const panoUserBtn = document.getElementById("panorama-header-user-btn");
+      if (panoUserBtn) {
+        panoUserBtn.title = `${displayName}\n${npub}\nClick to manage profile`;
       }
     } catch (_) {}
   }

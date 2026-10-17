@@ -355,12 +355,21 @@ export class PanoramaShell extends BaseShell {
         </style>
         <!-- 1. Panorama Hero Header -->
         <header class="panorama-hero-header">
-          <div class="panorama-brand-row">
-            <h1 class="panorama-hero-title">omni</h1>
-            <!-- Metro Left Pane Peek Affordance -->
-            <button class="panorama-left-peek-hint" id="panorama-left-peek-hint" title="Previous pane" aria-label="Previous pane" style="opacity: 0; pointer-events: none;">
-              <span class="panorama-left-peek-arrow">${icon("arrow-left", 14)}</span>
-              <span class="panorama-left-peek-label" id="panorama-left-peek-label"></span>
+          <div class="panorama-brand-row" style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <h1 class="panorama-hero-title">omni</h1>
+              <!-- Metro Left Pane Peek Affordance -->
+              <button class="panorama-left-peek-hint" id="panorama-left-peek-hint" title="Previous pane" aria-label="Previous pane" style="opacity: 0; pointer-events: none;">
+                <span class="panorama-left-peek-arrow">${icon("arrow-left", 14)}</span>
+                <span class="panorama-left-peek-label" id="panorama-left-peek-label"></span>
+              </button>
+            </div>
+            <!-- Metro User Profile Tile -->
+            <button class="panorama-header-user-btn" id="panorama-header-user-btn" title="Manage Profile & Keys" style="display: flex; align-items: center; gap: 8px; background: transparent; border: none; cursor: pointer; padding: 4px; color: #fff;">
+              <div class="panorama-header-avatar" id="panorama-header-avatar" style="width: 26px; height: 26px; border-radius: 0px; background: #222; border: 1px solid #444; display: flex; align-items: center; justify-content: center; overflow: hidden; color: #00a4ef; flex-shrink: 0;">
+                ${icon("user", 14)}
+              </div>
+              <span class="panorama-header-name" id="panorama-header-name" style="font-size: 0.82rem; font-weight: 400; color: #ccc; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Identity</span>
             </button>
           </div>
           <nav class="panorama-pivot-nav" id="panorama-pivot-nav"></nav>
@@ -1536,6 +1545,19 @@ export class PanoramaShell extends BaseShell {
         this.showPivot(prevPivot);
       }
     });
+
+    // Profile / Identity quick navigation
+    const openProfile = () => {
+      const profilePlugin = this.installedPlugins.find((p) => p.id === "org.omni.plugin.profile");
+      if (profilePlugin && profilePlugin.enabled) {
+        this.showPage("org.omni.plugin.profile");
+      } else {
+        this.showPivot("system");
+      }
+    };
+
+    document.getElementById("panorama-header-user-btn")?.addEventListener("click", openProfile);
+    document.getElementById("panorama-identity-card")?.addEventListener("click", openProfile);
 
     // Back button on full app slide-in overlay
     const btnOverlayBack = document.getElementById("btn-overlay-back");

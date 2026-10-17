@@ -391,6 +391,21 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     expect(musicBtn.classList.contains("active")).toBe(false);
   });
 
+  it("renders top nav profile avatar and updates identity on updateProfileUi", async () => {
+    const userBadge = root.querySelector("#user-badge");
+    const avatarEl = root.querySelector("#header-profile-avatar");
+    const nameEl = root.querySelector("#header-profile-name");
+
+    expect(userBadge).toBeTruthy();
+    expect(avatarEl).toBeTruthy();
+    expect(nameEl).toBeTruthy();
+
+    await shell.updateProfileUi();
+
+    expect(nameEl?.textContent).toBeTruthy();
+    expect(userBadge?.getAttribute("title")).toContain("Click to manage profile");
+  });
+
   it("renders a dock launcher visually and routes clicks when a plugin is added to navigation dock shortcut", () => {
     // Timer was originally in sidebar (Widgets dashboard)
     const timerPlugin = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer")!;

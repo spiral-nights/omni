@@ -1556,8 +1556,14 @@ export class OmniShell extends BaseShell {
           <span class="brand-logo">✦ Omni</span>
           <span style="font-size: 0.72rem; color: var(--omni-text-muted); background: var(--omni-bg-subtle); padding: 2px 6px; border-radius: var(--omni-radius-pill);">Universal nsite Runtime</span>
         </div>
-        <div class="header-actions">
+        <div class="header-actions" style="display: flex; align-items: center; gap: 10px;">
           <div id="header-actions-slot" class="omni-slot-inline" style="display: flex; align-items: center; gap: 8px;"></div>
+          <button id="user-badge" class="header-identity-pill" title="Click to manage profile" style="display: flex; align-items: center; gap: 7px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-pill, 9999px); padding: 3px 10px 3px 4px; color: var(--omni-text-primary); cursor: pointer; transition: all 0.15s ease;">
+            <div id="header-profile-avatar" style="width: 22px; height: 22px; border-radius: 50%; overflow: hidden; background: var(--omni-bg-subtle); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
+              ${icon("user", 14)}
+            </div>
+            <span id="header-profile-name" style="font-size: 0.78rem; font-weight: 500; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Identity</span>
+          </button>
         </div>
       </header>
 
