@@ -1188,6 +1188,22 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(overlay?.classList.contains("open")).toBe(false);
     });
 
+    it("animates app opening and closing with 3D card flip transitions and provides left-pane peek affordance", async () => {
+      const gridView = panoramaRoot.querySelector("#panorama-apps-grid-view");
+      const overlay = panoramaRoot.querySelector("#panorama-full-app-overlay");
+      const peekHint = panoramaRoot.querySelector("#panorama-left-peek-hint") as HTMLButtonElement;
+      expect(peekHint).toBeTruthy();
+
+      await panoramaShell.openApp("org.omni.plugin.feed");
+      expect(overlay?.classList.contains("open")).toBe(true);
+      expect(overlay?.classList.contains("card-flip-in-right")).toBe(true);
+
+      panoramaShell.closeApp();
+      expect(overlay?.classList.contains("open")).toBe(false);
+      expect(overlay?.classList.contains("card-flip-out-right")).toBe(true);
+      expect(gridView?.classList.contains("card-flip-in-left")).toBe(true);
+    });
+
     it("exports and applies workspace state with shellType: 'panorama'", () => {
       const state = panoramaShell.exportWorkspaceState();
       expect(state.shellType).toBe("panorama");

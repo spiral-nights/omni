@@ -360,6 +360,11 @@ export class PanoramaShell extends BaseShell {
             <h1 class="panorama-hero-title">omni</h1>
           </div>
           <nav class="panorama-pivot-nav" id="panorama-pivot-nav"></nav>
+          <!-- Left Pane Peek Affordance -->
+          <button class="panorama-left-peek-hint" id="panorama-left-peek-hint" title="Previous pane" aria-label="Previous pane" style="opacity: 0; pointer-events: none;">
+            ${icon("arrow-left", 12)}
+            <span class="panorama-left-peek-label" id="panorama-left-peek-label"></span>
+          </button>
         </header>
 
         <!-- 2. Horizontal Panorama Canvas -->
@@ -1167,16 +1172,30 @@ export class PanoramaShell extends BaseShell {
     if (titleEl) titleEl.textContent = meta.name;
 
     const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const isAlreadyOpen = this.fullAppOverlay?.classList.contains("open") || false;
 
-    // Toggle from live tiles grid to active application view inside apps section
+    // 1. 3D card flip transition: grid view flips out to the left
     const gridView = document.getElementById("panorama-apps-grid-view");
-    if (gridView) gridView.style.display = "none";
+    if (gridView) {
+      if (!isAlreadyOpen) {
+        gridView.classList.remove("card-flip-in-left", "card-flip-out-right", "card-flip-in-right");
+        gridView.classList.add("card-flip-out-left");
+        setTimeout(() => {
+          if (this.currentOpenedAppId) {
+            gridView.style.display = "none";
+            gridView.classList.remove("card-flip-out-left");
+          }
+        }, 260);
+      } else {
+        gridView.style.display = "none";
+      }
+    }
     if (this.sectionApps) this.sectionApps.classList.add("has-active-app");
 
-    // 1. Ensure the overlay page container element exists in fullAppContainer
+    // 2. Ensure the overlay page container element exists in fullAppContainer
     const slotEl = this.ensureAppPage(plugin.id);
 
-    // 2. Hide other app pages in overlay, and display this target page
+    // 3. Hide other app pages in overlay, and display this target page
     const allPages = this.fullAppContainer?.querySelectorAll<HTMLElement>(".panorama-app-page") || [];
     allPages.forEach((p) => (p.style.display = "none"));
 
@@ -1189,14 +1208,22 @@ export class PanoramaShell extends BaseShell {
       this.fullAppContainer.scrollTop = 0;
     }
 
+    // 4. 3D card flip transition: overlay flips in from the right
     if (this.fullAppOverlay) {
+      this.fullAppOverlay.classList.remove("card-flip-out-right", "card-flip-out-left", "card-flip-in-left");
       this.fullAppOverlay.classList.add("open");
+      if (!isAlreadyOpen) {
+        this.fullAppOverlay.classList.add("card-flip-in-right");
+        setTimeout(() => {
+          this.fullAppOverlay?.classList.remove("card-flip-in-right");
+        }, 320);
+      }
       this.fullAppOverlay.style.display = "flex";
     }
 
     this.showPivot("apps");
 
-    // 3. Ensure the full app view is mounted into the overlay slot container
+    // 5. Ensure the full app view is mounted into the overlay slot container
     const overlayInstanceKey = `${plugin.id}::overlay`;
     const placements = this.getPluginPlacements(plugin);
     const hasRunningInstance =
@@ -1274,13 +1301,37 @@ export class PanoramaShell extends BaseShell {
   }
 
   public closeApp(): void {
+    const prevOpenedAppId = this.currentOpenedAppId;
     this.currentOpenedAppId = null;
     const gridView = document.getElementById("panorama-apps-grid-view");
-    if (gridView) gridView.style.display = "flex";
-    if (this.sectionApps) this.sectionApps.classList.remove("has-active-app");
+
     if (this.fullAppOverlay) {
-      this.fullAppOverlay.classList.remove("open");
-      this.fullAppOverlay.style.display = "none";
+      this.fullAppOverlay.classList.remove("open", "card-flip-in-right");
+      if (prevOpenedAppId) {
+        this.fullAppOverlay.classList.add("card-flip-out-right");
+        if (gridView) {
+          gridView.style.display = "flex";
+          gridView.classList.remove("card-flip-out-left");
+          gridView.classList.add("card-flip-in-left");
+          setTimeout(() => {
+            gridView.classList.remove("card-flip-in-left");
+          }, 320);
+        }
+        setTimeout(() => {
+          if (!this.currentOpenedAppId && this.fullAppOverlay) {
+            this.fullAppOverlay.classList.remove("card-flip-out-right");
+            this.fullAppOverlay.style.display = "none";
+            if (this.sectionApps) this.sectionApps.classList.remove("has-active-app");
+          }
+        }, 260);
+      } else {
+        this.fullAppOverlay.style.display = "none";
+        if (gridView) gridView.style.display = "flex";
+        if (this.sectionApps) this.sectionApps.classList.remove("has-active-app");
+      }
+    } else {
+      if (gridView) gridView.style.display = "flex";
+      if (this.sectionApps) this.sectionApps.classList.remove("has-active-app");
     }
   }
 
@@ -1319,8 +1370,10 @@ export class PanoramaShell extends BaseShell {
         (pivot === "org.omni.plugin.feed" ? this.pivotHeadersTrack?.querySelector<HTMLElement>(`.panorama-pivot-item[data-pivot="feed"]`) : null);
       if (btn && this.pivotHeadersTrack) {
         const firstOffset = this.pivotHeadersTrack.querySelector<HTMLElement>(".panorama-pivot-item")?.offsetLeft || 0;
+        const btnIndex = Array.from(buttons).indexOf(btn);
+        const peekOffset = btnIndex > 0 ? 36 : 0;
         this.pivotHeadersTrack.scrollTo({
-          left: Math.max(0, btn.offsetLeft - firstOffset),
+          left: Math.max(0, btn.offsetLeft - firstOffset - peekOffset),
           behavior: "smooth"
         });
       }
@@ -1382,9 +1435,16 @@ export class PanoramaShell extends BaseShell {
     const buttons = Array.from(this.pivotHeadersTrack.querySelectorAll<HTMLElement>(".panorama-pivot-item"));
     if (sections.length === 0 || buttons.length === 0) return;
 
+    // 0. Parallax translation for hero title ("omni")
+    const heroTitle = this.root.querySelector<HTMLElement>(".panorama-hero-title");
+    if (heroTitle) {
+      heroTitle.style.transform = `translateX(${Math.round(-scrollLeft * 0.12)}px)`;
+    }
+
     // 1. Calculate continuous scroll position for the top pivot navigation
     const maxCanvas = this.panoramaContainer.scrollWidth - this.panoramaContainer.clientWidth;
     const maxPivot = this.pivotHeadersTrack.scrollWidth - this.pivotHeadersTrack.clientWidth;
+    const PEEK_OFFSET = 36;
 
     if (maxCanvas > 0 && maxPivot > 0) {
       let targetPivotScroll = 0;
@@ -1399,8 +1459,8 @@ export class PanoramaShell extends BaseShell {
           const span = secB.offsetLeft - secA.offsetLeft;
           const t = span > 0 ? (scrollLeft - secA.offsetLeft) / span : 0;
           const firstOffset = buttons[0]?.offsetLeft || 0;
-          const start = (btnA?.offsetLeft ?? 0) - firstOffset;
-          const end = (btnB?.offsetLeft ?? 0) - firstOffset;
+          const start = Math.max(0, (btnA?.offsetLeft ?? 0) - firstOffset - (i > 0 ? PEEK_OFFSET : 0));
+          const end = Math.max(0, (btnB?.offsetLeft ?? 0) - firstOffset - PEEK_OFFSET);
           targetPivotScroll = start + t * (end - start);
           matched = true;
           break;
@@ -1413,7 +1473,7 @@ export class PanoramaShell extends BaseShell {
         } else {
           const lastBtn = buttons[buttons.length - 1];
           const firstOffset = buttons[0]?.offsetLeft || 0;
-          targetPivotScroll = (lastBtn?.offsetLeft ?? 0) - firstOffset;
+          targetPivotScroll = Math.max(0, (lastBtn?.offsetLeft ?? 0) - firstOffset - PEEK_OFFSET);
         }
       }
 
@@ -1425,13 +1485,16 @@ export class PanoramaShell extends BaseShell {
     }
 
     // 2. Highlight closest pivot button
+    let closestIndex = 0;
     let closestSection = sections[0];
     let minDiff = Infinity;
-    for (const sec of sections) {
+    for (let i = 0; i < sections.length; i++) {
+      const sec = sections[i];
       const diff = Math.abs(sec.offsetLeft - scrollLeft);
       if (diff < minDiff) {
         minDiff = diff;
         closestSection = sec;
+        closestIndex = i;
       }
     }
 
@@ -1442,6 +1505,23 @@ export class PanoramaShell extends BaseShell {
       if (pivot === "widgets") {
         this.ensureWidgetsMounted().catch(console.warn);
       }
+    }
+
+    // 3. Update left pane peek hint affordance
+    const peekHint = document.getElementById("panorama-left-peek-hint");
+    const peekLabel = document.getElementById("panorama-left-peek-label");
+    if (peekHint && closestIndex > 0) {
+      const prevSection = sections[closestIndex - 1];
+      const prevPivot = (prevSection?.dataset.pivot || prevSection?.dataset.pluginId || "") as PanoramaPivot;
+      const prevBtn = buttons.find((b) => b.dataset.pivot === prevPivot);
+      const prevTitle = prevBtn?.textContent?.trim() || prevPivot;
+      if (peekLabel) peekLabel.textContent = prevTitle;
+      peekHint.dataset.prevPivot = prevPivot;
+      peekHint.style.opacity = "1";
+      peekHint.style.pointerEvents = "auto";
+    } else if (peekHint) {
+      peekHint.style.opacity = "0";
+      peekHint.style.pointerEvents = "none";
     }
   }
 
@@ -1455,6 +1535,15 @@ export class PanoramaShell extends BaseShell {
   }
 
   private wireGlobalEvents(): void {
+    // Left pane peek affordance click
+    const peekHint = document.getElementById("panorama-left-peek-hint");
+    peekHint?.addEventListener("click", () => {
+      const prevPivot = peekHint.dataset.prevPivot as PanoramaPivot;
+      if (prevPivot) {
+        this.showPivot(prevPivot);
+      }
+    });
+
     // Back button on full app slide-in overlay
     const btnOverlayBack = document.getElementById("btn-overlay-back");
     btnOverlayBack?.addEventListener("click", () => {

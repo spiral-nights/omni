@@ -93,6 +93,7 @@ body.theme-panorama,
   flex-shrink: 0;
   background: #000000;
   z-index: 10;
+  position: relative;
 }
 
 .panorama-hero-title {
@@ -103,6 +104,8 @@ body.theme-panorama,
   color: #ffffff;
   margin: 0 0 12px 0;
   text-transform: lowercase;
+  will-change: transform;
+  transition: transform 0.08s linear;
 }
 
 .panorama-pivot-nav {
@@ -112,7 +115,9 @@ body.theme-panorama,
   scrollbar-width: none;
   white-space: nowrap;
   scroll-behavior: smooth;
+  padding-left: 36px;
   padding-right: calc(100vw - 120px);
+  position: relative;
 }
 
 .panorama-pivot-nav::-webkit-scrollbar {
@@ -143,6 +148,37 @@ body.theme-panorama,
   font-weight: 400;
 }
 
+/* Left Pane Peek Hint Indicator */
+.panorama-left-peek-hint {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 20;
+  background: rgba(18, 18, 18, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid #333333;
+  color: #aaaaaa;
+  padding: 4px 10px 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.72rem;
+  text-transform: lowercase;
+  letter-spacing: -0.01em;
+  transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.15s ease, color 0.15s ease;
+  user-select: none;
+}
+
+.panorama-left-peek-hint:hover {
+  background: #222222;
+  color: #ffffff;
+  border-color: #555555;
+  transform: translateX(2px);
+}
+
 /* 2. Panorama Horizontal Canvas */
 .panorama-canvas {
   flex: 1;
@@ -152,6 +188,9 @@ body.theme-panorama,
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  scroll-padding-left: 20px;
+  scroll-padding-right: 48px;
+  position: relative;
 }
 
 .panorama-canvas::-webkit-scrollbar {
@@ -159,18 +198,19 @@ body.theme-panorama,
 }
 
 .panorama-section {
-  flex: 0 0 100vw;
-  max-width: 100vw;
+  flex: 0 0 calc(100vw - 44px);
+  max-width: calc(100vw - 44px);
   height: 100%;
   scroll-snap-align: start;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 8px 24px 24px 24px;
+  padding: 8px 16px 24px 16px;
   display: flex;
   flex-direction: column;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  box-sizing: border-box;
 }
 
 .panorama-section::-webkit-scrollbar {
@@ -181,8 +221,9 @@ body.theme-panorama,
 
 @media (min-width: 768px) {
   .panorama-section {
-    flex: 0 0 540px;
-    max-width: 540px;
+    flex: 0 0 min(540px, calc(100vw - 64px));
+    max-width: min(540px, calc(100vw - 64px));
+    padding: 8px 24px 24px 24px;
   }
 }
 
@@ -365,6 +406,17 @@ body.theme-panorama,
 }
 
 /* 5. Embedded Active Application in Applications Section */
+#panorama-section-apps {
+  perspective: 1200px;
+  position: relative;
+}
+
+#panorama-apps-grid-view {
+  transform-origin: center center;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
 .panorama-full-app-overlay {
   position: relative;
   width: 100%;
@@ -374,15 +426,79 @@ body.theme-panorama,
   display: none;
   flex-direction: column;
   gap: 12px;
+  transform-origin: center center;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
 }
 
-.panorama-full-app-overlay.open {
+.panorama-full-app-overlay.open,
+.panorama-full-app-overlay.card-flip-out-right {
   display: flex;
 }
 
+.card-flip-out-left {
+  animation: panoramaCardFlipOutLeft 0.26s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.card-flip-in-right {
+  animation: panoramaCardFlipInRight 0.30s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+}
+
+.card-flip-out-right {
+  animation: panoramaCardFlipOutRight 0.26s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.card-flip-in-left {
+  animation: panoramaCardFlipInLeft 0.30s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+}
+
+@keyframes panoramaCardFlipOutLeft {
+  0% {
+    transform: perspective(1200px) rotateY(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(-85deg) scale(0.94);
+    opacity: 0;
+  }
+}
+
+@keyframes panoramaCardFlipInRight {
+  0% {
+    transform: perspective(1200px) rotateY(85deg) scale(0.94);
+    opacity: 0;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(0deg) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes panoramaCardFlipOutRight {
+  0% {
+    transform: perspective(1200px) rotateY(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(85deg) scale(0.94);
+    opacity: 0;
+  }
+}
+
+@keyframes panoramaCardFlipInLeft {
+  0% {
+    transform: perspective(1200px) rotateY(-85deg) scale(0.94);
+    opacity: 0;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(0deg) scale(1);
+    opacity: 1;
+  }
+}
+
 .panorama-section.has-active-app {
-  flex: 0 0 90vw;
-  max-width: 90vw;
+  flex: 0 0 calc(100vw - 36px);
+  max-width: calc(100vw - 36px);
 }
 
 @media (min-width: 768px) {
