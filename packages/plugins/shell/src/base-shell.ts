@@ -699,7 +699,14 @@ export abstract class BaseShell implements OmniShellHost {
       const pubkey = await this.kernel.keystore.getPublicKey();
       const npub = WebCryptoKeystore.toNpub(pubkey);
       const shortNpub = `${npub.slice(0, 8)}...${npub.slice(-4)}`;
-      const profile = await this.kernel.getProfile(pubkey);
+      let profile = await this.kernel.getProfile(pubkey);
+      if (!profile) {
+        this.kernel.fetchRemoteProfile(pubkey, 3500).then((res) => {
+          if (res?.metadata) {
+            this.updateProfileUi().catch(() => {});
+          }
+        }).catch(() => {});
+      }
 
       const avatarEl = document.getElementById("header-profile-avatar") || document.getElementById("panorama-header-avatar");
       const nameEl = document.getElementById("header-profile-name") || document.getElementById("panorama-header-name");

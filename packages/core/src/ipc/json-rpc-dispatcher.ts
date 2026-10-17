@@ -411,6 +411,15 @@ export class JsonRpcDispatcher {
       case "profile.get": {
         const pubkey = params?.pubkey || (await this.ctx.keystore.getPublicKey());
         const events = await this.ctx.eventStore.getEvents({ kinds: [0], authors: [pubkey], limit: 1 });
+        if (events.length > 0 && !params?.syncRemote) {
+          try {
+            return JSON.parse(events[0].content);
+          } catch {
+            return null;
+          }
+        }
+        const remote = await this.fetchRemoteProfile(pubkey, params?.timeoutMs || 3000);
+        if (remote) return remote;
         if (events.length > 0) {
           try {
             return JSON.parse(events[0].content);
@@ -455,6 +464,46 @@ export class JsonRpcDispatcher {
       default:
         throw { code: JsonRpcErrorCode.METHOD_NOT_FOUND, message: `Unknown method: ${method}` };
     }
+  }
+
+  private async fetchRemoteProfile(pubkey: string, timeoutMs = 3000): Promise<Record<string, any> | null> {
+    const filter = { kinds: [0], authors: [pubkey], limit: 1 };
+    return new Promise((resolve) => {
+      let resolved = false;
+      let latestEvent: any = null;
+
+      const finish = async () => {
+        if (resolved) return;
+        resolved = true;
+        unsubscribe();
+        if (latestEvent) {
+          await this.ctx.eventStore.saveEvent(latestEvent);
+          try {
+            resolve(JSON.parse(latestEvent.content));
+          } catch {
+            resolve(null);
+          }
+        } else {
+          resolve(null);
+        }
+      };
+
+      const timer = setTimeout(finish, timeoutMs);
+      const subId = `profile-get-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const unsubscribe = this.ctx.relayPool.subscribe(
+        subId,
+        [filter],
+        (ev) => {
+          if (!latestEvent || ev.created_at > latestEvent.created_at) {
+            latestEvent = ev;
+          }
+        },
+        () => {
+          clearTimeout(timer);
+          finish();
+        }
+      );
+    });
   }
 
   destroy(): void {

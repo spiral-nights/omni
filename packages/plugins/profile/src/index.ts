@@ -137,7 +137,10 @@ async function mountProfileFull(root: any) {
           </label>
         </div>
 
-        <button id="btn-save-profile" class="btn-publish" style="align-self: flex-end; font-size: 0.82rem; padding: 6px 16px; margin-top: 4px; background: var(--accent-primary, #d4a373); color: var(--accent-contrast, #141312); border: none; border-radius: var(--radius-sm, 6px); font-weight: 600; cursor: pointer;">Save & Publish Profile (kind 0)</button>
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+          <button id="btn-sync-profile" class="btn-secondary" style="font-size: 0.82rem; padding: 6px 14px; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); border-radius: var(--radius-sm, 6px); cursor: pointer;">Sync from Relays</button>
+          <button id="btn-save-profile" class="btn-publish" style="font-size: 0.82rem; padding: 6px 16px; background: var(--accent-primary, #d4a373); color: var(--accent-contrast, #141312); border: none; border-radius: var(--radius-sm, 6px); font-weight: 600; cursor: pointer;">Save & Publish Profile (kind 0)</button>
+        </div>
       </div>
 
       <!-- Pane 2: Keys & Custody -->
@@ -214,6 +217,7 @@ async function mountProfileFull(root: any) {
   const rowNip05 = container.querySelector<HTMLInputElement>("#prof-nip05")!;
   const rowLud16 = container.querySelector<HTMLInputElement>("#prof-lud16")!;
   const btnSave = container.querySelector<HTMLButtonElement>("#btn-save-profile")!;
+  const btnSync = container.querySelector<HTMLButtonElement>("#btn-sync-profile")!;
 
   // Keys fields
   const inpNpub = container.querySelector<HTMLInputElement>("#key-npub")!;
@@ -259,7 +263,7 @@ async function mountProfileFull(root: any) {
     }
   });
 
-  const refreshIdentity = async () => {
+  const refreshIdentity = async (forceRemote = false) => {
     try {
       let pubkey = "";
       let npub = "";
@@ -277,7 +281,7 @@ async function mountProfileFull(root: any) {
         }
       }
       if (typeof omni !== "undefined" && omni.profile && pubkey) {
-        profileData = await omni.profile.get(pubkey);
+        profileData = await (omni.profile.get as any)(pubkey, { syncRemote: forceRemote });
         if (profileData) {
           spanName.textContent = profileData.display_name || profileData.name || "Active Identity";
           rowDName.value = profileData.display_name || "";
@@ -298,6 +302,22 @@ async function mountProfileFull(root: any) {
       }
     } catch (_) {}
   };
+
+  btnSync.addEventListener("click", async () => {
+    btnSync.disabled = true;
+    btnSync.textContent = "Syncing from Relays...";
+    try {
+      await refreshIdentity(true);
+      btnSync.textContent = "Synced!";
+      setTimeout(() => {
+        btnSync.disabled = false;
+        btnSync.textContent = "Sync from Relays";
+      }, 1500);
+    } catch (err: any) {
+      btnSync.disabled = false;
+      btnSync.textContent = "Sync from Relays";
+    }
+  });
 
   btnImport.addEventListener("click", async () => {
     const val = inpImport.value?.trim();

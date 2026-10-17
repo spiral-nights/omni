@@ -1175,9 +1175,10 @@
       }
     },
     profile: {
-      async get(pubkey) {
+      async get(pubkey, options) {
         await initPromise;
-        return callRpc("profile.get", { pubkey });
+        const params = typeof pubkey === "object" ? pubkey : { pubkey, ...(options || {}) };
+        return callRpc("profile.get", params);
       },
       async publish(metadata) {
         await initPromise;

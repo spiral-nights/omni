@@ -497,7 +497,7 @@ export class OmniKernel {
     }).catch(() => {});
   }
 
-  async getProfile(pubkey?: string): Promise<Record<string, any> | null> {
+  async getProfile(pubkey?: string, fetchIfMissing = false): Promise<Record<string, any> | null> {
     const targetPubkey = pubkey || (await this.getUserPubkey());
     const events = await this.eventStore.getEvents({
       kinds: [0],
@@ -511,7 +511,67 @@ export class OmniKernel {
         return null;
       }
     }
+    if (fetchIfMissing) {
+      const res = await this.fetchRemoteProfile(targetPubkey);
+      return res?.metadata || null;
+    }
     return null;
+  }
+
+  async fetchRemoteProfile(
+    pubkey?: string,
+    timeoutMs = 3500
+  ): Promise<{ metadata: Record<string, any>; event: NostrEvent } | null> {
+    const targetPubkey = pubkey || (await this.getUserPubkey());
+    const filter: NostrFilter = {
+      kinds: [0],
+      authors: [targetPubkey],
+      limit: 1
+    };
+
+    return new Promise((resolve) => {
+      let resolved = false;
+      let latestEvent: NostrEvent | null = null;
+
+      const finish = async () => {
+        if (resolved) return;
+        resolved = true;
+        unsubscribe();
+        if (latestEvent) {
+          await this.eventStore.saveEvent(latestEvent);
+          try {
+            const parsed = JSON.parse(latestEvent.content);
+            resolve({ metadata: parsed, event: latestEvent });
+          } catch {
+            resolve({ metadata: {}, event: latestEvent });
+          }
+        } else {
+          const local = await this.getProfile(targetPubkey, false);
+          if (local) {
+            resolve({ metadata: local, event: null as any });
+          } else {
+            resolve(null);
+          }
+        }
+      };
+
+      const timer = setTimeout(finish, timeoutMs);
+
+      const subId = `profile-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const unsubscribe = this.relayPool.subscribe(
+        subId,
+        [filter],
+        (ev) => {
+          if (!latestEvent || ev.created_at > latestEvent.created_at) {
+            latestEvent = ev;
+          }
+        },
+        () => {
+          clearTimeout(timer);
+          finish();
+        }
+      );
+    });
   }
 
   async publishProfile(metadata: Record<string, any>): Promise<NostrEvent> {
