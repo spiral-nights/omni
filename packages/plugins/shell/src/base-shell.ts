@@ -11,6 +11,7 @@ import {
 import { ICONS } from "./icons.js";
 import { showIntentEnableToast } from "./permissions-intents-ui.js";
 import { unmountShellStyles } from "./styles/loader.js";
+import { CURATED_APPS } from "./app-store-catalog.js";
 
 export interface InstalledPluginEntry {
   id: string;
@@ -788,6 +789,122 @@ export abstract class BaseShell implements OmniShellHost {
     }
     this.onWorkspaceUpdated();
     this.saveLocalWorkspace();
+  }
+
+  public async installPluginEntry(entry: InstalledPluginEntry): Promise<void> {
+    if (this.installedPlugins.some((p) => p.id === entry.id)) {
+      throw new Error(`Plugin '${entry.name || entry.id}' is already installed.`);
+    }
+    const manifest = this.ensurePluginManifest(entry);
+    const slotContainers = this.getSlotContainers();
+    const targetSlot = entry.viewport || manifest.components?.[0]?.slot || "main";
+    const customSlotContainers = new Map(slotContainers);
+    const targetContainer = this.getContainerForPluginSlot(entry.id, targetSlot, manifest.components?.[0]?.id);
+    if (targetContainer) {
+      customSlotContainers.set(targetSlot, targetContainer);
+    }
+    await this.kernel.registerPlugin(manifest, entry.scriptContent || "", customSlotContainers, {
+      targetSlot
+    });
+    this.installedPlugins.push(entry);
+    this.onWorkspaceUpdated();
+    this.saveLocalWorkspace();
+  }
+
+  public async resolveAndInstallNsite(target: string): Promise<InstalledPluginEntry> {
+    const trimmed = target.trim();
+    let manifest: any = null;
+    let scriptContent = "";
+    let resolvedNaddr: string | undefined;
+    let resolvedAuthorNpub: string | undefined;
+    let customViewport: string | undefined;
+    let customViews: any[] | undefined;
+
+    // 1. Check if target matches a curated app (by id, name, or htmlContent)
+    const curatedMatch = CURATED_APPS.find(
+      (c) => c.id === trimmed || c.name.toLowerCase() === trimmed.toLowerCase() || c.htmlContent.trim() === trimmed
+    );
+    if (curatedMatch) {
+      scriptContent = curatedMatch.htmlContent;
+      customViewport = curatedMatch.viewport;
+      customViews = curatedMatch.views;
+      manifest = {
+        id: curatedMatch.id,
+        name: curatedMatch.name,
+        version: curatedMatch.version,
+        description: curatedMatch.description,
+        icon: curatedMatch.icon,
+        entry: "index.html",
+        components: [
+          {
+            id: `${curatedMatch.id}-main`,
+            slot: curatedMatch.viewport || "sidebar",
+            title: curatedMatch.name
+          }
+        ],
+        views: curatedMatch.views
+      };
+    } else if (trimmed.startsWith("<") || trimmed.startsWith("<!DOCTYPE") || /<html[\s>]/i.test(trimmed)) {
+      scriptContent = trimmed;
+      const titleMatch = trimmed.match(/<title>([^<]+)<\/title>/i);
+      const title = titleMatch ? titleMatch[1].trim() : "Custom HTML App";
+      manifest = {
+        id: `custom-app-${Date.now()}`,
+        name: title,
+        version: "1.0.0",
+        entry: "index.html",
+        components: [{ id: "main", slot: "main", title }]
+      };
+    } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      const res = await fetch(trimmed);
+      const text = await res.text();
+      if (text.startsWith("<") || text.startsWith("<!DOCTYPE") || /<html[\s>]/i.test(text)) {
+        scriptContent = text;
+        const titleMatch = text.match(/<title>([^<]+)<\/title>/i);
+        const title = titleMatch ? titleMatch[1].trim() : "Custom nsite";
+        manifest = {
+          id: `nsite-${Date.now()}`,
+          name: title,
+          version: "1.0.0",
+          entry: "index.html",
+          components: [{ id: "main", slot: "main", title }]
+        };
+      } else {
+        manifest = JSON.parse(text);
+      }
+    } else if (trimmed.startsWith("naddr1") || trimmed.startsWith("nostr:naddr1") || /^\d+:[0-9a-fA-F]{64}:/.test(trimmed)) {
+      const resolved = await this.kernel.resolveNsitePlugin(trimmed);
+      manifest = resolved.manifest;
+      scriptContent = resolved.scriptContent;
+      resolvedNaddr = resolved.naddr;
+      resolvedAuthorNpub = resolved.authorNpub;
+    } else {
+      manifest = JSON.parse(trimmed);
+    }
+
+    if (!manifest.id || !manifest.name) {
+      throw new Error("Invalid manifest: 'id' and 'name' are required.");
+    }
+
+    const entry: InstalledPluginEntry = {
+      id: manifest.id,
+      name: manifest.name,
+      displayName: manifest.displayName || manifest.name,
+      version: manifest.version || "1.0.0",
+      description: manifest.description || "",
+      icon: manifest.icon || "widgets",
+      viewport: customViewport || manifest.components?.[0]?.slot || "main",
+      views: customViews || manifest.views || [{ id: "main", title: manifest.name, path: "" }],
+      manifest,
+      scriptContent,
+      sourceUrl: resolvedNaddr || (trimmed.startsWith("http") ? trimmed : `custom:${manifest.id}`),
+      enabled: true,
+      naddr: resolvedNaddr,
+      authorNpub: resolvedAuthorNpub
+    };
+
+    await this.installPluginEntry(entry);
+    return entry;
   }
 
   // --- Shared Intent UI & Protocol Handlers ---

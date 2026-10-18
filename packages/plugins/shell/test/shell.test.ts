@@ -1522,6 +1522,71 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       testShell.destroy();
       testRoot.remove();
     });
+
+    it("dynamically installs nsite via resolveAndInstallNsite with HTML content", async () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      const testShell = new OmniShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: []
+      });
+      testShell.mount();
+
+      const htmlApp = `<!DOCTYPE html>
+<html>
+<head><title>Dynamic Notes</title></head>
+<body><h1>Hello Dynamic nsite</h1></body>
+</html>`;
+
+      const installed = await testShell.resolveAndInstallNsite(htmlApp);
+      expect(installed.name).toBe("Dynamic Notes");
+      expect(testShell.installedPlugins.some((p) => p.id === installed.id)).toBe(true);
+
+      // Verify uninstallation
+      testShell.uninstallPlugin(installed.id);
+      expect(testShell.installedPlugins.some((p) => p.id === installed.id)).toBe(false);
+
+      testShell.destroy();
+      testRoot.remove();
+    });
+
+    it("renders curated app store catalog in PanoramaShell and installs featured app", async () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: []
+      });
+      testShell.mount();
+
+      const installBtn = testRoot.querySelector("#btn-panorama-install") as HTMLButtonElement | null;
+      expect(installBtn).toBeTruthy();
+
+      const catalog = testRoot.querySelector("#panorama-curated-catalog");
+      expect(catalog).toBeTruthy();
+      expect(catalog?.children.length).toBeGreaterThan(0);
+
+      // Install the first curated app (Cypherpunk Wisdom)
+      const firstInstallBtn = catalog?.querySelector("button") as HTMLButtonElement | null;
+      expect(firstInstallBtn).toBeTruthy();
+      expect(firstInstallBtn?.textContent).toBe("Install");
+
+      firstInstallBtn?.click();
+      for (let i = 0; i < 20; i++) {
+        if (firstInstallBtn?.textContent === "Installed") break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+
+      expect(firstInstallBtn?.textContent).toBe("Installed");
+      expect(testShell.installedPlugins.some((p) => p.name === "Cypherpunk Wisdom")).toBe(true);
+
+      testShell.destroy();
+      testRoot.remove();
+    });
   });
 });
 

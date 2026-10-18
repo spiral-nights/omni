@@ -10,6 +10,7 @@ import {
 import { mountShellStyles, unmountShellStyles } from "./styles/loader.js";
 import { PANORAMA_SHELL_CSS } from "./styles/panorama-styles.js";
 import { shellRegistry } from "./shell-registry.js";
+import { CURATED_APPS } from "./app-store-catalog.js";
 
 export type PanoramaPivot = "feed" | "apps" | "widgets" | "system" | string;
 
@@ -458,7 +459,10 @@ export class PanoramaShell extends BaseShell {
               <div class="panorama-system-card" style="display: flex; flex-direction: column; gap: 10px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <strong>Installed Plugins & Relays</strong>
-                  <span id="panorama-plugin-count" style="font-size: 0.75rem; color: #888;">5 installed</span>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <button id="btn-panorama-install" class="btn-panorama-action" style="color: #00a4ef; border-color: #00a4ef;">+ Install nsite</button>
+                    <span id="panorama-plugin-count" style="font-size: 0.75rem; color: #888;">5 installed</span>
+                  </div>
                 </div>
                 <div id="panorama-plugins-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
               </div>
@@ -500,6 +504,37 @@ export class PanoramaShell extends BaseShell {
               <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
                 <button id="btn-panorama-open-with-cancel" class="btn-panorama-action" style="padding: 6px 12px;">Cancel</button>
                 <button id="btn-panorama-open-with-confirm" class="btn-panorama-action" style="padding: 6px 12px; border-color: #00a4ef; color: #00a4ef;" disabled>Open</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Install nsite / Plugin Modal -->
+        <div class="panorama-inspector-modal" id="panorama-install-modal" style="display: none; align-items: center; justify-content: center;">
+          <div class="panorama-inspector-content" style="max-width: 520px; width: 92%; max-height: 85vh; overflow-y: auto;">
+            <div class="panorama-inspector-header">
+              <h3 style="margin: 0; font-size: 1.05rem; color: #fff;">Install nsite / Decentralized App</h3>
+              <button class="btn-app-bar-circle" id="btn-panorama-install-close" style="width: 32px; height: 32px; border: 1px solid #666;" title="Close">
+                ${icon("close", 16)}
+              </button>
+            </div>
+            <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+              <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: #ccc;">
+                <span style="font-weight: 600; color: #fff;">Nostr naddr (NIP-5A) or App URL:</span>
+                <input id="panorama-install-url" type="text" placeholder="naddr1... / 35129:pubkey:d-tag / https://..." style="background: #111; border: 1px solid #333; color: #fff; padding: 8px 12px; font-size: 0.85rem; outline: none;" />
+              </label>
+
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <button id="btn-panorama-quick-sample" class="btn-panorama-action" style="font-size: 0.75rem;">Load Sample naddr</button>
+                <button id="btn-panorama-confirm-install" class="btn-panorama-action" style="background: #00a4ef; color: #fff; border-color: #00a4ef; font-weight: 600; padding: 6px 14px;">Install</button>
+              </div>
+
+              <!-- Curated Decentralized Catalog -->
+              <div style="margin-top: 10px; border-top: 1px solid #222; padding-top: 12px;">
+                <div style="font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 8px;">
+                  Featured Decentralized Apps (1-Click Install)
+                </div>
+                <div id="panorama-curated-catalog" style="display: flex; flex-direction: column; gap: 8px;"></div>
               </div>
             </div>
           </div>
@@ -1616,6 +1651,122 @@ export class PanoramaShell extends BaseShell {
       }
     });
 
+    // Install nsite / Plugin Modal Wiring
+    const panoInstallModal = document.getElementById("panorama-install-modal");
+    document.getElementById("btn-panorama-install")?.addEventListener("click", () => {
+      if (panoInstallModal) panoInstallModal.style.display = "flex";
+    });
+    document.getElementById("btn-panorama-install-close")?.addEventListener("click", () => {
+      if (panoInstallModal) panoInstallModal.style.display = "none";
+    });
+    panoInstallModal?.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).id === "panorama-install-modal") {
+        panoInstallModal.style.display = "none";
+      }
+    });
+
+    const panoUrlInput = document.getElementById("panorama-install-url") as HTMLInputElement | null;
+    document.getElementById("btn-panorama-quick-sample")?.addEventListener("click", async () => {
+      const btn = document.getElementById("btn-panorama-quick-sample") as HTMLButtonElement | null;
+      if (btn) btn.disabled = true;
+      try {
+        const sampleManifest = {
+          id: "org.omni.plugin.nostr-wisdom",
+          name: "Decentralized Wisdom",
+          version: "1.0.0",
+          description: "Cryptographic quotes and cypherpunk wisdom widget",
+          entry: "index.html",
+          components: [{ id: "wisdom-widget", slot: "sidebar", title: "Wisdom Widget" }]
+        };
+        const sampleScript = `
+          <!DOCTYPE html>
+          <html>
+          <body>
+            <div style="background: #111; padding: 14px; border: 1px solid #333;">
+              <h3 style="font-size: 0.95rem; font-weight: 600; color: #00a4ef;">✦ Decentralized Wisdom</h3>
+              <p style="font-size: 0.85rem; font-style: italic; margin-top: 8px;">“Don't trust, verify.” — Cypherpunk Maxim</p>
+            </div>
+          </body>
+          </html>
+        `;
+        const published = await this.kernel.publishNsitePlugin(sampleManifest as any, sampleScript);
+        if (panoUrlInput) panoUrlInput.value = published.naddr;
+      } catch (err: any) {
+        alert(`Failed: ${err.message || String(err)}`);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
+    document.getElementById("btn-panorama-confirm-install")?.addEventListener("click", async () => {
+      const urlText = panoUrlInput?.value.trim();
+      if (!urlText) {
+        alert("Please enter a Nostr naddr or App URL.");
+        return;
+      }
+      const confirmBtn = document.getElementById("btn-panorama-confirm-install") as HTMLButtonElement | null;
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = "Resolving & Installing...";
+      }
+      try {
+        const installed = await this.resolveAndInstallNsite(urlText);
+        if (panoInstallModal) panoInstallModal.style.display = "none";
+        if (panoUrlInput) panoUrlInput.value = "";
+        this.renderSystemPluginList();
+        this.renderAppsTiles();
+        if (typeof alert === "function") { try { alert(`Installed '${installed.name}' successfully!`); } catch (_) {} }
+      } catch (err: any) {
+        if (typeof alert === "function") { try { alert(`Install failed: ${err.message || String(err)}`); } catch (_) {} }
+      } finally {
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = "Install";
+        }
+      }
+    });
+
+    const panoCatalog = document.getElementById("panorama-curated-catalog");
+    if (panoCatalog) {
+      panoCatalog.innerHTML = "";
+      for (const app of CURATED_APPS) {
+        const isInstalled = this.installedPlugins.some((p) => p.id === app.id);
+        const card = document.createElement("div");
+        card.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #111; border: 1px solid #222; gap: 10px;";
+        card.innerHTML = `
+          <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <strong style="font-size: 0.85rem; color: #fff;">${app.name}</strong>
+              <span style="font-size: 0.65rem; color: #00a4ef; background: #1a1a1a; padding: 1px 5px;">${app.category}</span>
+            </div>
+            <span style="font-size: 0.72rem; color: #888; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${app.description}</span>
+          </div>
+        `;
+        const btnInstallApp = document.createElement("button");
+        btnInstallApp.className = "btn-panorama-action";
+        btnInstallApp.style.cssText = "font-size: 0.72rem; padding: 3px 8px; flex-shrink: 0;";
+        btnInstallApp.textContent = isInstalled ? "Installed" : "Install";
+        btnInstallApp.disabled = isInstalled;
+        btnInstallApp.addEventListener("click", async () => {
+          btnInstallApp.disabled = true;
+          btnInstallApp.textContent = "Installing...";
+          try {
+            await this.resolveAndInstallNsite(app.htmlContent);
+            btnInstallApp.textContent = "Installed";
+            this.renderSystemPluginList();
+            this.renderAppsTiles();
+            if (typeof alert === "function") { try { alert(`Installed ${app.name}!`); } catch (_) {} }
+          } catch (err: any) {
+            if (typeof alert === "function") { try { alert(`Install failed: ${err.message || String(err)}`); } catch (_) {} }
+            btnInstallApp.disabled = false;
+            btnInstallApp.textContent = "Install";
+          }
+        });
+        card.appendChild(btnInstallApp);
+        panoCatalog.appendChild(card);
+      }
+    }
+
     // Escape key closes modals / overlay
     if (typeof window !== "undefined") {
       window.addEventListener("keydown", (e) => {
@@ -1624,6 +1775,9 @@ export class PanoramaShell extends BaseShell {
             this.closeApp();
           }
           this.closePluginInspector();
+          if (panoInstallModal) {
+            panoInstallModal.style.display = "none";
+          }
         }
       });
     }

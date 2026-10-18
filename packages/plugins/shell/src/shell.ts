@@ -9,6 +9,7 @@ import {
 import { mountShellStyles, unmountShellStyles } from "./styles/loader.js";
 import { CLASSIC_SHELL_CSS } from "./styles/classic-styles.js";
 import { shellRegistry } from "./shell-registry.js";
+import { CURATED_APPS } from "./app-store-catalog.js";
 
 import { BaseShell, InstalledPluginEntry, OmniShellOptions } from "./base-shell.js";
 export type { InstalledPluginEntry, OmniShellOptions };
@@ -1812,6 +1813,14 @@ export class OmniShell extends BaseShell {
                 Install Plugin
               </button>
             </div>
+
+            <!-- Curated Decentralized Catalog -->
+            <div style="margin-top: 10px; border-top: 1px solid var(--omni-border-subtle); padding-top: 10px;">
+              <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--omni-text-muted); margin-bottom: 8px;">
+                Featured Decentralized Apps (1-Click Install)
+              </div>
+              <div id="classic-curated-catalog" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -2228,97 +2237,71 @@ export class OmniShell extends BaseShell {
     btnConfirm?.addEventListener("click", async () => {
       const jsonText = jsonInput.value.trim();
       const urlText = urlInput.value.trim();
-      let manifest: any = null;
-      let scriptContent = "";
-      let resolvedNaddr: string | undefined;
-      let resolvedAuthorNpub: string | undefined;
-
+      const target = urlText || jsonText;
+      if (!target) {
+        alert("Please provide either a Nostr naddr, URL, or JSON/HTML content.");
+        return;
+      }
       btnConfirm.disabled = true;
+      btnConfirm.textContent = "Resolving & Installing...";
       try {
-        if (urlText && (urlText.startsWith("naddr1") || urlText.includes(":"))) {
-          btnConfirm.textContent = "Resolving from Nostr (NIP-5A)...";
-          const resolved = await this.kernel.resolveNsitePlugin(urlText);
-          manifest = resolved.manifest;
-          scriptContent = resolved.scriptContent;
-          resolvedNaddr = resolved.naddr;
-          resolvedAuthorNpub = resolved.authorNpub;
-        } else if (urlText) {
-          btnConfirm.textContent = "Fetching from URL...";
-          const res = await fetch(urlText);
-          manifest = await res.json();
-        } else if (jsonText) {
-          if (jsonText.startsWith("<") || jsonText.startsWith("<!DOCTYPE")) {
-            scriptContent = jsonText;
-            manifest = {
-              id: `custom-app-${Date.now()}`,
-              name: "Custom HTML App",
-              version: "1.0.0",
-              entry: "index.html",
-              components: [{ id: "custom-main", slot: "main", title: "Custom App" }]
-            };
-          } else {
-            manifest = JSON.parse(jsonText);
-          }
-        } else {
-          alert("Please provide either a Nostr naddr, URL, or JSON/HTML content.");
-          btnConfirm.disabled = false;
-          return;
-        }
-
-        if (!manifest.id || !manifest.name) {
-          alert("Invalid plugin manifest: 'id' and 'name' are required.");
-          btnConfirm.disabled = false;
-          return;
-        }
-
-        if (this.installedPlugins.some((p) => p.id === manifest.id)) {
-          alert(`Plugin '${manifest.name}' (${manifest.id}) is already installed.`);
-          btnConfirm.disabled = false;
-          return;
-        }
-
-        if (!scriptContent) {
-          scriptContent = `
-            <!DOCTYPE html>
-            <html>
-            <body>
-              <div style="background: var(--omni-bg-surface); padding: 12px; border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md);">
-                <h4>${manifest.name}</h4>
-                <p style="font-size: 0.8rem; color: var(--omni-text-muted);">${manifest.description || "Active application"}</p>
-              </div>
-            </body>
-            </html>
-          `;
-        }
-
-        const entry: InstalledPluginEntry = {
-          id: manifest.id,
-          manifest,
-          scriptContent,
-          sourceUrl: resolvedNaddr || urlText || `custom:${manifest.id}`,
-          enabled: true,
-          naddr: resolvedNaddr,
-          authorNpub: resolvedAuthorNpub
-        };
-
-        btnConfirm.textContent = "Mounting to sandbox...";
-        await this.kernel.registerPlugin(this.ensurePluginManifest(entry), scriptContent, this.slotContainers);
-        this.installedPlugins.push(entry);
+        const installed = await this.resolveAndInstallNsite(target);
         this.renderDockLaunchers();
         this.renderSettingsNavAndPanes();
-        this.saveLocalWorkspace();
         this.installPluginModal.classList.remove("open");
         urlInput.value = "";
         jsonInput.value = "";
-        alert(`Plugin '${manifest.name}' installed successfully!`);
+        if (typeof alert === "function") { try { alert(`Plugin '${installed.name}' installed successfully!`); } catch (_) {} }
       } catch (err: any) {
         console.error("Install failed:", err);
-        alert(`Install failed: ${err.message || String(err)}`);
+        if (typeof alert === "function") { try { alert(`Install failed: ${err.message || String(err)}`); } catch (_) {} }
       } finally {
         btnConfirm.disabled = false;
         btnConfirm.textContent = "Install Plugin";
       }
     });
+
+    const catalogContainer = document.getElementById("classic-curated-catalog");
+    if (catalogContainer) {
+      catalogContainer.innerHTML = "";
+      for (const app of CURATED_APPS) {
+        const isInstalled = this.installedPlugins.some((p) => p.id === app.id);
+        const card = document.createElement("div");
+        card.style.cssText =
+          "display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); gap: 10px;";
+        card.innerHTML = `
+          <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <strong style="font-size: 0.82rem; color: var(--omni-text-primary);">${app.name}</strong>
+              <span style="font-size: 0.65rem; color: var(--omni-accent-primary); background: var(--omni-bg-subtle); padding: 1px 5px; border-radius: 999px;">${app.category}</span>
+            </div>
+            <span style="font-size: 0.72rem; color: var(--omni-text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${app.description}</span>
+          </div>
+        `;
+        const btnInstallApp = document.createElement("button");
+        btnInstallApp.className = "btn-secondary";
+        btnInstallApp.style.cssText = "font-size: 0.72rem; padding: 3px 8px; flex-shrink: 0;";
+        btnInstallApp.textContent = isInstalled ? "Installed" : "Install";
+        btnInstallApp.disabled = isInstalled;
+        btnInstallApp.addEventListener("click", async () => {
+          btnInstallApp.disabled = true;
+          btnInstallApp.textContent = "Installing...";
+          try {
+            await this.resolveAndInstallNsite(app.htmlContent);
+            btnInstallApp.textContent = "Installed";
+            this.renderDockLaunchers();
+            this.renderSettingsNavAndPanes();
+            if (typeof alert === "function") { try { alert(`Installed ${app.name}!`); } catch (_) {} }
+          } catch (err: any) {
+            if (typeof alert === "function") { try { alert(`Install failed: ${err.message || String(err)}`); } catch (_) {} }
+            btnInstallApp.disabled = false;
+            btnInstallApp.textContent = "Install";
+          }
+        });
+        card.appendChild(btnInstallApp);
+        catalogContainer.appendChild(card);
+      }
+    }
   }
 
   private wireProfileControls(): void {
