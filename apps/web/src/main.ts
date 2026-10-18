@@ -240,6 +240,20 @@ async function startApp() {
     });
 
   console.log("🚀 [Omni Web] App running successfully with modular @omni/plugin-shell!");
+
+  // Register Offline-First PWA Service Worker
+  if (typeof window !== "undefined" && "serviceWorker" in navigator && window.location.protocol.startsWith("http")) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker
+        .register("/sw.js")
+        .then((reg) => {
+          console.log("✦ [Omni PWA] Service worker registered successfully:", reg.scope);
+        })
+        .catch((err) => {
+          console.warn("✦ [Omni PWA] Service worker registration failed:", err);
+        });
+    });
+  }
 }
 
 startApp().catch((err) => {

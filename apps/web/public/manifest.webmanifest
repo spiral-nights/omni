@@ -1,0 +1,43 @@
+{
+  "name": "Omni — Modular Nostr Runtime",
+  "short_name": "Omni",
+  "description": "Local-first extensible Nostr client and sandboxed micro-frontend runtime for standard Nostr sites.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#141312",
+  "theme_color": "#141312",
+  "categories": ["social", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Timeline Feed",
+      "short_name": "Feed",
+      "description": "Open your decentralized Nostr timeline notes",
+      "url": "/?view=feed",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Focus Timer",
+      "short_name": "Timer",
+      "description": "Open Pomodoro productivity timer",
+      "url": "/?view=widget",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Relay Manager",
+      "short_name": "Relays",
+      "description": "Inspect and manage Nostr relay connections",
+      "url": "/?view=settings",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    }
+  ]
+}
