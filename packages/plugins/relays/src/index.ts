@@ -71,6 +71,9 @@ function mountRelays(root: any) {
       let relays: any[] = [];
       if (typeof omni !== "undefined" && omni.relays) {
         relays = await omni.relays.list();
+      } else if (typeof window !== "undefined" && (window as any).nostr?.getRelays) {
+        const relayMap = await (window as any).nostr.getRelays();
+        relays = Object.keys(relayMap || {}).map((url) => ({ url, connected: true }));
       }
       if (!relays || relays.length === 0) {
         const empty = html<HTMLDivElement>`

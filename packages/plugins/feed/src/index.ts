@@ -793,11 +793,8 @@ function mountFeed(root: any) {
     const onProfileClick = (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      const omni = (window as any).omni;
-      if (omni?.intents?.dispatch && event.pubkey) {
-        omni.intents.dispatch("view_profile", { pubkey: event.pubkey }).catch((err: any) => {
-          console.error("view_profile intent failed:", err);
-        });
+      if (event.pubkey) {
+        dispatchViewProfile(event.pubkey);
       }
     };
 
