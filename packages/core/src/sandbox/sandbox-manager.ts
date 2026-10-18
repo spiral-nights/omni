@@ -33,6 +33,7 @@ export interface SandboxInstanceOptions {
   onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
   onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
   theme?: any;
+  useShadowDom?: boolean;
 }
 
 export class SandboxInstance {
@@ -55,6 +56,7 @@ export class SandboxInstance {
 
   getFirstPopulatedComponentContainer(): Element | null {
     for (const container of this.compContainers.values()) {
+      if (container.shadowRoot && container.shadowRoot.childNodes.length > 0) return container;
       if (container.childNodes.length > 0) return container;
     }
     return null;
@@ -159,6 +161,7 @@ export class SandboxInstance {
         const domHost = new RemoteDomHost({
           container: compContainer,
           componentId: comp.id,
+          useShadowDom: this.options.useShadowDom,
           onEvent: (componentId, eventData) => {
             try {
               this.channel1?.port1.postMessage({
@@ -201,6 +204,7 @@ export class SandboxInstance {
         const domHost = new RemoteDomHost({
           container: compContainer,
           componentId: "main",
+          useShadowDom: this.options.useShadowDom,
           onEvent: (componentId, eventData) => {
             try {
               this.channel1?.port1.postMessage({

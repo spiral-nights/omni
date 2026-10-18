@@ -14,12 +14,14 @@ export interface RemoteDomHostOptions {
   componentId: string;
   onEvent: (componentId: string, data: { id: string; eventName: string; detail: any }) => void;
   allowedElements?: string[];
+  useShadowDom?: boolean;
 }
 
 export class RemoteDomHost {
   private receiver: DOMRemoteReceiver;
   readonly componentId: string;
   readonly container: Element;
+  readonly renderRoot: Element | ShadowRoot;
   private onEvent: (componentId: string, data: { id: string; eventName: string; detail: any }) => void;
   private clickHandled = false;
 
@@ -43,55 +45,56 @@ export class RemoteDomHost {
       }
     }
 
+    if (options.useShadowDom && typeof this.container.attachShadow === "function") {
+      this.renderRoot = this.container.shadowRoot || this.container.attachShadow({ mode: "open" });
+      if (typeof document !== "undefined") {
+        const baseStyle = document.createElement("style");
+        baseStyle.textContent = `:host { display: block; width: 100%; height: 100%; box-sizing: border-box; } * { box-sizing: border-box; }`;
+        this.renderRoot.appendChild(baseStyle);
+      }
+    } else {
+      this.renderRoot = this.container;
+    }
+
     this.receiver = new DOMRemoteReceiver({
-      root: this.container,
+      root: this.renderRoot as any,
       elements: allowed
     });
 
     // Ensure form inputs (input, textarea, select) pass value/checked in event.detail
     // so DOMRemoteReceiver's handler (which passes event.detail) conveys input values
-    if (this.container instanceof HTMLElement) {
-      const enrichInputEvent = (e: Event) => {
-        const target = e.target as any;
-        if (target && ("value" in target || "checked" in target)) {
-          try {
-            Object.defineProperty(e, "detail", {
-              value: {
-                value: target.value !== undefined ? String(target.value) : "",
-                checked: Boolean(target.checked)
-              },
-              configurable: true
-            });
-          } catch {}
-        }
-      };
+    const targetRoot = this.renderRoot;
+    const enrichInputEvent = (e: Event) => {
+      const target = e.target as any;
+      if (target && ("value" in target || "checked" in target)) {
+        try {
+          Object.defineProperty(e, "detail", {
+            value: {
+              value: target.value !== undefined ? String(target.value) : "",
+              checked: Boolean(target.checked)
+            },
+            configurable: true
+          });
+        } catch {}
+      }
+    };
 
-      this.container.addEventListener("input", enrichInputEvent, true);
-      this.container.addEventListener("change", enrichInputEvent, true);
+    targetRoot.addEventListener("input", enrichInputEvent, true);
+    targetRoot.addEventListener("change", enrichInputEvent, true);
 
-      // DOMRemoteReceiver only fires a remote listener when `event.target === element`
-      // (it deliberately skips bubbled events, expecting the remote side to re-run
-      // capture/bubble). The guest only registers listeners on the interactive element
-      // itself (button, role=button div, ...), so a click landing on a child such as
-      // the label <span> or icon <svg> never reached the guest -- only clicks on the
-      // element's own padding did. Emulate bubbling here: if nothing handled the click
-      // at its real target, re-dispatch it to the nearest ancestor that has a remote
-      // listener. Only that ancestor is targeted because the guest re-dispatches a
-      // bubbling click natively, which already reaches further-up guest listeners.
-      const container = this.container;
-      container.addEventListener("click", () => {
-        this.clickHandled = false;
-      }, true);
-      container.addEventListener("click", (e: Event) => {
-        if (this.clickHandled) return;
-        let el = (e.target as Element | null)?.parentElement || null;
-        while (el && el !== container && !this.clickHandled) {
-          const retargeted = new CustomEvent("click", { detail: {}, bubbles: false });
-          el.dispatchEvent(retargeted);
-          el = el.parentElement;
-        }
-      });
-    }
+    // DOMRemoteReceiver only fires a remote listener when `event.target === element`
+    targetRoot.addEventListener("click", () => {
+      this.clickHandled = false;
+    }, true);
+    targetRoot.addEventListener("click", (e: Event) => {
+      if (this.clickHandled) return;
+      let el = (e.target as Element | null)?.parentElement || null;
+      while (el && el !== targetRoot && !this.clickHandled) {
+        const retargeted = new CustomEvent("click", { detail: {}, bubbles: false });
+        el.dispatchEvent(retargeted);
+        el = el.parentElement;
+      }
+    });
   }
 
   mutate(records: any[]): void {

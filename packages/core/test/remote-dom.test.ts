@@ -383,6 +383,58 @@ describe("RemoteDomHost Standard HTML Projection", () => {
     host.destroy();
     document.body.removeChild(container);
   });
+
+  it("encapsulates guest DOM inside an isolated ShadowRoot when useShadowDom is enabled", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const onEvent = vi.fn();
+    const host = new RemoteDomHost({
+      container,
+      componentId: "shadow-widget",
+      useShadowDom: true,
+      onEvent
+    });
+
+    expect(host.renderRoot).toBeInstanceOf(ShadowRoot);
+    expect(container.shadowRoot).toBe(host.renderRoot);
+
+    // Insert a button inside shadow root
+    host.mutate([
+      [
+        0,
+        "~",
+        {
+          id: "card-1",
+          type: 1,
+          element: "div",
+          attributes: { class: "shadow-card" },
+          children: [
+            {
+              id: "btn-1",
+              type: 1,
+              element: "button",
+              attributes: { class: "shadow-btn" },
+              children: [{ id: "txt-btn", type: 3, data: "Shadow Action" }]
+            }
+          ]
+        },
+        0
+      ]
+    ]);
+
+    // Outer container querySelector should NOT find elements inside shadow root
+    expect(container.querySelector(".shadow-card")).toBeNull();
+    expect(container.querySelector(".shadow-btn")).toBeNull();
+
+    // ShadowRoot querySelector DOES find the encapsulated elements
+    const shadowCard = host.renderRoot.querySelector(".shadow-card");
+    expect(shadowCard).not.toBeNull();
+    expect(host.renderRoot.querySelector(".shadow-btn")?.textContent).toBe("Shadow Action");
+
+    host.destroy();
+    document.body.removeChild(container);
+  });
 });
 
 

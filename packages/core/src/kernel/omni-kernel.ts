@@ -26,6 +26,7 @@ export interface OmniKernelOptions {
   storageName?: string;
   maxFeedNotes?: number;
   theme?: any;
+  useShadowDom?: boolean;
 }
 
 export class OmniKernel {
@@ -39,6 +40,7 @@ export class OmniKernel {
   readonly intentBroker: IntentBroker;
   readonly layoutManager: LayoutManager;
   public theme?: any;
+  public readonly useShadowDom: boolean;
 
   private sandboxes: Map<string, SandboxInstance> = new Map();
   private settingsSandboxes: Map<string, SandboxInstance> = new Map();
@@ -53,6 +55,7 @@ export class OmniKernel {
 
   constructor(options: OmniKernelOptions = {}) {
     this.theme = options.theme;
+    this.useShadowDom = Boolean(options.useShadowDom);
     this.keystore = new WebCryptoKeystore(options.privateKeyHex);
     this.eventStore = new LocalEventStore({
       dbName: options.eventStoreName,
@@ -251,7 +254,8 @@ export class OmniKernel {
           eventStore: this.eventStore,
           onSlotAction: this.onSlotAction,
           onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
-          onHandleShare: (payload, srcId) => this.handleShare(payload, srcId)
+          onHandleShare: (payload, srcId) => this.handleShare(payload, srcId),
+          useShadowDom: this.useShadowDom
         });
 
         await sandbox.mount();
@@ -425,7 +429,8 @@ export class OmniKernel {
       eventStore: this.eventStore,
       onSlotAction: this.onSlotAction,
       onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
-      onHandleShare: (payload, srcId) => this.handleShare(payload, srcId)
+      onHandleShare: (payload, srcId) => this.handleShare(payload, srcId),
+      useShadowDom: this.useShadowDom
     });
 
     await sandbox.mount();
