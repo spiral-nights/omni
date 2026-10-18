@@ -7,7 +7,8 @@ import { OmniShell, PanoramaShell, InstalledPluginEntry } from "../src/index.js"
 import {
   renderNostrWritePermissionsSection,
   renderHandledIntentsSection,
-  showIntentEnableToast
+  showIntentEnableToast,
+  INTENT_FRIENDLY_NAMES
 } from "../src/permissions-intents-ui.js";
 
 describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", () => {
@@ -567,6 +568,52 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
         k.startsWith("org.omni.plugin.profile-viewer")
       );
       expect(sandboxes.length).toBe(1);
+    });
+
+    it("resolves compose_note to create_note handler seamlessly via alias resolution", async () => {
+      let receivedData: any = null;
+      kernel.intentBroker.registerHandler("org.omni.plugin.feed", "create_note", async (data) => {
+        receivedData = data;
+        return { success: true };
+      }, { name: "Feed" });
+
+      const res: any = await kernel.intentBroker.dispatch("test-caller", "compose_note", {
+        text: "Draft from cross-app intent",
+        replyTo: "note1xyz"
+      });
+
+      expect(res.success).toBe(true);
+      expect(receivedData).toEqual({
+        text: "Draft from cross-app intent",
+        replyTo: "note1xyz"
+      });
+    });
+
+    it("dispatches view_note and stores omni_active_note_id in localStorage", async () => {
+      const shell = new OmniShell({ root, kernel, installedPlugins: [...mockPlugins] });
+      shell.mount();
+
+      let noteViewed = false;
+      kernel.intentBroker.registerHandler("org.omni.plugin.feed", "view_note", async (data) => {
+        noteViewed = true;
+        return { noteId: data.eventId };
+      }, { name: "Feed" });
+
+      await kernel.intentBroker.dispatch("test-caller", "view_note", {
+        eventId: "event123456"
+      });
+
+      expect(noteViewed).toBe(true);
+      expect(localStorage.getItem("omni_active_note_id")).toBe("event123456");
+    });
+
+    it("does not include send_zap in standard intent catalog", () => {
+      const actions = Object.keys(INTENT_FRIENDLY_NAMES);
+      expect(actions).toContain("view_profile");
+      expect(actions).toContain("compose_note");
+      expect(actions).toContain("create_note");
+      expect(actions).toContain("view_note");
+      expect(actions).not.toContain("send_zap");
     });
   });
 });

@@ -991,9 +991,13 @@ function mountFeed(root: any) {
   }
 
   function dispatchViewProfile(pubkey: string) {
+    if (!pubkey) return;
     const omni = (window as any).omni;
-    if (omni?.intents?.dispatch && pubkey) {
+    if (omni?.intents?.dispatch) {
       omni.intents.dispatch("view_profile", { pubkey }).catch(() => {});
+    }
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new CustomEvent("intent", { detail: { action: "view_profile", data: { pubkey } } }));
     }
   }
 
@@ -1481,6 +1485,73 @@ function mountFeed(root: any) {
   } catch (err) {
     console.error("Feed subscription failed:", err);
   }
+
+  const handleIncomingIntent = (action: string, data: any) => {
+    if (action === "create_note" || action === "compose_note") {
+      showFeedPage();
+      const text = data?.text || data?.content || "";
+      if (text) {
+        textarea.value = text;
+      }
+      textarea.focus();
+    } else if (action === "view_note") {
+      const noteId = data?.eventId || data?.id;
+      if (noteId) {
+        showFeedPage();
+        const existing = container.querySelector(`[data-note-id="${noteId}"]`) as HTMLElement | null;
+        if (existing) {
+          existing.scrollIntoView({ behavior: "smooth", block: "center" });
+          existing.style.outline = "2px solid var(--omni-accent-primary, #d4a373)";
+          setTimeout(() => {
+            existing.style.outline = "";
+          }, 3000);
+        } else {
+          fetchNoteById(noteId, ++searchSeq);
+        }
+      }
+    }
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("intent", (e: any) => {
+      const detail = e.detail;
+      if (detail && detail.action) {
+        handleIncomingIntent(detail.action, detail.data);
+      }
+    });
+    window.addEventListener("omni:intent", (e: any) => {
+      const detail = e.detail;
+      if (detail && detail.action) {
+        handleIncomingIntent(detail.action, detail.data);
+      }
+    });
+  }
+
+  const omniRef = (window as any).omni;
+  if (omniRef?.intents?.registerHandler) {
+    omniRef.intents.registerHandler("create_note", async (data: any) => {
+      handleIncomingIntent("create_note", data);
+      return { handled: true };
+    });
+    omniRef.intents.registerHandler("compose_note", async (data: any) => {
+      handleIncomingIntent("compose_note", data);
+      return { handled: true };
+    });
+    omniRef.intents.registerHandler("view_note", async (data: any) => {
+      handleIncomingIntent("view_note", data);
+      return { handled: true };
+    });
+  }
+
+  try {
+    const savedNoteId = localStorage.getItem("omni_active_note_id");
+    if (savedNoteId) {
+      localStorage.removeItem("omni_active_note_id");
+      setTimeout(() => {
+        handleIncomingIntent("view_note", { eventId: savedNoteId });
+      }, 300);
+    }
+  } catch (_) {}
 
   return {
     showSearchPage,

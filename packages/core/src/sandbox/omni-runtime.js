@@ -201,8 +201,12 @@
         }
       } else if (msg.method === "intent.invoke") {
         const action = msg.params && msg.params.action;
+        const effectiveAction = msg.params && msg.params.effectiveAction;
         const data = msg.params && msg.params.data;
-        const handler = intentHandlers.get(action);
+        let handler = intentHandlers.get(action);
+        if (!handler && effectiveAction) {
+          handler = intentHandlers.get(effectiveAction);
+        }
         if (handler) {
           try {
             handler(data);
@@ -212,7 +216,8 @@
         } else {
           try {
             if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-              window.dispatchEvent(new CustomEvent("omni:intent", { detail: { action, data } }));
+              window.dispatchEvent(new CustomEvent("omni:intent", { detail: { action, effectiveAction, data, __omniInternal: true } }));
+              window.dispatchEvent(new CustomEvent("intent", { detail: { action, effectiveAction, data, __omniInternal: true } }));
             }
           } catch (_) {}
           if (action) {
@@ -1245,6 +1250,19 @@
         url: data ? data.url : undefined
       });
     };
+  }
+
+  // 11. Standard Web Intent CustomEvent Interception
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("intent", (e) => {
+      const detail = e.detail;
+      if (detail && detail.action && !detail.__omniInternal) {
+        initPromise.then(() => callRpc("intent.dispatch", {
+          action: detail.action,
+          data: detail.data !== undefined ? detail.data : detail
+        }));
+      }
+    });
   }
 
   console.log("⚡ [Omni Sandbox] Injected runtime loaded.");

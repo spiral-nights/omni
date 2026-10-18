@@ -19,6 +19,7 @@ export const STANDARD_NOSTR_KINDS: StandardKindDef[] = [
 ];
 
 export const INTENT_FRIENDLY_NAMES: Record<string, { label: string; desc: string }> = {
+  compose_note: { label: "Compose Note", desc: "Compose and draft Nostr notes" },
   create_note: { label: "Create Note", desc: "Compose and draft Nostr notes" },
   view_note: { label: "View Note", desc: "Display note threads and events" },
   share: { label: "Web Share", desc: "Target for navigator.share() drafts" },

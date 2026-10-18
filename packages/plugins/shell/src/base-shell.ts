@@ -150,12 +150,17 @@ export abstract class BaseShell implements OmniShellHost {
         try {
           localStorage.setItem("omni_active_profile_pubkey", event.data.pubkey);
         } catch (_) {}
+      } else if (event?.action === "view_note" && (event?.data?.eventId || event?.data?.id)) {
+        try {
+          localStorage.setItem("omni_active_note_id", event.data.eventId || event.data.id);
+        } catch (_) {}
       }
 
       await this.showPage(targetPluginId);
       if (!event?.isRpc) {
         this.kernel.notifyPlugin(targetPluginId, "intent.invoke", {
           action: event.action,
+          effectiveAction: event.effectiveAction,
           data: event.data
         });
       }
@@ -174,6 +179,10 @@ export abstract class BaseShell implements OmniShellHost {
               if (action === "view_profile" && data?.pubkey) {
                 try {
                   localStorage.setItem("omni_active_profile_pubkey", data.pubkey);
+                } catch (_) {}
+              } else if (action === "view_note" && (data?.eventId || data?.id)) {
+                try {
+                  localStorage.setItem("omni_active_note_id", data.eventId || data.id);
                 } catch (_) {}
               }
               return { handled: true };
@@ -924,7 +933,8 @@ export abstract class BaseShell implements OmniShellHost {
     `;
 
     const standardActions = [
-      { action: "create_note", label: "Create Note / Composer" },
+      { action: "compose_note", label: "Compose Note / Composer" },
+      { action: "create_note", label: "Create Note" },
       { action: "view_note", label: "View Note / Thread" },
       { action: "view_profile", label: "View Identity Profile" },
       { action: "share", label: "Web Share Target" },

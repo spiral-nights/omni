@@ -30,7 +30,7 @@ const initialPlugins: InstalledPluginEntry[] = [
       { id: "settings", title: "Feed Settings", path: "?view=settings" },
       { id: "widget", title: "Feed Widget", path: "?view=widget" }
     ],
-    handledIntents: ["create_note", "view_note", "share"],
+    handledIntents: ["create_note", "compose_note", "view_note", "share"],
     scriptContent: feedScript,
     sourceUrl: "local:@omni/plugin-feed",
     enabled: true

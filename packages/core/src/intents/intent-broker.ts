@@ -25,6 +25,11 @@ export type PromptEnableCandidateCallback = (
   callerPluginId?: string
 ) => Promise<boolean>;
 
+export const INTENT_ACTION_ALIASES: Record<string, string> = {
+  compose_note: "create_note",
+  create_note: "compose_note"
+};
+
 export class IntentBroker {
   private handlers: Map<string, RegisteredIntentHandler[]> = new Map();
   private eventListeners: Map<string, Set<EventListener>> = new Map();
@@ -46,7 +51,10 @@ export class IntentBroker {
   }
 
   getDefaultHandler(action: string): string | undefined {
-    return this.defaultHandlers.get(action);
+    const direct = this.defaultHandlers.get(action);
+    if (direct) return direct;
+    const alias = INTENT_ACTION_ALIASES[action];
+    return alias ? this.defaultHandlers.get(alias) : undefined;
   }
 
   clearDefaultHandler(action: string): void {
@@ -69,14 +77,21 @@ export class IntentBroker {
     }
     if (enabled) {
       set.delete(action);
+      const alias = INTENT_ACTION_ALIASES[action];
+      if (alias) set.delete(alias);
     } else {
       set.add(action);
+      const alias = INTENT_ACTION_ALIASES[action];
+      if (alias) set.add(alias);
     }
   }
 
   isPluginIntentEnabled(pluginId: string, action: string): boolean {
     const set = this.disabledPluginIntents.get(pluginId);
-    return !(set && set.has(action));
+    if (set && set.has(action)) return false;
+    const alias = INTENT_ACTION_ALIASES[action];
+    if (alias && set && set.has(alias)) return false;
+    return true;
   }
 
   registerHandler(
@@ -126,7 +141,10 @@ export class IntentBroker {
   }
 
   getHandlers(action: string): RegisteredIntentHandler[] {
-    return this.handlers.get(action) || [];
+    const direct = this.handlers.get(action) || [];
+    if (direct.length > 0) return direct;
+    const alias = INTENT_ACTION_ALIASES[action];
+    return alias ? this.handlers.get(alias) || [] : [];
   }
 
   getRegisteredActions(): string[] {
@@ -134,13 +152,22 @@ export class IntentBroker {
   }
 
   async dispatch<T = any, R = any>(callerPluginId: string, action: string, data?: T): Promise<R> {
-    const allCandidates = this.handlers.get(action) || [];
-    const enabledCandidates = allCandidates.filter((h) => this.isPluginIntentEnabled(h.pluginId, action));
+    let effectiveAction = action;
+    let allCandidates = this.handlers.get(action) || [];
+    if (allCandidates.length === 0 && INTENT_ACTION_ALIASES[action]) {
+      const alias = INTENT_ACTION_ALIASES[action];
+      const aliasCandidates = this.handlers.get(alias) || [];
+      if (aliasCandidates.length > 0) {
+        effectiveAction = alias;
+        allCandidates = aliasCandidates;
+      }
+    }
+    const enabledCandidates = allCandidates.filter((h) => this.isPluginIntentEnabled(h.pluginId, effectiveAction));
 
     // Case 1: 0 enabled handlers
     if (enabledCandidates.length === 0) {
       // Check if exactly 1 disabled candidate exists
-      const disabledCandidates = allCandidates.filter((h) => !this.isPluginIntentEnabled(h.pluginId, action));
+      const disabledCandidates = allCandidates.filter((h) => !this.isPluginIntentEnabled(h.pluginId, effectiveAction));
       if (disabledCandidates.length === 1 && this.promptEnableCandidateCallback) {
         const candidate = disabledCandidates[0];
         const shouldEnable = await this.promptEnableCandidateCallback(
@@ -169,8 +196,8 @@ export class IntentBroker {
       chosen = enabledCandidates[0];
     } else {
       // Case 3: Multiple enabled candidates
-      // Check default handler first
-      const defaultPluginId = this.defaultHandlers.get(action);
+      // Check default handler first (direct or alias)
+      const defaultPluginId = this.defaultHandlers.get(action) || (INTENT_ACTION_ALIASES[action] ? this.defaultHandlers.get(INTENT_ACTION_ALIASES[action]) : undefined);
       if (defaultPluginId) {
         const defHandler = enabledCandidates.find((h) => h.pluginId === defaultPluginId);
         if (defHandler) {
@@ -205,9 +232,9 @@ export class IntentBroker {
       }
     }
 
-
     this.emit("intent:dispatched", {
       action,
+      effectiveAction: chosen.action,
       callerPluginId,
       targetPluginId: chosen.pluginId,
       isRpc: Boolean(chosen.isRpc),
