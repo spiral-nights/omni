@@ -828,7 +828,7 @@ function mountFeed(root: any) {
     const initReplies = pseudoRand % 5;
 
     const card = html<HTMLElement>`
-      <article class="feed-post note-card" data-note-id="${escapeHtml(event.id || "")}" data-author-pubkey="${escapeHtml(event.pubkey || "")}">
+      <article class="feed-post note-card" data-note-id="${escapeHtml(event.id || "")}" data-author-pubkey="${escapeHtml(event.pubkey || "")}" title="Click to view conversation thread">
         <div class="feed-post-avatar-col">
           <div class="feed-avatar" role="button" tabindex="0" style="background: ${avatarGradient}; cursor: pointer;" title="View profile">
             ${avatarInner}
@@ -1040,37 +1040,52 @@ function mountFeed(root: any) {
   let searchWs: any = null;
   let currentThreadNote: any = null;
 
-  function showSearchPage() {
+  function showSearchPage(pushHistory = true) {
     for (const el of feedSections) {
       if (el) el.style.display = "none";
     }
     settingsPage.style.display = "none";
     threadPage.style.display = "none";
     searchPage.style.display = "block";
+    if (pushHistory) {
+      try {
+        window.history.pushState({ omniFeedView: "search" }, "", window.location.href);
+      } catch (_) {}
+    }
     try {
       searchInput.focus();
     } catch (_) {}
   }
 
-  function showSettingsPage() {
+  function showSettingsPage(pushHistory = true) {
     for (const el of feedSections) {
       if (el) el.style.display = "none";
     }
     searchPage.style.display = "none";
     threadPage.style.display = "none";
     settingsPage.style.display = "block";
+    if (pushHistory) {
+      try {
+        window.history.pushState({ omniFeedView: "settings" }, "", window.location.href);
+      } catch (_) {}
+    }
   }
 
-  function showThreadPage() {
+  function showThreadPage(pushHistory = true) {
     for (const el of feedSections) {
       if (el) el.style.display = "none";
     }
     searchPage.style.display = "none";
     settingsPage.style.display = "none";
     threadPage.style.display = "block";
+    if (pushHistory && currentThreadNote?.id) {
+      try {
+        window.history.pushState({ omniFeedView: "thread", noteId: currentThreadNote.id }, "", window.location.href);
+      } catch (_) {}
+    }
   }
 
-  function showFeedPage() {
+  function showFeedPage(pushHistory = true) {
     searchPage.style.display = "none";
     settingsPage.style.display = "none";
     threadPage.style.display = "none";
@@ -1079,10 +1094,68 @@ function mountFeed(root: any) {
     }
   }
 
-  function renderThreadView(note: any, focusReply = false) {
+  function getDirectParentId(event: any, fallbackRootId: string): string {
+    const eTags = (event.tags || []).filter((t: any[]) => t[0] === "e" && t[1]);
+    if (eTags.length === 0) return fallbackRootId;
+    const replyTag = eTags.find((t: any[]) => t[3] === "reply");
+    if (replyTag) return replyTag[1];
+    if (eTags.length === 1) return eTags[0][1];
+    return eTags[eTags.length - 1][1];
+  }
+
+  function buildThreadReplyCard(rep: any, parentNote: any, isNested: boolean): HTMLElement {
+    const card = buildNoteCard(rep);
+    if (isNested) {
+      card.classList.add("thread-reply-nested");
+    }
+    const bodyEl = card.querySelector(".feed-post-body");
+    const contentEl = card.querySelector(".feed-post-content");
+    if (bodyEl && contentEl) {
+      let targetAuthorName = "";
+      if (parentNote?.pubkey) {
+        const meta = getAuthorMeta(parentNote.pubkey);
+        targetAuthorName = meta.handle || meta.name;
+      } else {
+        const pTag = (rep.tags || []).find((t: any[]) => t[0] === "p" && t[1]);
+        if (pTag) {
+          const meta = getAuthorMeta(pTag[1]);
+          targetAuthorName = meta.handle || meta.name;
+        }
+      }
+      if (targetAuthorName) {
+        const indicator = html<HTMLDivElement>`
+          <div class="thread-reply-indicator">
+            <span>↳ Replying to</span>
+            <span class="reply-target-author">${escapeHtml(targetAuthorName)}</span>
+          </div>
+        `;
+        bodyEl.insertBefore(indicator, contentEl);
+      }
+    }
+    return card;
+  }
+
+  function appendThreadReply(rep: any) {
+    if (!currentThreadNote || threadRepliesList.querySelector(`[data-note-id="${rep.id}"]`)) return;
+    const parentId = getDirectParentId(rep, currentThreadNote.id);
+    const parentNote = allKnownNotes.get(parentId) || currentThreadNote;
+    const isNested = parentId !== currentThreadNote.id;
+    const card = buildThreadReplyCard(rep, parentNote, isNested);
+
+    if (isNested) {
+      const parentEl = threadRepliesList.querySelector(`[data-note-id="${parentId}"]`);
+      if (parentEl && parentEl.nextSibling) {
+        threadRepliesList.insertBefore(card, parentEl.nextSibling);
+        return;
+      }
+    }
+    threadRepliesList.appendChild(card);
+  }
+
+  function renderThreadView(note: any, focusReply = false, pushHistory = true) {
     currentThreadNote = note;
     allKnownNotes.set(note.id, note);
-    showThreadPage();
+    showThreadPage(pushHistory);
 
     threadAncestors.innerHTML = "";
     threadFocusedNote.innerHTML = "";
@@ -1122,9 +1195,49 @@ function mountFeed(root: any) {
     });
     replies.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
 
+    // Build tree
+    const directReplies: any[] = [];
+    const childMap = new Map<string, any[]>();
+
     for (const rep of replies) {
-      const repCard = buildNoteCard(rep);
+      const parentId = getDirectParentId(rep, note.id);
+      if (parentId === note.id) {
+        directReplies.push(rep);
+      } else {
+        const existing = childMap.get(parentId) || [];
+        existing.push(rep);
+        childMap.set(parentId, existing);
+      }
+    }
+
+    function renderSubtree(parentId: string, parentNote: any, depth = 0) {
+      const children = childMap.get(parentId) || [];
+      for (const child of children) {
+        const childCard = buildThreadReplyCard(child, parentNote, true);
+        threadRepliesList.appendChild(childCard);
+        renderSubtree(child.id, child, depth + 1);
+      }
+    }
+
+    for (const directRep of directReplies) {
+      const repCard = buildThreadReplyCard(directRep, note, false);
       threadRepliesList.appendChild(repCard);
+      renderSubtree(directRep.id, directRep, 1);
+    }
+
+    // Orphan replies whose parent wasn't in tree
+    const renderedReplyIds = new Set<string>();
+    threadRepliesList.querySelectorAll(".note-card").forEach((el) => {
+      const id = el.getAttribute("data-note-id");
+      if (id) renderedReplyIds.add(id);
+    });
+    for (const rep of replies) {
+      if (!renderedReplyIds.has(rep.id)) {
+        const parentId = getDirectParentId(rep, note.id);
+        const parentNote = allKnownNotes.get(parentId) || note;
+        const repCard = buildThreadReplyCard(rep, parentNote, parentId !== note.id);
+        threadRepliesList.appendChild(repCard);
+      }
     }
 
     if (activeWs && activeWs.readyState === WebSocket.OPEN) {
@@ -1142,14 +1255,14 @@ function mountFeed(root: any) {
     }
   }
 
-  function openThread(target: any, focusReply = false) {
+  function openThread(target: any, focusReply = false, pushHistory = true) {
     if (!target) return;
     if (typeof target === "string") {
       const existing = allKnownNotes.get(target) || timelineNotes.get(target);
       if (existing) {
-        renderThreadView(existing, focusReply);
+        renderThreadView(existing, focusReply, pushHistory);
       } else {
-        showThreadPage();
+        showThreadPage(pushHistory);
         threadAncestors.innerHTML = "";
         threadRepliesList.innerHTML = "";
         threadFocusedNote.innerHTML = `
@@ -1165,11 +1278,16 @@ function mountFeed(root: any) {
         }
       }
     } else {
-      renderThreadView(target, focusReply);
+      renderThreadView(target, focusReply, pushHistory);
     }
   }
 
-  btnThreadBack.addEventListener("click", showFeedPage);
+  btnThreadBack.addEventListener("click", () => {
+    showFeedPage();
+    if (typeof window !== "undefined" && window.history.state?.omniFeedView === "thread") {
+      try { window.history.replaceState(null, "", window.location.href); } catch (_) {}
+    }
+  });
 
   btnThreadReply.addEventListener("click", async () => {
     if (!currentThreadNote) return;
@@ -1240,8 +1358,7 @@ function mountFeed(root: any) {
             created_at: Math.floor(Date.now() / 1000)
           };
           allKnownNotes.set(replyNote.id, replyNote);
-          const replyCard = buildNoteCard(replyNote);
-          threadRepliesList.appendChild(replyCard);
+          appendThreadReply(replyNote);
         }
       }
     } catch (err: any) {
@@ -1252,14 +1369,39 @@ function mountFeed(root: any) {
     }
   });
 
-  btnSearchOpen.addEventListener("click", showSearchPage);
-  btnSearchBack.addEventListener("click", showFeedPage);
+  btnSearchOpen.addEventListener("click", () => showSearchPage(true));
+  btnSearchBack.addEventListener("click", () => {
+    showFeedPage();
+    if (typeof window !== "undefined" && window.history.state?.omniFeedView === "search") {
+      try { window.history.replaceState(null, "", window.location.href); } catch (_) {}
+    }
+  });
 
-  btnSettingsOpen.addEventListener("click", showSettingsPage);
+  btnSettingsOpen.addEventListener("click", () => showSettingsPage(true));
   btnSettingsBack.addEventListener("click", () => {
     showFeedPage();
     reapplyFilters();
+    if (typeof window !== "undefined" && window.history.state?.omniFeedView === "settings") {
+      try { window.history.replaceState(null, "", window.location.href); } catch (_) {}
+    }
   });
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("popstate", (e: any) => {
+      const state = e.state;
+      if (state?.omniFeedView === "thread" && state.noteId) {
+        openThread(state.noteId, false, false);
+      } else if (state?.omniFeedView === "search") {
+        showSearchPage(false);
+      } else if (state?.omniFeedView === "settings") {
+        showSettingsPage(false);
+      } else {
+        if (threadPage.style.display !== "none" || searchPage.style.display !== "none" || settingsPage.style.display !== "none") {
+          showFeedPage(false);
+        }
+      }
+    });
+  }
 
   renderFilterSettings(settingsContent, (newPatterns) => {
     filterPatterns = newPatterns;

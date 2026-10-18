@@ -236,4 +236,87 @@ describe("People plugin (profile, follows, mutes)", () => {
     expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-profile")!.style.display).not.toBe("none");
     expect(peopleRoot().querySelector<HTMLElement>(".pv-npub-text")!.textContent).toBeDefined();
   });
+
+  it("toggles npub lookup bar visibility on demand", async () => {
+    await flush();
+    const searchBar = peopleRoot().querySelector<HTMLElement>(".pv-search-bar")!;
+    const btnToggleLookup = peopleRoot().querySelector<HTMLButtonElement>(".btn-toggle-lookup")!;
+
+    expect(searchBar.style.display).toBe("none");
+
+    btnToggleLookup.click();
+    expect(searchBar.style.display).toBe("flex");
+
+    btnToggleLookup.click();
+    expect(searchBar.style.display).toBe("none");
+  });
+
+  it("navigating to profile from following list shows Back button which returns to Following list", async () => {
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    // Deliver Kind 3 contact list
+    ws.deliver(["EVENT", "pv_my_contacts", {
+      id: "contacts-nav",
+      pubkey: myPubkey,
+      kind: 3,
+      created_at: 1700000000,
+      tags: [["p", friendPubkey]],
+      content: ""
+    }]);
+
+    peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-following")!.click();
+    await flush();
+
+    const userCard = peopleRoot().querySelector<HTMLElement>(".people-user-card")!;
+    expect(userCard).toBeDefined();
+
+    // Click user avatar to view profile
+    userCard.querySelector<HTMLElement>(".people-avatar")!.click();
+    await flush();
+
+    // Verify switched to Profile tab
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-profile")!.style.display).not.toBe("none");
+    const btnBack = peopleRoot().querySelector<HTMLButtonElement>(".btn-profile-back")!;
+    expect(btnBack.style.display).not.toBe("none");
+    expect(btnBack.textContent).toContain("Back to Following");
+
+    // Click Back
+    btnBack.click();
+    await flush();
+
+    // Should return to Following tab
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-following")!.style.display).not.toBe("none");
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-profile")!.style.display).toBe("none");
+  });
+
+  it("filters followed accounts by query string", async () => {
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    // Deliver Kind 3 with 2 friends
+    ws.deliver(["EVENT", "pv_my_contacts", {
+      id: "contacts-filter",
+      pubkey: myPubkey,
+      kind: 3,
+      created_at: 1700000000,
+      tags: [["p", friendPubkey], ["p", trollPubkey]],
+      content: ""
+    }]);
+
+    peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-following")!.click();
+    await flush();
+
+    let cards = peopleRoot().querySelectorAll(".people-user-card");
+    expect(cards.length).toBe(2);
+
+    const filterInput = peopleRoot().querySelector<HTMLInputElement>(".following-filter-input")!;
+    filterInput.value = friendPubkey;
+    filterInput.dispatchEvent(new Event("input"));
+    await flush();
+
+    cards = peopleRoot().querySelectorAll(".people-user-card");
+    expect(cards.length).toBe(1);
+    expect(cards[0].getAttribute("data-pubkey")).toBe(friendPubkey);
+  });
 });

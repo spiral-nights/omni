@@ -209,25 +209,50 @@ export class OmniShell extends BaseShell {
     const unpinnedGrid = document.getElementById("apps-unpinned-grid");
     const pinnedCountEl = document.getElementById("apps-pinned-count");
     const unpinnedCountEl = document.getElementById("apps-unpinned-count");
+    const totalBadgeEl = document.getElementById("apps-total-badge");
     if (!pinnedGrid || !unpinnedGrid) return;
 
     pinnedGrid.innerHTML = "";
     unpinnedGrid.innerHTML = "";
 
+    const searchInput = document.getElementById("apps-search-input") as HTMLInputElement | null;
+    const filterQuery = (searchInput?.value || "").trim().toLowerCase();
+
+    if (searchInput && !(searchInput as any)._bound) {
+      (searchInput as any)._bound = true;
+      searchInput.addEventListener("input", () => this.renderAppsLauncher());
+    }
+
     const appCandidates: InstalledPluginEntry[] = this.installedPlugins.filter((p) => p.enabled !== false);
+    if (totalBadgeEl) {
+      totalBadgeEl.textContent = `${appCandidates.length} Installed`;
+    }
+
+    const filteredCandidates = appCandidates.filter((p) => {
+      if (!filterQuery) return true;
+      const meta = this.getPluginMeta(p);
+      const hay = `${p.id} ${meta.name} ${meta.description || ""}`.toLowerCase();
+      return hay.includes(filterQuery);
+    });
 
     let pinnedCount = 0;
     let unpinnedCount = 0;
 
-    for (const plugin of appCandidates) {
+    for (const plugin of filteredCandidates) {
       const isPinned = this.isAppPinned(plugin);
       const meta = this.getPluginMeta(plugin);
-      const isFeed = plugin.id === "org.omni.plugin.feed";
+
+      // Category detection
+      let category = "App";
+      if (plugin.id.includes("feed")) category = "Social";
+      else if (plugin.id.includes("profile")) category = "Identity";
+      else if (plugin.id.includes("timer") || plugin.id.includes("checklist")) category = "Productivity";
+      else if (plugin.id.includes("relays")) category = "Network";
 
       const card = document.createElement("div");
       card.className = "app-card";
       card.style.cssText =
-        "display: flex; flex-direction: column; justify-content: space-between; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; gap: 12px; transition: border-color 0.15s ease;";
+        "display: flex; flex-direction: column; justify-content: space-between; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; gap: 12px; transition: all 0.15s ease; cursor: pointer;";
 
       const topRow = document.createElement("div");
       topRow.style.cssText = "display: flex; align-items: flex-start; gap: 10px;";
@@ -243,31 +268,41 @@ export class OmniShell extends BaseShell {
 
       const iconWrap = document.createElement("div");
       iconWrap.style.cssText =
-        "display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--omni-radius-sm); background: var(--omni-bg-subtle); color: var(--omni-accent-primary); flex-shrink: 0;";
+        "display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: var(--omni-radius-sm); background: var(--omni-bg-subtle); color: var(--omni-accent-primary); flex-shrink: 0;";
       iconWrap.innerHTML = iconSvg;
 
       const titleCol = document.createElement("div");
-      titleCol.style.cssText = "display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;";
+      titleCol.style.cssText = "display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0;";
 
       const nameRow = document.createElement("div");
-      nameRow.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 6px;";
+      nameRow.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;";
 
       const nameEl = document.createElement("span");
       nameEl.style.cssText =
-        "font-weight: 600; font-size: 0.88rem; color: var(--omni-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
+        "font-weight: 600; font-size: 0.9rem; color: var(--omni-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
       nameEl.textContent = meta.name;
+
+      const metaBadges = document.createElement("div");
+      metaBadges.style.cssText = "display: flex; align-items: center; gap: 4px;";
+
+      const catBadge = document.createElement("span");
+      catBadge.style.cssText =
+        "font-size: 0.65rem; padding: 1px 6px; border-radius: var(--omni-radius-pill); background: rgba(212, 163, 115, 0.12); color: var(--omni-accent-primary); font-weight: 500;";
+      catBadge.textContent = category;
 
       const badgeEl = document.createElement("span");
       badgeEl.style.cssText =
         "font-size: 0.65rem; padding: 1px 6px; border-radius: var(--omni-radius-pill); background: var(--omni-bg-subtle); color: var(--omni-text-muted); font-family: var(--omni-font-mono);";
       badgeEl.textContent = `v${meta.version}`;
 
+      metaBadges.appendChild(catBadge);
+      metaBadges.appendChild(badgeEl);
       nameRow.appendChild(nameEl);
-      nameRow.appendChild(badgeEl);
+      nameRow.appendChild(metaBadges);
 
       const descEl = document.createElement("p");
       descEl.style.cssText =
-        "font-size: 0.74rem; color: var(--omni-text-secondary); margin: 0; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;";
+        "font-size: 0.75rem; color: var(--omni-text-secondary); margin: 0; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;";
       descEl.textContent = meta.description || "Standalone Nostr web application.";
 
       titleCol.appendChild(nameRow);
@@ -289,7 +324,8 @@ export class OmniShell extends BaseShell {
       btnPin.innerHTML = `${icon("pin", 13)} <span>${isPinned ? "Pinned" : "Pin to Dock"}</span>`;
 
       btnPin.title = isPinned ? "Unpin from navigation dock" : "Pin to navigation dock";
-      btnPin.addEventListener("click", () => {
+      btnPin.addEventListener("click", (e) => {
+        e.stopPropagation();
         this.setAppPinned(plugin.id, !isPinned);
       });
 
@@ -297,7 +333,14 @@ export class OmniShell extends BaseShell {
       btnOpen.className = "btn-publish btn-app-launch";
       btnOpen.style.cssText = "font-size: 0.72rem; padding: 4px 12px;";
       btnOpen.textContent = "Open App";
-      btnOpen.addEventListener("click", () => {
+      btnOpen.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.showPage(plugin.id);
+      });
+
+      // Clicking anywhere on card opens the app
+      card.addEventListener("click", (e) => {
+        if ((e.target as HTMLElement).closest(".btn-app-pin")) return;
         this.showPage(plugin.id);
       });
 
@@ -321,7 +364,9 @@ export class OmniShell extends BaseShell {
       const emptyNote = document.createElement("div");
       emptyNote.style.cssText =
         "grid-column: 1 / -1; padding: 18px; text-align: center; color: var(--omni-text-muted); font-size: 0.78rem; background: var(--omni-bg-surface); border: 1px dashed var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
-      emptyNote.textContent = "No pinned applications. Pin apps to keep them in your navigation dock.";
+      emptyNote.textContent = filterQuery
+        ? `No pinned applications matching "${filterQuery}".`
+        : "No pinned applications. Pin apps to keep them in your navigation dock.";
       pinnedGrid.appendChild(emptyNote);
     }
 
@@ -329,7 +374,9 @@ export class OmniShell extends BaseShell {
       const emptyNote = document.createElement("div");
       emptyNote.style.cssText =
         "grid-column: 1 / -1; padding: 18px; text-align: center; color: var(--omni-text-muted); font-size: 0.78rem; background: var(--omni-bg-surface); border: 1px dashed var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
-      emptyNote.textContent = "All installed applications are currently pinned to your navigation dock.";
+      emptyNote.textContent = filterQuery
+        ? `No unpinned applications matching "${filterQuery}".`
+        : "All installed applications are currently pinned to your navigation dock.";
       unpinnedGrid.appendChild(emptyNote);
     }
   }
@@ -381,7 +428,12 @@ export class OmniShell extends BaseShell {
   /**
    * Switch center viewport between full-page apps and Widgets Dashboard
    */
-  public showPage(page: AppPage): void {
+  public showPage(page: AppPage, pushState = true): void {
+    if (pushState && typeof window !== "undefined") {
+      try {
+        window.history.pushState({ type: "omni-classic-page", page }, "");
+      } catch (_) {}
+    }
     const mainVp = this.mainViewport || this.root.querySelector(".main-viewport");
     const allPages = mainVp?.querySelectorAll<HTMLElement>(".app-page") || [];
     allPages.forEach((p) => p.classList.remove("active"));
@@ -1608,10 +1660,17 @@ export class OmniShell extends BaseShell {
             <div class="widgets-page-header">
               <div class="widgets-page-title-row">
                 <h2 class="widgets-page-title">Applications</h2>
-                <span class="widgets-page-badge">Launcher</span>
+                <span class="widgets-page-badge" id="apps-total-badge">Launcher</span>
               </div>
-              <p class="widgets-page-desc">All installed applications. Pin your favorites to the navigation dock for instant access.</p>
+              <p class="widgets-page-desc">All installed applications. Pin your favorites to the navigation dock or launch any application directly.</p>
             </div>
+
+            <!-- Apps Search Bar -->
+            <div class="apps-search-bar" style="display: flex; align-items: center; gap: 8px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 8px 12px; margin-bottom: 16px;">
+              <span style="color: var(--omni-text-muted); display: flex; align-items: center;">${icon("search", 15)}</span>
+              <input id="apps-search-input" type="text" placeholder="Search applications..." style="flex: 1; background: transparent; border: none; outline: none; color: var(--omni-text-primary); font-size: 0.85rem;" />
+            </div>
+
             <div class="apps-launcher-content" style="display: flex; flex-direction: column; gap: 20px;">
               <div class="apps-section">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -1981,6 +2040,14 @@ export class OmniShell extends BaseShell {
     this.dockBtnApps?.addEventListener("click", () => this.showPage("apps"));
     this.dockBtnWidgets?.addEventListener("click", () => this.showPage("widgets"));
     this.dockBtnSettings?.addEventListener("click", () => this.openSettings("plugins"));
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("popstate", (e) => {
+        if (e.state?.type === "omni-classic-page" && e.state.page) {
+          this.showPage(e.state.page, false);
+        }
+      });
+    }
 
     const btnToggleGuide = document.getElementById("btn-toggle-viewport-guide");
     const guideBox = document.getElementById("viewport-guide-box");

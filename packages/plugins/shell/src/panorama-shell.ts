@@ -1197,10 +1197,16 @@ export class PanoramaShell extends BaseShell {
     }
   }
 
-  public async openApp(pluginId: string): Promise<void> {
+  public async openApp(pluginId: string, pushHistory = true): Promise<void> {
     const plugin = this.installedPlugins.find((p) => p.id === pluginId);
     if (!plugin) {
       return;
+    }
+
+    if (pushHistory && typeof window !== "undefined") {
+      try {
+        window.history.pushState({ type: "omni-panorama-app", pluginId }, "");
+      } catch (_) {}
     }
 
     this.currentOpenedAppId = pluginId;
@@ -1597,8 +1603,24 @@ export class PanoramaShell extends BaseShell {
     // Back button on full app slide-in overlay
     const btnOverlayBack = document.getElementById("btn-overlay-back");
     btnOverlayBack?.addEventListener("click", () => {
-      this.closeApp();
+      if (typeof window !== "undefined" && window.history.length > 1) {
+        window.history.back();
+      } else {
+        this.closeApp();
+      }
     });
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("popstate", (e) => {
+        if (this.currentOpenedAppId) {
+          if (e.state?.type !== "omni-panorama-app") {
+            this.closeApp();
+          }
+        } else if (e.state?.type === "omni-panorama-app" && e.state.pluginId) {
+          this.openApp(e.state.pluginId, false);
+        }
+      });
+    }
 
     // Inspector Modal Close
     document.getElementById("btn-inspector-close")?.addEventListener("click", () => {

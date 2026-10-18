@@ -154,6 +154,10 @@ const ICONS = {
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
     <circle cx="12" cy="7" r="4"/>
   </svg>`,
+  arrowLeft: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="19" y1="12" x2="5" y2="12"/>
+    <polyline points="12 19 5 12 12 5"/>
+  </svg>`,
   users: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
     <circle cx="9" cy="7" r="4"/>
@@ -236,8 +240,8 @@ async function mountProfileViewer(root: HTMLElement) {
     <div class="profile-viewer-container" style="display: flex; flex-direction: column; gap: 16px; padding: 12px; max-width: 760px; margin: 0 auto; color: var(--text-primary, #ede8df); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
       
       <!-- Top App Header & Viewport Tabs -->
-      <div class="people-header" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 0;">
-        <div style="display: flex; align-items: center; gap: 12px;">
+      <div class="people-header" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 0; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
           <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-primary, #ede8df);">People</h2>
           <div class="people-tabs">
             <button class="people-tab-btn btn-tab-profile active" data-tab="profile">Profile</button>
@@ -245,12 +249,24 @@ async function mountProfileViewer(root: HTMLElement) {
             <button class="people-tab-btn btn-tab-blocked" data-tab="blocked">Blocked (<span class="count-blocked">0</span>)</button>
           </div>
         </div>
+        <button class="btn-toggle-lookup" title="Search by npub or hex pubkey">
+          ${ICONS.search}
+          <span>Lookup npub</span>
+        </button>
       </div>
 
       <!-- PROFILE TAB VIEW -->
       <div class="pv-tab-content pv-tab-profile">
-        <!-- Top Search & Switch Bar -->
-        <div class="pv-search-bar" style="display: flex; align-items: center; gap: 8px; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 8px); padding: 6px 10px; margin-bottom: 16px;">
+        <!-- Back button when opened from Following / Blocked list -->
+        <div class="pv-profile-top-bar" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px;">
+          <button class="btn-profile-back" style="display: none;">
+            ${ICONS.arrowLeft}
+            <span class="btn-profile-back-text">Back to Following</span>
+          </button>
+        </div>
+
+        <!-- Top Search & Switch Bar (Hidden by default, toggled on demand) -->
+        <div class="pv-search-bar" style="display: none; align-items: center; gap: 8px; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 8px); padding: 6px 10px; margin-bottom: 16px;">
           <span style="color: var(--text-muted, #78716c); display: flex; align-items: center;">${ICONS.search}</span>
           <input class="pv-search-input" type="text" placeholder="Lookup pubkey (hex) or npub1..." style="flex: 1; background: transparent; border: none; outline: none; color: var(--text-primary, #ede8df); font-family: var(--font-mono, monospace); font-size: 0.8rem;" />
           <button class="pv-search-btn btn-secondary" style="background: var(--bg-subtle, #22201d); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-sm, 6px); color: var(--text-primary, #ede8df); padding: 4px 10px; font-size: 0.75rem; cursor: pointer;">Lookup</button>
@@ -383,6 +399,11 @@ async function mountProfileViewer(root: HTMLElement) {
   const blockedFilterInput = container.querySelector<HTMLInputElement>(".blocked-filter-input")!;
 
   // Profile elements
+  const btnToggleLookup = container.querySelector<HTMLButtonElement>(".btn-toggle-lookup")!;
+  const btnProfileBack = container.querySelector<HTMLButtonElement>(".btn-profile-back")!;
+  const btnProfileBackText = container.querySelector<HTMLElement>(".btn-profile-back-text")!;
+  const searchBarEl = container.querySelector<HTMLElement>(".pv-search-bar")!;
+
   const bannerEl = container.querySelector<HTMLElement>(".pv-banner")!;
   const avatarWrapEl = container.querySelector<HTMLElement>(".pv-avatar-wrap")!;
   const displayNameEl = container.querySelector<HTMLElement>(".pv-display-name")!;
@@ -407,8 +428,19 @@ async function mountProfileViewer(root: HTMLElement) {
 
   root.appendChild(container);
 
-  // Tab switching
-  function switchTab(tab: "profile" | "following" | "blocked") {
+  let previousTab: "following" | "blocked" | null = null;
+
+  function updateProfileBackButton() {
+    if (previousTab && activeTab === "profile") {
+      btnProfileBack.style.display = "inline-flex";
+      btnProfileBackText.textContent = previousTab === "blocked" ? "Back to Blocked" : "Back to Following";
+    } else {
+      btnProfileBack.style.display = "none";
+    }
+  }
+
+  // Tab switching with optional pushState
+  function switchTab(tab: "profile" | "following" | "blocked", pushState = true) {
     activeTab = tab;
     btnTabProfile.classList.toggle("active", tab === "profile");
     btnTabFollowing.classList.toggle("active", tab === "following");
@@ -418,6 +450,18 @@ async function mountProfileViewer(root: HTMLElement) {
     tabFollowing.style.display = tab === "following" ? "block" : "none";
     tabBlocked.style.display = tab === "blocked" ? "block" : "none";
 
+    updateProfileBackButton();
+
+    if (pushState) {
+      try {
+        window.history.pushState(
+          { type: "omni-people-view", tab, pubkey: activePubkey, from: previousTab },
+          "",
+          `?view=${tab}${tab === "profile" && activePubkey ? `&pubkey=${activePubkey}` : ""}`
+        );
+      } catch (_) {}
+    }
+
     if (tab === "following") {
       renderFollowingList();
     } else if (tab === "blocked") {
@@ -425,9 +469,43 @@ async function mountProfileViewer(root: HTMLElement) {
     }
   }
 
-  btnTabProfile.addEventListener("click", () => switchTab("profile"));
-  btnTabFollowing.addEventListener("click", () => switchTab("following"));
-  btnTabBlocked.addEventListener("click", () => switchTab("blocked"));
+  btnTabProfile.addEventListener("click", () => {
+    previousTab = null;
+    switchTab("profile", true);
+  });
+  btnTabFollowing.addEventListener("click", () => {
+    previousTab = null;
+    switchTab("following", true);
+  });
+  btnTabBlocked.addEventListener("click", () => {
+    previousTab = null;
+    switchTab("blocked", true);
+  });
+
+  // Profile back button handler
+  btnProfileBack.addEventListener("click", () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      const target = previousTab || "following";
+      previousTab = null;
+      updateProfileBackButton();
+      switchTab(target, true);
+    }
+  });
+
+  // Toggle npub lookup bar
+  btnToggleLookup.addEventListener("click", () => {
+    const isHidden = searchBarEl.style.display === "none" || !searchBarEl.style.display;
+    searchBarEl.style.display = isHidden ? "flex" : "none";
+    if (isHidden) {
+      if (activeTab !== "profile") {
+        previousTab = null;
+        switchTab("profile", true);
+      }
+      setTimeout(() => searchInput.focus(), 50);
+    }
+  });
 
   // Copy npub handler
   copyBtn.addEventListener("click", async () => {
@@ -450,8 +528,9 @@ async function mountProfileViewer(root: HTMLElement) {
       raw = npubToHex(raw);
     }
     if (raw.length === 64) {
+      previousTab = null;
       loadProfile(raw);
-      switchTab("profile");
+      switchTab("profile", true);
     } else {
       alert("Please enter a valid 64-character hex pubkey or bech32 npub1 string.");
     }
@@ -818,8 +897,9 @@ async function mountProfileViewer(root: HTMLElement) {
 
     // Click on info/avatar navigates to profile tab
     const openUser = () => {
+      previousTab = isBlockList ? "blocked" : "following";
       loadProfile(pubkey);
-      switchTab("profile");
+      switchTab("profile", true);
     };
     card.querySelector<HTMLElement>(".people-avatar")?.addEventListener("click", openUser);
     card.querySelector<HTMLElement>(".people-user-info")?.addEventListener("click", openUser);
@@ -1034,13 +1114,27 @@ async function mountProfileViewer(root: HTMLElement) {
   }
 
   // Listen for route navigation changes using standard web APIs (popstate / hashchange)
-  const syncRouteFromLocation = () => {
+  const syncRouteFromLocation = (e?: any) => {
     try {
+      if (e?.state?.type === "omni-people-view") {
+        const state = e.state;
+        previousTab = state.from || null;
+        if (state.pubkey && state.pubkey !== activePubkey) {
+          loadProfile(state.pubkey);
+        }
+        switchTab(state.tab, false);
+        return;
+      }
+
       const searchParams = new URLSearchParams(window.location.search || window.location.hash.replace("#", "?"));
       const pk = searchParams.get("pubkey");
       const v = searchParams.get("view");
       if (v === "following" || v === "blocked" || v === "profile") {
-        switchTab(v as any);
+        switchTab(v as any, false);
+      } else if (previousTab) {
+        const target = previousTab;
+        previousTab = null;
+        switchTab(target, false);
       }
       if (pk && pk !== activePubkey) {
         loadProfile(pk);

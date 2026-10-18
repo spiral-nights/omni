@@ -905,6 +905,97 @@ body.theme-panorama,
   flex-direction: column;
 }
 
+.thread-reply-nested {
+  margin-left: 20px;
+  border-left: 2px solid #222222;
+  padding-left: 12px;
+  position: relative;
+}
+
+.thread-reply-nested::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 24px;
+  width: 8px;
+  height: 2px;
+  background: #222222;
+}
+
+.thread-reply-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.73rem;
+  color: #888888;
+  margin-bottom: 4px;
+  background: #161616;
+  padding: 2px 8px;
+  border-radius: 0;
+  width: fit-content;
+}
+
+.thread-reply-indicator .reply-target-author {
+  color: #00a4ef;
+  font-weight: 500;
+}
+
+.btn-profile-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid #333333;
+  color: #ffffff;
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-profile-back:hover {
+  background: #1a1a1a;
+  border-color: #00a4ef;
+  color: #00a4ef;
+}
+
+.btn-toggle-lookup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid #333333;
+  color: #aaaaaa;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-toggle-lookup:hover {
+  color: #ffffff;
+  border-color: #00a4ef;
+}
+
+.following-filter-input,
+.blocked-filter-input {
+  background: #111111;
+  border: 1px solid #333333;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 0;
+  outline: none;
+  font-size: 0.82rem;
+  transition: border-color 0.15s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.following-filter-input:focus,
+.blocked-filter-input:focus {
+  border-color: #00a4ef;
+}
+
 /* People App Tabs & Views */
 .people-tabs {
   display: flex;
@@ -1199,18 +1290,21 @@ body.theme-panorama,
 .note-card {
   display: flex;
   gap: 14px;
-  padding: 14px 0;
+  padding: 14px 8px;
   border: none;
-  border-bottom: 1px solid #161616;
+  border-bottom: 1px solid #1a1a1a;
   background: transparent;
-  transition: background 0.12s ease;
+  transition: background 0.15s ease, border-left-color 0.15s ease;
   text-decoration: none;
   box-sizing: border-box;
+  cursor: pointer;
+  border-left: 2px solid transparent;
 }
 
 .feed-post:hover,
 .note-card:hover {
-  background: transparent;
+  background: #141414;
+  border-left-color: #00a4ef;
 }
 
 .feed-post-avatar-col {
