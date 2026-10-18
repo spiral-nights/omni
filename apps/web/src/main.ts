@@ -98,13 +98,13 @@ const initialPlugins: InstalledPluginEntry[] = [
   },
   {
     id: "org.omni.plugin.profile-viewer",
-    name: "Profile Viewer",
-    displayName: "Profile",
-    description: "View decentralized Nostr user profiles and recent notes.",
-    icon: "user",
+    name: "People",
+    displayName: "People",
+    description: "Nostr user profiles, following, and block list management.",
+    icon: "users",
     viewport: "main",
     views: [
-      { id: "main", title: "Profile Viewer", path: "" }
+      { id: "main", title: "People", path: "" }
     ],
     handledIntents: ["view_profile"],
     scriptContent: profileViewerScript,

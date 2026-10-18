@@ -605,6 +605,133 @@ body {
   flex-direction: column;
 }
 
+/* People App Tabs & Views */
+.people-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--omni-bg-subtle, rgba(255, 255, 255, 0.05));
+  padding: 3px 4px;
+  border-radius: var(--omni-radius-pill, 20px);
+}
+
+.people-tab-btn {
+  background: transparent;
+  color: var(--omni-text-secondary, #9e988f);
+  border: none;
+  border-radius: var(--omni-radius-pill, 16px);
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.people-tab-btn.active {
+  background: var(--omni-bg-surface, #22201d);
+  color: var(--omni-text-primary, #ede8df);
+  font-weight: 600;
+}
+
+.people-tab-btn:hover:not(.active) {
+  color: var(--omni-text-primary, #ede8df);
+}
+
+.people-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.people-user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--omni-bg-surface, #191816);
+  border: 1px solid var(--omni-border-subtle, #272522);
+  border-radius: var(--omni-radius-md, 8px);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.people-user-card:hover {
+  border-color: var(--omni-border-active, #3d3a35);
+  background: var(--omni-bg-elevated, #1f1d1a);
+}
+
+.people-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.people-user-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--omni-text-primary, #ede8df);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.people-user-handle {
+  font-size: 0.78rem;
+  color: var(--omni-text-secondary, #9e988f);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.people-user-about {
+  font-size: 0.76rem;
+  color: var(--omni-text-muted, #78716c);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.people-user-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-follow-toggle,
+.btn-block-toggle {
+  font-size: 0.76rem;
+  padding: 4px 12px;
+  border-radius: var(--omni-radius-pill, 16px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+  border: 1px solid var(--omni-border-subtle, #383530);
+  background: var(--omni-bg-subtle, #22201d);
+  color: var(--omni-text-primary, #ede8df);
+}
+
+.btn-follow-toggle.is-following {
+  background: rgba(212, 163, 115, 0.15);
+  border-color: rgba(212, 163, 115, 0.4);
+  color: var(--omni-accent-primary, #d4a373);
+}
+
+.btn-follow-toggle.is-following:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+.btn-block-toggle.is-blocked {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
 /* Note Composer (Bluesky Seamless Post Box) */
 .feed-composer,
 .composer-card {

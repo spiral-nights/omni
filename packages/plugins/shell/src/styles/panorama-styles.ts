@@ -905,6 +905,132 @@ body.theme-panorama,
   flex-direction: column;
 }
 
+/* People App Tabs & Views */
+.people-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #111111;
+  padding: 3px 4px;
+  border-radius: 0;
+}
+
+.people-tab-btn {
+  background: transparent;
+  color: #999999;
+  border: none;
+  border-radius: 0;
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.people-tab-btn.active {
+  background: #00a4ef;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.people-tab-btn:hover:not(.active) {
+  color: #ffffff;
+}
+
+.people-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.people-user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #111111;
+  border: 1px solid #222222;
+  border-radius: 0;
+  transition: border-color 0.15s ease;
+}
+
+.people-user-card:hover {
+  border-color: #00a4ef;
+}
+
+.people-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.people-user-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.people-user-handle {
+  font-size: 0.78rem;
+  color: #999999;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.people-user-about {
+  font-size: 0.76rem;
+  color: #666666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.people-user-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-follow-toggle,
+.btn-block-toggle {
+  font-size: 0.76rem;
+  padding: 4px 12px;
+  border-radius: 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+  border: 1px solid #333333;
+  background: #1a1a1a;
+  color: #ffffff;
+}
+
+.btn-follow-toggle.is-following {
+  background: rgba(0, 164, 239, 0.2);
+  border-color: #00a4ef;
+  color: #00a4ef;
+}
+
+.btn-follow-toggle.is-following:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.btn-block-toggle.is-blocked {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
 /* Note Composer */
 .feed-composer,
 .composer-card {

@@ -1,0 +1,239 @@
+// @vitest-environment happy-dom
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const peopleCode = readFileSync(
+  join(__dirname, "../dist/index.js"),
+  "utf8"
+).replace(/^export /gm, "");
+
+class FakeWebSocket {
+  static OPEN = 1;
+  static instances: FakeWebSocket[] = [];
+  url: string;
+  readyState = 0;
+  onopen: any = null;
+  onmessage: any = null;
+  onerror: any = null;
+  onclose: any = null;
+  sent: any[] = [];
+
+  constructor(url: string) {
+    this.url = url;
+    FakeWebSocket.instances.push(this);
+    setTimeout(() => {
+      this.readyState = 1;
+      this.onopen?.(new Event("open"));
+    }, 0);
+  }
+
+  send(data: string) {
+    this.sent.push(JSON.parse(data));
+  }
+
+  close() {
+    this.readyState = 3;
+  }
+
+  deliver(frame: any[]) {
+    this.onmessage?.({ data: JSON.stringify(frame) });
+  }
+}
+
+function flush() {
+  return new Promise((r) => setTimeout(r, 20));
+}
+
+describe("People plugin (profile, follows, mutes)", () => {
+  let document: Document;
+  const myPubkey = "1".repeat(64);
+  const friendPubkey = "2".repeat(64);
+  const trollPubkey = "3".repeat(64);
+
+  beforeEach(() => {
+    const store = new Map<string, string>();
+    (window as any).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => store.set(k, String(v)),
+      removeItem: (k: string) => store.delete(k),
+      clear: () => store.clear()
+    };
+    document = window.document;
+    document.body.innerHTML = "";
+    FakeWebSocket.instances = [];
+    (window as any).WebSocket = FakeWebSocket;
+    (window as any).nostr = {
+      getPublicKey: vi.fn(async () => myPubkey),
+      signEvent: vi.fn(async (ev: any) => ({
+        ...ev,
+        id: `signed-${ev.kind}`,
+        pubkey: myPubkey,
+        sig: "sig"
+      }))
+    };
+    (window as any).omni = {
+      intents: { handle: vi.fn() }
+    };
+    (window as any).location.search = "";
+    (window as any).location.hash = "";
+    new Function(peopleCode)();
+  });
+
+  const peopleRoot = () => document.body.querySelector<HTMLElement>(".profile-viewer-container")!;
+
+  it("renders People tabs and switches views", async () => {
+    await flush();
+    const btnProfile = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-profile")!;
+    const btnFollowing = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-following")!;
+    const btnBlocked = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-blocked")!;
+
+    expect(btnProfile.classList.contains("active")).toBe(true);
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-profile")!.style.display).not.toBe("none");
+
+    btnFollowing.click();
+    expect(btnFollowing.classList.contains("active")).toBe(true);
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-following")!.style.display).not.toBe("none");
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-profile")!.style.display).toBe("none");
+
+    btnBlocked.click();
+    expect(btnBlocked.classList.contains("active")).toBe(true);
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-blocked")!.style.display).not.toBe("none");
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-following")!.style.display).toBe("none");
+  });
+
+  it("loads user's Kind 3 contacts and renders Following list with 1-click unfollow", async () => {
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    // Deliver Kind 3 contact list
+    ws.deliver(["EVENT", "pv_my_contacts", {
+      id: "contacts-1",
+      pubkey: myPubkey,
+      kind: 3,
+      created_at: 1700000000,
+      tags: [["p", friendPubkey]],
+      content: ""
+    }]);
+
+    // Check count in tab button
+    const countFollowing = peopleRoot().querySelector<HTMLElement>(".count-following")!;
+    expect(countFollowing.textContent).toBe("1");
+
+    // Switch to Following tab
+    peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-following")!.click();
+    await flush();
+
+    const userCards = peopleRoot().querySelectorAll(".people-user-card");
+    expect(userCards.length).toBe(1);
+    expect(userCards[0].getAttribute("data-pubkey")).toBe(friendPubkey);
+
+    // Click Unfollow
+    const unfollowBtn = userCards[0].querySelector<HTMLButtonElement>(".btn-unfollow-row")!;
+    unfollowBtn.click();
+    await flush();
+
+    // Verify Kind 3 was signed and published
+    const signEventSpy = (window as any).nostr.signEvent;
+    expect(signEventSpy).toHaveBeenCalled();
+    const lastCall = signEventSpy.mock.calls[signEventSpy.mock.calls.length - 1][0];
+    expect(lastCall.kind).toBe(3);
+    expect(lastCall.tags.some((t: string[]) => t[1] === friendPubkey)).toBe(false);
+
+    expect(countFollowing.textContent).toBe("0");
+  });
+
+  it("loads user's Kind 10000 mute list and renders Blocked list with 1-click unblock", async () => {
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    // Deliver Kind 10000 mute list
+    ws.deliver(["EVENT", "pv_my_mutes", {
+      id: "mutes-1",
+      pubkey: myPubkey,
+      kind: 10000,
+      created_at: 1700000000,
+      tags: [["p", trollPubkey]],
+      content: ""
+    }]);
+
+    const countBlocked = peopleRoot().querySelector<HTMLElement>(".count-blocked")!;
+    expect(countBlocked.textContent).toBe("1");
+
+    // Switch to Blocked tab
+    peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-blocked")!.click();
+    await flush();
+
+    const userCards = peopleRoot().querySelectorAll(".people-user-card");
+    expect(userCards.length).toBe(1);
+    expect(userCards[0].getAttribute("data-pubkey")).toBe(trollPubkey);
+
+    // Click Unblock
+    const unblockBtn = userCards[0].querySelector<HTMLButtonElement>(".btn-unblock-row")!;
+    unblockBtn.click();
+    await flush();
+
+    const signEventSpy = (window as any).nostr.signEvent;
+    expect(signEventSpy).toHaveBeenCalled();
+    const lastCall = signEventSpy.mock.calls[signEventSpy.mock.calls.length - 1][0];
+    expect(lastCall.kind).toBe(10000);
+    expect(lastCall.tags.some((t: string[]) => t[1] === trollPubkey)).toBe(false);
+
+    expect(countBlocked.textContent).toBe("0");
+  });
+
+  it("inspecting another user displays Follow and Block buttons", async () => {
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    // Search/Lookup friendPubkey
+    const searchInput = peopleRoot().querySelector<HTMLInputElement>(".pv-search-input")!;
+    const searchBtn = peopleRoot().querySelector<HTMLButtonElement>(".pv-search-btn")!;
+    searchInput.value = friendPubkey;
+    searchBtn.click();
+
+    await flush();
+
+    const btnFollow = peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-follow")!;
+    const btnBlock = peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-block")!;
+
+    expect(btnFollow.style.display).not.toBe("none");
+    expect(btnBlock.style.display).not.toBe("none");
+    expect(btnFollow.textContent).toBe("Follow");
+
+    // Click Follow on profile
+    btnFollow.click();
+    await flush();
+
+    expect(btnFollow.textContent).toBe("Following");
+    expect(btnFollow.classList.contains("is-following")).toBe(true);
+
+    // Click Block on profile
+    btnBlock.click();
+    await flush();
+
+    expect(btnBlock.textContent).toBe("Blocked");
+    expect(btnBlock.classList.contains("is-blocked")).toBe(true);
+  });
+
+  it("responds to view_profile intent by loading profile and switching to Profile tab", async () => {
+    await flush();
+    const intentHandler = (window as any).omni.intents.handle.mock.calls.find(
+      (c: any[]) => c[0] === "view_profile"
+    )?.[1];
+    expect(intentHandler).toBeDefined();
+
+    // Switch to Blocked tab first
+    peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-blocked")!.click();
+
+    // Dispatch intent
+    intentHandler({ pubkey: friendPubkey });
+    await flush();
+
+    // Verify it switched back to Profile tab and loaded friendPubkey
+    const btnProfile = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-profile")!;
+    expect(btnProfile.classList.contains("active")).toBe(true);
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-profile")!.style.display).not.toBe("none");
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-npub-text")!.textContent).toBeDefined();
+  });
+});
