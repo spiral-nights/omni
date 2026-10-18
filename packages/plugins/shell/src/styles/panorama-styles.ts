@@ -665,7 +665,8 @@ body.theme-panorama,
 }
 
 .btn-search-back,
-.btn-settings-back {
+.btn-settings-back,
+.btn-thread-back {
   background: transparent;
   border: none;
   color: #aaaaaa;
@@ -680,7 +681,8 @@ body.theme-panorama,
 }
 
 .btn-search-back:hover,
-.btn-settings-back:hover {
+.btn-settings-back:hover,
+.btn-thread-back:hover {
   color: #ffffff;
 }
 
@@ -826,6 +828,79 @@ body.theme-panorama,
 }
 
 .search-notes-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Feed Tabs (Following vs Global) */
+.feed-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #111111;
+  padding: 2px 3px;
+  border: 1px solid #222222;
+}
+
+.feed-tab-btn {
+  background: transparent;
+  color: #888888;
+  border: none;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.feed-tab-btn.active {
+  background: #00a4ef;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.feed-tab-btn:hover:not(.active) {
+  color: #ffffff;
+}
+
+/* Thread Page & Stream */
+.feed-thread-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.thread-ancestor-card {
+  position: relative;
+  opacity: 0.9;
+}
+
+.thread-ancestors {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.thread-focused-note {
+  border-left: 3px solid #00a4ef;
+  background: #111111;
+  margin: 6px 0;
+  padding: 4px 0;
+}
+
+.thread-focused-note .feed-post-content {
+  font-size: 1.02rem;
+  line-height: 1.5;
+}
+
+.thread-reply-composer {
+  margin: 10px 0;
+  padding: 12px;
+  background: #111111;
+  border: 1px solid #222222;
+}
+
+.thread-replies-list {
   display: flex;
   flex-direction: column;
 }
