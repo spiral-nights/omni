@@ -1,4 +1,4 @@
-import { NostrEvent, NostrFilter } from "@omni/types";
+import { NostrEvent, NostrFilter, Nip65Relay } from "@omni/types";
 
 export interface RelayPoolOptions {
   bootstrapRelays?: string[];
@@ -7,6 +7,37 @@ export interface RelayPoolOptions {
 
 export type EventCallback = (event: NostrEvent, relayUrl: string) => void;
 export type EoseCallback = (relayUrl: string) => void;
+
+export function parseNip65Relays(event: NostrEvent): Nip65Relay[] {
+  if (event.kind !== 10002) return [];
+  const list: Nip65Relay[] = [];
+  for (const tag of event.tags) {
+    if (tag[0] === "r" && tag[1]) {
+      const url = tag[1].trim().replace(/\/+$/, "");
+      const marker = tag[2]?.toLowerCase();
+      let read = true;
+      let write = true;
+      if (marker === "read") {
+        read = true;
+        write = false;
+      } else if (marker === "write") {
+        read = false;
+        write = true;
+      }
+      list.push({ url, read, write });
+    }
+  }
+  return list;
+}
+
+export function buildNip65Tags(relays: Nip65Relay[]): string[][] {
+  return relays.map((r) => {
+    const norm = r.url.trim().replace(/\/+$/, "");
+    if (r.read && !r.write) return ["r", norm, "read"];
+    if (!r.read && r.write) return ["r", norm, "write"];
+    return ["r", norm];
+  });
+}
 
 interface ActiveSubscription {
   subId: string;
@@ -19,6 +50,8 @@ export class RelayPool {
   private relays: Map<string, WebSocket> = new Map();
   private subscriptions: Map<string, ActiveSubscription> = new Map();
   private bootstrapUrls: string[];
+  private userRelays: Map<string, Nip65Relay> = new Map();
+  private authorRelays: Map<string, Nip65Relay[]> = new Map();
 
   constructor(options: RelayPoolOptions = {}) {
     this.bootstrapUrls = options.bootstrapRelays || [
@@ -77,12 +110,69 @@ export class RelayPool {
     }
   }
 
+  setUserRelays(relays: Nip65Relay[]): void {
+    this.userRelays.clear();
+    for (const r of relays) {
+      const norm = r.url.trim().replace(/\/+$/, "");
+      this.userRelays.set(norm, { ...r, url: norm });
+      if (r.read || r.write) {
+        this.addRelay(norm);
+      }
+    }
+  }
+
+  getUserRelays(): Nip65Relay[] {
+    return Array.from(this.userRelays.values());
+  }
+
+  setAuthorRelays(pubkey: string, relays: Nip65Relay[]): void {
+    const normalized = relays.map((r) => ({ ...r, url: r.url.trim().replace(/\/+$/, "") }));
+    this.authorRelays.set(pubkey, normalized);
+    for (const r of normalized) {
+      if (r.read || r.write) {
+        this.addRelay(r.url);
+      }
+    }
+  }
+
+  getAuthorRelays(pubkey: string): Nip65Relay[] | undefined {
+    return this.authorRelays.get(pubkey);
+  }
+
+  getWriteRelayUrls(pubkey?: string): string[] {
+    if (pubkey && this.authorRelays.has(pubkey)) {
+      const writes = this.authorRelays.get(pubkey)!.filter((r) => r.write).map((r) => r.url);
+      if (writes.length > 0) return Array.from(new Set(writes));
+    }
+    if (this.userRelays.size > 0) {
+      const writes = Array.from(this.userRelays.values()).filter((r) => r.write).map((r) => r.url);
+      if (writes.length > 0) return Array.from(new Set(writes));
+    }
+    return this.getConnectedRelayUrls();
+  }
+
+  getReadRelayUrls(pubkey?: string): string[] {
+    if (pubkey && this.authorRelays.has(pubkey)) {
+      const reads = this.authorRelays.get(pubkey)!.filter((r) => r.read).map((r) => r.url);
+      if (reads.length > 0) return Array.from(new Set(reads));
+    }
+    if (this.userRelays.size > 0) {
+      const reads = Array.from(this.userRelays.values()).filter((r) => r.read).map((r) => r.url);
+      if (reads.length > 0) return Array.from(new Set(reads));
+    }
+    return this.getConnectedRelayUrls();
+  }
+
   async publish(event: NostrEvent, targetRelays?: string[]): Promise<string[]> {
     const acceptedRelays: string[] = [];
     const message = JSON.stringify(["EVENT", event]);
 
-    const normalizedTargets = targetRelays && targetRelays.length > 0
-      ? new Set(targetRelays.map((u) => u.trim().replace(/\/+$/, "")))
+    const targets = targetRelays && targetRelays.length > 0
+      ? targetRelays
+      : (this.userRelays.size > 0 ? this.getWriteRelayUrls(event.pubkey) : null);
+
+    const normalizedTargets = targets
+      ? new Set(targets.map((u) => u.trim().replace(/\/+$/, "")))
       : null;
 
     for (const [url, ws] of this.relays.entries()) {

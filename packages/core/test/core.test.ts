@@ -339,3 +339,33 @@ describe("OmniKernel Profile Management", () => {
     expect(result?.metadata?.display_name).toBe("Bob Nostr");
   });
 });
+
+describe("OmniKernel NIP-65 Relay List Management", () => {
+  it("publishes and retrieves kind-10002 relay list metadata", async () => {
+    const kernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+    await kernel.boot();
+
+    const policies = [
+      { url: "wss://relay.damus.io", read: true, write: true },
+      { url: "wss://write.custom.relay", read: false, write: true },
+      { url: "wss://read.custom.relay", read: true, write: false }
+    ];
+
+    const signedEvent = await kernel.publishRelayList(policies);
+    expect(signedEvent.kind).toBe(10002);
+    expect(signedEvent.tags).toHaveLength(3);
+
+    const loadedRelays = await kernel.getRelayList();
+    expect(loadedRelays).not.toBeNull();
+    expect(loadedRelays).toHaveLength(3);
+    expect(loadedRelays![0]).toEqual({ url: "wss://relay.damus.io", read: true, write: true });
+    expect(loadedRelays![1]).toEqual({ url: "wss://write.custom.relay", read: false, write: true });
+    expect(loadedRelays![2]).toEqual({ url: "wss://read.custom.relay", read: true, write: false });
+
+    // Verify relayPool has registered the write relays
+    const writeUrls = kernel.relayPool.getWriteRelayUrls();
+    expect(writeUrls).toContain("wss://relay.damus.io");
+    expect(writeUrls).toContain("wss://write.custom.relay");
+    expect(writeUrls).not.toContain("wss://read.custom.relay");
+  });
+});

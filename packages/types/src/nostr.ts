@@ -62,3 +62,12 @@ export interface Nip07Signer {
   nip04?: Nip04Interface;
   nip44?: Nip44Interface;
 }
+
+/**
+ * NIP-65 Relay List Metadata Policy (kind: 10002)
+ */
+export interface Nip65Relay {
+  url: string;
+  read: boolean;
+  write: boolean;
+}

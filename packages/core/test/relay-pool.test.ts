@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import omniRuntimeScript from "../src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
-import { RelayPool } from "../src/nostr/relay-pool.js";
+import { RelayPool, parseNip65Relays, buildNip65Tags } from "../src/nostr/relay-pool.js";
 import { JsonRpcDispatcher } from "../src/ipc/json-rpc-dispatcher.js";
 import { CapabilityStore } from "../src/acl/capability-store.js";
 import { AclEngine } from "../src/acl/acl-engine.js";
@@ -274,6 +274,70 @@ describe("Per-Plugin Relay Scoping & Isolation", () => {
     // Publish scoped strictly to wss://nos.lol
     const scopedPublished = await pool.publish(testEvent, ["wss://nos.lol"]);
     expect(scopedPublished).toEqual(["wss://nos.lol"]);
+  });
+
+  it("parses and builds NIP-65 relay list metadata (kind: 10002)", () => {
+    const nip65Event = {
+      id: "ev_nip65",
+      pubkey: "pk1",
+      created_at: 1000,
+      kind: 10002,
+      tags: [
+        ["r", "wss://relay.damus.io"],
+        ["r", "wss://write.only.relay", "write"],
+        ["r", "wss://read.only.relay", "read"]
+      ],
+      content: "",
+      sig: "sig1"
+    };
+
+    const parsed = parseNip65Relays(nip65Event);
+    expect(parsed).toHaveLength(3);
+    expect(parsed[0]).toEqual({ url: "wss://relay.damus.io", read: true, write: true });
+    expect(parsed[1]).toEqual({ url: "wss://write.only.relay", read: false, write: true });
+    expect(parsed[2]).toEqual({ url: "wss://read.only.relay", read: true, write: false });
+
+    const rebuiltTags = buildNip65Tags(parsed);
+    expect(rebuiltTags).toEqual([
+      ["r", "wss://relay.damus.io"],
+      ["r", "wss://write.only.relay", "write"],
+      ["r", "wss://read.only.relay", "read"]
+    ]);
+  });
+
+  it("routes publishes to write-capable relays via NIP-65 outbox policy", async () => {
+    const pool = new RelayPool({
+      bootstrapRelays: ["wss://relay.damus.io", "wss://nos.lol"]
+    });
+
+    // Mock WebSocket instances
+    const mockDamusWs: any = { readyState: 1, send: () => {} };
+    const mockWriteWs: any = { readyState: 1, send: () => {} };
+    const mockReadWs: any = { readyState: 1, send: () => {} };
+
+    (pool as any).relays.set("wss://relay.damus.io", mockDamusWs);
+    (pool as any).relays.set("wss://write.relay", mockWriteWs);
+    (pool as any).relays.set("wss://read.relay", mockReadWs);
+
+    pool.setUserRelays([
+      { url: "wss://write.relay", read: false, write: true },
+      { url: "wss://read.relay", read: true, write: false }
+    ]);
+
+    const testEvent = {
+      id: "ev2",
+      pubkey: "pk1",
+      created_at: 1000,
+      kind: 1,
+      tags: [],
+      content: "Outbox post",
+      sig: "sig2"
+    };
+
+    // When publish is called without explicit targets, it should target write relays
+    const published = await pool.publish(testEvent);
+    expect(published).toContain("wss://write.relay");
+    expect(published).not.toContain("wss://read.relay");
   });
 });
 

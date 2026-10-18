@@ -1,7 +1,7 @@
-import { OmniManifest, NostrEvent, NostrFilter, EventMetadata, OmniWorkspaceState, OMNI_WORKSPACE_D_TAG } from "@omni/types";
+import { OmniManifest, NostrEvent, NostrFilter, EventMetadata, OmniWorkspaceState, OMNI_WORKSPACE_D_TAG, Nip65Relay } from "@omni/types";
 import { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import { LocalEventStore } from "../nostr/event-store.js";
-import { RelayPool } from "../nostr/relay-pool.js";
+import { RelayPool, parseNip65Relays, buildNip65Tags } from "../nostr/relay-pool.js";
 import { SubscriptionCoordinator } from "../nostr/subscription-coordinator.js";
 import { CapabilityStore } from "../acl/capability-store.js";
 import { AclEngine, PermissionPromptHandler } from "../acl/acl-engine.js";
@@ -84,11 +84,13 @@ export class OmniKernel {
     try {
       const pubkey = await this.getUserPubkey();
       this.eventStore.setUserPubkey(pubkey);
+      this.fetchRemoteRelayList(pubkey).catch(() => {});
     } catch {}
     this.keystore.onKeyChange(async () => {
       try {
         const pubkey = await this.getUserPubkey();
         this.eventStore.setUserPubkey(pubkey);
+        this.fetchRemoteRelayList(pubkey).catch(() => {});
       } catch {}
     });
     await this.storageManager.init();
@@ -607,6 +609,107 @@ export class OmniKernel {
     await this.eventStore.saveEvent(signed);
     await this.relayPool.publish(signed);
     return signed;
+  }
+
+  // --- NIP-65: Relay List Metadata (kind 10002) & Outbox Model ---
+
+  async publishRelayList(relays: Nip65Relay[]): Promise<NostrEvent> {
+    const pubkey = await this.getUserPubkey();
+    const draft = {
+      kind: 10002,
+      content: "",
+      tags: buildNip65Tags(relays),
+      created_at: Math.floor(Date.now() / 1000)
+    };
+    const signed = await this.keystore.signEvent(draft);
+    await this.eventStore.saveEvent(signed);
+    this.relayPool.setUserRelays(relays);
+    await this.relayPool.publish(signed);
+    return signed;
+  }
+
+  async getRelayList(pubkey?: string): Promise<Nip65Relay[] | null> {
+    const targetPubkey = pubkey || (await this.getUserPubkey());
+    const events = await this.eventStore.getEvents({
+      kinds: [10002],
+      authors: [targetPubkey],
+      limit: 1
+    });
+    if (events.length > 0) {
+      return parseNip65Relays(events[0]);
+    }
+    return null;
+  }
+
+  async fetchRemoteRelayList(
+    pubkey?: string,
+    timeoutMs = 3500
+  ): Promise<{ relays: Nip65Relay[]; event: NostrEvent } | null> {
+    const targetPubkey = pubkey || (await this.getUserPubkey());
+    const filter: NostrFilter = {
+      kinds: [10002],
+      authors: [targetPubkey],
+      limit: 1
+    };
+
+    return new Promise((resolve) => {
+      let resolved = false;
+      let latestEvent: NostrEvent | null = null;
+      let debounceTimer: any = null;
+      const eosedRelays = new Set<string>();
+
+      const finish = async () => {
+        if (resolved) return;
+        resolved = true;
+        if (debounceTimer) clearTimeout(debounceTimer);
+        clearTimeout(timer);
+        unsubscribe();
+        if (latestEvent) {
+          await this.eventStore.saveEvent(latestEvent);
+          const parsed = parseNip65Relays(latestEvent);
+          const isUser = (await this.getUserPubkey()) === targetPubkey;
+          if (isUser) {
+            this.relayPool.setUserRelays(parsed);
+          } else {
+            this.relayPool.setAuthorRelays(targetPubkey, parsed);
+          }
+          resolve({ relays: parsed, event: latestEvent });
+        } else {
+          const local = await this.getRelayList(targetPubkey);
+          if (local) {
+            resolve({ relays: local, event: null as any });
+          } else {
+            resolve(null);
+          }
+        }
+      };
+
+      const timer = setTimeout(finish, timeoutMs);
+      const subId = `nip65-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const unsubscribe = this.relayPool.subscribe(
+        subId,
+        [filter],
+        (ev) => {
+          if (!latestEvent || ev.created_at > latestEvent.created_at) {
+            latestEvent = ev;
+          }
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            finish();
+          }, 300);
+        },
+        (relayUrl) => {
+          if (relayUrl) eosedRelays.add(relayUrl);
+          const connectedCount = this.relayPool.getConnectedRelayCount();
+          const targetCount = connectedCount > 0 ? connectedCount : 1;
+          if (eosedRelays.size >= targetCount) {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            clearTimeout(timer);
+            finish();
+          }
+        }
+      );
+    });
   }
 
   async publishNote(content: string, tags: string[][] = []): Promise<NostrEvent> {
