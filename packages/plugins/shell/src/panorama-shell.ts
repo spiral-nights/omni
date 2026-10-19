@@ -1320,6 +1320,9 @@ export class PanoramaShell extends BaseShell {
       target.style.display = "block";
     }
 
+    if (this.sectionApps) {
+      this.sectionApps.scrollTop = 0;
+    }
     if (this.fullAppContainer) {
       this.fullAppContainer.scrollTop = 0;
     }
@@ -1420,6 +1423,20 @@ export class PanoramaShell extends BaseShell {
     const prevOpenedAppId = this.currentOpenedAppId;
     this.currentOpenedAppId = null;
     const gridView = document.getElementById("panorama-apps-grid-view");
+    const tilesGrid = document.getElementById("panorama-tiles-grid");
+
+    if (this.sectionApps) {
+      this.sectionApps.scrollTop = 0;
+    }
+    if (this.fullAppContainer) {
+      this.fullAppContainer.scrollTop = 0;
+    }
+    if (gridView) {
+      gridView.scrollTop = 0;
+    }
+    if (tilesGrid) {
+      tilesGrid.scrollTop = 0;
+    }
 
     if (this.fullAppOverlay) {
       this.fullAppOverlay.classList.remove("open", "card-flip-in-right");
@@ -1437,17 +1454,27 @@ export class PanoramaShell extends BaseShell {
           if (!this.currentOpenedAppId && this.fullAppOverlay) {
             this.fullAppOverlay.classList.remove("card-flip-out-right");
             this.fullAppOverlay.style.display = "none";
-            if (this.sectionApps) this.sectionApps.classList.remove("has-active-app");
+            if (this.sectionApps) {
+              this.sectionApps.classList.remove("has-active-app");
+              this.sectionApps.scrollTop = 0;
+            }
+            if (gridView) gridView.scrollTop = 0;
           }
         }, 260);
       } else {
         this.fullAppOverlay.style.display = "none";
         if (gridView) gridView.style.display = "flex";
-        if (this.sectionApps) this.sectionApps.classList.remove("has-active-app");
+        if (this.sectionApps) {
+          this.sectionApps.classList.remove("has-active-app");
+          this.sectionApps.scrollTop = 0;
+        }
       }
     } else {
       if (gridView) gridView.style.display = "flex";
-      if (this.sectionApps) this.sectionApps.classList.remove("has-active-app");
+      if (this.sectionApps) {
+        this.sectionApps.classList.remove("has-active-app");
+        this.sectionApps.scrollTop = 0;
+      }
     }
   }
 
