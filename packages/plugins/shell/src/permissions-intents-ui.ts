@@ -80,7 +80,7 @@ export function renderNostrWritePermissionsSection(options: NostrWriteSectionOpt
   const summaryBadge = document.createElement("span");
   summaryBadge.className = "write-permissions-summary-badge";
   summaryBadge.style.cssText = isPanorama
-    ? "font-size: 0.68rem; padding: 1px 6px; background: #222; color: #00a4ef;"
+    ? "font-size: 0.68rem; padding: 1px 6px; background: #222; color: var(--omni-accent-primary, #00a4ef);"
     : "font-size: 0.68rem; padding: 1px 6px; border-radius: var(--omni-radius-pill); background: var(--omni-bg-subtle); color: var(--omni-accent-primary);";
 
   const updateBadge = () => {
@@ -218,7 +218,7 @@ export function renderNostrWritePermissionsSection(options: NostrWriteSectionOpt
   btnAddKind.type = "button";
   btnAddKind.textContent = "+ Add";
   btnAddKind.style.cssText = isPanorama
-    ? "background: #222; border: 1px solid #444; color: #00a4ef; padding: 4px 10px; font-size: 0.72rem; cursor: pointer;"
+    ? "background: #222; border: 1px solid #444; color: var(--omni-accent-primary, #00a4ef); padding: 4px 10px; font-size: 0.72rem; cursor: pointer;"
     : "background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-subtle); color: var(--omni-accent-primary); padding: 4px 10px; font-size: 0.72rem; border-radius: var(--omni-radius-sm); cursor: pointer;";
 
   customInputRow.appendChild(inputKind);
@@ -368,7 +368,7 @@ export function renderHandledIntentsSection(options: HandledIntentsSectionOption
       const left = document.createElement("div");
       left.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
       left.innerHTML = `
-        <span style="font-size: 0.78rem; font-weight: 500; color: ${isPanorama ? "#fff" : "var(--omni-text-primary)"};">${info.label} <code style="font-size: 0.68rem; color: ${isPanorama ? "#00a4ef" : "var(--omni-accent-primary)"};">(${action})</code></span>
+        <span style="font-size: 0.78rem; font-weight: 500; color: ${isPanorama ? "#fff" : "var(--omni-text-primary)"};">${info.label} <code style="font-size: 0.68rem; color: ${isPanorama ? "var(--omni-accent-primary, #00a4ef)" : "var(--omni-accent-primary)"};">(${action})</code></span>
         <span style="font-size: 0.7rem; color: ${isPanorama ? "#888" : "var(--omni-text-muted)"};">${info.desc}</span>
       `;
 
@@ -433,13 +433,13 @@ export function showIntentEnableToast(options: IntentToastOptions): () => void {
   const toast = document.createElement("div");
   toast.id = "omni-intent-enable-toast";
   toast.style.cssText = isPanorama
-    ? "position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 100000; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #000; border: 1px solid #00a4ef; box-shadow: 0 8px 30px rgba(0,0,0,0.8); color: #fff; font-size: 0.82rem; font-family: var(--omni-font-sans, sans-serif); animation: omni-toast-slide-down 0.2s ease;"
+    ? "position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 100000; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #000; border: 1px solid var(--omni-accent-primary, #00a4ef); box-shadow: 0 8px 30px rgba(0,0,0,0.8); color: #fff; font-size: 0.82rem; font-family: var(--omni-font-sans, sans-serif); animation: omni-toast-slide-down 0.2s ease;"
     : "position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 100000; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--omni-bg-surface); border: 1px solid var(--omni-accent-primary); box-shadow: 0 8px 30px rgba(0,0,0,0.5); border-radius: var(--omni-radius-sm); color: var(--omni-text-primary); font-size: 0.82rem; font-family: var(--omni-font-sans, sans-serif); animation: omni-toast-slide-down 0.2s ease;";
 
   const label = document.createElement("div");
   label.style.cssText = "display: flex; align-items: center; gap: 6px;";
   label.innerHTML = `
-    <span style="color: ${isPanorama ? "#00a4ef" : "var(--omni-accent-primary)"}; font-weight: 700;">✦</span>
+    <span style="color: ${isPanorama ? "var(--omni-accent-primary, #00a4ef)" : "var(--omni-accent-primary)"}; font-weight: 700;">✦</span>
     <span>No active handler for <strong>"${action}"</strong>. Enable <strong>${candidateName}</strong>?</span>
   `;
 
@@ -449,7 +449,7 @@ export function showIntentEnableToast(options: IntentToastOptions): () => void {
   const btnEnable = document.createElement("button");
   btnEnable.textContent = "Enable & Open";
   btnEnable.style.cssText = isPanorama
-    ? "background: #00a4ef; color: #000; border: none; font-weight: 600; padding: 4px 10px; font-size: 0.75rem; cursor: pointer;"
+    ? "background: var(--omni-accent-primary, #00a4ef); color: #000; border: none; font-weight: 600; padding: 4px 10px; font-size: 0.75rem; cursor: pointer;"
     : "background: var(--omni-accent-primary); color: #141312; border: none; font-weight: 600; padding: 4px 10px; border-radius: var(--omni-radius-xs); font-size: 0.75rem; cursor: pointer;";
 
   const btnDismiss = document.createElement("button");

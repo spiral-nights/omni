@@ -419,23 +419,6 @@ export class PanoramaShell extends BaseShell {
             </div>
             <!-- Header Right Actions -->
             <div style="display: flex; align-items: center; gap: 8px; position: relative;">
-              <!-- Quick Color Chooser Button -->
-              <button class="panorama-header-color-btn" id="btn-panorama-header-color" title="Theme Accent Color" style="display: flex; align-items: center; gap: 6px; background: transparent; border: 1px solid #444; cursor: pointer; padding: 4px 8px; color: #fff;">
-                <span id="panorama-header-color-swatch" style="width: 12px; height: 12px; background: var(--omni-accent-primary, #00a4ef); display: inline-block;"></span>
-                <span style="font-size: 0.75rem; color: #ccc;">Theme</span>
-              </button>
-              <!-- Quick Header Color Dropdown / Popup -->
-              <div class="panorama-color-popup" id="panorama-header-color-popup" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #222; padding-bottom: 6px;">
-                  <strong style="font-size: 0.82rem; color: #fff;">Accent Color</strong>
-                  <button id="btn-close-color-popup" style="background: transparent; border: none; color: #888; font-size: 0.9rem; cursor: pointer; padding: 2px;">✕</button>
-                </div>
-                <div class="panorama-color-swatches-grid" id="panorama-header-swatches-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;"></div>
-                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 1px solid #222;">
-                  <span style="font-size: 0.72rem; color: #888;">Custom</span>
-                  <input type="color" id="panorama-header-custom-color" style="width: 32px; height: 24px; padding: 0; background: none; border: 1px solid #444; cursor: pointer;" />
-                </div>
-              </div>
               <!-- Metro User Profile Tile -->
               <button class="panorama-header-user-btn" id="panorama-header-user-btn" title="Manage Profile & Keys" style="display: flex; align-items: center; gap: 8px; background: transparent; border: none; cursor: pointer; padding: 4px; color: #fff;">
                 <div class="panorama-header-avatar" id="panorama-header-avatar" style="width: 26px; height: 26px; border-radius: 0px; background: #222; border: 1px solid #444; display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--omni-accent-primary, #00a4ef); flex-shrink: 0;">
@@ -1214,7 +1197,7 @@ export class PanoramaShell extends BaseShell {
 
     body.innerHTML = `
       <div style="display: flex; flex-direction: column; gap: 12px; font-size: 0.82rem; color: #fff;">
-        <div><strong>Plugin ID:</strong> <code style="color: #00a4ef;">${meta.id}</code></div>
+        <div><strong>Plugin ID:</strong> <code style="color: var(--omni-accent-primary, #00a4ef);">${meta.id}</code></div>
         <div><strong>Version:</strong> <span style="background: #222; padding: 2px 6px;">v${meta.version}</span></div>
         <div><strong>Source:</strong> <code>${plugin.sourceUrl || "local"}</code></div>
         <div>
@@ -1795,7 +1778,7 @@ export class PanoramaShell extends BaseShell {
           <html>
           <body>
             <div style="background: #111; padding: 14px; border: 1px solid #333;">
-              <h3 style="font-size: 0.95rem; font-weight: 600; color: #00a4ef;">✦ Decentralized Wisdom</h3>
+              <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--omni-accent-primary, #00a4ef);">✦ Decentralized Wisdom</h3>
               <p style="font-size: 0.85rem; font-style: italic; margin-top: 8px;">“Don't trust, verify.” — Cypherpunk Maxim</p>
             </div>
           </body>
@@ -1849,7 +1832,7 @@ export class PanoramaShell extends BaseShell {
           <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
             <div style="display: flex; align-items: center; gap: 6px;">
               <strong style="font-size: 0.85rem; color: #fff;">${app.name}</strong>
-              <span style="font-size: 0.65rem; color: #00a4ef; background: #1a1a1a; padding: 1px 5px;">${app.category}</span>
+              <span style="font-size: 0.65rem; color: var(--omni-accent-primary, #00a4ef); background: #1a1a1a; padding: 1px 5px;">${app.category}</span>
             </div>
             <span style="font-size: 0.72rem; color: #888; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${app.description}</span>
           </div>
@@ -1918,11 +1901,13 @@ export class PanoramaShell extends BaseShell {
     const properties: Array<[string, string]> = [
       ["--omni-accent-primary", this.currentAccentColor],
       ["--omni-accent-hover", hoverColor],
+      ["--omni-accent", this.currentAccentColor],
       ["--omni-border-focus", this.currentAccentColor],
       ["--omni-status-online", this.currentAccentColor],
       ["--omni-status-badge", this.currentAccentColor],
       ["--accent-primary", this.currentAccentColor],
       ["--accent-hover", hoverColor],
+      ["--accent", this.currentAccentColor],
       ["--status-online", this.currentAccentColor],
       ["--status-badge", this.currentAccentColor],
       ["--border-focus", this.currentAccentColor]
@@ -1958,17 +1943,11 @@ export class PanoramaShell extends BaseShell {
   private updateColorChooserUI(): void {
     const hex = this.currentAccentColor;
 
-    const headerSwatch = this.root?.querySelector<HTMLElement>("#panorama-header-color-swatch");
-    if (headerSwatch) headerSwatch.style.backgroundColor = hex;
-
     const hexLabel = this.root?.querySelector<HTMLElement>("#panorama-system-color-hex");
     if (hexLabel) {
       hexLabel.textContent = hex;
       hexLabel.style.color = hex;
     }
-
-    const headerCustomInput = this.root?.querySelector<HTMLInputElement>("#panorama-header-custom-color");
-    if (headerCustomInput) headerCustomInput.value = hex;
 
     const systemCustomInput = this.root?.querySelector<HTMLInputElement>("#panorama-system-custom-color");
     if (systemCustomInput) systemCustomInput.value = hex;
@@ -1980,13 +1959,8 @@ export class PanoramaShell extends BaseShell {
   }
 
   private renderColorChoosers(): void {
-    const grids = [
-      this.root.querySelector<HTMLElement>("#panorama-header-swatches-grid"),
-      this.root.querySelector<HTMLElement>("#panorama-system-swatches-grid")
-    ];
-
-    grids.forEach((grid) => {
-      if (!grid) return;
+    const grid = this.root.querySelector<HTMLElement>("#panorama-system-swatches-grid");
+    if (grid) {
       grid.innerHTML = "";
       PANORAMA_ACCENT_PRESETS.forEach((preset) => {
         const btn = document.createElement("button");
@@ -2003,44 +1977,13 @@ export class PanoramaShell extends BaseShell {
         });
         grid.appendChild(btn);
       });
-    });
+    }
 
-    // Wire custom color inputs
-    const headerCustom = this.root.querySelector<HTMLInputElement>("#panorama-header-custom-color");
-    headerCustom?.addEventListener("input", (e) => {
-      const val = (e.target as HTMLInputElement).value;
-      if (val) this.applyAccentColor(val);
-    });
-
+    // Wire custom color input in settings
     const systemCustom = this.root.querySelector<HTMLInputElement>("#panorama-system-custom-color");
     systemCustom?.addEventListener("input", (e) => {
       const val = (e.target as HTMLInputElement).value;
       if (val) this.applyAccentColor(val);
-    });
-
-    // Wire header popup toggle
-    const btnHeaderColor = this.root.querySelector<HTMLButtonElement>("#btn-panorama-header-color");
-    const popup = this.root.querySelector<HTMLElement>("#panorama-header-color-popup");
-    const btnClosePopup = this.root.querySelector<HTMLButtonElement>("#btn-close-color-popup");
-
-    btnHeaderColor?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (!popup) return;
-      const isOpen = popup.style.display !== "none";
-      popup.style.display = isOpen ? "none" : "flex";
-    });
-
-    btnClosePopup?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (popup) popup.style.display = "none";
-    });
-
-    document.addEventListener("click", (e) => {
-      if (popup && popup.style.display !== "none") {
-        if (!popup.contains(e.target as Node) && e.target !== btnHeaderColor && !btnHeaderColor?.contains(e.target as Node)) {
-          popup.style.display = "none";
-        }
-      }
     });
   }
 

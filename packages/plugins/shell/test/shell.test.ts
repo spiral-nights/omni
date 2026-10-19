@@ -1375,26 +1375,16 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(widgetsSlot).toBeTruthy();
     });
 
-    it("renders accent color chooser in system section and header with preset swatches", () => {
+    it("renders accent color chooser in system section with preset swatches (not in header)", () => {
       // System card
       const systemCard = panoramaRoot.querySelector("#panorama-accent-card");
       expect(systemCard).toBeTruthy();
       const systemSwatches = panoramaRoot.querySelectorAll("#panorama-system-swatches-grid .panorama-color-swatch");
       expect(systemSwatches.length).toBe(14);
 
-      // Header button & popup
-      const headerColorBtn = panoramaRoot.querySelector("#btn-panorama-header-color") as HTMLButtonElement | null;
-      expect(headerColorBtn).toBeTruthy();
-      const headerPopup = panoramaRoot.querySelector("#panorama-header-color-popup") as HTMLElement | null;
-      expect(headerPopup).toBeTruthy();
-      expect(headerPopup?.style.display).toBe("none");
-
-      // Clicking header button opens popup
-      headerColorBtn?.click();
-      expect(headerPopup?.style.display).not.toBe("none");
-
-      const headerSwatches = panoramaRoot.querySelectorAll("#panorama-header-swatches-grid .panorama-color-swatch");
-      expect(headerSwatches.length).toBe(14);
+      // Header button & popup should NOT exist (only in settings)
+      const headerColorBtn = panoramaRoot.querySelector("#btn-panorama-header-color");
+      expect(headerColorBtn).toBeFalsy();
     });
 
     it("applies selected accent color, updates CSS variables, and persists to localStorage", () => {
@@ -1407,8 +1397,14 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
       expect(panoramaShell.getAccentColor()).toBe("#2ECC71");
       expect(document.documentElement.style.getPropertyValue("--omni-accent-primary")).toBe("#2ECC71");
+      expect(document.documentElement.style.getPropertyValue("--omni-accent")).toBe("#2ECC71");
+      expect(document.documentElement.style.getPropertyValue("--accent-primary")).toBe("#2ECC71");
       expect(localStorage.getItem(PanoramaShell.STORAGE_KEY_PANORAMA_ACCENT)).toBe("#2ECC71");
       expect(emeraldSwatch?.classList.contains("active")).toBe(true);
+
+      // Verify the active shell button exists and has .active class
+      const activeShellBtn = panoramaRoot.querySelector("#panorama-shell-switcher-buttons .btn-panorama-action.active");
+      expect(activeShellBtn).toBeTruthy();
 
       // Verify the hex label updated
       const hexLabel = panoramaRoot.querySelector("#panorama-system-color-hex");

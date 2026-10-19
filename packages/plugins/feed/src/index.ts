@@ -362,7 +362,7 @@ export function renderFilterSettings(container: HTMLElement, onFiltersChanged?: 
         </label>
         <div style="display: flex; gap: 8px;">
           <input id="input-filter-pattern" class="filter-pattern-input" type="text" spellcheck="false" placeholder="e.g. ^\\s*\\{[\\s\\S]*\\}\\s*$ or \\b(spam|bot)\\b" style="flex: 1; background: var(--bg-canvas, #141312); border: 1px solid var(--border-strong, #44413c); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-family: monospace; font-size: 0.82rem;" />
-          <button class="btn-add-pattern" style="background: var(--accent-primary, #d4a373); color: var(--accent-contrast, #141312); border: none; padding: 7px 14px; border-radius: var(--radius-sm, 6px); font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+          <button class="btn-add-pattern" style="background: var(--omni-accent-primary, var(--accent-primary, #d4a373)); color: var(--accent-contrast, #141312); border: none; padding: 7px 14px; border-radius: var(--radius-sm, 6px); font-size: 0.8rem; font-weight: 600; cursor: pointer;">
             Add Filter
           </button>
         </div>
@@ -392,7 +392,7 @@ export function renderFilterSettings(container: HTMLElement, onFiltersChanged?: 
   function setStatus(text: string, isError = false) {
     if (!statusMsg) return;
     statusMsg.textContent = text;
-    statusMsg.style.color = isError ? "var(--accent-danger, #e11d48)" : "var(--accent-primary, #d4a373)";
+    statusMsg.style.color = isError ? "var(--accent-danger, #e11d48)" : "var(--omni-accent-primary, var(--accent-primary, #d4a373))";
     if (text && !isError) {
       setTimeout(() => {
         if (statusMsg.textContent === text) {
@@ -422,7 +422,7 @@ export function renderFilterSettings(container: HTMLElement, onFiltersChanged?: 
       const row = html<HTMLDivElement>`
         <div class="pattern-item" data-index="${i}" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #2a2824); padding: 8px 12px; border-radius: var(--radius-sm, 6px);">
           <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; min-width: 0;">
-            <code class="feed-pattern-code" style="font-family: monospace; font-size: 0.82rem; color: var(--accent-primary, #d4a373); word-break: break-all;">${escapeHtml(pat)}</code>
+            <code class="feed-pattern-code" style="font-family: monospace; font-size: 0.82rem; color: var(--omni-accent-primary, var(--accent-primary, #d4a373)); word-break: break-all;">${escapeHtml(pat)}</code>
             ${isJsonDefault ? `<span class="pattern-badge-default" style="font-size: 0.7rem; color: var(--text-muted, #78716c); white-space: nowrap;">(JSON payloads default)</span>` : ""}
           </div>
           <button class="btn-remove-pattern" data-index="${i}" title="Remove pattern" aria-label="Remove pattern" style="background: transparent; border: none; color: var(--text-muted, #78716c); cursor: pointer; padding: 4px; display: flex; align-items: center;">
@@ -588,7 +588,7 @@ function mountFeed(root: any) {
           <!-- Inline reply composer -->
           <div class="thread-reply-composer composer-card">
             <div style="display: flex; gap: 10px; width: 100%;">
-              <div class="thread-composer-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: var(--omni-accent, #d4a373); color: #141312; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.8rem; flex-shrink: 0;">
+              <div class="thread-composer-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: var(--omni-accent-primary, var(--omni-accent, #d4a373)); color: #141312; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.8rem; flex-shrink: 0;">
                 <span>U</span>
               </div>
               <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
@@ -905,7 +905,7 @@ function mountFeed(root: any) {
         await navigator.clipboard.writeText(textToCopy);
         const originalTitle = btnShare.title;
         btnShare.title = "Copied to clipboard!";
-        btnShare.style.color = "var(--accent-primary, #00a4ef)";
+        btnShare.style.color = "var(--omni-accent-primary, var(--accent-primary, #00a4ef))";
         setTimeout(() => {
           btnShare.title = originalTitle;
           btnShare.style.color = "";
@@ -1047,6 +1047,8 @@ function mountFeed(root: any) {
     settingsPage.style.display = "none";
     threadPage.style.display = "none";
     searchPage.style.display = "block";
+    btnSearchOpen?.classList.add("active");
+    btnSettingsOpen?.classList.remove("active");
     if (pushHistory) {
       try {
         window.history.pushState({ omniFeedView: "search" }, "", window.location.href);
@@ -1064,6 +1066,8 @@ function mountFeed(root: any) {
     searchPage.style.display = "none";
     threadPage.style.display = "none";
     settingsPage.style.display = "block";
+    btnSettingsOpen?.classList.add("active");
+    btnSearchOpen?.classList.remove("active");
     if (pushHistory) {
       try {
         window.history.pushState({ omniFeedView: "settings" }, "", window.location.href);
@@ -1078,6 +1082,8 @@ function mountFeed(root: any) {
     searchPage.style.display = "none";
     settingsPage.style.display = "none";
     threadPage.style.display = "block";
+    btnSearchOpen?.classList.remove("active");
+    btnSettingsOpen?.classList.remove("active");
     if (pushHistory && currentThreadNote?.id) {
       try {
         window.history.pushState({ omniFeedView: "thread", noteId: currentThreadNote.id }, "", window.location.href);
@@ -1089,6 +1095,8 @@ function mountFeed(root: any) {
     searchPage.style.display = "none";
     settingsPage.style.display = "none";
     threadPage.style.display = "none";
+    btnSearchOpen?.classList.remove("active");
+    btnSettingsOpen?.classList.remove("active");
     for (const el of feedSections) {
       if (el) el.style.display = "";
     }
