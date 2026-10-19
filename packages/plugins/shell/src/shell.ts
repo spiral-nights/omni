@@ -429,7 +429,8 @@ export class OmniShell extends BaseShell {
    * Switch center viewport between full-page apps and Widgets Dashboard
    */
   public showPage(page: AppPage, pushState = true): void {
-    if (pushState && typeof window !== "undefined") {
+    const currentPage = this.getActivePageId();
+    if (pushState && typeof window !== "undefined" && currentPage !== page) {
       try {
         window.history.pushState({ type: "omni-classic-page", page }, "");
       } catch (_) {}
@@ -2045,6 +2046,8 @@ export class OmniShell extends BaseShell {
       window.addEventListener("popstate", (e) => {
         if (e.state?.type === "omni-classic-page" && e.state.page) {
           this.showPage(e.state.page, false);
+        } else if (!e.state || !e.state.type) {
+          this.showPage("feed", false);
         }
       });
     }

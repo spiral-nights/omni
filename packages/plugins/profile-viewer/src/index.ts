@@ -228,12 +228,221 @@ async function mountProfileViewer(root: HTMLElement) {
   let activeProfileSubId: string | null = null;
   let isLoading = false;
   let eoseTimeout: any = null;
+  const renderedNoteIds = new Set<string>();
+  let noteCount = 0;
+
+  function getFollowsStorageKey(pk: string): string {
+    return `omni_people_follows_${pk}`;
+  }
+  function getMutesStorageKey(pk: string): string {
+    return `omni_people_mutes_${pk}`;
+  }
+
+  function loadCachedSocialGraph(pk: string) {
+    if (!pk) return;
+    try {
+      const raw = localStorage.getItem(getFollowsStorageKey(pk));
+      if (raw) {
+        const tags = JSON.parse(raw);
+        if (Array.isArray(tags)) {
+          myFollowTags = tags;
+          myFollows.clear();
+          for (const t of tags) {
+            if (t[0] === "p" && t[1]) myFollows.add(t[1]);
+          }
+          if (countFollowingEl) countFollowingEl.textContent = String(myFollows.size);
+          updateActionButtons(activePubkey);
+          if (activeTab === "following") {
+            renderFollowingList();
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      const raw = localStorage.getItem(getMutesStorageKey(pk));
+      if (raw) {
+        const tags = JSON.parse(raw);
+        if (Array.isArray(tags)) {
+          myMuteTags = tags;
+          myMutes.clear();
+          for (const t of tags) {
+            if (t[0] === "p" && t[1]) myMutes.add(t[1]);
+          }
+          if (countBlockedEl) countBlockedEl.textContent = String(myMutes.size);
+          updateActionButtons(activePubkey);
+          if (activeTab === "blocked") {
+            renderBlockedList();
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  function addWsListener(ws: any, type: string, handler: Function) {
+    if (typeof ws.addEventListener === "function") {
+      ws.addEventListener(type, handler as any);
+    } else {
+      const prev = ws[`on${type}`];
+      ws[`on${type}`] = function (ev: any) {
+        if (typeof prev === "function") {
+          try { prev.call(ws, ev); } catch (_) {}
+        }
+        handler(ev);
+      };
+    }
+  }
 
   function getWebSocket(): WebSocket {
     if (!activeWs || activeWs.readyState === WebSocket.CLOSED) {
       activeWs = new WebSocket("wss://relay.damus.io");
+      addWsListener(activeWs, "message", handleIncomingWsMessage);
     }
     return activeWs;
+  }
+
+  function sendWs(payload: any) {
+    const ws = getWebSocket();
+    const raw = JSON.stringify(payload);
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(raw);
+      } catch (_) {}
+    } else {
+      let fired = false;
+      const onOpen = () => {
+        if (fired) return;
+        fired = true;
+        try {
+          ws.send(raw);
+        } catch (_) {}
+        if (typeof ws.removeEventListener === "function") {
+          ws.removeEventListener("open", onOpen);
+        }
+      };
+      addWsListener(ws, "open", onOpen);
+    }
+  }
+
+  function updateUserCards(pubkey: string, meta: ProfileMetadata) {
+    if (!container) return;
+    const cards = container.querySelectorAll<HTMLElement>(`.people-user-card[data-pubkey="${pubkey}"]`);
+    cards.forEach((card) => {
+      const nameEl = card.querySelector<HTMLElement>(".people-user-name");
+      const handleEl = card.querySelector<HTMLElement>(".people-user-handle");
+      const aboutEl = card.querySelector<HTMLElement>(".people-user-about");
+      const aWrap = card.querySelector<HTMLElement>(".people-avatar");
+      if (nameEl && (meta.display_name || meta.name)) nameEl.textContent = meta.display_name || meta.name || "";
+      if (handleEl && meta.name) handleEl.textContent = `@${meta.name}`;
+      if (aboutEl && meta.about) aboutEl.textContent = meta.about;
+      if (aWrap && meta.picture) {
+        let pic = String(meta.picture).trim();
+        if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
+        if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
+          aWrap.innerHTML = `<img src="${escapeHtml(pic)}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+        }
+      }
+    });
+  }
+
+  function handleIncomingWsMessage(event: any) {
+    try {
+      const rawData = event.data !== undefined ? event.data : event;
+      const frame = typeof rawData === "string" ? JSON.parse(rawData) : rawData;
+      if (!Array.isArray(frame)) return;
+      const type = frame[0];
+      const subId = frame[1];
+
+      if (type === "EVENT" && frame[2]) {
+        const ev = frame[2];
+        const k = Number(ev.kind);
+
+        // Kind 3: Contact List for current user
+        if (k === 3 && (subId === "pv_my_contacts" || (myPubkey && ev.pubkey === myPubkey))) {
+          if (!myPubkey && ev.pubkey) myPubkey = ev.pubkey;
+          myFollows.clear();
+          myFollowTags = ev.tags || [];
+          for (const tag of myFollowTags) {
+            if (tag[0] === "p" && tag[1]) {
+              myFollows.add(tag[1]);
+            }
+          }
+          if (myPubkey) {
+            try {
+              localStorage.setItem(getFollowsStorageKey(myPubkey), JSON.stringify(myFollowTags));
+            } catch (_) {}
+          }
+          if (countFollowingEl) countFollowingEl.textContent = String(myFollows.size);
+          updateActionButtons(activePubkey);
+          if (activeTab === "following") {
+            renderFollowingList();
+          }
+        }
+
+        // Kind 10000: Mute List for current user
+        else if (k === 10000 && (subId === "pv_my_mutes" || (myPubkey && ev.pubkey === myPubkey))) {
+          if (!myPubkey && ev.pubkey) myPubkey = ev.pubkey;
+          myMutes.clear();
+          myMuteTags = ev.tags || [];
+          for (const tag of myMuteTags) {
+            if (tag[0] === "p" && tag[1]) {
+              myMutes.add(tag[1]);
+            }
+          }
+          if (myPubkey) {
+            try {
+              localStorage.setItem(getMutesStorageKey(myPubkey), JSON.stringify(myMuteTags));
+            } catch (_) {}
+          }
+          if (countBlockedEl) countBlockedEl.textContent = String(myMutes.size);
+          updateActionButtons(activePubkey);
+          if (activeTab === "blocked") {
+            renderBlockedList();
+          }
+        }
+
+        // Kind 0: Profile Metadata
+        else if (k === 0 && ev.pubkey) {
+          try {
+            const meta: ProfileMetadata = JSON.parse(ev.content);
+            profileCache.set(ev.pubkey, meta);
+            if (ev.pubkey === activePubkey) {
+              renderProfileMetadata(activePubkey, meta);
+            }
+            updateUserCards(ev.pubkey, meta);
+          } catch (_) {}
+        }
+
+        // Kind 1: Timeline Notes for activePubkey
+        else if (k === 1 && (subId === activeNotesSubId || (!subId && ev.pubkey === activePubkey))) {
+          if (eoseTimeout) {
+            clearTimeout(eoseTimeout);
+            eoseTimeout = null;
+          }
+          if (!renderedNoteIds.has(ev.id)) {
+            renderedNoteIds.add(ev.id);
+            if (noteCount === 0 && notesListEl) {
+              notesListEl.innerHTML = "";
+            }
+            noteCount++;
+            if (notesCountEl) notesCountEl.textContent = `${noteCount} note${noteCount === 1 ? "" : "s"}`;
+            if (notesListEl) notesListEl.appendChild(renderNoteCard(ev));
+          }
+        }
+      } else if (type === "EOSE") {
+        if (subId === activeNotesSubId) {
+          if (eoseTimeout) {
+            clearTimeout(eoseTimeout);
+            eoseTimeout = null;
+          }
+          isLoading = false;
+          if (noteCount === 0 && notesListEl) {
+            notesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">No public notes published by this user yet.</div>`;
+            if (notesCountEl) notesCountEl.textContent = "0 notes";
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   const container = html<HTMLDivElement>`
@@ -441,6 +650,7 @@ async function mountProfileViewer(root: HTMLElement) {
 
   // Tab switching with optional pushState
   function switchTab(tab: "profile" | "following" | "blocked", pushState = true) {
+    const isSameTab = activeTab === tab;
     activeTab = tab;
     btnTabProfile.classList.toggle("active", tab === "profile");
     btnTabFollowing.classList.toggle("active", tab === "following");
@@ -452,7 +662,7 @@ async function mountProfileViewer(root: HTMLElement) {
 
     updateProfileBackButton();
 
-    if (pushState) {
+    if (pushState && !isSameTab) {
       try {
         window.history.pushState(
           { type: "omni-people-view", tab, pubkey: activePubkey, from: previousTab },
@@ -463,8 +673,16 @@ async function mountProfileViewer(root: HTMLElement) {
     }
 
     if (tab === "following") {
+      if (myPubkey && myFollows.size === 0) {
+        loadCachedSocialGraph(myPubkey);
+        sendWs(["REQ", "pv_my_contacts", { kinds: [3], authors: [myPubkey], limit: 1 }]);
+      }
       renderFollowingList();
     } else if (tab === "blocked") {
+      if (myPubkey && myMutes.size === 0) {
+        loadCachedSocialGraph(myPubkey);
+        sendWs(["REQ", "pv_my_mutes", { kinds: [10000], authors: [myPubkey], limit: 1 }]);
+      }
       renderBlockedList();
     }
   }
@@ -484,13 +702,12 @@ async function mountProfileViewer(root: HTMLElement) {
 
   // Profile back button handler
   btnProfileBack.addEventListener("click", () => {
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      const target = previousTab || "following";
-      previousTab = null;
-      updateProfileBackButton();
-      switchTab(target, true);
+    const target = previousTab || "following";
+    previousTab = null;
+    updateProfileBackButton();
+    switchTab(target, false);
+    if (typeof window !== "undefined" && window.history.state?.type === "omni-people-view") {
+      try { window.history.back(); } catch (_) {}
     }
   });
 
@@ -582,6 +799,12 @@ async function mountProfileViewer(root: HTMLElement) {
       }
     }
 
+    if (myPubkey) {
+      try {
+        localStorage.setItem(getFollowsStorageKey(myPubkey), JSON.stringify(myFollowTags));
+      } catch (_) {}
+    }
+
     countFollowingEl.textContent = String(myFollows.size);
     updateActionButtons(activePubkey);
     if (activeTab === "following") {
@@ -599,10 +822,7 @@ async function mountProfileViewer(root: HTMLElement) {
           created_at: Math.floor(Date.now() / 1000)
         };
         const signed = await nostr.signEvent(draft);
-        const ws = getWebSocket();
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(["EVENT", signed]));
-        }
+        sendWs(["EVENT", signed]);
       }
     } catch (err) {
       console.error("Failed to sign/publish kind 3 follow update:", err);
@@ -624,6 +844,12 @@ async function mountProfileViewer(root: HTMLElement) {
       }
     }
 
+    if (myPubkey) {
+      try {
+        localStorage.setItem(getMutesStorageKey(myPubkey), JSON.stringify(myMuteTags));
+      } catch (_) {}
+    }
+
     countBlockedEl.textContent = String(myMutes.size);
     updateActionButtons(activePubkey);
     if (activeTab === "blocked") {
@@ -641,10 +867,7 @@ async function mountProfileViewer(root: HTMLElement) {
           created_at: Math.floor(Date.now() / 1000)
         };
         const signed = await nostr.signEvent(draft);
-        const ws = getWebSocket();
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(["EVENT", signed]));
-        }
+        sendWs(["EVENT", signed]);
       }
     } catch (err) {
       console.error("Failed to sign/publish kind 10000 block update:", err);
@@ -776,16 +999,11 @@ async function mountProfileViewer(root: HTMLElement) {
     const cached = profileCache.get(pubkey);
     renderProfileMetadata(pubkey, cached || null);
 
-    const ws = getWebSocket();
-    if (activeProfileSubId && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify(["CLOSE", activeProfileSubId]));
-      } catch (_) {}
+    if (activeProfileSubId) {
+      sendWs(["CLOSE", activeProfileSubId]);
     }
-    if (activeNotesSubId && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify(["CLOSE", activeNotesSubId]));
-      } catch (_) {}
+    if (activeNotesSubId) {
+      sendWs(["CLOSE", activeNotesSubId]);
     }
 
     const profileSubId = `pv_prof_${Math.random().toString(36).slice(2, 8)}`;
@@ -793,21 +1011,12 @@ async function mountProfileViewer(root: HTMLElement) {
     activeProfileSubId = profileSubId;
     activeNotesSubId = notesSubId;
 
-    const renderedNoteIds = new Set<string>();
-    let noteCount = 0;
+    renderedNoteIds.clear();
+    noteCount = 0;
 
-    const startSubscriptions = () => {
-      // 1. Request Kind 0 Metadata
-      ws.send(JSON.stringify(["REQ", profileSubId, { kinds: [0], authors: [pubkey], limit: 1 }]));
-      // 2. Request Author's Kind 1 Notes
-      ws.send(JSON.stringify(["REQ", notesSubId, { kinds: [1], authors: [pubkey], limit: 30 }]));
-    };
-
-    if (ws.readyState === WebSocket.OPEN) {
-      startSubscriptions();
-    } else {
-      ws.onopen = startSubscriptions;
-    }
+    // Send subscriptions safely via sendWs (buffered if socket not open yet)
+    sendWs(["REQ", profileSubId, { kinds: [0], authors: [pubkey], limit: 1 }]);
+    sendWs(["REQ", notesSubId, { kinds: [1], authors: [pubkey], limit: 30 }]);
 
     eoseTimeout = setTimeout(() => {
       isLoading = false;
@@ -816,55 +1025,6 @@ async function mountProfileViewer(root: HTMLElement) {
         notesCountEl.textContent = "0 notes";
       }
     }, 3000);
-
-    const prevOnMessage = ws.onmessage;
-    ws.onmessage = (event) => {
-      if (typeof prevOnMessage === "function") prevOnMessage.call(ws, event);
-      try {
-        const frame = JSON.parse(event.data);
-        if (!Array.isArray(frame)) return;
-        const type = frame[0];
-        const subId = frame[1];
-
-        if (type === "EVENT" && frame[2]) {
-          const ev = frame[2];
-          const k = Number(ev.kind);
-          if ((subId === profileSubId || !subId) && k === 0 && ev.pubkey === pubkey) {
-            try {
-              const meta: ProfileMetadata = JSON.parse(ev.content);
-              profileCache.set(pubkey, meta);
-              renderProfileMetadata(pubkey, meta);
-            } catch (err) {}
-          } else if ((subId === notesSubId || !subId) && k === 1 && ev.pubkey === pubkey) {
-            if (eoseTimeout) {
-              clearTimeout(eoseTimeout);
-              eoseTimeout = null;
-            }
-            if (!renderedNoteIds.has(ev.id)) {
-              renderedNoteIds.add(ev.id);
-              if (noteCount === 0) {
-                notesListEl.innerHTML = "";
-              }
-              noteCount++;
-              notesCountEl.textContent = `${noteCount} note${noteCount === 1 ? "" : "s"}`;
-              notesListEl.appendChild(renderNoteCard(ev));
-            }
-          }
-        } else if (type === "EOSE") {
-          if (subId === notesSubId) {
-            if (eoseTimeout) {
-              clearTimeout(eoseTimeout);
-              eoseTimeout = null;
-            }
-            isLoading = false;
-            if (noteCount === 0) {
-              notesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">No public notes published by this user yet.</div>`;
-              notesCountEl.textContent = "0 notes";
-            }
-          }
-        }
-      } catch (err) {}
-    };
   }
 
   // Build user card row for Following / Blocked lists
@@ -997,109 +1157,27 @@ async function mountProfileViewer(root: HTMLElement) {
   function fetchMissingProfiles(pubkeys: string[]) {
     const missing = pubkeys.filter((pk) => !profileCache.has(pk)).slice(0, 50);
     if (missing.length === 0) return;
-    const ws = getWebSocket();
-    if (ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify(["REQ", `pv_batch_${Date.now()}`, { kinds: [0], authors: missing, limit: missing.length }]));
-      } catch (_) {}
-    }
+    sendWs(["REQ", `pv_batch_${Date.now()}`, { kinds: [0], authors: missing, limit: missing.length }]);
   }
 
   // Load Contact List (Kind 3) and Mute List (Kind 10000) for current user
   function initUserSocialGraph(pk: string) {
     if (!pk) return;
     myPubkey = pk;
-    const ws = getWebSocket();
 
-    const subSocial = () => {
-      try {
-        ws.send(JSON.stringify(["REQ", "pv_my_contacts", { kinds: [3], authors: [pk], limit: 1 }]));
-        ws.send(JSON.stringify(["REQ", "pv_my_mutes", { kinds: [10000], authors: [pk], limit: 1 }]));
-      } catch (_) {}
-    };
+    // 1. Immediately populate from local cache (0ms hit)
+    loadCachedSocialGraph(pk);
 
-    if (ws.readyState === WebSocket.OPEN) {
-      subSocial();
-    } else {
-      const prevOpen = ws.onopen;
-      ws.onopen = (e) => {
-        if (typeof prevOpen === "function") prevOpen.call(ws, e);
-        subSocial();
-      };
-    }
-
-    // Attach global listener for kind 3, 10000, 0
-    const prevMsg = ws.onmessage;
-    ws.onmessage = (e) => {
-      if (typeof prevMsg === "function") prevMsg.call(ws, e);
-      try {
-        const frame = JSON.parse(e.data);
-        if (!Array.isArray(frame)) return;
-        const [type, sid, ev] = frame;
-        if (type === "EVENT" && ev) {
-          const k = Number(ev.kind);
-          if (k === 3 && ev.pubkey === pk) {
-            myFollows.clear();
-            myFollowTags = ev.tags || [];
-            for (const tag of myFollowTags) {
-              if (tag[0] === "p" && tag[1]) {
-                myFollows.add(tag[1]);
-              }
-            }
-            countFollowingEl.textContent = String(myFollows.size);
-            updateActionButtons(activePubkey);
-            if (activeTab === "following") {
-              renderFollowingList();
-            }
-          } else if (k === 10000 && ev.pubkey === pk) {
-            myMutes.clear();
-            myMuteTags = ev.tags || [];
-            for (const tag of myMuteTags) {
-              if (tag[0] === "p" && tag[1]) {
-                myMutes.add(tag[1]);
-              }
-            }
-            countBlockedEl.textContent = String(myMutes.size);
-            updateActionButtons(activePubkey);
-            if (activeTab === "blocked") {
-              renderBlockedList();
-            }
-          } else if (k === 0) {
-            try {
-              const meta: ProfileMetadata = JSON.parse(ev.content);
-              profileCache.set(ev.pubkey, meta);
-              if (ev.pubkey === activePubkey) {
-                renderProfileMetadata(activePubkey, meta);
-              }
-              const card = container.querySelector(`.people-user-card[data-pubkey="${ev.pubkey}"]`);
-              if (card) {
-                const nameEl = card.querySelector<HTMLElement>(".people-user-name");
-                const handleEl = card.querySelector<HTMLElement>(".people-user-handle");
-                const aboutEl = card.querySelector<HTMLElement>(".people-user-about");
-                const aWrap = card.querySelector<HTMLElement>(".people-avatar");
-                if (nameEl && (meta.display_name || meta.name)) nameEl.textContent = meta.display_name || meta.name || "";
-                if (handleEl && meta.name) handleEl.textContent = `@${meta.name}`;
-                if (aboutEl && meta.about) aboutEl.textContent = meta.about;
-                if (aWrap && meta.picture) {
-                  let pic = String(meta.picture).trim();
-                  if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
-                  if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
-                    aWrap.innerHTML = `<img src="${escapeHtml(pic)}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
-                  }
-                }
-              }
-            } catch (_) {}
-          }
-        }
-      } catch (_) {}
-    };
+    // 2. Fetch latest live updates from relay / local event store
+    sendWs(["REQ", "pv_my_contacts", { kinds: [3], authors: [pk], limit: 1 }]);
+    sendWs(["REQ", "pv_my_mutes", { kinds: [10000], authors: [pk], limit: 1 }]);
   }
 
   // Register Intent Handler for 'view_profile'
   const handleViewProfile = (data: any) => {
     if (data?.pubkey) {
       loadProfile(data.pubkey);
-      switchTab("profile");
+      switchTab("profile", false);
     }
   };
 
@@ -1145,17 +1223,30 @@ async function mountProfileViewer(root: HTMLElement) {
   window.addEventListener("popstate", syncRouteFromLocation);
   window.addEventListener("hashchange", syncRouteFromLocation);
 
-  // Initialize logged in user pubkey via window.nostr (NIP-07)
-  try {
-    const nostr = (window as any).nostr;
-    if (nostr?.getPublicKey) {
-      nostr.getPublicKey().then((pk: string) => {
-        if (pk) {
-          initUserSocialGraph(pk);
-        }
-      }).catch(() => {});
-    }
-  } catch (_) {}
+  // Robust user pubkey resolution using standard NIP-07 or omni session
+  async function resolveUserPubkey(): Promise<string> {
+    try {
+      const nostr = (window as any).nostr;
+      if (nostr?.getPublicKey) {
+        const pk = await nostr.getPublicKey();
+        if (pk) return pk;
+      }
+    } catch (_) {}
+    try {
+      const omniObj = typeof window !== "undefined" ? (window as any).omni : null;
+      if (omniObj?.nostr?.getPublicKey) {
+        const pk = await omniObj.nostr.getPublicKey();
+        if (pk) return pk;
+      }
+    } catch (_) {}
+    try {
+      const omniObj = typeof window !== "undefined" ? (window as any).omni : null;
+      if (omniObj?.session?.userPubkey) {
+        return omniObj.session.userPubkey;
+      }
+    } catch (_) {}
+    return "";
+  }
 
   // Resolve initial pubkey to inspect strictly using standard Web APIs
   let initialPubkey = "";
@@ -1164,7 +1255,7 @@ async function mountProfileViewer(root: HTMLElement) {
     initialPubkey = searchParams.get("pubkey") || "";
     const v = searchParams.get("view");
     if (v === "following" || v === "blocked") {
-      switchTab(v as any);
+      switchTab(v as any, false);
     }
   } catch (_) {}
 
@@ -1176,24 +1267,22 @@ async function mountProfileViewer(root: HTMLElement) {
 
   if (initialPubkey) {
     loadProfile(initialPubkey);
-  } else {
-    try {
-      const nostr = (window as any).nostr;
-      if (nostr?.getPublicKey) {
-        nostr.getPublicKey().then((pk: string) => {
-          if (pk && !activePubkey) {
-            loadProfile(pk);
-          }
-        }).catch(() => {
-          displayNameEl.textContent = "Enter a pubkey or npub above to view profile";
-        });
-      } else {
-        displayNameEl.textContent = "Enter a pubkey or npub above to view profile";
+  }
+
+  resolveUserPubkey().then((pk) => {
+    if (pk) {
+      initUserSocialGraph(pk);
+      if (!initialPubkey && !activePubkey) {
+        loadProfile(pk);
       }
-    } catch (_) {
+    } else if (!initialPubkey && !activePubkey) {
       displayNameEl.textContent = "Enter a pubkey or npub above to view profile";
     }
-  }
+  }).catch(() => {
+    if (!initialPubkey && !activePubkey) {
+      displayNameEl.textContent = "Enter a pubkey or npub above to view profile";
+    }
+  });
 
   return {
     switchTab,

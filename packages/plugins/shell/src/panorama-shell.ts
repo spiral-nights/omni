@@ -1276,7 +1276,7 @@ export class PanoramaShell extends BaseShell {
       return;
     }
 
-    if (pushHistory && typeof window !== "undefined") {
+    if (pushHistory && typeof window !== "undefined" && this.currentOpenedAppId !== pluginId) {
       try {
         window.history.pushState({ type: "omni-panorama-app", pluginId }, "");
       } catch (_) {}
@@ -1676,17 +1676,16 @@ export class PanoramaShell extends BaseShell {
     // Back button on full app slide-in overlay
     const btnOverlayBack = document.getElementById("btn-overlay-back");
     btnOverlayBack?.addEventListener("click", () => {
-      if (typeof window !== "undefined" && window.history.length > 1) {
-        window.history.back();
-      } else {
-        this.closeApp();
+      this.closeApp();
+      if (typeof window !== "undefined" && (window.history.state?.type === "omni-panorama-app" || window.history.state?.type === "omni-people-view")) {
+        try { window.history.back(); } catch (_) {}
       }
     });
 
     if (typeof window !== "undefined") {
       window.addEventListener("popstate", (e) => {
         if (this.currentOpenedAppId) {
-          if (e.state?.type !== "omni-panorama-app") {
+          if (e.state?.type !== "omni-panorama-app" && e.state?.type !== "omni-people-view") {
             this.closeApp();
           }
         } else if (e.state?.type === "omni-panorama-app" && e.state.pluginId) {

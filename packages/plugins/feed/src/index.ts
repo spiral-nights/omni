@@ -1495,8 +1495,7 @@ function mountFeed(root: any) {
     const omni = (window as any).omni;
     if (omni?.intents?.dispatch) {
       omni.intents.dispatch("view_profile", { pubkey }).catch(() => {});
-    }
-    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+    } else if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
       window.dispatchEvent(new CustomEvent("intent", { detail: { action: "view_profile", data: { pubkey } } }));
     }
   }

@@ -148,6 +148,7 @@ export class JsonRpcDispatcher {
         }
 
         const signed = await this.ctx.keystore.signEvent(draft);
+        await this.ctx.eventStore.saveEvent(signed);
         const acceptedRelays = await this.ctx.relayPool.publish(signed, this.getAllowedRelays());
 
         return {
