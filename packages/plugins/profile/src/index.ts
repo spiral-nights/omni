@@ -33,6 +33,77 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
+const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+function polymod(values: number[]): number {
+  let chk = 1;
+  for (const val of values) {
+    const top = chk >> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ val;
+    if ((top >> 0) & 1) chk ^= 0x3b6a57b2;
+    if ((top >> 1) & 1) chk ^= 0x26508e6d;
+    if ((top >> 2) & 1) chk ^= 0x1ea119fa;
+    if ((top >> 3) & 1) chk ^= 0x3d4233dd;
+    if ((top >> 4) & 1) chk ^= 0x2a1462b3;
+  }
+  return chk;
+}
+
+function hrpExpand(hrp: string): number[] {
+  const ret: number[] = [];
+  for (let p = 0; p < hrp.length; ++p) ret.push(hrp.charCodeAt(p) >> 5);
+  ret.push(0);
+  for (let p = 0; p < hrp.length; ++p) ret.push(hrp.charCodeAt(p) & 31);
+  return ret;
+}
+
+function createChecksum(hrp: string, data: number[]): number[] {
+  const values = hrpExpand(hrp).concat(data).concat([0, 0, 0, 0, 0, 0]);
+  const mod = polymod(values) ^ 1;
+  const ret: number[] = [];
+  for (let p = 0; p < 6; ++p) ret.push((mod >> (5 * (5 - p))) & 31);
+  return ret;
+}
+
+function convertBits(data: number[], frombits: number, tobits: number, pad: boolean): number[] | null {
+  let acc = 0;
+  let bits = 0;
+  const ret: number[] = [];
+  const maxv = (1 << tobits) - 1;
+  for (const value of data) {
+    if (value < 0 || value >> frombits !== 0) return null;
+    acc = (acc << frombits) | value;
+    bits += frombits;
+    while (bits >= tobits) {
+      bits -= tobits;
+      ret.push((acc >> bits) & maxv);
+    }
+  }
+  if (pad) {
+    if (bits > 0) ret.push((acc << (tobits - bits)) & maxv);
+  } else if (bits >= frombits || ((acc << (tobits - bits)) & maxv)) {
+    return null;
+  }
+  return ret;
+}
+
+function hexToBytes(hex: string): number[] {
+  const clean = hex.trim().toLowerCase();
+  const bytes: number[] = [];
+  for (let c = 0; c < clean.length; c += 2) {
+    bytes.push(parseInt(clean.slice(c, c + 2), 16));
+  }
+  return bytes;
+}
+
+function toBech32(hrp: string, hex: string): string {
+  const bytes = hexToBytes(hex);
+  const words = convertBits(bytes, 8, 5, true);
+  if (!words) throw new Error("Failed to convert bits for bech32");
+  const checksum = createChecksum(hrp, words);
+  return hrp + "1" + words.concat(checksum).map(c => CHARSET.charAt(c)).join("");
+}
+
 function getCurrentView(): string {
   const route =
     (typeof window !== "undefined" && window.location?.search) ||
@@ -94,23 +165,42 @@ async function mountProfileWidget(root: any) {
       let npub = "";
       let profileData: any = null;
 
-      if (typeof window !== "undefined" && (window as any).nostr) {
-        pubkey = await (window as any).nostr.getPublicKey();
-      } else if (typeof omni !== "undefined" && omni.nostr) {
-        pubkey = await omni.nostr.getPublicKey();
+      try {
+        if (typeof window !== "undefined" && (window as any).nostr?.getPublicKey) {
+          pubkey = await (window as any).nostr.getPublicKey();
+        } else if (typeof window !== "undefined" && (window as any).omni?.nostr?.getPublicKey) {
+          pubkey = await (window as any).omni.nostr.getPublicKey();
+        } else if (typeof omni !== "undefined" && (omni as any).nostr?.getPublicKey) {
+          pubkey = await (omni as any).nostr.getPublicKey();
+        }
+      } catch (_) {}
+
+      if (pubkey) {
+        try {
+          npub = toBech32("npub", pubkey);
+        } catch (_) {}
       }
 
-      if (typeof omni !== "undefined" && omni.auth) {
-        npub = await omni.auth.getNpub();
+      if (!npub) {
+        try {
+          if (typeof window !== "undefined" && (window as any).omni?.auth?.getNpub) {
+            npub = await (window as any).omni.auth.getNpub();
+          } else if (typeof omni !== "undefined" && (omni as any).auth?.getNpub) {
+            npub = await (omni as any).auth.getNpub();
+          }
+        } catch (_) {}
       }
 
-      if (typeof omni !== "undefined" && omni.profile && pubkey) {
-        profileData = await omni.profile.get(pubkey);
+      const omniObj = typeof window !== "undefined" ? (window as any).omni : (typeof omni !== "undefined" ? omni : null);
+      if (omniObj?.profile?.get && pubkey) {
+        try {
+          profileData = await omniObj.profile.get(pubkey);
+        } catch (_) {}
       }
 
       const displayName = profileData?.display_name || profileData?.name || (npub ? "Nostr User" : "Anonymous Nostr User");
       strongEl.textContent = displayName;
-      npubEl.textContent = npub ? `${npub.slice(0, 10)}...${npub.slice(-6)}` : "No Key Loaded";
+      npubEl.textContent = npub ? `${npub.slice(0, 10)}...${npub.slice(-6)}` : (pubkey ? `${pubkey.slice(0, 10)}...${pubkey.slice(-4)}` : "No Key Loaded");
 
       if (profileData?.picture) {
         avatarEl.innerHTML = `<img src="${escapeHtml(profileData.picture)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
@@ -192,7 +282,7 @@ async function mountProfileFull(root: any) {
         <div style="display: flex; flex-direction: column; gap: 4px;">
           <span style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e);">Public Key (npub):</span>
           <div style="display: flex; gap: 6px;">
-            <input id="key-npub" type="text" readonly style="flex: 1; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 6px 10px; border-radius: var(--radius-sm, 6px); font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" value="Loading..." />
+            <input id="key-npub" type="text" readonly style="flex: 1; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 6px 10px; border-radius: var(--radius-sm, 6px); font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" placeholder="Loading npub..." value="" />
             <button id="btn-copy-npub" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 10px; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); border-radius: var(--radius-sm, 6px); cursor: pointer; display: flex; align-items: center; gap: 4px;">
               ${ICONS.copy} <span>Copy</span>
             </button>
@@ -202,7 +292,7 @@ async function mountProfileFull(root: any) {
         <div style="display: flex; flex-direction: column; gap: 4px;">
           <span style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e);">Public Key (Hex):</span>
           <div style="display: flex; gap: 6px;">
-            <input id="key-hex" type="text" readonly style="flex: 1; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 6px 10px; border-radius: var(--radius-sm, 6px); font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" value="Loading..." />
+            <input id="key-hex" type="text" readonly style="flex: 1; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 6px 10px; border-radius: var(--radius-sm, 6px); font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" placeholder="Loading hex pubkey..." value="" />
             <button id="btn-copy-hex" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 10px; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); border-radius: var(--radius-sm, 6px); cursor: pointer; display: flex; align-items: center; gap: 4px;">
               ${ICONS.copy} <span>Copy</span>
             </button>
@@ -268,6 +358,7 @@ async function mountProfileFull(root: any) {
     btnTabProfile.style.color = "var(--text-muted, #78716c)";
     paneKeys.style.display = "flex";
     paneProfile.style.display = "none";
+    refreshIdentity();
   });
 
   // Profile Form fields
@@ -369,9 +460,11 @@ async function mountProfileFull(root: any) {
   btnConfirmReveal.addEventListener("click", async () => {
     nsecConfirmBox.style.display = "none";
     try {
-      if (typeof omni !== "undefined" && omni.auth) {
-        const nsec = await omni.auth.getNsec();
+      const omniObj = typeof window !== "undefined" ? (window as any).omni : (typeof omni !== "undefined" ? omni : null);
+      if (omniObj?.auth?.getNsec) {
+        const nsec = await omniObj.auth.getNsec();
         inpNsec.value = nsec;
+        inpNsec.setAttribute("value", nsec);
         nsecBox.style.display = "flex";
         btnReveal.textContent = "Hide Private Key";
       }
@@ -386,48 +479,101 @@ async function mountProfileFull(root: any) {
       let npub = "";
       let profileData: any = null;
 
-      if (typeof window !== "undefined" && (window as any).nostr) {
-        pubkey = await (window as any).nostr.getPublicKey();
-        if (pubkey) inpPubkey.value = pubkey;
-      } else if (typeof omni !== "undefined" && omni.nostr) {
-        pubkey = await omni.nostr.getPublicKey();
-        if (pubkey) inpPubkey.value = pubkey;
+      // 1. Fetch public key (hex)
+      try {
+        if (typeof window !== "undefined" && (window as any).nostr?.getPublicKey) {
+          pubkey = await (window as any).nostr.getPublicKey();
+        } else if (typeof window !== "undefined" && (window as any).omni?.nostr?.getPublicKey) {
+          pubkey = await (window as any).omni.nostr.getPublicKey();
+        } else if (typeof omni !== "undefined" && (omni as any).nostr?.getPublicKey) {
+          pubkey = await (omni as any).nostr.getPublicKey();
+        }
+      } catch (err) {
+        console.warn("Could not retrieve public key via nostr:", err);
       }
 
-      if (typeof omni !== "undefined" && omni.auth) {
-        npub = await omni.auth.getNpub();
-        if (npub) {
-          spanNpub.textContent = npub;
-          inpNpub.value = npub;
+      if (pubkey) {
+        inpPubkey.value = pubkey;
+        inpPubkey.setAttribute("value", pubkey);
+        try {
+          npub = toBech32("npub", pubkey);
+        } catch (_) {}
+      }
+
+      // 2. Fetch npub via auth or fallback
+      if (!npub) {
+        try {
+          if (typeof window !== "undefined" && (window as any).omni?.auth?.getNpub) {
+            npub = await (window as any).omni.auth.getNpub();
+          } else if (typeof omni !== "undefined" && (omni as any).auth?.getNpub) {
+            npub = await (omni as any).auth.getNpub();
+          }
+        } catch (err) {
+          console.warn("Could not retrieve npub via omni.auth:", err);
         }
       }
 
-      if (!npub && pubkey) {
+      if (npub) {
+        spanNpub.textContent = npub;
+        inpNpub.value = npub;
+        inpNpub.setAttribute("value", npub);
+      } else if (pubkey) {
         spanNpub.textContent = `${pubkey.slice(0, 10)}...${pubkey.slice(-4)}`;
+        inpNpub.value = pubkey;
+        inpNpub.setAttribute("value", pubkey);
+      } else {
+        inpPubkey.value = "";
+        inpPubkey.placeholder = "No key available";
+        inpPubkey.setAttribute("value", "");
+        inpNpub.value = "";
+        inpNpub.placeholder = "No key available";
+        inpNpub.setAttribute("value", "");
+        spanNpub.textContent = "No identity";
       }
 
-      if (typeof omni !== "undefined" && omni.profile && pubkey) {
-        profileData = await (omni.profile.get as any)(pubkey, { syncRemote: forceRemote });
-        if (profileData) {
-          spanName.textContent = profileData.display_name || profileData.name || "Active Identity";
-          rowDName.value = profileData.display_name || "";
-          rowName.value = profileData.name || "";
-          inpAbout.value = profileData.about || "";
-          rowPic.value = profileData.picture || "";
-          rowNip05.value = profileData.nip05 || "";
-          rowLud16.value = profileData.lud16 || "";
-          updateLiveAvatar(profileData.picture);
-        } else {
-          spanName.textContent = "Active Identity";
-          rowDName.value = "";
-          rowName.value = "";
-          inpAbout.value = "";
-          rowPic.value = "";
-          rowNip05.value = "";
-          rowLud16.value = "";
-          updateLiveAvatar("");
+      // 3. Fetch profile metadata
+      if (pubkey) {
+        try {
+          const omniObj = typeof window !== "undefined" ? (window as any).omni : (typeof omni !== "undefined" ? omni : null);
+          if (omniObj?.profile?.get) {
+            profileData = await (omniObj.profile.get as any)(pubkey, { syncRemote: forceRemote });
+            if (profileData) {
+              spanName.textContent = profileData.display_name || profileData.name || "Active Identity";
+              rowDName.value = profileData.display_name || "";
+              rowDName.setAttribute("value", profileData.display_name || "");
+              rowName.value = profileData.name || "";
+              rowName.setAttribute("value", profileData.name || "");
+              inpAbout.value = profileData.about || "";
+              inpAbout.setAttribute("value", profileData.about || "");
+              rowPic.value = profileData.picture || "";
+              rowPic.setAttribute("value", profileData.picture || "");
+              rowNip05.value = profileData.nip05 || "";
+              rowNip05.setAttribute("value", profileData.nip05 || "");
+              rowLud16.value = profileData.lud16 || "";
+              rowLud16.setAttribute("value", profileData.lud16 || "");
+              updateLiveAvatar(profileData.picture);
+            } else {
+              spanName.textContent = "Active Identity";
+              rowDName.value = "";
+              rowDName.setAttribute("value", "");
+              rowName.value = "";
+              rowName.setAttribute("value", "");
+              inpAbout.value = "";
+              inpAbout.setAttribute("value", "");
+              rowPic.value = "";
+              rowPic.setAttribute("value", "");
+              rowNip05.value = "";
+              rowNip05.setAttribute("value", "");
+              rowLud16.value = "";
+              rowLud16.setAttribute("value", "");
+              updateLiveAvatar("");
+            }
+          }
+        } catch (err) {
+          console.warn("Could not retrieve profile metadata:", err);
         }
       }
+
       return profileData;
     } catch (_) {
       return null;
@@ -467,13 +613,16 @@ async function mountProfileFull(root: any) {
     const origText = btnImport.textContent;
     btnImport.textContent = "Switching & Fetching Profile...";
     try {
-      if (typeof omni !== "undefined" && omni.auth) {
-        const switchRes = await omni.auth.switchKey(val);
+      const omniObj = typeof window !== "undefined" ? (window as any).omni : (typeof omni !== "undefined" ? omni : null);
+      if (omniObj?.auth?.switchKey) {
+        const switchRes = await omniObj.auth.switchKey(val);
         if (switchRes?.pubkey) {
           inpPubkey.value = switchRes.pubkey;
+          inpPubkey.setAttribute("value", switchRes.pubkey);
         }
         if (switchRes?.npub) {
           inpNpub.value = switchRes.npub;
+          inpNpub.setAttribute("value", switchRes.npub);
           spanNpub.textContent = switchRes.npub;
         }
         inpImport.value = "";

@@ -840,6 +840,7 @@
 
     const nativeToRemote = new WeakMap();
     const remoteIdToNative = new Map();
+    let isDispatchingHostEvent = false;
 
     // Ensure any user interaction listener registered on any native element
     // (avatars, author handles, cards, buttons) is projected to host Remote DOM
@@ -853,6 +854,43 @@
       }
       return origAddEventListener.call(this, type, listener, options);
     };
+
+    // Auto-sync property mutations on form inputs (.value, .checked) from guest scripts to Remote DOM
+    function patchNativeProperty(proto, prop, isBool) {
+      if (!proto) return;
+      const desc = Object.getOwnPropertyDescriptor(proto, prop);
+      if (!desc || !desc.set) return;
+      Object.defineProperty(proto, prop, {
+        get() {
+          return desc.get.call(this);
+        },
+        set(val) {
+          desc.set.call(this, val);
+          if (isDispatchingHostEvent) return;
+          const remoteEl = nativeToRemote.get(this);
+          if (remoteEl) {
+            if (isBool) {
+              remoteEl.checked = Boolean(val);
+            } else {
+              remoteEl.value = String(val ?? "");
+            }
+          }
+        },
+        configurable: true,
+        enumerable: true
+      });
+    }
+
+    if (typeof HTMLInputElement !== "undefined") {
+      patchNativeProperty(HTMLInputElement.prototype, "value", false);
+      patchNativeProperty(HTMLInputElement.prototype, "checked", true);
+    }
+    if (typeof HTMLTextAreaElement !== "undefined") {
+      patchNativeProperty(HTMLTextAreaElement.prototype, "value", false);
+    }
+    if (typeof HTMLSelectElement !== "undefined") {
+      patchNativeProperty(HTMLSelectElement.prototype, "value", false);
+    }
 
     function mirrorNode(nativeNode) {
       if (!nativeNode) return null;
@@ -880,6 +918,15 @@
           for (let i = 0; i < nativeNode.attributes.length; i++) {
             const attr = nativeNode.attributes[i];
             remoteEl.setAttribute(attr.name, attr.value);
+          }
+        }
+
+        if (tag === "input" || tag === "textarea" || tag === "select") {
+          if ("value" in nativeNode && nativeNode.value !== undefined && nativeNode.value !== "") {
+            remoteEl.value = nativeNode.value;
+          }
+          if ("checked" in nativeNode && nativeNode.checked !== undefined && nativeNode.checked) {
+            remoteEl.checked = nativeNode.checked;
           }
         }
 
@@ -931,19 +978,24 @@
       origHandleHostEvent(id, eventName, detail);
       const nativeNode = remoteIdToNative.get(String(id));
       if (nativeNode) {
-        if (detail) {
-          if (detail.value !== undefined && "value" in nativeNode) nativeNode.value = detail.value;
-          if (detail.checked !== undefined && "checked" in nativeNode) nativeNode.checked = detail.checked;
+        isDispatchingHostEvent = true;
+        try {
+          if (detail) {
+            if (detail.value !== undefined && "value" in nativeNode) nativeNode.value = detail.value;
+            if (detail.checked !== undefined && "checked" in nativeNode) nativeNode.checked = detail.checked;
+          }
+          let ev;
+          if (eventName === "click") {
+            ev = new MouseEvent("click", { bubbles: true, cancelable: true });
+          } else if (eventName === "input" || eventName === "change") {
+            ev = new Event(eventName, { bubbles: true, cancelable: true });
+          } else {
+            ev = new CustomEvent(eventName, { bubbles: true, cancelable: true, detail });
+          }
+          nativeNode.dispatchEvent(ev);
+        } finally {
+          isDispatchingHostEvent = false;
         }
-        let ev;
-        if (eventName === "click") {
-          ev = new MouseEvent("click", { bubbles: true, cancelable: true });
-        } else if (eventName === "input" || eventName === "change") {
-          ev = new Event(eventName, { bubbles: true, cancelable: true });
-        } else {
-          ev = new CustomEvent(eventName, { bubbles: true, cancelable: true, detail });
-        }
-        nativeNode.dispatchEvent(ev);
       }
     };
 
@@ -1001,6 +1053,9 @@
   window.nostr = {
     async getPublicKey() {
       await initPromise;
+      if (sessionInfo && sessionInfo.userPubkey) {
+        return sessionInfo.userPubkey;
+      }
       return callRpc("nostr.getPublicKey");
     },
     async signEvent(event) {
@@ -1048,6 +1103,9 @@
     nostr: {
       async getPublicKey() {
         await initPromise;
+        if (sessionInfo && sessionInfo.userPubkey) {
+          return sessionInfo.userPubkey;
+        }
         return callRpc("nostr.getPublicKey");
       },
       async signEvent(event) {
@@ -1201,7 +1259,11 @@
       },
       async switchKey(key) {
         await initPromise;
-        return callRpc("auth.switchKey", { key });
+        const res = await callRpc("auth.switchKey", { key });
+        if (res && res.pubkey && sessionInfo) {
+          sessionInfo.userPubkey = res.pubkey;
+        }
+        return res;
       }
     }
   };
