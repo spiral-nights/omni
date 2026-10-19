@@ -266,7 +266,7 @@ export class PanoramaShell extends BaseShell {
   }
 
   public getActivePageId(): string {
-    return this.activePivot;
+    return this.currentOpenedAppId || this.activePivot;
   }
 
   private renderSkeleton(): void {
