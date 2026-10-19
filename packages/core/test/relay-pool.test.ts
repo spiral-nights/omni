@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import omniRuntimeScript from "../src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
-import { RelayPool, parseNip65Relays, buildNip65Tags } from "../src/nostr/relay-pool.js";
+import { RelayPool, parseNip65Relays, buildNip65Tags, STORAGE_KEY_CONFIGURED_RELAYS } from "../src/nostr/relay-pool.js";
 import { JsonRpcDispatcher } from "../src/ipc/json-rpc-dispatcher.js";
 import { CapabilityStore } from "../src/acl/capability-store.js";
 import { AclEngine } from "../src/acl/acl-engine.js";
@@ -14,6 +14,28 @@ function sendRpc(port: MessagePort, req: any): Promise<any> {
     port.postMessage(req);
   });
 }
+
+function createMemoryStorage() {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, val: string) => store.set(key, String(val)),
+    removeItem: (key: string) => store.delete(key),
+    clear: () => store.clear(),
+    get length() { return store.size; },
+    key: (i: number) => Array.from(store.keys())[i] ?? null
+  };
+}
+
+let memStorage: any;
+
+beforeEach(() => {
+  memStorage = createMemoryStorage();
+  (globalThis as any).localStorage = memStorage;
+  if (typeof window !== "undefined") {
+    (window as any).localStorage = memStorage;
+  }
+});
 
 describe("RelayPool Management (Issue 5)", () => {
   let pool: RelayPool;
@@ -44,6 +66,30 @@ describe("RelayPool Management (Issue 5)", () => {
     relays = pool.getAllRelays();
     expect(relays.length).toBe(2);
     expect(relays.some((r) => r.url === "wss://relay.nostr.band")).toBe(false);
+  });
+
+  it("persists added and removed relays across RelayPool instances via localStorage", () => {
+    pool.addRelay("wss://relay.primal.net");
+    const storage = typeof window !== "undefined" && window.localStorage ? window.localStorage : null;
+    const stored = JSON.parse(storage?.getItem(STORAGE_KEY_CONFIGURED_RELAYS) || "[]");
+    expect(stored).toContain("wss://relay.primal.net");
+
+    // New instance without options should load the persisted relays
+    const newPool = new RelayPool();
+    expect(newPool.getAllRelays().some((r) => r.url === "wss://relay.primal.net")).toBe(true);
+
+    // Remove relay and verify new instance reflects removal
+    newPool.removeRelay("wss://relay.primal.net");
+    const updated = JSON.parse(storage?.getItem(STORAGE_KEY_CONFIGURED_RELAYS) || "[]");
+    expect(updated).not.toContain("wss://relay.primal.net");
+
+    const thirdPool = new RelayPool();
+    expect(thirdPool.getAllRelays().some((r) => r.url === "wss://relay.primal.net")).toBe(false);
+  });
+
+  it("auto-prefixes wss:// when protocol is omitted", () => {
+    pool.addRelay("relay.nostr.band");
+    expect(pool.getAllRelays().some((r) => r.url === "wss://relay.nostr.band")).toBe(true);
   });
 });
 

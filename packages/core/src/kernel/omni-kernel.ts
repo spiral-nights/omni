@@ -27,6 +27,7 @@ export interface OmniKernelOptions {
   maxFeedNotes?: number;
   theme?: any;
   useShadowDom?: boolean;
+  persistRelays?: boolean;
 }
 
 export class OmniKernel {
@@ -61,7 +62,10 @@ export class OmniKernel {
       dbName: options.eventStoreName,
       maxFeedNotes: options.maxFeedNotes ?? 100
     });
-    this.relayPool = new RelayPool({ bootstrapRelays: options.bootstrapRelays });
+    this.relayPool = new RelayPool({
+      bootstrapRelays: options.bootstrapRelays,
+      persistRelays: options.persistRelays
+    });
     this.capabilityStore = new CapabilityStore();
     this.aclEngine = new AclEngine(this.capabilityStore, options.promptHandler);
     this.subscriptionCoordinator = new SubscriptionCoordinator(this.eventStore, this.relayPool, this.aclEngine);

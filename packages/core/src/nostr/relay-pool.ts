@@ -1,12 +1,16 @@
 import { NostrEvent, NostrFilter, Nip65Relay } from "@omni/types";
 
+export const STORAGE_KEY_CONFIGURED_RELAYS = "omni_configured_relays";
+
 export interface RelayPoolOptions {
   bootstrapRelays?: string[];
   maxRelays?: number;
+  persistRelays?: boolean;
 }
 
 export type EventCallback = (event: NostrEvent, relayUrl: string) => void;
 export type EoseCallback = (relayUrl: string) => void;
+export type RelayStatusCallback = (relays: Array<{ url: string; status: "connected" | "connecting" | "disconnected" }>) => void;
 
 export function parseNip65Relays(event: NostrEvent): Nip65Relay[] {
   if (event.kind !== 10002) return [];
@@ -46,20 +50,94 @@ interface ActiveSubscription {
   onEose?: EoseCallback;
 }
 
+function getStorage(): Storage | null {
+  try {
+    if (typeof globalThis !== "undefined") {
+      if ((globalThis as any).localStorage) return (globalThis as any).localStorage;
+      if ((globalThis as any).window?.localStorage) return (globalThis as any).window.localStorage;
+    }
+    if (typeof window !== "undefined" && window.localStorage) {
+      return window.localStorage;
+    }
+    if (typeof localStorage !== "undefined") {
+      return localStorage;
+    }
+  } catch {}
+  return null;
+}
+
 export class RelayPool {
   private relays: Map<string, WebSocket> = new Map();
   private subscriptions: Map<string, ActiveSubscription> = new Map();
   private bootstrapUrls: string[];
   private userRelays: Map<string, Nip65Relay> = new Map();
   private authorRelays: Map<string, Nip65Relay[]> = new Map();
+  private persistRelays: boolean;
+  private statusListeners: Set<RelayStatusCallback> = new Set();
 
   constructor(options: RelayPoolOptions = {}) {
-    this.bootstrapUrls = options.bootstrapRelays || [
+    this.persistRelays = options.persistRelays ?? true;
+    const defaultBootstrap = [
       "wss://relay.damus.io",
       "wss://relay.ditto.pub",
       "wss://nos.lol",
       "wss://relay.nostr.band"
     ];
+
+    const persisted = this.persistRelays ? this.loadPersistedRelays() : null;
+    if (persisted !== null) {
+      this.bootstrapUrls = persisted;
+    } else if (options.bootstrapRelays !== undefined) {
+      this.bootstrapUrls = [...options.bootstrapRelays];
+    } else {
+      this.bootstrapUrls = defaultBootstrap;
+    }
+  }
+
+  private loadPersistedRelays(): string[] | null {
+    const storage = getStorage();
+    if (!storage) return null;
+    try {
+      const raw = storage.getItem(STORAGE_KEY_CONFIGURED_RELAYS);
+      if (raw === null) return null;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((u: string) => {
+          let s = String(u).trim();
+          if (!s.startsWith("ws://") && !s.startsWith("wss://")) s = `wss://${s}`;
+          return s.replace(/\/+$/, "");
+        }).filter(Boolean);
+      }
+    } catch {
+      // Ignore parse error
+    }
+    return null;
+  }
+
+  private savePersistedRelays(): void {
+    if (!this.persistRelays) return;
+    const storage = getStorage();
+    if (!storage) return;
+    try {
+      storage.setItem(STORAGE_KEY_CONFIGURED_RELAYS, JSON.stringify(this.bootstrapUrls));
+    } catch {
+      // Ignore quota error
+    }
+  }
+
+  onStatusChange(callback: RelayStatusCallback): () => void {
+    this.statusListeners.add(callback);
+    return () => this.statusListeners.delete(callback);
+  }
+
+  private notifyStatusChange(): void {
+    if (this.statusListeners.size === 0) return;
+    const all = this.getAllRelays();
+    for (const listener of this.statusListeners) {
+      try {
+        listener(all);
+      } catch {}
+    }
   }
 
   async connect(): Promise<void> {
@@ -88,6 +166,7 @@ export class RelayPool {
         for (const sub of this.subscriptions.values()) {
           ws.send(JSON.stringify(["REQ", sub.subId, ...sub.filters]));
         }
+        this.notifyStatusChange();
       };
 
       ws.onmessage = (event) => {
@@ -96,15 +175,18 @@ export class RelayPool {
 
       ws.onclose = () => {
         this.relays.delete(normalized);
+        this.notifyStatusChange();
         // Attempt reconnect after delay
         setTimeout(() => this.connectRelay(normalized), 5000);
       };
 
       ws.onerror = () => {
+        this.notifyStatusChange();
         ws.close();
       };
 
       this.relays.set(normalized, ws);
+      this.notifyStatusChange();
     } catch {
       // Failed to open socket
     }
@@ -295,15 +377,27 @@ export class RelayPool {
   }
 
   addRelay(url: string): void {
-    const normalized = url.trim().replace(/\/+$/, "");
+    let normalized = url.trim();
+    if (!normalized.startsWith("ws://") && !normalized.startsWith("wss://")) {
+      normalized = `wss://${normalized}`;
+    }
+    normalized = normalized.replace(/\/+$/, "");
+
     if (!this.bootstrapUrls.some((u) => u.trim().replace(/\/+$/, "") === normalized)) {
       this.bootstrapUrls.push(normalized);
+      this.savePersistedRelays();
     }
     this.connectRelay(normalized);
+    this.notifyStatusChange();
   }
 
   removeRelay(url: string): void {
-    const normalized = url.trim().replace(/\/+$/, "");
+    let normalized = url.trim();
+    if (!normalized.startsWith("ws://") && !normalized.startsWith("wss://")) {
+      normalized = `wss://${normalized}`;
+    }
+    normalized = normalized.replace(/\/+$/, "");
+
     const ws = this.relays.get(normalized);
     if (ws) {
       ws.close();
@@ -312,7 +406,9 @@ export class RelayPool {
     const idx = this.bootstrapUrls.findIndex((u) => u.trim().replace(/\/+$/, "") === normalized);
     if (idx !== -1) {
       this.bootstrapUrls.splice(idx, 1);
+      this.savePersistedRelays();
     }
+    this.notifyStatusChange();
   }
 
   async fetchEvent(filter: NostrFilter, timeoutMs = 4000): Promise<NostrEvent | null> {

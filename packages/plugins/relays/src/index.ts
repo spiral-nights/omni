@@ -21,6 +21,15 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function normalizeRelayUrl(input: string): string {
+  let url = input.trim();
+  if (!url) return "";
+  if (!url.startsWith("ws://") && !url.startsWith("wss://")) {
+    url = `wss://${url}`;
+  }
+  return url.replace(/\/+$/, "");
+}
+
 function mountRelays(root: any) {
   const presets = [
     { name: "Ditto", url: "wss://relay.ditto.pub" },
@@ -32,6 +41,19 @@ function mountRelays(root: any) {
 
   const card = html<HTMLDivElement>`
     <div class="checklist-widget-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 10px; color: var(--text-primary, #ede8df);">
+      <style>
+        @keyframes omni-relay-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.35; transform: scale(0.8); }
+        }
+        .relay-row:hover {
+          border-color: var(--border-strong, #383530) !important;
+        }
+        .btn-remove-relay:hover {
+          color: #ef4444 !important;
+          background: rgba(239, 68, 68, 0.12) !important;
+        }
+      </style>
       <div class="widget-header" style="display: flex; justify-content: space-between; align-items: center;">
         <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary, #ede8df);">✦ Relays</h3>
       </div>
@@ -55,18 +77,29 @@ function mountRelays(root: any) {
   const input = card.querySelector<HTMLInputElement>(".input-relay-url")!;
   const btnAdd = card.querySelector<HTMLButtonElement>(".btn-add-relay")!;
 
+  let currentRelayUrls: Set<string> = new Set();
+
+  async function addRelayUrl(rawUrl: string) {
+    const url = normalizeRelayUrl(rawUrl);
+    if (!url) return;
+    if (typeof omni !== "undefined" && omni.relays) {
+      await omni.relays.add(url);
+    }
+    renderRelays();
+    setTimeout(renderRelays, 600);
+    setTimeout(renderRelays, 1500);
+  }
+
   card.querySelectorAll<HTMLButtonElement>(".btn-preset-relay").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const url = btn.getAttribute("data-url");
-      if (url && typeof omni !== "undefined" && omni.relays) {
-        await omni.relays.add(url);
-        renderRelays();
+      if (url) {
+        await addRelayUrl(url);
       }
     });
   });
 
   async function renderRelays() {
-    listContainer.replaceChildren();
     try {
       let relays: any[] = [];
       if (typeof omni !== "undefined" && omni.relays) {
@@ -75,7 +108,11 @@ function mountRelays(root: any) {
         const relayMap = await (window as any).nostr.getRelays();
         relays = Object.keys(relayMap || {}).map((url) => ({ url, connected: true }));
       }
+
+      listContainer.replaceChildren();
+
       if (!relays || relays.length === 0) {
+        currentRelayUrls.clear();
         const empty = html<HTMLDivElement>`
           <div style="font-size: 0.75rem; color: var(--text-muted, #78716c); padding: 8px 0; text-align: center;">
             No relays connected. Operating in 0ms local offline mode.
@@ -85,15 +122,35 @@ function mountRelays(root: any) {
         return;
       }
 
+      currentRelayUrls = new Set(relays.map((r) => normalizeRelayUrl(r.url)));
+
       for (const r of relays) {
-        const isConn = r.status === "connected" || r.connected;
+        const isConnected = r.status === "connected" || (!r.status && r.connected);
+        const isConnecting = r.status === "connecting";
+
+        let statusColor = "#ef4444";
+        let statusLabel = "Offline";
+        let pulseStyle = "";
+
+        if (isConnected) {
+          statusColor = "var(--status-online, #00a4ef)";
+          statusLabel = "Connected";
+        } else if (isConnecting) {
+          statusColor = "#f59e0b";
+          statusLabel = "Connecting...";
+          pulseStyle = "animation: omni-relay-pulse 1.2s infinite ease-in-out;";
+        }
+
         const row = html<HTMLDivElement>`
-          <div class="relay-row" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-sm, 6px); padding: 6px 10px; font-size: 0.78rem;">
-            <div style="display: flex; align-items: center; gap: 6px; overflow: hidden;">
-              <span style="width: 7px; height: 7px; border-radius: 50%; background: ${isConn ? "var(--status-online, #34d399)" : "#f87171"}; flex-shrink: 0;"></span>
-              <span style="font-family: var(--font-mono, monospace); font-size: 0.72rem; color: var(--text-primary, #ede8df); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 170px;">${escapeHtml(r.url)}</span>
+          <div class="relay-row" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-sm, 6px); padding: 6px 10px; font-size: 0.78rem; transition: border-color 0.15s ease;">
+            <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; flex: 1; min-width: 0;">
+              <span class="relay-dot" style="width: 8px; height: 8px; border-radius: 50%; background: ${statusColor}; flex-shrink: 0; ${pulseStyle}" title="${statusLabel}"></span>
+              <div style="display: flex; flex-direction: column; overflow: hidden; min-width: 0; flex: 1;">
+                <span style="font-family: var(--font-mono, monospace); font-size: 0.75rem; color: var(--text-primary, #ede8df); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${escapeHtml(r.url)}</span>
+                <span style="font-size: 0.68rem; color: ${statusColor}; margin-top: 1px; line-height: 1;">${statusLabel}</span>
+              </div>
             </div>
-            <button class="btn-remove-relay" title="Disconnect & Remove Relay" style="background: transparent; border: none; color: var(--text-muted, #78716c); font-size: 0.75rem; cursor: pointer; padding: 2px 6px;">✕</button>
+            <button class="btn-remove-relay" title="Disconnect & Remove Relay" style="background: transparent; border: none; color: var(--text-muted, #78716c); font-size: 0.85rem; cursor: pointer; padding: 2px 6px; line-height: 1; border-radius: 4px; transition: color 0.15s ease, background 0.15s ease;">✕</button>
           </div>
         `;
 
@@ -112,24 +169,32 @@ function mountRelays(root: any) {
     }
   }
 
-  btnAdd.addEventListener("click", async () => {
+  async function handleAdd() {
     const val = input.value?.trim();
-    if (!val || !val.startsWith("ws")) return;
-    if (typeof omni !== "undefined" && omni.relays) {
-      await omni.relays.add(val);
-    }
+    if (!val) return;
     input.value = "";
-    renderRelays();
-  });
+    await addRelayUrl(val);
+  }
+
+  btnAdd.addEventListener("click", handleAdd);
 
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
-      btnAdd.click();
+      handleAdd();
     }
   });
 
   root.appendChild(card);
   renderRelays();
+
+  // Periodic live status check so connections transition to Connected automatically
+  const intervalId = setInterval(renderRelays, 2000);
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("beforeunload", () => {
+      clearInterval(intervalId);
+    });
+  }
 }
 
 function init() {

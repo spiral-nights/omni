@@ -390,11 +390,15 @@ export class JsonRpcDispatcher {
         if (!allowed) {
           throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for relays:manage" };
         }
-        if (!params?.url || !params.url.startsWith("ws")) {
-          throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Invalid relay URL (must start with ws:// or wss://)" };
+        let url = params?.url?.trim();
+        if (!url) {
+          throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing relay url" };
         }
-        this.ctx.relayPool.addRelay(params.url);
-        return { success: true, url: params.url };
+        if (!url.startsWith("ws://") && !url.startsWith("wss://")) {
+          url = `wss://${url}`;
+        }
+        this.ctx.relayPool.addRelay(url);
+        return { success: true, url };
       }
 
       case "relays.remove": {
@@ -402,9 +406,13 @@ export class JsonRpcDispatcher {
         if (!allowed) {
           throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for relays:manage" };
         }
-        if (!params?.url) throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing relay url" };
-        this.ctx.relayPool.removeRelay(params.url);
-        return { success: true, url: params.url };
+        let url = params?.url?.trim();
+        if (!url) throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing relay url" };
+        if (!url.startsWith("ws://") && !url.startsWith("wss://")) {
+          url = `wss://${url}`;
+        }
+        this.ctx.relayPool.removeRelay(url);
+        return { success: true, url };
       }
 
       // 10. Profile & Identity
