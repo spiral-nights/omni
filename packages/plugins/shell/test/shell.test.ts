@@ -1375,6 +1375,80 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(widgetsSlot).toBeTruthy();
     });
 
+    it("renders accent color chooser in system section and header with preset swatches", () => {
+      // System card
+      const systemCard = panoramaRoot.querySelector("#panorama-accent-card");
+      expect(systemCard).toBeTruthy();
+      const systemSwatches = panoramaRoot.querySelectorAll("#panorama-system-swatches-grid .panorama-color-swatch");
+      expect(systemSwatches.length).toBe(14);
+
+      // Header button & popup
+      const headerColorBtn = panoramaRoot.querySelector("#btn-panorama-header-color") as HTMLButtonElement | null;
+      expect(headerColorBtn).toBeTruthy();
+      const headerPopup = panoramaRoot.querySelector("#panorama-header-color-popup") as HTMLElement | null;
+      expect(headerPopup).toBeTruthy();
+      expect(headerPopup?.style.display).toBe("none");
+
+      // Clicking header button opens popup
+      headerColorBtn?.click();
+      expect(headerPopup?.style.display).not.toBe("none");
+
+      const headerSwatches = panoramaRoot.querySelectorAll("#panorama-header-swatches-grid .panorama-color-swatch");
+      expect(headerSwatches.length).toBe(14);
+    });
+
+    it("applies selected accent color, updates CSS variables, and persists to localStorage", () => {
+      // Find the emerald swatch (#2ecc71)
+      const emeraldSwatch = Array.from(panoramaRoot.querySelectorAll<HTMLButtonElement>("#panorama-system-swatches-grid .panorama-color-swatch"))
+        .find((s) => s.dataset.color?.toLowerCase() === "#2ecc71");
+      expect(emeraldSwatch).toBeTruthy();
+
+      emeraldSwatch?.click();
+
+      expect(panoramaShell.getAccentColor()).toBe("#2ECC71");
+      expect(document.documentElement.style.getPropertyValue("--omni-accent-primary")).toBe("#2ECC71");
+      expect(localStorage.getItem(PanoramaShell.STORAGE_KEY_PANORAMA_ACCENT)).toBe("#2ECC71");
+      expect(emeraldSwatch?.classList.contains("active")).toBe(true);
+
+      // Verify the hex label updated
+      const hexLabel = panoramaRoot.querySelector("#panorama-system-color-hex");
+      expect(hexLabel?.textContent).toBe("#2ECC71");
+    });
+
+    it("supports custom color input selection", () => {
+      const customInput = panoramaRoot.querySelector("#panorama-system-custom-color") as HTMLInputElement | null;
+      expect(customInput).toBeTruthy();
+
+      if (customInput) {
+        customInput.value = "#8e44ad";
+        customInput.dispatchEvent(new Event("input"));
+      }
+
+      expect(panoramaShell.getAccentColor()).toBe("#8E44AD");
+      expect(document.documentElement.style.getPropertyValue("--omni-accent-primary")).toBe("#8E44AD");
+      expect(localStorage.getItem(PanoramaShell.STORAGE_KEY_PANORAMA_ACCENT)).toBe("#8E44AD");
+    });
+
+    it("restores saved accent color from localStorage on mount", () => {
+      localStorage.setItem(PanoramaShell.STORAGE_KEY_PANORAMA_ACCENT, "#F39C12");
+
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: panoramaKernel,
+        installedPlugins: []
+      });
+      testShell.mount();
+
+      expect(testShell.getAccentColor()).toBe("#F39C12");
+      expect(document.documentElement.style.getPropertyValue("--omni-accent-primary")).toBe("#F39C12");
+
+      testShell.destroy();
+      testRoot.remove();
+    });
+
+
     it("automatically pins and adds app to navigation dock when assigned to main in OmniShell", async () => {
       const classicRoot = document.createElement("div");
       document.body.appendChild(classicRoot);

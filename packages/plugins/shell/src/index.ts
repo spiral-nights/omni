@@ -1,7 +1,7 @@
 export { BaseShell } from "./base-shell.js";
 export { OmniShell } from "./shell.js";
-export { PanoramaShell } from "./panorama-shell.js";
-export type { PanoramaPivot } from "./panorama-shell.js";
+export { PanoramaShell, PANORAMA_ACCENT_PRESETS } from "./panorama-shell.js";
+export type { PanoramaPivot, PanoramaAccentPreset } from "./panorama-shell.js";
 export type {
   OmniShellOptions,
   InstalledPluginEntry,

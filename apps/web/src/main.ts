@@ -13,8 +13,10 @@ import omniRuntimeScript from "../../../packages/core/src/sandbox/omni-runtime.j
 
 const STORAGE_KEY_NSEC = "omni_privkey";
 const STORAGE_KEY_SHELL = "omni_active_shell";
+const STORAGE_KEY_PANORAMA_ACCENT = "omni_panorama_accent_color";
 const savedPrivkey = localStorage.getItem(STORAGE_KEY_NSEC) || undefined;
 const activeShellType = localStorage.getItem(STORAGE_KEY_SHELL) || "classic";
+const savedAccent = localStorage.getItem(STORAGE_KEY_PANORAMA_ACCENT) || "#00a4ef";
 
 // Initial First-Class Core System Standalone nsites (Zero Manifests)
 const initialPlugins: InstalledPluginEntry[] = [
@@ -125,7 +127,7 @@ const kernel = new OmniKernel({
     colors: {
       canvas: "#000000",
       surface: "#111111",
-      accent: "#00a4ef",
+      accent: savedAccent,
       contrast: "#ffffff",
       radius: "0px"
     }

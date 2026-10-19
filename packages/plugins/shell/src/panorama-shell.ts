@@ -14,6 +14,39 @@ import { CURATED_APPS } from "./app-store-catalog.js";
 
 export type PanoramaPivot = "feed" | "apps" | "widgets" | "system" | string;
 
+export interface PanoramaAccentPreset {
+  name: string;
+  hex: string;
+}
+
+export const PANORAMA_ACCENT_PRESETS: PanoramaAccentPreset[] = [
+  { name: "Cyan", hex: "#00a4ef" },
+  { name: "Cobalt", hex: "#0078d7" },
+  { name: "Teal", hex: "#00aba9" },
+  { name: "Emerald", hex: "#2ecc71" },
+  { name: "Lime", hex: "#60a917" },
+  { name: "Mango", hex: "#f39c12" },
+  { name: "Orange", hex: "#fa6800" },
+  { name: "Amber", hex: "#d4a373" },
+  { name: "Crimson", hex: "#e51400" },
+  { name: "Magenta", hex: "#e056fd" },
+  { name: "Purple", hex: "#8e44ad" },
+  { name: "Pink", hex: "#f472d0" },
+  { name: "Steel", hex: "#647687" },
+  { name: "Gold", hex: "#f0a30a" }
+];
+
+function adjustColorBrightness(hex: string, percent: number): string {
+  const clean = hex.replace("#", "");
+  const num = parseInt(clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean, 16);
+  if (isNaN(num)) return hex;
+  const amt = Math.round(2.55 * percent);
+  const R = Math.min(255, Math.max(0, (num >> 16) + amt));
+  const G = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amt));
+  const B = Math.min(255, Math.max(0, (num & 0x0000ff) + amt));
+  return `#${((1 << 24) + (R << 16) + (G << 8) + B).toString(16).slice(1)}`;
+}
+
 /**
  * PanoramaShell: Windows Phone "People Hub" Inspired Modern Typography & Panorama Runtime.
  *
@@ -26,6 +59,10 @@ export type PanoramaPivot = "feed" | "apps" | "widgets" | "system" | string;
  * - Bottom Application Bar (AppBar) with icon buttons (Back, Windows Start/Home, Search, More ...)
  */
 export class PanoramaShell extends BaseShell {
+  public static readonly STORAGE_KEY_PANORAMA_ACCENT = "omni_panorama_accent_color";
+  public static readonly DEFAULT_ACCENT_COLOR = "#00a4ef";
+
+  private currentAccentColor: string = PanoramaShell.DEFAULT_ACCENT_COLOR;
   private activePivot: PanoramaPivot = "feed";
   private currentOpenedAppId: string | null = null;
   private isProgrammaticScroll: boolean = false;
@@ -175,6 +212,10 @@ export class PanoramaShell extends BaseShell {
       document.body?.classList.add("theme-panorama");
     }
     this.renderSkeleton();
+    const savedAccent = (typeof localStorage !== "undefined"
+      ? localStorage.getItem(PanoramaShell.STORAGE_KEY_PANORAMA_ACCENT)
+      : null) || PanoramaShell.DEFAULT_ACCENT_COLOR;
+    this.applyAccentColor(savedAccent, false);
     this.cacheElementReferences();
     this.initSlotContainers();
     this.ensureMainAppSections();
@@ -186,6 +227,7 @@ export class PanoramaShell extends BaseShell {
     }
     this.renderAppsTiles();
     this.renderSystemPluginList();
+    this.renderColorChoosers();
     this.wireNavigation();
     this.wireGlobalEvents();
     this.updateProfileUi();
@@ -207,6 +249,16 @@ export class PanoramaShell extends BaseShell {
     if (typeof document !== "undefined") {
       document.documentElement.classList.remove("theme-panorama");
       document.body?.classList.remove("theme-panorama");
+      document.documentElement.style.removeProperty("--omni-accent-primary");
+      document.documentElement.style.removeProperty("--omni-accent-hover");
+      document.documentElement.style.removeProperty("--omni-border-focus");
+      document.documentElement.style.removeProperty("--omni-status-online");
+      document.documentElement.style.removeProperty("--omni-status-badge");
+      document.documentElement.style.removeProperty("--accent-primary");
+      document.documentElement.style.removeProperty("--accent-hover");
+      document.documentElement.style.removeProperty("--status-online");
+      document.documentElement.style.removeProperty("--status-badge");
+      document.documentElement.style.removeProperty("--border-focus");
     }
     if (this.root) {
       this.root.innerHTML = "";
@@ -231,12 +283,12 @@ export class PanoramaShell extends BaseShell {
             --omni-text-muted: #666666;
             --omni-border-subtle: #1e1e1e;
             --omni-border-strong: #333333;
-            --omni-border-focus: #00a4ef;
+            --omni-border-focus: var(--omni-accent-primary, #00a4ef);
             --omni-accent-primary: #00a4ef;
             --omni-accent-hover: #0078d7;
             --omni-accent-contrast: #ffffff;
-            --omni-status-online: #00a4ef;
-            --omni-status-badge: #00a4ef;
+            --omni-status-online: var(--omni-accent-primary, #00a4ef);
+            --omni-status-badge: var(--omni-accent-primary, #00a4ef);
             --omni-radius-sm: 0px;
             --omni-radius-md: 0px;
             --omni-radius-lg: 0px;
@@ -251,12 +303,12 @@ export class PanoramaShell extends BaseShell {
             --text-muted: #666666;
             --border-subtle: #1e1e1e;
             --border-strong: #333333;
-            --border-focus: #00a4ef;
-            --accent-primary: #00a4ef;
-            --accent-hover: #0078d7;
+            --border-focus: var(--omni-accent-primary, #00a4ef);
+            --accent-primary: var(--omni-accent-primary, #00a4ef);
+            --accent-hover: var(--omni-accent-hover, #0078d7);
             --accent-contrast: #ffffff;
-            --status-online: #00a4ef;
-            --status-badge: #00a4ef;
+            --status-online: var(--omni-accent-primary, #00a4ef);
+            --status-badge: var(--omni-accent-primary, #00a4ef);
             --radius-sm: 0px;
             --radius-md: 0px;
             --radius-lg: 0px;
@@ -323,7 +375,7 @@ export class PanoramaShell extends BaseShell {
           .panorama-shell-root .btn-publish,
           .panorama-shell-root .btn-timer-start,
           .panorama-shell-root .btn-add-task {
-            background: #00a4ef !important;
+            background: var(--omni-accent-primary, #00a4ef) !important;
             color: #ffffff !important;
             border: none !important;
             border-radius: 0px !important;
@@ -334,18 +386,18 @@ export class PanoramaShell extends BaseShell {
             border-radius: 0px !important;
           }
           .panorama-shell-root .new-posts-pill {
-            background: #00a4ef !important;
+            background: var(--omni-accent-primary, #00a4ef) !important;
             color: #ffffff !important;
             border-radius: 0px !important;
           }
           .panorama-shell-root .cache-indicator,
           .panorama-shell-root .note-author,
           .panorama-shell-root .timer-digits {
-            color: #00a4ef !important;
+            color: var(--omni-accent-primary, #00a4ef) !important;
           }
           .panorama-shell-root .omni-toggle input:checked + .toggle-slider {
-            background-color: #00a4ef !important;
-            border-color: #00a4ef !important;
+            background-color: var(--omni-accent-primary, #00a4ef) !important;
+            border-color: var(--omni-accent-primary, #00a4ef) !important;
           }
           .panorama-shell-root .toggle-slider {
             border-radius: 0px !important;
@@ -365,13 +417,33 @@ export class PanoramaShell extends BaseShell {
                 <span class="panorama-left-peek-label" id="panorama-left-peek-label"></span>
               </button>
             </div>
-            <!-- Metro User Profile Tile -->
-            <button class="panorama-header-user-btn" id="panorama-header-user-btn" title="Manage Profile & Keys" style="display: flex; align-items: center; gap: 8px; background: transparent; border: none; cursor: pointer; padding: 4px; color: #fff;">
-              <div class="panorama-header-avatar" id="panorama-header-avatar" style="width: 26px; height: 26px; border-radius: 0px; background: #222; border: 1px solid #444; display: flex; align-items: center; justify-content: center; overflow: hidden; color: #00a4ef; flex-shrink: 0;">
-                ${icon("user", 14)}
+            <!-- Header Right Actions -->
+            <div style="display: flex; align-items: center; gap: 8px; position: relative;">
+              <!-- Quick Color Chooser Button -->
+              <button class="panorama-header-color-btn" id="btn-panorama-header-color" title="Theme Accent Color" style="display: flex; align-items: center; gap: 6px; background: transparent; border: 1px solid #444; cursor: pointer; padding: 4px 8px; color: #fff;">
+                <span id="panorama-header-color-swatch" style="width: 12px; height: 12px; background: var(--omni-accent-primary, #00a4ef); display: inline-block;"></span>
+                <span style="font-size: 0.75rem; color: #ccc;">Theme</span>
+              </button>
+              <!-- Quick Header Color Dropdown / Popup -->
+              <div class="panorama-color-popup" id="panorama-header-color-popup" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #222; padding-bottom: 6px;">
+                  <strong style="font-size: 0.82rem; color: #fff;">Accent Color</strong>
+                  <button id="btn-close-color-popup" style="background: transparent; border: none; color: #888; font-size: 0.9rem; cursor: pointer; padding: 2px;">✕</button>
+                </div>
+                <div class="panorama-color-swatches-grid" id="panorama-header-swatches-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;"></div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 1px solid #222;">
+                  <span style="font-size: 0.72rem; color: #888;">Custom</span>
+                  <input type="color" id="panorama-header-custom-color" style="width: 32px; height: 24px; padding: 0; background: none; border: 1px solid #444; cursor: pointer;" />
+                </div>
               </div>
-              <span class="panorama-header-name" id="panorama-header-name" style="font-size: 0.82rem; font-weight: 400; color: #ccc; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Identity</span>
-            </button>
+              <!-- Metro User Profile Tile -->
+              <button class="panorama-header-user-btn" id="panorama-header-user-btn" title="Manage Profile & Keys" style="display: flex; align-items: center; gap: 8px; background: transparent; border: none; cursor: pointer; padding: 4px; color: #fff;">
+                <div class="panorama-header-avatar" id="panorama-header-avatar" style="width: 26px; height: 26px; border-radius: 0px; background: #222; border: 1px solid #444; display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--omni-accent-primary, #00a4ef); flex-shrink: 0;">
+                  ${icon("user", 14)}
+                </div>
+                <span class="panorama-header-name" id="panorama-header-name" style="font-size: 0.82rem; font-weight: 400; color: #ccc; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Identity</span>
+              </button>
+            </div>
           </div>
           <nav class="panorama-pivot-nav" id="panorama-pivot-nav"></nav>
         </header>
@@ -441,6 +513,24 @@ export class PanoramaShell extends BaseShell {
                 </div>
               </div>
 
+              <!-- Theme Accent Color Card -->
+              <div class="panorama-system-card" id="panorama-accent-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px;">
+                  <div>
+                    <strong>Accent Color</strong>
+                    <p style="font-size: 0.75rem; color: #888; margin-top: 2px;">Personalize live tiles, highlights, and controls.</p>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span id="panorama-system-color-hex" style="font-family: var(--omni-font-mono, monospace); font-size: 0.8rem; font-weight: 600; color: var(--omni-accent-primary, #00a4ef);">#00A4EF</span>
+                    <label title="Pick Custom Color" style="cursor: pointer; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid #444; background: #222; position: relative;">
+                      <input type="color" id="panorama-system-custom-color" style="opacity: 0; width: 100%; height: 100%; position: absolute; top: 0; left: 0; cursor: pointer;" />
+                      <span style="font-size: 0.8rem; pointer-events: none;">🎨</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="panorama-color-swatches-grid" id="panorama-system-swatches-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(36px, 1fr)); gap: 8px;"></div>
+              </div>
+
               <!-- Cloud Workspace Sync Card -->
               <div class="panorama-system-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
@@ -460,7 +550,7 @@ export class PanoramaShell extends BaseShell {
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <strong>Installed Plugins & Relays</strong>
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <button id="btn-panorama-install" class="btn-panorama-action" style="color: #00a4ef; border-color: #00a4ef;">+ Install nsite</button>
+                    <button id="btn-panorama-install" class="btn-panorama-action" style="color: var(--omni-accent-primary, #00a4ef); border-color: var(--omni-accent-primary, #00a4ef);">+ Install nsite</button>
                     <span id="panorama-plugin-count" style="font-size: 0.75rem; color: #888;">5 installed</span>
                   </div>
                 </div>
@@ -494,7 +584,7 @@ export class PanoramaShell extends BaseShell {
             </div>
             <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
               <div style="background: #111; padding: 8px 10px; border: 1px solid #222;">
-                <span id="panorama-open-with-target" style="font-size: 0.75rem; color: #00a4ef; word-break: break-all; font-family: var(--omni-font-mono);"></span>
+                <span id="panorama-open-with-target" style="font-size: 0.75rem; color: var(--omni-accent-primary, #00a4ef); word-break: break-all; font-family: var(--omni-font-mono);"></span>
               </div>
               <div id="panorama-open-with-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto;"></div>
               <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #aaa; cursor: pointer; padding-top: 4px; border-top: 1px solid #222;">
@@ -503,7 +593,7 @@ export class PanoramaShell extends BaseShell {
               </label>
               <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
                 <button id="btn-panorama-open-with-cancel" class="btn-panorama-action" style="padding: 6px 12px;">Cancel</button>
-                <button id="btn-panorama-open-with-confirm" class="btn-panorama-action" style="padding: 6px 12px; border-color: #00a4ef; color: #00a4ef;" disabled>Open</button>
+                <button id="btn-panorama-open-with-confirm" class="btn-panorama-action" style="padding: 6px 12px; border-color: var(--omni-accent-primary, #00a4ef); color: var(--omni-accent-primary, #00a4ef);" disabled>Open</button>
               </div>
             </div>
           </div>
@@ -526,7 +616,7 @@ export class PanoramaShell extends BaseShell {
 
               <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                 <button id="btn-panorama-quick-sample" class="btn-panorama-action" style="font-size: 0.75rem;">Load Sample naddr</button>
-                <button id="btn-panorama-confirm-install" class="btn-panorama-action" style="background: #00a4ef; color: #fff; border-color: #00a4ef; font-weight: 600; padding: 6px 14px;">Install</button>
+                <button id="btn-panorama-confirm-install" class="btn-panorama-action" style="background: var(--omni-accent-primary, #00a4ef); color: #fff; border-color: var(--omni-accent-primary, #00a4ef); font-weight: 600; padding: 6px 14px;">Install</button>
               </div>
 
               <!-- Curated Decentralized Catalog -->
@@ -574,7 +664,7 @@ export class PanoramaShell extends BaseShell {
 
     // Color palette inspired by Windows Phone signature accent colors
     const tileColors = [
-      "#00a4ef", // cyan
+      this.currentAccentColor,
       "#d4a373", // warm amber
       "#e056fd", // magenta
       "#2ecc71", // emerald
@@ -1800,9 +1890,158 @@ export class PanoramaShell extends BaseShell {
           if (panoInstallModal) {
             panoInstallModal.style.display = "none";
           }
+          const headerColorPopup = this.root?.querySelector<HTMLElement>("#panorama-header-color-popup");
+          if (headerColorPopup) {
+            headerColorPopup.style.display = "none";
+          }
         }
       });
     }
+  }
+
+  // --- Theme Accent Color Chooser ---
+
+  public getAccentColor(): string {
+    return this.currentAccentColor;
+  }
+
+  public applyAccentColor(hexColor: string, persist = true): void {
+    if (!hexColor || !hexColor.startsWith("#")) return;
+    this.currentAccentColor = hexColor.toUpperCase();
+    if (persist && typeof localStorage !== "undefined") {
+      try {
+        localStorage.setItem(PanoramaShell.STORAGE_KEY_PANORAMA_ACCENT, this.currentAccentColor);
+      } catch {}
+    }
+
+    const hoverColor = adjustColorBrightness(this.currentAccentColor, -15);
+    const properties: Array<[string, string]> = [
+      ["--omni-accent-primary", this.currentAccentColor],
+      ["--omni-accent-hover", hoverColor],
+      ["--omni-border-focus", this.currentAccentColor],
+      ["--omni-status-online", this.currentAccentColor],
+      ["--omni-status-badge", this.currentAccentColor],
+      ["--accent-primary", this.currentAccentColor],
+      ["--accent-hover", hoverColor],
+      ["--status-online", this.currentAccentColor],
+      ["--status-badge", this.currentAccentColor],
+      ["--border-focus", this.currentAccentColor]
+    ];
+
+    if (typeof document !== "undefined") {
+      const docEl = document.documentElement;
+      for (const [prop, val] of properties) {
+        docEl.style.setProperty(prop, val);
+      }
+    }
+
+    if (this.root) {
+      for (const [prop, val] of properties) {
+        this.root.style.setProperty(prop, val);
+      }
+      const shellRoot = this.root.querySelector<HTMLElement>(".panorama-shell-root");
+      if (shellRoot) {
+        for (const [prop, val] of properties) {
+          shellRoot.style.setProperty(prop, val);
+        }
+      }
+    }
+
+    if (this.kernel?.theme?.colors) {
+      this.kernel.theme.colors.accent = this.currentAccentColor;
+    }
+
+    this.updateColorChooserUI();
+    this.renderAppsTiles();
+  }
+
+  private updateColorChooserUI(): void {
+    const hex = this.currentAccentColor;
+
+    const headerSwatch = this.root?.querySelector<HTMLElement>("#panorama-header-color-swatch");
+    if (headerSwatch) headerSwatch.style.backgroundColor = hex;
+
+    const hexLabel = this.root?.querySelector<HTMLElement>("#panorama-system-color-hex");
+    if (hexLabel) {
+      hexLabel.textContent = hex;
+      hexLabel.style.color = hex;
+    }
+
+    const headerCustomInput = this.root?.querySelector<HTMLInputElement>("#panorama-header-custom-color");
+    if (headerCustomInput) headerCustomInput.value = hex;
+
+    const systemCustomInput = this.root?.querySelector<HTMLInputElement>("#panorama-system-custom-color");
+    if (systemCustomInput) systemCustomInput.value = hex;
+
+    this.root?.querySelectorAll<HTMLButtonElement>(".panorama-color-swatch").forEach((btn) => {
+      const swatchHex = btn.dataset.color?.toUpperCase();
+      btn.classList.toggle("active", swatchHex === hex);
+    });
+  }
+
+  private renderColorChoosers(): void {
+    const grids = [
+      this.root.querySelector<HTMLElement>("#panorama-header-swatches-grid"),
+      this.root.querySelector<HTMLElement>("#panorama-system-swatches-grid")
+    ];
+
+    grids.forEach((grid) => {
+      if (!grid) return;
+      grid.innerHTML = "";
+      PANORAMA_ACCENT_PRESETS.forEach((preset) => {
+        const btn = document.createElement("button");
+        btn.className = "panorama-color-swatch";
+        btn.dataset.color = preset.hex;
+        btn.title = preset.name;
+        btn.style.backgroundColor = preset.hex;
+        if (preset.hex.toUpperCase() === this.currentAccentColor.toUpperCase()) {
+          btn.classList.add("active");
+        }
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.applyAccentColor(preset.hex);
+        });
+        grid.appendChild(btn);
+      });
+    });
+
+    // Wire custom color inputs
+    const headerCustom = this.root.querySelector<HTMLInputElement>("#panorama-header-custom-color");
+    headerCustom?.addEventListener("input", (e) => {
+      const val = (e.target as HTMLInputElement).value;
+      if (val) this.applyAccentColor(val);
+    });
+
+    const systemCustom = this.root.querySelector<HTMLInputElement>("#panorama-system-custom-color");
+    systemCustom?.addEventListener("input", (e) => {
+      const val = (e.target as HTMLInputElement).value;
+      if (val) this.applyAccentColor(val);
+    });
+
+    // Wire header popup toggle
+    const btnHeaderColor = this.root.querySelector<HTMLButtonElement>("#btn-panorama-header-color");
+    const popup = this.root.querySelector<HTMLElement>("#panorama-header-color-popup");
+    const btnClosePopup = this.root.querySelector<HTMLButtonElement>("#btn-close-color-popup");
+
+    btnHeaderColor?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!popup) return;
+      const isOpen = popup.style.display !== "none";
+      popup.style.display = isOpen ? "none" : "flex";
+    });
+
+    btnClosePopup?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (popup) popup.style.display = "none";
+    });
+
+    document.addEventListener("click", (e) => {
+      if (popup && popup.style.display !== "none") {
+        if (!popup.contains(e.target as Node) && e.target !== btnHeaderColor && !btnHeaderColor?.contains(e.target as Node)) {
+          popup.style.display = "none";
+        }
+      }
+    });
   }
 
 }

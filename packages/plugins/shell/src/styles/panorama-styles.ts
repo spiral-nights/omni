@@ -20,14 +20,14 @@ body.theme-panorama,
 
   --omni-border-subtle: #1e1e1e;
   --omni-border-strong: #333333;
-  --omni-border-focus: #00a4ef;
+  --omni-border-focus: var(--omni-accent-primary, #00a4ef);
 
   --omni-accent-primary: #00a4ef;
   --omni-accent-hover: #0078d7;
   --omni-accent-contrast: #ffffff;
 
-  --omni-status-online: #00a4ef;
-  --omni-status-badge: #00a4ef;
+  --omni-status-online: var(--omni-accent-primary, #00a4ef);
+  --omni-status-badge: var(--omni-accent-primary, #00a4ef);
 
   --omni-radius-sm: 0px;
   --omni-radius-md: 0px;
@@ -46,14 +46,14 @@ body.theme-panorama,
 
   --border-subtle: #1e1e1e;
   --border-strong: #333333;
-  --border-focus: #00a4ef;
+  --border-focus: var(--omni-accent-primary, #00a4ef);
 
-  --accent-primary: #00a4ef;
-  --accent-hover: #0078d7;
+  --accent-primary: var(--omni-accent-primary, #00a4ef);
+  --accent-hover: var(--omni-accent-hover, #0078d7);
   --accent-contrast: #ffffff;
 
-  --status-online: #00a4ef;
-  --status-badge: #00a4ef;
+  --status-online: var(--omni-accent-primary, #00a4ef);
+  --status-badge: var(--omni-accent-primary, #00a4ef);
 
   --radius-sm: 0px;
   --radius-md: 0px;
@@ -1613,7 +1613,7 @@ body.theme-panorama,
 
 .panorama-inspector-content {
   background: #111111;
-  border: 2px solid #00a4ef;
+  border: 2px solid var(--omni-accent-primary, #00a4ef);
   max-width: 560px;
   width: 100%;
   max-height: 80vh;
@@ -1635,5 +1635,64 @@ body.theme-panorama,
   overflow-y: auto;
 }
 
+/* 7. Theme Accent Color Chooser */
+.panorama-color-swatches-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.panorama-color-swatch {
+  aspect-ratio: 1 / 1;
+  border: 2px solid transparent;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+  padding: 0;
+  outline: none;
+  min-height: 36px;
+}
+
+.panorama-color-swatch:hover {
+  transform: scale(1.08);
+  z-index: 2;
+}
+
+.panorama-color-swatch.active {
+  border: 2px solid #ffffff !important;
+  box-shadow: 0 0 0 1px #000000;
+}
+
+.panorama-color-swatch.active::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+.panorama-color-popup {
+  position: absolute;
+  top: 48px;
+  right: 16px;
+  background: #111111;
+  border: 1px solid #333333;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.9);
+  padding: 12px;
+  z-index: 1000;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: panorama-fade-in 0.15s ease;
+}
+
+@keyframes panorama-fade-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 `;
