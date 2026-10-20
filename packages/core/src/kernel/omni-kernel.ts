@@ -103,58 +103,26 @@ export class OmniKernel {
 
   async seedInitialNotesIfEmpty(): Promise<void> {
     try {
-      const now = Math.floor(Date.now() / 1000);
-
-      // 1. Always ensure demo author Kind 0 profile metadata exists so author inspection is rich
-      const existingProfile = await this.eventStore.getEvents({ kinds: [0], limit: 1 });
-      if (existingProfile.length === 0) {
-        const profileDraft = {
-          kind: 0,
-          content: JSON.stringify({
-            name: "spiralnights",
-            display_name: "Spiral Nights",
-            about: "Omni modular Nostr workspace explorer & local-first client.",
-            picture: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-            nip05: "spiralnights@omni.local"
-          }),
-          tags: [],
-          created_at: now - 300
-        };
-        const signedProfile = await this.keystore.signEvent(profileDraft);
-        await this.eventStore.saveEvent(signedProfile);
+      // Clean up any previously seeded demo notes from local event store
+      const existingNotes = await this.eventStore.getEvents({ kinds: [1] });
+      for (const ev of existingNotes) {
+        if (
+          ev.content.includes("Welcome to Omni!") ||
+          ev.content.includes("Omni runs 100% standard Nostr web apps") ||
+          ev.content.includes("Try publishing a note above")
+        ) {
+          await this.eventStore.deleteEvent(ev.id);
+        }
       }
 
-      const existing = await this.eventStore.getEvents({ kinds: [1], limit: 1 });
-      if (existing.length === 0) {
-
-        const demoNotes = [
-          {
-            kind: 1,
-            content: "Welcome to Omni! ✦ A modular Nostr web client where every feature is a first-class plugin. Use the Layout tool to customize viewports, and inspect relay connections via Settings.",
-            tags: [["client", "omni"]],
-            created_at: now - 120
-          },
-          {
-            kind: 1,
-            content: "Omni runs 100% standard Nostr web apps (nsites) in hardened sandboxes with virtualized WebSockets and NIP-07 signing.",
-            tags: [["client", "omni"]],
-            created_at: now - 60
-          },
-          {
-            kind: 1,
-            content: "Try publishing a note above or switching to the Widgets dashboard in the navigation dock!",
-            tags: [["client", "omni"]],
-            created_at: now - 10
-          }
-        ];
-
-        for (const draft of demoNotes) {
-          const signed = await this.keystore.signEvent(draft);
-          await this.eventStore.saveEvent(signed);
+      const existingProfiles = await this.eventStore.getEvents({ kinds: [0] });
+      for (const ev of existingProfiles) {
+        if (ev.content.includes('"name":"spiralnights"') && ev.content.includes("Omni modular Nostr workspace explorer")) {
+          await this.eventStore.deleteEvent(ev.id);
         }
       }
     } catch (err) {
-      console.warn("Error seeding initial notes:", err);
+      console.warn("Error in seedInitialNotesIfEmpty:", err);
     }
   }
 
