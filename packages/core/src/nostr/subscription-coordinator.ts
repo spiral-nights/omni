@@ -72,7 +72,7 @@ export class SubscriptionCoordinator {
       targetRelays
     );
 
-    if (this.relayPool.getAllRelays().length === 0 && onEose) {
+    if ((this.relayPool.getAllRelays().length === 0 || this.relayPool.getConnectedRelayCount() === 0) && onEose) {
       queueMicrotask(() => onEose());
     }
 
