@@ -66,6 +66,9 @@ function getStorage(): Storage | null {
   return null;
 }
 
+const WS_CONNECTING = 0;
+const WS_OPEN = 1;
+
 export class RelayPool {
   private relays: Map<string, WebSocket> = new Map();
   private subscriptions: Map<string, ActiveSubscription> = new Map();
@@ -154,7 +157,7 @@ export class RelayPool {
   private connectRelay(url: string): void {
     const normalized = url.trim().replace(/\/+$/, "");
     const existing = this.relays.get(normalized);
-    if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) {
+    if (existing && (existing.readyState === WS_OPEN || existing.readyState === WS_CONNECTING)) {
       return;
     }
 
@@ -261,7 +264,7 @@ export class RelayPool {
       if (normalizedTargets && !normalizedTargets.has(url)) {
         continue;
       }
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws.readyState === WS_OPEN) {
         ws.send(message);
         acceptedRelays.push(url);
       }
@@ -289,7 +292,7 @@ export class RelayPool {
       if (normalizedTargets && !normalizedTargets.has(url)) {
         continue;
       }
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws.readyState === WS_OPEN) {
         ws.send(message);
       }
     }
@@ -301,7 +304,7 @@ export class RelayPool {
         if (normalizedTargets && !normalizedTargets.has(url)) {
           continue;
         }
-        if (ws.readyState === WebSocket.OPEN) {
+        if (ws.readyState === WS_OPEN) {
           ws.send(closeMsg);
         }
       }
@@ -342,7 +345,7 @@ export class RelayPool {
   getConnectedRelayCount(): number {
     let count = 0;
     for (const ws of this.relays.values()) {
-      if (ws.readyState === WebSocket.OPEN) count++;
+      if (ws.readyState === WS_OPEN) count++;
     }
     return count;
   }
@@ -350,7 +353,7 @@ export class RelayPool {
   getConnectedRelayUrls(): string[] {
     const urls: string[] = [];
     for (const [url, ws] of this.relays.entries()) {
-      if (ws.readyState === WebSocket.OPEN) urls.push(url);
+      if (ws.readyState === WS_OPEN) urls.push(url);
     }
     return urls.length > 0 ? Array.from(new Set(urls)) : Array.from(new Set(this.bootstrapUrls));
   }
@@ -365,9 +368,9 @@ export class RelayPool {
       const ws = this.relays.get(url);
       if (!ws) {
         list.push({ url, status: "disconnected" });
-      } else if (ws.readyState === WebSocket.OPEN) {
+      } else if (ws.readyState === WS_OPEN) {
         list.push({ url, status: "connected" });
-      } else if (ws.readyState === WebSocket.CONNECTING) {
+      } else if (ws.readyState === WS_CONNECTING) {
         list.push({ url, status: "connecting" });
       } else {
         list.push({ url, status: "disconnected" });

@@ -212,7 +212,10 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
     ws.send(JSON.stringify(["REQ", "test_sub", { kinds: [1] }]));
 
     // Wait for cached event and EOSE delivery
-    await new Promise((r) => setTimeout(r, 100));
+    const startWait = Date.now();
+    while (receivedFrames.length < 2 && Date.now() - startWait < 1500) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
 
     expect(receivedFrames.length).toBeGreaterThanOrEqual(2);
     // Frame 1: ["EVENT", "test_sub", event]
