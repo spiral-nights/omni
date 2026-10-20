@@ -9,6 +9,9 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
   let kernel: OmniKernel;
 
   beforeEach(async () => {
+    try {
+      localStorage.clear();
+    } catch {}
     kernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
     await kernel.boot();
   });

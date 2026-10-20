@@ -87,7 +87,7 @@ export class RelayPool {
       "wss://relay.nostr.band"
     ];
 
-    const persisted = this.persistRelays ? this.loadPersistedRelays() : null;
+    const persisted = (this.persistRelays && options.bootstrapRelays === undefined) ? this.loadPersistedRelays() : null;
     if (persisted !== null) {
       this.bootstrapUrls = persisted;
     } else if (options.bootstrapRelays !== undefined) {

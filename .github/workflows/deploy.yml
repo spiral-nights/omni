@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - architecture-revamp
   workflow_dispatch:
 
 # Grant GITHUB_TOKEN permissions required to deploy to GitHub Pages
