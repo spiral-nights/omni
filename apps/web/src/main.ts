@@ -167,7 +167,6 @@ async function startApp() {
 
   // Boot Kernel (Keystore, RelayPool, Storage, Coordinator, 0ms Cache)
   await kernel.boot();
-  await kernel.seedInitialNotesIfEmpty();
 
   // Persist private key if newly generated
   if (!localStorage.getItem(STORAGE_KEY_NSEC)) {

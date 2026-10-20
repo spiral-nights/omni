@@ -101,31 +101,6 @@ export class OmniKernel {
     this.relayPool.connect().catch(() => {});
   }
 
-  async seedInitialNotesIfEmpty(): Promise<void> {
-    try {
-      // Clean up any previously seeded demo notes from local event store
-      const existingNotes = await this.eventStore.getEvents({ kinds: [1] });
-      for (const ev of existingNotes) {
-        if (
-          ev.content.includes("Welcome to Omni!") ||
-          ev.content.includes("Omni runs 100% standard Nostr web apps") ||
-          ev.content.includes("Try publishing a note above")
-        ) {
-          await this.eventStore.deleteEvent(ev.id);
-        }
-      }
-
-      const existingProfiles = await this.eventStore.getEvents({ kinds: [0] });
-      for (const ev of existingProfiles) {
-        if (ev.content.includes('"name":"spiralnights"') && ev.content.includes("Omni modular Nostr workspace explorer")) {
-          await this.eventStore.deleteEvent(ev.id);
-        }
-      }
-    } catch (err) {
-      console.warn("Error in seedInitialNotesIfEmpty:", err);
-    }
-  }
-
   async getUserPubkey(): Promise<string> {
     return this.keystore.getPublicKey();
   }
