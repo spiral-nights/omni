@@ -244,7 +244,7 @@ async function startApp() {
 
   // Register Offline-First PWA Service Worker
   if (typeof window !== "undefined" && "serviceWorker" in navigator && window.location.protocol.startsWith("http")) {
-    window.addEventListener("load", () => {
+    const registerSw = () => {
       const swUrl = `${import.meta.env.BASE_URL}sw.js`;
       navigator.serviceWorker
         .register(swUrl)
@@ -254,7 +254,13 @@ async function startApp() {
         .catch((err) => {
           console.warn("✦ [Omni PWA] Service worker registration failed:", err);
         });
-    });
+    };
+
+    if (document.readyState === "complete") {
+      registerSw();
+    } else {
+      window.addEventListener("load", registerSw);
+    }
   }
 }
 

@@ -1,10 +1,12 @@
 // Omni Service Worker — Offline-First PWA Cache
-const CACHE_NAME = "omni-shell-v1";
+const CACHE_NAME = "omni-shell-v2";
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./icon.svg"
+  "./icon.svg",
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
 // Install: Pre-cache core shell skeleton

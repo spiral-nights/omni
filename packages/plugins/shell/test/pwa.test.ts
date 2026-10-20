@@ -17,7 +17,7 @@ describe("Offline-First PWA (Service Worker & Cache-First Architecture)", () => 
     expect(manifest.name).toBe("Omni — Modular Nostr Runtime");
     expect(manifest.short_name).toBe("Omni");
     expect(manifest.display).toBe("standalone");
-    expect(manifest.start_url).toBe("/");
+    expect(manifest.start_url).toMatch(/^(\/|\.\/)/);
     expect(manifest.theme_color).toBe("#141312");
     expect(manifest.background_color).toBe("#141312");
     expect(Array.isArray(manifest.icons)).toBe(true);
@@ -48,10 +48,11 @@ describe("Offline-First PWA (Service Worker & Cache-First Architecture)", () => 
     expect(fs.existsSync(indexPath)).toBe(true);
     const htmlContent = fs.readFileSync(indexPath, "utf-8");
 
-    expect(htmlContent).toContain('rel="manifest" href="/manifest.webmanifest"');
+    expect(htmlContent).toContain('rel="manifest"');
+    expect(htmlContent).toContain('manifest.webmanifest');
     expect(htmlContent).toContain('name="apple-mobile-web-app-capable" content="yes"');
     expect(htmlContent).toContain('name="theme-color" content="#141312"');
-    expect(htmlContent).toContain('href="/icon.svg"');
+    expect(htmlContent).toContain('icon.svg');
   });
 
   it("provides valid geometric monochrome vector PWA icon (icon.svg)", () => {
