@@ -1,11 +1,10 @@
 // Omni Service Worker — Offline-First PWA Cache
 const CACHE_NAME = "omni-shell-v1";
 const PRECACHE_ASSETS = [
-  "/",
-  "/index.html",
-  "/src/style.css",
-  "/manifest.webmanifest",
-  "/icon.svg"
+  "./",
+  "./index.html",
+  "./manifest.webmanifest",
+  "./icon.svg"
 ];
 
 // Install: Pre-cache core shell skeleton
@@ -62,9 +61,9 @@ self.addEventListener("fetch", (event) => {
         .catch(async () => {
           const cached = await caches.match(req);
           if (cached) return cached;
-          const fallback = await caches.match("/index.html");
+          const fallback = await caches.match("./index.html") || await caches.match("/index.html") || await caches.match("index.html");
           if (fallback) return fallback;
-          return caches.match("/");
+          return caches.match("./") || caches.match("/");
         })
     );
     return;

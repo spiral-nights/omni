@@ -246,8 +246,9 @@ async function startApp() {
   // Register Offline-First PWA Service Worker
   if (typeof window !== "undefined" && "serviceWorker" in navigator && window.location.protocol.startsWith("http")) {
     window.addEventListener("load", () => {
+      const swUrl = `${import.meta.env.BASE_URL}sw.js`;
       navigator.serviceWorker
-        .register("/sw.js")
+        .register(swUrl)
         .then((reg) => {
           console.log("✦ [Omni PWA] Service worker registered successfully:", reg.scope);
         })
