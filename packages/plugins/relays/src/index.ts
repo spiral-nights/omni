@@ -197,9 +197,54 @@ function mountRelays(root: any) {
   }
 }
 
+function isCompactRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const search = window.location.search || "";
+    if (new URLSearchParams(search).get("view") === "compact") return true;
+    if (window.location.hash.includes("compact")) return true;
+    if ((window as any).__OMNI_ROUTE__?.includes("compact")) return true;
+    if ((window as any).__OMNI_VIEW__ === "compact") return true;
+  } catch (_) {}
+  return false;
+}
+
+function mountRelaysCompact(root: any) {
+  const container = html<HTMLDivElement>`
+    <div class="relays-compact-card" style="display: flex; flex-direction: column; justify-content: center; height: 100%; width: 100%; gap: 6px; padding: 4px; box-sizing: border-box; color: #ffffff; font-family: inherit;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: #2ecc71; display: inline-block;"></span>
+        <span class="relays-compact-status" style="font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.85;">Connected</span>
+      </div>
+      <div class="relays-compact-count" style="font-size: 1.6rem; font-weight: 700; line-height: 1;">Pool Active</div>
+      <div style="font-size: 0.72rem; opacity: 0.8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">WebSocket Mesh</div>
+    </div>
+  `;
+
+  async function updateStatus() {
+    try {
+      if ((window as any).nostr?.getRelays) {
+        const relaysObj = await (window as any).nostr.getRelays();
+        const count = Object.keys(relaysObj || {}).length;
+        if (count > 0) {
+          const countEl = container.querySelector(".relays-compact-count");
+          if (countEl) countEl.textContent = `${count} Online`;
+        }
+      }
+    } catch (_) {}
+  }
+
+  updateStatus();
+  root.appendChild(container);
+}
+
 function init() {
   if (typeof document !== "undefined") {
-    mountRelays(document.body);
+    if (isCompactRoute()) {
+      mountRelaysCompact(document.body);
+    } else {
+      mountRelays(document.body);
+    }
   }
 }
 

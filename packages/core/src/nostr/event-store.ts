@@ -384,6 +384,15 @@ export class LocalEventStore {
     if (filter.since && event.created_at < filter.since) return false;
     if (filter.until && event.created_at > filter.until) return false;
 
+    // NIP-50 search filter matching
+    if ((filter as any).search && typeof (filter as any).search === "string" && (filter as any).search.trim()) {
+      const searchTerms = (filter as any).search.toLowerCase().split(/\s+/).filter(Boolean);
+      const content = (event.content || "").toLowerCase();
+      if (!searchTerms.every((term: string) => content.includes(term))) {
+        return false;
+      }
+    }
+
     // Check tag filters like `#p`, `#t`, `#e`, `#d`
     for (const [key, values] of Object.entries(filter)) {
       if (key.startsWith("#") && Array.isArray(values)) {

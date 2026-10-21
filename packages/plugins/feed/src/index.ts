@@ -273,6 +273,10 @@ const ICONS = {
     <line x1="19" y1="12" x2="5" y2="12"/>
     <polyline points="12 19 5 12 12 5"/>
   </svg>`,
+  arrowUp: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="12" y1="19" x2="12" y2="5"/>
+    <polyline points="5 12 12 5 19 12"/>
+  </svg>`,
   user: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
     <circle cx="12" cy="7" r="4"/>
@@ -491,7 +495,7 @@ function mountFeed(root: any) {
     <div class="feed-container">
       <!-- Top Timeline Navigation Header -->
       <div class="feed-top-header">
-        <div style="display: flex; align-items: center; gap: 12px;">
+        <div class="feed-nav-group" style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
           <h2 class="feed-title">Feed</h2>
           <div class="feed-tabs">
             <button class="feed-tab-btn btn-tab-following" data-tab="following">Following</button>
@@ -501,15 +505,15 @@ function mountFeed(root: any) {
         <div class="feed-header-actions">
           <button class="btn-search-feed" title="Search Notes" aria-label="Search Notes">
             ${ICONS.search}
-            <span>Search</span>
+            <span class="btn-label">Search</span>
           </button>
           <button class="btn-settings-feed" title="Feed Settings" aria-label="Feed Settings">
             ${ICONS.settings}
-            <span>Settings</span>
+            <span class="btn-label">Settings</span>
           </button>
-          <button class="btn-refresh-feed" title="Refresh Feed">
+          <button class="btn-refresh-feed" title="Refresh Feed" aria-label="Refresh Feed">
             ${ICONS.refresh}
-            <span>Refresh</span>
+            <span class="btn-label">Refresh</span>
           </button>
         </div>
       </div>
@@ -541,6 +545,14 @@ function mountFeed(root: any) {
       <!-- Infinite Scroll Sentinel -->
       <div class="feed-sentinel" id="feed-sentinel"></div>
 
+      <!-- Back to Top Footer Action -->
+      <div class="feed-footer-actions" style="display: flex; justify-content: center; padding: 24px 0 16px 0;">
+        <button class="btn-feed-back-to-top" data-action="scroll-top" title="Back to top" aria-label="Back to top">
+          ${ICONS.arrowUp}
+          <span>Back to top</span>
+        </button>
+      </div>
+
       <!-- Search Page (hidden until activated from the header) -->
       <div class="feed-search-page" style="display: none;">
         <div class="feed-top-header">
@@ -551,7 +563,7 @@ function mountFeed(root: any) {
           <h2 class="feed-title">Search</h2>
         </div>
         <div class="feed-search-bar">
-          <input class="feed-search-input" type="text" spellcheck="false"
+          <input class="feed-search-input" type="search" spellcheck="false"
             placeholder="Search notes, @author, or paste npub / note / nevent" />
           <button class="btn-do-search">Search</button>
         </div>
@@ -1040,7 +1052,10 @@ function mountFeed(root: any) {
   let searchWs: any = null;
   let currentThreadNote: any = null;
 
-  function showSearchPage(pushHistory = true) {
+  function showSearchPage(arg: boolean | string = true) {
+    const pushHistory = typeof arg === "boolean" ? arg : true;
+    const initialQuery = typeof arg === "string" ? arg : undefined;
+
     for (const el of feedSections) {
       if (el) el.style.display = "none";
     }
@@ -1054,9 +1069,20 @@ function mountFeed(root: any) {
         window.history.pushState({ omniFeedView: "search" }, "", window.location.href);
       } catch (_) {}
     }
-    try {
-      searchInput.focus();
-    } catch (_) {}
+    if (initialQuery !== undefined) {
+      searchInput.value = initialQuery;
+      triggerSearch();
+    }
+    const focusInput = () => {
+      try {
+        searchInput.focus();
+        searchInput.select?.();
+      } catch (_) {}
+    };
+    focusInput();
+    setTimeout(focusInput, 50);
+    setTimeout(focusInput, 150);
+    setTimeout(focusInput, 300);
   }
 
   function showSettingsPage(pushHistory = true) {
@@ -1501,7 +1527,11 @@ function mountFeed(root: any) {
   }
 
   function matchesNote(ev: any, keyword: string, authorHexes: string[], authorTerms: string[]): boolean {
-    if (keyword && !(ev.content || "").toLowerCase().includes(keyword)) return false;
+    if (keyword && keyword.trim()) {
+      const terms = keyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const content = (ev.content || "").toLowerCase();
+      if (!terms.every((term) => content.includes(term))) return false;
+    }
     if (authorHexes.length > 0 && !authorHexes.includes(ev.pubkey)) return false;
     if (authorHexes.length === 0 && authorTerms.length > 0) {
       const meta = profileCache.get(ev.pubkey);
@@ -1648,8 +1678,12 @@ function mountFeed(root: any) {
 
     // 4. Local results (0ms) render immediately
     const localNotes: any[] = [];
-    for (const ev of timelineNotes.values()) {
-      if (matchesNote(ev, parsed.keyword, authorHexes, parsed.authors)) localNotes.push(ev);
+    const seenLocalIds = new Set<string>();
+    for (const ev of [...timelineNotes.values(), ...allKnownNotes.values()]) {
+      if (!seenLocalIds.has(ev.id) && matchesNote(ev, parsed.keyword, authorHexes, parsed.authors)) {
+        seenLocalIds.add(ev.id);
+        localNotes.push(ev);
+      }
     }
     localNotes.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
     if (seq !== searchSeq) return;
@@ -1706,7 +1740,7 @@ function mountFeed(root: any) {
         }
       };
 
-      const noteFilter: any = { kinds: [1], limit: 60 };
+      const noteFilter: any = { kinds: [1], limit: 120 };
       if (parsed.keyword) noteFilter.search = parsed.keyword;
       if (authorHexes.length > 0) noteFilter.authors = authorHexes;
       collectSubscription(socket, `search-notes-${seq}`, noteFilter, (ev) => {
@@ -1804,9 +1838,21 @@ function mountFeed(root: any) {
     runSearch(searchInput.value);
   }
 
-  btnDoSearch.addEventListener("click", triggerSearch);
-  searchInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") triggerSearch();
+  btnDoSearch.addEventListener("click", (e) => {
+    e.preventDefault();
+    triggerSearch();
+  });
+  searchInput.addEventListener("keydown", (e: any) => {
+    if (e.key === "Enter" || e.keyCode === 13) {
+      e.preventDefault();
+      triggerSearch();
+    }
+  });
+  searchInput.addEventListener("keyup", (e: any) => {
+    if (e.key === "Enter" || e.keyCode === 13) {
+      e.preventDefault();
+      triggerSearch();
+    }
   });
 
   // Seamless Infinite Scrolling (Load Older Notes)
@@ -2068,6 +2114,8 @@ function mountFeed(root: any) {
       if (noteId) {
         openThread(noteId);
       }
+    } else if (action === "search") {
+      showSearchPage(data?.query);
     }
   };
 
@@ -2098,6 +2146,10 @@ function mountFeed(root: any) {
     });
     omniRef.intents.registerHandler("view_note", async (data: any) => {
       handleIncomingIntent("view_note", data);
+      return { handled: true };
+    });
+    omniRef.intents.registerHandler("search", async (data: any) => {
+      handleIncomingIntent("search", data);
       return { handled: true };
     });
   }

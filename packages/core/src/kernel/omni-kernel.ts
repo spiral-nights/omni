@@ -295,12 +295,23 @@ export class OmniKernel {
    * UI surface when a sandbox exists but its mirror is not in the visible slot.
    */
   reparentLiveComponent(pluginId: string, targetContainer: Element): boolean {
-    for (const [key, sandbox] of this.sandboxes.entries()) {
-      if (key === pluginId || key.startsWith(`${pluginId}::`)) {
-        const container = sandbox.getFirstPopulatedComponentContainer();
-        if (container) {
-          targetContainer.appendChild(container);
-          return true;
+    const exact = this.sandboxes.get(pluginId);
+    if (exact) {
+      const container = exact.getFirstPopulatedComponentContainer();
+      if (container) {
+        targetContainer.appendChild(container);
+        return true;
+      }
+    }
+    if (!pluginId.includes("::")) {
+      for (const [key, sandbox] of this.sandboxes.entries()) {
+        if (key.startsWith(`${pluginId}::`)) {
+          if (key.endsWith("::compact") || key.endsWith("::widget")) continue;
+          const container = sandbox.getFirstPopulatedComponentContainer();
+          if (container) {
+            targetContainer.appendChild(container);
+            return true;
+          }
         }
       }
     }

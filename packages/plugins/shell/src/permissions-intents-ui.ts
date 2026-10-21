@@ -360,17 +360,17 @@ export function renderHandledIntentsSection(options: HandledIntentsSectionOption
     for (const action of allIntents) {
       const info = INTENT_FRIENDLY_NAMES[action] || { label: action, desc: `Handler for "${action}" intent` };
 
-      const row = document.createElement("label");
-      row.style.cssText = isPanorama
-        ? "display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; background: #1a1a1a; border: 1px solid #2a2a2a; cursor: pointer;"
-        : "display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--omni-bg-canvas); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); cursor: pointer;";
+      const itemCard = document.createElement("div");
+      itemCard.className = "intent-capability-card";
+      itemCard.style.cssText = isPanorama
+        ? "display: flex; flex-direction: column; background: #1a1a1a; border: 1px solid #2a2a2a; padding: 6px 10px; gap: 4px;"
+        : "display: flex; flex-direction: column; background: var(--omni-bg-canvas); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 8px 10px; gap: 4px;";
 
-      const left = document.createElement("div");
-      left.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
-      left.innerHTML = `
-        <span style="font-size: 0.78rem; font-weight: 500; color: ${isPanorama ? "#fff" : "var(--omni-text-primary)"};">${info.label} <code style="font-size: 0.68rem; color: ${isPanorama ? "var(--omni-accent-primary, #00a4ef)" : "var(--omni-accent-primary)"};">(${action})</code></span>
-        <span style="font-size: 0.7rem; color: ${isPanorama ? "#888" : "var(--omni-text-muted)"};">${info.desc}</span>
-      `;
+      const mainRow = document.createElement("div");
+      mainRow.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px;";
+
+      const leftLabel = document.createElement("label");
+      leftLabel.style.cssText = "display: flex; align-items: center; gap: 8px; cursor: pointer; flex: 1; user-select: none;";
 
       const cb = document.createElement("input");
       cb.type = "checkbox";
@@ -390,9 +390,43 @@ export function renderHandledIntentsSection(options: HandledIntentsSectionOption
         onUpdate?.();
       });
 
-      row.appendChild(left);
-      row.appendChild(cb);
-      intentsListWrap.appendChild(row);
+      const nameSpan = document.createElement("span");
+      nameSpan.style.cssText = `font-size: 0.78rem; font-weight: 500; color: ${isPanorama ? "#fff" : "var(--omni-text-primary)"};`;
+      nameSpan.textContent = info.label;
+
+      leftLabel.appendChild(cb);
+      leftLabel.appendChild(nameSpan);
+
+      const btnInfo = document.createElement("button");
+      btnInfo.type = "button";
+      btnInfo.className = "btn-intent-info";
+      btnInfo.style.cssText = "background: transparent; border: none; color: #888; font-size: 0.72rem; cursor: pointer; padding: 2px 6px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; width: 22px; height: 22px;";
+      btnInfo.title = "Explain capability";
+      btnInfo.innerHTML = "ⓘ";
+
+      mainRow.appendChild(leftLabel);
+      mainRow.appendChild(btnInfo);
+      itemCard.appendChild(mainRow);
+
+      const descBox = document.createElement("div");
+      descBox.className = "intent-description-box";
+      descBox.style.cssText = isPanorama
+        ? "display: none; font-size: 0.7rem; color: #999; padding: 4px 6px 2px 24px; border-top: 1px dashed #262626; margin-top: 2px;"
+        : "display: none; font-size: 0.7rem; color: var(--omni-text-muted); padding: 4px 6px 2px 24px; border-top: 1px dashed var(--omni-border-subtle); margin-top: 2px;";
+      descBox.innerHTML = `
+        <div>${info.desc}</div>
+        <div style="margin-top: 2px;"><code style="font-size: 0.65rem; color: ${isPanorama ? "var(--omni-accent-primary, #00a4ef)" : "var(--omni-accent-primary)"};">${action}</code></div>
+      `;
+      itemCard.appendChild(descBox);
+
+      btnInfo.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = descBox.style.display !== "none";
+        descBox.style.display = isOpen ? "none" : "block";
+        btnInfo.style.color = isOpen ? "#888" : (isPanorama ? "var(--omni-accent-primary, #00a4ef)" : "var(--omni-accent-primary)");
+      });
+
+      intentsListWrap.appendChild(itemCard);
     }
   }
 

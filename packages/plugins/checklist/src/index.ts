@@ -174,9 +174,60 @@ function isSettingsRoute(): boolean {
   return false;
 }
 
+function isCompactRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const search = window.location.search || "";
+    if (new URLSearchParams(search).get("view") === "compact") return true;
+    if (window.location.hash.includes("compact")) return true;
+    if ((window as any).__OMNI_ROUTE__?.includes("compact")) return true;
+    if ((window as any).__OMNI_VIEW__ === "compact") return true;
+  } catch (_) {}
+  return false;
+}
+
+function mountChecklistCompact(root: any) {
+  let tasks: TaskItem[] = [
+    { id: 1, text: "Send Nostr note", done: true },
+    { id: 2, text: "Review Omni PR", done: false },
+    { id: 3, text: "Test Focus Timer", done: false }
+  ];
+
+  try {
+    if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem("tasks");
+      if (stored) tasks = JSON.parse(stored);
+    }
+  } catch {}
+
+  const completed = tasks.filter((t) => t.done).length;
+  const total = tasks.length;
+  const nextPending = tasks.find((t) => !t.done);
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  const container = html<HTMLDivElement>`
+    <div class="checklist-compact-card" style="display: flex; flex-direction: column; justify-content: center; height: 100%; width: 100%; gap: 6px; padding: 4px; box-sizing: border-box; color: #ffffff; font-family: inherit;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <span style="font-size: 1.5rem; font-weight: 700; line-height: 1;">${completed}/${total}</span>
+        <span style="font-size: 0.72rem; opacity: 0.85;">${percent}% done</span>
+      </div>
+      <div style="width: 100%; height: 4px; background: rgba(255, 255, 255, 0.25); border-radius: 2px; overflow: hidden;">
+        <div style="width: ${percent}%; height: 100%; background: #ffffff;"></div>
+      </div>
+      <div style="font-size: 0.75rem; opacity: 0.9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;">
+        ${nextPending ? `Next: ${escapeHtml(nextPending.text)}` : "All tasks complete!"}
+      </div>
+    </div>
+  `;
+
+  root.appendChild(container);
+}
+
 const mountApp = (root: any) => {
   if (isSettingsRoute()) {
     mountChecklistSettings(root);
+  } else if (isCompactRoute()) {
+    mountChecklistCompact(root);
   } else {
     mountChecklist(root);
   }

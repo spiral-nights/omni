@@ -82,6 +82,29 @@ export class RemoteDomHost {
     targetRoot.addEventListener("input", enrichInputEvent, true);
     targetRoot.addEventListener("change", enrichInputEvent, true);
 
+    const enrichKeyboardEvent = (e: KeyboardEvent) => {
+      const target = e.target as any;
+      try {
+        Object.defineProperty(e, "detail", {
+          value: {
+            key: e.key,
+            code: e.code,
+            keyCode: e.keyCode,
+            shiftKey: e.shiftKey,
+            altKey: e.altKey,
+            ctrlKey: e.ctrlKey,
+            metaKey: e.metaKey,
+            value: target?.value !== undefined ? String(target.value) : ""
+          },
+          configurable: true
+        });
+      } catch {}
+    };
+
+    targetRoot.addEventListener("keydown", enrichKeyboardEvent as any, true);
+    targetRoot.addEventListener("keyup", enrichKeyboardEvent as any, true);
+    targetRoot.addEventListener("keypress", enrichKeyboardEvent as any, true);
+
     // DOMRemoteReceiver only fires a remote listener when `event.target === element`
     targetRoot.addEventListener("click", () => {
       this.clickHandled = false;

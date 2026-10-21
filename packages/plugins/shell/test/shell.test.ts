@@ -21,6 +21,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
   const mockPlugins: InstalledPluginEntry[] = [
     {
       id: "org.omni.plugin.feed",
+      handledIntents: ["create_note", "compose_note", "search"],
       manifest: {
         id: "org.omni.plugin.feed",
         name: "Feed",
@@ -30,7 +31,11 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
           { id: "feed-main", type: "main", title: "Feed", slot: "main" },
           { id: "feed-dock-icon", type: "icon", title: "Feed", slot: "dock" }
         ],
-        permissions: { nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true } }
+        views: [
+          { id: "main", title: "Feed", path: "" },
+          { id: "search", title: "Search", path: "?view=search" }
+        ],
+        permissions: { nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true }, intents: { handle: ["create_note", "compose_note", "search"] } }
       },
       scriptContent: "console.log('feed');",
       sourceUrl: "local:@omni/plugin-feed",
@@ -48,6 +53,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
         ],
         views: [
           { id: "main", title: "Timer", path: "" },
+          { id: "compact", title: "Live Tile", path: "?view=compact" },
           { id: "settings", title: "Timer Settings", path: "?view=settings" }
         ],
         permissions: { storage: { quotaMb: 2 } }
@@ -1140,11 +1146,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       panoramaShell.mount();
     });
 
-    it("renders the signature hero title 'omni' and horizontal pivot headers", () => {
-      const heroTitle = panoramaRoot.querySelector(".panorama-hero-title");
-      expect(heroTitle).toBeTruthy();
-      expect(heroTitle?.textContent).toBe("omni");
-
+    it("renders compact single-tier header with horizontal pivot headers and profile button", () => {
       const pivotNav = panoramaRoot.querySelector(".panorama-pivot-nav");
       expect(pivotNav).toBeTruthy();
       const pivotItems = Array.from(panoramaRoot.querySelectorAll(".panorama-pivot-item")).map(
@@ -1154,6 +1156,9 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(pivotItems).toContain("apps");
       expect(pivotItems).toContain("widgets");
       expect(pivotItems).toContain("system");
+
+      const userBtn = panoramaRoot.querySelector("#panorama-header-user-btn");
+      expect(userBtn).toBeTruthy();
     });
 
     it("renders live accent tiles for installed apps in the apps section", () => {
@@ -1203,20 +1208,18 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(overlay?.classList.contains("open")).toBe(false);
     });
 
-    it("animates app opening and closing with 3D card flip transitions and provides left-pane peek affordance", async () => {
-      const gridView = panoramaRoot.querySelector("#panorama-apps-grid-view");
-      const overlay = panoramaRoot.querySelector("#panorama-full-app-overlay");
+    it("opens dynamic app pane on app launch and applies subtle fade out on close while sliding back to apps", async () => {
       const peekHint = panoramaRoot.querySelector("#panorama-left-peek-hint") as HTMLButtonElement;
       expect(peekHint).toBeTruthy();
 
       await panoramaShell.openApp("org.omni.plugin.feed");
-      expect(overlay?.classList.contains("open")).toBe(true);
-      expect(overlay?.classList.contains("card-flip-in-right")).toBe(true);
+      const dynamicPane = panoramaRoot.querySelector("#panorama-section-dynamic-app") as HTMLElement | null;
+      expect(dynamicPane).toBeTruthy();
 
       panoramaShell.closeApp();
-      expect(overlay?.classList.contains("open")).toBe(false);
-      expect(overlay?.classList.contains("card-flip-out-right")).toBe(true);
-      expect(gridView?.classList.contains("card-flip-in-left")).toBe(true);
+      expect(dynamicPane?.classList.contains("pane-closing")).toBe(true);
+      await new Promise((r) => setTimeout(r, 260));
+      expect(panoramaRoot.querySelector("#panorama-section-dynamic-app")).toBeFalsy();
     });
 
     it("exports and applies workspace state with shellType: 'panorama'", () => {
@@ -1653,6 +1656,269 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
       expect(firstInstallBtn?.textContent).toBe("Installed");
       expect(testShell.installedPlugins.some((p) => p.name === "Cypherpunk Wisdom")).toBe(true);
+
+      testShell.destroy();
+      testRoot.remove();
+    });
+
+    it("renders compact live tiles for plugins declaring a compact view tier", async () => {
+      const compactPlugin: InstalledPluginEntry = {
+        id: "org.omni.plugin.live-status",
+        name: "Live Status",
+        version: "1.0.0",
+        entry: "index.html",
+        views: [
+          { id: "main", title: "Full View", path: "" },
+          { id: "compact", title: "Live Tile", path: "?view=compact" }
+        ],
+        scriptContent: "console.log('compact live tile');",
+        sourceUrl: "local:@omni/plugin-live-status",
+        enabled: true,
+        viewport: ""
+      };
+
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: [compactPlugin]
+      });
+      testShell.mount();
+
+      const tile = testRoot.querySelector(`.panorama-tile[data-plugin-id="${compactPlugin.id}"]`);
+      expect(tile).toBeTruthy();
+      expect(tile?.classList.contains("has-compact-view")).toBe(true);
+
+      const compactContainer = testRoot.querySelector("#panorama-tile-compact-org-omni-plugin-live-status");
+      expect(compactContainer).toBeTruthy();
+
+      testShell.destroy();
+      testRoot.remove();
+    });
+
+    it("opens unpinned apps in a horizontal dynamic app pane with dynamic pivot header", async () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: mockPlugins.map((p) => ({ ...p }))
+      });
+      testShell.mount();
+
+      expect(testRoot.querySelector("#panorama-section-dynamic-app")).toBeFalsy();
+      expect(testRoot.querySelector(".panorama-dynamic-pivot")).toBeFalsy();
+
+      await testShell.openApp("org.omni.plugin.timer");
+
+      // Dynamic pane exists immediately after apps without redundant inner header
+      const dynamicPane = testRoot.querySelector("#panorama-section-dynamic-app");
+      expect(dynamicPane).toBeTruthy();
+      expect(dynamicPane?.querySelector(".panorama-dynamic-pane-header")).toBeFalsy();
+
+      // Dynamic pivot header tab exists next to apps with close button
+      const dynamicPivot = testRoot.querySelector(".panorama-dynamic-pivot");
+      expect(dynamicPivot).toBeTruthy();
+      expect(dynamicPivot?.textContent?.toLowerCase()).toContain("focus timer");
+      expect(dynamicPivot?.querySelector(".dynamic-pivot-close")).toBeTruthy();
+
+      // Header close button is visible
+      const headerCloseBtn = testRoot.querySelector("#btn-header-close-app") as HTMLElement | null;
+      expect(headerCloseBtn).toBeTruthy();
+      expect(headerCloseBtn?.style.display).toBe("inline-flex");
+
+      // Close app via header close button returns to apps launcher and cleans up with subtle fade out
+      headerCloseBtn?.click();
+      expect(testShell.getCurrentOpenedAppId()).toBeNull();
+      expect(headerCloseBtn?.style.display).toBe("none");
+      expect(dynamicPane?.classList.contains("pane-closing")).toBe(true);
+      await new Promise((r) => setTimeout(r, 260));
+      expect(testRoot.querySelector("#panorama-section-dynamic-app")).toBeFalsy();
+      expect(testRoot.querySelector(".panorama-dynamic-pivot")).toBeFalsy();
+
+      // Test closing via dynamic pivot close button
+      await testShell.openApp("org.omni.plugin.timer");
+      const dynamicPivot2 = testRoot.querySelector(".panorama-dynamic-pivot");
+      const pivotCloseBtn = dynamicPivot2?.querySelector(".dynamic-pivot-close") as HTMLElement | null;
+      expect(pivotCloseBtn).toBeTruthy();
+      pivotCloseBtn?.click();
+      expect(testShell.getCurrentOpenedAppId()).toBeNull();
+      await new Promise((r) => setTimeout(r, 260));
+
+      testShell.destroy();
+      testRoot.remove();
+    });
+
+    it("opens and dismisses long-press context menu on tiles with quick actions", () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: mockPlugins.map((p) => ({ ...p }))
+      });
+      testShell.mount();
+
+      const targetPlugin = testShell.installedPlugins[0];
+      expect(document.getElementById("panorama-tile-context-menu")).toBeFalsy();
+
+      // Trigger context menu
+      testShell.openTileContextMenu(targetPlugin, 150, 200);
+
+      const menu = document.getElementById("panorama-tile-context-menu");
+      const backdrop = document.getElementById("panorama-tile-context-backdrop");
+      expect(menu).toBeTruthy();
+      expect(backdrop).toBeTruthy();
+
+      const items = Array.from(menu?.querySelectorAll(".context-menu-item") || []).map((el) => el.textContent?.trim());
+      expect(items.some((t) => t?.includes("Pivots"))).toBe(true);
+      expect(items.some((t) => t?.includes("Widget"))).toBe(true);
+      expect(items.some((t) => t?.includes("App Info"))).toBe(true);
+
+      // Dismiss context menu
+      testShell.closeTileContextMenu();
+      expect(document.getElementById("panorama-tile-context-menu")).toBeFalsy();
+
+      testShell.destroy();
+      testRoot.remove();
+    });
+
+    it("renders desktop edge hover gliders and navigates adjacent pivots", () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: mockPlugins.map((p) => ({ ...p }))
+      });
+      testShell.mount();
+
+      const gliderLeft = testRoot.querySelector("#panorama-glider-left");
+      const gliderRight = testRoot.querySelector("#panorama-glider-right");
+      expect(gliderLeft).toBeTruthy();
+      expect(gliderRight).toBeTruthy();
+
+      // Glider left is disabled when at the start
+      testShell.updateEdgeGliders();
+      expect(gliderLeft?.classList.contains("disabled")).toBe(true);
+
+      testShell.destroy();
+      testRoot.remove();
+    });
+
+    it("renders metro bottom application bar with compose, refresh, search, and more menu", () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: mockPlugins.map((p) => ({ ...p }))
+      });
+      testShell.mount();
+
+      const bottomBar = testRoot.querySelector("#panorama-bottom-app-bar");
+      expect(bottomBar).toBeTruthy();
+
+      const btnCompose = testRoot.querySelector("#btn-app-bar-compose");
+      const btnRefresh = testRoot.querySelector("#btn-app-bar-refresh");
+      const btnSearch = testRoot.querySelector("#btn-app-bar-search");
+      const btnMore = testRoot.querySelector("#btn-app-bar-more") as HTMLButtonElement | null;
+      expect(btnCompose).toBeTruthy();
+      expect(btnRefresh).toBeTruthy();
+      expect(btnSearch).toBeTruthy();
+      expect(btnMore).toBeTruthy();
+
+      // Toggle more menu
+      const menu = testRoot.querySelector("#panorama-app-bar-menu") as HTMLElement | null;
+      expect(menu?.style.display).toBe("none");
+
+      btnMore?.click();
+      expect(menu?.style.display).toBe("flex");
+
+      testShell.destroy();
+      testRoot.remove();
+    });
+
+    it("renders clean empty state in widgets slot when no companion widgets are pinned", () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      // All plugins with viewport: "" (no widgets)
+      const noWidgetPlugins = mockPlugins.map((p) => ({ ...p, viewport: "", placements: [] }));
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: noWidgetPlugins
+      });
+      testShell.mount();
+
+      testShell.renderWidgetsEmptyState();
+      const widgetsSlot = testRoot.querySelector("#panorama-widgets-slot");
+      expect(widgetsSlot?.querySelector(".panorama-empty-state")).toBeTruthy();
+      expect(widgetsSlot?.textContent).toContain("No Widgets Pinned");
+
+      testShell.destroy();
+      testRoot.remove();
+    });
+
+    it("dynamically omits Manage Relays and Compose from bottom bar when corresponding plugins are absent", () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      // Filter out feed and relays plugins
+      const minimalPlugins = mockPlugins.filter(
+        (p) => p.id !== "org.omni.plugin.relays" && p.id !== "org.omni.plugin.feed"
+      );
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: minimalPlugins.map((p) => ({ ...p }))
+      });
+      testShell.mount();
+
+      const btnCompose = testRoot.querySelector("#btn-app-bar-compose");
+      expect(btnCompose).toBeFalsy();
+
+      const btnMenuRelays = testRoot.querySelector("#btn-app-bar-menu-relays");
+      expect(btnMenuRelays).toBeFalsy();
+
+      // System and Sync menu items still exist
+      const btnMenuSystem = testRoot.querySelector("#btn-app-bar-menu-system");
+      const btnMenuSync = testRoot.querySelector("#btn-app-bar-menu-sync");
+      expect(btnMenuSystem).toBeTruthy();
+      expect(btnMenuSync).toBeTruthy();
+
+      testShell.destroy();
+      testRoot.remove();
+    });
+
+    it("renders compact live tile containers in apps grid and populates them", async () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: mockPlugins.map((p) => ({ ...p }))
+      });
+      testShell.mount();
+
+      // Check that plugins with compact view have .has-compact-view tile and container
+      const timerTile = testRoot.querySelector('.panorama-tile[data-plugin-id="org.omni.plugin.timer"]');
+      expect(timerTile).toBeTruthy();
+      expect(timerTile?.classList.contains("has-compact-view")).toBe(true);
+
+      const compactContainer = testRoot.querySelector("#panorama-tile-compact-org-omni-plugin-timer");
+      expect(compactContainer).toBeTruthy();
+
+      // Verify ensureCompactTilesMounted can be called without errors
+      await testShell.ensureCompactTilesMounted();
 
       testShell.destroy();
       testRoot.remove();

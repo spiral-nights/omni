@@ -183,9 +183,52 @@ function isSettingsRoute(): boolean {
   return false;
 }
 
+function isCompactRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const search = window.location.search || "";
+    if (new URLSearchParams(search).get("view") === "compact") return true;
+    if (window.location.hash.includes("compact")) return true;
+    if ((window as any).__OMNI_ROUTE__?.includes("compact")) return true;
+    if ((window as any).__OMNI_VIEW__ === "compact") return true;
+  } catch (_) {}
+  return false;
+}
+
+function mountTimerCompact(root: any) {
+  const container = html<HTMLDivElement>`
+    <div class="timer-compact-card" style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; width: 100%; gap: 6px; padding: 4px; box-sizing: border-box; text-align: center; color: #ffffff; font-family: inherit;">
+      <div class="timer-compact-digits" style="font-size: 1.8rem; font-weight: 700; font-family: var(--font-mono, monospace); line-height: 1; letter-spacing: 0.04em; color: #ffffff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);">${formatTime(remainingSeconds)}</div>
+      <div class="timer-compact-status" style="font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.9); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);">${isRunning ? "Focusing" : remainingSeconds === 0 ? "Done" : "Ready"}</div>
+      <button class="btn-timer-compact-toggle" style="background: rgba(255, 255, 255, 0.22); border: 1px solid rgba(255, 255, 255, 0.5); color: #ffffff; padding: 3px 10px; font-size: 0.72rem; font-weight: 600; cursor: pointer; border-radius: 2px; margin-top: 2px;">${isRunning ? "Pause" : "Start"}</button>
+    </div>
+  `;
+
+  const digits = container.querySelector<HTMLElement>(".timer-compact-digits")!;
+  const status = container.querySelector<HTMLElement>(".timer-compact-status")!;
+  const toggleBtn = container.querySelector<HTMLButtonElement>(".btn-timer-compact-toggle")!;
+
+  toggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (isRunning) pauseTimer();
+    else startTimer();
+  });
+
+  function updateCompact() {
+    digits.textContent = formatTime(remainingSeconds);
+    status.textContent = isRunning ? "Focusing" : remainingSeconds === 0 ? "Done" : "Ready";
+    toggleBtn.textContent = isRunning ? "Pause" : "Start";
+  }
+
+  listeners.push(updateCompact);
+  root.appendChild(container);
+}
+
 const mountApp = (root: any) => {
   if (isSettingsRoute()) {
     mountTimerSettings(root);
+  } else if (isCompactRoute()) {
+    mountTimerCompact(root);
   } else {
     mountTimer(root);
   }

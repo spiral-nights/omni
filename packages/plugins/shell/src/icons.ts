@@ -29,19 +29,30 @@ export type IconName =
   | "download"
   | "chevron-down"
   | "chevron-up"
+  | "chevron-left"
+  | "chevron-right"
   | "grid"
   | "apps"
   | "pin"
   | "help-circle"
   | "arrow-left"
+  | "arrow-up"
   | "search"
   | "more"
+  | "check-circle"
+  | "relays"
+  | "users"
   | "windows";
 
 export const ICONS: Record<IconName, string> = {
   "arrow-left": `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <line x1="19" y1="12" x2="5" y2="12"/>
     <polyline points="12 19 5 12 12 5"/>
+  </svg>`,
+
+  "arrow-up": `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="12" y1="19" x2="12" y2="5"/>
+    <polyline points="5 12 12 5 19 12"/>
   </svg>`,
 
   search: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -135,6 +146,13 @@ export const ICONS: Record<IconName, string> = {
     <circle cx="12" cy="7" r="4"/>
   </svg>`,
 
+  users: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  </svg>`,
+
   profile: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
     <circle cx="12" cy="7" r="4"/>
@@ -181,7 +199,19 @@ export const ICONS: Record<IconName, string> = {
     <polyline points="20 6 9 17 4 12"/>
   </svg>`,
 
+  "check-circle": `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="16 9 10.5 15 8 12.5"/>
+  </svg>`,
+
   relay: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.93 4.93a10 10 0 0 1 14.14 0"/>
+    <path d="M7.76 7.76a6 6 0 0 1 8.48 0"/>
+    <circle cx="12" cy="12" r="2"/>
+    <path d="M12 14v7"/>
+  </svg>`,
+
+  relays: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
     <path d="M4.93 4.93a10 10 0 0 1 14.14 0"/>
     <path d="M7.76 7.76a6 6 0 0 1 8.48 0"/>
     <circle cx="12" cy="12" r="2"/>
@@ -240,6 +270,14 @@ export const ICONS: Record<IconName, string> = {
 
   "chevron-up": `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <polyline points="18 15 12 9 6 15"/>
+  </svg>`,
+
+  "chevron-left": `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>`,
+
+  "chevron-right": `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="9 18 15 12 9 6"/>
   </svg>`
 };
 

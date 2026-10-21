@@ -1034,54 +1034,127 @@ export abstract class BaseShell implements OmniShellHost {
     const existing = container.querySelector(".default-applications-box") || container.querySelector(".panorama-default-applications-box");
     if (existing) existing.remove();
 
+    const isPanorama = this.getShellType() === "panorama" || (typeof document !== "undefined" && document.body.classList.contains("theme-panorama"));
+
     const box = document.createElement("div");
     box.className = "default-applications-box";
-    box.style.cssText =
-      "display: flex; flex-direction: column; gap: 8px; background: var(--omni-bg-surface, #191816); padding: 12px 14px; border: 1px solid var(--omni-border-subtle, #2d2b27); border-radius: var(--omni-radius-sm, 6px); margin-top: 10px;";
+    box.style.cssText = isPanorama
+      ? "display: flex; flex-direction: column; gap: 10px; background: #111; padding: 14px; border: 1px solid #1e1e1e; margin-top: 14px; box-sizing: border-box;"
+      : "display: flex; flex-direction: column; gap: 10px; background: var(--omni-bg-surface, #191816); padding: 14px; border: 1px solid var(--omni-border-subtle, #2d2b27); border-radius: var(--omni-radius-sm, 6px); margin-top: 14px; box-sizing: border-box;";
 
     box.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center;">
-        <strong style="font-size: 0.85rem; font-weight: 600; color: var(--omni-text-primary, #ede8df);">Default Applications</strong>
-        <span style="font-size: 0.7rem; color: var(--omni-text-muted, #6b665f);">Intent Routing</span>
+        <strong style="font-size: 0.85rem; font-weight: 600; color: ${isPanorama ? "#fff" : "var(--omni-text-primary, #ede8df)"};">Default Applications</strong>
+        <span style="font-size: 0.7rem; color: ${isPanorama ? "#888" : "var(--omni-text-muted, #6b665f)"};">Intent Routing</span>
       </div>
-      <p style="font-size: 0.72rem; color: var(--omni-text-muted, #6b665f); margin: 0;">
+      <p style="font-size: 0.72rem; color: ${isPanorama ? "#888" : "var(--omni-text-muted, #6b665f)"}; margin: 0;">
         Assign default applications to handle common actions across plugins without prompting every time.
       </p>
     `;
 
-    const standardActions = [
-      { action: "compose_note", label: "Compose Note / Composer" },
-      { action: "create_note", label: "Create Note" },
-      { action: "view_note", label: "View Note / Thread" },
-      { action: "view_profile", label: "View Identity Profile" },
-      { action: "share", label: "Web Share Target" },
-      { action: "pay_invoice", label: "Lightning Payment" }
+    const standardActions: Array<{
+      action: string;
+      aliases?: string[];
+      label: string;
+      desc: string;
+    }> = [
+      {
+        action: "compose_note",
+        aliases: ["create_note"],
+        label: "Compose Note",
+        desc: "Create and publish new short notes, posts, or thread replies."
+      },
+      {
+        action: "view_note",
+        label: "View Note & Thread",
+        desc: "Inspect notes, discussions, and conversation trees."
+      },
+      {
+        action: "view_profile",
+        label: "View Profile",
+        desc: "Open user identity profiles, contacts, and metadata."
+      },
+      {
+        action: "share",
+        label: "Web Share Target",
+        desc: "Receive text and links forwarded from other apps or external shares."
+      },
+      {
+        action: "pay_invoice",
+        label: "Lightning Payment",
+        desc: "Handle lightning: invoices and Cashu payment requests."
+      },
+      {
+        action: "search",
+        label: "Search",
+        desc: "Search notes, events, profiles, and keywords across relays."
+      }
     ];
 
-    const actionsList = document.createElement("div");
-    actionsList.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 4px;";
+    const grid = document.createElement("div");
+    grid.className = "default-applications-grid";
+    grid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 6px;";
 
     for (const sa of standardActions) {
-      const row = document.createElement("div");
-      row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0;";
+      const allActions = [sa.action, ...(sa.aliases || [])];
+      const candidates = this.installedPlugins.filter((p) =>
+        allActions.some((act) =>
+          (p.handledIntents || []).includes(act) ||
+          this.kernel.intentBroker.getHandlers(act).some((h) => h.pluginId === p.id)
+        )
+      );
 
-      const label = document.createElement("span");
-      label.style.cssText = "font-size: 0.75rem; color: var(--omni-text-secondary, #9e988f);";
-      label.textContent = sa.label;
+      const card = document.createElement("div");
+      card.className = "default-app-card";
+      card.style.cssText = isPanorama
+        ? "display: flex; flex-direction: column; gap: 6px; background: #0c0c0c; padding: 10px 12px; border: 1px solid #1e1e1e; box-sizing: border-box;"
+        : "display: flex; flex-direction: column; gap: 6px; background: var(--omni-bg-canvas, #141312); padding: 10px 12px; border: 1px solid var(--omni-border-subtle, #2d2b27); border-radius: var(--omni-radius-sm, 4px); box-sizing: border-box;";
+
+      const topRow = document.createElement("div");
+      topRow.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px;";
+
+      const titleLabel = document.createElement("span");
+      titleLabel.style.cssText = `font-size: 0.78rem; font-weight: 600; color: ${isPanorama ? "#fff" : "var(--omni-text-primary, #ede8df)"};`;
+      titleLabel.textContent = sa.label;
+      topRow.appendChild(titleLabel);
+
+      const btnInfo = document.createElement("button");
+      btnInfo.type = "button";
+      btnInfo.className = "btn-default-app-info";
+      btnInfo.style.cssText = "background: transparent; border: none; color: #888; font-size: 0.72rem; cursor: pointer; padding: 2px 6px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; width: 22px; height: 22px;";
+      btnInfo.title = "Explain action";
+      btnInfo.innerHTML = "ⓘ";
+      topRow.appendChild(btnInfo);
+      card.appendChild(topRow);
+
+      const descBox = document.createElement("div");
+      descBox.className = "default-app-desc";
+      descBox.style.cssText = isPanorama
+        ? "display: none; font-size: 0.7rem; color: #999; padding: 4px 6px 2px 0; border-top: 1px dashed #262626;"
+        : "display: none; font-size: 0.7rem; color: var(--omni-text-muted, #6b665f); padding: 4px 6px 2px 0; border-top: 1px dashed var(--omni-border-subtle, #2d2b27);";
+      descBox.innerHTML = `
+        <div>${sa.desc}</div>
+        <div style="margin-top: 2px;"><code style="font-size: 0.65rem; color: ${isPanorama ? "var(--omni-accent-primary, #00a4ef)" : "var(--omni-accent-primary, #d4a373)"};">${sa.action}${sa.aliases ? ` (${sa.aliases.join(", ")})` : ""}</code></div>
+      `;
+      card.appendChild(descBox);
+
+      btnInfo.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = descBox.style.display !== "none";
+        descBox.style.display = isOpen ? "none" : "block";
+        btnInfo.style.color = isOpen ? "#888" : (isPanorama ? "var(--omni-accent-primary, #00a4ef)" : "var(--omni-accent-primary, #d4a373)");
+      });
 
       const select = document.createElement("select");
-      select.style.cssText =
-        "background: var(--omni-bg-subtle, #22201d); border: 1px solid var(--omni-border-strong, #3a3732); color: var(--omni-text-primary, #ede8df); font-size: 0.72rem; padding: 4px 8px; border-radius: var(--omni-radius-sm, 4px); outline: none;";
+      select.className = "default-app-select";
+      select.style.cssText = isPanorama
+        ? "background: #191919; border: 1px solid #333; color: #fff; font-size: 0.75rem; padding: 6px 8px; outline: none; cursor: pointer; width: 100%; height: 32px; box-sizing: border-box;"
+        : "background: var(--omni-bg-subtle, #22201d); border: 1px solid var(--omni-border-strong, #3a3732); color: var(--omni-text-primary, #ede8df); font-size: 0.75rem; padding: 6px 8px; border-radius: var(--omni-radius-sm, 4px); outline: none; cursor: pointer; width: 100%; height: 32px; box-sizing: border-box;";
 
       const optNone = document.createElement("option");
       optNone.value = "";
-      optNone.textContent = "Prompt every time (None)";
+      optNone.textContent = candidates.length > 0 ? "Prompt every time (None)" : "No apps available";
       select.appendChild(optNone);
-
-      const candidates = this.installedPlugins.filter((p) =>
-        (p.handledIntents || []).includes(sa.action) ||
-        this.kernel.intentBroker.getHandlers(sa.action).some((h) => h.pluginId === p.id)
-      );
 
       for (const cand of candidates) {
         const meta = this.getPluginMeta(cand);
@@ -1091,26 +1164,42 @@ export abstract class BaseShell implements OmniShellHost {
         select.appendChild(opt);
       }
 
-      const currentDefault = this.kernel.intentBroker.getDefaultHandler(sa.action);
+      let currentDefault = this.kernel.intentBroker.getDefaultHandler(sa.action);
+      if (!currentDefault && sa.aliases) {
+        for (const alias of sa.aliases) {
+          currentDefault = this.kernel.intentBroker.getDefaultHandler(alias);
+          if (currentDefault) break;
+        }
+      }
       if (currentDefault) {
         select.value = currentDefault;
       }
 
       select.addEventListener("change", () => {
-        if (!select.value) {
+        const val = select.value;
+        if (!val) {
           this.kernel.intentBroker.clearDefaultHandler(sa.action);
+          if (sa.aliases) {
+            for (const alias of sa.aliases) {
+              this.kernel.intentBroker.clearDefaultHandler(alias);
+            }
+          }
         } else {
-          this.kernel.intentBroker.setDefaultHandler(sa.action, select.value);
+          this.kernel.intentBroker.setDefaultHandler(sa.action, val);
+          if (sa.aliases) {
+            for (const alias of sa.aliases) {
+              this.kernel.intentBroker.setDefaultHandler(alias, val);
+            }
+          }
         }
         this.saveLocalWorkspace();
       });
 
-      row.appendChild(label);
-      row.appendChild(select);
-      actionsList.appendChild(row);
+      card.appendChild(select);
+      grid.appendChild(card);
     }
 
-    box.appendChild(actionsList);
+    box.appendChild(grid);
     container.appendChild(box);
   }
 

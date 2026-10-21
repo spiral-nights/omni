@@ -32,7 +32,7 @@ const initialPlugins: InstalledPluginEntry[] = [
       { id: "settings", title: "Feed Settings", path: "?view=settings" },
       { id: "widget", title: "Feed Widget", path: "?view=widget" }
     ],
-    handledIntents: ["create_note", "compose_note", "view_note", "share"],
+    handledIntents: ["create_note", "compose_note", "view_note", "search", "share"],
     scriptContent: feedScript,
     sourceUrl: "local:@omni/plugin-feed",
     enabled: true
@@ -45,6 +45,7 @@ const initialPlugins: InstalledPluginEntry[] = [
     viewport: "sidebar",
     views: [
       { id: "main", title: "Full Focus Screen", path: "" },
+      { id: "compact", title: "Live Tile", path: "?view=compact" },
       { id: "widget", title: "Timer Card", path: "?view=widget" },
       { id: "settings", title: "Timer Settings", path: "?view=settings" }
     ],
@@ -60,6 +61,7 @@ const initialPlugins: InstalledPluginEntry[] = [
     viewport: "sidebar",
     views: [
       { id: "main", title: "Full Task List", path: "" },
+      { id: "compact", title: "Live Tile", path: "?view=compact" },
       { id: "widget", title: "Checklist Card", path: "?view=widget" },
       { id: "settings", title: "Checklist Settings", path: "?view=settings" }
     ],
@@ -75,7 +77,8 @@ const initialPlugins: InstalledPluginEntry[] = [
     icon: "relays",
     viewport: "sidebar",
     views: [
-      { id: "main", title: "Relays", path: "" }
+      { id: "main", title: "Relays", path: "" },
+      { id: "compact", title: "Live Tile", path: "?view=compact" }
     ],
     scriptContent: relaysScript,
     sourceUrl: "local:@omni/plugin-relays",
@@ -90,6 +93,7 @@ const initialPlugins: InstalledPluginEntry[] = [
     viewport: "main",
     views: [
       { id: "main", title: "Profile", path: "" },
+      { id: "compact", title: "Live Tile", path: "?view=compact" },
       { id: "widget", title: "User Badge Pill", path: "?view=widget" },
       { id: "settings", title: "Profile Settings", path: "?view=settings" }
     ],
@@ -120,7 +124,7 @@ let shell: OmniShell | PanoramaShell;
 // 1. Initialize Host Orchestration Kernel
 const kernel = new OmniKernel({
   privateKeyHex: savedPrivkey,
-  bootstrapRelays: ["wss://relay.damus.io", "wss://relay.ditto.pub"],
+  bootstrapRelays: ["wss://relay.damus.io", "wss://relay.ditto.pub", "wss://relay.nostr.band"],
   runtimeScript: omniRuntimeScript,
   theme: activeShellType === "panorama" ? {
     mode: "dark",

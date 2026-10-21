@@ -124,13 +124,93 @@ function getCurrentView(): string {
 async function mountProfile(root: any) {
   const currentView = getCurrentView();
 
-  // Widget compact view
+  // Live tile compact view
+  if (currentView === "compact") {
+    return mountProfileCompact(root);
+  }
+
+  // Widget view (card / pill / badge)
   if (currentView === "widget" || currentView === "pill" || currentView === "badge") {
     return mountProfileWidget(root);
   }
 
   // Full Profile & Keys Management view (main / settings)
   return mountProfileFull(root);
+}
+
+async function mountProfileCompact(root: any) {
+  const card = html<HTMLDivElement>`
+    <div class="profile-compact-card" style="background: transparent; border: none; padding: 0 2px 2px 2px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; width: 100%; box-sizing: border-box; color: #ffffff;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="profile-compact-avatar" style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: rgba(255, 255, 255, 0.22); border: 1px solid rgba(255, 255, 255, 0.45); display: flex; align-items: center; justify-content: center; color: #ffffff; flex-shrink: 0;">
+          ${ICONS.user}
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1px; overflow: hidden; min-width: 0;">
+          <strong class="profile-compact-name" style="font-size: 0.85rem; font-weight: 600; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.45); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Loading...</strong>
+          <span class="profile-compact-npub" style="font-family: var(--font-mono, monospace); font-size: 0.68rem; color: rgba(255, 255, 255, 0.85); text-shadow: 0 1px 2px rgba(0,0,0,0.45); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">...</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const strongEl = card.querySelector<HTMLElement>(".profile-compact-name")!;
+  const npubEl = card.querySelector<HTMLElement>(".profile-compact-npub")!;
+  const avatarEl = card.querySelector<HTMLElement>(".profile-compact-avatar")!;
+
+  root.appendChild(card);
+
+  (async () => {
+    try {
+      let pubkey = "";
+      let npub = "";
+      let profileData: any = null;
+
+      try {
+        if (typeof window !== "undefined" && (window as any).nostr?.getPublicKey) {
+          pubkey = await (window as any).nostr.getPublicKey();
+        } else if (typeof window !== "undefined" && (window as any).omni?.nostr?.getPublicKey) {
+          pubkey = await (window as any).omni.nostr.getPublicKey();
+        } else if (typeof omni !== "undefined" && (omni as any).nostr?.getPublicKey) {
+          pubkey = await (omni as any).nostr.getPublicKey();
+        }
+      } catch (_) {}
+
+      if (pubkey) {
+        try {
+          npub = toBech32("npub", pubkey);
+        } catch (_) {}
+      }
+
+      if (!npub) {
+        try {
+          if (typeof window !== "undefined" && (window as any).omni?.auth?.getNpub) {
+            npub = await (window as any).omni.auth.getNpub();
+          } else if (typeof omni !== "undefined" && (omni as any).auth?.getNpub) {
+            npub = await (omni as any).auth.getNpub();
+          }
+        } catch (_) {}
+      }
+
+      const omniObj = typeof window !== "undefined" ? (window as any).omni : (typeof omni !== "undefined" ? omni : null);
+      if (omniObj?.profile?.get && pubkey) {
+        try {
+          profileData = await omniObj.profile.get(pubkey);
+        } catch (_) {}
+      }
+
+      const displayName = profileData?.display_name || profileData?.name || (npub ? "Nostr User" : "Anonymous Nostr User");
+      strongEl.textContent = displayName;
+      npubEl.textContent = npub ? `${npub.slice(0, 8)}...${npub.slice(-4)}` : (pubkey ? `${pubkey.slice(0, 8)}...${pubkey.slice(-4)}` : "No Key");
+
+      if (profileData?.picture) {
+        avatarEl.innerHTML = `<img src="${escapeHtml(profileData.picture)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
+        const img = avatarEl.querySelector("img");
+        img?.addEventListener("error", () => {
+          avatarEl.innerHTML = ICONS.user;
+        });
+      }
+    } catch (_) {}
+  })();
 }
 
 async function mountProfileWidget(root: any) {

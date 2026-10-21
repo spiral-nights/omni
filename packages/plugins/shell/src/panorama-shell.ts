@@ -78,6 +78,18 @@ export class PanoramaShell extends BaseShell {
   private fullAppOverlay!: HTMLElement;
   private fullAppContainer!: HTMLElement;
   private pendingOverlayMounts: Set<string> = new Set();
+  private pendingCompactMounts: Set<string> = new Set();
+  private activeContextMenu: HTMLElement | null = null;
+  private dynamicAppSection: HTMLElement | null = null;
+  private boundKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  private boundGliderScrollHandler: (() => void) | null = null;
+
+  // New element references
+  private gliderLeft!: HTMLElement;
+  private gliderRight!: HTMLElement;
+  private bottomAppBar!: HTMLElement;
+  private appBarMenu!: HTMLElement;
+  private headerCloseBtn: HTMLElement | null = null;
 
   constructor(options: OmniShellOptions) {
     super(options);
@@ -91,7 +103,15 @@ export class PanoramaShell extends BaseShell {
     this.ensureMainAppSections();
     this.renderPivotNavigation();
     this.renderAppsTiles();
+    this.renderWidgetsEmptyState();
     this.renderSystemPluginList();
+    this.renderBottomAppBar();
+    this.updateEdgeGliders();
+  }
+
+  public override async ensureWidgetsMounted(): Promise<void> {
+    await super.ensureWidgetsMounted();
+    this.renderWidgetsEmptyState();
   }
   public getSlotContainers(): Map<string, Element> {
     return this.slotContainers;
@@ -110,7 +130,14 @@ export class PanoramaShell extends BaseShell {
 
   // --- Mounting & Container Resolution ---
 
-  public getContainerForPluginSlot(pluginId: string, slotId: string, compId?: string): Element {
+  public getContainerForPluginSlot(pluginId: string, slotId: string, compId?: string): Element | undefined {
+    if (slotId === "compact" || compId?.includes("compact")) {
+      const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const compactEl = document.getElementById(`panorama-tile-compact-${safeId}`);
+      if (compactEl) return compactEl;
+      return undefined;
+    }
+
     if (slotId === "main" || slotId === "dock") {
       const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
       if (compId?.includes("overlay")) {
@@ -164,10 +191,7 @@ export class PanoramaShell extends BaseShell {
 
         const meta = this.getPluginMeta(app);
         sec.innerHTML = `
-          <div class="panorama-section-content">
-            <div class="panorama-section-title-bar">
-              <h2>${(app.name || meta.name).toLowerCase()}</h2>
-            </div>
+          <div class="panorama-section-content" style="height: auto; min-height: 100%; flex: 1;">
             <div id="panorama-slot-main-${safeId}" class="omni-slot panorama-main-viewport-slot" style="flex: 1; width: 100%; min-height: 100%; overflow: visible;"></div>
           </div>
         `;
@@ -230,6 +254,9 @@ export class PanoramaShell extends BaseShell {
     this.renderColorChoosers();
     this.wireNavigation();
     this.wireGlobalEvents();
+    this.wireKeyboardAndGliders();
+    this.wireBottomAppBar();
+    this.renderBottomAppBar();
     this.updateProfileUi();
 
     // Wire intent broker callbacks for conflict resolution & single candidate flow
@@ -246,6 +273,15 @@ export class PanoramaShell extends BaseShell {
 
   public destroy(): void {
     super.destroy();
+    if (typeof window !== "undefined" && this.boundKeydownHandler) {
+      window.removeEventListener("keydown", this.boundKeydownHandler);
+      this.boundKeydownHandler = null;
+    }
+    if (this.panoramaContainer && this.boundGliderScrollHandler) {
+      this.panoramaContainer.removeEventListener("scroll", this.boundGliderScrollHandler);
+      this.boundGliderScrollHandler = null;
+    }
+    this.closeTileContextMenu();
     if (typeof document !== "undefined") {
       document.documentElement.classList.remove("theme-panorama");
       document.body?.classList.remove("theme-panorama");
@@ -406,29 +442,30 @@ export class PanoramaShell extends BaseShell {
             border-radius: 0px !important;
           }
         </style>
-        <!-- 1. Panorama Hero Header -->
+        <!-- 1. Panorama Header & Pivot Navigation -->
         <header class="panorama-hero-header">
-          <div class="panorama-brand-row" style="display: flex; align-items: center; justify-content: space-between;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <h1 class="panorama-hero-title">omni</h1>
-              <!-- Metro Left Pane Peek Affordance -->
-              <button class="panorama-left-peek-hint" id="panorama-left-peek-hint" title="Previous pane" aria-label="Previous pane" style="opacity: 0; pointer-events: none;">
-                <span class="panorama-left-peek-arrow">${icon("arrow-left", 14)}</span>
-                <span class="panorama-left-peek-label" id="panorama-left-peek-label"></span>
+          <div class="panorama-header-content">
+            <!-- Metro Left Pane Peek Affordance -->
+            <button class="panorama-left-peek-hint" id="panorama-left-peek-hint" title="Previous pane" aria-label="Previous pane" style="opacity: 0; pointer-events: none;">
+              <span class="panorama-left-peek-arrow">${icon("arrow-left", 14)}</span>
+              <span class="panorama-left-peek-label" id="panorama-left-peek-label"></span>
+            </button>
+            <nav class="panorama-pivot-nav" id="panorama-pivot-nav"></nav>
+            <div class="panorama-header-profile-wrap">
+              <!-- Metro Close App Button (Visible when a dynamic app is open) -->
+              <button class="btn-header-close-app" id="btn-header-close-app" title="Close application" aria-label="Close application" style="display: none;">
+                <span class="btn-header-close-icon">${icon("close", 14)}</span>
+                <span class="btn-header-close-label">close</span>
               </button>
-            </div>
-            <!-- Header Right Actions -->
-            <div style="display: flex; align-items: center; gap: 8px; position: relative;">
               <!-- Metro User Profile Tile -->
-              <button class="panorama-header-user-btn" id="panorama-header-user-btn" title="Manage Profile & Keys" style="display: flex; align-items: center; gap: 8px; background: transparent; border: none; cursor: pointer; padding: 4px; color: #fff;">
-                <div class="panorama-header-avatar" id="panorama-header-avatar" style="width: 26px; height: 26px; border-radius: 0px; background: #222; border: 1px solid #444; display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--omni-accent-primary, #00a4ef); flex-shrink: 0;">
+              <button class="panorama-header-user-btn" id="panorama-header-user-btn" title="Manage Profile & Keys">
+                <div class="panorama-header-avatar" id="panorama-header-avatar">
                   ${icon("user", 14)}
                 </div>
-                <span class="panorama-header-name" id="panorama-header-name" style="font-size: 0.82rem; font-weight: 400; color: #ccc; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Identity</span>
+                <span class="panorama-header-name" id="panorama-header-name">Identity</span>
               </button>
             </div>
           </div>
-          <nav class="panorama-pivot-nav" id="panorama-pivot-nav"></nav>
         </header>
 
         <!-- 2. Horizontal Panorama Canvas -->
@@ -437,9 +474,6 @@ export class PanoramaShell extends BaseShell {
           <section class="panorama-section" id="panorama-section-apps" data-pivot="apps">
             <!-- Grid of application tiles (default state) -->
             <div class="panorama-section-content" id="panorama-apps-grid-view">
-              <div class="panorama-section-title-bar">
-                <h2>applications</h2>
-              </div>
               <div class="panorama-tiles-grid" id="panorama-tiles-grid"></div>
             </div>
 
@@ -460,9 +494,6 @@ export class PanoramaShell extends BaseShell {
           <!-- Section 3: Widgets (Modular Companion Tools) -->
           <section class="panorama-section" id="panorama-section-widgets" data-pivot="widgets">
             <div class="panorama-section-content">
-              <div class="panorama-section-title-bar">
-                <h2>workspace widgets</h2>
-              </div>
               <div class="panorama-widgets-grid" id="panorama-widgets-slot"></div>
             </div>
           </section>
@@ -470,10 +501,6 @@ export class PanoramaShell extends BaseShell {
           <!-- Section 4: System (Governance & Control) -->
           <section class="panorama-section" id="panorama-section-system" data-pivot="system">
             <div class="panorama-section-content">
-              <div class="panorama-section-title-bar">
-                <h2>system & control</h2>
-              </div>
-
               <!-- Identity Card -->
               <div class="panorama-system-card" id="panorama-identity-card">
                 <div class="panorama-system-card-header">
@@ -529,9 +556,9 @@ export class PanoramaShell extends BaseShell {
               </div>
 
               <!-- Installed Apps List -->
-              <div class="panorama-system-card" style="display: flex; flex-direction: column; gap: 10px;">
+              <div class="panorama-system-card panorama-installed-plugins-card" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 32px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <strong>Installed Plugins & Relays</strong>
+                  <strong>Installed Plugins</strong>
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <button id="btn-panorama-install" class="btn-panorama-action" style="color: var(--omni-accent-primary, #00a4ef); border-color: var(--omni-accent-primary, #00a4ef);">+ Install nsite</button>
                     <span id="panorama-plugin-count" style="font-size: 0.75rem; color: #888;">5 installed</span>
@@ -612,6 +639,31 @@ export class PanoramaShell extends BaseShell {
             </div>
           </div>
         </div>
+
+        <!-- Desktop Edge Hover Gliders -->
+        <button class="panorama-edge-glider glider-left" id="panorama-glider-left" title="Previous pane" aria-label="Previous pane">
+          ${icon("chevron-left", 20)}
+        </button>
+        <button class="panorama-edge-glider glider-right" id="panorama-glider-right" title="Next pane" aria-label="Next pane">
+          ${icon("chevron-right", 20)}
+        </button>
+
+        <!-- Floating Back to Top Button -->
+        <button class="panorama-back-to-top" id="panorama-back-to-top" title="Back to top" aria-label="Back to top">
+          ${icon("arrow-up", 16)}
+          <span>Top</span>
+        </button>
+
+        <!-- Metro Bottom Application Bar -->
+        <footer class="panorama-bottom-app-bar" id="panorama-bottom-app-bar">
+          <div class="app-bar-content">
+            <div class="app-bar-actions" id="panorama-app-bar-actions"></div>
+            <button class="btn-app-bar-more" id="btn-app-bar-more" title="More options" aria-label="More options">
+              ${icon("more", 18)}
+            </button>
+          </div>
+          <div class="panorama-app-bar-menu" id="panorama-app-bar-menu" style="display: none;"></div>
+        </footer>
       </div>
     `;
   }
@@ -625,6 +677,18 @@ export class PanoramaShell extends BaseShell {
     this.sectionSystem = q("#panorama-section-system");
     this.fullAppOverlay = q("#panorama-full-app-overlay");
     this.fullAppContainer = q("#panorama-full-app-container");
+    this.gliderLeft = q("#panorama-glider-left");
+    this.gliderRight = q("#panorama-glider-right");
+    this.bottomAppBar = q("#panorama-bottom-app-bar");
+    this.appBarMenu = q("#panorama-app-bar-menu");
+    this.headerCloseBtn = q("#btn-header-close-app");
+  }
+
+  private updateHeaderCloseButton(visible: boolean): void {
+    const btn = this.headerCloseBtn || this.root.querySelector<HTMLElement>("#btn-header-close-app") || document.getElementById("btn-header-close-app");
+    if (btn) {
+      btn.style.display = visible ? "inline-flex" : "none";
+    }
   }
 
   private initSlotContainers(): void {
@@ -645,6 +709,24 @@ export class PanoramaShell extends BaseShell {
     grid.innerHTML = "";
     const apps = this.installedPlugins.filter((p) => p.enabled !== false);
 
+    if (apps.length === 0) {
+      const emptyCard = document.createElement("div");
+      emptyCard.className = "panorama-empty-state";
+      emptyCard.style.gridColumn = "1 / -1";
+      emptyCard.innerHTML = `
+        ${icon("apps", 36)}
+        <h4>No Applications Installed</h4>
+        <p>Install decentralized web apps (nsites) from Nostr relays or explore the catalog.</p>
+        <button class="btn-panorama-action btn-empty-install" style="color: var(--omni-accent-primary, #00a4ef); border-color: var(--omni-accent-primary, #00a4ef); margin-top: 4px;">Install App</button>
+      `;
+      emptyCard.querySelector(".btn-empty-install")?.addEventListener("click", () => {
+        const installModal = document.getElementById("panorama-install-modal");
+        if (installModal) installModal.style.display = "flex";
+      });
+      grid.appendChild(emptyCard);
+      return;
+    }
+
     // Color palette inspired by Windows Phone signature accent colors
     const tileColors = [
       this.currentAccentColor,
@@ -659,6 +741,7 @@ export class PanoramaShell extends BaseShell {
       const meta = this.getPluginMeta(plugin);
       const isPinned = this.isAppPinned(plugin);
       const color = tileColors[index % tileColors.length];
+      const safeId = plugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
 
       const tile = document.createElement("div");
       tile.className = "panorama-tile";
@@ -674,18 +757,278 @@ export class PanoramaShell extends BaseShell {
         iconSvg = icon("apps", 28);
       }
 
-      tile.innerHTML = `
-        <div class="panorama-tile-icon">${iconSvg}</div>
-        <div class="panorama-tile-title">${meta.name}</div>
-        ${isPinned ? `<span class="panorama-tile-pin">${icon("pin", 12)}</span>` : ""}
-      `;
+      const synthManifest = this.ensurePluginManifest(plugin);
+      const views = plugin.views || synthManifest.views || [];
+      const hasCompactView = views.some(
+        (v: any) => v.id === "compact" || (v.path && v.path.includes("view=compact"))
+      );
 
-      tile.addEventListener("click", () => {
+      if (hasCompactView) {
+        tile.classList.add("has-compact-view");
+        tile.innerHTML = `
+          <div class="panorama-tile-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="panorama-tile-icon" style="width: 22px; height: 22px;">${iconSvg}</div>
+              <div class="panorama-tile-title" style="font-size: 0.8rem;">${meta.name}</div>
+            </div>
+            ${isPinned ? `<span class="panorama-tile-pin" style="position: static; opacity: 0.7;">${icon("pin", 11)}</span>` : ""}
+          </div>
+          <div class="panorama-tile-compact-container" id="panorama-tile-compact-${safeId}"></div>
+        `;
+      } else {
+        tile.innerHTML = `
+          <div class="panorama-tile-icon">${iconSvg}</div>
+          <div class="panorama-tile-title">${meta.name}</div>
+          ${isPinned ? `<span class="panorama-tile-pin">${icon("pin", 12)}</span>` : ""}
+        `;
+      }
+
+      // Long-press detection for touch devices & context menu on desktop
+      let touchTimer: any = null;
+      let startX = 0;
+      let startY = 0;
+      let longPressed = false;
+
+      tile.addEventListener("touchstart", (e) => {
+        const touch = e.touches[0];
+        if (!touch) return;
+        startX = touch.clientX;
+        startY = touch.clientY;
+        longPressed = false;
+        touchTimer = setTimeout(() => {
+          longPressed = true;
+          this.openTileContextMenu(plugin, touch.clientX, touch.clientY);
+        }, 500);
+      }, { passive: true });
+
+      tile.addEventListener("touchmove", (e) => {
+        const touch = e.touches[0];
+        if (!touch || !touchTimer) return;
+        if (Math.abs(touch.clientX - startX) > 10 || Math.abs(touch.clientY - startY) > 10) {
+          clearTimeout(touchTimer);
+          touchTimer = null;
+        }
+      }, { passive: true });
+
+      tile.addEventListener("touchend", () => {
+        if (touchTimer) {
+          clearTimeout(touchTimer);
+          touchTimer = null;
+        }
+      });
+
+      tile.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        this.openTileContextMenu(plugin, e.clientX, e.clientY);
+      });
+
+      tile.addEventListener("click", (e) => {
+        if (longPressed) {
+          longPressed = false;
+          return;
+        }
+        const clickedButton = (e.target as HTMLElement).closest("button");
+        if (clickedButton && clickedButton.closest(".panorama-tile-compact-container")) {
+          return;
+        }
         this.showPage(plugin.id);
       });
 
       grid.appendChild(tile);
+
+      if (hasCompactView) {
+        const compactContainer = tile.querySelector<HTMLElement>(`#panorama-tile-compact-${safeId}`);
+        if (compactContainer) {
+          this.mountCompactTile(plugin, safeId, compactContainer);
+        }
+      }
     });
+  }
+
+  public async ensureCompactTilesMounted(): Promise<void> {
+    const apps = this.installedPlugins.filter((p) => p.enabled !== false);
+    for (const plugin of apps) {
+      const synthManifest = this.ensurePluginManifest(plugin);
+      const views = plugin.views || synthManifest.views || [];
+      const hasCompactView = views.some(
+        (v: any) => v.id === "compact" || (v.path && v.path.includes("view=compact"))
+      );
+      if (hasCompactView) {
+        const safeId = plugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+        const container = document.getElementById(`panorama-tile-compact-${safeId}`);
+        if (container && !container.querySelector(".omni-component-slot")) {
+          await this.mountCompactTile(plugin, safeId, container);
+        }
+      }
+    }
+  }
+
+  public async mountCompactTile(plugin: InstalledPluginEntry, safeId: string, targetEl?: HTMLElement): Promise<void> {
+    const container = targetEl || document.getElementById(`panorama-tile-compact-${safeId}`);
+    if (!container) return;
+    const compactInstanceKey = `${plugin.id}::compact`;
+    if (this.pendingCompactMounts.has(compactInstanceKey)) {
+      return;
+    }
+    const existingSandbox = this.kernel.getSandbox(compactInstanceKey);
+    if (existingSandbox) {
+      if (this.kernel.reparentLiveComponent(compactInstanceKey, container)) {
+        return;
+      }
+      this.kernel.disablePlugin(compactInstanceKey);
+    }
+    this.pendingCompactMounts.add(compactInstanceKey);
+    try {
+      const synthManifest = this.ensurePluginManifest(plugin);
+      const compactManifest = {
+        ...synthManifest,
+        components: [
+          {
+            id: `${plugin.id}-compact`,
+            type: "compact",
+            title: plugin.name || plugin.id,
+            slot: "compact"
+          }
+        ]
+      };
+      const customSlotContainers = new Map();
+      customSlotContainers.set("compact", container);
+      customSlotContainers.set("main", container);
+      customSlotContainers.set("dock", container);
+      customSlotContainers.set("sidebar", container);
+      if (synthManifest.components) {
+        for (const comp of synthManifest.components) {
+          if (comp.slot) customSlotContainers.set(comp.slot, container);
+        }
+      }
+      await this.kernel.registerPlugin(
+        compactManifest,
+        plugin.htmlContent || plugin.scriptContent,
+        customSlotContainers,
+        {
+          instanceId: compactInstanceKey,
+          route: "?view=compact",
+          viewId: "compact",
+          targetSlot: "compact",
+          relays: plugin.relays
+        }
+      );
+    } catch (err) {
+      console.warn(`Failed to mount compact tile for ${plugin.id}:`, err);
+    } finally {
+      this.pendingCompactMounts.delete(compactInstanceKey);
+    }
+  }
+
+  public openTileContextMenu(plugin: InstalledPluginEntry, clientX: number, clientY: number): void {
+    this.closeTileContextMenu();
+    const meta = this.getPluginMeta(plugin);
+    const isPinnedMain = this.isAppPinned(plugin);
+    const placements = this.getPluginPlacements(plugin);
+    const isWidget = placements.some((pl) => pl.enabled !== false && (pl.viewport === "sidebar" || pl.viewport === "widgets"));
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "panorama-tile-context-backdrop";
+    backdrop.id = "panorama-tile-context-backdrop";
+
+    const menu = document.createElement("div");
+    menu.className = "panorama-tile-context-menu";
+    menu.id = "panorama-tile-context-menu";
+
+    menu.innerHTML = `
+      <div class="panorama-tile-context-header">${meta.name}</div>
+      <button class="context-menu-item" data-action="pin-pivot">
+        ${isPinnedMain ? icon("close", 14) : icon("pin", 14)}
+        <span>${isPinnedMain ? "Unpin from Pivots" : "Pin to Pivots"}</span>
+      </button>
+      <button class="context-menu-item" data-action="pin-widget">
+        ${isWidget ? icon("close", 14) : icon("widgets", 14)}
+        <span>${isWidget ? "Remove from Widgets" : "Pin as Widget"}</span>
+      </button>
+      <button class="context-menu-item" data-action="inspect">
+        ${icon("sliders", 14)}
+        <span>App Info & Permissions</span>
+      </button>
+      <button class="context-menu-item context-menu-cancel" data-action="cancel">
+        <span>Cancel</span>
+      </button>
+    `;
+
+    const menuWidth = 240;
+    const menuHeight = 180;
+    const x = Math.min(Math.max(10, clientX), (window.innerWidth || 360) - menuWidth - 10);
+    const y = Math.min(Math.max(10, clientY), (window.innerHeight || 600) - menuHeight - 10);
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+
+    menu.addEventListener("click", async (e) => {
+      const target = (e.target as HTMLElement).closest(".context-menu-item") as HTMLElement | null;
+      if (!target) return;
+      const action = target.dataset.action;
+      this.closeTileContextMenu();
+
+      if (action === "pin-pivot") {
+        this.setAppPinned(plugin.id, !isPinnedMain);
+        this.onWorkspaceUpdated();
+      } else if (action === "pin-widget") {
+        if (isWidget) {
+          plugin.placements = placements.filter((pl) => pl.viewport !== "sidebar" && pl.viewport !== "widgets");
+        } else {
+          const widgetView = plugin.views?.find((v) => v.id === "widget") || { id: "widget", title: "Widget", path: "?view=widget" };
+          plugin.placements = [
+            ...placements,
+            { id: `${plugin.id}-widget-${Date.now()}`, viewport: "sidebar", route: widgetView.path, viewId: widgetView.id, enabled: true }
+          ];
+        }
+        await this.remountPlugin(plugin);
+        this.onWorkspaceUpdated();
+      } else if (action === "inspect") {
+        this.openPluginInspector(plugin);
+      }
+    });
+
+    backdrop.addEventListener("click", () => this.closeTileContextMenu());
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(menu);
+    this.activeContextMenu = menu;
+  }
+
+  public closeTileContextMenu(): void {
+    const backdrop = document.getElementById("panorama-tile-context-backdrop");
+    if (backdrop) backdrop.remove();
+    const menu = document.getElementById("panorama-tile-context-menu");
+    if (menu) menu.remove();
+    this.activeContextMenu = null;
+  }
+
+  public renderWidgetsEmptyState(): void {
+    const widgetsSlot = document.getElementById("panorama-widgets-slot");
+    if (!widgetsSlot) return;
+    const hasActiveWidgets = this.installedPlugins.some((p) => {
+      if (!p.enabled) return false;
+      const placements = this.getPluginPlacements(p);
+      return placements.some((pl) => pl.enabled !== false && (pl.viewport === "sidebar" || pl.viewport === "widgets"));
+    });
+
+    const existingEmpty = widgetsSlot.querySelector(".panorama-empty-state");
+    if (!hasActiveWidgets) {
+      if (!existingEmpty) {
+        widgetsSlot.innerHTML = `
+          <div class="panorama-empty-state">
+            ${icon("widgets", 36)}
+            <h4>No Widgets Pinned</h4>
+            <p>Pin widgets from your installed apps to monitor live tools and ambient information.</p>
+            <button class="btn-panorama-action btn-add-widget-hint" style="color: var(--omni-accent-primary, #00a4ef); border-color: var(--omni-accent-primary, #00a4ef); margin-top: 4px;">Browse Apps</button>
+          </div>
+        `;
+        widgetsSlot.querySelector(".btn-add-widget-hint")?.addEventListener("click", () => {
+          this.showPivot("apps");
+        });
+      }
+    } else {
+      if (existingEmpty) existingEmpty.remove();
+    }
   }
 
   public renderSystemPluginList(): void {
@@ -740,7 +1083,7 @@ export class PanoramaShell extends BaseShell {
           <strong style="font-size: 0.88rem; color: #fff;">${meta.name}</strong>
           <span style="font-size: 0.65rem; color: #888; background: #1a1a1a; padding: 1px 5px; border-radius: 0;">v${meta.version}</span>
         </div>
-        <span style="font-size: 0.7rem; color: #888;">${plugin.id} • ${plugin.enabled ? "Active" : "Disabled"}</span>
+        <span style="font-size: 0.7rem; color: ${plugin.enabled ? "#888" : "#666"};">${plugin.enabled ? "Active" : "Disabled"}</span>
       `;
 
       left.appendChild(iconBox);
@@ -792,6 +1135,15 @@ export class PanoramaShell extends BaseShell {
         details.className = "panorama-plugin-config-details";
         details.style.cssText = "display: flex; flex-direction: column; gap: 12px; padding: 12px 14px 16px 14px; border-top: 1px solid #1a1a1a; background: #0c0c0c;";
 
+        const idInfoRow = document.createElement("div");
+        idInfoRow.className = "plugin-details-id-row";
+        idInfoRow.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.72rem; color: #888; padding: 2px 0 6px 0;";
+        idInfoRow.innerHTML = `
+          <span>ID: <code style="font-family: var(--omni-font-mono, monospace); color: #aaa;">${plugin.id}</code></span>
+          <span style="color: ${plugin.enabled ? "#4caf50" : "#888"};">${plugin.enabled ? "Active" : "Disabled"}</span>
+        `;
+        details.appendChild(idInfoRow);
+
         // Section A: Sandboxed Settings
         const settingsBox = document.createElement("div");
         settingsBox.className = "panorama-config-section plugin-settings-box";
@@ -802,7 +1154,7 @@ export class PanoramaShell extends BaseShell {
         settingsHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; font-weight: 600; color: #fff;";
 
         const settingsTitle = document.createElement("span");
-        settingsTitle.textContent = "Settings & Preferences";
+        settingsTitle.textContent = "Preferences";
         settingsHeader.appendChild(settingsTitle);
 
         const mountContainer = document.createElement("div");
@@ -814,7 +1166,7 @@ export class PanoramaShell extends BaseShell {
           const btnToggleSettings = document.createElement("button");
           btnToggleSettings.className = "btn-panorama-action btn-plugin-settings";
           btnToggleSettings.id = `btn-toggle-settings-${safeId}`;
-          btnToggleSettings.textContent = "Open Settings";
+          btnToggleSettings.textContent = "Configure";
 
           btnToggleSettings.addEventListener("click", async () => {
             const isOpen = mountContainer.style.display !== "none";
@@ -829,17 +1181,17 @@ export class PanoramaShell extends BaseShell {
                   mountContainer,
                   settingsView.path || "?view=settings"
                 );
-                btnToggleSettings.textContent = "Close Settings";
+                btnToggleSettings.textContent = "Close";
               } catch (err) {
                 console.error(`Failed to mount settings for ${plugin.id}:`, err);
                 mountContainer.textContent = "Failed to load settings.";
-                btnToggleSettings.textContent = "Open Settings";
+                btnToggleSettings.textContent = "Configure";
               }
             } else {
               this.kernel.destroyPluginSettings(plugin.id);
               mountContainer.style.display = "none";
               mountContainer.innerHTML = "";
-              btnToggleSettings.textContent = "Open Settings";
+              btnToggleSettings.textContent = "Configure";
             }
           });
 
@@ -903,18 +1255,51 @@ export class PanoramaShell extends BaseShell {
           const pl = placements[plIdx];
           const row = document.createElement("div");
           row.className = "plugin-placement-row";
-          row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: #0c0c0c; padding: 8px 10px; border: 1px solid #1e1e1e;";
+          row.style.cssText = "display: flex; flex-direction: column; gap: 8px; background: #0c0c0c; padding: 10px 12px; border: 1px solid #1e1e1e;";
 
-          const controlsLeft = document.createElement("div");
-          controlsLeft.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
+          const rowHeader = document.createElement("div");
+          rowHeader.style.cssText = "display: flex; align-items: center; justify-content: space-between;";
 
+          const plNumber = document.createElement("span");
+          plNumber.style.cssText = "font-size: 0.74rem; font-weight: 600; color: #fff;";
+          plNumber.textContent = `Placement #${plIdx + 1}`;
+          rowHeader.appendChild(plNumber);
+
+          const btnRemovePl = document.createElement("button");
+          btnRemovePl.className = "btn-panorama-action btn-remove-placement";
+          btnRemovePl.style.cssText = "font-size: 0.72rem; padding: 4px 10px; color: #ff5555; border-color: #552222;";
+          btnRemovePl.textContent = placements.length > 1 ? "Remove" : "Unassign";
+          btnRemovePl.title = "Remove this placement";
+          btnRemovePl.addEventListener("click", async () => {
+            plugin.placements = placements.filter((_, idx) => idx !== plIdx);
+            if (plugin.placements.length > 0) {
+              plugin.viewport = plugin.placements[0].viewport;
+              plugin.route = plugin.placements[0].route;
+              plugin.viewId = plugin.placements[0].viewId;
+            } else {
+              plugin.viewport = "";
+              plugin.route = "";
+              plugin.viewId = "";
+              this.layoutManager.unregisterPlugin(plugin.id);
+            }
+            await this.remountPlugin(plugin);
+          });
+          rowHeader.appendChild(btnRemovePl);
+          row.appendChild(rowHeader);
+
+          const fieldsGrid = document.createElement("div");
+          fieldsGrid.className = "plugin-placement-fields";
+          fieldsGrid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;";
+
+          const vpCol = document.createElement("label");
+          vpCol.style.cssText = "display: flex; flex-direction: column; gap: 4px; font-size: 0.7rem; color: #888;";
           const vpLabel = document.createElement("span");
-          vpLabel.style.cssText = "font-size: 0.72rem; color: #888;";
-          vpLabel.textContent = `Location #${plIdx + 1}:`;
+          vpLabel.textContent = "Viewport";
+          vpCol.appendChild(vpLabel);
 
           const vpSelect = document.createElement("select");
           vpSelect.className = "plugin-viewport-select";
-          vpSelect.style.cssText = "background: #191919; border: 1px solid #333; color: #fff; font-size: 0.72rem; padding: 3px 6px; outline: none; cursor: pointer;";
+          vpSelect.style.cssText = "background: #191919; border: 1px solid #333; color: #fff; font-size: 0.75rem; padding: 6px 8px; outline: none; cursor: pointer; width: 100%; height: 32px; box-sizing: border-box;";
 
           for (const optDef of viewportOptions) {
             const opt = document.createElement("option");
@@ -936,14 +1321,18 @@ export class PanoramaShell extends BaseShell {
             }
             await this.remountPlugin(plugin);
           });
+          vpCol.appendChild(vpSelect);
+          fieldsGrid.appendChild(vpCol);
 
+          const routeCol = document.createElement("label");
+          routeCol.style.cssText = "display: flex; flex-direction: column; gap: 4px; font-size: 0.7rem; color: #888;";
           const routeLabel = document.createElement("span");
-          routeLabel.style.cssText = "font-size: 0.72rem; color: #888; margin-left: 4px;";
-          routeLabel.textContent = "View:";
+          routeLabel.textContent = "Sub-View Route";
+          routeCol.appendChild(routeLabel);
 
           const routeSelect = document.createElement("select");
           routeSelect.className = "plugin-route-select";
-          routeSelect.style.cssText = "background: #191919; border: 1px solid #333; color: #fff; font-size: 0.72rem; padding: 3px 6px; outline: none; cursor: pointer;";
+          routeSelect.style.cssText = "background: #191919; border: 1px solid #333; color: #fff; font-size: 0.75rem; padding: 6px 8px; outline: none; cursor: pointer; width: 100%; height: 32px; box-sizing: border-box;";
 
           for (const v of pluginViews) {
             const opt = document.createElement("option");
@@ -963,50 +1352,30 @@ export class PanoramaShell extends BaseShell {
             plugin.viewId = pl.viewId;
             await this.remountPlugin(plugin);
           });
+          routeCol.appendChild(routeSelect);
+          fieldsGrid.appendChild(routeCol);
 
-          controlsLeft.appendChild(vpLabel);
-          controlsLeft.appendChild(vpSelect);
-          controlsLeft.appendChild(routeLabel);
-          controlsLeft.appendChild(routeSelect);
+          row.appendChild(fieldsGrid);
 
           if (pl.viewport === "main") {
             const isPinned = this.isAppPinned(plugin);
+            const pinBtnWrap = document.createElement("div");
+            pinBtnWrap.style.cssText = "display: flex; justify-content: flex-start; margin-top: 2px;";
+
             const pinBtn = document.createElement("button");
             pinBtn.className = "btn-panorama-action btn-pin-dock";
-            pinBtn.style.cssText = `font-size: 0.7rem; padding: 2px 7px; display: inline-flex; align-items: center; gap: 4px; color: ${
-              isPinned ? "var(--omni-accent-primary, #00a4ef)" : "#888"
-            };`;
+            pinBtn.style.cssText = `font-size: 0.74rem; padding: 5px 12px; display: inline-flex; align-items: center; gap: 6px; color: ${
+              isPinned ? "var(--omni-accent-primary, #00a4ef)" : "#bbb"
+            }; border-color: ${isPinned ? "var(--omni-accent-primary, #00a4ef)" : "#333"};`;
             pinBtn.innerHTML = `${icon("pin", 12)} <span>${isPinned ? "Pinned to Tiles" : "Pin to Tiles"}</span>`;
             pinBtn.title = isPinned ? "Unpin tile" : "Pin live tile";
             pinBtn.addEventListener("click", () => {
               this.setAppPinned(plugin.id, !isPinned);
               this.renderSystemPluginList();
             });
-            controlsLeft.appendChild(pinBtn);
+            pinBtnWrap.appendChild(pinBtn);
+            row.appendChild(pinBtnWrap);
           }
-
-          row.appendChild(controlsLeft);
-
-          const btnRemovePl = document.createElement("button");
-          btnRemovePl.className = "btn-panorama-action btn-remove-placement";
-          btnRemovePl.style.cssText = "font-size: 0.68rem; padding: 2px 6px; color: #ff5555; border-color: #552222;";
-          btnRemovePl.textContent = placements.length > 1 ? "Remove" : "Unassign";
-          btnRemovePl.title = "Remove this placement";
-          btnRemovePl.addEventListener("click", async () => {
-            plugin.placements = placements.filter((_, idx) => idx !== plIdx);
-            if (plugin.placements.length > 0) {
-              plugin.viewport = plugin.placements[0].viewport;
-              plugin.route = plugin.placements[0].route;
-              plugin.viewId = plugin.placements[0].viewId;
-            } else {
-              plugin.viewport = "";
-              plugin.route = "";
-              plugin.viewId = "";
-              this.layoutManager.unregisterPlugin(plugin.id);
-            }
-            await this.remountPlugin(plugin);
-          });
-          row.appendChild(btnRemovePl);
 
           placementsBox.appendChild(row);
         }
@@ -1141,7 +1510,8 @@ export class PanoramaShell extends BaseShell {
 
         // Section D: Actions Row
         const actionsRow = document.createElement("div");
-        actionsRow.style.cssText = "display: flex; gap: 8px; align-items: center; margin-top: 4px;";
+        actionsRow.className = "panorama-config-actions plugin-actions-row";
+        actionsRow.style.cssText = "display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;";
 
         const btnInspect = document.createElement("button");
         btnInspect.className = "btn-panorama-action";
@@ -1267,6 +1637,30 @@ export class PanoramaShell extends BaseShell {
       }
       btn.addEventListener("click", () => this.showPivot(sp));
       this.pivotHeadersTrack.appendChild(btn);
+
+      // If an unpinned app is currently open, show its dynamic pivot tab right next to apps
+      if (sp === "apps" && this.currentOpenedAppId && !mainApps.some((a) => a.id === this.currentOpenedAppId)) {
+        const openedPlugin = this.installedPlugins.find((p) => p.id === this.currentOpenedAppId);
+        if (openedPlugin) {
+          const meta = this.getPluginMeta(openedPlugin);
+          const dynBtn = document.createElement("button");
+          dynBtn.className = "panorama-pivot-item panorama-dynamic-pivot";
+          dynBtn.dataset.pivot = openedPlugin.id;
+          if (this.activePivot === openedPlugin.id) {
+            dynBtn.classList.add("active");
+          }
+          dynBtn.innerHTML = `<span>${(openedPlugin.name || meta.name).toLowerCase()}</span><span class="dynamic-pivot-close" title="Close application" aria-label="Close application">${icon("close", 10)}</span>`;
+          dynBtn.addEventListener("click", (e) => {
+            if ((e.target as HTMLElement).closest(".dynamic-pivot-close")) {
+              e.stopPropagation();
+              this.closeApp();
+            } else {
+              this.showPivot(openedPlugin.id);
+            }
+          });
+          this.pivotHeadersTrack.appendChild(dynBtn);
+        }
+      }
     }
   }
 
@@ -1290,29 +1684,9 @@ export class PanoramaShell extends BaseShell {
     const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
     const isAlreadyOpen = this.fullAppOverlay?.classList.contains("open") || false;
 
-    // 1. 3D card flip transition: grid view flips out to the left
-    const gridView = document.getElementById("panorama-apps-grid-view");
-    if (gridView) {
-      if (!isAlreadyOpen) {
-        gridView.classList.remove("card-flip-in-left", "card-flip-out-right", "card-flip-in-right");
-        gridView.classList.add("card-flip-out-left");
-        setTimeout(() => {
-          if (this.currentOpenedAppId) {
-            gridView.style.display = "none";
-            gridView.classList.remove("card-flip-out-left");
-          }
-        }, 260);
-      } else {
-        gridView.style.display = "none";
-      }
-    }
-    if (this.sectionApps) this.sectionApps.classList.add("has-active-app");
-
-    // 2. Ensure the overlay page container element exists in fullAppContainer
+    // 1. Maintain overlay page container for backward compatibility and test stability
     const slotEl = this.ensureAppPage(plugin.id);
-
-    // 3. Hide other app pages in overlay, and display this target page
-    const allPages = this.fullAppContainer?.querySelectorAll<HTMLElement>(".panorama-app-page") || [];
+    const allPages = (this.root || document).querySelectorAll<HTMLElement>(".panorama-app-page");
     allPages.forEach((p) => (p.style.display = "none"));
 
     const target = document.getElementById(`panorama-page-app-${safeId}`);
@@ -1327,43 +1701,62 @@ export class PanoramaShell extends BaseShell {
       this.fullAppContainer.scrollTop = 0;
     }
 
-    // 4. 3D card flip transition: overlay flips in from the right
+    // 2. Full app overlay visibility for backwards compatibility
     if (this.fullAppOverlay) {
-      this.fullAppOverlay.classList.remove("card-flip-out-right", "card-flip-out-left", "card-flip-in-left");
+      this.fullAppOverlay.classList.remove("card-flip-out-right", "card-flip-out-left", "card-flip-in-left", "card-flip-in-right");
       this.fullAppOverlay.classList.add("open");
-      if (!isAlreadyOpen) {
-        this.fullAppOverlay.classList.add("card-flip-in-right");
-        setTimeout(() => {
-          this.fullAppOverlay?.classList.remove("card-flip-in-right");
-        }, 320);
-      }
       this.fullAppOverlay.style.display = "flex";
     }
 
-    this.showPivot("apps");
+    // 3. Create Dynamic Horizontal Pane next to Apps section
+    if (this.dynamicAppSection) {
+      this.dynamicAppSection.remove();
+      this.dynamicAppSection = null;
+    }
+    const oldDynamic = document.getElementById("panorama-section-dynamic-app");
+    if (oldDynamic) oldDynamic.remove();
 
-    // 5. Ensure the full app view is mounted into the overlay slot container
+    const dynamicSec = document.createElement("section");
+    dynamicSec.className = "panorama-section panorama-dynamic-app-pane";
+    dynamicSec.id = "panorama-section-dynamic-app";
+    dynamicSec.dataset.pivot = pluginId;
+    dynamicSec.dataset.pluginId = pluginId;
+
+    dynamicSec.innerHTML = `
+      <div class="panorama-section-content" style="height: auto; min-height: 100%; flex: 1;">
+        <div id="panorama-slot-dynamic-${safeId}" class="omni-slot panorama-main-viewport-slot" style="flex: 1; width: 100%; min-height: 100%; overflow: visible;"></div>
+      </div>
+    `;
+
+    if (this.sectionApps && this.sectionApps.nextSibling) {
+      this.panoramaContainer?.insertBefore(dynamicSec, this.sectionApps.nextSibling);
+    } else if (this.panoramaContainer) {
+      this.panoramaContainer.appendChild(dynamicSec);
+    }
+    this.dynamicAppSection = dynamicSec;
+
+    this.renderPivotNavigation();
+    this.updateHeaderCloseButton(true);
+    this.showPivot(pluginId);
+
+    // 4. Ensure the full app view is mounted into the overlay slot container
     const overlayInstanceKey = `${plugin.id}::overlay`;
-    const placements = this.getPluginPlacements(plugin);
-    const hasRunningInstance =
-      Boolean(this.kernel.getSandbox(overlayInstanceKey)) ||
-      Boolean(this.kernel.getSandbox(plugin.id)) ||
-      placements.some((pl) => Boolean(this.kernel.getSandbox(`${plugin.id}::${pl.id}`)));
+
+    const hasOverlaySandbox = Boolean(this.kernel.getSandbox(overlayInstanceKey));
     const overlayHasMirror = Boolean(slotEl.querySelector(".omni-component-slot"));
 
-
-    if (!hasRunningInstance && !this.pendingOverlayMounts.has(overlayInstanceKey)) {
+    if (!hasOverlaySandbox && !this.pendingOverlayMounts.has(overlayInstanceKey)) {
       await this.mountOverlayInstance(plugin, meta, slotEl, overlayInstanceKey);
-    } else if (hasRunningInstance && !overlayHasMirror && !this.pendingOverlayMounts.has(overlayInstanceKey)) {
-      // A sandbox exists but its live mirrored DOM is not in the overlay page
-      // (e.g. the main-viewport mount landed here, or a previous overlay was
-      // destroyed by a remount). Recover instead of showing a dead surface.
-      if (this.kernel.reparentLiveComponent(plugin.id, slotEl)) {
-      } else {
-        this.kernel.disablePlugin(plugin.id);
-        await this.mountPlugin(plugin);
+    } else if (hasOverlaySandbox && !overlayHasMirror && !this.pendingOverlayMounts.has(overlayInstanceKey)) {
+      if (!this.kernel.reparentLiveComponent(overlayInstanceKey, slotEl)) {
         await this.mountOverlayInstance(plugin, meta, slotEl, overlayInstanceKey);
       }
+    }
+
+    // Project app container inside the dynamic pane
+    const dynamicSlot = dynamicSec.querySelector(`#panorama-slot-dynamic-${safeId}`) as HTMLElement;
+    if (dynamicSlot && target) {
+      dynamicSlot.appendChild(target);
     }
   }
 
@@ -1419,62 +1812,363 @@ export class PanoramaShell extends BaseShell {
     }
   }
 
-  public closeApp(): void {
+  public closeApp(immediate = false): void {
     const prevOpenedAppId = this.currentOpenedAppId;
     this.currentOpenedAppId = null;
+    this.updateHeaderCloseButton(false);
     const gridView = document.getElementById("panorama-apps-grid-view");
     const tilesGrid = document.getElementById("panorama-tiles-grid");
 
     if (this.sectionApps) {
       this.sectionApps.scrollTop = 0;
+      this.sectionApps.classList.remove("has-active-app");
     }
     if (this.fullAppContainer) {
       this.fullAppContainer.scrollTop = 0;
     }
     if (gridView) {
       gridView.scrollTop = 0;
+      gridView.style.display = "flex";
+      gridView.classList.remove("card-flip-out-left", "card-flip-in-left");
     }
     if (tilesGrid) {
       tilesGrid.scrollTop = 0;
     }
 
     if (this.fullAppOverlay) {
-      this.fullAppOverlay.classList.remove("open", "card-flip-in-right");
-      if (prevOpenedAppId) {
-        this.fullAppOverlay.classList.add("card-flip-out-right");
-        if (gridView) {
-          gridView.style.display = "flex";
-          gridView.classList.remove("card-flip-out-left");
-          gridView.classList.add("card-flip-in-left");
-          setTimeout(() => {
-            gridView.classList.remove("card-flip-in-left");
-          }, 320);
-        }
-        setTimeout(() => {
-          if (!this.currentOpenedAppId && this.fullAppOverlay) {
-            this.fullAppOverlay.classList.remove("card-flip-out-right");
-            this.fullAppOverlay.style.display = "none";
-            if (this.sectionApps) {
-              this.sectionApps.classList.remove("has-active-app");
-              this.sectionApps.scrollTop = 0;
-            }
-            if (gridView) gridView.scrollTop = 0;
-          }
-        }, 260);
+      this.fullAppOverlay.classList.remove("open", "card-flip-in-right", "card-flip-out-right");
+      this.fullAppOverlay.style.display = "none";
+    }
+
+    // Return app page container to fullAppContainer
+    if (prevOpenedAppId) {
+      const prevSafeId = prevOpenedAppId.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const pageEl = document.getElementById(`panorama-page-app-${prevSafeId}`);
+      if (this.fullAppContainer && pageEl && pageEl.parentElement !== this.fullAppContainer) {
+        this.fullAppContainer.appendChild(pageEl);
+      }
+    }
+
+    const dynamicSec = this.dynamicAppSection || document.getElementById("panorama-section-dynamic-app");
+    this.dynamicAppSection = null;
+
+    // Smoothly glide back to the apps section
+    this.showPivot("apps");
+
+    if (dynamicSec) {
+      dynamicSec.classList.add("pane-closing");
+      if (immediate) {
+        dynamicSec.remove();
+        this.renderPivotNavigation();
       } else {
-        this.fullAppOverlay.style.display = "none";
-        if (gridView) gridView.style.display = "flex";
-        if (this.sectionApps) {
-          this.sectionApps.classList.remove("has-active-app");
-          this.sectionApps.scrollTop = 0;
-        }
+        setTimeout(() => {
+          dynamicSec.remove();
+          this.renderPivotNavigation();
+        }, 220);
       }
     } else {
-      if (gridView) gridView.style.display = "flex";
-      if (this.sectionApps) {
-        this.sectionApps.classList.remove("has-active-app");
-        this.sectionApps.scrollTop = 0;
+      this.renderPivotNavigation();
+    }
+  }
+
+  public updateEdgeGliders(): void {
+    if (!this.panoramaContainer || !this.gliderLeft || !this.gliderRight) return;
+    const scrollLeft = this.panoramaContainer.scrollLeft;
+    const maxScroll = Math.max(0, this.panoramaContainer.scrollWidth - this.panoramaContainer.clientWidth);
+
+    if (scrollLeft <= 10) {
+      this.gliderLeft.classList.add("disabled");
+    } else {
+      this.gliderLeft.classList.remove("disabled");
+    }
+
+    if (scrollLeft >= maxScroll - 10) {
+      this.gliderRight.classList.add("disabled");
+    } else {
+      this.gliderRight.classList.remove("disabled");
+    }
+  }
+
+  public showToast(msg: string, durationMs = 2000): void {
+    let container = document.getElementById("panorama-toast-container");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "panorama-toast-container";
+      container.className = "panorama-toast-container";
+      (this.root || document.body).appendChild(container);
+    }
+    const toast = document.createElement("div");
+    toast.className = "panorama-toast-notification";
+    toast.innerHTML = `<span>${msg}</span>`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add("toast-leaving");
+      setTimeout(() => toast.remove(), 200);
+    }, durationMs);
+  }
+
+  public navigateAdjacentPivot(direction: "left" | "right"): void {
+    if (!this.panoramaContainer) return;
+    const sections = Array.from(this.panoramaContainer.querySelectorAll<HTMLElement>(".panorama-section"))
+      .filter((s) => s.style.display !== "none" && s.offsetWidth > 0);
+    if (sections.length === 0) return;
+
+    const currentScroll = this.panoramaContainer.scrollLeft;
+    let closestIndex = 0;
+    let minDiff = Infinity;
+    sections.forEach((sec, idx) => {
+      const diff = Math.abs(sec.offsetLeft - currentScroll);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIndex = idx;
       }
+    });
+
+    const targetIndex = direction === "left" ? closestIndex - 1 : closestIndex + 1;
+    if (targetIndex >= 0 && targetIndex < sections.length) {
+      const targetSec = sections[targetIndex];
+      const pivot = targetSec.dataset.pivot;
+      if (pivot) {
+        this.showPivot(pivot);
+      } else {
+        this.panoramaContainer.scrollTo({ left: targetSec.offsetLeft, behavior: "smooth" });
+      }
+    }
+  }
+
+  private wireKeyboardAndGliders(): void {
+    if (this.gliderLeft) {
+      this.gliderLeft.addEventListener("click", () => this.navigateAdjacentPivot("left"));
+    }
+    if (this.gliderRight) {
+      this.gliderRight.addEventListener("click", () => this.navigateAdjacentPivot("right"));
+    }
+    this.boundGliderScrollHandler = () => this.updateEdgeGliders();
+    this.panoramaContainer?.addEventListener("scroll", this.boundGliderScrollHandler, { passive: true });
+    this.updateEdgeGliders();
+
+    this.boundKeydownHandler = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+
+      const active = document.activeElement as HTMLElement | null;
+      const isInput = active && (
+        active.tagName === "INPUT" ||
+        active.tagName === "TEXTAREA" ||
+        active.isContentEditable ||
+        Boolean(active.closest("input, textarea, [contenteditable='true']"))
+      );
+      if (isInput) return;
+
+      const inspector = document.getElementById("panorama-inspector-modal");
+      const openWith = document.getElementById("panorama-open-with-modal");
+      const install = document.getElementById("panorama-install-modal");
+      if (
+        (inspector && inspector.style.display !== "none") ||
+        (openWith && openWith.style.display !== "none") ||
+        (install && install.style.display !== "none")
+      ) {
+        return;
+      }
+
+      e.preventDefault();
+      this.navigateAdjacentPivot(e.key === "ArrowLeft" ? "left" : "right");
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("keydown", this.boundKeydownHandler);
+    }
+  }
+
+  public renderBottomAppBar(): void {
+    const actionsBar = (this.root.querySelector("#panorama-app-bar-actions") || document.getElementById("panorama-app-bar-actions")) as HTMLElement | null;
+    const menu = (this.root.querySelector("#panorama-app-bar-menu") || document.getElementById("panorama-app-bar-menu")) as HTMLElement | null;
+    if (!actionsBar || !menu) return;
+
+    actionsBar.innerHTML = "";
+    menu.innerHTML = "";
+
+    const enabledPlugins = this.installedPlugins.filter((p) => p.enabled !== false);
+
+    // 1. Compose Action: Purely intent-driven (create_note / compose_note)
+    const composeHandlers = [
+      ...this.kernel.intentBroker.getHandlers("create_note"),
+      ...this.kernel.intentBroker.getHandlers("compose_note")
+    ];
+    const composePlugin = enabledPlugins.find((p) => {
+      const synth = this.ensurePluginManifest(p);
+      const handled = p.handledIntents || synth.permissions?.intents?.handle || [];
+      return handled.includes("create_note") || handled.includes("compose_note");
+    });
+
+    if (composeHandlers.length > 0 || composePlugin) {
+      const btnCompose = document.createElement("button");
+      btnCompose.className = "btn-app-bar-action";
+      btnCompose.id = "btn-app-bar-compose";
+      btnCompose.title = "Compose note";
+      btnCompose.innerHTML = `<span class="app-bar-icon-circle">${icon("plus", 14)}</span>`;
+      btnCompose.addEventListener("click", async () => {
+        try {
+          await this.kernel.intentBroker.dispatch("shell", "create_note", {});
+        } catch {
+          if (composePlugin) {
+            await this.showPage(composePlugin.id);
+          }
+        }
+      });
+      actionsBar.appendChild(btnCompose);
+    }
+
+    // 2. Refresh Action: Universal refresh dispatching to active section
+    const btnRefresh = document.createElement("button");
+    btnRefresh.className = "btn-app-bar-action";
+    btnRefresh.id = "btn-app-bar-refresh";
+    btnRefresh.title = "Refresh";
+    btnRefresh.innerHTML = `<span class="app-bar-icon-circle">${icon("refresh", 14)}</span>`;
+    btnRefresh.addEventListener("click", () => {
+      btnRefresh.classList.add("is-refreshing");
+      setTimeout(() => btnRefresh.classList.remove("is-refreshing"), 650);
+
+      const activePivotName = this.activePivot === "now" ? "feed" : this.activePivot;
+      this.showToast(`Refreshed ${activePivotName}`);
+
+      const activeSection = this.panoramaContainer?.querySelector<HTMLElement>(`.panorama-section[data-pivot="${this.activePivot}"]`);
+      if (activeSection) {
+        activeSection.dispatchEvent(new CustomEvent("omni:refresh", { bubbles: true }));
+        const refreshAffordance = activeSection.querySelector<HTMLElement>('button[data-action="refresh"], button[title*="Refresh" i], button[aria-label*="Refresh" i]');
+        if (refreshAffordance) {
+          refreshAffordance.click();
+        }
+      }
+      if (this.activePivot === "apps") {
+        this.renderAppsTiles();
+      } else if (this.activePivot === "widgets") {
+        this.ensureWidgetsMounted().catch(console.warn);
+      }
+    });
+    actionsBar.appendChild(btnRefresh);
+
+    // 3. Search Action: Purely intent- & view-driven
+    const searchHandlers = this.kernel.intentBroker.getHandlers("search");
+    const searchPlugin = enabledPlugins.find((p) => {
+      const synth = this.ensurePluginManifest(p);
+      const handled = p.handledIntents || synth.permissions?.intents?.handle || [];
+      const views = p.views || synth.views || [];
+      return handled.includes("search") || views.some((v: any) => v.id === "search" || (v.path && v.path.includes("search")));
+    });
+
+    if (searchHandlers.length > 0 || searchPlugin) {
+      const btnSearch = document.createElement("button");
+      btnSearch.className = "btn-app-bar-action";
+      btnSearch.id = "btn-app-bar-search";
+      btnSearch.title = "Search";
+      btnSearch.innerHTML = `<span class="app-bar-icon-circle">${icon("search", 14)}</span>`;
+      btnSearch.addEventListener("click", async () => {
+        if (searchPlugin) {
+          await this.showPage(searchPlugin.id);
+        }
+        try {
+          await this.kernel.intentBroker.dispatch("shell", "search", {});
+        } catch (_) {}
+
+        const focusInput = () => {
+          const targetSec = this.dynamicAppSection || this.panoramaContainer || document.body;
+          const searchAffordance = targetSec?.querySelector<HTMLElement>('.btn-search-feed, [data-action="search"]');
+          if (searchAffordance) {
+            searchAffordance.click();
+          }
+          const searchInput = targetSec?.querySelector<HTMLInputElement>(".feed-search-input, input[type='search'], input[name='search']");
+          if (searchInput) {
+            searchInput.focus();
+            searchInput.select?.();
+            return true;
+          }
+          return false;
+        };
+
+        if (!focusInput()) {
+          setTimeout(focusInput, 60);
+          setTimeout(focusInput, 180);
+          setTimeout(focusInput, 350);
+        }
+      });
+      actionsBar.appendChild(btnSearch);
+    }
+
+    // --- More Options Menu (···) ---
+    // A. Settings & System (Core Shell Pivot)
+    const btnMenuSystem = document.createElement("button");
+    btnMenuSystem.className = "app-bar-menu-item";
+    btnMenuSystem.id = "btn-app-bar-menu-system";
+    btnMenuSystem.innerHTML = `${icon("settings", 16)} <span>Settings & System</span>`;
+    btnMenuSystem.addEventListener("click", () => {
+      menu.style.display = "none";
+      this.showPivot("system");
+    });
+    menu.appendChild(btnMenuSystem);
+
+    // B. Sync Workspace (Core Shell NIP-78)
+    const btnMenuSync = document.createElement("button");
+    btnMenuSync.className = "app-bar-menu-item";
+    btnMenuSync.id = "btn-app-bar-menu-sync";
+    btnMenuSync.innerHTML = `${icon("cloud", 16)} <span>Sync Workspace (NIP-78)</span>`;
+    btnMenuSync.addEventListener("click", () => {
+      menu.style.display = "none";
+      document.getElementById("btn-panorama-sync")?.click();
+    });
+    menu.appendChild(btnMenuSync);
+
+    // C. Relay Management: Dynamically discovered by capabilities, zero hardcoded IDs
+    const relayManagerPlugin = enabledPlugins.find((p) => {
+      const synth = this.ensurePluginManifest(p);
+      return (
+        p.manifest?.permissions?.relays?.manage === true ||
+        synth.permissions?.relays?.manage === true ||
+        (p.handledIntents && p.handledIntents.includes("manage_relays"))
+      );
+    });
+    if (relayManagerPlugin) {
+      const meta = this.getPluginMeta(relayManagerPlugin);
+      const btnMenuRelays = document.createElement("button");
+      btnMenuRelays.className = "app-bar-menu-item";
+      btnMenuRelays.id = "btn-app-bar-menu-relays";
+      btnMenuRelays.innerHTML = `${icon("relays", 16)} <span>${meta.name || "Manage Relays"}</span>`;
+      btnMenuRelays.addEventListener("click", () => {
+        menu.style.display = "none";
+        this.showPage(relayManagerPlugin.id);
+      });
+      menu.appendChild(btnMenuRelays);
+    }
+
+    // D. Install nsite / Plugin (Core Shell Feature)
+    const btnMenuInstall = document.createElement("button");
+    btnMenuInstall.className = "app-bar-menu-item";
+    btnMenuInstall.id = "btn-app-bar-menu-install";
+    btnMenuInstall.innerHTML = `${icon("plus", 16)} <span>Install nsite / Plugin</span>`;
+    btnMenuInstall.addEventListener("click", () => {
+      menu.style.display = "none";
+      document.getElementById("btn-panorama-install")?.click();
+    });
+    menu.appendChild(btnMenuInstall);
+  }
+
+  private wireBottomAppBar(): void {
+    const btnMore = document.getElementById("btn-app-bar-more");
+    const menu = document.getElementById("panorama-app-bar-menu") as HTMLElement | null;
+
+    btnMore?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!menu) return;
+      const isVisible = menu.style.display === "flex";
+      menu.style.display = isVisible ? "none" : "flex";
+    });
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("click", (e) => {
+        if (menu && menu.style.display === "flex" && !(e.target as HTMLElement).closest("#panorama-bottom-app-bar")) {
+          menu.style.display = "none";
+        }
+      });
     }
   }
 
@@ -1486,6 +2180,9 @@ export class PanoramaShell extends BaseShell {
     this.activePivot = pivot;
     if (pivot === "widgets") {
       this.ensureWidgetsMounted().catch(console.warn);
+    }
+    if (pivot === "apps") {
+      this.ensureCompactTilesMounted().catch(console.warn);
     }
     const buttons = this.pivotHeadersTrack?.querySelectorAll<HTMLElement>(".panorama-pivot-item") || [];
     buttons.forEach((btn) => {
@@ -1500,6 +2197,11 @@ export class PanoramaShell extends BaseShell {
       (this.panoramaContainer?.querySelector<HTMLElement>(`.panorama-section[data-pivot="${pivot}"]`));
 
     if (targetSection && this.panoramaContainer) {
+      // If already on this pivot pane, smooth scroll to top of this section
+      if (Math.abs(this.panoramaContainer.scrollLeft - targetSection.offsetLeft) < 20 && targetSection.scrollTop > 0) {
+        targetSection.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
       this.isProgrammaticScroll = true;
       if (this.programmaticScrollTimer) clearTimeout(this.programmaticScrollTimer);
 
@@ -1524,7 +2226,12 @@ export class PanoramaShell extends BaseShell {
       this.programmaticScrollTimer = setTimeout(() => {
         this.isProgrammaticScroll = false;
         this.syncPivotScrollFromCanvas();
+        this.updateEdgeGliders();
       }, 600);
+      if (this.currentOpenedAppId) {
+        this.updateHeaderCloseButton(pivot === this.currentOpenedAppId);
+      }
+      this.updateEdgeGliders();
     }
   }
 
@@ -1577,12 +2284,6 @@ export class PanoramaShell extends BaseShell {
     const sections = Array.from(this.panoramaContainer.querySelectorAll<HTMLElement>(".panorama-section"));
     const buttons = Array.from(this.pivotHeadersTrack.querySelectorAll<HTMLElement>(".panorama-pivot-item"));
     if (sections.length === 0 || buttons.length === 0) return;
-
-    // 0. Parallax translation for hero title ("omni")
-    const heroTitle = this.root.querySelector<HTMLElement>(".panorama-hero-title");
-    if (heroTitle) {
-      heroTitle.style.transform = `translateX(${Math.round(-scrollLeft * 0.12)}px)`;
-    }
 
     // 1. Calculate continuous scroll position for the top pivot navigation
     const maxCanvas = this.panoramaContainer.scrollWidth - this.panoramaContainer.clientWidth;
@@ -1645,6 +2346,9 @@ export class PanoramaShell extends BaseShell {
     if (pivot && this.activePivot !== pivot) {
       this.activePivot = pivot;
       buttons.forEach((b) => b.classList.toggle("active", b.dataset.pivot === pivot));
+      if (this.currentOpenedAppId) {
+        this.updateHeaderCloseButton(pivot === this.currentOpenedAppId);
+      }
       if (pivot === "widgets") {
         this.ensureWidgetsMounted().catch(console.warn);
       }
@@ -1666,6 +2370,8 @@ export class PanoramaShell extends BaseShell {
       peekHint.style.opacity = "0";
       peekHint.style.pointerEvents = "none";
     }
+
+    this.updateEdgeGliders();
   }
 
   private wireNavigation(): void {
@@ -1675,6 +2381,48 @@ export class PanoramaShell extends BaseShell {
     this.panoramaContainer?.addEventListener("scroll", () => {
       this.syncPivotScrollFromCanvas();
     }, { passive: true });
+
+    // Vertical scroll tracking on all sections for Back to Top button
+    const backToTopBtn = this.root.querySelector<HTMLElement>("#panorama-back-to-top") || document.getElementById("panorama-back-to-top");
+    const sections = Array.from(this.panoramaContainer?.querySelectorAll<HTMLElement>(".panorama-section") || []);
+
+    sections.forEach((sec) => {
+      sec.addEventListener("scroll", () => {
+        const anyScrolled = sections.some((s) => s.scrollTop > 200);
+        if (anyScrolled) {
+          backToTopBtn?.classList.add("visible");
+        } else {
+          backToTopBtn?.classList.remove("visible");
+        }
+      }, { passive: true });
+    });
+
+    backToTopBtn?.addEventListener("click", () => {
+      const scrollLeft = this.panoramaContainer?.scrollLeft || 0;
+      let currentSec: HTMLElement | null = null;
+      let minDiff = Infinity;
+      sections.forEach((sec) => {
+        const diff = Math.abs(sec.offsetLeft - scrollLeft);
+        if (diff < minDiff) {
+          minDiff = diff;
+          currentSec = sec;
+        }
+      });
+      if (currentSec) {
+        (currentSec as HTMLElement).scrollTo({ top: 0, behavior: "smooth" });
+      }
+    });
+
+    // Delegate clicks from any inner back-to-top buttons
+    this.root.addEventListener("click", (e: Event) => {
+      const topBtn = (e.target as Element)?.closest(".btn-feed-back-to-top, [data-action='scroll-top']");
+      if (topBtn) {
+        const sec = topBtn.closest(".panorama-section, .main-viewport") || sections[0];
+        if (sec) {
+          (sec as HTMLElement).scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }
+    });
   }
 
   private wireGlobalEvents(): void {
@@ -1699,6 +2447,11 @@ export class PanoramaShell extends BaseShell {
 
     document.getElementById("panorama-header-user-btn")?.addEventListener("click", openProfile);
     document.getElementById("panorama-identity-card")?.addEventListener("click", openProfile);
+
+    // Metro header close button for dynamic open apps
+    document.getElementById("btn-header-close-app")?.addEventListener("click", () => {
+      this.closeApp();
+    });
 
     // Back button on full app slide-in overlay
     const btnOverlayBack = document.getElementById("btn-overlay-back");

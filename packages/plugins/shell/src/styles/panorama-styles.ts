@@ -66,6 +66,7 @@ body.theme-panorama,
   flex-direction: column;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background-color: #000000;
   color: #ffffff;
   overflow: hidden;
@@ -89,42 +90,32 @@ body.theme-panorama,
 
 /* 1. Panorama Hero Header & Pivot Navigation */
 .panorama-hero-header {
-  padding: 24px 24px 8px 24px;
+  padding: 10px 16px 6px 16px;
   flex-shrink: 0;
   background: #000000;
   z-index: 10;
   position: relative;
+  border-bottom: 1px solid #161616;
 }
 
-.panorama-brand-row {
+.panorama-header-content {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.panorama-hero-title {
-  font-size: 3.2rem;
-  font-weight: 200;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  color: #ffffff;
-  margin: 0;
-  text-transform: lowercase;
-  will-change: transform;
-  transition: transform 0.08s linear;
+  gap: 12px;
+  width: 100%;
 }
 
 .panorama-pivot-nav {
   display: flex;
-  gap: 28px;
+  gap: 20px;
   overflow-x: auto;
   scrollbar-width: none;
   white-space: nowrap;
   scroll-behavior: smooth;
-  padding-left: 36px;
-  padding-right: calc(100vw - 120px);
-  position: relative;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .panorama-pivot-nav::-webkit-scrollbar {
@@ -135,11 +126,11 @@ body.theme-panorama,
   background: transparent;
   border: none;
   color: #666666;
-  font-size: 1.55rem;
+  font-size: 1.25rem;
   font-weight: 300;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   cursor: pointer;
-  padding: 0;
+  padding: 2px 0;
   text-transform: lowercase;
   transition: color 0.15s ease;
   font-family: inherit;
@@ -152,7 +143,73 @@ body.theme-panorama,
 
 .panorama-pivot-item.active {
   color: #ffffff;
+  font-weight: 500;
+}
+
+.panorama-header-profile-wrap {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.panorama-header-user-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  color: #fff;
+  transition: opacity 0.15s ease;
+}
+
+.panorama-header-user-btn:hover {
+  opacity: 0.85;
+}
+
+.panorama-header-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 0px;
+  background: #1a1a1a;
+  border: 1px solid #333333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--omni-accent-primary, #00a4ef);
+  flex-shrink: 0;
+  transition: border-color 0.15s ease;
+}
+
+.panorama-header-user-btn:hover .panorama-header-avatar {
+  border-color: var(--omni-accent-primary, #00a4ef);
+}
+
+.panorama-header-name {
+  font-size: 0.8rem;
   font-weight: 400;
+  color: #ccc;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .panorama-hero-header {
+    padding: 6px 12px 4px 12px;
+  }
+  .panorama-pivot-nav {
+    gap: 14px;
+  }
+  .panorama-pivot-item {
+    font-size: 1.15rem;
+  }
+  .panorama-header-name {
+    display: none;
+  }
 }
 
 /* Left Pane Peek Hint Indicator (Pure Metro Typography) */
@@ -162,16 +219,17 @@ body.theme-panorama,
   padding: 0;
   color: #666666;
   font-family: inherit;
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 300;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   text-transform: lowercase;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   transition: color 0.15s ease, opacity 0.2s ease;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .panorama-left-peek-hint:hover {
@@ -190,6 +248,7 @@ body.theme-panorama,
 /* 2. Panorama Horizontal Canvas */
 .panorama-canvas {
   flex: 1;
+  min-height: 0;
   display: flex;
   overflow-x: auto;
   overflow-y: hidden;
@@ -221,6 +280,10 @@ body.theme-panorama,
   box-sizing: border-box;
 }
 
+#panorama-section-system {
+  padding-bottom: 32px;
+}
+
 .panorama-section::-webkit-scrollbar {
   display: none;
   width: 0;
@@ -233,6 +296,10 @@ body.theme-panorama,
     max-width: min(540px, calc(100vw - 64px));
     padding: 8px 24px 24px 24px;
   }
+
+  #panorama-section-system {
+    padding-bottom: 32px;
+  }
 }
 
 .panorama-section-content {
@@ -243,6 +310,13 @@ body.theme-panorama,
   min-height: 100%;
   height: auto;
   flex: 1;
+}
+
+.panorama-section-content::after {
+  content: "";
+  display: block;
+  height: 24px;
+  flex-shrink: 0;
 }
 
 /* Full page vertical scroll effect: prevent slots from clipping or trapping inner scrollbars */
@@ -258,14 +332,19 @@ body.theme-panorama,
 }
 
 .panorama-section-title-bar {
+  display: none;
+}
+
+.panorama-apps-active-view .panorama-section-title-bar {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 4px;
+  align-items: center;
+  margin-bottom: 6px;
+  padding: 2px 0;
 }
 
 .panorama-section-title-bar h2 {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 300;
   color: #ffffff;
   letter-spacing: -0.02em;
@@ -593,15 +672,41 @@ body.theme-panorama,
 
 .feed-top-header {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
-  padding: 4px 0 12px 0;
+  padding: 4px 0 10px 0;
   background: transparent;
   border-bottom: 1px solid #1a1a1a;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.feed-top-header::-webkit-scrollbar {
+  display: none;
+}
+
+.feed-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .feed-top-header .feed-title {
   display: none;
+}
+
+.feed-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .btn-refresh-feed {
@@ -617,6 +722,7 @@ body.theme-panorama,
   align-items: center;
   gap: 5px;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .btn-refresh-feed:hover {
@@ -634,13 +740,6 @@ body.theme-panorama,
   to { transform: rotate(360deg); }
 }
 
-/* Feed Search Page */
-.feed-header-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .btn-search-feed,
 .btn-settings-feed {
   background: #111111;
@@ -655,6 +754,7 @@ body.theme-panorama,
   align-items: center;
   gap: 5px;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .btn-search-feed:hover,
@@ -669,6 +769,90 @@ body.theme-panorama,
   color: #ffffff;
   border-color: var(--omni-accent-primary, #00a4ef);
   background: var(--omni-accent-primary, #00a4ef);
+}
+
+.btn-feed-back-to-top {
+  background: #111111;
+  border: 1px solid #222222;
+  color: #aaaaaa;
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 0px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-feed-back-to-top:hover {
+  color: #ffffff;
+  border-color: var(--omni-accent-primary, #00a4ef);
+  background: #161616;
+}
+
+.panorama-back-to-top {
+  position: fixed;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  right: 24px;
+  z-index: 99;
+  background: #111111;
+  color: #ffffff;
+  border: 1px solid var(--omni-accent-primary, #00a4ef);
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.15s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+}
+
+.panorama-back-to-top.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.panorama-back-to-top:hover {
+  background: var(--omni-accent-primary, #00a4ef);
+  color: #000000;
+}
+
+@media (max-width: 600px) {
+  .feed-top-header {
+    padding: 4px 0 8px 0;
+    gap: 6px;
+  }
+  .feed-nav-group {
+    gap: 6px;
+  }
+  .feed-header-actions .btn-label {
+    display: none;
+  }
+  .btn-search-feed,
+  .btn-settings-feed,
+  .btn-refresh-feed {
+    padding: 5px 8px;
+    min-width: 32px;
+    justify-content: center;
+  }
+  .feed-tab-btn {
+    padding: 4px 8px;
+    font-size: 0.72rem;
+  }
+  .panorama-back-to-top {
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+    right: 16px;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
 }
 
 .btn-search-back,
@@ -1611,7 +1795,7 @@ body.theme-panorama,
   width: 100vw;
   height: 100vh;
   background: rgba(0, 0, 0, 0.85);
-  z-index: 200;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1679,5 +1863,564 @@ body.theme-panorama,
   font-size: 13px;
   font-weight: 700;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* 8. Compact Live Tiles & Context Menu */
+.panorama-tile.has-compact-view {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.panorama-tile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.panorama-tile-compact-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.panorama-tile-compact-container .omni-component-slot {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.panorama-tile-context-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 9998;
+}
+
+.panorama-tile-context-menu {
+  position: fixed;
+  background: #161616;
+  border: 1px solid #333333;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.85);
+  min-width: 220px;
+  max-width: 280px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  animation: contextMenuPop 0.15s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+@keyframes contextMenuPop {
+  0% { opacity: 0; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.panorama-tile-context-header {
+  padding: 8px 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #888888;
+  border-bottom: 1px solid #222222;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.context-menu-item {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  padding: 10px 16px;
+  font-size: 0.84rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s ease;
+  font-family: inherit;
+  width: 100%;
+}
+
+.context-menu-item:hover {
+  background: #242424;
+}
+
+.context-menu-cancel {
+  border-top: 1px solid #222222;
+  color: #888888;
+  margin-top: 4px;
+}
+
+/* 9. Dynamic App Pane */
+.panorama-dynamic-app-pane {
+  min-width: 320px;
+  max-width: 720px;
+  width: 88vw;
+  flex-shrink: 0;
+  transition: opacity 0.22s cubic-bezier(0.1, 0.9, 0.2, 1), transform 0.22s cubic-bezier(0.1, 0.9, 0.2, 1);
+  transform-origin: center left;
+}
+
+.panorama-dynamic-app-pane.pane-closing {
+  opacity: 0;
+  transform: scale(0.96);
+  pointer-events: none;
+}
+
+/* Header & Dynamic App Close Controls */
+.btn-header-close-app {
+  background: transparent;
+  border: 1px solid #444444;
+  color: #ffffff;
+  padding: 3px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
+  letter-spacing: -0.01em;
+  transition: all 0.15s ease;
+  user-select: none;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.btn-header-close-app:hover {
+  border-color: #ffffff;
+  background: #1e1e1e;
+  color: #ffffff;
+}
+
+.btn-header-close-app:active {
+  transform: scale(0.95);
+}
+
+.btn-header-close-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.btn-header-close-label {
+  line-height: 1;
+  text-transform: lowercase;
+}
+
+.dynamic-pivot-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 8px;
+  border-radius: 50%;
+  border: 1px solid #555555;
+  color: #cccccc;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  vertical-align: middle;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.panorama-dynamic-pivot:hover .dynamic-pivot-close,
+.dynamic-pivot-close:hover {
+  border-color: #ffffff;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dynamic-pivot-close:active {
+  transform: scale(0.9);
+}
+
+/* 10. Desktop Edge Hover Gliders */
+.panorama-edge-glider {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 52px;
+  background: rgba(18, 18, 18, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease;
+  user-select: none;
+}
+
+.panorama-edge-glider.glider-left {
+  left: 10px;
+}
+
+.panorama-edge-glider.glider-right {
+  right: 10px;
+}
+
+@media (hover: hover) and (min-width: 768px) {
+  .panorama-shell-root:hover .panorama-edge-glider:not(.disabled) {
+    opacity: 0.35;
+  }
+  .panorama-edge-glider:hover:not(.disabled) {
+    opacity: 1 !important;
+    transform: translateY(-50%) scale(1.06);
+    background: rgba(28, 28, 28, 0.95);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+}
+
+.panorama-edge-glider.disabled {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+@media (max-width: 767px) {
+  .panorama-edge-glider {
+    display: none !important;
+  }
+}
+
+/* 11. Metro Bottom App Bar */
+.panorama-bottom-app-bar {
+  position: relative;
+  flex-shrink: 0;
+  width: 100%;
+  background: #0a0a0a;
+  border-top: 1px solid #1c1c1c;
+  display: flex;
+  flex-direction: column;
+  z-index: 900;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.app-bar-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 44px;
+  padding: 0 16px;
+}
+
+.app-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.btn-app-bar-action {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 4px;
+  outline: none;
+}
+
+.app-bar-icon-circle {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #444444;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+  color: #ffffff;
+}
+
+.btn-app-bar-action:hover .app-bar-icon-circle {
+  border-color: var(--omni-accent-primary, #00a4ef);
+  color: var(--omni-accent-primary, #00a4ef);
+}
+
+.btn-app-bar-action:active .app-bar-icon-circle {
+  transform: scale(0.92);
+}
+
+.btn-app-bar-more {
+  background: transparent;
+  border: none;
+  color: #888888;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.12s ease;
+}
+
+.btn-app-bar-more:hover {
+  color: #ffffff;
+}
+
+.panorama-app-bar-menu {
+  position: absolute;
+  bottom: calc(44px + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  right: 0;
+  background: #111111;
+  border-top: 1px solid #222222;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  z-index: 901;
+  animation: appMenuSlideUp 0.18s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+@keyframes appMenuSlideUp {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.app-bar-menu-item {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  padding: 10px 20px;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.1s ease;
+}
+
+.app-bar-menu-item:hover {
+  background: #1e1e1e;
+}
+
+/* 12. Skeletons & Empty States */
+@keyframes omni-skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.omni-skeleton-shimmer {
+  background: linear-gradient(90deg, #161616 25%, #222222 37%, #161616 63%);
+  background-size: 400% 100%;
+  animation: omni-skeleton-shimmer 1.4s ease infinite;
+}
+
+.panorama-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  gap: 12px;
+  border: 1px dashed #262626;
+  color: #888888;
+}
+
+.panorama-empty-state h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.panorama-empty-state p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #777777;
+  max-width: 280px;
+}
+
+/* 13. App Bar Refresh Spin & Metro Toast Notifications */
+.btn-app-bar-action.is-refreshing .app-bar-icon-circle svg {
+  animation: omni-app-bar-spin 0.6s linear infinite;
+}
+
+@keyframes omni-app-bar-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.panorama-toast-container {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.panorama-toast-notification {
+  pointer-events: auto;
+  background: #191816;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-left: 4px solid var(--accent-primary, #00a4ef);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+  max-width: 440px;
+  animation: omniToastSlideDown 0.22s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+}
+
+.panorama-toast-notification.toast-leaving {
+  animation: omniToastSlideUp 0.18s cubic-bezier(0.9, 0.1, 1, 0.2) forwards;
+}
+
+@keyframes omniToastSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes omniToastSlideUp {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+}
+
+/* 14. Responsive Mobile Settings & Action Buttons */
+.plugin-actions-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.plugin-actions-row .btn-panorama-action {
+  flex: 1;
+  min-width: 90px;
+  text-align: center;
+  justify-content: center;
+  padding: 6px 12px;
+  height: 32px;
+  box-sizing: border-box;
+}
+
+.btn-panorama-action {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.plugin-placement-row {
+  box-sizing: border-box;
+}
+
+.plugin-placement-fields select {
+  box-sizing: border-box;
+  height: 32px;
+}
+
+.default-applications-box {
+  box-sizing: border-box;
+}
+
+.default-applications-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.default-app-card {
+  box-sizing: border-box;
+}
+
+.panorama-installed-plugins-card {
+  margin-bottom: 32px;
+}
+
+.default-app-select {
+  box-sizing: border-box;
+  height: 32px;
+}
+
+.default-app-select:focus {
+  border-color: var(--omni-accent-primary, #00a4ef) !important;
+}
+
+@media (max-width: 600px) {
+  .panorama-installed-plugins-card {
+    margin-bottom: 32px;
+  }
+
+  #panorama-section-system {
+    padding-bottom: 36px !important;
+  }
+
+  #panorama-section-system .panorama-section-content {
+    padding-bottom: 24px !important;
+  }
+
+  .default-applications-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .plugin-actions-row {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .plugin-actions-row .btn-panorama-action {
+    width: 100%;
+    height: 36px;
+    font-size: 0.8rem;
+    padding: 8px 12px;
+  }
+
+  .plugin-placement-fields {
+    grid-template-columns: 1fr !important;
+  }
+
+  .panorama-plugin-config-header {
+    padding: 12px 10px !important;
+  }
 }
 `;

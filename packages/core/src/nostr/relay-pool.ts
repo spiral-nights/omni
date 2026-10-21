@@ -87,11 +87,12 @@ export class RelayPool {
       "wss://relay.nostr.band"
     ];
 
-    const persisted = (this.persistRelays && options.bootstrapRelays === undefined) ? this.loadPersistedRelays() : null;
-    if (persisted !== null) {
+    const persisted = this.persistRelays ? this.loadPersistedRelays() : null;
+    if (persisted !== null && persisted.length > 0) {
       this.bootstrapUrls = persisted;
-    } else if (options.bootstrapRelays !== undefined) {
+    } else if (options.bootstrapRelays !== undefined && options.bootstrapRelays.length > 0) {
       this.bootstrapUrls = [...options.bootstrapRelays];
+      if (this.persistRelays) this.savePersistedRelays();
     } else {
       this.bootstrapUrls = defaultBootstrap;
     }
