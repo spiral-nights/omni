@@ -8,7 +8,7 @@ import {
   PluginViewDeclaration,
   OmniShellHost
 } from "@omni/types";
-import { ICONS } from "./icons.js";
+import { ICONS, icon } from "./icons.js";
 import { showIntentEnableToast } from "./permissions-intents-ui.js";
 import { unmountShellStyles } from "./styles/loader.js";
 import { CURATED_APPS } from "./app-store-catalog.js";
@@ -88,6 +88,184 @@ export abstract class BaseShell implements OmniShellHost {
     }
     this.registerHandledIntents();
     this.setupIntentListener();
+  }
+
+  // --- Pull Down to Refresh (Mobile Web & PWA) ---
+  protected pullToRefreshEl: HTMLElement | null = null;
+  protected boundTouchStartHandler: ((e: TouchEvent) => void) | null = null;
+  protected boundTouchMoveHandler: ((e: TouchEvent) => void) | null = null;
+  protected boundTouchEndHandler: ((e: TouchEvent) => void) | null = null;
+
+  protected initPullToRefresh(): void {
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+
+    if (this.pullToRefreshEl) {
+      this.destroyPullToRefresh();
+    }
+
+    const indicator = document.createElement("div");
+    indicator.className = "omni-pull-to-refresh";
+    indicator.id = "omni-pull-to-refresh";
+    indicator.innerHTML = `
+      <div class="omni-pull-indicator-content">
+        <span class="omni-pull-icon">${icon("refresh", 16)}</span>
+        <span class="omni-pull-label">pull down to refresh</span>
+      </div>
+    `;
+    this.root.appendChild(indicator);
+    this.pullToRefreshEl = indicator;
+
+    let startY = 0;
+    let startX = 0;
+    let isPulling = false;
+    let pullDistance = 0;
+    const PULL_THRESHOLD = 50;
+
+    const isAtScrollTop = (target: EventTarget | null): boolean => {
+      let el = target as HTMLElement | null;
+      while (el && el !== document.body && el !== document.documentElement && el !== this.root) {
+        if (el.scrollTop > 1) {
+          return false;
+        }
+        el = el.parentElement;
+      }
+      return true;
+    };
+
+    this.boundTouchStartHandler = (e: TouchEvent) => {
+      if (!e.touches || e.touches.length !== 1) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) {
+        return;
+      }
+      if (!isAtScrollTop(target)) {
+        return;
+      }
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+      isPulling = false;
+      pullDistance = 0;
+    };
+
+    this.boundTouchMoveHandler = (e: TouchEvent) => {
+      if (!e.touches || e.touches.length !== 1 || startY === 0) return;
+      const currentY = e.touches[0].clientY;
+      const currentX = e.touches[0].clientX;
+      const diffY = currentY - startY;
+      const diffX = Math.abs(currentX - startX);
+
+      // If predominantly horizontal, ignore and abort pull to refresh
+      if (diffX > Math.abs(diffY)) {
+        if (isPulling) {
+          this.resetPullIndicator();
+          isPulling = false;
+        }
+        return;
+      }
+
+      // If pulling down while at the top of scrollable content
+      if (diffY > 10 && isAtScrollTop(e.target)) {
+        isPulling = true;
+        pullDistance = Math.min(90, diffY * 0.5);
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+        this.updatePullIndicator(pullDistance, PULL_THRESHOLD);
+      } else if (isPulling && diffY <= 0) {
+        this.resetPullIndicator();
+        isPulling = false;
+      }
+    };
+
+    this.boundTouchEndHandler = () => {
+      if (isPulling) {
+        if (pullDistance >= PULL_THRESHOLD) {
+          this.triggerPullRefresh();
+        } else {
+          this.resetPullIndicator();
+        }
+      }
+      startY = 0;
+      startX = 0;
+      isPulling = false;
+      pullDistance = 0;
+    };
+
+    window.addEventListener("touchstart", this.boundTouchStartHandler, { passive: true });
+    window.addEventListener("touchmove", this.boundTouchMoveHandler, { passive: false });
+    window.addEventListener("touchend", this.boundTouchEndHandler, { passive: true });
+    window.addEventListener("touchcancel", this.boundTouchEndHandler, { passive: true });
+  }
+
+  protected updatePullIndicator(distance: number, threshold: number): void {
+    if (!this.pullToRefreshEl) return;
+    const label = this.pullToRefreshEl.querySelector(".omni-pull-label");
+    const iconEl = this.pullToRefreshEl.querySelector<HTMLElement>("svg");
+
+    this.pullToRefreshEl.style.transition = "none";
+    this.pullToRefreshEl.style.opacity = Math.min(1, distance / 25).toString();
+    this.pullToRefreshEl.style.transform = `translate(-50%, ${distance}px)`;
+
+    if (iconEl) {
+      iconEl.style.transform = `rotate(${distance * 4.5}deg)`;
+    }
+
+    if (label) {
+      if (distance >= threshold) {
+        label.textContent = "release to refresh";
+        this.pullToRefreshEl.classList.add("ready");
+      } else {
+        label.textContent = "pull down to refresh";
+        this.pullToRefreshEl.classList.remove("ready");
+      }
+    }
+  }
+
+  protected resetPullIndicator(): void {
+    if (!this.pullToRefreshEl) return;
+    this.pullToRefreshEl.style.transition = "transform 0.22s ease, opacity 0.22s ease";
+    this.pullToRefreshEl.style.opacity = "0";
+    this.pullToRefreshEl.style.transform = "translate(-50%, -100%)";
+    this.pullToRefreshEl.classList.remove("ready", "is-refreshing");
+  }
+
+  protected triggerPullRefresh(): void {
+    if (!this.pullToRefreshEl) return;
+    const label = this.pullToRefreshEl.querySelector(".omni-pull-label");
+    if (label) label.textContent = "refreshing...";
+    this.pullToRefreshEl.classList.add("is-refreshing");
+    this.pullToRefreshEl.style.transition = "transform 0.15s ease";
+    this.pullToRefreshEl.style.transform = "translate(-50%, 48px)";
+
+    setTimeout(() => {
+      this.reloadPage();
+    }, 280);
+  }
+
+  public reloadPage(): void {
+    if (typeof window !== "undefined" && window.location && typeof window.location.reload === "function") {
+      try {
+        window.location.reload();
+      } catch (_) {
+        // Navigation not implemented in synthetic test runners
+      }
+    }
+  }
+
+  protected destroyPullToRefresh(): void {
+    if (typeof window !== "undefined") {
+      if (this.boundTouchStartHandler) window.removeEventListener("touchstart", this.boundTouchStartHandler);
+      if (this.boundTouchMoveHandler) window.removeEventListener("touchmove", this.boundTouchMoveHandler);
+      if (this.boundTouchEndHandler) {
+        window.removeEventListener("touchend", this.boundTouchEndHandler);
+        window.removeEventListener("touchcancel", this.boundTouchEndHandler);
+      }
+    }
+    this.boundTouchStartHandler = null;
+    this.boundTouchMoveHandler = null;
+    this.boundTouchEndHandler = null;
+    this.pullToRefreshEl?.remove();
+    this.pullToRefreshEl = null;
   }
 
   // --- Abstract Interface: Concrete Shells Must Implement Layout & Styling ---
@@ -341,6 +519,8 @@ export abstract class BaseShell implements OmniShellHost {
     }
   }
 
+  private pendingWidgetMounts = new Set<string>();
+
   public async ensureWidgetsMounted(): Promise<void> {
     for (const p of this.installedPlugins) {
       if (!p.enabled) continue;
@@ -349,8 +529,26 @@ export abstract class BaseShell implements OmniShellHost {
         if (pl.enabled === false) continue;
         if (pl.viewport === "sidebar" || pl.viewport === "widgets") {
           const instanceKey = `${p.id}::${pl.id}`;
-          if (!this.kernel.getSandbox(instanceKey) && !this.kernel.getSandbox(p.id)) {
-            await this.mountPlugin(p, pl.id).catch(console.warn);
+          if (this.pendingWidgetMounts.has(instanceKey)) continue;
+          const existingSandbox = this.kernel.getSandbox(instanceKey);
+          if (existingSandbox) {
+            const safePlId = pl.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+            const targetContainer = this.getContainerForPluginSlot(p.id, pl.viewport, `${p.id}-${safePlId}`);
+            if (targetContainer) {
+              const compEl = existingSandbox.getFirstPopulatedComponentContainer();
+              if (compEl && !targetContainer.contains(compEl)) {
+                this.kernel.reparentLiveComponent(instanceKey, targetContainer);
+              }
+            }
+          } else {
+            this.pendingWidgetMounts.add(instanceKey);
+            try {
+              await this.mountPlugin(p, pl.id);
+            } catch (err) {
+              console.warn(`Failed to mount widget ${instanceKey}:`, err);
+            } finally {
+              this.pendingWidgetMounts.delete(instanceKey);
+            }
           }
         }
       }
@@ -1356,6 +1554,8 @@ export abstract class BaseShell implements OmniShellHost {
 
   public destroy(): void {
     unmountShellStyles();
+    this.destroyPullToRefresh();
+    this.pendingWidgetMounts.clear();
     if (this.syncDebounceTimer) {
       clearTimeout(this.syncDebounceTimer);
     }

@@ -107,6 +107,7 @@ export class PanoramaShell extends BaseShell {
     this.renderSystemPluginList();
     this.renderBottomAppBar();
     this.updateEdgeGliders();
+    this.ensureWidgetsMounted().catch(console.warn);
   }
 
   public override async ensureWidgetsMounted(): Promise<void> {
@@ -250,6 +251,7 @@ export class PanoramaShell extends BaseShell {
       this.activePivot = "apps";
     }
     this.renderAppsTiles();
+    this.renderWidgetsEmptyState();
     this.renderSystemPluginList();
     this.renderColorChoosers();
     this.wireNavigation();
@@ -269,6 +271,8 @@ export class PanoramaShell extends BaseShell {
     this.kernel.intentBroker.setDisambiguateCallback(async (action, candidates, data) => {
       return this.promptDisambiguateIntent(action, candidates, data);
     });
+
+    this.initPullToRefresh();
   }
 
   public destroy(): void {

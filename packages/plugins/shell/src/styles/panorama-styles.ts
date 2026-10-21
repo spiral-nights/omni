@@ -126,9 +126,10 @@ body.theme-panorama,
   background: transparent;
   border: none;
   color: #666666;
-  font-size: 1.25rem;
+  font-size: 1.6rem;
   font-weight: 300;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
   cursor: pointer;
   padding: 2px 0;
   text-transform: lowercase;
@@ -199,13 +200,14 @@ body.theme-panorama,
 
 @media (max-width: 600px) {
   .panorama-hero-header {
-    padding: 6px 12px 4px 12px;
+    padding: 8px 12px 6px 12px;
   }
   .panorama-pivot-nav {
-    gap: 14px;
+    gap: 16px;
   }
   .panorama-pivot-item {
-    font-size: 1.15rem;
+    font-size: 1.5rem;
+    line-height: 1.1;
   }
   .panorama-header-name {
     display: none;
@@ -2265,6 +2267,57 @@ body.theme-panorama,
 @keyframes omni-app-bar-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Pull to Refresh Indicator */
+.omni-pull-to-refresh {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.omni-pull-indicator-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 20px;
+  padding: 6px 14px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.78rem;
+  letter-spacing: -0.01em;
+  user-select: none;
+}
+
+.omni-pull-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--omni-accent-primary, #00a4ef);
+  transition: transform 0.05s ease;
+}
+
+.omni-pull-to-refresh.ready .omni-pull-indicator-content {
+  border-color: var(--omni-accent-primary, #00a4ef);
+  background: #1a1a1a;
+  color: #ffffff;
+}
+
+.omni-pull-to-refresh.is-refreshing .omni-pull-icon svg {
+  animation: omni-app-bar-spin 0.6s linear infinite;
 }
 
 .panorama-toast-container {

@@ -1923,6 +1923,101 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       testShell.destroy();
       testRoot.remove();
     });
+
+    it("mounts pull-to-refresh indicator and triggers page reload on downward touch drag", () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: mockPlugins.map((p) => ({ ...p }))
+      });
+      testShell.mount();
+
+      const pullEl = testRoot.querySelector("#omni-pull-to-refresh");
+      expect(pullEl).toBeTruthy();
+      expect(pullEl?.textContent?.toLowerCase()).toContain("pull down to refresh");
+
+      let reloaded = false;
+      testShell.reloadPage = () => {
+        reloaded = true;
+      };
+
+      // 1. Simulate pull down gesture (past threshold 65px)
+      const touchStart = new TouchEvent("touchstart", {
+        touches: [{ clientX: 100, clientY: 50 } as any]
+      });
+      window.dispatchEvent(touchStart);
+
+      const touchMove = new TouchEvent("touchmove", {
+        cancelable: true,
+        touches: [{ clientX: 100, clientY: 180 } as any]
+      });
+      window.dispatchEvent(touchMove);
+
+      expect(pullEl?.classList.contains("ready")).toBe(true);
+      expect(pullEl?.textContent?.toLowerCase()).toContain("release to refresh");
+
+      // 2. Release to trigger refresh
+      const touchEnd = new TouchEvent("touchend", {
+        touches: []
+      });
+      window.dispatchEvent(touchEnd);
+
+      expect(pullEl?.classList.contains("is-refreshing")).toBe(true);
+      expect(pullEl?.textContent?.toLowerCase()).toContain("refreshing");
+
+      // Advance timer for reload callback
+      return new Promise<void>((resolve) => {
+        setTimeout(() => {
+          expect(reloaded).toBe(true);
+          testShell.destroy();
+          expect(testRoot.querySelector("#omni-pull-to-refresh")).toBeFalsy();
+          testRoot.remove();
+          resolve();
+        }, 320);
+      });
+    });
+
+    it("cancels pull-to-refresh when swipe is predominantly horizontal", () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: mockPlugins.map((p) => ({ ...p }))
+      });
+      testShell.mount();
+
+      const pullEl = testRoot.querySelector("#omni-pull-to-refresh");
+      expect(pullEl).toBeTruthy();
+
+      let reloaded = false;
+      testShell.reloadPage = () => {
+        reloaded = true;
+      };
+
+      // Horizontal swipe (moving mostly along X)
+      window.dispatchEvent(new TouchEvent("touchstart", {
+        touches: [{ clientX: 100, clientY: 50 } as any]
+      }));
+
+      window.dispatchEvent(new TouchEvent("touchmove", {
+        cancelable: true,
+        touches: [{ clientX: 250, clientY: 70 } as any]
+      }));
+
+      // Should not be ready or pulling
+      expect(pullEl?.classList.contains("ready")).toBe(false);
+
+      window.dispatchEvent(new TouchEvent("touchend", { touches: [] }));
+      expect(reloaded).toBe(false);
+
+      testShell.destroy();
+      testRoot.remove();
+    });
   });
 });
 

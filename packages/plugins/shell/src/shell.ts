@@ -412,6 +412,8 @@ export class OmniShell extends BaseShell {
     this.kernel.intentBroker.setDisambiguateCallback(async (action, candidates, data) => {
       return this.promptDisambiguateIntent(action, candidates, data);
     });
+
+    this.initPullToRefresh();
   }
 
   public destroy(): void {

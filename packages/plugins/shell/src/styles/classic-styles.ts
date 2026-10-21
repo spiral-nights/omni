@@ -1828,5 +1828,52 @@ body {
   }
 }
 
+/* Pull to Refresh Indicator */
+.omni-pull-to-refresh {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform, opacity;
+}
 
+.omni-pull-indicator-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--omni-bg-surface, #191816);
+  border: 1px solid var(--omni-border-subtle, #2d2b27);
+  border-radius: 20px;
+  padding: 6px 14px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75);
+  color: var(--omni-text-primary, #ede8df);
+  font-family: inherit;
+  font-size: 0.78rem;
+  letter-spacing: -0.01em;
+  user-select: none;
+}
+
+.omni-pull-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--omni-accent-primary, #d4a373);
+  transition: transform 0.05s ease;
+}
+
+.omni-pull-to-refresh.ready .omni-pull-indicator-content {
+  border-color: var(--omni-accent-primary, #d4a373);
+}
+
+.omni-pull-to-refresh.is-refreshing .omni-pull-icon svg {
+  animation: omni-spin 0.6s linear infinite;
+}
 `;
