@@ -227,6 +227,7 @@ describe("Feed Regex Content Filtering", () => {
     it("filters out JSON events while rendering non-JSON events", async () => {
       new Function(feedCode)();
       await flush();
+      feed().querySelector<HTMLButtonElement>(".btn-tab-global")?.click();
 
       const ws = FakeWebSocket.instances[0];
       // Deliver non-JSON event

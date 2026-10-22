@@ -2,7 +2,7 @@
 
 > **An extensible, local-first Nostr web client and sandboxed micro-frontend runtime for 100% standard Nostr sites (nsites).**
 
-Omni combines a **high-performance, local-first Nostr web client** with a **sandboxed micro-frontend runtime**. Every client domain (feed, relays, profile, tasks, timer, and the shell itself) is a standalone plugin. Third-party applications and companion widgets execute as **100% standard web apps (nsites)** inside isolated sandboxes, projecting directly into the native host DOM via Remote DOM without nested iframes, custom SDKs, or proprietary manifests.
+Omni combines a **high-performance, local-first Nostr web client** with a **sandboxed micro-frontend runtime**. Every client domain (feed, relays, profile, tasks, and the shell itself) is a standalone plugin. Third-party applications and companion widgets execute as **100% standard web apps (nsites)** inside isolated sandboxes, projecting directly into the native host DOM via Remote DOM without nested iframes, custom SDKs, or proprietary manifests.
 
 ---
 
@@ -126,7 +126,7 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser.
    - The navigation dock provides direct launcher links for all installed full-page applications (e.g. Feed).
    - Switching pages swaps the center viewport cleanly and resets scroll position.
 3. **Widgets Dashboard**:
-   - Click the **Widgets** button in the navigation dock to open the multi-column tools dashboard containing active widgets (Focus Timer, Daily Checklist, Relay Inspector).
+   - Click the **Widgets** button in the navigation dock to open the multi-column tools dashboard containing active widgets (Daily Checklist, Relay Inspector).
 4. **Installed Plugins & User Viewports**:
    - Open **Settings (⚙️) -> Plugins**.
    - Change any app's navigation viewport dynamically via the dropdown (Full-Page App, Navigation Dock Shortcut, Workspace Widget, or Header Quick Action).

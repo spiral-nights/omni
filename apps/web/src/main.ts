@@ -8,7 +8,6 @@ import relaysScript from "../../../packages/plugins/relays/dist/index.js?raw";
 import profileScript from "../../../packages/plugins/profile/dist/index.js?raw";
 import profileViewerScript from "../../../packages/plugins/profile-viewer/dist/index.js?raw";
 import checklistScript from "../../../packages/plugins/checklist/dist/index.js?raw";
-import timerScript from "../../../packages/plugins/timer/dist/index.js?raw";
 import omniRuntimeScript from "../../../packages/core/src/sandbox/omni-runtime.js?raw";
 
 const STORAGE_KEY_NSEC = "omni_privkey";
@@ -35,22 +34,6 @@ const initialPlugins: InstalledPluginEntry[] = [
     handledIntents: ["create_note", "compose_note", "view_note", "search", "share"],
     scriptContent: feedScript,
     sourceUrl: "local:@omni/plugin-feed",
-    enabled: true
-  },
-  {
-    id: "org.omni.plugin.timer",
-    name: "Focus Timer",
-    description: "Pomodoro focus countdown and productivity timer widget.",
-    icon: "timer",
-    viewport: "sidebar",
-    views: [
-      { id: "main", title: "Full Focus Screen", path: "" },
-      { id: "compact", title: "Live Tile", path: "?view=compact" },
-      { id: "widget", title: "Timer Card", path: "?view=widget" },
-      { id: "settings", title: "Timer Settings", path: "?view=settings" }
-    ],
-    scriptContent: timerScript,
-    sourceUrl: "local:@omni/plugin-timer",
     enabled: true
   },
   {

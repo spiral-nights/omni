@@ -65,6 +65,7 @@ describe("feed plugin DOM interactions", () => {
 
   it("renders note cards from relay events", async () => {
     await flush();
+    feed().querySelector<HTMLButtonElement>(".btn-tab-global")?.click();
     const ws = FakeWebSocket.instances[0];
     ws.deliver(["EVENT", "feed-initial", {
       id: "note-1", pubkey: "b".repeat(64), kind: 1, created_at: 1700000000,

@@ -39,9 +39,9 @@
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Focus Timer",
-      "short_name": "Timer",
-      "description": "Open Pomodoro productivity timer",
+      "name": "Daily Checklist",
+      "short_name": "Tasks",
+      "description": "Track daily goals and productivity tasks",
       "url": "./?view=widget",
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
     },

@@ -470,7 +470,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     btnWidgets.title = "Companion Cards";
     btnWidgets.innerHTML = `
       <div class="editorial-dock-icon">${icon("layout", 20)}</div>
-      <span class="editorial-dock-label">Cards</span>
+      <span class="editorial-dock-label">Widgets</span>
       <span class="editorial-active-dot"></span>
     `;
     btnWidgets.addEventListener("click", () => this.showWidgetsView());

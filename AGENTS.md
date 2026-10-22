@@ -81,8 +81,7 @@ omni/
 │       ├── feed/                          # @omni/plugin-feed (Timeline feed & composer)
 │       ├── relays/                        # @omni/plugin-relays (Relay status & pool manager)
 │       ├── profile/                       # @omni/plugin-profile (Identity & key custody)
-│       ├── checklist/                     # @omni/plugin-checklist (Daily checklist widget)
-│       └── timer/                         # @omni/plugin-timer (Focus timer / Pomodoro)
+│       └── checklist/                     # @omni/plugin-checklist (Daily checklist widget)
 │
 └── docs/                                  # Consolidated System Documentation
     ├── 01-architecture.md                 # System Architecture & Core Runtime

@@ -656,7 +656,7 @@ function mountFeed(root: any) {
 
   root.appendChild(container);
 
-  let activeTab: "following" | "global" = "global";
+  let activeTab: "following" | "global" = "following";
   try {
     const savedTab = localStorage.getItem("omni_feed_active_tab");
     if (savedTab === "following" || savedTab === "global") {

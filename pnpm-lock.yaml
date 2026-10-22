@@ -29,9 +29,6 @@ importers:
       '@omni/plugin-shell':
         specifier: workspace:*
         version: link:../../packages/plugins/shell
-      '@omni/plugin-timer':
-        specifier: workspace:*
-        version: link:../../packages/plugins/timer
       '@omni/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -146,15 +143,6 @@ importers:
       fake-indexeddb:
         specifier: ^6.0.0
         version: 6.2.5
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-
-  packages/plugins/timer:
-    devDependencies:
-      '@omni/types':
-        specifier: workspace:*
-        version: link:../../types
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

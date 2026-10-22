@@ -1429,8 +1429,7 @@ body {
 }
 
 /* Checklist widget styling inside slot */
-.checklist-widget-card,
-.timer-widget-card {
+.checklist-widget-card {
   background: var(--omni-bg-surface);
   border: 1px solid var(--omni-border-strong);
   border-radius: var(--omni-radius-md);
@@ -1479,41 +1478,6 @@ body {
   color: var(--omni-text-muted) !important;
   font-size: 1.1rem !important;
   padding: 2px 6px !important;
-}
-
-/* Timer widget styling inside slot */
-.timer-display-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 16px 0;
-}
-
-.timer-digits {
-  font-size: 2.4rem;
-  font-weight: 700;
-  font-family: var(--omni-font-mono);
-  color: var(--omni-accent-primary);
-  letter-spacing: 0.05em;
-}
-
-.timer-status {
-  font-size: 0.85rem;
-  color: var(--omni-text-secondary);
-  margin-top: 4px;
-}
-
-.timer-buttons-row {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-}
-
-.btn-timer-reset {
-  background: var(--omni-bg-subtle) !important;
-  color: var(--omni-text-primary) !important;
-  border: 1px solid var(--omni-border-strong) !important;
 }
 
 /* Dock badges */

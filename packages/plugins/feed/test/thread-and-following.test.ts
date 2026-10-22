@@ -86,19 +86,16 @@ describe("feed plugin thread view and following tabs", () => {
     const btnFollowing = feed().querySelector<HTMLButtonElement>(".btn-tab-following")!;
     const btnGlobal = feed().querySelector<HTMLButtonElement>(".btn-tab-global")!;
 
-    expect(btnGlobal.classList.contains("active")).toBe(true);
-
-    btnFollowing.click();
     expect(btnFollowing.classList.contains("active")).toBe(true);
-    expect(btnGlobal.classList.contains("active")).toBe(false);
-    expect(localStorage.getItem("omni_feed_active_tab")).toBe("following");
-
-    // In following tab with no follows yet, shows following empty state
-    expect(feed().querySelector(".empty-state-title")?.textContent).toContain("No notes from followed accounts yet");
 
     btnGlobal.click();
     expect(btnGlobal.classList.contains("active")).toBe(true);
     expect(btnFollowing.classList.contains("active")).toBe(false);
+    expect(localStorage.getItem("omni_feed_active_tab")).toBe("global");
+
+    btnFollowing.click();
+    expect(btnFollowing.classList.contains("active")).toBe(true);
+    expect(btnGlobal.classList.contains("active")).toBe(false);
   });
 
   it("filters notes in Following tab to only followed pubkeys", async () => {
@@ -134,20 +131,21 @@ describe("feed plugin thread view and following tabs", () => {
       tags: []
     }]);
 
-    // In Global tab, both notes are present
-    expect(feed().querySelectorAll(".note-card").length).toBe(2);
-
-    // Switch to Following tab
-    feed().querySelector<HTMLButtonElement>(".btn-tab-following")!.click();
-
-    // Only friend's note should be rendered
+    // In Following tab, only friend's note should be rendered
     const notesInFollowing = feed().querySelectorAll(".note-card");
     expect(notesInFollowing.length).toBe(1);
     expect(notesInFollowing[0].textContent).toContain("Friend update");
+
+    // Switch to Global tab
+    feed().querySelector<HTMLButtonElement>(".btn-tab-global")!.click();
+
+    // In Global tab, both notes are present
+    expect(feed().querySelectorAll(".note-card").length).toBe(2);
   });
 
   it("clicking a note card opens thread view with back navigation", async () => {
     await flush();
+    feed().querySelector<HTMLButtonElement>(".btn-tab-global")!.click();
     const ws = FakeWebSocket.instances[0];
 
     ws.deliver(["EVENT", "feed-initial", {
@@ -180,6 +178,7 @@ describe("feed plugin thread view and following tabs", () => {
 
   it("clicking reply button on a card opens thread view and focuses reply input", async () => {
     await flush();
+    feed().querySelector<HTMLButtonElement>(".btn-tab-global")!.click();
     const ws = FakeWebSocket.instances[0];
 
     ws.deliver(["EVENT", "feed-initial", {
@@ -202,6 +201,7 @@ describe("feed plugin thread view and following tabs", () => {
 
   it("submitting in-thread reply tags NIP-10 e/p tags, signs, and updates UI", async () => {
     await flush();
+    feed().querySelector<HTMLButtonElement>(".btn-tab-global")!.click();
     const ws = FakeWebSocket.instances[0];
 
     ws.deliver(["EVENT", "feed-initial", {
@@ -249,6 +249,7 @@ describe("feed plugin thread view and following tabs", () => {
 
   it("renders existing replies and incoming thread events", async () => {
     await flush();
+    feed().querySelector<HTMLButtonElement>(".btn-tab-global")!.click();
     const ws = FakeWebSocket.instances[0];
 
     ws.deliver(["EVENT", "feed-initial", {

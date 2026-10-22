@@ -43,30 +43,29 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       sourceUrl: "local:@omni/plugin-feed"
     },
     {
-      id: "org.omni.plugin.timer",
-      name: "Focus Timer",
-      displayName: "Focus Timer",
-      description: "Pomodoro focus countdown and productivity timer.",
-      icon: "timer",
+      id: "org.omni.plugin.relays",
+      name: "Relays",
+      displayName: "Relays",
+      description: "Manage connected relays and monitor live pool status.",
+      icon: "relays",
       viewport: "sidebar",
       pinned: true,
       enabled: true,
       manifest: {
-        id: "org.omni.plugin.timer",
-        name: "Focus Timer",
+        id: "org.omni.plugin.relays",
+        name: "Relays",
         version: "1.0.0",
         entry: "dist/index.js",
         components: [
-          { id: "timer-main", type: "main", title: "Focus Timer", slot: "main" },
-          { id: "timer-widget", type: "widget", title: "Timer Card", slot: "sidebar" }
+          { id: "relays-main", type: "main", title: "Relays", slot: "main" },
+          { id: "relays-widget", type: "widget", title: "Relays Card", slot: "sidebar" }
         ],
         views: [
-          { id: "main", title: "Full Focus Screen", path: "" },
-          { id: "widget", title: "Timer Card", path: "?view=widget" }
+          { id: "main", title: "Relays", path: "" }
         ]
       },
-      scriptContent: "console.log('timer');",
-      sourceUrl: "local:@omni/plugin-timer"
+      scriptContent: "console.log('relays');",
+      sourceUrl: "local:@omni/plugin-relays"
     },
     {
       id: "org.omni.plugin.checklist",
@@ -171,7 +170,7 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(mainContainer).toBeTruthy();
       expect(mainContainer.id).toBe("editorial-main-app-container");
 
-      const widgetsContainer = shell.getContainerForPluginSlot("org.omni.plugin.timer", "sidebar");
+      const widgetsContainer = shell.getContainerForPluginSlot("org.omni.plugin.relays", "sidebar");
       expect(widgetsContainer).toBeTruthy();
       expect(widgetsContainer.id).toBe("editorial-widgets-slot");
 
@@ -257,12 +256,12 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       shell.mount();
 
       const dockItems = root.querySelectorAll(".editorial-dock-item");
-      expect(dockItems.length).toBeGreaterThanOrEqual(4); // Feed, Timer, Index, Cards, Prefs
+      expect(dockItems.length).toBeGreaterThanOrEqual(4); // Feed, Relays, Index, Cards, Prefs
 
       const dockTexts = Array.from(dockItems).map((el) => el.textContent || "");
       expect(dockTexts.some((t) => t.includes("FEED") || t.includes("Feed"))).toBe(true);
       expect(dockTexts.some((t) => t.includes("INDEX") || t.includes("Index"))).toBe(true);
-      expect(dockTexts.some((t) => t.includes("CARDS") || t.includes("Cards"))).toBe(true);
+      expect(dockTexts.some((t) => t.includes("CARDS") || t.includes("Cards") || t.includes("WIDGETS") || t.includes("Widgets"))).toBe(true);
 
       // Unpinned checklist should not be in dock
       const hasChecklist = Array.from(root.querySelectorAll("#editorial-dock-items .editorial-dock-item")).some(
@@ -339,17 +338,17 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
     it("opens non-feed plugins into dedicated isolated containers and shows them", async () => {
       shell.mount();
 
-      // Open timer
-      await shell.openApp("org.omni.plugin.timer");
+      // Open relays
+      await shell.openApp("org.omni.plugin.relays");
 
       expect(shell.activePage).toBe("app");
-      expect(shell.activePluginId).toBe("org.omni.plugin.timer");
-      expect(root.querySelector("#editorial-view-subtitle")?.textContent).toBe("Focus Timer");
+      expect(shell.activePluginId).toBe("org.omni.plugin.relays");
+      expect(root.querySelector("#editorial-view-subtitle")?.textContent).toBe("Relays");
 
-      const timerPage = root.querySelector("#editorial-app-page-org-omni-plugin-timer") as HTMLElement | null;
-      expect(timerPage).toBeTruthy();
-      expect(timerPage?.classList.contains("active")).toBe(true);
-      expect(timerPage?.style.display).toBe("flex");
+      const relaysPage = root.querySelector("#editorial-app-page-org-omni-plugin-relays") as HTMLElement | null;
+      expect(relaysPage).toBeTruthy();
+      expect(relaysPage?.classList.contains("active")).toBe(true);
+      expect(relaysPage?.style.display).toBe("flex");
 
       // Feed page should be hidden
       const feedPage = root.querySelector("#editorial-page-app") as HTMLElement | null;
@@ -361,8 +360,8 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(shell.activePluginId).toBe("org.omni.plugin.feed");
       expect(feedPage?.classList.contains("active")).toBe(true);
       expect(feedPage?.style.display).toBe("flex");
-      expect(timerPage?.classList.contains("active")).toBe(false);
-      expect(timerPage?.style.display).toBe("none");
+      expect(relaysPage?.classList.contains("active")).toBe(false);
+      expect(relaysPage?.style.display).toBe("none");
     });
 
     it("contains authentic tactile paper grain texture and warm broadsheet newspaper dark ground", () => {
@@ -374,7 +373,7 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(EDITORIAL_SHELL_CSS).toContain(".feed-container");
       expect(EDITORIAL_SHELL_CSS).toContain(".feed-composer");
       expect(EDITORIAL_SHELL_CSS).toContain(".note-card");
-      expect(EDITORIAL_SHELL_CSS).toContain(".timer-widget-card");
+      expect(EDITORIAL_SHELL_CSS).toContain(".relays-container");
       expect(EDITORIAL_SHELL_CSS).toContain(".checklist-widget-card");
     });
   });

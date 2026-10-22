@@ -14,7 +14,7 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
    - The timeline feed & composer (`@omni/plugin-feed`) is a plugin.
    - The relay inspector & connection manager (`@omni/plugin-relays`) is a plugin.
    - The profile editor & key custody manager (`@omni/plugin-profile`) is a plugin.
-   - The task list (`@omni/plugin-checklist`) and focus timer (`@omni/plugin-timer`) are plugins.
+   - The task list (`@omni/plugin-checklist`) is a plugin.
    - The shell UI frame itself (`@omni/plugin-shell`) is a first-class plugin.
 2. **Every Plugin is a 100% Standard Nostr Site (nsite)**:
    - There are **no proprietary manifests** (`omni.manifest.json` is completely eliminated).
@@ -73,8 +73,7 @@ omni/
 │       ├── feed/                          # @omni/plugin-feed (Timeline notes & note composer)
 │       ├── relays/                        # @omni/plugin-relays (Relay inspector & manager)
 │       ├── profile/                       # @omni/plugin-profile (Identity & key custody)
-│       ├── checklist/                     # @omni/plugin-checklist (Daily checklist widget)
-│       └── timer/                         # @omni/plugin-timer (Focus timer / Pomodoro)
+│       └── checklist/                     # @omni/plugin-checklist (Daily checklist widget)
 ```
 
 ---
@@ -246,7 +245,7 @@ shell.mount();
 await kernel.boot();
 ```
 
-All existing plugins (`@omni/plugin-feed`, `@omni/plugin-timer`, `@omni/plugin-relays`, etc.) immediately render inside `MyCustomMobileShell` with zero code modifications.
+All existing plugins (`@omni/plugin-feed`, `@omni/plugin-relays`, `@omni/plugin-checklist`, etc.) immediately render inside `MyCustomMobileShell` with zero code modifications.
 
 ---
 
