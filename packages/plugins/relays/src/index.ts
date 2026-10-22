@@ -217,7 +217,6 @@ function mountRelaysCompact(root: any) {
         <span class="relays-compact-status" style="font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.85;">Connected</span>
       </div>
       <div class="relays-compact-count" style="font-size: 1.6rem; font-weight: 700; line-height: 1;">Pool Active</div>
-      <div style="font-size: 0.72rem; opacity: 0.8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">WebSocket Mesh</div>
     </div>
   `;
 
