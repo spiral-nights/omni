@@ -458,7 +458,7 @@ async function mountProfileViewer(root: HTMLElement) {
             <button class="people-tab-btn btn-tab-blocked" data-tab="blocked">Blocked (<span class="count-blocked">0</span>)</button>
           </div>
         </div>
-        <button class="btn-toggle-lookup" title="Search by npub or hex pubkey">
+        <button class="btn-toggle-lookup btn-secondary" title="Search by npub or hex pubkey">
           ${ICONS.search}
           <span>Lookup npub</span>
         </button>
@@ -468,21 +468,21 @@ async function mountProfileViewer(root: HTMLElement) {
       <div class="pv-tab-content pv-tab-profile">
         <!-- Back button when opened from Following / Blocked list -->
         <div class="pv-profile-top-bar" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px;">
-          <button class="btn-profile-back" style="display: none;">
+          <button class="btn-profile-back btn-secondary" style="display: none;">
             ${ICONS.arrowLeft}
             <span class="btn-profile-back-text">Back to Following</span>
           </button>
         </div>
 
         <!-- Top Search & Switch Bar (Hidden by default, toggled on demand) -->
-        <div class="pv-search-bar" style="display: none; align-items: center; gap: 8px; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 8px); padding: 6px 10px; margin-bottom: 16px;">
+        <div class="pv-search-bar" style="display: none; align-items: center; gap: 8px; padding: 6px 10px; margin-bottom: 16px;">
           <span style="color: var(--text-muted, #78716c); display: flex; align-items: center;">${ICONS.search}</span>
-          <input class="pv-search-input" type="text" placeholder="Lookup pubkey (hex) or npub1..." style="flex: 1; background: transparent; border: none; outline: none; color: var(--text-primary, #ede8df); font-family: var(--font-mono, monospace); font-size: 0.8rem;" />
-          <button class="pv-search-btn btn-secondary" style="background: var(--bg-subtle, #22201d); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-sm, 6px); color: var(--text-primary, #ede8df); padding: 4px 10px; font-size: 0.75rem; cursor: pointer;">Lookup</button>
+          <input class="pv-search-input" type="text" placeholder="Lookup pubkey (hex) or npub1..." style="flex: 1; background: transparent; border: none; outline: none; color: inherit; font-family: var(--font-mono, monospace); font-size: 0.8rem;" />
+          <button class="pv-search-btn btn-secondary">Lookup</button>
         </div>
 
         <!-- Hero Banner & Card -->
-        <div class="pv-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 10px); overflow: hidden; display: flex; flex-direction: column;">
+        <div class="pv-card" style="border-radius: var(--radius-md, 10px); overflow: hidden; display: flex; flex-direction: column;">
           
           <!-- Banner Image / Header -->
           <div class="pv-banner" style="height: 140px; background: linear-gradient(135deg, #1f1d1a, #2a2723); background-size: cover; background-position: center; position: relative;"></div>
@@ -492,14 +492,14 @@ async function mountProfileViewer(root: HTMLElement) {
             
             <!-- Avatar Overlapping Banner -->
             <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: -54px; margin-bottom: 4px;">
-              <div class="pv-avatar-wrap" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--bg-surface, #191816); overflow: hidden; background: #22201d; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0;">
+              <div class="pv-avatar-wrap" style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0;">
                 <div class="pv-avatar-fallback" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff;">?</div>
               </div>
               
               <div class="pv-action-buttons" style="display: flex; align-items: center; gap: 8px;">
                 <button class="pv-btn-follow btn-follow-toggle" title="Follow or Unfollow user" style="display: none;">Follow</button>
                 <button class="pv-btn-block btn-block-toggle" title="Block or Unblock user" style="display: none;">Block</button>
-                <button class="pv-btn-refresh btn-secondary" title="Refresh Profile & Notes" style="display: inline-flex; align-items: center; gap: 6px; background: var(--bg-subtle, #22201d); border: 1px solid var(--border-subtle, #272522); color: var(--text-primary, #ede8df); padding: 6px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.75rem; cursor: pointer;">
+                <button class="pv-btn-refresh btn-secondary" title="Refresh Profile & Notes">
                   ${ICONS.refresh}
                   <span>Refresh</span>
                 </button>
@@ -509,7 +509,7 @@ async function mountProfileViewer(root: HTMLElement) {
             <!-- Name & Handles -->
             <div style="display: flex; flex-direction: column; gap: 3px;">
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <h2 class="pv-display-name" style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-primary, #ede8df);">Loading Profile...</h2>
+                <h2 class="pv-display-name" style="margin: 0; font-size: 1.25rem; font-weight: 700;">Loading Profile...</h2>
                 <span class="pv-nip05-badge" style="display: none; align-items: center; gap: 4px; font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(212, 163, 115, 0.15); color: var(--accent-primary, #d4a373); border: 1px solid rgba(212, 163, 115, 0.3);">
                   ${ICONS.checkCircle}
                   <span class="pv-nip05-text"></span>
@@ -520,10 +520,10 @@ async function mountProfileViewer(root: HTMLElement) {
 
             <!-- Npub Copy Pill -->
             <div class="pv-npub-row" style="display: flex; align-items: center; gap: 8px;">
-              <div class="pv-npub-pill" style="display: flex; align-items: center; gap: 6px; background: var(--bg-subtle, #22201d); border: 1px solid var(--border-subtle, #272522); border-radius: 6px; padding: 4px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; color: var(--text-muted, #78716c); max-width: 100%; overflow: hidden;">
+              <div class="pv-npub-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; color: var(--text-muted, #78716c); max-width: 100%; overflow: hidden;">
                 <span class="pv-npub-text" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">npub...</span>
               </div>
-              <button class="pv-btn-copy-npub btn-secondary" title="Copy npub to clipboard" style="display: inline-flex; align-items: center; gap: 4px; background: var(--bg-subtle, #22201d); border: 1px solid var(--border-subtle, #272522); color: var(--text-secondary, #9e988f); padding: 4px 8px; border-radius: 6px; font-size: 0.72rem; cursor: pointer;">
+              <button class="pv-btn-copy-npub btn-secondary" title="Copy npub to clipboard">
                 ${ICONS.copy}
                 <span class="pv-copy-label">Copy</span>
               </button>

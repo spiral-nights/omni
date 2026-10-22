@@ -350,10 +350,10 @@ async function mountProfileFull(root: any) {
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
-          <button id="btn-sync-profile" class="btn-secondary" style="font-size: 0.82rem; padding: 6px 14px; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); border-radius: var(--radius-sm, 6px); cursor: pointer; display: flex; align-items: center; gap: 6px;">
-            ${ICONS.refresh} Sync from Relays
+          <button id="btn-sync-profile" class="btn-secondary">
+            ${ICONS.refresh} <span>Sync from Relays</span>
           </button>
-          <button id="btn-save-profile" class="btn-publish" style="font-size: 0.82rem; padding: 6px 16px; background: var(--accent-primary, #d4a373); color: var(--accent-contrast, #141312); border: none; border-radius: var(--radius-sm, 6px); font-weight: 600; cursor: pointer;">Save & Publish Profile (kind 0)</button>
+          <button id="btn-save-profile" class="btn-publish">Save & Publish Profile (kind 0)</button>
         </div>
       </div>
 
@@ -362,8 +362,8 @@ async function mountProfileFull(root: any) {
         <div style="display: flex; flex-direction: column; gap: 4px;">
           <span style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e);">Public Key (npub):</span>
           <div style="display: flex; gap: 6px;">
-            <input id="key-npub" type="text" readonly style="flex: 1; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 6px 10px; border-radius: var(--radius-sm, 6px); font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" placeholder="Loading npub..." value="" />
-            <button id="btn-copy-npub" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 10px; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); border-radius: var(--radius-sm, 6px); cursor: pointer; display: flex; align-items: center; gap: 4px;">
+            <input id="key-npub" type="text" readonly style="flex: 1; padding: 6px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" placeholder="Loading npub..." value="" />
+            <button id="btn-copy-npub" class="btn-secondary">
               ${ICONS.copy} <span>Copy</span>
             </button>
           </div>
@@ -372,8 +372,8 @@ async function mountProfileFull(root: any) {
         <div style="display: flex; flex-direction: column; gap: 4px;">
           <span style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e);">Public Key (Hex):</span>
           <div style="display: flex; gap: 6px;">
-            <input id="key-hex" type="text" readonly style="flex: 1; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 6px 10px; border-radius: var(--radius-sm, 6px); font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" placeholder="Loading hex pubkey..." value="" />
-            <button id="btn-copy-hex" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 10px; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); border-radius: var(--radius-sm, 6px); cursor: pointer; display: flex; align-items: center; gap: 4px;">
+            <input id="key-hex" type="text" readonly style="flex: 1; padding: 6px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" placeholder="Loading hex pubkey..." value="" />
+            <button id="btn-copy-hex" class="btn-secondary">
               ${ICONS.copy} <span>Copy</span>
             </button>
           </div>
@@ -383,7 +383,7 @@ async function mountProfileFull(root: any) {
         <div style="border-top: 1px solid var(--border-subtle, #272522); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary, #a8a29e);">Private Key (nsec):</span>
-            <button id="btn-reveal-nsec" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 10px; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); border-radius: var(--radius-sm, 6px); cursor: pointer;">Reveal Private Key</button>
+            <button id="btn-reveal-nsec" class="btn-secondary">Reveal Private Key</button>
           </div>
 
           <!-- Inline Warning Confirmation Box -->
@@ -393,14 +393,14 @@ async function mountProfileFull(root: any) {
               <span>Never share your private key (nsec). Anyone with this key has full control over your Nostr identity.</span>
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 8px;">
-              <button id="btn-cancel-reveal" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 10px; background: transparent; border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); border-radius: var(--radius-sm, 6px); cursor: pointer;">Cancel</button>
-              <button id="btn-confirm-reveal" style="font-size: 0.72rem; padding: 4px 10px; background: #ef4444; color: #fff; border: none; border-radius: var(--radius-sm, 6px); font-weight: 600; cursor: pointer;">I Understand, Reveal</button>
+              <button id="btn-cancel-reveal" class="btn-secondary">Cancel</button>
+              <button id="btn-confirm-reveal" class="btn-danger">I Understand, Reveal</button>
             </div>
           </div>
 
           <div id="box-nsec" style="display: none; gap: 6px;">
-            <input id="key-nsec" type="text" readonly style="flex: 1; background: var(--bg-subtle, #2a2824); border: 1px solid rgba(239,68,68,0.4); color: #f87171; padding: 6px 10px; border-radius: var(--radius-sm, 6px); font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" />
-            <button id="btn-copy-nsec" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 10px; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); border-radius: var(--radius-sm, 6px); cursor: pointer; display: flex; align-items: center; gap: 4px;">
+            <input id="key-nsec" type="text" readonly style="flex: 1; border: 1px solid rgba(239,68,68,0.4); color: #f87171; padding: 6px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" />
+            <button id="btn-copy-nsec" class="btn-secondary">
               ${ICONS.copy} <span>Copy</span>
             </button>
           </div>
@@ -409,8 +409,8 @@ async function mountProfileFull(root: any) {
         <!-- Switch identity / Import key -->
         <div style="border-top: 1px solid var(--border-subtle, #272522); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
           <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary, #a8a29e);">Switch Identity / Import Key:</span>
-          <input id="key-import" type="password" placeholder="Paste nsec1... or 64-char hex private key" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
-          <button id="btn-import-key" class="btn-publish" style="align-self: flex-end; font-size: 0.78rem; padding: 6px 14px; background: var(--accent-primary, #d4a373); color: var(--accent-contrast, #141312); border: none; border-radius: var(--radius-sm, 6px); font-weight: 600; cursor: pointer;">Import & Switch</button>
+          <input id="key-import" type="password" placeholder="Paste nsec1... or 64-char hex private key" style="padding: 7px 10px; font-size: 0.82rem; outline: none;" />
+          <button id="btn-import-key" class="btn-publish" style="align-self: flex-end;">Import & Switch</button>
         </div>
       </div>
     </div>
