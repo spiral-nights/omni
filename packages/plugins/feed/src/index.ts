@@ -1027,12 +1027,43 @@ function mountFeed(root: any) {
   // Refresh Feed
   let lastRefreshStartCount = 0;
   function refreshFeed() {
-    if (!activeWs || activeWs.readyState !== WebSocket.OPEN) return;
+    if (!activeWs || activeWs.readyState !== WebSocket.OPEN) {
+      if (typeof WebSocket !== "undefined") {
+        initFeedSocket();
+      }
+      return;
+    }
     btnRefresh.classList.add("spinning");
     lastRefreshStartCount = renderedIds.size;
     const refreshSubId = `refresh-${Date.now()}`;
-    const sinceTime = latestTimestamp > 0 ? latestTimestamp : Math.floor(Date.now() / 1000) - 120;
-    activeWs.send(JSON.stringify(["REQ", refreshSubId, { kinds: [1], since: sinceTime, limit: 30 }]));
+
+    if (myUserPubkey) {
+      fetchFollowingList(myUserPubkey);
+    }
+
+    // Immediately display any notes in allKnownNotes not yet rendered in the active tab
+    const unrendered = Array.from(allKnownNotes.values())
+      .filter((ev) => !renderedIds.has(ev.id) && !isContentFiltered(ev.content || "", filterPatterns) && shouldDisplayInActiveTab(ev))
+      .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    for (const ev of unrendered) {
+      renderNote(ev, true);
+    }
+
+    // Request the latest batch of notes from relay without restricting to since: latestTimestamp
+    if (activeTab === "following" && followingPubkeys.size > 0) {
+      activeWs.send(JSON.stringify([
+        "REQ",
+        refreshSubId,
+        { kinds: [1], authors: Array.from(followingPubkeys).slice(0, 100), limit: 40 }
+      ]));
+    } else {
+      activeWs.send(JSON.stringify([
+        "REQ",
+        refreshSubId,
+        { kinds: [1], limit: 40 }
+      ]));
+    }
+
     setTimeout(() => {
       btnRefresh.classList.remove("spinning");
     }, 1500);
@@ -1928,90 +1959,102 @@ function mountFeed(root: any) {
   });
 
   // Subscribe to Timeline Notes via standard WebSocket
-  try {
-    if (typeof WebSocket !== "undefined") {
-      const ws = new WebSocket("wss://relay.damus.io");
-      activeWs = ws;
+  function initFeedSocket() {
+    try {
+      if (typeof WebSocket !== "undefined") {
+        const ws = new WebSocket("wss://relay.damus.io");
+        activeWs = ws;
 
-      ws.onopen = () => {
-        if (myUserPubkey) {
-          fetchFollowingList(myUserPubkey);
-        }
-        if (activeTab === "following" && followingPubkeys.size > 0) {
-          subscribeFollowingNotes();
-        } else {
-          ws.send(JSON.stringify(["REQ", "feed-initial", { kinds: [1], limit: 40 }]));
-        }
-      };
+        ws.onopen = () => {
+          if (myUserPubkey) {
+            fetchFollowingList(myUserPubkey);
+          }
+          if (activeTab === "following" && followingPubkeys.size > 0) {
+            subscribeFollowingNotes();
+          } else {
+            ws.send(JSON.stringify(["REQ", "feed-initial", { kinds: [1], limit: 40 }]));
+          }
+        };
 
-      ws.onmessage = (msg) => {
-        try {
-          const data = JSON.parse(msg.data);
-          const type = data[0];
-          const subId = data[1];
+        ws.onmessage = (msg) => {
+          try {
+            const data = JSON.parse(msg.data);
+            const type = data[0];
+            const subId = data[1];
 
-          if (type === "EVENT" && data[2]) {
-            const ev = data[2];
-            if (ev.kind === 0) {
-              try {
-                const parsed = JSON.parse(ev.content);
-                profileCache.set(ev.pubkey, parsed);
-                const cards = container.querySelectorAll(`[data-author-pubkey="${ev.pubkey}"]`);
-                for (const c of Array.from(cards)) {
-                  const nEl = c.querySelector<HTMLElement>(".feed-author-name");
-                  const hEl = c.querySelector<HTMLElement>(".feed-author-handle");
-                  const aEl = c.querySelector<HTMLElement>(".feed-avatar");
-                  if (nEl && (parsed.display_name || parsed.name)) {
-                    nEl.textContent = parsed.display_name || parsed.name;
-                  }
-                  if (hEl && parsed.nip05) {
-                    hEl.textContent = `@${parsed.nip05}`;
-                  }
-                  if (aEl && parsed.picture) {
-                    let pic = String(parsed.picture).trim();
-                    if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
-                    if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
-                      aEl.innerHTML = `<img src="${escapeHtml(pic)}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+            if (type === "EVENT" && data[2]) {
+              const ev = data[2];
+              if (ev.kind === 0) {
+                try {
+                  const parsed = JSON.parse(ev.content);
+                  profileCache.set(ev.pubkey, parsed);
+                  const cards = container.querySelectorAll(`[data-author-pubkey="${ev.pubkey}"]`);
+                  for (const c of Array.from(cards)) {
+                    const nEl = c.querySelector<HTMLElement>(".feed-author-name");
+                    const hEl = c.querySelector<HTMLElement>(".feed-author-handle");
+                    const aEl = c.querySelector<HTMLElement>(".feed-avatar");
+                    if (nEl && (parsed.display_name || parsed.name)) {
+                      nEl.textContent = parsed.display_name || parsed.name;
+                    }
+                    if (hEl && parsed.nip05) {
+                      hEl.textContent = `@${parsed.nip05}`;
+                    }
+                    if (aEl && parsed.picture) {
+                      let pic = String(parsed.picture).trim();
+                      if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
+                      if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
+                        aEl.innerHTML = `<img src="${escapeHtml(pic)}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                      }
                     }
                   }
-                }
-              } catch (_) {}
-              return;
-            }
-
-            if (ev.kind === 3 && ev.pubkey === myUserPubkey) {
-              for (const tag of ev.tags || []) {
-                if (tag[0] === "p" && tag[1]) {
-                  followingPubkeys.add(tag[1]);
-                }
+                } catch (_) {}
+                return;
               }
-              if (activeTab === "following") {
-                renderActiveFeedTab();
-                subscribeFollowingNotes();
-              }
-              return;
-            }
 
-            clearTimeout(initialLoadTimeout);
-            allKnownNotes.set(ev.id, ev);
-
-            // Handle thread-specific arrivals
-            if (subId?.startsWith("thread_focus_")) {
-              renderThreadView(ev);
-              return;
-            }
-            if (subId?.startsWith("thread_anc_")) {
-              if (currentThreadNote && (currentThreadNote.tags || []).some((t: any[]) => t[0] === "e" && t[1] === ev.id)) {
-                const existing = threadAncestors.querySelector(`[data-note-id="${ev.id}"]`);
-                if (!existing) {
-                  const ancCard = buildNoteCard(ev);
-                  ancCard.classList.add("thread-ancestor-card");
-                  threadAncestors.appendChild(ancCard);
+              if (ev.kind === 3 && ev.pubkey === myUserPubkey) {
+                for (const tag of ev.tags || []) {
+                  if (tag[0] === "p" && tag[1]) {
+                    followingPubkeys.add(tag[1]);
+                  }
                 }
+                if (activeTab === "following") {
+                  renderActiveFeedTab();
+                  subscribeFollowingNotes();
+                }
+                return;
               }
-              return;
-            }
-            if (subId?.startsWith("thread_rep_")) {
+
+              clearTimeout(initialLoadTimeout);
+              allKnownNotes.set(ev.id, ev);
+
+              // Handle thread-specific arrivals
+              if (subId?.startsWith("thread_focus_")) {
+                renderThreadView(ev);
+                return;
+              }
+              if (subId?.startsWith("thread_anc_")) {
+                if (currentThreadNote && (currentThreadNote.tags || []).some((t: any[]) => t[0] === "e" && t[1] === ev.id)) {
+                  const existing = threadAncestors.querySelector(`[data-note-id="${ev.id}"]`);
+                  if (!existing) {
+                    const ancCard = buildNoteCard(ev);
+                    ancCard.classList.add("thread-ancestor-card");
+                    threadAncestors.appendChild(ancCard);
+                  }
+                }
+                return;
+              }
+              if (subId?.startsWith("thread_rep_")) {
+                if (currentThreadNote && (ev.tags || []).some((t: any[]) => t[0] === "e" && t[1] === currentThreadNote.id)) {
+                  const existing = threadRepliesList.querySelector(`[data-note-id="${ev.id}"]`);
+                  if (!existing) {
+                    const repCard = buildNoteCard(ev);
+                    threadRepliesList.appendChild(repCard);
+                  }
+                }
+                return;
+              }
+
+              // If active thread view is open and incoming note is a reply to current note, append to thread
               if (currentThreadNote && (ev.tags || []).some((t: any[]) => t[0] === "e" && t[1] === currentThreadNote.id)) {
                 const existing = threadRepliesList.querySelector(`[data-note-id="${ev.id}"]`);
                 if (!existing) {
@@ -2019,23 +2062,37 @@ function mountFeed(root: any) {
                   threadRepliesList.appendChild(repCard);
                 }
               }
-              return;
-            }
 
-            // If active thread view is open and incoming note is a reply to current note, append to thread
-            if (currentThreadNote && (ev.tags || []).some((t: any[]) => t[0] === "e" && t[1] === currentThreadNote.id)) {
-              const existing = threadRepliesList.querySelector(`[data-note-id="${ev.id}"]`);
-              if (!existing) {
-                const repCard = buildNoteCard(ev);
-                threadRepliesList.appendChild(repCard);
+              const isRefresh = subId?.startsWith("refresh-");
+              handleIncomingEvent(ev, isRefresh);
+            } else if (type === "EOSE") {
+              if (subId === "feed-initial") {
+                clearTimeout(initialLoadTimeout);
+                if (renderedIds.size === 0) {
+                  if (activeTab === "following") {
+                    showFollowingEmptyState();
+                  } else {
+                    showEmptyState();
+                  }
+                }
+                // Close initial subscription to prevent continuous noisy background firehose
+                ws.send(JSON.stringify(["CLOSE", "feed-initial"]));
+              } else if (subId?.startsWith("older-")) {
+                isLoadingOlder = false;
+                ws.send(JSON.stringify(["CLOSE", subId]));
+              } else if (subId?.startsWith("refresh-")) {
+                btnRefresh.classList.remove("spinning");
+                ws.send(JSON.stringify(["CLOSE", subId]));
+                if (renderedIds.size === lastRefreshStartCount) {
+                  const label = btnRefresh.querySelector<HTMLElement>("span");
+                  if (label) {
+                    const original = label.textContent;
+                    label.textContent = "None new";
+                    setTimeout(() => { label.textContent = original; }, 1500);
+                  }
+                }
               }
-            }
-
-            const isRefresh = subId?.startsWith("refresh-");
-            handleIncomingEvent(ev, isRefresh);
-          } else if (type === "EOSE") {
-            if (subId === "feed-initial") {
-              clearTimeout(initialLoadTimeout);
+            } else if (type === "NOTICE") {
               if (renderedIds.size === 0) {
                 if (activeTab === "following") {
                   showFollowingEmptyState();
@@ -2043,45 +2100,26 @@ function mountFeed(root: any) {
                   showEmptyState();
                 }
               }
-              // Close initial subscription to prevent continuous noisy background firehose
-              ws.send(JSON.stringify(["CLOSE", "feed-initial"]));
-            } else if (subId?.startsWith("older-")) {
-              isLoadingOlder = false;
-              ws.send(JSON.stringify(["CLOSE", subId]));
-            } else if (subId?.startsWith("refresh-")) {
-              btnRefresh.classList.remove("spinning");
-              ws.send(JSON.stringify(["CLOSE", subId]));
-              if (renderedIds.size === lastRefreshStartCount) {
-                const label = btnRefresh.querySelector<HTMLElement>("span");
-                if (label) {
-                  const original = label.textContent;
-                  label.textContent = "None new";
-                  setTimeout(() => { label.textContent = original; }, 1500);
-                }
-              }
             }
-          } else if (type === "NOTICE") {
-            if (renderedIds.size === 0) {
-              if (activeTab === "following") {
-                showFollowingEmptyState();
-              } else {
-                showEmptyState();
-              }
+          } catch {}
+        };
+
+        ws.onerror = () => {
+          if (renderedIds.size === 0) {
+            if (activeTab === "following") {
+              showFollowingEmptyState();
+            } else {
+              showEmptyState();
             }
           }
-        } catch {}
-      };
+        };
+      }
+    } catch (_) {}
+  }
 
-      ws.onerror = () => {
-        if (renderedIds.size === 0) {
-          if (activeTab === "following") {
-            showFollowingEmptyState();
-          } else {
-            showEmptyState();
-          }
-        }
-      };
-
+  try {
+    if (typeof WebSocket !== "undefined") {
+      initFeedSocket();
     } else if (typeof omni !== "undefined" && (omni as any).nostr?.subscribe) {
       (omni as any).nostr.subscribe(
         [{ kinds: [1], limit: 40 }],

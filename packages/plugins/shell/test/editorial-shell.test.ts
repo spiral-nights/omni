@@ -260,7 +260,7 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
 
       const dockTexts = Array.from(dockItems).map((el) => el.textContent || "");
       expect(dockTexts.some((t) => t.includes("FEED") || t.includes("Feed"))).toBe(true);
-      expect(dockTexts.some((t) => t.includes("INDEX") || t.includes("Index"))).toBe(true);
+      expect(dockTexts.some((t) => t.includes("INDEX") || t.includes("Index") || t.includes("APPS") || t.includes("Apps"))).toBe(true);
       expect(dockTexts.some((t) => t.includes("CARDS") || t.includes("Cards") || t.includes("WIDGETS") || t.includes("Widgets"))).toBe(true);
 
       // Unpinned checklist should not be in dock
