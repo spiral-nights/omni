@@ -1,5 +1,5 @@
 import { OmniKernel } from "@omni/core";
-import { OmniShell, PanoramaShell, InstalledPluginEntry, shellRegistry } from "@omni/plugin-shell";
+import { OmniShell, PanoramaShell, EditorialShell, InstalledPluginEntry, shellRegistry } from "@omni/plugin-shell";
 import { OmniShellHost } from "@omni/types";
 
 // Import compiled plugin scripts (using Vite ?raw import)
@@ -119,7 +119,7 @@ const initialPlugins: InstalledPluginEntry[] = [
   }
 ];
 
-let shell: OmniShell | PanoramaShell;
+let shell: OmniShell | PanoramaShell | EditorialShell;
 
 // 1. Initialize Host Orchestration Kernel
 const kernel = new OmniKernel({
@@ -163,7 +163,7 @@ async function startApp() {
     root: rootEl,
     kernel,
     installedPlugins: initialPlugins
-  }) as OmniShell | PanoramaShell;
+  }) as OmniShell | PanoramaShell | EditorialShell;
 
   // Restore local workspace customizations (0ms instant startup)
   shell.loadInitialWorkspace();

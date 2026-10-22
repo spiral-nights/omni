@@ -1,12 +1,13 @@
 import { OmniShellHost } from "@omni/types";
 import { OmniShell, OmniShellOptions, InstalledPluginEntry } from "./shell.js";
 import { PanoramaShell } from "./panorama-shell.js";
+import { EditorialShell } from "./editorial-shell.js";
 
 /**
  * Metadata descriptor for an installable Omni Shell experience
  */
 export interface ShellDescriptor {
-  id: string; // e.g. "classic", "panorama", "mantra", or custom ID / pubkey
+  id: string; // e.g. "classic", "panorama", "editorial", or custom ID / pubkey
   name: string;
   description: string;
   icon?: string;
@@ -41,6 +42,16 @@ export const BUILTIN_SHELLS: ShellDescriptor[] = [
     version: "1.0.0",
     isBuiltin: true,
     create: (options) => new PanoramaShell(options)
+  },
+  {
+    id: "editorial",
+    name: "Editorial",
+    description: "Sacred Swiss Editorial & Papyrus sanctuary with Newsreader typography, contemplative layout, and dynamic accent illumination.",
+    icon: "book",
+    author: "Omni Editorial Studio",
+    version: "1.0.0",
+    isBuiltin: true,
+    create: (options) => new EditorialShell(options)
   }
 ];
 

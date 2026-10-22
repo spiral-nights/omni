@@ -1,0 +1,1172 @@
+import { OmniKernel, LayoutManager } from "@omni/core";
+import {
+  OmniWorkspaceState,
+  PluginPlacement,
+  PluginViewDeclaration,
+  OmniShellHost
+} from "@omni/types";
+import { BaseShell, InstalledPluginEntry, OmniShellOptions } from "./base-shell.js";
+import { ICONS, icon, IconName } from "./icons.js";
+import { mountShellStyles, unmountShellStyles } from "./styles/loader.js";
+import { EDITORIAL_SHELL_CSS } from "./styles/editorial-styles.js";
+import { shellRegistry } from "./shell-registry.js";
+
+export type EditorialThemeMode = "light" | "dark" | "system";
+
+export interface EditorialAccentPreset {
+  id: string;
+  name: string;
+  lightColor: string;
+  darkColor: string;
+}
+
+export const EDITORIAL_ACCENTS: EditorialAccentPreset[] = [
+  { id: "cobalt", name: "Cobalt Glow", lightColor: "#1e40af", darkColor: "#4d8eff" },
+  { id: "terra", name: "Terracotta", lightColor: "#c2410c", darkColor: "#e2725b" },
+  { id: "saffron", name: "Saffron Ochre", lightColor: "#b45309", darkColor: "#e8a838" },
+  { id: "pine", name: "Forest Pine", lightColor: "#15803d", darkColor: "#4e9f78" },
+  { id: "bone", name: "Monochrome Bone", lightColor: "#475569", darkColor: "#e5e1e4" }
+];
+
+export const STORAGE_KEY_EDITORIAL_MODE = "omni_editorial_theme_mode";
+export const STORAGE_KEY_EDITORIAL_ACCENT_ID = "omni_editorial_accent_id";
+export const STORAGE_KEY_EDITORIAL_ACCENT_COLOR = "omni_editorial_accent_color";
+export const STORAGE_KEY_EDITORIAL_ACCENT_NAME = "omni_editorial_accent_name";
+
+/**
+ * EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary
+ *
+ * Distinctive Features:
+ * - Sacred Swiss Editorial aesthetic with Newsreader serif headings & Space Mono uppercase labels
+ * - Dual-Theme architecture: Sacred Editorial (Papyrus light mode) & Obsidian Sanctuary (dark mode)
+ * - Dynamic Theme Mode (Light / Dark / System auto-detection)
+ * - Curated & Custom Accent Color selector (Cobalt, Terracotta, Saffron, Pine, Bone)
+ * - Dynamic dock navigation driven by plugin placements & dock pinning
+ * - Clean broadsheet Applications Index & Companion Cards (widgets) dashboard
+ * - Dedicated Installed Shells manager and pluggable settings
+ */
+export class EditorialShell extends BaseShell implements OmniShellHost {
+  public activePage: "app" | "apps" | "widgets" = "app";
+  public activePluginId: string | null = null;
+
+  private themeMode: EditorialThemeMode = "system";
+  private mediaQueryDark: MediaQueryList | null = null;
+  private mediaQueryListener: ((e: MediaQueryListEvent) => void) | null = null;
+
+  // Cached slot elements
+  private headerActionsSlot!: HTMLElement;
+  private mainAppContainer!: HTMLElement;
+  private widgetsSlot!: HTMLElement;
+  private dockContainer!: HTMLElement;
+
+  constructor(options: OmniShellOptions) {
+    super(options);
+  }
+
+  public getShellType(): string {
+    return "editorial";
+  }
+
+  public getActivePageId(): string {
+    return this.activePluginId || "org.omni.plugin.feed";
+  }
+
+  public getContainerForPluginSlot(pluginId: string, slotId: string, compId?: string): Element {
+    if (slotId === "main") {
+      return this.mainAppContainer || this.root;
+    }
+    if (slotId === "sidebar" || slotId === "widget" || slotId === "widgets") {
+      return this.widgetsSlot || this.root;
+    }
+    if (slotId === "header-actions") {
+      return this.headerActionsSlot || this.root;
+    }
+    if (slotId === "dock") {
+      return this.dockContainer || this.root;
+    }
+    return this.mainAppContainer || this.root;
+  }
+
+  public getSlotContainers(): Map<string, Element> {
+    return this.slotContainers;
+  }
+
+  public async showPage(page: string): Promise<void> {
+    if (page === "apps" || page === "launcher") {
+      this.showAppsIndex();
+    } else if (page === "widgets" || page === "cards") {
+      this.showWidgetsView();
+    } else if (page === "settings" || page === "preferences") {
+      this.openSettings();
+    } else {
+      const p = this.installedPlugins.find(
+        (x) => x.id === page || x.name?.toLowerCase() === page.toLowerCase()
+      );
+      if (p) {
+        this.openApp(p.id);
+      } else {
+        this.openApp(page);
+      }
+    }
+  }
+
+  public async dispatchIntent(action: string, data: any = {}): Promise<any> {
+    if (!this.kernel?.intentBroker) return;
+    return this.kernel.intentBroker.dispatch("shell", action, data);
+  }
+
+  public handleSlotAction(action: string, slot: string): void {
+    if (action === "settings") {
+      this.openSettings();
+    } else if (action === "compose") {
+      this.dispatchIntent("compose_note", {}).catch(() => {});
+    }
+  }
+
+  public override async ensureWidgetsMounted(): Promise<void> {
+    await super.ensureWidgetsMounted();
+    this.renderWidgetsView();
+  }
+
+  // --- Mounting & Teardown ---
+
+  public mount(): void {
+    // 1. Inject Editorial Stylesheet
+    mountShellStyles(EDITORIAL_SHELL_CSS);
+
+    // 2. Set root classes
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.remove("theme-panorama", "theme-classic");
+      document.documentElement.classList.add("theme-editorial");
+      document.body?.classList.remove("theme-panorama", "theme-classic");
+      document.body?.classList.add("theme-editorial");
+    }
+    this.root.classList.add("editorial-shell-root", "theme-editorial");
+
+    // 3. Render Skeleton Markup
+    this.renderSkeleton();
+
+    // 4. Cache Slot & Element References
+    this.cacheElementReferences();
+    this.initSlotContainers();
+
+    // 5. Restore Theme Mode & Accent Color
+    this.initThemeAndAccent();
+
+    // 6. Restore Workspace & Pinned Plugins
+    this.loadInitialWorkspace();
+
+    // 7. Render Navigation Dock & Apps Index
+    this.renderDock();
+    this.renderAppsIndex();
+    this.renderWidgetsView();
+
+    // 8. Wire Interactive Listeners
+    this.wireHeaderControls();
+    this.wireDockEvents();
+    this.wireAppsSearch();
+    this.wireSettingsModal();
+    this.wireShellManager();
+
+    // 9. Initial View Selection
+    this.selectInitialView();
+
+    // 10. Pull-to-refresh
+    this.initPullToRefresh();
+  }
+
+  public destroy(): void {
+    if (this.mediaQueryDark && this.mediaQueryListener) {
+      this.mediaQueryDark.removeEventListener("change", this.mediaQueryListener);
+      this.mediaQueryListener = null;
+    }
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.remove("theme-editorial");
+      document.body?.classList.remove("theme-editorial");
+    }
+    unmountShellStyles();
+    this.root.innerHTML = "";
+  }
+
+  protected onWorkspaceUpdated(): void {
+    this.renderDock();
+    this.renderAppsIndex();
+    this.renderWidgetsView();
+    this.renderShellManager();
+    this.renderPluginSettingsList();
+  }
+
+  // --- Theme Mode & Accent Illumination ---
+
+  public getThemeMode(): EditorialThemeMode {
+    return this.themeMode;
+  }
+
+  public setThemeMode(mode: EditorialThemeMode): void {
+    this.themeMode = mode;
+    try {
+      localStorage.setItem(STORAGE_KEY_EDITORIAL_MODE, mode);
+    } catch (_) {}
+
+    this.applyThemeMode();
+    this.updateThemeModeUi();
+  }
+
+  private initThemeAndAccent(): void {
+    // Restore Theme Mode
+    let savedMode: EditorialThemeMode = "system";
+    try {
+      const mode = localStorage.getItem(STORAGE_KEY_EDITORIAL_MODE);
+      if (mode === "light" || mode === "dark" || mode === "system") {
+        savedMode = mode;
+      }
+    } catch (_) {}
+    this.themeMode = savedMode;
+
+    // Listen to OS theme changes if in system mode
+    if (typeof window !== "undefined" && window.matchMedia) {
+      this.mediaQueryDark = window.matchMedia("(prefers-color-scheme: dark)");
+      this.mediaQueryListener = () => {
+        if (this.themeMode === "system") {
+          this.applyThemeMode();
+        }
+      };
+      this.mediaQueryDark.addEventListener("change", this.mediaQueryListener);
+    }
+
+    this.applyThemeMode();
+    this.updateThemeModeUi();
+
+    // Restore Accent Color
+    this.restoreSavedAccent();
+  }
+
+  private applyThemeMode(): void {
+    const isDark =
+      this.themeMode === "dark" ||
+      (this.themeMode === "system" &&
+        (typeof window !== "undefined" && window.matchMedia
+          ? window.matchMedia("(prefers-color-scheme: dark)").matches
+          : false));
+
+    const resolvedMode = isDark ? "dark" : "light";
+
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme-mode", resolvedMode);
+      document.body?.setAttribute("data-theme-mode", resolvedMode);
+    }
+    this.root.setAttribute("data-theme-mode", resolvedMode);
+
+    // Re-apply accent color for current mode
+    this.applyAccentVariables();
+  }
+
+  private updateThemeModeUi(): void {
+    const btns = this.root.querySelectorAll(".editorial-mode-btn");
+    btns.forEach((btn) => {
+      const mode = (btn as HTMLElement).dataset.mode;
+      if (mode === this.themeMode) {
+        btn.classList.add("active");
+      } else {
+        btn.classList.remove("active");
+      }
+    });
+  }
+
+  public setAccent(presetId: string, customColor?: string): void {
+    if (presetId === "custom" && customColor) {
+      try {
+        localStorage.setItem(STORAGE_KEY_EDITORIAL_ACCENT_ID, "custom");
+        localStorage.setItem(STORAGE_KEY_EDITORIAL_ACCENT_COLOR, customColor);
+        localStorage.setItem(STORAGE_KEY_EDITORIAL_ACCENT_NAME, "Custom");
+      } catch (_) {}
+    } else {
+      const preset = EDITORIAL_ACCENTS.find((a) => a.id === presetId) || EDITORIAL_ACCENTS[0];
+      try {
+        localStorage.setItem(STORAGE_KEY_EDITORIAL_ACCENT_ID, preset.id);
+        localStorage.removeItem(STORAGE_KEY_EDITORIAL_ACCENT_COLOR);
+        localStorage.setItem(STORAGE_KEY_EDITORIAL_ACCENT_NAME, preset.name);
+      } catch (_) {}
+    }
+
+    this.applyAccentVariables();
+    this.updateAccentUi();
+  }
+
+  private restoreSavedAccent(): void {
+    this.applyAccentVariables();
+    this.updateAccentUi();
+  }
+
+  private applyAccentVariables(): void {
+    let accentId = "cobalt";
+    let customColor: string | null = null;
+
+    try {
+      accentId = localStorage.getItem(STORAGE_KEY_EDITORIAL_ACCENT_ID) || "cobalt";
+      customColor = localStorage.getItem(STORAGE_KEY_EDITORIAL_ACCENT_COLOR);
+    } catch (_) {}
+
+    const isDark = this.root.getAttribute("data-theme-mode") === "dark";
+    let colorToApply = "#1e40af";
+
+    if (accentId === "custom" && customColor) {
+      colorToApply = customColor;
+    } else {
+      const preset = EDITORIAL_ACCENTS.find((a) => a.id === accentId) || EDITORIAL_ACCENTS[0];
+      colorToApply = isDark ? preset.darkColor : preset.lightColor;
+    }
+
+    const contrastColor = isDark && (accentId === "bone" || colorToApply.toLowerCase() === "#e5e1e4") ? "#131315" : "#ffffff";
+
+    this.root.style.setProperty("--omni-accent-primary", colorToApply);
+    this.root.style.setProperty("--accent-primary", colorToApply);
+    this.root.style.setProperty("--omni-accent-contrast", contrastColor);
+    this.root.style.setProperty("--omni-border-focus", colorToApply);
+    this.root.style.setProperty("--omni-status-online", colorToApply);
+    this.root.style.setProperty("--omni-status-badge", colorToApply);
+
+    if (typeof document !== "undefined") {
+      document.documentElement.style.setProperty("--omni-accent-primary", colorToApply);
+      document.documentElement.style.setProperty("--accent-primary", colorToApply);
+    }
+  }
+
+  private updateAccentUi(): void {
+    let currentId = "cobalt";
+    let customColor: string | null = null;
+    let currentName = "Cobalt Glow";
+
+    try {
+      currentId = localStorage.getItem(STORAGE_KEY_EDITORIAL_ACCENT_ID) || "cobalt";
+      customColor = localStorage.getItem(STORAGE_KEY_EDITORIAL_ACCENT_COLOR);
+      currentName = localStorage.getItem(STORAGE_KEY_EDITORIAL_ACCENT_NAME) || "Cobalt Glow";
+    } catch (_) {}
+
+    const labelEl = this.root.querySelector("#editorial-active-accent-name");
+    if (labelEl) labelEl.textContent = currentName;
+
+    const swatchItems = this.root.querySelectorAll(".editorial-swatch-item");
+    swatchItems.forEach((item) => {
+      const sid = (item as HTMLElement).dataset.accentId;
+      if (sid === currentId) {
+        item.classList.add("active");
+        const check = item.querySelector(".editorial-swatch-check");
+        if (check) (check as HTMLElement).style.display = "flex";
+      } else {
+        item.classList.remove("active");
+        const check = item.querySelector(".editorial-swatch-check");
+        if (check) (check as HTMLElement).style.display = "none";
+      }
+    });
+
+    const customInput = this.root.querySelector("#editorial-custom-accent-color") as HTMLInputElement | null;
+    if (customInput && customColor) {
+      customInput.value = customColor;
+    }
+  }
+
+  // --- Dynamic Dock Navigation & Viewport Reparenting ---
+
+  public getPinnedPlugins(): InstalledPluginEntry[] {
+    return this.installedPlugins.filter((p) => {
+      if (p.enabled === false) return false;
+      if (p.pinned !== undefined) return p.pinned;
+      const placements = this.getPluginPlacements(p);
+      return placements.some((pl) => pl.viewport === "dock" || pl.viewport === "main");
+    });
+  }
+
+  public renderDock(): void {
+    if (!this.dockContainer) return;
+    this.dockContainer.innerHTML = "";
+
+    const pinned = this.getPinnedPlugins();
+
+    for (const plugin of pinned) {
+      const isActive = this.activePage === "app" && this.activePluginId === plugin.id;
+      const item = document.createElement("button");
+      item.className = `editorial-dock-item ${isActive ? "active" : ""}`;
+      item.dataset.pluginId = plugin.id;
+      item.title = plugin.name || plugin.id;
+
+      const iconKey = (plugin.icon as IconName) || "apps";
+      const iconMarkup = ICONS[iconKey] ? icon(iconKey, 20) : icon("apps", 20);
+
+      item.innerHTML = `
+        <div class="editorial-dock-icon">${iconMarkup}</div>
+        <span class="editorial-dock-label">${plugin.displayName || plugin.name || "App"}</span>
+        <span class="editorial-active-dot"></span>
+      `;
+
+      item.addEventListener("click", () => {
+        this.openApp(plugin.id);
+      });
+
+      this.dockContainer.appendChild(item);
+    }
+
+    // Index (All Apps) Button
+    const btnApps = document.createElement("button");
+    const isAppsActive = this.activePage === "apps";
+    btnApps.className = `editorial-dock-item ${isAppsActive ? "active" : ""}`;
+    btnApps.id = "btn-editorial-dock-apps";
+    btnApps.title = "Index of Applications";
+    btnApps.innerHTML = `
+      <div class="editorial-dock-icon">${icon("grid", 20)}</div>
+      <span class="editorial-dock-label">Index</span>
+      <span class="editorial-active-dot"></span>
+    `;
+    btnApps.addEventListener("click", () => this.showAppsIndex());
+    this.dockContainer.appendChild(btnApps);
+
+    // Cards (Widgets) Button
+    const btnWidgets = document.createElement("button");
+    const isWidgetsActive = this.activePage === "widgets";
+    btnWidgets.className = `editorial-dock-item ${isWidgetsActive ? "active" : ""}`;
+    btnWidgets.id = "btn-editorial-dock-widgets";
+    btnWidgets.title = "Companion Cards";
+    btnWidgets.innerHTML = `
+      <div class="editorial-dock-icon">${icon("layout", 20)}</div>
+      <span class="editorial-dock-label">Cards</span>
+      <span class="editorial-active-dot"></span>
+    `;
+    btnWidgets.addEventListener("click", () => this.showWidgetsView());
+    this.dockContainer.appendChild(btnWidgets);
+
+    // Prefs Button
+    const btnPrefs = document.createElement("button");
+    btnPrefs.className = "editorial-dock-item";
+    btnPrefs.id = "btn-editorial-dock-prefs";
+    btnPrefs.title = "Preferences & Custody";
+    btnPrefs.innerHTML = `
+      <div class="editorial-dock-icon">${icon("settings", 20)}</div>
+      <span class="editorial-dock-label">Prefs</span>
+      <span class="editorial-active-dot"></span>
+    `;
+    btnPrefs.addEventListener("click", () => this.openSettings());
+    this.dockContainer.appendChild(btnPrefs);
+  }
+
+  public openApp(pluginId: string): void {
+    const plugin = this.installedPlugins.find((p) => p.id === pluginId);
+    if (!plugin) return;
+
+    this.activePage = "app";
+    this.activePluginId = pluginId;
+
+    // Update Header Title & Subtitle
+    this.updateHeaderSubtitle(plugin.displayName || plugin.name || "App");
+
+    // Switch Viewport Page
+    const pageApp = this.root.querySelector("#editorial-page-app") as HTMLElement | null;
+    const pageApps = this.root.querySelector("#editorial-page-apps") as HTMLElement | null;
+    const pageWidgets = this.root.querySelector("#editorial-page-widgets") as HTMLElement | null;
+
+    pageApp?.classList.add("active");
+    pageApps?.classList.remove("active");
+    pageWidgets?.classList.remove("active");
+
+    // Reparent Slot: Move plugin's main component into mainAppContainer
+    const synthManifest = this.ensurePluginManifest(plugin);
+    const mainComp = synthManifest.components?.find((c: any) => c.slot === "main") || synthManifest.components?.[0];
+    if (mainComp && this.mainAppContainer) {
+      this.kernel.getSandbox(plugin.id)?.reparentComponent(mainComp.id, this.mainAppContainer);
+    }
+
+    this.renderDock();
+    this.saveLocalWorkspace();
+  }
+
+  public showAppsIndex(): void {
+    this.activePage = "apps";
+    this.activePluginId = null;
+
+    this.updateHeaderSubtitle("Index");
+
+    const pageApp = this.root.querySelector("#editorial-page-app") as HTMLElement | null;
+    const pageApps = this.root.querySelector("#editorial-page-apps") as HTMLElement | null;
+    const pageWidgets = this.root.querySelector("#editorial-page-widgets") as HTMLElement | null;
+
+    pageApp?.classList.remove("active");
+    pageApps?.classList.add("active");
+    pageWidgets?.classList.remove("active");
+
+    this.renderDock();
+    this.renderAppsIndex();
+  }
+
+  public showWidgetsView(): void {
+    this.activePage = "widgets";
+    this.activePluginId = null;
+
+    this.updateHeaderSubtitle("Cards");
+
+    const pageApp = this.root.querySelector("#editorial-page-app") as HTMLElement | null;
+    const pageApps = this.root.querySelector("#editorial-page-apps") as HTMLElement | null;
+    const pageWidgets = this.root.querySelector("#editorial-page-widgets") as HTMLElement | null;
+
+    pageApp?.classList.remove("active");
+    pageApps?.classList.remove("active");
+    pageWidgets?.classList.add("active");
+
+    this.renderDock();
+    this.renderWidgetsView();
+  }
+
+  private updateHeaderSubtitle(sub: string): void {
+    const subtitleEl = this.root.querySelector("#editorial-view-subtitle");
+    if (subtitleEl) subtitleEl.textContent = sub;
+  }
+
+  private selectInitialView(): void {
+    const pinned = this.getPinnedPlugins();
+    if (pinned.length > 0) {
+      this.openApp(pinned[0].id);
+    } else if (this.installedPlugins.length > 0) {
+      this.openApp(this.installedPlugins[0].id);
+    } else {
+      this.showAppsIndex();
+    }
+  }
+
+  // --- Broadsheet Applications Index ---
+
+  public renderAppsIndex(): void {
+    const pinnedGrid = this.root.querySelector("#editorial-pinned-apps-grid");
+    const allGrid = this.root.querySelector("#editorial-all-apps-grid");
+    if (!pinnedGrid || !allGrid) return;
+
+    pinnedGrid.innerHTML = "";
+    allGrid.innerHTML = "";
+
+    const filterInput = this.root.querySelector("#editorial-apps-search-input") as HTMLInputElement | null;
+    const query = filterInput?.value.trim().toLowerCase() || "";
+
+    const filtered = this.installedPlugins.filter((p) => {
+      if (!query) return true;
+      const n = (p.name || p.id).toLowerCase();
+      const d = (p.description || "").toLowerCase();
+      return n.includes(query) || d.includes(query);
+    });
+
+    const pinnedList = filtered.filter((p) => p.pinned !== false);
+    const unpinnedList = filtered.filter((p) => p.pinned === false);
+
+    const renderCard = (plugin: InstalledPluginEntry, container: Element) => {
+      const card = document.createElement("div");
+      card.className = "editorial-plate-card";
+      const iconKey = (plugin.icon as IconName) || "apps";
+
+      card.innerHTML = `
+        <div class="editorial-plate-card-header">
+          <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+            <div class="editorial-plate-card-icon">
+              ${ICONS[iconKey] ? icon(iconKey, 18) : icon("apps", 18)}
+            </div>
+            <div style="min-width: 0;">
+              <div class="editorial-plate-card-name" style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                ${plugin.displayName || plugin.name || plugin.id}
+              </div>
+              <div style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted);">
+                v${plugin.version || "1.0.0"}
+              </div>
+            </div>
+          </div>
+          <button class="editorial-btn-secondary btn-toggle-pin" style="font-size: 0.65rem; padding: 3px 8px; flex-shrink: 0;">
+            ${plugin.pinned !== false ? "Unpin" : "Pin"}
+          </button>
+        </div>
+        <p class="editorial-plate-card-desc">${plugin.description || "Decentralized micro-frontend application."}</p>
+      `;
+
+      card.addEventListener("click", (e) => {
+        if ((e.target as HTMLElement).closest(".btn-toggle-pin")) return;
+        this.openApp(plugin.id);
+      });
+
+      card.querySelector(".btn-toggle-pin")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        plugin.pinned = plugin.pinned === false;
+        this.saveLocalWorkspace();
+        this.renderDock();
+        this.renderAppsIndex();
+      });
+
+      container.appendChild(card);
+    };
+
+    pinnedList.forEach((p) => renderCard(p, pinnedGrid));
+    unpinnedList.forEach((p) => renderCard(p, allGrid));
+
+    const pinnedCount = this.root.querySelector("#editorial-pinned-count");
+    if (pinnedCount) pinnedCount.textContent = `${pinnedList.length} pinned`;
+
+    const allCount = this.root.querySelector("#editorial-all-count");
+    if (allCount) allCount.textContent = `${unpinnedList.length} unpinned`;
+  }
+
+  // --- Companion Widgets View ---
+
+  public renderWidgetsView(): void {
+    if (!this.widgetsSlot) return;
+    const widgetPlugins = this.installedPlugins.filter((p) => {
+      const placements = this.getPluginPlacements(p);
+      return placements.some((pl) => pl.viewport === "sidebar" || pl.viewport === "widget");
+    });
+
+    const emptyNotice = this.root.querySelector("#editorial-widgets-empty");
+    if (widgetPlugins.length === 0) {
+      if (emptyNotice) (emptyNotice as HTMLElement).style.display = "flex";
+    } else {
+      if (emptyNotice) (emptyNotice as HTMLElement).style.display = "none";
+    }
+  }
+
+  // --- Wire Interactive Controls ---
+
+  private wireHeaderControls(): void {
+    const btnSearch = this.root.querySelector("#btn-editorial-search");
+    btnSearch?.addEventListener("click", () => {
+      this.dispatchIntent("search", {}).catch(() => {});
+    });
+
+    const headerBrand = this.root.querySelector("#editorial-brand-container");
+    headerBrand?.addEventListener("click", () => {
+      this.showAppsIndex();
+    });
+
+    const btnSettings = this.root.querySelector("#btn-editorial-settings");
+    btnSettings?.addEventListener("click", () => {
+      this.openSettings();
+    });
+
+    const btnProfile = this.root.querySelector("#btn-editorial-profile-toggle");
+    btnProfile?.addEventListener("click", () => {
+      this.dispatchIntent("view_profile", {}).catch(() => {});
+    });
+  }
+
+  private wireDockEvents(): void {
+    // Dock item clicks are handled during dynamic dock rendering
+  }
+
+  private wireAppsSearch(): void {
+    const searchInput = this.root.querySelector("#editorial-apps-search-input") as HTMLInputElement | null;
+    searchInput?.addEventListener("input", () => {
+      this.renderAppsIndex();
+    });
+  }
+
+  // --- Settings & Preferences Modal ---
+
+  public openSettings(): void {
+    const modal = this.root.querySelector("#editorial-settings-modal");
+    modal?.classList.add("open");
+    this.renderPluginSettingsList();
+    this.renderShellManager();
+  }
+
+  public closeSettings(): void {
+    const modal = this.root.querySelector("#editorial-settings-modal");
+    modal?.classList.remove("open");
+  }
+
+  private wireSettingsModal(): void {
+    const modal = this.root.querySelector("#editorial-settings-modal");
+    const btnClose = this.root.querySelector("#btn-editorial-close-settings");
+
+    btnClose?.addEventListener("click", () => this.closeSettings());
+    modal?.addEventListener("click", (e) => {
+      if (e.target === modal) this.closeSettings();
+    });
+
+    // Theme Mode buttons
+    const modeBtns = this.root.querySelectorAll(".editorial-mode-btn");
+    modeBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mode = (btn as HTMLElement).dataset.mode as EditorialThemeMode;
+        if (mode) this.setThemeMode(mode);
+      });
+    });
+
+    // Accent Swatches
+    const swatchBtns = this.root.querySelectorAll(".editorial-swatch-item");
+    swatchBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const aid = (btn as HTMLElement).dataset.accentId;
+        if (aid) this.setAccent(aid);
+      });
+    });
+
+    // Custom Accent Color input
+    const customInput = this.root.querySelector("#editorial-custom-accent-color") as HTMLInputElement | null;
+    customInput?.addEventListener("input", (e) => {
+      const color = (e.target as HTMLInputElement).value;
+      this.setAccent("custom", color);
+    });
+
+    // Cloud Workspace Sync
+    const btnSync = this.root.querySelector("#btn-editorial-sync-workspace");
+    btnSync?.addEventListener("click", async () => {
+      try {
+        await this.syncWorkspaceToNostr();
+        alert("Workspace synced to Nostr relays!");
+      } catch (err: any) {
+        alert(`Sync failed: ${err.message || String(err)}`);
+      }
+    });
+  }
+
+  // --- Installed Shells Manager in Editorial ---
+
+  public renderShellManager(): void {
+    const shellsList = this.root.querySelector("#editorial-installed-shells-list");
+    const countBadge = this.root.querySelector("#editorial-shell-count-badge");
+    if (!shellsList) return;
+
+    const shells = shellRegistry.list();
+    const currentActive = shellRegistry.getActiveShellId();
+
+    if (countBadge) {
+      countBadge.textContent = `${shells.length} installed`;
+    }
+
+    shellsList.innerHTML = "";
+
+    for (const s of shells) {
+      const isActive = currentActive === s.id;
+      const isBuiltin = s.isBuiltin !== false;
+
+      const card = document.createElement("div");
+      card.className = "editorial-pref-card";
+      card.style.cssText = `border: 1px solid ${isActive ? "var(--omni-accent-primary)" : "var(--omni-border-subtle)"};`;
+
+      card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 32px; height: 32px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
+              ${s.icon && ICONS[s.icon as IconName] ? icon(s.icon as IconName, 18) : icon("layout", 18)}
+            </div>
+            <div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <strong style="font-family: var(--omni-font-serif); font-size: 0.95rem; color: var(--omni-text-primary);">${s.name}</strong>
+                ${isActive ? `<span style="font-family: var(--omni-font-mono); font-size: 0.62rem; font-weight: 700; text-transform: uppercase; padding: 1px 6px; background: var(--omni-accent-primary); color: #fff; border-radius: 2px;">Active</span>` : ""}
+                ${!isBuiltin ? `<span style="font-family: var(--omni-font-mono); font-size: 0.62rem; text-transform: uppercase; padding: 1px 6px; background: var(--omni-bg-elevated); color: var(--omni-text-muted); border: 1px solid var(--omni-border-subtle); border-radius: 2px;">Custom</span>` : ""}
+              </div>
+              <div style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); margin-top: 2px;">
+                ${s.author ? `by ${s.author}` : "Omni Core Team"} • v${s.version || "1.0.0"}
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            ${!isActive ? `
+              <button class="editorial-btn-secondary btn-activate-shell" data-shell-id="${s.id}" style="color: var(--omni-accent-primary); border-color: var(--omni-accent-primary); font-size: 0.72rem; padding: 4px 8px;">
+                Activate
+              </button>
+            ` : `
+              <span style="font-family: var(--omni-font-mono); font-size: 0.68rem; color: var(--omni-accent-primary); font-weight: 600; padding: 4px 6px;">Current</span>
+            `}
+            ${!isBuiltin ? `
+              <button class="editorial-btn-secondary btn-uninstall-shell" data-shell-id="${s.id}" style="color: #ff5555; border-color: #552222; font-size: 0.72rem; padding: 4px 8px;">
+                Uninstall
+              </button>
+            ` : ""}
+          </div>
+        </div>
+        <p style="font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-secondary); margin: 0; line-height: 1.35;">${s.description}</p>
+      `;
+
+      card.querySelector(".btn-activate-shell")?.addEventListener("click", () => {
+        shellRegistry.setActiveShell(s.id);
+        this.reloadPage();
+      });
+
+      card.querySelector(".btn-uninstall-shell")?.addEventListener("click", () => {
+        if (confirm(`Uninstall shell '${s.name}'?`)) {
+          shellRegistry.uninstall(s.id);
+          this.renderShellManager();
+        }
+      });
+
+      shellsList.appendChild(card);
+    }
+
+    this.renderCuratedShellCatalog();
+  }
+
+  public renderCuratedShellCatalog(): void {
+    const catalogContainer = this.root.querySelector("#editorial-curated-shell-catalog");
+    if (!catalogContainer) return;
+    catalogContainer.innerHTML = "";
+
+    const curated = shellRegistry.getCuratedCatalog();
+    const installed = shellRegistry.list();
+
+    for (const c of curated) {
+      const isInstalled = installed.some((s) => s.id === c.id);
+      const isCurrentActive = shellRegistry.getActiveShellId() === c.id;
+
+      const item = document.createElement("div");
+      item.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); gap: 10px;";
+      item.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+          <div style="width: 30px; height: 30px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
+            ${c.icon && ICONS[c.icon as IconName] ? icon(c.icon as IconName, 16) : icon("layout", 16)}
+          </div>
+          <div style="min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <strong style="font-family: var(--omni-font-serif); font-size: 0.88rem; color: var(--omni-text-primary);">${c.name}</strong>
+              <span style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted);">v${c.version || "1.0.0"}</span>
+            </div>
+            <div style="font-family: var(--omni-font-sans); font-size: 0.72rem; color: var(--omni-text-muted); margin-top: 1px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+              ${c.description}
+            </div>
+          </div>
+        </div>
+        <div style="flex-shrink: 0;">
+          ${isInstalled ? (
+            isCurrentActive ? `
+              <span style="font-family: var(--omni-font-mono); font-size: 0.68rem; color: var(--omni-accent-primary); font-weight: 600;">Active</span>
+            ` : `
+              <button class="editorial-btn-secondary btn-activate-curated-shell" data-shell-id="${c.id}" style="font-size: 0.72rem; padding: 3px 8px;">
+                Activate
+              </button>
+            `
+          ) : `
+            <button class="editorial-btn-secondary btn-install-curated-shell" data-shell-id="${c.id}" style="color: var(--omni-accent-primary); border-color: var(--omni-accent-primary); font-size: 0.72rem; padding: 3px 8px;">
+              Install Shell
+            </button>
+          `}
+        </div>
+      `;
+
+      item.querySelector(".btn-install-curated-shell")?.addEventListener("click", () => {
+        shellRegistry.install(c);
+        this.renderShellManager();
+      });
+
+      item.querySelector(".btn-activate-curated-shell")?.addEventListener("click", () => {
+        shellRegistry.setActiveShell(c.id);
+        this.reloadPage();
+      });
+
+      catalogContainer.appendChild(item);
+    }
+  }
+
+  private wireShellManager(): void {
+    const modal = this.root.querySelector("#editorial-install-shell-modal");
+    const btnOpen = this.root.querySelector("#btn-editorial-open-install-shell");
+    const btnClose = this.root.querySelector("#btn-editorial-close-install-shell");
+
+    btnOpen?.addEventListener("click", () => {
+      modal?.classList.add("open");
+      this.renderCuratedShellCatalog();
+    });
+
+    btnClose?.addEventListener("click", () => {
+      modal?.classList.remove("open");
+    });
+
+    modal?.addEventListener("click", (e) => {
+      if (e.target === modal) modal.classList.remove("open");
+    });
+  }
+
+  // --- Installed Plugins Settings List ---
+
+  private renderPluginSettingsList(): void {
+    const container = this.root.querySelector("#editorial-plugins-settings-list");
+    if (!container) return;
+    container.innerHTML = "";
+
+    for (const plugin of this.installedPlugins) {
+      const card = document.createElement("div");
+      card.className = "editorial-pref-card";
+
+      const iconKey = (plugin.icon as IconName) || "apps";
+
+      card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 30px; height: 30px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
+              ${ICONS[iconKey] ? icon(iconKey, 16) : icon("apps", 16)}
+            </div>
+            <div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <strong style="font-family: var(--omni-font-serif); font-size: 0.95rem; color: var(--omni-text-primary);">${plugin.displayName || plugin.name || plugin.id}</strong>
+                <span style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted);">v${plugin.version || "1.0.0"}</span>
+              </div>
+              <div style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); margin-top: 1px;">${plugin.id}</div>
+            </div>
+          </div>
+          <button class="editorial-btn-secondary btn-uninstall-plugin" style="color: #ff5555; border-color: #552222; font-size: 0.68rem; padding: 3px 8px;">
+            Uninstall
+          </button>
+        </div>
+        <p style="font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-secondary); margin: 0;">${plugin.description || "Micro-frontend plugin."}</p>
+      `;
+
+      card.querySelector(".btn-uninstall-plugin")?.addEventListener("click", () => {
+        if (confirm(`Uninstall ${plugin.name || plugin.id}?`)) {
+          this.uninstallPlugin(plugin.id);
+          this.renderPluginSettingsList();
+          this.renderDock();
+          this.renderAppsIndex();
+        }
+      });
+
+      container.appendChild(card);
+    }
+  }
+
+  // --- HTML Skeleton Markup ---
+
+  private renderSkeleton(): void {
+    this.root.innerHTML = `
+      <!-- 1. Fixed Editorial Header -->
+      <header class="editorial-header">
+        <div class="editorial-header-inner">
+          <button id="btn-editorial-search" class="editorial-header-btn" title="Search Network">
+            ${icon("search", 18)}
+          </button>
+
+          <div id="editorial-brand-container" class="editorial-header-center" title="Omni">
+            <h1 class="editorial-brand-title">OMNI</h1>
+            <span id="editorial-view-subtitle" class="editorial-view-subtitle">Feed</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <div id="editorial-header-actions-slot" style="display: flex; align-items: center; gap: 4px;"></div>
+            <button id="btn-editorial-settings" class="editorial-header-btn" title="Preferences">
+              ${icon("settings", 18)}
+            </button>
+            <div id="btn-editorial-profile-toggle" class="editorial-header-avatar" title="Active Profile">
+              <span>Ω</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- 2. Central Content Viewport -->
+      <main class="editorial-main-content">
+        <!-- Viewport A: Full App View -->
+        <section id="editorial-page-app" class="editorial-viewport-page active">
+          <div id="editorial-main-app-container" class="editorial-app-container"></div>
+          <div class="editorial-stream-end">
+            <div class="editorial-stream-end-line">
+              <span>○ Synchronized</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Viewport B: Broadsheet Applications Index -->
+        <section id="editorial-page-apps" class="editorial-viewport-page" style="padding: 20px 16px;">
+          <div class="editorial-section-header">
+            <h2 class="editorial-section-title">Applications</h2>
+            <div class="editorial-section-meta">All Installed Apps • Pin to Dock or Launch Directly</div>
+          </div>
+
+          <!-- Apps Search -->
+          <div style="margin-bottom: 20px;">
+            <input
+              id="editorial-apps-search-input"
+              class="editorial-input-text"
+              type="text"
+              placeholder="Search applications..."
+            />
+          </div>
+
+          <!-- Pinned to Dock Section -->
+          <div style="margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <span class="editorial-pref-label">Pinned to Dock</span>
+              <span id="editorial-pinned-count" class="editorial-pref-status">0 pinned</span>
+            </div>
+            <div id="editorial-pinned-apps-grid" class="editorial-apps-grid"></div>
+          </div>
+
+          <!-- All Apps Section -->
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <span class="editorial-pref-label">Unpinned Applications</span>
+              <span id="editorial-all-count" class="editorial-pref-status">0 unpinned</span>
+            </div>
+            <div id="editorial-all-apps-grid" class="editorial-apps-grid"></div>
+          </div>
+        </section>
+
+        <!-- Viewport C: Companion Cards (Widgets) -->
+        <section id="editorial-page-widgets" class="editorial-viewport-page" style="padding: 20px 16px;">
+          <div class="editorial-section-header">
+            <h2 class="editorial-section-title">Companion Cards</h2>
+            <div class="editorial-section-meta">Workspace Widgets • Glanceable Real-Time Data</div>
+          </div>
+
+          <div id="editorial-widgets-empty" class="editorial-pref-card" style="align-items: center; text-align: center; padding: 32px 16px; display: none;">
+            <div style="font-family: var(--omni-font-serif); font-size: 1.1rem; color: var(--omni-text-primary); margin-bottom: 4px;">No companion widgets active</div>
+            <p style="font-family: var(--omni-font-sans); font-size: 0.82rem; color: var(--omni-text-muted); margin: 0; max-width: 320px;">
+              Assign any installed application to the sidebar/widget slot in Preferences to view cards here.
+            </p>
+          </div>
+
+          <div id="editorial-widgets-slot" style="display: flex; flex-direction: column; gap: 12px;"></div>
+        </section>
+      </main>
+
+      <!-- 3. Fixed Editorial Bottom Dock -->
+      <nav class="editorial-dock">
+        <div id="editorial-dock-items" class="editorial-dock-inner"></div>
+      </nav>
+
+      <!-- 4. Settings & Preferences Modal -->
+      <div id="editorial-settings-modal" class="editorial-modal-overlay">
+        <div class="editorial-modal-card">
+          <div class="editorial-modal-header">
+            <div>
+              <h3 style="font-family: var(--omni-font-serif); font-size: 1.25rem; font-weight: 500; margin: 0;">Preferences & Custody</h3>
+              <span style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Theme, Display & Sovereignty</span>
+            </div>
+            <button id="btn-editorial-close-settings" class="editorial-header-btn">
+              ${icon("close", 18)}
+            </button>
+          </div>
+
+          <div class="editorial-modal-body">
+            <!-- Section 1: Display Mode (Light / Dark / System) -->
+            <div class="editorial-pref-group">
+              <div class="editorial-pref-header">
+                <span class="editorial-pref-label">Display Cadence</span>
+                <span class="editorial-pref-status">Dual Theme</span>
+              </div>
+              <div class="editorial-pref-card">
+                <div class="editorial-mode-switcher">
+                  <button class="editorial-mode-btn" data-mode="light" id="btn-editorial-mode-light">
+                    <span>Papyrus</span>
+                  </button>
+                  <button class="editorial-mode-btn" data-mode="dark" id="btn-editorial-mode-dark">
+                    <span>Obsidian</span>
+                  </button>
+                  <button class="editorial-mode-btn" data-mode="system" id="btn-editorial-mode-system">
+                    <span>System</span>
+                  </button>
+                </div>
+                <p style="font-family: var(--omni-font-sans); font-size: 0.76rem; color: var(--omni-text-muted); margin: 0;">
+                  Papyrus renders warm archival rag paper; Obsidian renders deep charcoal sanctuary.
+                </p>
+              </div>
+            </div>
+
+            <!-- Section 2: Theme Accent Selector -->
+            <div class="editorial-pref-group">
+              <div class="editorial-pref-header">
+                <span class="editorial-pref-label">Accent Illumination</span>
+                <span id="editorial-active-accent-name" class="editorial-pref-status">Cobalt Glow</span>
+              </div>
+              <div class="editorial-pref-card">
+                <div class="editorial-swatches-grid">
+                  ${EDITORIAL_ACCENTS.map(
+                    (a) => `
+                    <button class="editorial-swatch-item" data-accent-id="${a.id}" title="${a.name}">
+                      <div class="editorial-swatch-circle" style="background-color: ${a.darkColor};">
+                        <span class="editorial-swatch-check" style="display: none; font-size: 14px;">✓</span>
+                      </div>
+                      <span class="editorial-swatch-label">${a.name.split(" ")[0]}</span>
+                    </button>
+                  `
+                  ).join("")}
+                  <!-- Custom Picker -->
+                  <label class="editorial-swatch-item" title="Custom Hex">
+                    <input type="color" id="editorial-custom-accent-color" value="#1e40af" style="opacity: 0; width: 0; height: 0; position: absolute;" />
+                    <div class="editorial-swatch-circle" style="background: conic-gradient(red, yellow, green, cyan, blue, magenta, red); cursor: pointer;">
+                      <span style="font-size: 11px; font-weight: 700;">+</span>
+                    </div>
+                    <span class="editorial-swatch-label">Custom</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 3: Installed Shells Architecture -->
+            <div class="editorial-pref-group" id="editorial-shells-group">
+              <div class="editorial-pref-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="editorial-pref-label">Installed Shells</span>
+                  <span id="editorial-shell-count-badge" class="editorial-pref-status">3 installed</span>
+                </div>
+                <button id="btn-editorial-open-install-shell" class="editorial-btn-secondary" style="font-size: 0.7rem; padding: 4px 8px; color: var(--omni-accent-primary);">
+                  + Install Shell
+                </button>
+              </div>
+              <div id="editorial-installed-shells-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+
+            <!-- Section 4: Installed Plugins Overview -->
+            <div class="editorial-pref-group">
+              <div class="editorial-pref-header">
+                <span class="editorial-pref-label">Installed Plugins</span>
+                <span class="editorial-pref-status">Standalone nsites</span>
+              </div>
+              <div id="editorial-plugins-settings-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+
+            <!-- Section 5: Decentralized Workspace Sync -->
+            <div class="editorial-pref-group">
+              <div class="editorial-pref-header">
+                <span class="editorial-pref-label">NIP-78 Workspace Sync</span>
+                <span class="editorial-pref-status">Decentralized</span>
+              </div>
+              <div class="editorial-pref-card">
+                <p style="font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-secondary); margin: 0;">
+                  Persist your pinned applications, viewport assignments, and themes directly to your Nostr relay list.
+                </p>
+                <div style="display: flex; justify-content: flex-end;">
+                  <button id="btn-editorial-sync-workspace" class="editorial-btn-primary">
+                    Sync to Relays
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Install Shell Modal -->
+      <div id="editorial-install-shell-modal" class="editorial-modal-overlay">
+        <div class="editorial-modal-card" style="max-width: 500px;">
+          <div class="editorial-modal-header">
+            <div>
+              <h3 style="font-family: var(--omni-font-serif); font-size: 1.15rem; font-weight: 500; margin: 0;">Install Shell Experience</h3>
+              <span style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); text-transform: uppercase;">Curated & Custom Shells</span>
+            </div>
+            <button id="btn-editorial-close-install-shell" class="editorial-header-btn">
+              ${icon("close", 18)}
+            </button>
+          </div>
+          <div class="editorial-modal-body" style="gap: 16px;">
+            <div class="editorial-pref-group">
+              <span class="editorial-pref-label">Curated Shell Catalog</span>
+              <div id="editorial-curated-shell-catalog" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private cacheElementReferences(): void {
+    this.headerActionsSlot = this.root.querySelector("#editorial-header-actions-slot") as HTMLElement;
+    this.mainAppContainer = this.root.querySelector("#editorial-main-app-container") as HTMLElement;
+    this.widgetsSlot = this.root.querySelector("#editorial-widgets-slot") as HTMLElement;
+    this.dockContainer = this.root.querySelector("#editorial-dock-items") as HTMLElement;
+  }
+
+  private initSlotContainers(): void {
+    this.slotContainers.set("header-actions", this.headerActionsSlot);
+    this.slotContainers.set("main", this.mainAppContainer);
+    this.slotContainers.set("dock", this.dockContainer);
+    this.slotContainers.set("sidebar", this.widgetsSlot);
+    this.slotContainers.set("widget", this.widgetsSlot);
+  }
+}

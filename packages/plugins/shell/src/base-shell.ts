@@ -960,6 +960,17 @@ export abstract class BaseShell implements OmniShellHost {
       if (panoSysName) panoSysName.textContent = displayName;
       if (panoSysNpub) panoSysNpub.textContent = shortNpub;
 
+      // Update Editorial header profile elements
+      const editorialAvatar = document.getElementById("btn-editorial-profile-toggle");
+      if (editorialAvatar) {
+        if (profile?.picture) {
+          editorialAvatar.innerHTML = `<img src="${profile.picture}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
+        } else {
+          editorialAvatar.innerHTML = `<span>${(displayName || "Ω").slice(0, 1).toUpperCase()}</span>`;
+        }
+        editorialAvatar.title = `${displayName}\n${npub}`;
+      }
+
       const userBadge = document.getElementById("user-badge");
       if (userBadge) {
         userBadge.title = `${displayName}\n${npub}\nClick to manage profile`;
