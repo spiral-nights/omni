@@ -58,6 +58,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   private mainAppContainer!: HTMLElement;
   private widgetsSlot!: HTMLElement;
   private dockContainer!: HTMLElement;
+  private pendingAppMounts = new Set<string>();
 
   constructor(options: OmniShellOptions) {
     super(options);
@@ -71,9 +72,50 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     return this.activePluginId || "org.omni.plugin.feed";
   }
 
+  public ensureAppContainer(pluginId: string): HTMLElement {
+    if (pluginId === "org.omni.plugin.feed" || pluginId === "feed") {
+      const feedContainer = this.root.querySelector("#editorial-main-app-container") as HTMLElement | null;
+      if (feedContainer) return feedContainer;
+    }
+
+    const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+    let appPage = this.root.querySelector(`#editorial-app-page-${safeId}`) as HTMLElement | null;
+    if (!appPage) {
+      appPage = document.createElement("section");
+      appPage.id = `editorial-app-page-${safeId}`;
+      appPage.className = "editorial-viewport-page editorial-app-page";
+      appPage.dataset.pluginId = pluginId;
+      appPage.style.cssText = "display: none; width: 100%; min-height: 100%; flex-direction: column;";
+
+      const slotInner = document.createElement("div");
+      slotInner.id = `editorial-slot-main-${safeId}`;
+      slotInner.className = "omni-slot editorial-app-container";
+      slotInner.style.cssText = "width: 100%; min-height: 100%; flex: 1; display: flex; flex-direction: column;";
+      appPage.appendChild(slotInner);
+
+      const streamEnd = document.createElement("div");
+      streamEnd.className = "editorial-stream-end";
+      streamEnd.innerHTML = `
+        <div class="editorial-stream-end-line">
+          <span>○ Synchronized</span>
+        </div>
+      `;
+      appPage.appendChild(streamEnd);
+
+      const mainContent = this.root.querySelector(".editorial-main-content");
+      const pageApps = this.root.querySelector("#editorial-page-apps");
+      if (mainContent && pageApps) {
+        mainContent.insertBefore(appPage, pageApps);
+      } else if (mainContent) {
+        mainContent.appendChild(appPage);
+      }
+    }
+    return appPage.querySelector(".editorial-app-container") as HTMLElement;
+  }
+
   public getContainerForPluginSlot(pluginId: string, slotId: string, compId?: string): Element {
     if (slotId === "main") {
-      return this.mainAppContainer || this.root;
+      return this.ensureAppContainer(pluginId);
     }
     if (slotId === "sidebar" || slotId === "widget" || slotId === "widgets") {
       return this.widgetsSlot || this.root;
@@ -84,7 +126,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     if (slotId === "dock") {
       return this.dockContainer || this.root;
     }
-    return this.mainAppContainer || this.root;
+    return this.ensureAppContainer(pluginId);
   }
 
   public getSlotContainers(): Map<string, Element> {
@@ -441,14 +483,14 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     btnPrefs.title = "Preferences & Custody";
     btnPrefs.innerHTML = `
       <div class="editorial-dock-icon">${icon("settings", 20)}</div>
-      <span class="editorial-dock-label">Prefs</span>
+      <span class="editorial-dock-label">Settings</span>
       <span class="editorial-active-dot"></span>
     `;
     btnPrefs.addEventListener("click", () => this.openSettings());
     this.dockContainer.appendChild(btnPrefs);
   }
 
-  public openApp(pluginId: string): void {
+  public async openApp(pluginId: string): Promise<void> {
     const plugin = this.installedPlugins.find((p) => p.id === pluginId);
     if (!plugin) return;
 
@@ -458,20 +500,132 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     // Update Header Title & Subtitle
     this.updateHeaderSubtitle(plugin.displayName || plugin.name || "App");
 
-    // Switch Viewport Page
-    const pageApp = this.root.querySelector("#editorial-page-app") as HTMLElement | null;
+    // Hide Index & Cards Viewports
     const pageApps = this.root.querySelector("#editorial-page-apps") as HTMLElement | null;
     const pageWidgets = this.root.querySelector("#editorial-page-widgets") as HTMLElement | null;
+    if (pageApps) {
+      pageApps.classList.remove("active");
+      pageApps.style.display = "none";
+    }
+    if (pageWidgets) {
+      pageWidgets.classList.remove("active");
+      pageWidgets.style.display = "none";
+    }
 
-    pageApp?.classList.add("active");
-    pageApps?.classList.remove("active");
-    pageWidgets?.classList.remove("active");
+    // Hide all application viewports
+    const isFeed = pluginId === "org.omni.plugin.feed" || pluginId === "feed";
+    const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const feedPage = this.root.querySelector("#editorial-page-app") as HTMLElement | null;
+    const allAppPages = this.root.querySelectorAll<HTMLElement>(".editorial-app-page");
 
-    // Reparent Slot: Move plugin's main component into mainAppContainer
-    const synthManifest = this.ensurePluginManifest(plugin);
-    const mainComp = synthManifest.components?.find((c: any) => c.slot === "main") || synthManifest.components?.[0];
-    if (mainComp && this.mainAppContainer) {
-      this.kernel.getSandbox(plugin.id)?.reparentComponent(mainComp.id, this.mainAppContainer);
+    allAppPages.forEach((p) => {
+      p.classList.remove("active");
+      p.style.display = "none";
+    });
+    if (feedPage) {
+      feedPage.classList.remove("active");
+      feedPage.style.display = "none";
+    }
+
+    let targetContainer: HTMLElement;
+
+    if (isFeed) {
+      if (feedPage) {
+        feedPage.classList.add("active");
+        feedPage.style.display = "flex";
+      }
+      targetContainer = (this.mainAppContainer || this.root.querySelector("#editorial-main-app-container")) as HTMLElement;
+    } else {
+      targetContainer = this.ensureAppContainer(pluginId);
+      const appPage = this.root.querySelector(`#editorial-app-page-${safeId}`) as HTMLElement | null;
+      if (appPage) {
+        appPage.classList.add("active");
+        appPage.style.display = "flex";
+      }
+    }
+
+    // Ensure the nsite is mounted and its component is projected into targetContainer
+    const appInstanceKey = `${plugin.id}::app`;
+    const placements = this.getPluginPlacements(plugin);
+    const runningMainPlacement = placements.find(
+      (pl) => pl.enabled !== false && (pl.viewport === "main" || pl.viewport === "dock") && this.kernel.getSandbox(`${plugin.id}::${pl.id}`)
+    );
+    const directSandbox = this.kernel.getSandbox(plugin.id);
+    const appSandbox = this.kernel.getSandbox(appInstanceKey);
+
+    if (runningMainPlacement) {
+      const sb = this.kernel.getSandbox(`${plugin.id}::${runningMainPlacement.id}`);
+      const liveComp = sb?.getFirstPopulatedComponentContainer();
+      if (liveComp && !targetContainer.contains(liveComp)) {
+        this.kernel.reparentLiveComponent(`${plugin.id}::${runningMainPlacement.id}`, targetContainer);
+      }
+    } else if (directSandbox) {
+      const liveComp = directSandbox.getFirstPopulatedComponentContainer();
+      if (liveComp && !targetContainer.contains(liveComp)) {
+        this.kernel.reparentLiveComponent(plugin.id, targetContainer);
+      }
+    } else if (appSandbox) {
+      const liveComp = appSandbox.getFirstPopulatedComponentContainer();
+      if (liveComp && !targetContainer.contains(liveComp)) {
+        this.kernel.reparentLiveComponent(appInstanceKey, targetContainer);
+      }
+    } else {
+      const hasMainPlacement = placements.some((pl) => pl.enabled !== false && (pl.viewport === "main" || pl.viewport === "dock"));
+      if (hasMainPlacement) {
+        if (!this.pendingAppMounts.has(plugin.id)) {
+          this.pendingAppMounts.add(plugin.id);
+          try {
+            await this.mountPlugin(plugin);
+          } catch (err) {
+            console.warn(`Failed to mount plugin ${plugin.id}:`, err);
+          } finally {
+            this.pendingAppMounts.delete(plugin.id);
+          }
+        }
+      } else {
+        if (!this.pendingAppMounts.has(appInstanceKey)) {
+          this.pendingAppMounts.add(appInstanceKey);
+          try {
+            const synthManifest = this.ensurePluginManifest(plugin);
+            const appManifest = {
+              ...synthManifest,
+              components: [
+                {
+                  id: `${plugin.id}-app-main`,
+                  type: "main",
+                  title: plugin.name || plugin.id,
+                  slot: "main"
+                }
+              ]
+            };
+            const customSlotContainers = new Map(this.getSlotContainers());
+            customSlotContainers.set("main", targetContainer);
+            customSlotContainers.set("sidebar", targetContainer);
+            if (synthManifest.components) {
+              for (const comp of synthManifest.components) {
+                if (comp.slot) customSlotContainers.set(comp.slot, targetContainer);
+              }
+            }
+            const activePubkey = typeof localStorage !== "undefined" ? localStorage.getItem("omni_active_profile_pubkey") || "" : "";
+            await this.kernel.registerPlugin(
+              appManifest,
+              plugin.htmlContent || plugin.scriptContent,
+              customSlotContainers,
+              {
+                instanceId: appInstanceKey,
+                route: (plugin.id === "org.omni.plugin.profile-viewer" && activePubkey) ? `?pubkey=${activePubkey}` : "",
+                viewId: "main",
+                targetSlot: "main",
+                relays: plugin.relays
+              }
+            );
+          } catch (err) {
+            console.warn(`Failed to register app instance for ${plugin.id}:`, err);
+          } finally {
+            this.pendingAppMounts.delete(appInstanceKey);
+          }
+        }
+      }
     }
 
     this.renderDock();
@@ -484,13 +638,27 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     this.updateHeaderSubtitle("Index");
 
-    const pageApp = this.root.querySelector("#editorial-page-app") as HTMLElement | null;
     const pageApps = this.root.querySelector("#editorial-page-apps") as HTMLElement | null;
     const pageWidgets = this.root.querySelector("#editorial-page-widgets") as HTMLElement | null;
+    const pageApp = this.root.querySelector("#editorial-page-app") as HTMLElement | null;
+    const allAppPages = this.root.querySelectorAll<HTMLElement>(".editorial-app-page");
 
-    pageApp?.classList.remove("active");
-    pageApps?.classList.add("active");
-    pageWidgets?.classList.remove("active");
+    if (pageApps) {
+      pageApps.classList.add("active");
+      pageApps.style.display = "block";
+    }
+    if (pageWidgets) {
+      pageWidgets.classList.remove("active");
+      pageWidgets.style.display = "none";
+    }
+    if (pageApp) {
+      pageApp.classList.remove("active");
+      pageApp.style.display = "none";
+    }
+    allAppPages.forEach((p) => {
+      p.classList.remove("active");
+      p.style.display = "none";
+    });
 
     this.renderDock();
     this.renderAppsIndex();
@@ -502,21 +670,89 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     this.updateHeaderSubtitle("Cards");
 
-    const pageApp = this.root.querySelector("#editorial-page-app") as HTMLElement | null;
     const pageApps = this.root.querySelector("#editorial-page-apps") as HTMLElement | null;
     const pageWidgets = this.root.querySelector("#editorial-page-widgets") as HTMLElement | null;
+    const pageApp = this.root.querySelector("#editorial-page-app") as HTMLElement | null;
+    const allAppPages = this.root.querySelectorAll<HTMLElement>(".editorial-app-page");
 
-    pageApp?.classList.remove("active");
-    pageApps?.classList.remove("active");
-    pageWidgets?.classList.add("active");
+    if (pageWidgets) {
+      pageWidgets.classList.add("active");
+      pageWidgets.style.display = "block";
+    }
+    if (pageApps) {
+      pageApps.classList.remove("active");
+      pageApps.style.display = "none";
+    }
+    if (pageApp) {
+      pageApp.classList.remove("active");
+      pageApp.style.display = "none";
+    }
+    allAppPages.forEach((p) => {
+      p.classList.remove("active");
+      p.style.display = "none";
+    });
 
     this.renderDock();
+    this.ensureWidgetsMounted().catch(console.warn);
     this.renderWidgetsView();
   }
 
   private updateHeaderSubtitle(sub: string): void {
     const subtitleEl = this.root.querySelector("#editorial-view-subtitle");
     if (subtitleEl) subtitleEl.textContent = sub;
+  }
+
+  public async ensurePinnedAppsMounted(): Promise<void> {
+    const pinned = this.getPinnedPlugins();
+    for (const plugin of pinned) {
+      if (!plugin.enabled) continue;
+      if (plugin.id === "org.omni.plugin.feed") continue;
+      const placements = this.getPluginPlacements(plugin);
+      const hasRunning = placements.some((pl) => Boolean(this.kernel.getSandbox(`${plugin.id}::${pl.id}`))) ||
+        Boolean(this.kernel.getSandbox(plugin.id)) ||
+        Boolean(this.kernel.getSandbox(`${plugin.id}::app`));
+
+      if (!hasRunning) {
+        try {
+          const targetContainer = this.ensureAppContainer(plugin.id);
+          const hasMainPlacement = placements.some((pl) => pl.enabled !== false && (pl.viewport === "main" || pl.viewport === "dock"));
+          if (hasMainPlacement) {
+            await this.mountPlugin(plugin);
+          } else {
+            const appInstanceKey = `${plugin.id}::app`;
+            const synthManifest = this.ensurePluginManifest(plugin);
+            const appManifest = {
+              ...synthManifest,
+              components: [
+                {
+                  id: `${plugin.id}-app-main`,
+                  type: "main",
+                  title: plugin.name || plugin.id,
+                  slot: "main"
+                }
+              ]
+            };
+            const customSlotContainers = new Map(this.getSlotContainers());
+            customSlotContainers.set("main", targetContainer);
+            customSlotContainers.set("sidebar", targetContainer);
+            await this.kernel.registerPlugin(
+              appManifest,
+              plugin.htmlContent || plugin.scriptContent,
+              customSlotContainers,
+              {
+                instanceId: appInstanceKey,
+                route: "",
+                viewId: "main",
+                targetSlot: "main",
+                relays: plugin.relays
+              }
+            );
+          }
+        } catch (err) {
+          console.warn(`Could not pre-mount pinned plugin ${plugin.id}:`, err);
+        }
+      }
+    }
   }
 
   private selectInitialView(): void {
@@ -528,6 +764,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     } else {
       this.showAppsIndex();
     }
+    this.ensurePinnedAppsMounted().catch(console.warn);
   }
 
   // --- Broadsheet Applications Index ---
@@ -952,7 +1189,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       <!-- 2. Central Content Viewport -->
       <main class="editorial-main-content">
         <!-- Viewport A: Full App View -->
-        <section id="editorial-page-app" class="editorial-viewport-page active">
+        <section id="editorial-page-app" class="editorial-viewport-page editorial-app-page active">
           <div id="editorial-main-app-container" class="editorial-app-container"></div>
           <div class="editorial-stream-end">
             <div class="editorial-stream-end-line">
@@ -1001,7 +1238,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         <section id="editorial-page-widgets" class="editorial-viewport-page" style="padding: 20px 16px;">
           <div class="editorial-section-header">
             <h2 class="editorial-section-title">Companion Cards</h2>
-            <div class="editorial-section-meta">Workspace Widgets • Glanceable Real-Time Data</div>
+            <div class="editorial-section-meta">Workspace Widgets</div>
           </div>
 
           <div id="editorial-widgets-empty" class="editorial-pref-card" style="align-items: center; text-align: center; padding: 32px 16px; display: none;">

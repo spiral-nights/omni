@@ -335,6 +335,50 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
     });
   });
 
+  describe("Application Navigation & Micro-Frontend Mounting", () => {
+    it("opens non-feed plugins into dedicated isolated containers and shows them", async () => {
+      shell.mount();
+
+      // Open timer
+      await shell.openApp("org.omni.plugin.timer");
+
+      expect(shell.activePage).toBe("app");
+      expect(shell.activePluginId).toBe("org.omni.plugin.timer");
+      expect(root.querySelector("#editorial-view-subtitle")?.textContent).toBe("Focus Timer");
+
+      const timerPage = root.querySelector("#editorial-app-page-org-omni-plugin-timer") as HTMLElement | null;
+      expect(timerPage).toBeTruthy();
+      expect(timerPage?.classList.contains("active")).toBe(true);
+      expect(timerPage?.style.display).toBe("flex");
+
+      // Feed page should be hidden
+      const feedPage = root.querySelector("#editorial-page-app") as HTMLElement | null;
+      expect(feedPage?.classList.contains("active")).toBe(false);
+      expect(feedPage?.style.display).toBe("none");
+
+      // Switch back to feed
+      await shell.openApp("org.omni.plugin.feed");
+      expect(shell.activePluginId).toBe("org.omni.plugin.feed");
+      expect(feedPage?.classList.contains("active")).toBe(true);
+      expect(feedPage?.style.display).toBe("flex");
+      expect(timerPage?.classList.contains("active")).toBe(false);
+      expect(timerPage?.style.display).toBe("none");
+    });
+
+    it("contains authentic tactile paper grain texture and warm broadsheet newspaper dark ground", () => {
+      shell.mount();
+
+      expect(EDITORIAL_SHELL_CSS).toContain("noiseFilter");
+      expect(EDITORIAL_SHELL_CSS).toContain("mix-blend-mode: screen");
+      expect(EDITORIAL_SHELL_CSS).toContain("#1c1b20");
+      expect(EDITORIAL_SHELL_CSS).toContain(".feed-container");
+      expect(EDITORIAL_SHELL_CSS).toContain(".feed-composer");
+      expect(EDITORIAL_SHELL_CSS).toContain(".note-card");
+      expect(EDITORIAL_SHELL_CSS).toContain(".timer-widget-card");
+      expect(EDITORIAL_SHELL_CSS).toContain(".checklist-widget-card");
+    });
+  });
+
   describe("Built-in Shell Registry Integration", () => {
     it("registers Editorial as a built-in shell in shellRegistry", () => {
       expect(shellRegistry.get("editorial")?.name).toBe("Editorial");
