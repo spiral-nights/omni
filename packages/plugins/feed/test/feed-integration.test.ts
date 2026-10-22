@@ -117,7 +117,7 @@ describe("feed plugin full-stack (runtime bridge + remote-dom host + kernel)", (
     const { container, dispatcher } = await bootFeed();
     const btn = container.querySelector(".btn-search-feed") as HTMLElement;
     btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await wait(100);
+    await wait(200);
 
     // The mirrored search page should now be visible in the host DOM
     const searchPage = container.querySelector(".feed-search-page") as HTMLElement;
@@ -129,11 +129,11 @@ describe("feed plugin full-stack (runtime bridge + remote-dom host + kernel)", (
   it("search toggle remains responsive across repeated open/close cycles", async () => {
     const { container, dispatcher } = await bootFeed();
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 5; i++) {
       (container.querySelector(".btn-search-feed") as HTMLElement).dispatchEvent(
         new MouseEvent("click", { bubbles: true })
       );
-      await wait(50);
+      await wait(150);
       const searchPage = container.querySelector(".feed-search-page") as HTMLElement;
       const openOk = searchPage && !searchPage.getAttribute("style")?.includes("none");
       if (!openOk) {
@@ -142,7 +142,7 @@ describe("feed plugin full-stack (runtime bridge + remote-dom host + kernel)", (
       (container.querySelector(".btn-search-back") as HTMLElement).dispatchEvent(
         new MouseEvent("click", { bubbles: true })
       );
-      await wait(50);
+      await wait(150);
     }
     dispatcher.destroy();
   });

@@ -57,6 +57,7 @@ export class OmniShell extends BaseShell {
   protected onWorkspaceUpdated(): void {
     this.renderDockLaunchers();
     this.renderAppsLauncher();
+    this.renderShellManager();
     this.renderPluginManager();
     this.renderSettingsNavAndPanes();
   }
@@ -396,6 +397,8 @@ export class OmniShell extends BaseShell {
     this.renderDockLaunchers();
     this.wireNavigation();
     this.wireSettingsModal();
+    this.renderShellManager();
+    this.wireShellManager();
     this.wireInspectorModal();
     this.wireInstallModal();
     this.wireProfileControls();
@@ -1239,6 +1242,220 @@ export class OmniShell extends BaseShell {
     this.renderPluginManager();
   }
 
+  // --- Installed Shells Manager UI (Swappable Shells Architecture) ---
+
+  public renderShellManager(): void {
+    const switcherContainer = (this.root.querySelector("#shell-switcher-buttons") || document.getElementById("shell-switcher-buttons")) as HTMLElement | null;
+    const cardsList = (this.root.querySelector("#classic-installed-shells-list") || document.getElementById("classic-installed-shells-list")) as HTMLElement | null;
+    const countBadge = (this.root.querySelector("#classic-shell-count-badge") || document.getElementById("classic-shell-count-badge")) as HTMLElement | null;
+
+    const shells = shellRegistry.list();
+    const currentActive = shellRegistry.getActiveShellId();
+
+    if (countBadge) {
+      countBadge.textContent = `${shells.length} installed`;
+    }
+
+    if (switcherContainer) {
+      switcherContainer.innerHTML = "";
+      for (const s of shells) {
+        const btn = document.createElement("button");
+        btn.id = `btn-shell-${s.id}`;
+        btn.className = `btn-secondary ${currentActive === s.id ? "active" : ""}`;
+        btn.style.cssText = `font-size: 0.72rem; padding: 3px 8px; ${currentActive === s.id ? "border-color: var(--omni-accent-primary); color: var(--omni-accent-primary);" : ""}`;
+        btn.textContent = s.name;
+        btn.title = s.description;
+        btn.addEventListener("click", () => {
+          shellRegistry.setActiveShell(s.id);
+          this.reloadPage();
+        });
+        switcherContainer.appendChild(btn);
+      }
+    }
+
+    if (!cardsList) return;
+    cardsList.innerHTML = "";
+
+    for (const s of shells) {
+      const isActive = currentActive === s.id;
+      const isBuiltin = s.isBuiltin !== false;
+      const card = document.createElement("div");
+      card.className = "classic-shell-card";
+      card.style.cssText = `
+        background: var(--omni-bg-elevated);
+        border: 1px solid ${isActive ? "var(--omni-accent-primary)" : "var(--omni-border-subtle)"};
+        border-radius: var(--omni-radius-sm);
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      `;
+
+      card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 32px; height: 32px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
+              ${s.icon && ICONS[s.icon as IconName] ? icon(s.icon as IconName, 18) : icon("layout", 18)}
+            </div>
+            <div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <strong style="font-size: 0.88rem; color: var(--omni-text-primary);">${s.name}</strong>
+                ${isActive ? `<span style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase; padding: 1px 6px; background: var(--omni-accent-primary); color: #fff; border-radius: 3px;">Active</span>` : ""}
+                ${!isBuiltin ? `<span style="font-size: 0.65rem; text-transform: uppercase; padding: 1px 6px; background: var(--omni-bg-subtle); color: var(--omni-text-muted); border: 1px solid var(--omni-border-subtle); border-radius: 3px;">Custom</span>` : ""}
+              </div>
+              <div style="font-size: 0.72rem; color: var(--omni-text-muted); margin-top: 1px;">
+                ${s.author ? `by ${s.author}` : "Omni Core Team"} • v${s.version || "1.0.0"}
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            ${!isActive ? `
+              <button class="btn-secondary btn-activate-shell" data-shell-id="${s.id}" style="color: var(--omni-accent-primary); border-color: var(--omni-accent-primary); font-size: 0.75rem; padding: 4px 10px;">
+                Activate
+              </button>
+            ` : `
+              <span style="font-size: 0.72rem; color: var(--omni-accent-primary); font-weight: 600; padding: 4px 6px;">Current</span>
+            `}
+            ${!isBuiltin ? `
+              <button class="btn-secondary btn-uninstall-shell" data-shell-id="${s.id}" style="color: #ff5555; border-color: #552222; font-size: 0.75rem; padding: 4px 8px;">
+                Uninstall
+              </button>
+            ` : ""}
+          </div>
+        </div>
+        <p style="font-size: 0.78rem; color: var(--omni-text-secondary); margin: 0; line-height: 1.35;">${s.description}</p>
+      `;
+
+      card.querySelector(".btn-activate-shell")?.addEventListener("click", () => {
+        shellRegistry.setActiveShell(s.id);
+        this.reloadPage();
+      });
+
+      card.querySelector(".btn-uninstall-shell")?.addEventListener("click", () => {
+        if (confirm(`Uninstall shell '${s.name}'?`)) {
+          shellRegistry.uninstall(s.id);
+          this.renderShellManager();
+        }
+      });
+
+      cardsList.appendChild(card);
+    }
+
+    this.renderCuratedShellCatalog();
+  }
+
+  public renderCuratedShellCatalog(): void {
+    const catalogContainer = (this.root.querySelector("#classic-curated-shell-catalog") || document.getElementById("classic-curated-shell-catalog")) as HTMLElement | null;
+    if (!catalogContainer) return;
+    catalogContainer.innerHTML = "";
+
+    const curated = shellRegistry.getCuratedCatalog();
+    const installed = shellRegistry.list();
+
+    for (const c of curated) {
+      const isInstalled = installed.some((s) => s.id === c.id);
+      const isCurrentActive = shellRegistry.getActiveShellId() === c.id;
+
+      const item = document.createElement("div");
+      item.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); gap: 10px;";
+      item.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+          <div style="width: 32px; height: 32px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
+            ${c.icon && ICONS[c.icon as IconName] ? icon(c.icon as IconName, 18) : icon("layout", 18)}
+          </div>
+          <div style="min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <strong style="font-size: 0.85rem; color: var(--omni-text-primary);">${c.name}</strong>
+              <span style="font-size: 0.68rem; color: var(--omni-text-muted);">v${c.version || "1.0.0"}</span>
+            </div>
+            <div style="font-size: 0.74rem; color: var(--omni-text-muted); margin-top: 2px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+              ${c.description}
+            </div>
+          </div>
+        </div>
+        <div style="flex-shrink: 0;">
+          ${isInstalled ? (
+            isCurrentActive ? `
+              <span style="font-size: 0.72rem; color: var(--omni-accent-primary); font-weight: 600;">Active</span>
+            ` : `
+              <button class="btn-secondary btn-activate-curated-shell" data-shell-id="${c.id}" style="font-size: 0.75rem; padding: 3px 8px;">
+                Activate
+              </button>
+            `
+          ) : `
+            <button class="btn-secondary btn-install-curated-shell" data-shell-id="${c.id}" style="color: var(--omni-accent-primary); border-color: var(--omni-accent-primary); font-size: 0.75rem; padding: 3px 8px;">
+              Install Shell
+            </button>
+          `}
+        </div>
+      `;
+
+      item.querySelector(".btn-install-curated-shell")?.addEventListener("click", () => {
+        shellRegistry.install(c);
+        this.renderShellManager();
+      });
+
+      item.querySelector(".btn-activate-curated-shell")?.addEventListener("click", () => {
+        shellRegistry.setActiveShell(c.id);
+        this.reloadPage();
+      });
+
+      catalogContainer.appendChild(item);
+    }
+  }
+
+  public wireShellManager(): void {
+    const modal = (this.root.querySelector("#install-shell-modal") || document.getElementById("install-shell-modal")) as HTMLElement | null;
+    const btnOpen = (this.root.querySelector("#btn-classic-open-install-shell") || document.getElementById("btn-classic-open-install-shell")) as HTMLElement | null;
+    const btnClose = (this.root.querySelector("#btn-close-install-shell-modal") || document.getElementById("btn-close-install-shell-modal")) as HTMLElement | null;
+    const btnConfirmCustom = (this.root.querySelector("#btn-classic-confirm-custom-shell-install") || document.getElementById("btn-classic-confirm-custom-shell-install")) as HTMLElement | null;
+
+    btnOpen?.addEventListener("click", () => {
+      modal?.classList.add("open");
+      this.renderCuratedShellCatalog();
+    });
+
+    btnClose?.addEventListener("click", () => {
+      modal?.classList.remove("open");
+    });
+
+    modal?.addEventListener("click", (e) => {
+      if (e.target === modal) modal.classList.remove("open");
+    });
+
+    btnConfirmCustom?.addEventListener("click", () => {
+      const idInput = (this.root.querySelector("#classic-custom-shell-id") || document.getElementById("classic-custom-shell-id")) as HTMLInputElement | null;
+      const nameInput = (this.root.querySelector("#classic-custom-shell-name") || document.getElementById("classic-custom-shell-name")) as HTMLInputElement | null;
+      const descInput = (this.root.querySelector("#classic-custom-shell-desc") || document.getElementById("classic-custom-shell-desc")) as HTMLInputElement | null;
+
+      const id = idInput?.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+      const name = nameInput?.value.trim();
+      const desc = descInput?.value.trim() || `Custom installed shell experience (${id})`;
+
+      if (!id || !name) {
+        alert("Please provide both a Shell ID and Name.");
+        return;
+      }
+
+      shellRegistry.install({
+        id,
+        name,
+        description: desc,
+        author: "Custom",
+        version: "1.0.0",
+        isBuiltin: false,
+        create: (options) => new OmniShell(options)
+      });
+
+      if (idInput) idInput.value = "";
+      if (nameInput) nameInput.value = "";
+      if (descInput) descInput.value = "";
+
+      modal?.classList.remove("open");
+      this.renderShellManager();
+    });
+  }
+
   // --- Installed Plugins Manager UI ---
   public renderPluginManager(): void {
     const container = document.getElementById("plugins-list");
@@ -1807,16 +2024,28 @@ export class OmniShell extends BaseShell {
                 </div>
 
                 <!-- Shell Experience Switcher -->
-                <div id="shell-experience-box" style="display: flex; flex-direction: column; gap: 8px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 12px 14px; margin-top: 4px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                <!-- Installed Shells Card -->
+                <div id="shell-experience-box" class="classic-shells-card" style="display: flex; flex-direction: column; gap: 10px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-md); padding: 14px; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                     <div>
-                      <strong style="font-size: 0.85rem; color: var(--omni-text-primary); display: flex; align-items: center; gap: 6px;">
-                        ${icon("layout", 15)} Shell Experience
-                      </strong>
-                      <span style="font-size: 0.72rem; color: var(--omni-text-muted);">Select or switch between installed shell layout experiences.</span>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <strong style="font-size: 0.9rem; color: var(--omni-text-primary); display: flex; align-items: center; gap: 6px;">
+                          ${icon("layout", 15)} Installed Shells
+                        </strong>
+                        <span id="classic-shell-count-badge" style="font-size: 0.68rem; padding: 2px 6px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: 4px; color: var(--omni-text-muted);">2 installed</span>
+                      </div>
+                      <span style="font-size: 0.72rem; color: var(--omni-text-muted);">Host UI frames, viewport mapping, and navigation layouts. Exactly one shell can be active.</span>
                     </div>
-                    <div id="shell-switcher-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <button id="btn-classic-open-install-shell" class="btn-secondary" style="font-size: 0.75rem; display: flex; align-items: center; gap: 4px; color: var(--omni-accent-primary); border-color: var(--omni-accent-primary);">
+                        ${icon("plus", 12)}
+                        <span>Install Shell</span>
+                      </button>
+                      <div id="shell-switcher-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+                    </div>
                   </div>
+                  <!-- Installed Shell Cards List -->
+                  <div id="classic-installed-shells-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
                 </div>
 
                 <p style="font-size: 0.78rem; color: var(--omni-text-muted); margin: 0;">
@@ -1887,7 +2116,57 @@ export class OmniShell extends BaseShell {
         </div>
       </div>
 
-      <!-- 5. Plugin Inspector Modal -->
+      <!-- 5. Install Shell Modal -->
+      <div class="modal-overlay" id="install-shell-modal">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 style="font-size: 1.05rem; font-weight: 600;">Install Shell Experience</h3>
+            <button class="btn-drawer-close" id="btn-close-install-shell-modal">
+              ${icon("close", 14)}
+            </button>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <p style="font-size: 0.8rem; color: var(--omni-text-muted); margin: 0;">
+              Shell experiences redefine the entire workspace frame, layout viewport routing, navigation dock, and visual design system.
+            </p>
+
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--omni-text-secondary); margin-bottom: 8px;">
+                Featured Shells (1-Click Install)
+              </div>
+              <div id="classic-curated-shell-catalog" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+
+            <div style="border-top: 1px solid var(--omni-border-subtle); padding-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+              <div style="font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--omni-text-secondary);">
+                Install Custom Shell
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--omni-text-secondary);">
+                  Shell ID:
+                  <input id="classic-custom-shell-id" type="text" placeholder="e.g. minimalist" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-size: 0.8rem; outline: none;" />
+                </label>
+                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--omni-text-secondary);">
+                  Shell Name:
+                  <input id="classic-custom-shell-name" type="text" placeholder="e.g. Minimalist Shell" style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-size: 0.8rem; outline: none;" />
+                </label>
+              </div>
+              <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--omni-text-secondary);">
+                Description:
+                <input id="classic-custom-shell-desc" type="text" placeholder="Brief description of the shell..." style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 6px 10px; border-radius: var(--omni-radius-sm); font-size: 0.8rem; outline: none;" />
+              </label>
+              <div style="display: flex; justify-content: flex-end;">
+                <button id="btn-classic-confirm-custom-shell-install" class="btn-publish">
+                  Install Custom Shell
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Plugin Inspector Modal -->
       <div class="modal-overlay" id="plugin-inspector-modal">
         <div class="modal-card" style="max-width: 540px;">
           <div class="modal-header">
@@ -2122,26 +2401,8 @@ export class OmniShell extends BaseShell {
       this.saveLocalWorkspace();
     });
 
-    const shellButtonsContainer = (this.root.querySelector("#shell-switcher-buttons") || document.getElementById("shell-switcher-buttons")) as HTMLElement | null;
-    if (shellButtonsContainer) {
-      shellButtonsContainer.innerHTML = "";
-      const currentActive = (typeof window !== "undefined" ? window.localStorage.getItem("omni_active_shell") : null) || "classic";
-      for (const s of shellRegistry.list()) {
-        const btn = document.createElement("button");
-        btn.id = `btn-shell-${s.id}`;
-        btn.className = `btn-secondary ${currentActive === s.id ? "active" : ""}`;
-        btn.style.cssText = `font-size: 0.72rem; padding: 3px 8px; ${currentActive === s.id ? "border-color: var(--omni-accent-primary); color: var(--omni-accent-primary);" : ""}`;
-        btn.textContent = s.name;
-        btn.title = s.description;
-        btn.addEventListener("click", () => {
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem("omni_active_shell", s.id);
-            window.location.reload();
-          }
-        });
-        shellButtonsContainer.appendChild(btn);
-      }
-    }
+    this.renderShellManager();
+    this.wireShellManager();
   }
 
   private wireSettingsModal(): void {

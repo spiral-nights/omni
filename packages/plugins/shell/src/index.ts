@@ -20,7 +20,8 @@ export type { SlotMapping, AvailableSlot } from "@omni/core";
 export {
   ShellRegistry,
   shellRegistry,
-  BUILTIN_SHELLS
+  BUILTIN_SHELLS,
+  CURATED_SHELLS
 } from "./shell-registry.js";
 export type { ShellDescriptor } from "./shell-registry.js";
 

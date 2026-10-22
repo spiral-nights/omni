@@ -104,6 +104,7 @@ export class PanoramaShell extends BaseShell {
     this.renderPivotNavigation();
     this.renderAppsTiles();
     this.renderWidgetsEmptyState();
+    this.renderSystemShellList();
     this.renderSystemPluginList();
     this.renderBottomAppBar();
     this.updateEdgeGliders();
@@ -252,6 +253,7 @@ export class PanoramaShell extends BaseShell {
     }
     this.renderAppsTiles();
     this.renderWidgetsEmptyState();
+    this.renderSystemShellList();
     this.renderSystemPluginList();
     this.renderColorChoosers();
     this.wireNavigation();
@@ -259,6 +261,7 @@ export class PanoramaShell extends BaseShell {
     this.wireKeyboardAndGliders();
     this.wireBottomAppBar();
     this.renderBottomAppBar();
+    this.wireShellManagement();
     this.updateProfileUi();
 
     // Wire intent broker callbacks for conflict resolution & single candidate flow
@@ -516,15 +519,29 @@ export class PanoramaShell extends BaseShell {
                 </div>
               </div>
 
-              <!-- Shell Switcher Card -->
-              <div class="panorama-system-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+              <!-- Installed Shells Card -->
+              <div class="panorama-system-card panorama-installed-shells-card" id="panorama-shells-card" style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                   <div>
-                    <strong>Shell Experience</strong>
-                    <p style="font-size: 0.75rem; color: #888; margin-top: 2px;">Switch layout and navigation style.</p>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <strong style="font-size: 0.9rem;">Installed Shells</strong>
+                      <span id="panorama-shell-count" class="panorama-badge" style="font-size: 0.68rem; padding: 2px 6px; background: #222; border: 1px solid #333; color: #aaa;">2 installed</span>
+                    </div>
+                    <p style="font-size: 0.75rem; color: #888; margin-top: 2px;">
+                      Host UI frames, viewport mapping, and navigation layouts. Exactly one shell can be active.
+                    </p>
                   </div>
-                  <div id="panorama-shell-switcher-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <button id="btn-panorama-install-shell" class="btn-panorama-action" style="color: var(--omni-accent-primary, #00a4ef); border-color: var(--omni-accent-primary, #00a4ef); font-size: 0.78rem; height: 32px; display: inline-flex; align-items: center; gap: 4px;">
+                      ${icon("plus", 14)}
+                      <span>Install Shell</span>
+                    </button>
+                    <!-- Preserved container for switcher buttons -->
+                    <div id="panorama-shell-switcher-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+                  </div>
                 </div>
+                <!-- Installed Shell Cards List -->
+                <div id="panorama-installed-shells-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
               </div>
 
               <!-- Theme Accent Color Card -->
@@ -639,6 +656,57 @@ export class PanoramaShell extends BaseShell {
                   Featured Decentralized Apps (1-Click Install)
                 </div>
                 <div id="panorama-curated-catalog" style="display: flex; flex-direction: column; gap: 8px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. Install Shell Modal -->
+        <div class="panorama-inspector-modal" id="panorama-install-shell-modal" style="display: none; align-items: center; justify-content: center;">
+          <div class="panorama-inspector-content" style="max-width: 540px; width: 92%; max-height: 85vh; overflow-y: auto;">
+            <div class="panorama-inspector-header">
+              <h3 style="margin: 0; font-size: 1.05rem; color: #fff;">Install Shell Experience</h3>
+              <button class="btn-app-bar-circle" id="btn-panorama-install-shell-close" style="width: 32px; height: 32px; border: 1px solid #666;" title="Close">
+                ${icon("close", 16)}
+              </button>
+            </div>
+            <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+              <p style="font-size: 0.8rem; color: #aaa; margin: 0;">
+                Shell experiences redefine the entire application layout, typography, navigation docks, and theme system.
+              </p>
+
+              <!-- Curated Shell Catalog -->
+              <div>
+                <div style="font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 8px;">
+                  Featured Shells (1-Click Install)
+                </div>
+                <div id="panorama-curated-shell-catalog" style="display: flex; flex-direction: column; gap: 8px;"></div>
+              </div>
+
+              <!-- Custom Shell Installation -->
+              <div style="border-top: 1px solid #222; padding-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #888;">
+                  Install Custom Shell
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: #ccc;">
+                    <span>Shell ID:</span>
+                    <input id="panorama-custom-shell-id" type="text" placeholder="e.g. minimalist" style="background: #111; border: 1px solid #333; color: #fff; padding: 6px 10px; font-size: 0.8rem; outline: none;" />
+                  </label>
+                  <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: #ccc;">
+                    <span>Shell Name:</span>
+                    <input id="panorama-custom-shell-name" type="text" placeholder="e.g. Minimalist Shell" style="background: #111; border: 1px solid #333; color: #fff; padding: 6px 10px; font-size: 0.8rem; outline: none;" />
+                  </label>
+                </div>
+                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: #ccc;">
+                  <span>Description:</span>
+                  <input id="panorama-custom-shell-desc" type="text" placeholder="Brief description of the shell..." style="background: #111; border: 1px solid #333; color: #fff; padding: 6px 10px; font-size: 0.8rem; outline: none;" />
+                </label>
+                <div style="display: flex; justify-content: flex-end;">
+                  <button id="btn-panorama-confirm-custom-shell" class="btn-panorama-action" style="background: var(--omni-accent-primary, #00a4ef); color: #fff; border-color: var(--omni-accent-primary, #00a4ef); font-weight: 600;">
+                    Install Custom Shell
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1033,6 +1101,225 @@ export class PanoramaShell extends BaseShell {
     } else {
       if (existingEmpty) existingEmpty.remove();
     }
+  }
+
+  // --- Installed Shells Management (First-Class Swappable Shells) ---
+
+  public renderSystemShellList(): void {
+    const list = (this.root.querySelector("#panorama-installed-shells-list") || document.getElementById("panorama-installed-shells-list")) as HTMLElement | null;
+    const countBadge = this.root.querySelector("#panorama-shell-count") || document.getElementById("panorama-shell-count");
+    const switcherButtons = (this.root.querySelector("#panorama-shell-switcher-buttons") || document.getElementById("panorama-shell-switcher-buttons")) as HTMLElement | null;
+
+    const shells = shellRegistry.list();
+    const currentActive = shellRegistry.getActiveShellId();
+
+    if (countBadge) {
+      countBadge.textContent = `${shells.length} installed`;
+    }
+
+    // Populate quick buttons for backward compatibility and tests
+    if (switcherButtons) {
+      switcherButtons.innerHTML = "";
+      for (const s of shells) {
+        const btn = document.createElement("button");
+        btn.id = `btn-switch-${s.id}`;
+        btn.className = `btn-panorama-action ${currentActive === s.id ? "active" : ""}`;
+        btn.textContent = s.name;
+        btn.title = s.description;
+        btn.addEventListener("click", () => {
+          shellRegistry.setActiveShell(s.id);
+          this.reloadPage();
+        });
+        switcherButtons.appendChild(btn);
+      }
+    }
+
+    if (!list) return;
+    list.innerHTML = "";
+
+    for (const s of shells) {
+      const isActive = currentActive === s.id;
+      const isBuiltin = s.isBuiltin !== false;
+      const card = document.createElement("div");
+      card.className = "panorama-shell-card";
+      card.style.cssText = `
+        background: #141414;
+        border: 1px solid ${isActive ? "var(--omni-accent-primary, #00a4ef)" : "#222"};
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        position: relative;
+      `;
+
+      card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 32px; height: 32px; background: #222; border: 1px solid #333; display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary, #00a4ef); flex-shrink: 0;">
+              ${s.icon && ICONS[s.icon as IconName] ? icon(s.icon as IconName, 18) : icon("layout", 18)}
+            </div>
+            <div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <strong style="font-size: 0.88rem; color: #fff;">${s.name}</strong>
+                ${isActive ? `<span style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase; padding: 1px 6px; background: var(--omni-accent-primary, #00a4ef); color: #fff;">Active</span>` : ""}
+                ${!isBuiltin ? `<span style="font-size: 0.65rem; text-transform: uppercase; padding: 1px 6px; background: #262626; color: #888; border: 1px solid #333;">Custom</span>` : ""}
+              </div>
+              <div style="font-size: 0.72rem; color: #888; margin-top: 1px;">
+                ${s.author ? `by ${s.author}` : "Omni Core Team"} • v${s.version || "1.0.0"}
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            ${!isActive ? `
+              <button class="btn-panorama-action btn-activate-shell" data-shell-id="${s.id}" style="color: var(--omni-accent-primary, #00a4ef); border-color: var(--omni-accent-primary, #00a4ef); font-size: 0.75rem; padding: 4px 10px; height: 28px;">
+                Activate
+              </button>
+            ` : `
+              <span style="font-size: 0.72rem; color: var(--omni-accent-primary, #00a4ef); font-weight: 600; padding: 4px 6px;">Current</span>
+            `}
+            ${!isBuiltin ? `
+              <button class="btn-panorama-action btn-uninstall-shell" data-shell-id="${s.id}" style="color: #ff5555; border-color: #552222; font-size: 0.75rem; padding: 4px 8px; height: 28px;">
+                Uninstall
+              </button>
+            ` : ""}
+          </div>
+        </div>
+        <p style="font-size: 0.78rem; color: #bbb; margin: 0; line-height: 1.35;">${s.description}</p>
+      `;
+
+      card.querySelector(".btn-activate-shell")?.addEventListener("click", () => {
+        shellRegistry.setActiveShell(s.id);
+        this.reloadPage();
+      });
+
+      card.querySelector(".btn-uninstall-shell")?.addEventListener("click", () => {
+        if (confirm(`Uninstall shell '${s.name}'?`)) {
+          shellRegistry.uninstall(s.id);
+          this.renderSystemShellList();
+          this.showToast(`Uninstalled shell ${s.name}`);
+        }
+      });
+
+      list.appendChild(card);
+    }
+
+    // Populate curated shells catalog inside modal
+    this.renderCuratedShellCatalog();
+  }
+
+  public renderCuratedShellCatalog(): void {
+    const catalogContainer = this.root.querySelector("#panorama-curated-shell-catalog") || document.getElementById("panorama-curated-shell-catalog");
+    if (!catalogContainer) return;
+    catalogContainer.innerHTML = "";
+
+    const curated = shellRegistry.getCuratedCatalog();
+    const installed = shellRegistry.list();
+
+    for (const c of curated) {
+      const isInstalled = installed.some((s) => s.id === c.id);
+      const isCurrentActive = shellRegistry.getActiveShellId() === c.id;
+
+      const item = document.createElement("div");
+      item.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #161616; border: 1px solid #282828; gap: 10px;";
+      item.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+          <div style="width: 32px; height: 32px; background: #222; border: 1px solid #333; display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary, #00a4ef); flex-shrink: 0;">
+            ${c.icon && ICONS[c.icon as IconName] ? icon(c.icon as IconName, 18) : icon("layout", 18)}
+          </div>
+          <div style="min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <strong style="font-size: 0.85rem; color: #fff;">${c.name}</strong>
+              <span style="font-size: 0.68rem; color: #888;">v${c.version || "1.0.0"}</span>
+            </div>
+            <div style="font-size: 0.74rem; color: #aaa; margin-top: 2px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+              ${c.description}
+            </div>
+          </div>
+        </div>
+        <div style="flex-shrink: 0;">
+          ${isInstalled ? (
+            isCurrentActive ? `
+              <span style="font-size: 0.72rem; color: var(--omni-accent-primary, #00a4ef); font-weight: 600;">Active</span>
+            ` : `
+              <button class="btn-panorama-action btn-activate-curated-shell" data-shell-id="${c.id}" style="font-size: 0.75rem; padding: 4px 10px;">
+                Activate
+              </button>
+            `
+          ) : `
+            <button class="btn-panorama-action btn-install-curated-shell" data-shell-id="${c.id}" style="color: var(--omni-accent-primary, #00a4ef); border-color: var(--omni-accent-primary, #00a4ef); font-size: 0.75rem; padding: 4px 10px;">
+              Install Shell
+            </button>
+          `}
+        </div>
+      `;
+
+      item.querySelector(".btn-install-curated-shell")?.addEventListener("click", () => {
+        shellRegistry.install(c);
+        this.renderSystemShellList();
+        this.showToast(`Installed ${c.name} Shell!`);
+      });
+
+      item.querySelector(".btn-activate-curated-shell")?.addEventListener("click", () => {
+        shellRegistry.setActiveShell(c.id);
+        this.reloadPage();
+      });
+
+      catalogContainer.appendChild(item);
+    }
+  }
+
+  public wireShellManagement(): void {
+    const modal = (this.root.querySelector("#panorama-install-shell-modal") || document.getElementById("panorama-install-shell-modal")) as HTMLElement | null;
+    const btnOpen = (this.root.querySelector("#btn-panorama-install-shell") || document.getElementById("btn-panorama-install-shell")) as HTMLElement | null;
+    const btnClose = (this.root.querySelector("#btn-panorama-install-shell-close") || document.getElementById("btn-panorama-install-shell-close")) as HTMLElement | null;
+    const btnConfirmCustom = (this.root.querySelector("#btn-panorama-confirm-custom-shell") || document.getElementById("btn-panorama-confirm-custom-shell")) as HTMLElement | null;
+
+    btnOpen?.addEventListener("click", () => {
+      if (modal) modal.style.display = "flex";
+      this.renderCuratedShellCatalog();
+    });
+
+    btnClose?.addEventListener("click", () => {
+      if (modal) modal.style.display = "none";
+    });
+
+    modal?.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).id === "panorama-install-shell-modal") {
+        modal.style.display = "none";
+      }
+    });
+
+    btnConfirmCustom?.addEventListener("click", () => {
+      const idInput = (this.root.querySelector("#panorama-custom-shell-id") || document.getElementById("panorama-custom-shell-id")) as HTMLInputElement | null;
+      const nameInput = (this.root.querySelector("#panorama-custom-shell-name") || document.getElementById("panorama-custom-shell-name")) as HTMLInputElement | null;
+      const descInput = (this.root.querySelector("#panorama-custom-shell-desc") || document.getElementById("panorama-custom-shell-desc")) as HTMLInputElement | null;
+
+      const id = idInput?.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+      const name = nameInput?.value.trim();
+      const desc = descInput?.value.trim() || `Custom installed shell experience (${id})`;
+
+      if (!id || !name) {
+        alert("Please provide both a Shell ID and Name.");
+        return;
+      }
+
+      shellRegistry.install({
+        id,
+        name,
+        description: desc,
+        author: "Custom",
+        version: "1.0.0",
+        isBuiltin: false
+      });
+
+      if (idInput) idInput.value = "";
+      if (nameInput) nameInput.value = "";
+      if (descInput) descInput.value = "";
+
+      if (modal) modal.style.display = "none";
+      this.renderSystemShellList();
+      this.showToast(`Installed shell ${name}!`);
+    });
   }
 
   public renderSystemPluginList(): void {
@@ -2488,26 +2775,9 @@ export class PanoramaShell extends BaseShell {
       }
     });
 
-    // Shell Switcher
-    const shellButtonsContainer = (this.root.querySelector("#panorama-shell-switcher-buttons") || document.getElementById("panorama-shell-switcher-buttons")) as HTMLElement | null;
-    if (shellButtonsContainer) {
-      shellButtonsContainer.innerHTML = "";
-      const currentActive = (typeof window !== "undefined" ? window.localStorage.getItem("omni_active_shell") : null) || "panorama";
-      for (const s of shellRegistry.list()) {
-        const btn = document.createElement("button");
-        btn.id = `btn-switch-${s.id}`;
-        btn.className = `btn-panorama-action ${currentActive === s.id ? "active" : ""}`;
-        btn.textContent = s.name;
-        btn.title = s.description;
-        btn.addEventListener("click", () => {
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem("omni_active_shell", s.id);
-            window.location.reload();
-          }
-        });
-        shellButtonsContainer.appendChild(btn);
-      }
-    }
+    // Shell Switcher & Registry
+    this.renderSystemShellList();
+    this.wireShellManagement();
 
     // Nostr Cloud Workspace Sync
     document.getElementById("btn-panorama-sync")?.addEventListener("click", async () => {

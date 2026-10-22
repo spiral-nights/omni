@@ -8,6 +8,7 @@ import {
   PanoramaShell,
   InstalledPluginEntry,
   shellRegistry,
+  ShellRegistry,
   OMNI_SHELL_STYLE_ELEMENT_ID,
   CLASSIC_SHELL_CSS,
   PANORAMA_SHELL_CSS
@@ -1529,6 +1530,144 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       // Clean up
       shellRegistry.unregister("minimalist");
       expect(shellRegistry.get("minimalist")).toBeUndefined();
+    });
+
+    it("installs, lists, and uninstalls custom shells via shellRegistry with persistence", () => {
+      const customShell = {
+        id: "test-cyberpunk",
+        name: "Cyberpunk Terminal",
+        description: "Neon high-contrast shell",
+        author: "Neo",
+        version: "2.0.0"
+      };
+
+      shellRegistry.install(customShell, true);
+      expect(shellRegistry.get("test-cyberpunk")?.name).toBe("Cyberpunk Terminal");
+      expect(shellRegistry.list().some((s) => s.id === "test-cyberpunk")).toBe(true);
+      expect(shellRegistry.isBuiltin("test-cyberpunk")).toBe(false);
+
+      // Verify persistence in localStorage
+      const saved = localStorage.getItem(ShellRegistry.STORAGE_KEY_INSTALLED);
+      expect(saved).toBeTruthy();
+      expect(saved).toContain("test-cyberpunk");
+
+      // Test activating custom shell
+      shellRegistry.setActiveShell("test-cyberpunk");
+      expect(shellRegistry.getActiveShellId()).toBe("test-cyberpunk");
+
+      // Uninstall custom shell
+      const uninstalled = shellRegistry.uninstall("test-cyberpunk");
+      expect(uninstalled).toBe(true);
+      expect(shellRegistry.get("test-cyberpunk")).toBeUndefined();
+      expect(shellRegistry.getActiveShellId()).toBe("classic");
+    });
+
+    it("prevents uninstalling built-in shells", () => {
+      expect(shellRegistry.isBuiltin("classic")).toBe(true);
+      expect(shellRegistry.isBuiltin("panorama")).toBe(true);
+      expect(() => shellRegistry.uninstall("classic")).toThrow();
+      expect(() => shellRegistry.uninstall("panorama")).toThrow();
+    });
+
+    it("includes curated shell experiences like Mantra in catalog", () => {
+      const catalog = shellRegistry.getCuratedCatalog();
+      expect(catalog.length).toBeGreaterThanOrEqual(1);
+      const mantra = catalog.find((c) => c.id === "mantra");
+      expect(mantra).toBeTruthy();
+      expect(mantra?.name).toBe("Mantra");
+      expect(mantra?.description).toContain("Sacred Editorial");
+    });
+
+    it("renders dedicated Installed Shells section in PanoramaShell and supports installing Mantra", () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      const testShell = new PanoramaShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: []
+      });
+
+      testShell.mount();
+
+      // Check for dedicated Installed Shells section & cards
+      const shellsSection = testRoot.querySelector("#panorama-shells-card");
+      expect(shellsSection).toBeTruthy();
+      const shellsList = testRoot.querySelector("#panorama-installed-shells-list");
+      expect(shellsList).toBeTruthy();
+      const shellCards = testRoot.querySelectorAll(".panorama-shell-card");
+      expect(shellCards.length).toBeGreaterThanOrEqual(2);
+
+      // Open install shell modal
+      const btnInstall = testRoot.querySelector("#btn-panorama-install-shell") as HTMLElement | null;
+      expect(btnInstall).toBeTruthy();
+      btnInstall?.click();
+
+      const modal = testRoot.querySelector("#panorama-install-shell-modal") as HTMLElement | null;
+      expect(modal?.style.display).toBe("flex");
+
+      // Verify Mantra is listed in curated catalog inside modal
+      const catalogEl = testRoot.querySelector("#panorama-curated-shell-catalog");
+      expect(catalogEl?.textContent).toContain("Mantra");
+
+      // Install Mantra from curated catalog
+      const installMantraBtn = catalogEl?.querySelector(".btn-install-curated-shell[data-shell-id='mantra']") as HTMLElement | null;
+      if (installMantraBtn) {
+        installMantraBtn.click();
+        expect(shellRegistry.get("mantra")).toBeTruthy();
+        expect(testRoot.querySelectorAll(".panorama-shell-card").length).toBeGreaterThanOrEqual(3);
+      }
+
+      // Cleanup
+      shellRegistry.uninstall("mantra");
+      testShell.destroy();
+      testRoot.remove();
+    });
+
+    it("renders dedicated Installed Shells section in OmniShell and supports installing Mantra", () => {
+      const testRoot = document.createElement("div");
+      document.body.appendChild(testRoot);
+      const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+      const testShell = new OmniShell({
+        root: testRoot,
+        kernel: testKernel,
+        installedPlugins: []
+      });
+
+      testShell.mount();
+
+      // Check for dedicated Installed Shells box & cards
+      const shellsBox = testRoot.querySelector("#shell-experience-box");
+      expect(shellsBox).toBeTruthy();
+      const cardsList = testRoot.querySelector("#classic-installed-shells-list");
+      expect(cardsList).toBeTruthy();
+      const shellCards = testRoot.querySelectorAll(".classic-shell-card");
+      expect(shellCards.length).toBeGreaterThanOrEqual(2);
+
+      // Open install shell modal
+      const btnOpen = testRoot.querySelector("#btn-classic-open-install-shell") as HTMLElement | null;
+      expect(btnOpen).toBeTruthy();
+      btnOpen?.click();
+
+      const modal = testRoot.querySelector("#install-shell-modal");
+      expect(modal?.classList.contains("open")).toBe(true);
+
+      // Verify Mantra in curated catalog
+      const catalogEl = testRoot.querySelector("#classic-curated-shell-catalog");
+      expect(catalogEl?.textContent).toContain("Mantra");
+
+      // Install Mantra
+      const installMantraBtn = catalogEl?.querySelector(".btn-install-curated-shell[data-shell-id='mantra']") as HTMLElement | null;
+      if (installMantraBtn) {
+        installMantraBtn.click();
+        expect(shellRegistry.get("mantra")).toBeTruthy();
+        expect(testRoot.querySelectorAll(".classic-shell-card").length).toBeGreaterThanOrEqual(3);
+      }
+
+      // Cleanup
+      shellRegistry.uninstall("mantra");
+      testShell.destroy();
+      testRoot.remove();
     });
 
     it("injects classic stylesheet upon OmniShell mount and removes it on destroy", () => {
