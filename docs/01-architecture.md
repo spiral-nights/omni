@@ -14,6 +14,7 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
    - The timeline feed & composer (`@omni/plugin-feed`) is a plugin.
    - The relay inspector & connection manager (`@omni/plugin-relays`) is a plugin.
    - The profile editor & key custody manager (`@omni/plugin-profile`) is a plugin.
+   - The profile & people viewer (`@omni/plugin-profile-viewer`) is a plugin.
    - The task list (`@omni/plugin-checklist`) is a plugin.
    - The shell UI frame itself (`@omni/plugin-shell`) is a first-class plugin.
 2. **Every Plugin is a 100% Standard Nostr Site (nsite)**:
@@ -73,6 +74,7 @@ omni/
 │       ├── feed/                          # @omni/plugin-feed (Timeline notes & note composer)
 │       ├── relays/                        # @omni/plugin-relays (Relay inspector & manager)
 │       ├── profile/                       # @omni/plugin-profile (Identity & key custody)
+│       ├── profile-viewer/                # @omni/plugin-profile-viewer (People & profile viewer)
 │       └── checklist/                     # @omni/plugin-checklist (Daily checklist widget)
 ```
 
@@ -109,7 +111,7 @@ Omni enforces a strict architectural boundary between the **headless execution m
 │                                                                           │
 │   Projects sandboxed nsites via Remote DOM into shell container slots:    │
 │   • Timeline Feed     ──> getContainerForPluginSlot(id, "main")           │
-│   • Focus Timer       ──> getContainerForPluginSlot(id, "sidebar")        │
+│   • Profile Viewer    ──> getContainerForPluginSlot(id, "sidebar")        │
 │   • Daily Checklist   ──> getContainerForPluginSlot(id, "sidebar")        │
 │   • Relay Manager     ──> getContainerForPluginSlot(id, "sidebar")        │
 │   • Third-Party nsite ──> getContainerForPluginSlot(id, userSelectedSlot) │
@@ -267,10 +269,15 @@ All existing plugins (`@omni/plugin-feed`, `@omni/plugin-relays`, `@omni/plugin-
 - Each shell encapsulates its own stylesheet self-contained in `packages/plugins/shell/src/styles/`:
   - `classic-styles.ts` (`CLASSIC_SHELL_CSS`): Warm Paper Dark design system, dock navigation, and multi-viewport workbench.
   - `panorama-styles.ts` (`PANORAMA_SHELL_CSS`): Windows Phone Metro / People Hub panoramic canvas, flat live tiles, and fluid horizontal swipe.
+  - `editorial-styles.ts` (`EDITORIAL_SHELL_CSS`): Sacred Swiss Editorial & Papyrus Sanctuary aesthetic featuring Newsreader serif typography, Space Mono uppercase metadata tags, tactile broadsheet grain, dual-theme modes (Papyrus Light & Obsidian Sanctuary Dark), calibrated accent illumination (Cobalt, Terra, Saffron, Pine, Bone), mathematically centered 3-column header, and unified card containers.
 - Upon `shell.mount()`, the active shell calls `mountShellStyles(css)` which dynamically injects `<style id="omni-active-shell-style">` into `<head>`. Calling `shell.destroy()` removes it cleanly, preventing style conflicts or cross-contamination.
 
 #### 2. First-Class Swappable Shell Registry (`ShellRegistry`)
 - Shells are registered in `shellRegistry` with metadata (`id`, `name`, `description`, `author`, `version`, `create` factory).
+- Built-in first-class shells include:
+  - **Omni Classic** (`classic`): Multi-viewport workbench with dock navigation and widgets dashboard.
+  - **Panorama Hub** (`panorama`): Windows Phone Metro panoramic canvas with horizontal gestures and live tiles.
+  - **Editorial Shell** (`editorial`): Sacred Swiss editorial aesthetic with dual-theme mode, accent illumination, Apps directory, Companion Cards, and native history synchronization.
 - The bootloader dynamically instantiates the user's active shell via:
   ```typescript
   const shell = shellRegistry.create(activeShellType, {
@@ -280,6 +287,15 @@ All existing plugins (`@omni/plugin-feed`, `@omni/plugin-relays`, `@omni/plugin-
   });
   ```
 - The shell selector in Settings automatically enumerates all registered shells from `shellRegistry.list()`, enabling users to install new shell plugins and switch experiences dynamically without code changes.
+
+#### 3. Browser History & Deep Linking Best Practices
+- Shells and plugins synchronize navigation state with the browser's native History API (`window.history.pushState` and `window.addEventListener("popstate")`).
+- Sub-views (such as thread discussions, profile inspection, search, or settings) push state onto the history stack and position a consistent back button in the top-left of the view.
+- Back navigation (`popstate` or clicking the top-left back button) restores the previous page or feed position smoothly without requiring a full page refresh.
+
+#### 4. Pluggable Plugin Settings Panels (`mountPluginSettings`)
+- Shells provide full control over plugin viewports, route assignments, and individual plugin configuration.
+- If a plugin declares a `settings` route (`?view=settings`), the shell dynamically mounts that plugin's remote DOM container directly inside the plugin's dedicated configuration card or drawer within Shell Preferences.
 
 ---
 

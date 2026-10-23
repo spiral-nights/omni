@@ -142,10 +142,10 @@ Add `view` tags directly to your published Nostr nsite event (`kind: 35129` or `
 {
   "kind": 35129,
   "tags": [
-    ["d", "my-pomodoro"],
-    ["name", "Focus Timer"],
-    ["view", "settings", "Timer Settings", "?view=settings"],
-    ["view", "widget", "Countdown Card", "?view=widget"]
+    ["d", "task-planner"],
+    ["name", "Task Planner"],
+    ["view", "settings", "Planner Settings", "?view=settings"],
+    ["view", "widget", "Daily Summary Card", "?view=widget"]
   ]
 }
 ```
@@ -196,11 +196,30 @@ When a user assigns your plugin to a viewport in Omni:
 2. They select the **Assigned Route** (e.g. `Main App (/)` or `Countdown Card (/?view=widget)`).
 3. If your plugin declares a `settings` route, an **"Open Settings Panel"** control is automatically rendered inside the plugin's card in Omni's Settings menu.
 
+### 4.6 Back Button Placement & Browser History Synchronization
+When plugins navigate into sub-views (such as a thread discussion, search results, or user profile inspection):
+1. **Top-Left Placement**: Position the back button anchored at the top-left of the view header, adjacent to the view title or search input, maintaining consistent ergonomics across desktop and mobile.
+2. **Browser History Integration**: Synchronize with browser navigation using `window.history.pushState` on sub-view transitions and listen for `popstate` events:
+   ```javascript
+   // When opening a sub-view:
+   window.history.pushState({ view: "thread", noteId }, "", `?view=thread&id=${noteId}`);
+
+   // When handling browser back/forward buttons:
+   window.addEventListener("popstate", (event) => {
+     if (event.state?.view === "thread") {
+       renderThread(event.state.noteId);
+     } else {
+       renderMainFeed();
+     }
+   });
+   ```
+3. **Explicit Back Action**: When the user clicks the top-left back button, invoke `window.history.back()` or restore the root state, resetting the URL and view cleanly.
+
 ---
 
 ## 5. Design System & Aesthetic Guidelines
 
-Omni follows the **"Warm Paper Dark"** e-ink aesthetic. Plugins should leverage host CSS custom properties:
+Omni supports multiple swappable shells (Omni Classic, Panorama Hub, and Editorial). Plugins automatically inherit the active shell's design tokens and CSS custom properties:
 
 ### 5.1 Color Tokens
 ```css

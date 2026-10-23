@@ -14,7 +14,8 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
    - The timeline feed and composer (`@omni/plugin-feed`) is a plugin.
    - The relay pool inspector and manager (`@omni/plugin-relays`) is a plugin.
    - The profile editor and key custody manager (`@omni/plugin-profile`) is a plugin.
-   - The task list (`@omni/plugin-checklist`) and focus timer (`@omni/plugin-timer`) are plugins.
+   - The profile & people viewer (`@omni/plugin-profile-viewer`) is a plugin.
+   - The task list (`@omni/plugin-checklist`) is a plugin.
    - The host UI frame itself (`@omni/plugin-shell`) is a first-class plugin.
 2. **The Host Bootloader (`apps/web`) is a Minimal Microkernel**:
    - `apps/web/index.html` is strictly a ~15-line skeleton with `<div id="omni-root"></div>`.
@@ -32,8 +33,8 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
    - Sub-views and routes are declared via standard Nostr tags (`["view", "<id>", "<title>", "<path>"]`) or HTML `<link rel="alternate">` / Web Manifest shortcuts.
 4. **Strict Shell vs. Kernel Separation**:
    - **Kernel (`@omni/core`) is Headless**: Manages sandboxes, WebCrypto keystore, relay pooling, 0ms local event caching, capability store (ACL), and Remote DOM transport. It has zero knowledge of UI layouts, slot semantics, or user pages.
-   - **Shell (`@omni/plugin-shell`) Owns Presentation & Styling**: Manages viewport slots (`main`, `dock`, `sidebar`, `header-actions`), layout mapping (`LayoutManager`), desktop/mobile navigation docks, widgets dashboard grid, settings tabs, and NIP-78 workspace synchronization. Each shell bundles its own stylesheet self-contained in `packages/plugins/shell/src/styles/` (`classic-styles.ts`, `panorama-styles.ts`), injected dynamically into the host DOM upon `mount()`.
-   - **User-Swappable Shell Registry (`ShellRegistry`)**: Shells are swappable first-class plugins registered in `shellRegistry`. Users can select between Omni Classic, Panorama Hub, or custom installed shells dynamically in Settings.
+   - **Shell (`@omni/plugin-shell`) Owns Presentation & Styling**: Manages viewport slots (`main`, `dock`, `sidebar`, `header-actions`), layout mapping (`LayoutManager`), desktop/mobile navigation docks, widgets dashboard grid, settings tabs, and NIP-78 workspace synchronization. Each shell bundles its own stylesheet self-contained in `packages/plugins/shell/src/styles/` (`classic-styles.ts`, `panorama-styles.ts`, `editorial-styles.ts`), injected dynamically into the host DOM upon `mount()`.
+   - **User-Swappable Shell Registry (`ShellRegistry`)**: Shells are swappable first-class plugins registered in `shellRegistry`. Users can select between Omni Classic, Panorama Hub, Editorial Shell, or custom installed shells dynamically in Settings.
 5. **User-Defined Viewports & Route Assignment (Zero Hardcoded Slots)**:
    - Developers never declare or configure "slots".
    - Users assign apps and choose specific routes directly in Settings:
@@ -81,6 +82,7 @@ omni/
 │       ├── feed/                          # @omni/plugin-feed (Timeline feed & composer)
 │       ├── relays/                        # @omni/plugin-relays (Relay status & pool manager)
 │       ├── profile/                       # @omni/plugin-profile (Identity & key custody)
+│       ├── profile-viewer/                # @omni/plugin-profile-viewer (People & profile viewer)
 │       └── checklist/                     # @omni/plugin-checklist (Daily checklist widget)
 │
 └── docs/                                  # Consolidated System Documentation
@@ -178,7 +180,7 @@ Omni uses Shopify's `@remote-dom/core` to project guest elements from the sandbo
 # Build all packages and plugins
 pnpm -r run build
 
-# Run comprehensive test suite (59 tests across core, shell, nip78, nip5a, remote-dom)
+# Run comprehensive test suite (264 tests across 19 test suites)
 pnpm test
 
 # Run Vite development server for apps/web

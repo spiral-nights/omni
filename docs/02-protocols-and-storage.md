@@ -69,7 +69,7 @@ Omni uses **NIP-78** (Arbitrary Custom App Data, `kind: 30078`) to synchronize u
       "enabled": true
     },
     {
-      "id": "org.omni.plugin.timer",
+      "id": "org.omni.plugin.profile-viewer",
       "viewport": "sidebar",
       "enabled": true
     },

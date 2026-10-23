@@ -10,7 +10,7 @@ Omni combines a **high-performance, local-first Nostr web client** with a **sand
 
 | Subsystem | Architectural Approach | Key Technologies |
 | :--- | :--- | :--- |
-| **Shell UI & Navigation** | Decoupled Shell Plugin | `@omni/plugin-shell` with dynamic page router and Warm Paper Dark tokens |
+| **Shell UI & Navigation** | Swappable Shell Registry | `@omni/plugin-shell` with swappable shells (Omni Classic, Panorama Hub, Editorial) |
 | **Host Bootloader** | Minimal Microkernel (~30 lines) | `apps/web` boots `OmniKernel` and passes container root to shell |
 | **App Model** | Pure Standalone nsites (Zero Manifests) | Standard HTML/JS apps mounting to `document.body` or `#root` |
 | **UI Projection** | Remote DOM (Zero Iframe Traps) | Shopify `@remote-dom/core` on dedicated mutation channel (Port 1) |
@@ -34,11 +34,11 @@ Omni combines a **high-performance, local-first Nostr web client** with a **sand
 │  ├── OmniKernel (Keystore, RelayPool, LocalEventStore, AclEngine)                      │
 │  └── Mounts @omni/plugin-shell into <div id="omni-root">                               │
 │                                                                                        │
-│  @omni/plugin-shell (First-Class UI Frame Plugin)                                      │
-│  ├── Top Header (Identity badge, NIP-05 / npub, cloud sync status)                     │
-│  ├── Navigation Dock (Adaptive: left sidebar on desktop, bottom bar on mobile)         │
-│  ├── Page Router (Center pages for full-page apps + multi-column Widgets Dashboard)    │
-│  └── Settings Modal (Profile & keys custody, live relay manager, plugins & viewports)  │
+│  @omni/plugin-shell (Swappable Shell Experiences via ShellRegistry)                   │
+│  ├── Omni Classic (Warm Paper Dark workbench, dock navigation, widgets dashboard)      │
+│  ├── Panorama Hub (Windows Phone Metro panoramic canvas, live tiles, fluid swipe)      │
+│  └── Editorial (Sacred Swiss typography, Papyrus/Obsidian modes, accent illumination)  │
+│  ├── Pluggable Settings (Profile & keys custody, relay manager, plugins & viewports)   │
 └───────────────────────────────────────────┬────────────────────────────────────────────┘
                                             │ Container Elements
                                             ▼
@@ -104,7 +104,7 @@ pnpm -r run build
 ```
 
 ### 3. Run Test Suite
-Omni includes 59 automated unit and integration tests across crypto, 0ms IndexedDB storage, ACL engine, NIP-78 workspace sync, NIP-5A resolver, and Remote DOM:
+Omni includes 264 automated unit and integration tests across 19 test suites covering crypto, 0ms IndexedDB storage, ACL engine, NIP-78 workspace sync, NIP-5A resolver, shells, and Remote DOM:
 ```bash
 pnpm test
 ```
