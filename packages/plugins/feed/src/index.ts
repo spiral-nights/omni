@@ -1076,8 +1076,18 @@ function mountFeed(root: any) {
     container.querySelector<HTMLElement>(":scope > .feed-top-header") as HTMLElement,
     container.querySelector<HTMLElement>(".feed-composer") as HTMLElement,
     notesList,
-    sentinelEl
+    sentinelEl,
+    container.querySelector<HTMLElement>(".feed-footer-actions") as HTMLElement
   ];
+
+  const btnFeedBackToTop = container.querySelector<HTMLElement>(".btn-feed-back-to-top");
+  btnFeedBackToTop?.addEventListener("click", () => {
+    const scrollContainer =
+      container.closest(".editorial-viewport-page, .editorial-app-page, .panorama-section, .main-viewport, [data-viewport-slot]") ||
+      document.querySelector(".editorial-viewport-page.active, .panorama-section, .main-viewport") ||
+      window;
+    scrollContainer.scrollTo({ top: 0, behavior: "smooth" });
+  });
 
   let searchSeq = 0;
   let searchWs: any = null;
@@ -1146,6 +1156,11 @@ function mountFeed(root: any) {
         window.history.pushState({ omniFeedView: "thread", noteId: currentThreadNote.id }, "", window.location.href);
       } catch (_) {}
     }
+    const scrollContainer =
+      container.closest(".editorial-viewport-page, .editorial-app-page, .panorama-section, .main-viewport, [data-viewport-slot]") ||
+      document.querySelector(".editorial-viewport-page.active, .panorama-section, .main-viewport") ||
+      window;
+    scrollContainer.scrollTo({ top: 0, behavior: "auto" });
   }
 
   function showFeedPage(pushHistory = true) {

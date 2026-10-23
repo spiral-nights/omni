@@ -407,7 +407,7 @@ body.theme-editorial[data-theme-mode="dark"],
 
 /* Sticky Feed Sub-Header */
 .feed-top-header {
-  display: flex !important;
+  display: flex;
   justify-content: space-between !important;
   align-items: center !important;
   padding: 10px 4px 14px 4px !important;
@@ -422,9 +422,20 @@ body.theme-editorial[data-theme-mode="dark"],
   box-sizing: border-box !important;
 }
 
-/* Redundant in Editorial shell since page header already displays app title */
-.feed-top-header .feed-title {
+/* Redundant in Editorial shell since page header already displays app title (only hide on top-level main feed header) */
+.feed-container > .feed-top-header .feed-title {
   display: none !important;
+}
+
+.feed-thread-page .feed-title,
+.feed-search-page .feed-title,
+.feed-settings-page .feed-title {
+  font-family: var(--omni-font-serif);
+  font-size: 1.15rem;
+  font-weight: 500;
+  color: var(--omni-text-primary);
+  margin: 0;
+  display: block !important;
 }
 
 .feed-nav-group {
@@ -903,6 +914,62 @@ body.theme-editorial[data-theme-mode="dark"],
   width: 13px;
   height: 13px;
   stroke-width: 1.8;
+}
+
+/* Floating Editorial Back to Top Button */
+.editorial-back-to-top {
+  position: fixed;
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  right: 24px;
+  z-index: 99;
+  background: var(--omni-bg-surface);
+  color: var(--omni-text-primary);
+  border: 1px solid var(--omni-border-strong);
+  padding: 7px 14px;
+  font-family: var(--omni-font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: var(--omni-radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  user-select: none;
+}
+
+.editorial-back-to-top svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+}
+
+.editorial-back-to-top.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.editorial-back-to-top:hover {
+  background: var(--omni-bg-elevated);
+  border-color: var(--omni-accent-primary);
+  color: var(--omni-accent-primary);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 600px) {
+  .editorial-back-to-top {
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    right: 16px;
+    padding: 6px 12px;
+    font-size: 0.65rem;
+  }
 }
 
 /* Back Buttons Across Feed Views (Search, Thread, Settings) */

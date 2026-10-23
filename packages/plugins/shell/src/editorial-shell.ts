@@ -60,6 +60,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   private dockContainer!: HTMLElement;
   private pendingAppMounts = new Set<string>();
   private boundKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  private boundScrollHandler: (() => void) | null = null;
 
   constructor(options: OmniShellOptions) {
     super(options);
@@ -210,6 +211,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.wireAppsSearch();
     this.wireSettingsModal();
     this.wireShellManager();
+    this.wireBackToTop();
 
     // 9. Initial View Selection
     this.selectInitialView();
@@ -256,6 +258,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   }
 
   public destroy(): void {
+    if (this.boundScrollHandler) {
+      this.root.removeEventListener("scroll", this.boundScrollHandler, { capture: true } as any);
+      this.boundScrollHandler = null;
+    }
     if (typeof window !== "undefined" && this.boundKeydownHandler) {
       window.removeEventListener("keydown", this.boundKeydownHandler);
       this.boundKeydownHandler = null;
@@ -687,6 +693,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     this.renderDock();
     this.saveLocalWorkspace();
+    this.boundScrollHandler?.();
   }
 
   public showAppsIndex(pushState = true): void {
@@ -725,6 +732,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     this.renderDock();
     this.renderAppsIndex();
+    this.boundScrollHandler?.();
   }
 
   public showWidgetsView(pushState = true): void {
@@ -764,6 +772,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.renderDock();
     this.ensureWidgetsMounted().catch(console.warn);
     this.renderWidgetsView();
+    this.boundScrollHandler?.();
   }
 
   private updateHeaderSubtitle(sub: string): void {
@@ -1190,6 +1199,38 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     });
   }
 
+  private wireBackToTop(): void {
+    const backToTopBtn = this.root.querySelector("#editorial-back-to-top");
+
+    this.boundScrollHandler = () => {
+      const activePage = this.root.querySelector(".editorial-viewport-page.active") as HTMLElement | null;
+      if (activePage && activePage.scrollTop > 200) {
+        backToTopBtn?.classList.add("visible");
+      } else {
+        backToTopBtn?.classList.remove("visible");
+      }
+    };
+
+    this.root.addEventListener("scroll", this.boundScrollHandler, { capture: true, passive: true });
+
+    backToTopBtn?.addEventListener("click", () => {
+      const activePage = this.root.querySelector(".editorial-viewport-page.active") as HTMLElement | null;
+      if (activePage) {
+        activePage.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    });
+
+    this.root.addEventListener("click", (e: Event) => {
+      const topBtn = (e.target as Element)?.closest(".btn-feed-back-to-top, [data-action='scroll-top']");
+      if (topBtn) {
+        const page = topBtn.closest(".editorial-viewport-page") || (this.root.querySelector(".editorial-viewport-page.active") as HTMLElement | null);
+        if (page) {
+          (page as HTMLElement).scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }
+    });
+  }
+
   // --- Installed Plugins Settings List ---
 
   private renderPluginSettingsList(): void {
@@ -1566,6 +1607,12 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       <nav class="editorial-dock">
         <div id="editorial-dock-items" class="editorial-dock-inner"></div>
       </nav>
+
+      <!-- Floating Back to Top Button -->
+      <button id="editorial-back-to-top" class="editorial-back-to-top" title="Back to top" aria-label="Back to top">
+        ${icon("arrow-up", 13)}
+        <span>Top</span>
+      </button>
 
       <!-- 4. Settings & Preferences Modal -->
       <div id="editorial-settings-modal" class="editorial-modal-overlay">
