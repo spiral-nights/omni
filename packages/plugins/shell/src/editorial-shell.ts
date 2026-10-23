@@ -59,6 +59,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   private widgetsSlot!: HTMLElement;
   private dockContainer!: HTMLElement;
   private pendingAppMounts = new Set<string>();
+  private boundKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(options: OmniShellOptions) {
     super(options);
@@ -216,7 +217,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     // 10. Pull-to-refresh
     this.initPullToRefresh();
 
-    // 11. Listen for browser back / forward navigation
+    // 11. Listen for browser back / forward navigation & Escape key
     if (typeof window !== "undefined") {
       window.addEventListener("popstate", (e: PopStateEvent) => {
         const state = e.state;
@@ -231,10 +232,34 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           this.openSettings(false);
         }
       });
+
+      this.boundKeydownHandler = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          const settingsModal = this.root.querySelector("#editorial-settings-modal");
+          if (settingsModal?.classList.contains("open")) {
+            this.closeSettings();
+            return;
+          }
+          const profileDrawer = this.root.querySelector("#editorial-profile-drawer");
+          if (profileDrawer?.classList.contains("open")) {
+            profileDrawer.classList.remove("open");
+            return;
+          }
+          const openWithModal = this.root.querySelector("#open-with-modal");
+          if (openWithModal?.classList.contains("open")) {
+            openWithModal.classList.remove("open");
+          }
+        }
+      };
+      window.addEventListener("keydown", this.boundKeydownHandler);
     }
   }
 
   public destroy(): void {
+    if (typeof window !== "undefined" && this.boundKeydownHandler) {
+      window.removeEventListener("keydown", this.boundKeydownHandler);
+      this.boundKeydownHandler = null;
+    }
     if (this.mediaQueryDark && this.mediaQueryListener) {
       this.mediaQueryDark.removeEventListener("change", this.mediaQueryListener);
       this.mediaQueryListener = null;

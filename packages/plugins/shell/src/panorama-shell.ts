@@ -2915,20 +2915,26 @@ export class PanoramaShell extends BaseShell {
       }
     }
 
-    // Escape key closes modals / overlay
+    // Escape key closes modals / overlay / settings pivot
     if (typeof window !== "undefined") {
       window.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
           if (this.currentOpenedAppId) {
             this.closeApp();
+            return;
           }
           this.closePluginInspector();
-          if (panoInstallModal) {
+          if (panoInstallModal && panoInstallModal.style.display !== "none") {
             panoInstallModal.style.display = "none";
+            return;
           }
           const headerColorPopup = this.root?.querySelector<HTMLElement>("#panorama-header-color-popup");
-          if (headerColorPopup) {
+          if (headerColorPopup && headerColorPopup.style.display !== "none") {
             headerColorPopup.style.display = "none";
+            return;
+          }
+          if (this.activePivot === "system") {
+            this.showPivot("feed");
           }
         }
       });

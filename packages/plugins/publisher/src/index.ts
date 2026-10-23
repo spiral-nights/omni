@@ -815,7 +815,7 @@ function mountPublisherStudio(root: HTMLElement) {
   let appDescription = "";
   let appIcon = "globe";
   let appViews: Array<{ id: string; title: string; path: string }> = [];
-  let packagingMode: "inlined" | "multifile" = "multifile";
+  let packagingMode: "inlined" | "multifile" = "inlined";
   let remoteUrlInputVal = "";
   let statusLogs: string[] = [];
   let lastPublishedResult: PublishedAppRecord | null = null;
@@ -1458,8 +1458,18 @@ function mountPublisherStudio(root: HTMLElement) {
         handleFilesSelected(files);
       });
 
+      dropzoneCard.addEventListener("dragover", (e: any) => {
+        e.preventDefault?.();
+        dropzoneCard.style.borderColor = "var(--omni-accent-primary, #d4a373)";
+      });
+
+      dropzoneCard.addEventListener("dragleave", () => {
+        dropzoneCard.style.borderColor = "var(--omni-border-strong, #3d3933)";
+      });
+
       dropzoneCard.addEventListener("drop", (e: any) => {
         e.preventDefault?.();
+        dropzoneCard.style.borderColor = "var(--omni-border-strong, #3d3933)";
         const files = e.dataTransfer?.files || e.detail?.files;
         handleFilesSelected(files);
       });
@@ -1568,13 +1578,13 @@ function mountPublisherStudio(root: HTMLElement) {
           <div style="display: flex; flex-direction: column; gap: 8px;">
             <span style="font-size: 0.78rem; font-weight: 600; color: var(--omni-text-secondary, #9e988f);">Upload & Packaging Format:</span>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-              <div id="mode-card-multifile" style="padding: 10px 12px; border-radius: var(--omni-radius-sm, 6px); cursor: pointer; border: 1px solid ${packagingMode === "multifile" ? "var(--omni-accent-primary, #d4a373)" : "var(--omni-border-subtle, #2e2b26)"}; background: var(--omni-bg-card, #22201d);">
-                <div style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-primary, #ede8df);">Option B: Multi-File Blossom Upload</div>
-                <div style="font-size: 0.73rem; color: var(--omni-text-muted, #6b665f); margin-top: 2px;">Extracts and uploads each file separately to Blossom with individual ['f', path, sha256, mime] tags.</div>
-              </div>
               <div id="mode-card-inlined" style="padding: 10px 12px; border-radius: var(--omni-radius-sm, 6px); cursor: pointer; border: 1px solid ${packagingMode === "inlined" ? "var(--omni-accent-primary, #d4a373)" : "var(--omni-border-subtle, #2e2b26)"}; background: var(--omni-bg-card, #22201d);">
                 <div style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-primary, #ede8df);">Option A: Single-File Inlined Bundle</div>
                 <div style="font-size: 0.73rem; color: var(--omni-text-muted, #6b665f); margin-top: 2px;">Inlines all CSS, JS, and assets from the zip into a single self-contained HTML bundle.</div>
+              </div>
+              <div id="mode-card-multifile" style="padding: 10px 12px; border-radius: var(--omni-radius-sm, 6px); cursor: pointer; border: 1px solid ${packagingMode === "multifile" ? "var(--omni-accent-primary, #d4a373)" : "var(--omni-border-subtle, #2e2b26)"}; background: var(--omni-bg-card, #22201d);">
+                <div style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-primary, #ede8df);">Option B: Multi-File Blossom Upload</div>
+                <div style="font-size: 0.73rem; color: var(--omni-text-muted, #6b665f); margin-top: 2px;">Extracts and uploads each file separately to Blossom with individual ['f', path, sha256, mime] tags.</div>
               </div>
             </div>
           </div>

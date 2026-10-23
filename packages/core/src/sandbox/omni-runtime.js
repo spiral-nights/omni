@@ -21,6 +21,24 @@
   // Component registrations and instances
   const registeredComponents = new Map();
   const componentContexts = new Map();
+  let activeNativeToRemote = null;
+
+  // Capture all Element.prototype.addEventListener calls from the very beginning
+  // (including synchronous calls during initial script execution prior to omni:init)
+  if (typeof Element !== "undefined" && Element.prototype && typeof Element.prototype.addEventListener === "function") {
+    const origProtoAddEventListener = Element.prototype.addEventListener;
+    Element.prototype.addEventListener = function(type, listener, options) {
+      if (!this.__omniListeners) this.__omniListeners = new Set();
+      this.__omniListeners.add(type);
+      if (activeNativeToRemote) {
+        const remoteEl = activeNativeToRemote.get(this);
+        if (remoteEl) {
+          remoteEl.addEventListener(type, () => {});
+        }
+      }
+      return origProtoAddEventListener.call(this, type, listener, options);
+    };
+  }
 
   // 1. Transparent LocalStorage Shim (handles sandboxed opaque origin restrictions)
   try {
@@ -895,21 +913,14 @@
     }
 
     const nativeToRemote = new WeakMap();
+    activeNativeToRemote = nativeToRemote;
     const remoteIdToNative = new Map();
     let isDispatchingHostEvent = false;
 
-    // Ensure any user interaction listener registered on any native element
-    // (avatars, author handles, cards, buttons) is projected to host Remote DOM
-    const origAddEventListener = Element.prototype.addEventListener;
-    Element.prototype.addEventListener = function(type, listener, options) {
-      if (!this.__omniListeners) this.__omniListeners = new Set();
-      this.__omniListeners.add(type);
-      const remoteEl = nativeToRemote.get(this);
-      if (remoteEl) {
-        remoteEl.addEventListener(type, () => {});
-      }
-      return origAddEventListener.call(this, type, listener, options);
-    };
+    function scopePluginCss(cssText) {
+      if (!cssText) return "";
+      return String(cssText).replace(/(^|[}\s,])(html|body|:root)(?=[\s,{])/gi, "$1.omni-component-slot");
+    }
 
     // Auto-sync property mutations on form inputs (.value, .checked) from guest scripts to Remote DOM
     function patchNativeProperty(proto, prop, isBool) {
@@ -964,10 +975,12 @@
       if (nativeToRemote.has(nativeNode)) return nativeToRemote.get(nativeNode);
 
       if (nativeNode.nodeType === 3) {
-        if (nativeNode.parentNode && (nativeNode.parentNode.nodeName === "SCRIPT" || nativeNode.parentNode.nodeName === "STYLE")) {
+        if (nativeNode.parentNode && nativeNode.parentNode.nodeName === "SCRIPT") {
           return null;
         }
-        const remoteText = ctx.root.createTextNode(nativeNode.data || "");
+        const isStyleText = nativeNode.parentNode && nativeNode.parentNode.nodeName === "STYLE";
+        const textData = isStyleText ? scopePluginCss(nativeNode.data || "") : (nativeNode.data || "");
+        const remoteText = ctx.root.createTextNode(textData);
         nativeToRemote.set(nativeNode, remoteText);
         remoteIdToNative.set(remoteText.id, nativeNode);
         return remoteText;
@@ -975,7 +988,7 @@
 
       if (nativeNode.nodeType === 1) {
         const tag = nativeNode.tagName.toLowerCase();
-        if (tag === "script" || tag === "style" || tag === "link") return null;
+        if (tag === "script" || tag === "link") return null;
 
         const remoteEl = ctx.root.createElement(tag);
         nativeToRemote.set(nativeNode, remoteEl);
@@ -1021,6 +1034,17 @@
       }
 
       return null;
+    }
+
+    // Mirror <style> tags from document.head so external/inlined CSS stylesheets apply to projected DOM
+    if (document.head) {
+      const headStyles = document.head.querySelectorAll("style");
+      for (let i = 0; i < headStyles.length; i++) {
+        const remoteStyle = mirrorNode(headStyles[i]);
+        if (remoteStyle) {
+          ctx.root.appendChild(remoteStyle);
+        }
+      }
     }
 
     // Mirror current body contents
@@ -1108,10 +1132,14 @@
     const observer = new MutationObserver((mutations) => {
       for (const m of mutations) {
         if (m.type === "childList") {
-          const parentRemote = m.target === document.body ? ctx.root : nativeToRemote.get(m.target);
+          const isRootTarget = m.target === document.body || m.target === document.head;
+          const parentRemote = isRootTarget ? ctx.root : nativeToRemote.get(m.target);
           if (!parentRemote) continue;
 
           for (const added of m.addedNodes) {
+            if (m.target === document.head && (!added.tagName || added.tagName.toLowerCase() !== "style")) {
+              continue;
+            }
             const remoteChild = mirrorNode(added);
             if (remoteChild && !remoteChild.parentNode) {
               parentRemote.appendChild(remoteChild);
@@ -1140,7 +1168,8 @@
         } else if (m.type === "characterData") {
           const remoteText = nativeToRemote.get(m.target);
           if (remoteText) {
-            remoteText.data = m.target.data || "";
+            const isStyleText = m.target.parentNode && m.target.parentNode.nodeName === "STYLE";
+            remoteText.data = isStyleText ? scopePluginCss(m.target.data || "") : (m.target.data || "");
           }
         }
       }
@@ -1152,6 +1181,13 @@
       attributes: true,
       characterData: true
     });
+    if (document.head) {
+      observer.observe(document.head, {
+        childList: true,
+        subtree: true,
+        characterData: true
+      });
+    }
   }
 
   // 7. Standard NIP-07 (window.nostr)

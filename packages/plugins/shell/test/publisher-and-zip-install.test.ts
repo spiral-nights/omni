@@ -138,11 +138,13 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     expect(pubContainer.textContent).toContain("app.js");
     expect(pubContainer.textContent).toContain("manifest.json");
 
-    // 2. Toggle between Option A (Single-File Inlined) and Option B (Multi-File Blossom)
+    // 2. Verify Option A (Single-File Inlined) is on the left and selected by default
     const modeInlined = pubContainer.querySelector("#mode-card-inlined") as HTMLElement;
+    const modeMultifile = pubContainer.querySelector("#mode-card-multifile") as HTMLElement;
     expect(modeInlined).toBeTruthy();
-    modeInlined.click();
-    await wait(80);
+    expect(modeMultifile).toBeTruthy();
+    expect(modeInlined.parentElement?.firstElementChild).toBe(modeInlined);
+    expect(modeInlined.getAttribute("style")).toContain("#d4a373");
 
     // 3. Publish to Nostr (NIP-5A)
     const btnPublish = pubContainer.querySelector("#btn-publish-blossom-nostr") as HTMLButtonElement;
@@ -239,7 +241,9 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       const dropzone = pubContainer.querySelector("#studio-zip-dropzone")!;
       expect(dropzone).toBeTruthy();
 
-      dropzone.dispatchEvent(new CustomEvent("drop", { detail: { files: [mockZipFile] } }));
+      // Drop onto a nested child element inside the dropzone (simulating real browser cursor over text/icon)
+      const nestedChild = dropzone.querySelector("strong") || dropzone;
+      nestedChild.dispatchEvent(new CustomEvent("drop", { detail: { files: [mockZipFile] }, bubbles: true }));
       await wait(150);
 
       const btnInstallLocal = pubContainer.querySelector("#btn-install-local-direct") as HTMLButtonElement;
@@ -310,6 +314,12 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       const btnInstallLocal = pubContainer.querySelector("#btn-install-local-direct") as HTMLButtonElement;
       btnInstallLocal.click();
       await wait(350);
+
+      // Also verify Escape key closes settings modal in Editorial Shell
+      edShell.openSettings();
+      expect(rootEl.querySelector("#editorial-settings-modal")?.classList.contains("open")).toBe(true);
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      expect(rootEl.querySelector("#editorial-settings-modal")?.classList.contains("open")).toBe(false);
 
       expect(edShell.installedPlugins.some((p) => p.id === "org.omni.plugin.dropped-zip")).toBe(true);
       edShell.destroy();
@@ -411,7 +421,8 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
 
   it("persists user-installed .zip plugins across browser refreshes (loadInitialWorkspace on fresh shell)", async () => {
     const zipBytes = createPluginZipArchive({
-      "index.html": `<!DOCTYPE html><html><head><title>Relay Ping Radar</title></head><body><div id="radar-root">Relay Ping Radar Ready</div></body></html>`,
+      "index.html": `<!DOCTYPE html><html><head><title>Relay Ping Radar</title><link rel="stylesheet" href="./style.css"></head><body><div id="radar-root" class="radar-shell">Relay Ping Radar Ready</div></body></html>`,
+      "style.css": `.radar-shell { padding: 24px; color: #ede8df; }`,
       "manifest.json": JSON.stringify({
         id: "org.omni.plugin.relay-ping-radar",
         name: "Relay Ping & Health Radar",
@@ -507,11 +518,12 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     expect(restoredPlugin?.scriptContent).toContain("Relay Ping Radar Ready");
     expect(restoredPlugin?.views?.some((v) => v.id === "compact")).toBe(true);
 
-    // Navigate to the restored plugin and verify it mounts & renders into the DOM
+    // Navigate to the restored plugin and verify both its DOM and its <style> stylesheet are projected into the host DOM
     await shell2.showPage("org.omni.plugin.relay-ping-radar");
     await wait(200);
     const radarContainer = shell2.getContainerForPluginSlot("org.omni.plugin.relay-ping-radar", "main");
     expect(radarContainer?.innerHTML).toContain("Relay Ping Radar Ready");
+    expect(radarContainer?.querySelector("style")?.textContent).toContain(".radar-shell");
 
     shell2.destroy();
   });

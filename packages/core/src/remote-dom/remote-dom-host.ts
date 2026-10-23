@@ -4,9 +4,12 @@ export const ALLOWED_HTML_ELEMENTS = [
   "div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6",
   "button", "input", "label", "form", "textarea", "select", "option",
   "ul", "ol", "li", "article", "section", "header", "footer", "nav",
-  "svg", "path", "circle", "rect", "line", "polyline", "polygon",
+  "svg", "path", "circle", "rect", "line", "polyline", "polygon", "g",
   "img", "small", "strong", "em", "b", "i", "time", "blockquote",
-  "a", "code", "pre"
+  "a", "code", "pre", "style",
+  "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+  "details", "summary", "hr", "br", "dl", "dt", "dd",
+  "figure", "figcaption", "main", "aside", "canvas", "progress", "meter"
 ];
 
 export interface RemoteDomHostOptions {
@@ -120,14 +123,25 @@ export class RemoteDomHost {
     targetRoot.addEventListener("input", enrichInputEvent, true);
     targetRoot.addEventListener("change", enrichInputEvent, true);
 
-    targetRoot.addEventListener("dragover", (e: Event) => {
+    targetRoot.addEventListener("dragenter", (e: any) => {
       e.preventDefault();
+      if (e.dataTransfer) {
+        try { e.dataTransfer.dropEffect = "copy"; } catch {}
+      }
+    }, true);
+
+    targetRoot.addEventListener("dragover", (e: any) => {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        try { e.dataTransfer.dropEffect = "copy"; } catch {}
+      }
     }, true);
 
     targetRoot.addEventListener("drop", (e: any) => {
       e.preventDefault();
+      if (e.__omniRetargeted) return;
       this.clickHandled = false;
-      const rawFiles = e.dataTransfer?.files
+      const rawFiles = e.dataTransfer?.files && e.dataTransfer.files.length > 0
         ? Array.from(e.dataTransfer.files)
         : e.detail?.files
         ? Array.from(e.detail.files)
@@ -142,13 +156,18 @@ export class RemoteDomHost {
 
     targetRoot.addEventListener("drop", (e: any) => {
       if (this.clickHandled) return;
-      const rawFiles = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : (e.detail?.__omniRawFiles || []);
+      const rawFiles = e.dataTransfer?.files && e.dataTransfer.files.length > 0
+        ? Array.from(e.dataTransfer.files)
+        : e.detail?.files
+        ? Array.from(e.detail.files)
+        : e.detail?.__omniRawFiles || [];
       let el = (e.target as Element | null)?.parentElement || null;
       while (el && el !== targetRoot && !this.clickHandled) {
-        const retargeted = new CustomEvent("drop", {
+        const retargeted: any = new CustomEvent("drop", {
           detail: { __omniRawFiles: rawFiles },
           bubbles: false
         });
+        retargeted.__omniRetargeted = true;
         el.dispatchEvent(retargeted);
         el = el.parentElement;
       }
