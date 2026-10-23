@@ -399,8 +399,7 @@ body {
   gap: 8px;
 }
 
-.btn-search-feed,
-.btn-settings-feed {
+.btn-search-feed {
   background: var(--omni-bg-subtle);
   border: 1px solid var(--omni-border-subtle);
   color: var(--omni-text-secondary);
@@ -415,8 +414,11 @@ body {
   transition: all 0.15s ease;
 }
 
-.btn-search-feed:hover,
-.btn-settings-feed:hover {
+.btn-settings-feed {
+  display: none !important;
+}
+
+.btn-search-feed:hover {
   color: var(--omni-text-primary);
   border-color: var(--omni-border-strong);
   background: var(--omni-bg-elevated);

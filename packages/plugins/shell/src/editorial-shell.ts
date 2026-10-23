@@ -23,7 +23,7 @@ export interface EditorialAccentPreset {
 export const EDITORIAL_ACCENTS: EditorialAccentPreset[] = [
   { id: "cobalt", name: "Cobalt Glow", lightColor: "#1e40af", darkColor: "#4d8eff" },
   { id: "terra", name: "Terracotta", lightColor: "#c2410c", darkColor: "#e2725b" },
-  { id: "saffron", name: "Saffron Ochre", lightColor: "#b45309", darkColor: "#e8a838" },
+  { id: "saffron", name: "Saffron Ochre", lightColor: "#d97706", darkColor: "#f59e0b" },
   { id: "pine", name: "Forest Pine", lightColor: "#15803d", darkColor: "#4e9f78" },
   { id: "bone", name: "Monochrome Bone", lightColor: "#475569", darkColor: "#e5e1e4" }
 ];
@@ -215,6 +215,23 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     // 10. Pull-to-refresh
     this.initPullToRefresh();
+
+    // 11. Listen for browser back / forward navigation
+    if (typeof window !== "undefined") {
+      window.addEventListener("popstate", (e: PopStateEvent) => {
+        const state = e.state;
+        if (!state || state.type !== "omni-editorial-view") return;
+        if (state.page === "app" && state.pluginId) {
+          this.openApp(state.pluginId, false);
+        } else if (state.page === "apps") {
+          this.showAppsIndex(false);
+        } else if (state.page === "widgets") {
+          this.showWidgetsView(false);
+        } else if (state.page === "settings") {
+          this.openSettings(false);
+        }
+      });
+    }
   }
 
   public destroy(): void {
@@ -359,7 +376,8 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       colorToApply = isDark ? preset.darkColor : preset.lightColor;
     }
 
-    const contrastColor = isDark && (accentId === "bone" || colorToApply.toLowerCase() === "#e5e1e4") ? "#131315" : "#ffffff";
+    const isLightText = isDark && (accentId === "saffron" || accentId === "bone" || colorToApply.toLowerCase() === "#e5e1e4" || colorToApply.toLowerCase() === "#f59e0b" || colorToApply.toLowerCase() === "#e8a838");
+    const contrastColor = isLightText ? "#141312" : "#ffffff";
 
     this.root.style.setProperty("--omni-accent-primary", colorToApply);
     this.root.style.setProperty("--accent-primary", colorToApply);
@@ -388,9 +406,17 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     const labelEl = this.root.querySelector("#editorial-active-accent-name");
     if (labelEl) labelEl.textContent = currentName;
 
+    const isDark = this.root.getAttribute("data-theme-mode") === "dark";
     const swatchItems = this.root.querySelectorAll(".editorial-swatch-item");
     swatchItems.forEach((item) => {
       const sid = (item as HTMLElement).dataset.accentId;
+      const preset = EDITORIAL_ACCENTS.find((a) => a.id === sid);
+      if (preset) {
+        const circle = item.querySelector(".editorial-swatch-circle") as HTMLElement | null;
+        if (circle) {
+          circle.style.backgroundColor = isDark ? preset.darkColor : preset.lightColor;
+        }
+      }
       if (sid === currentId) {
         item.classList.add("active");
         const check = item.querySelector(".editorial-swatch-check");
@@ -448,15 +474,15 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       this.dockContainer.appendChild(item);
     }
 
-    // Index (All Apps) Button
+    // Apps (All Applications) Button
     const btnApps = document.createElement("button");
     const isAppsActive = this.activePage === "apps";
     btnApps.className = `editorial-dock-item ${isAppsActive ? "active" : ""}`;
     btnApps.id = "btn-editorial-dock-apps";
-    btnApps.title = "Index of Applications";
+    btnApps.title = "Applications";
     btnApps.innerHTML = `
-      <div class="editorial-dock-icon">${icon("grid", 20)}</div>
-      <span class="editorial-dock-label">Index</span>
+      <div class="editorial-dock-icon">${icon("apps", 20)}</div>
+      <span class="editorial-dock-label">Apps</span>
       <span class="editorial-active-dot"></span>
     `;
     btnApps.addEventListener("click", () => this.showAppsIndex());
@@ -490,9 +516,15 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.dockContainer.appendChild(btnPrefs);
   }
 
-  public async openApp(pluginId: string): Promise<void> {
+  public async openApp(pluginId: string, pushState = true): Promise<void> {
     const plugin = this.installedPlugins.find((p) => p.id === pluginId);
     if (!plugin) return;
+
+    if (pushState && typeof window !== "undefined" && (this.activePluginId !== pluginId || this.activePage !== "app")) {
+      try {
+        window.history.pushState({ type: "omni-editorial-view", page: "app", pluginId }, "");
+      } catch (_) {}
+    }
 
     this.activePage = "app";
     this.activePluginId = pluginId;
@@ -632,11 +664,17 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.saveLocalWorkspace();
   }
 
-  public showAppsIndex(): void {
+  public showAppsIndex(pushState = true): void {
+    if (pushState && typeof window !== "undefined" && this.activePage !== "apps") {
+      try {
+        window.history.pushState({ type: "omni-editorial-view", page: "apps" }, "");
+      } catch (_) {}
+    }
+
     this.activePage = "apps";
     this.activePluginId = null;
 
-    this.updateHeaderSubtitle("Index");
+    this.updateHeaderSubtitle("Apps");
 
     const pageApps = this.root.querySelector("#editorial-page-apps") as HTMLElement | null;
     const pageWidgets = this.root.querySelector("#editorial-page-widgets") as HTMLElement | null;
@@ -664,7 +702,13 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.renderAppsIndex();
   }
 
-  public showWidgetsView(): void {
+  public showWidgetsView(pushState = true): void {
+    if (pushState && typeof window !== "undefined" && this.activePage !== "widgets") {
+      try {
+        window.history.pushState({ type: "omni-editorial-view", page: "widgets" }, "");
+      } catch (_) {}
+    }
+
     this.activePage = "widgets";
     this.activePluginId = null;
 
@@ -897,16 +941,26 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
   // --- Settings & Preferences Modal ---
 
-  public openSettings(): void {
+  public openSettings(pushState = true): void {
+    if (pushState && typeof window !== "undefined") {
+      try {
+        window.history.pushState({ type: "omni-editorial-view", page: "settings" }, "");
+      } catch (_) {}
+    }
     const modal = this.root.querySelector("#editorial-settings-modal");
     modal?.classList.add("open");
     this.renderPluginSettingsList();
     this.renderShellManager();
   }
 
-  public closeSettings(): void {
+  public closeSettings(pushState = true): void {
     const modal = this.root.querySelector("#editorial-settings-modal");
     modal?.classList.remove("open");
+    if (pushState && typeof window !== "undefined" && window.history.state?.page === "settings") {
+      try {
+        window.history.back();
+      } catch (_) {}
+    }
   }
 
   private wireSettingsModal(): void {
@@ -1118,17 +1172,23 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     if (!container) return;
     container.innerHTML = "";
 
+    const viewportOptions = this.getAvailableViewports();
+
     for (const plugin of this.installedPlugins) {
       const card = document.createElement("div");
       card.className = "editorial-pref-card";
 
       const iconKey = (plugin.icon as IconName) || "apps";
+      const synthManifest = this.ensurePluginManifest(plugin);
+      const pluginViews = synthManifest.views || [{ id: "main", title: "Default View", path: "" }];
+      const safeId = plugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const isPinned = plugin.pinned !== false;
 
       card.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="width: 30px; height: 30px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
-              ${ICONS[iconKey] ? icon(iconKey, 16) : icon("apps", 16)}
+            <div style="width: 32px; height: 32px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
+              ${ICONS[iconKey] ? icon(iconKey, 18) : icon("apps", 18)}
             </div>
             <div>
               <div style="display: flex; align-items: center; gap: 6px;">
@@ -1138,12 +1198,25 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
               <div style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); margin-top: 1px;">${plugin.id}</div>
             </div>
           </div>
-          <button class="editorial-btn-secondary btn-uninstall-plugin" style="color: #ff5555; border-color: #552222; font-size: 0.68rem; padding: 3px 8px;">
-            Uninstall
-          </button>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button class="editorial-btn-secondary btn-toggle-pin-pref" style="font-size: 0.68rem; padding: 3px 8px;">
+              ${isPinned ? "Pinned to Dock" : "Pin to Dock"}
+            </button>
+            <button class="editorial-btn-secondary btn-uninstall-plugin" style="color: #ff5555; border-color: #552222; font-size: 0.68rem; padding: 3px 8px;">
+              Uninstall
+            </button>
+          </div>
         </div>
         <p style="font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-secondary); margin: 0;">${plugin.description || "Micro-frontend plugin."}</p>
       `;
+
+      card.querySelector(".btn-toggle-pin-pref")?.addEventListener("click", () => {
+        plugin.pinned = plugin.pinned === false;
+        this.saveLocalWorkspace();
+        this.renderDock();
+        this.renderAppsIndex();
+        this.renderPluginSettingsList();
+      });
 
       card.querySelector(".btn-uninstall-plugin")?.addEventListener("click", () => {
         if (confirm(`Uninstall ${plugin.name || plugin.id}?`)) {
@@ -1151,8 +1224,227 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           this.renderPluginSettingsList();
           this.renderDock();
           this.renderAppsIndex();
+          this.renderWidgetsView();
         }
       });
+
+      // 1. Placements & Viewports Section
+      const placementsBox = document.createElement("div");
+      placementsBox.className = "plugin-placements-section";
+
+      const placementsHeader = document.createElement("div");
+      placementsHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
+
+      const placementsTitle = document.createElement("span");
+      placementsTitle.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--omni-text-primary);";
+      placementsTitle.textContent = "Placements & Viewports";
+      placementsHeader.appendChild(placementsTitle);
+
+      const btnAddPlacement = document.createElement("button");
+      btnAddPlacement.className = "editorial-btn-secondary btn-add-placement";
+      btnAddPlacement.id = `btn-add-placement-${safeId}`;
+      btnAddPlacement.style.cssText = "font-size: 0.68rem; padding: 3px 8px;";
+      btnAddPlacement.textContent = "+ Add Location";
+      btnAddPlacement.addEventListener("click", async () => {
+        const currentPlacements = this.getPluginPlacements(plugin);
+        const newPl: PluginPlacement = {
+          id: `placement-${Date.now()}`,
+          viewport: "sidebar",
+          route: pluginViews[0]?.path || "",
+          viewId: pluginViews[0]?.id || "main",
+          enabled: true
+        };
+        plugin.placements = [...currentPlacements, newPl];
+        plugin.viewport = plugin.placements[0].viewport;
+        plugin.route = plugin.placements[0].route;
+        plugin.viewId = plugin.placements[0].viewId;
+        this.saveLocalWorkspace();
+        await this.remountPlugin(plugin);
+        this.renderPluginSettingsList();
+        this.renderDock();
+        this.renderAppsIndex();
+        this.renderWidgetsView();
+      });
+      placementsHeader.appendChild(btnAddPlacement);
+      placementsBox.appendChild(placementsHeader);
+
+      const placements = this.getPluginPlacements(plugin);
+      if (placements.length === 0) {
+        const emptyPl = document.createElement("div");
+        emptyPl.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.68rem; color: var(--omni-text-muted); font-style: italic;";
+        emptyPl.textContent = "Unassigned — Not currently placed in any viewport.";
+        placementsBox.appendChild(emptyPl);
+      }
+
+      for (let plIdx = 0; plIdx < placements.length; plIdx++) {
+        const pl = placements[plIdx];
+        const row = document.createElement("div");
+        row.className = "plugin-placement-row";
+
+        const rowHeader = document.createElement("div");
+        rowHeader.style.cssText = "display: flex; align-items: center; justify-content: space-between;";
+
+        const plNumber = document.createElement("span");
+        plNumber.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.7rem; font-weight: 700; color: var(--omni-text-primary); text-transform: uppercase;";
+        plNumber.textContent = `Placement #${plIdx + 1}`;
+        rowHeader.appendChild(plNumber);
+
+        const btnRemovePl = document.createElement("button");
+        btnRemovePl.className = "editorial-btn-secondary btn-remove-placement";
+        btnRemovePl.style.cssText = "font-size: 0.65rem; padding: 2px 6px; color: #ff5555; border-color: #552222;";
+        btnRemovePl.textContent = placements.length > 1 ? "Remove" : "Unassign";
+        btnRemovePl.addEventListener("click", async () => {
+          plugin.placements = placements.filter((_, idx) => idx !== plIdx);
+          if (plugin.placements.length > 0) {
+            plugin.viewport = plugin.placements[0].viewport;
+            plugin.route = plugin.placements[0].route;
+            plugin.viewId = plugin.placements[0].viewId;
+          } else {
+            plugin.viewport = "";
+            plugin.route = "";
+            plugin.viewId = "";
+            this.layoutManager?.unregisterPlugin(plugin.id);
+          }
+          this.saveLocalWorkspace();
+          await this.remountPlugin(plugin);
+          this.renderPluginSettingsList();
+          this.renderDock();
+          this.renderAppsIndex();
+          this.renderWidgetsView();
+        });
+        rowHeader.appendChild(btnRemovePl);
+        row.appendChild(rowHeader);
+
+        const fieldsGrid = document.createElement("div");
+        fieldsGrid.className = "plugin-placement-fields";
+
+        // Viewport Column
+        const vpCol = document.createElement("label");
+        vpCol.style.cssText = "display: flex; flex-direction: column; gap: 4px; font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); text-transform: uppercase;";
+        const vpLabel = document.createElement("span");
+        vpLabel.textContent = "Viewport";
+        vpCol.appendChild(vpLabel);
+
+        const vpSelect = document.createElement("select");
+        vpSelect.className = "plugin-viewport-select";
+
+        for (const optDef of viewportOptions) {
+          const opt = document.createElement("option");
+          opt.value = optDef.id;
+          opt.textContent = optDef.label;
+          if (optDef.id === pl.viewport) opt.selected = true;
+          vpSelect.appendChild(opt);
+        }
+
+        vpSelect.addEventListener("change", async () => {
+          pl.viewport = vpSelect.value;
+          plugin.viewport = pl.viewport;
+          if (pl.viewport === "main" || pl.viewport === "dock") {
+            plugin.pinned = true;
+          }
+          const primaryComp = synthManifest.components?.[0];
+          if (primaryComp && this.layoutManager) {
+            this.layoutManager.setComponentSlot(plugin.id, primaryComp.id, pl.viewport);
+          }
+          this.saveLocalWorkspace();
+          await this.remountPlugin(plugin);
+          this.renderDock();
+          this.renderAppsIndex();
+          this.renderWidgetsView();
+        });
+        vpCol.appendChild(vpSelect);
+        fieldsGrid.appendChild(vpCol);
+
+        // Route Column
+        const routeCol = document.createElement("label");
+        routeCol.style.cssText = "display: flex; flex-direction: column; gap: 4px; font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); text-transform: uppercase;";
+        const routeLabel = document.createElement("span");
+        routeLabel.textContent = "View / Route";
+        routeCol.appendChild(routeLabel);
+
+        const routeSelect = document.createElement("select");
+        routeSelect.className = "plugin-route-select";
+
+        for (const v of pluginViews) {
+          const opt = document.createElement("option");
+          opt.value = v.path || "";
+          opt.textContent = `${v.title || v.id} (${v.path || "/"})`;
+          if ((v.path || "") === (pl.route || "")) opt.selected = true;
+          routeSelect.appendChild(opt);
+        }
+
+        routeSelect.addEventListener("change", async () => {
+          pl.route = routeSelect.value;
+          const matchedView = pluginViews.find((v: any) => (v.path || "") === pl.route);
+          if (matchedView) pl.viewId = matchedView.id;
+          plugin.route = pl.route;
+          plugin.viewId = pl.viewId;
+          this.saveLocalWorkspace();
+          await this.remountPlugin(plugin);
+        });
+        routeCol.appendChild(routeSelect);
+        fieldsGrid.appendChild(routeCol);
+
+        row.appendChild(fieldsGrid);
+        placementsBox.appendChild(row);
+      }
+      card.appendChild(placementsBox);
+
+      // 2. Custom Plugin Settings View (e.g. for Feed filtering)
+      const settingsView = pluginViews.find((v: any) => v.id === "settings" || v.path?.includes("view=settings"));
+      if (settingsView && this.kernel?.mountPluginSettings) {
+        const settingsBox = document.createElement("div");
+        settingsBox.className = "plugin-custom-settings-container";
+
+        const settingsHeader = document.createElement("div");
+        settingsHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
+
+        const settingsTitle = document.createElement("span");
+        settingsTitle.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--omni-text-primary);";
+        settingsTitle.textContent = "Plugin Settings & Rules";
+        settingsHeader.appendChild(settingsTitle);
+
+        const btnToggleSettings = document.createElement("button");
+        btnToggleSettings.className = "editorial-btn-secondary";
+        btnToggleSettings.style.cssText = "font-size: 0.68rem; padding: 3px 8px; color: var(--omni-accent-primary); border-color: var(--omni-accent-primary);";
+        btnToggleSettings.textContent = "Configure Settings";
+
+        const mountContainer = document.createElement("div");
+        mountContainer.style.cssText = "display: none; padding: 10px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); margin-top: 6px;";
+
+        btnToggleSettings.addEventListener("click", async () => {
+          const isCurrentlyOpen = mountContainer.style.display !== "none";
+          if (!isCurrentlyOpen) {
+            mountContainer.style.display = "block";
+            mountContainer.innerHTML = '<div style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted);">Loading settings...</div>';
+            try {
+              await this.kernel.mountPluginSettings(
+                plugin.id,
+                synthManifest,
+                plugin.htmlContent || plugin.scriptContent,
+                mountContainer,
+                settingsView.path || "?view=settings",
+                plugin.relays
+              );
+              btnToggleSettings.textContent = "Close Settings";
+            } catch (err: any) {
+              console.error(`Failed to mount settings for ${plugin.id}:`, err);
+              mountContainer.textContent = "Failed to load settings.";
+              btnToggleSettings.textContent = "Configure Settings";
+            }
+          } else {
+            this.kernel.destroyPluginSettings(plugin.id);
+            mountContainer.style.display = "none";
+            mountContainer.innerHTML = "";
+            btnToggleSettings.textContent = "Configure Settings";
+          }
+        });
+
+        settingsHeader.appendChild(btnToggleSettings);
+        settingsBox.appendChild(settingsHeader);
+        settingsBox.appendChild(mountContainer);
+        card.appendChild(settingsBox);
+      }
 
       container.appendChild(card);
     }
@@ -1165,16 +1457,14 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       <!-- 1. Fixed Editorial Header -->
       <header class="editorial-header">
         <div class="editorial-header-inner">
-          <button id="btn-editorial-search" class="editorial-header-btn" title="Search Network">
-            ${icon("search", 18)}
-          </button>
+          <div class="editorial-header-left"></div>
 
           <div id="editorial-brand-container" class="editorial-header-center" title="Omni">
             <h1 class="editorial-brand-title">OMNI</h1>
             <span id="editorial-view-subtitle" class="editorial-view-subtitle">Feed</span>
           </div>
 
-          <div style="display: flex; align-items: center; gap: 6px;">
+          <div class="editorial-header-right">
             <div id="editorial-header-actions-slot" style="display: flex; align-items: center; gap: 4px;"></div>
             <button id="btn-editorial-settings" class="editorial-header-btn" title="Preferences">
               ${icon("settings", 18)}
@@ -1191,11 +1481,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         <!-- Viewport A: Full App View -->
         <section id="editorial-page-app" class="editorial-viewport-page editorial-app-page active">
           <div id="editorial-main-app-container" class="editorial-app-container"></div>
-          <div class="editorial-stream-end">
-            <div class="editorial-stream-end-line">
-              <span>○ Synchronized</span>
-            </div>
-          </div>
         </section>
 
         <!-- Viewport B: Broadsheet Applications Index -->
@@ -1275,7 +1560,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
             <div class="editorial-pref-group">
               <div class="editorial-pref-header">
                 <span class="editorial-pref-label">Display Cadence</span>
-                <span class="editorial-pref-status">Dual Theme</span>
               </div>
               <div class="editorial-pref-card">
                 <div class="editorial-mode-switcher">

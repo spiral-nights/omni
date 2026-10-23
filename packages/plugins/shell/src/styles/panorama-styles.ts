@@ -742,8 +742,7 @@ body.theme-panorama,
   to { transform: rotate(360deg); }
 }
 
-.btn-search-feed,
-.btn-settings-feed {
+.btn-search-feed {
   background: #111111;
   border: 1px solid #222222;
   color: #aaaaaa;
@@ -757,6 +756,10 @@ body.theme-panorama,
   gap: 5px;
   transition: all 0.15s ease;
   flex-shrink: 0;
+}
+
+.btn-settings-feed {
+  display: none !important;
 }
 
 .btn-search-feed:hover,

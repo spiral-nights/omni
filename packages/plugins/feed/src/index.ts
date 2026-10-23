@@ -507,7 +507,7 @@ function mountFeed(root: any) {
             ${ICONS.search}
             <span class="btn-label">Search</span>
           </button>
-          <button class="btn-settings-feed" title="Feed Settings" aria-label="Feed Settings">
+          <button class="btn-settings-feed" title="Feed Settings" aria-label="Feed Settings" style="display: none !important;">
             ${ICONS.settings}
             <span class="btn-label">Settings</span>
           </button>

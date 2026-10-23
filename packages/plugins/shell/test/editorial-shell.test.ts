@@ -277,7 +277,7 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       btnIndex?.click();
       expect(shell.activePage).toBe("apps");
       expect(root.querySelector("#editorial-page-apps")?.classList.contains("active")).toBe(true);
-      expect(root.querySelector("#editorial-view-subtitle")?.textContent).toBe("Index");
+      expect(root.querySelector("#editorial-view-subtitle")?.textContent).toBe("Apps");
 
       const btnCards = root.querySelector("#btn-editorial-dock-widgets") as HTMLElement | null;
       btnCards?.click();
@@ -375,6 +375,53 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(EDITORIAL_SHELL_CSS).toContain(".note-card");
       expect(EDITORIAL_SHELL_CSS).toContain(".relays-container");
       expect(EDITORIAL_SHELL_CSS).toContain(".checklist-widget-card");
+    });
+  });
+
+  describe("Plugin Placements & Viewports in Editorial Preferences", () => {
+    it("renders viewport and route selectors for each installed plugin in settings", () => {
+      shell.mount();
+      shell.openSettings();
+
+      const list = root.querySelector("#editorial-plugins-settings-list");
+      expect(list).toBeTruthy();
+
+      const vpSelects = list?.querySelectorAll(".plugin-viewport-select");
+      expect(vpSelects?.length).toBeGreaterThanOrEqual(1);
+
+      const addBtn = list?.querySelector(".btn-add-placement") as HTMLElement | null;
+      expect(addBtn).toBeTruthy();
+    });
+
+    it("allows adding and reassigning viewports for a plugin in Editorial mode", async () => {
+      shell.mount();
+      shell.openSettings();
+
+      const checklist = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.checklist")!;
+      const addBtn = root.querySelector("#btn-add-placement-org-omni-plugin-checklist") as HTMLElement | null;
+      expect(addBtn).toBeTruthy();
+      addBtn?.click();
+
+      const placements = shell.getPluginPlacements(checklist);
+      expect(placements.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("supports browser popstate navigation across app, apps, and widgets views", () => {
+      shell.mount();
+      shell.openApp("org.omni.plugin.feed");
+      expect(shell.activePage).toBe("app");
+
+      shell.showAppsIndex();
+      expect(shell.activePage).toBe("apps");
+
+      // Simulate popstate back to app
+      window.dispatchEvent(
+        new PopStateEvent("popstate", {
+          state: { type: "omni-editorial-view", page: "app", pluginId: "org.omni.plugin.feed" }
+        })
+      );
+      expect(shell.activePage).toBe("app");
+      expect(shell.activePluginId).toBe("org.omni.plugin.feed");
     });
   });
 

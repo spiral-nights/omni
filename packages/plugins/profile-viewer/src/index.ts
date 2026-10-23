@@ -702,12 +702,13 @@ async function mountProfileViewer(root: HTMLElement) {
 
   // Profile back button handler
   btnProfileBack.addEventListener("click", () => {
-    const target = previousTab || "following";
-    previousTab = null;
-    updateProfileBackButton();
-    switchTab(target, false);
     if (typeof window !== "undefined" && window.history.state?.type === "omni-people-view") {
-      try { window.history.back(); } catch (_) {}
+      window.history.back();
+    } else {
+      const target = previousTab || "following";
+      previousTab = null;
+      updateProfileBackButton();
+      switchTab(target, false);
     }
   });
 
