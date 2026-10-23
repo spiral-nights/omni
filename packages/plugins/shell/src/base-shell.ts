@@ -759,7 +759,7 @@ export abstract class BaseShell implements OmniShellHost {
       scriptContent,
       sourceUrl: item.sourceUrl || bundle?.sourceUrl || item.naddr || `custom:${item.id}`,
       enabled: typeof item.enabled === "boolean" ? item.enabled : true,
-      pinned: item.pinned,
+      pinned: typeof item.pinned === "boolean" ? item.pinned : false,
       relays: Array.isArray(item.relays) ? item.relays : undefined,
       handledIntents: item.handledIntents,
       disabledIntents: item.disabledIntents,
@@ -1303,6 +1303,7 @@ export abstract class BaseShell implements OmniShellHost {
       scriptContent,
       sourceUrl: resolvedNaddr || (trimmed.startsWith("http") ? trimmed : `custom:${manifest.id}`),
       enabled: true,
+      pinned: false,
       naddr: resolvedNaddr,
       authorNpub: resolvedAuthorNpub
     };

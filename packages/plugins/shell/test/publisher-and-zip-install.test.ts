@@ -515,6 +515,8 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     const restoredPlugin = shell2.installedPlugins.find((p) => p.id === "org.omni.plugin.relay-ping-radar");
     expect(restoredPlugin).toBeDefined();
     expect(restoredPlugin?.name).toBe("Relay Ping & Health Radar");
+    expect(restoredPlugin?.pinned).toBe(false);
+    expect(shell2.isAppPinned(restoredPlugin!)).toBe(false);
     expect(restoredPlugin?.scriptContent).toContain("Relay Ping Radar Ready");
     expect(restoredPlugin?.views?.some((v) => v.id === "compact")).toBe(true);
 
