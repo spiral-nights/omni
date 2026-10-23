@@ -122,7 +122,11 @@ export class RemoteDomHost {
     targetRoot.addEventListener("drop", (e: any) => {
       e.preventDefault();
       this.clickHandled = false;
-      const rawFiles = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : [];
+      const rawFiles = e.dataTransfer?.files
+        ? Array.from(e.dataTransfer.files)
+        : e.detail?.files
+        ? Array.from(e.detail.files)
+        : e.detail?.__omniRawFiles || [];
       try {
         Object.defineProperty(e, "detail", {
           value: { __omniRawFiles: rawFiles },

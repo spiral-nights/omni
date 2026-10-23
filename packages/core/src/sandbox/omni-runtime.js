@@ -367,12 +367,12 @@
     globalThis.WebSocket = VirtualWebSocket;
   }
 
-  // 4b. Transparent Blossom PUT /upload Fetch Bridge (bypasses sandbox connect-src 'none' via host RPC)
+  // 4b. Transparent HTTP / Blossom Fetch Bridge (bypasses sandbox connect-src 'none' via host RPC)
   const nativeFetch = typeof window.fetch === "function" ? window.fetch.bind(window) : null;
   const virtualFetch = async function(input, init) {
     const urlStr = typeof input === "string" ? input : (input && input.url ? String(input.url) : String(input || ""));
     const method = (init && init.method ? String(init.method) : "GET").toUpperCase();
-    if (method === "PUT" && /^https?:\/\//i.test(urlStr)) {
+    if ((method === "PUT" || method === "GET") && /^https?:\/\//i.test(urlStr)) {
       await initPromise;
       let bytes = new Uint8Array(0);
       const body = init ? init.body : null;
@@ -383,16 +383,27 @@
       } else if (typeof body === "string") {
         bytes = new TextEncoder().encode(body);
       }
-      const res = await callRpc("blossom.upload", {
+      const res = await callRpc(method === "PUT" ? "blossom.upload" : "http.fetch", {
         url: urlStr,
-        method: "PUT",
+        method,
         headers: (init && init.headers) || {},
         bytes
       });
       const bodyText = (res && res.bodyText) || "";
+      const respBytes =
+        res && res.bytes
+          ? new Uint8Array(res.bytes)
+          : new TextEncoder().encode(bodyText);
+      const contentType = (res && res.contentType) || "";
       return {
         ok: Boolean(res && res.ok),
         status: (res && res.status) || 200,
+        headers: {
+          get(name) {
+            return String(name || "").toLowerCase() === "content-type" ? contentType : null;
+          }
+        },
+        arrayBuffer: async () => respBytes.buffer.slice(respBytes.byteOffset, respBytes.byteOffset + respBytes.byteLength),
         text: async () => bodyText,
         json: async () => {
           try { return JSON.parse(bodyText); } catch (_) { return {}; }

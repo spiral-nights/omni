@@ -178,7 +178,7 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     shell.destroy();
   });
 
-  it("supports dropping a .zip archive directly into the Install Modal across Classic, Panorama, and Editorial shells", async () => {
+  it("installs a dropped .zip archive directly into Omni across Classic, Panorama, and Editorial shells purely via @omni/plugin-publisher", async () => {
     const zipBytes = createPluginZipArchive({
       "index.html": `<!DOCTYPE html><html><head><title>Dropped Zip App</title><link rel="stylesheet" href="./theme.css"></head><body><h1>Dropped Zip Works</h1><script src="./logic.js"></script></body></html>`,
       "theme.css": `h1 { color: #d4a373; }`,
@@ -197,32 +197,52 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       bytes: zipBytes
     };
 
-    // 1. Test Classic Shell Dropzone
+    const makePublisherEntry = (): InstalledPluginEntry => ({
+      id: "org.omni.plugin.publisher",
+      name: "Plugin Studio",
+      displayName: "Publisher",
+      description: "Package .zip archives into NIP-5A nsites and upload to Blossom.",
+      icon: "globe",
+      viewport: "main",
+      views: [{ id: "main", title: "Plugin Studio", path: "" }],
+      scriptContent: publisherScript,
+      sourceUrl: "local:@omni/plugin-publisher",
+      enabled: true
+    });
+
+    // 1. Classic Shell (via @omni/plugin-publisher)
     {
       let classicShell!: OmniShell;
       const kernel = new OmniKernel({
         bootstrapRelays: [],
         runtimeScript,
-        slotResolver: (id, compId, slot) => classicShell?.getContainerForPluginSlot(id, slot, compId)
+        slotResolver: (id, compId, slot) => classicShell?.getContainerForPluginSlot(id, slot, compId),
+        onHandleUri: (uri, srcId) => classicShell?.handleUri(uri, srcId)
       });
       classicShell = new OmniShell({ root: rootEl, kernel, installedPlugins: [] });
       classicShell.mount();
       await kernel.boot();
+      await classicShell.installPluginEntry(makePublisherEntry());
+      classicShell.showPage("org.omni.plugin.publisher");
+      await wait(150);
 
-      const dropzone = document.getElementById("classic-install-dropzone")!;
+      const pubContainer = classicShell.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
+      const dropzone = pubContainer.querySelector("#studio-zip-dropzone")!;
       expect(dropzone).toBeTruthy();
 
-      const dropEv = new CustomEvent("drop", {
-        detail: { files: [mockZipFile] }
-      });
-      dropzone.dispatchEvent(dropEv);
-      await wait(250);
+      dropzone.dispatchEvent(new CustomEvent("drop", { detail: { files: [mockZipFile] } }));
+      await wait(150);
+
+      const btnInstallLocal = pubContainer.querySelector("#btn-install-local-direct") as HTMLButtonElement;
+      expect(btnInstallLocal).toBeTruthy();
+      btnInstallLocal.click();
+      await wait(350);
 
       expect(classicShell.installedPlugins.some((p) => p.id === "org.omni.plugin.dropped-zip")).toBe(true);
       classicShell.destroy();
     }
 
-    // 2. Test Panorama Shell Dropzone
+    // 2. Panorama Shell (via @omni/plugin-publisher)
     {
       document.body.innerHTML = `<div id="omni-root"></div>`;
       rootEl = document.getElementById("omni-root")!;
@@ -230,26 +250,30 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       const kernel = new OmniKernel({
         bootstrapRelays: [],
         runtimeScript,
-        slotResolver: (id, compId, slot) => panoShell?.getContainerForPluginSlot(id, slot, compId)
+        slotResolver: (id, compId, slot) => panoShell?.getContainerForPluginSlot(id, slot, compId),
+        onHandleUri: (uri, srcId) => panoShell?.handleUri(uri, srcId)
       });
       panoShell = new PanoramaShell({ root: rootEl, kernel, installedPlugins: [] });
       panoShell.mount();
       await kernel.boot();
+      await panoShell.installPluginEntry(makePublisherEntry());
+      panoShell.showPage("org.omni.plugin.publisher");
+      await wait(150);
 
-      const dropzone = document.getElementById("panorama-install-dropzone")!;
-      expect(dropzone).toBeTruthy();
+      const pubContainer = panoShell.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
+      const dropzone = pubContainer.querySelector("#studio-zip-dropzone")!;
+      dropzone.dispatchEvent(new CustomEvent("drop", { detail: { files: [mockZipFile] } }));
+      await wait(150);
 
-      const dropEv = new CustomEvent("drop", {
-        detail: { files: [mockZipFile] }
-      });
-      dropzone.dispatchEvent(dropEv);
-      await wait(250);
+      const btnInstallLocal = pubContainer.querySelector("#btn-install-local-direct") as HTMLButtonElement;
+      btnInstallLocal.click();
+      await wait(350);
 
       expect(panoShell.installedPlugins.some((p) => p.id === "org.omni.plugin.dropped-zip")).toBe(true);
       panoShell.destroy();
     }
 
-    // 3. Test Editorial Shell Dropzone
+    // 3. Editorial Shell (via @omni/plugin-publisher)
     {
       document.body.innerHTML = `<div id="omni-root"></div>`;
       rootEl = document.getElementById("omni-root")!;
@@ -257,36 +281,56 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       const kernel = new OmniKernel({
         bootstrapRelays: [],
         runtimeScript,
-        slotResolver: (id, compId, slot) => edShell?.getContainerForPluginSlot(id, slot, compId)
+        slotResolver: (id, compId, slot) => edShell?.getContainerForPluginSlot(id, slot, compId),
+        onHandleUri: (uri, srcId) => edShell?.handleUri(uri, srcId)
       });
       edShell = new EditorialShell({ root: rootEl, kernel, installedPlugins: [] });
       edShell.mount();
       await kernel.boot();
+      await edShell.installPluginEntry(makePublisherEntry());
+      edShell.showPage("org.omni.plugin.publisher");
+      await wait(150);
 
-      const dropzone = rootEl.querySelector("#editorial-install-dropzone")!;
-      expect(dropzone).toBeTruthy();
+      const pubContainer = edShell.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
+      const dropzone = pubContainer.querySelector("#studio-zip-dropzone")!;
+      dropzone.dispatchEvent(new CustomEvent("drop", { detail: { files: [mockZipFile] } }));
+      await wait(150);
 
-      const dropEv = new CustomEvent("drop", {
-        detail: { files: [mockZipFile] }
-      });
-      dropzone.dispatchEvent(dropEv);
-      await wait(250);
+      const btnInstallLocal = pubContainer.querySelector("#btn-install-local-direct") as HTMLButtonElement;
+      btnInstallLocal.click();
+      await wait(350);
 
       expect(edShell.installedPlugins.some((p) => p.id === "org.omni.plugin.dropped-zip")).toBe(true);
       edShell.destroy();
     }
   });
 
-  it("installs plugins from arbitrary remote .zip URLs and HTML URLs with <base href> injection", async () => {
+  it("installs plugins from arbitrary remote .zip URLs and HTML URLs with <base href> injection via @omni/plugin-publisher", async () => {
     let shell!: OmniShell;
     const kernel = new OmniKernel({
       bootstrapRelays: [],
       runtimeScript,
-      slotResolver: (id, compId, slot) => shell?.getContainerForPluginSlot(id, slot, compId)
+      slotResolver: (id, compId, slot) => shell?.getContainerForPluginSlot(id, slot, compId),
+      onHandleUri: (uri, srcId) => shell?.handleUri(uri, srcId)
     });
     shell = new OmniShell({ root: rootEl, kernel, installedPlugins: [] });
     shell.mount();
     await kernel.boot();
+
+    await shell.installPluginEntry({
+      id: "org.omni.plugin.publisher",
+      name: "Plugin Studio",
+      displayName: "Publisher",
+      description: "Package .zip archives into NIP-5A nsites and upload to Blossom.",
+      icon: "globe",
+      viewport: "main",
+      views: [{ id: "main", title: "Plugin Studio", path: "" }],
+      scriptContent: publisherScript,
+      sourceUrl: "local:@omni/plugin-publisher",
+      enabled: true
+    });
+    shell.showPage("org.omni.plugin.publisher");
+    await wait(150);
 
     const remoteZipBytes = createPluginZipArchive({
       "index.html": `<!DOCTYPE html><html><head><title>Remote Release Zip</title></head><body><div>From GitHub Release Zip</div></body></html>`,
@@ -302,6 +346,7 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       if (url.endsWith(".zip")) {
         return {
           ok: true,
+          status: 200,
           headers: new Map([["content-type", "application/zip"]]),
           arrayBuffer: async () =>
             remoteZipBytes.buffer.slice(
@@ -312,21 +357,43 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       }
       return {
         ok: true,
+        status: 200,
         headers: new Map([["content-type", "text/html"]]),
         text: async () =>
           `<!DOCTYPE html><html><head><title>External Tool</title></head><body><script src="./tool.js"></script></body></html>`
       } as unknown as Response;
     });
 
-    // 1. Install from remote .zip URL
-    const zipInstalled = await shell.resolveAndInstallNsite("https://example.com/releases/remote-release.zip");
-    expect(zipInstalled.id).toBe("org.omni.plugin.remote-release");
-    expect(zipInstalled.name).toBe("Remote Release Zip");
+    const pubContainer = shell.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
 
-    // 2. Install from arbitrary HTML URL and verify <base href> is injected
-    const htmlInstalled = await shell.resolveAndInstallNsite("https://apps.example.org/notes/index.html");
-    expect(htmlInstalled.name).toBe("External Tool");
-    expect(htmlInstalled.scriptContent).toContain('<base href="https://apps.example.org/notes/">');
+    // 1. Install from remote .zip URL via @omni/plugin-publisher
+    const urlInput1 = pubContainer.querySelector("#input-studio-arbitrary-url") as HTMLInputElement;
+    urlInput1.value = "https://example.com/releases/remote-release.zip";
+    urlInput1.dispatchEvent(new Event("input", { bubbles: true }));
+    await wait(50);
+
+    const btnInstallUrl1 = pubContainer.querySelector("#btn-studio-install-url") as HTMLButtonElement;
+    btnInstallUrl1.click();
+    await wait(400);
+
+    const zipInstalled = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.remote-release");
+    expect(zipInstalled).toBeDefined();
+    expect(zipInstalled?.name).toBe("Remote Release Zip");
+
+    // 2. Install from arbitrary HTML URL via @omni/plugin-publisher and verify <base href> is injected
+    const urlInput2 = pubContainer.querySelector("#input-studio-arbitrary-url") as HTMLInputElement;
+    urlInput2.value = "https://apps.example.org/notes/index.html";
+    urlInput2.dispatchEvent(new Event("input", { bubbles: true }));
+    await wait(50);
+
+    const btnInstallUrl2 = pubContainer.querySelector("#btn-studio-install-url") as HTMLButtonElement;
+    btnInstallUrl2.click();
+    await wait(400);
+
+    const htmlInstalled = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.external-tool");
+    expect(htmlInstalled).toBeDefined();
+    expect(htmlInstalled?.name).toBe("External Tool");
+    expect(htmlInstalled?.scriptContent).toContain('<base href="https://apps.example.org/notes/">');
 
     shell.destroy();
   });

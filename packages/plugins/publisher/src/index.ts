@@ -815,6 +815,7 @@ function mountPublisherStudio(root: HTMLElement) {
   let appDescription = "";
   let appIcon = "globe";
   let packagingMode: "inlined" | "multifile" = "multifile";
+  let remoteUrlInputVal = "";
   let statusLogs: string[] = [];
   let lastPublishedResult: PublishedAppRecord | null = null;
 
@@ -944,6 +945,94 @@ function mountPublisherStudio(root: HTMLElement) {
       [fileName.endsWith(".js") ? "index.js" : "index.html"]: bytes
     });
     processZipBytes(zipBytes, fileName);
+  }
+
+  async function handleRemoteUrlInput(rawTarget: string, autoInstall = true) {
+    const trimmed = (rawTarget || "").trim();
+    if (!trimmed) {
+      appendLog("Please enter an arbitrary .zip URL, web app URL, or NIP-5A naddr1 address.");
+      return;
+    }
+
+    if (trimmed.startsWith("naddr1") || trimmed.startsWith("nostr:naddr1")) {
+      const cleanNaddr = trimmed.replace(/^nostr:/i, "");
+      appendLog(`Opening NIP-5A address in Omni: nostr:${cleanNaddr}`);
+      try {
+        window.open(`nostr:${cleanNaddr}`);
+      } catch {}
+      return;
+    }
+
+    if (!/^https?:\/\//i.test(trimmed)) {
+      appendLog("Error: URL must start with https://, http://, or naddr1...");
+      return;
+    }
+
+    const cleanUrlPath = trimmed.split("?")[0].split("#")[0];
+    const urlFileName = cleanUrlPath.split("/").pop() || "remote-plugin.html";
+
+    try {
+      appendLog(`Fetching remote plugin from ${trimmed}...`);
+      const fetchFn = (typeof window !== "undefined" && typeof window.fetch === "function") ? window.fetch.bind(window) : fetch;
+      const res = await fetchFn(trimmed);
+      const contentType = res.headers?.get?.("content-type") || "";
+      const ab = await res.arrayBuffer();
+      const bytes = new Uint8Array(ab);
+
+      const isZip =
+        cleanUrlPath.toLowerCase().endsWith(".zip") ||
+        contentType.toLowerCase().includes("application/zip") ||
+        (bytes.byteLength >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b);
+
+      if (isZip) {
+        processZipBytes(bytes, urlFileName.endsWith(".zip") ? urlFileName : `${urlFileName}.zip`);
+      } else {
+        const text = new TextDecoder().decode(bytes);
+        const baseHref = trimmed.endsWith("/") ? trimmed : trimmed.replace(/\/[^/]*$/, "/");
+        let htmlWithBase = text;
+        if (text.trim().startsWith("<") || /<html[\s>]/i.test(text)) {
+          if (!/<base\s/i.test(htmlWithBase)) {
+            if (/<head[^>]*>/i.test(htmlWithBase)) {
+              htmlWithBase = htmlWithBase.replace(/<head[^>]*>/i, (m) => `${m}\n  <base href="${baseHref}">`);
+            } else {
+              htmlWithBase = `<head><base href="${baseHref}"></head>\n${htmlWithBase}`;
+            }
+          }
+        }
+        processSingleHtmlOrJsFile(
+          new TextEncoder().encode(htmlWithBase),
+          urlFileName.endsWith(".js") ? urlFileName : "index.html"
+        );
+      }
+
+      if (autoInstall) {
+        await executePublishWorkflow(true);
+      }
+    } catch (err: any) {
+      let hostTitle = "Remote Web App";
+      try {
+        const parsedUrl = new URL(trimmed);
+        hostTitle = parsedUrl.hostname.replace(/^www\./, "");
+      } catch {}
+      const fallbackHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <base href="${escapeHtml(trimmed)}">
+  <title>${escapeHtml(hostTitle)}</title>
+</head>
+<body>
+  <div style="padding: 16px; background: var(--omni-bg-surface, #191816); border: 1px solid var(--omni-border-subtle, #2e2b26); border-radius: 8px; color: var(--omni-text-primary, #ede8df);">
+    <h3 style="margin: 0 0 6px 0; font-size: 0.95rem;">${escapeHtml(hostTitle)}</h3>
+    <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: var(--omni-text-secondary, #9e988f);">Remote URL: <code>${escapeHtml(trimmed)}</code></p>
+    <a href="${escapeHtml(trimmed)}" target="_blank" rel="noopener noreferrer" style="color: var(--omni-accent-primary, #d4a373); font-size: 0.82rem;">Open External Application</a>
+  </div>
+</body>
+</html>`;
+      processSingleHtmlOrJsFile(new TextEncoder().encode(fallbackHtml), `${hostTitle}.html`);
+      if (autoInstall) {
+        await executePublishWorkflow(true);
+      }
+    }
   }
 
   async function syncPublishedFromRelays() {
@@ -1362,6 +1451,46 @@ function mountPublisherStudio(root: HTMLElement) {
       });
 
       createPane.appendChild(dropzoneCard);
+
+      // 1b. Arbitrary URL / NIP-5A naddr Loader & Installer Card
+      const urlCard = document.createElement("div");
+      urlCard.id = "studio-url-installer-card";
+      urlCard.style.cssText =
+        "background: var(--omni-bg-surface, #191816); border: 1px solid var(--omni-border-subtle, #2e2b26); border-radius: var(--omni-radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 10px;";
+      urlCard.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong style="font-size: 0.88rem; color: var(--omni-text-primary, #ede8df);">Install or Package from Arbitrary URL / NIP-5A naddr</strong>
+          <span style="font-size: 0.73rem; color: var(--omni-text-muted, #6b665f);">Supports remote .zip, .html, or naddr1...</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <input
+            id="input-studio-arbitrary-url"
+            type="text"
+            value="${escapeHtml(remoteUrlInputVal)}"
+            placeholder="https://example.com/plugin.zip, https://.../index.html, or naddr1..."
+            style="flex: 1; min-width: 240px; background: var(--omni-bg-subtle, #2a2723); border: 1px solid var(--omni-border-strong, #3d3933); color: var(--omni-text-primary, #ede8df); padding: 8px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.82rem;"
+          />
+          <button id="btn-studio-fetch-url" style="background: var(--omni-bg-card, #22201d); color: var(--omni-text-primary, #ede8df); border: 1px solid var(--omni-border-strong, #3d3933); padding: 8px 14px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.8rem; cursor: pointer;">
+            Fetch &amp; Inspect
+          </button>
+          <button id="btn-studio-install-url" style="background: var(--omni-accent-primary, #d4a373); color: #141312; border: none; padding: 8px 16px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+            Install from URL
+          </button>
+        </div>
+      `;
+
+      const urlInputEl = urlCard.querySelector("#input-studio-arbitrary-url") as HTMLInputElement;
+      urlInputEl?.addEventListener("input", () => {
+        remoteUrlInputVal = urlInputEl.value;
+      });
+      urlCard.querySelector("#btn-studio-fetch-url")?.addEventListener("click", () => {
+        handleRemoteUrlInput(urlInputEl?.value || remoteUrlInputVal, false);
+      });
+      urlCard.querySelector("#btn-studio-install-url")?.addEventListener("click", () => {
+        handleRemoteUrlInput(urlInputEl?.value || remoteUrlInputVal, true);
+      });
+
+      createPane.appendChild(urlCard);
 
       // 2. Extracted Files Table & Metadata Form (shown when files are loaded)
       if (extractedFiles.length > 0) {

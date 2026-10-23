@@ -470,8 +470,10 @@ export class JsonRpcDispatcher {
         };
       }
 
-      case "blossom.upload": {
+      case "blossom.upload":
+      case "http.fetch": {
         const url = String(params?.url || "");
+        const reqMethod = String(params?.method || "GET").toUpperCase();
         const headers = params?.headers || {};
         const bodyBytes =
           params?.bytes instanceof Uint8Array
@@ -481,22 +483,35 @@ export class JsonRpcDispatcher {
             : new Uint8Array(0);
 
         if (!url || !/^https?:\/\//i.test(url)) {
-          throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Invalid Blossom upload URL" };
+          throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Invalid HTTP URL" };
         }
-        const resp = await fetch(url, {
-          method: params?.method || "PUT",
-          headers,
-          body: bodyBytes as any
-        });
+        const fetchInit: RequestInit = {
+          method: reqMethod,
+          headers
+        };
+        if (reqMethod !== "GET" && reqMethod !== "HEAD") {
+          fetchInit.body = bodyBytes as any;
+        }
+        const resp = await fetch(url, fetchInit);
+        const contentType =
+          typeof resp?.headers?.get === "function" ? resp.headers.get("content-type") || "" : "";
+        let respBytes = new Uint8Array(0);
         let text = "";
         try {
-          if (typeof resp.text === "function") {
+          if (typeof resp?.arrayBuffer === "function") {
+            const ab = await resp.arrayBuffer();
+            respBytes = new Uint8Array(ab);
+            text = new TextDecoder().decode(respBytes);
+          } else if (typeof resp?.text === "function") {
             text = await resp.text();
+            respBytes = new TextEncoder().encode(text);
           }
         } catch {}
         return {
           ok: Boolean(resp?.ok),
           status: resp?.status || 200,
+          contentType,
+          bytes: Array.from(respBytes),
           bodyText: text
         };
       }

@@ -640,19 +640,9 @@ export class PanoramaShell extends BaseShell {
               </button>
             </div>
             <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
-              <div
-                id="panorama-install-dropzone"
-                style="border: 1.5px dashed #444; background: #111; padding: 14px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;"
-              >
-                <span style="font-size: 0.85rem; font-weight: 600; color: #fff;">Drop a Plugin Archive (.zip) or .html File Here</span>
-                <span style="font-size: 0.74rem; color: #888;">Extracts &amp; installs directly in-browser (no Blossom server needed)</span>
-                <input id="panorama-install-file-input" type="file" accept=".zip,.html,.htm,.js" style="display: none;" />
-                <button type="button" id="btn-panorama-browse-file" class="btn-panorama-action" style="font-size: 0.74rem; margin-top: 2px;">Select .zip or .html File</button>
-              </div>
-
               <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: #ccc;">
-                <span style="font-weight: 600; color: #fff;">Nostr naddr (NIP-5A) or Arbitrary App/ZIP URL:</span>
-                <input id="panorama-install-url" type="text" placeholder="naddr1... / 35129:pubkey:d-tag / https://.../app.zip / https://..." style="background: #111; border: 1px solid #333; color: #fff; padding: 8px 12px; font-size: 0.85rem; outline: none;" />
+                <span style="font-weight: 600; color: #fff;">Nostr naddr (NIP-5A) or App URL:</span>
+                <input id="panorama-install-url" type="text" placeholder="naddr1... / 35129:pubkey:d-tag / https://..." style="background: #111; border: 1px solid #333; color: #fff; padding: 8px 12px; font-size: 0.85rem; outline: none;" />
               </label>
 
               <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
@@ -2824,48 +2814,6 @@ export class PanoramaShell extends BaseShell {
     });
 
     const panoUrlInput = document.getElementById("panorama-install-url") as HTMLInputElement | null;
-    const panoDropzone = document.getElementById("panorama-install-dropzone");
-    const panoFileInput = document.getElementById("panorama-install-file-input") as HTMLInputElement | null;
-    const btnPanoBrowse = document.getElementById("btn-panorama-browse-file");
-
-    const handlePanoFileInstall = async (files: FileList | any[] | null | undefined) => {
-      if (!files || files.length === 0) return;
-      const file = files[0];
-      try {
-        const installed = await this.installPluginFromFile(file);
-        if (panoInstallModal) panoInstallModal.style.display = "none";
-        if (panoUrlInput) panoUrlInput.value = "";
-        this.renderSystemPluginList();
-        this.renderAppsTiles();
-        if (typeof alert === "function") {
-          try { alert(`Installed '${installed.name}' successfully!`); } catch (_) {}
-        }
-      } catch (err: any) {
-        if (typeof alert === "function") {
-          try { alert(`Install failed: ${err.message || String(err)}`); } catch (_) {}
-        }
-      }
-    };
-
-    btnPanoBrowse?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      panoFileInput?.click();
-    });
-    panoFileInput?.addEventListener("change", () => {
-      handlePanoFileInstall(panoFileInput.files);
-    });
-    panoDropzone?.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      panoDropzone.style.borderColor = "var(--omni-accent-primary, #00a4ef)";
-    });
-    panoDropzone?.addEventListener("dragleave", () => {
-      panoDropzone.style.borderColor = "#444";
-    });
-    panoDropzone?.addEventListener("drop", (e: any) => {
-      e.preventDefault();
-      panoDropzone.style.borderColor = "#444";
-      handlePanoFileInstall(e.dataTransfer?.files || e.detail?.files);
-    });
     document.getElementById("btn-panorama-quick-sample")?.addEventListener("click", async () => {
       const btn = document.getElementById("btn-panorama-quick-sample") as HTMLButtonElement | null;
       if (btn) btn.disabled = true;
