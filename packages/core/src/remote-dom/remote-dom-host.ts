@@ -47,12 +47,16 @@ export class RemoteDomHost {
               name: f.name || "file",
               size: f.size ?? bytes.byteLength,
               type: f.type || "application/octet-stream",
-              bytes
+              bytes: Array.from(bytes)
             };
           })
         ).then((serializedFiles) => {
+          if (data.detail.__omniTargetInput) {
+            try { data.detail.__omniTargetInput.value = ""; } catch {}
+          }
           const cleanDetail = { ...data.detail, files: serializedFiles };
           delete cleanDetail.__omniRawFiles;
+          delete cleanDetail.__omniTargetInput;
           options.onEvent(componentId, { ...data, detail: cleanDetail });
         }).catch(() => {
           options.onEvent(componentId, data);
@@ -103,6 +107,7 @@ export class RemoteDomHost {
           };
           if (target.files && target.files.length > 0) {
             detailVal.__omniRawFiles = Array.from(target.files);
+            detailVal.__omniTargetInput = target;
           }
           Object.defineProperty(e, "detail", {
             value: detailVal,
@@ -173,8 +178,19 @@ export class RemoteDomHost {
     targetRoot.addEventListener("keypress", enrichKeyboardEvent as any, true);
 
     // DOMRemoteReceiver only fires a remote listener when `event.target === element`
-    targetRoot.addEventListener("click", () => {
+    targetRoot.addEventListener("click", (e: Event) => {
       this.clickHandled = false;
+      const targetEl = e.target as Element | null;
+      const triggerEl = targetEl?.closest?.("[data-file-input]");
+      if (triggerEl) {
+        const inputId = triggerEl.getAttribute("data-file-input");
+        if (inputId) {
+          const fileInput = targetRoot.querySelector(`#${inputId}`) as HTMLInputElement | null;
+          if (fileInput && fileInput.type === "file") {
+            fileInput.click();
+          }
+        }
+      }
     }, true);
     targetRoot.addEventListener("click", (e: Event) => {
       if (this.clickHandled) return;

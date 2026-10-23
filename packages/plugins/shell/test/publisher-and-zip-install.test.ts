@@ -115,6 +115,15 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     expect(pubContainer).toBeTruthy();
     expect(pubContainer.textContent).toContain("Plugin Studio & Blossom Publisher");
 
+    // Verify clicking #btn-browse-zip synchronously triggers the host DOM <input type="file">
+    const hostFileInput = pubContainer.querySelector("#studio-file-input") as HTMLInputElement;
+    expect(hostFileInput).toBeTruthy();
+    const clickSpy = vi.spyOn(hostFileInput, "click");
+    const btnBrowseZip = pubContainer.querySelector("#btn-browse-zip") as HTMLButtonElement;
+    expect(btnBrowseZip).toBeTruthy();
+    btnBrowseZip.click();
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+
     // 1. Click "Load Multi-File Starter Template (.zip)"
     const btnStarter = pubContainer.querySelector("#btn-load-starter-zip") as HTMLButtonElement;
     expect(btnStarter).toBeTruthy();

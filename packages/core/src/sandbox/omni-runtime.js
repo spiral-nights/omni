@@ -940,6 +940,17 @@
     if (typeof HTMLInputElement !== "undefined") {
       patchNativeProperty(HTMLInputElement.prototype, "value", false);
       patchNativeProperty(HTMLInputElement.prototype, "checked", true);
+      const origInputClick = HTMLInputElement.prototype.click;
+      if (typeof origInputClick === "function") {
+        HTMLInputElement.prototype.click = function() {
+          if (this.type === "file") {
+            // File picker activation is handled synchronously on the host DOM via data-file-input
+            // to preserve transient user activation and avoid sandbox iframe popup warnings.
+            return;
+          }
+          return origInputClick.apply(this, arguments);
+        };
+      }
     }
     if (typeof HTMLTextAreaElement !== "undefined") {
       patchNativeProperty(HTMLTextAreaElement.prototype, "value", false);
@@ -1038,7 +1049,7 @@
         try {
           let wrappedFiles = null;
           if (detail) {
-            if (detail.value !== undefined && "value" in nativeNode) {
+            if (detail.value !== undefined && "value" in nativeNode && nativeNode.type !== "file") {
               try { nativeNode.value = detail.value; } catch (_) {}
             }
             if (detail.checked !== undefined && "checked" in nativeNode) {

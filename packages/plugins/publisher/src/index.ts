@@ -1399,7 +1399,7 @@ function mountPublisherStudio(root: HTMLElement) {
         </div>
         <input id="studio-file-input" type="file" accept=".zip,.html,.htm,.js" style="display: none;" />
         <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px;">
-          <button id="btn-browse-zip" style="background: var(--omni-accent-primary, #d4a373); color: #141312; border: none; padding: 8px 16px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.82rem; font-weight: 600; cursor: pointer;">
+          <button id="btn-browse-zip" data-file-input="studio-file-input" style="background: var(--omni-accent-primary, #d4a373); color: #141312; border: none; padding: 8px 16px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.82rem; font-weight: 600; cursor: pointer;">
             Select .zip or .html File
           </button>
           <button id="btn-load-starter-zip" style="background: var(--omni-bg-card, #22201d); color: var(--omni-text-primary, #ede8df); border: 1px solid var(--omni-border-strong, #3d3933); padding: 8px 16px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.82rem; cursor: pointer;">
