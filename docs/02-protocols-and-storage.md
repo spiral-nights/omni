@@ -100,7 +100,7 @@ Omni uses **NIP-78** (Arbitrary Custom App Data, `kind: 30078`) to synchronize u
 
 Omni eliminates proprietary manifests in favor of decentralized, open standards:
 
-### 3.1 Pure NIP-5A Manifest Events (`kind: 35129`)
+### 3.1 Pure NIP-5A Manifest Events (`kind: 35129`) & Blossom Storage (BUD-01 / BUD-03 / BUD-06)
 Apps and widgets are published as standard parameterized replaceable NIP-5A events:
 - **Kind**: `35129`
 - **Tags**:
@@ -108,14 +108,18 @@ Apps and widgets are published as standard parameterized replaceable NIP-5A even
   - `["name", "<App Name>"]`: Human-readable title.
   - `["description", "<Summary>"]`: Description.
   - `["icon", "<icon-url-or-name>"]`: Monochrome icon.
-  - `["f", "index.html", "<sha256_hash>", "text/html"]`: File entry pointing to Blossom.
-  - `["server", "https://cdn.satellite.earth"]`: Blossom CDN servers.
+  - `["f", "index.html", "<sha256_hash>", "text/html"]`: File entry pointing to Blossom (can include multiple `["f", "<path>", "<sha256_hash>", "<mime>"]` tags for multi-file bundles).
+  - `["server", "https://cdn.satellite.earth"]`: Blossom CDN servers where blobs are stored.
+- **Blossom Upload Authentication (BUD-06, `kind: 24242`)**:
+  - Uploading blobs to a Blossom server (`PUT <server>/upload`) uses a signed `kind: 24242` Nostr authorization event in the `Authorization: Nostr <base64(signedEvent)>` header with `["t", "upload"]`, `["x", "<sha256_hash>"]`, and `["expiration", "<unix_ts>"]`.
+- **User Blossom Server List (BUD-03, `kind: 10063`)**:
+  - Users track their preferred Blossom servers across devices using replaceable event `kind: 10063` with `["server", "<url>"]` tags.
 
-### 3.2 NIP-19 `naddr` Resolution
-Users can install any app by pasting its `naddr1...` identifier:
+### 3.2 NIP-19 `naddr` Resolution & Protocol Interception
+Users can install any app by pasting its `naddr1...` identifier or clicking a `nostr:naddr1...` link inside any plugin:
 1. `NostrPluginResolver.resolve(naddr)` decodes the TLV structure (author pubkey, kind `35129`, identifier `d`, and bootstrap relays).
-2. Fetches the NIP-5A manifest event from relays or local cache.
-3. Downloads the `index.html` bundle from Blossom and verifies the SHA-256 hash.
+2. Fetches the NIP-5A manifest event from `LocalEventStore` (0ms) or connected Nostr relays.
+3. If the event content is empty or references external companion files via `["f", ...]` tags, downloads the blobs from the listed Blossom servers and verifies every SHA-256 hash before inlining/mounting.
 4. Mounts the verified nsite directly into an isolated sandbox.
 
 ---

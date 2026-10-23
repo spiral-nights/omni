@@ -251,38 +251,57 @@ Omni supports multiple swappable shells (Omni Classic, Panorama Hub, and Editori
 
 ---
 
-## 6. Packaging & Publishing to Blossom & Nostr
+## 6. Authoring, Packaging & Uploading Plugins (`@omni/plugin-publisher`)
 
-### Option 1: In-Browser Packaging & Upload via Plugin Studio (`@omni/plugin-publisher`)
-Omni ships with **Plugin Studio** (`@omni/plugin-publisher`), a first-class full-page application that automates packaging, Blossom uploading, and NIP-5A publishing without requiring external CLI tooling or self-hosted Blossom servers:
-1. **Drop a `.zip` Archive (or `.html`/`.js` file)**:
-   Plugin Studio extracts all files in-browser, computes SHA-256 digests, and infers metadata from `index.html`, `manifest.json`, or `package.json`.
-2. **Choose Packaging Format**:
-   - **Option A — Single-File Inlined Bundle**: Inlines relative `.css`, `.js`, and image assets into a single self-contained HTML bundle.
-   - **Option B — Multi-File Blossom Upload**: Uploads each extracted file individually to configured Blossom servers using BUD-06 (`kind: 24242`) Nostr authentication headers and records `["f", "<path>", "<sha256>", "<mime>"]` tags on the `kind: 35129` event.
-3. **Blossom Server Management & Discovery (`kind: 10063`)**:
-   The **Blossom Servers** tab manages public or custom Blossom endpoints and syncs your server list to Nostr via BUD-03 (`kind: 10063`).
-4. **My Published Plugins (`kind: 35129`)**:
-   The **My Published Plugins** tab queries your signed `kind: 35129` events from Omni's 0ms local store and Nostr relays, displaying each plugin's `naddr1...`, file hashes, and Blossom servers with one-click installation.
+Omni handles all plugin creation, `.zip` extraction, Blossom uploading, and arbitrary URL installation purely through the **Plugin Studio** (`@omni/plugin-publisher`) plugin—requiring zero custom modifications to any shell.
 
-### Option 2: Direct Blossom-Free Installation (`.zip`, `.html`, or Arbitrary URL)
-Across all three shells (**Omni Classic**, **Panorama Hub**, and **Editorial Shell**), the **+ Install Plugin** modal supports:
-- **Direct `.zip` or `.html` File Drop / Picker**: Extracts and bundles `.zip` archives in-browser and installs them immediately into Omni's local workspace without needing a Blossom server.
-- **Arbitrary Remote URLs (`https://...`)**: Installs directly from remote `.zip` release URLs, raw `.html`/`.js` URLs (with automatic `<base href>` injection for relative assets), or `naddr1...` addresses.
+### 6.1 Structure of a `.zip` Plugin Archive
+To create a multi-file plugin, place your standard web files in a directory and zip them:
+```
+my-plugin.zip
+├── index.html          # Entry HTML (mounts to document.body or #root)
+├── style.css           # Stylesheet using --omni-* CSS variables
+├── app.js              # Standard ES module / JavaScript logic
+└── manifest.json       # Optional metadata (id, name, version, description, icon)
+```
+- **Sub-Views**: Declare supported views in `index.html` using `<link rel="alternate" href="?view=widget" title="Mini Widget">` or `<link rel="alternate" href="?view=settings" title="Settings">`.
+- **Icons**: Always use geometric monochrome SVG line icons (`stroke="currentColor"`, `stroke-width="1.75"`). Never use colorful emojis.
 
-### Option 3: Manual NIP-5A Event Structure (`kind: 35129`)
+### 6.2 Uploading & Installing via Plugin Studio (`@omni/plugin-publisher`)
+Open **Publisher** (**Plugin Studio**) from the navigation dock in any shell (**Omni Classic**, **Panorama Hub**, or **Editorial**):
+
+1. **Drop or Select Your `.zip` Archive**:
+   - Drag and drop your `.zip` file (or `.html` / `.js` bundle) onto the **Create & Upload** dropzone, or click **Select .zip or .html File**.
+   - Plugin Studio extracts all files in-browser, computes each file's SHA-256 hash, and auto-populates the plugin's Name, App Slug (`d` tag), Version, and Description.
+2. **Choose Your Packaging & Upload Method**:
+   - **Option B — Multi-File Blossom Upload**: Extracts and uploads each file (`index.html`, `style.css`, `app.js`, etc.) separately to your active Blossom servers via `PUT <server>/upload` with a signed BUD-06 (`kind: 24242`) Nostr authorization header, and records individual `["f", "<path>", "<sha256>", "<mime>"]` tags on the `kind: 35129` Nostr event.
+   - **Option A — Single-File Inlined Bundle**: Inlines relative CSS, JS, and image assets from the `.zip` into a single self-contained HTML bundle.
+3. **Install Locally or Publish to Blossom & Nostr**:
+   - **Install Locally in Omni (No Blossom Needed)**: Signs the `kind: 35129` event into Omni's 0ms `LocalEventStore` and triggers `nostr:naddr1...` to immediately install and open your plugin in the active workspace without needing any Blossom server.
+   - **Upload to Blossom & Publish to Nostr (NIP-5A)**: Uploads the files to all enabled Blossom servers, signs and broadcasts the `kind: 35129` event to your connected Nostr relays, and outputs a shareable `naddr1...` address.
+4. **Install or Package from an Arbitrary URL / `naddr`**:
+   - Paste any remote `.zip` URL (`https://.../plugin.zip`), raw `.html` URL (`https://.../index.html`), or `naddr1...` string into the **Install or Package from Arbitrary URL / NIP-5A naddr** card in Plugin Studio and click **Fetch & Inspect** or **Install from URL**.
+5. **Manage Published Plugins & Blossom Servers**:
+   - **My Published Plugins (`?view=published`)**: Tracks all `kind: 35129` plugins signed by your Nostr key, showing which Blossom servers and file hashes are associated with each version.
+   - **Blossom Servers (`?view=servers`)**: Add or toggle public Blossom servers (e.g. `https://cdn.satellite.earth`, `https://blossom.primal.net`, `https://nostr.download`) and sync your server list to Nostr as a BUD-03 (`kind: 10063`) event.
+
+### 6.3 Manual NIP-5A Event Structure (`kind: 35129`)
+If publishing via external scripts instead of Plugin Studio:
 1. **Host Assets on Blossom**:
-   Upload your compiled `index.html` (and any companion assets) to a Blossom server (`PUT /upload` with a signed `kind: 24242` Nostr auth header). Compute the SHA-256 hash of each file.
+   Upload your files to a Blossom server (`PUT /upload` with a signed `kind: 24242` Nostr auth header) and record each file's SHA-256 hex digest.
 2. **Publish NIP-5A Event (`kind: 35129`)**:
-   Publish a parameterized replaceable event:
    ```json
    {
      "kind": 35129,
      "tags": [
-       ["d", "my-app"],
+       ["d", "org.omni.plugin.my-app"],
        ["name", "My App Name"],
+       ["version", "1.0.0"],
        ["description", "A decentralized tool for Omni."],
-       ["icon", "layout"],
+       ["icon", "globe"],
+       ["view", "main", "My App Name", ""],
+       ["view", "widget", "My App Widget", "?view=widget"],
+       ["view", "settings", "My App Settings", "?view=settings"],
        ["f", "index.html", "<sha256_hash>", "text/html"],
        ["f", "style.css", "<sha256_hash>", "text/css"],
        ["f", "app.js", "<sha256_hash>", "application/javascript"],
@@ -292,4 +311,4 @@ Across all three shells (**Omni Classic**, **Panorama Hub**, and **Editorial She
    }
    ```
 3. **Distribute via `naddr`**:
-   Encode the event address into a NIP-19 `naddr1...` string. Users can paste this identifier into Omni's **+ Install Plugin** dialog to install and launch your app with one click.
+   Encode `(kind: 35129, pubkey, d-tag, relays)` into a NIP-19 `naddr1...` string and open or paste it in Plugin Studio.

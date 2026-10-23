@@ -16,6 +16,7 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
    - The profile editor and key custody manager (`@omni/plugin-profile`) is a plugin.
    - The profile & people viewer (`@omni/plugin-profile-viewer`) is a plugin.
    - The task list (`@omni/plugin-checklist`) is a plugin.
+   - The plugin studio & Blossom publisher (`@omni/plugin-publisher`) is a plugin.
    - The host UI frame itself (`@omni/plugin-shell`) is a first-class plugin.
 2. **The Host Bootloader (`apps/web`) is a Minimal Microkernel**:
    - `apps/web/index.html` is strictly a ~15-line skeleton with `<div id="omni-root"></div>`.
@@ -83,7 +84,8 @@ omni/
 │       ├── relays/                        # @omni/plugin-relays (Relay status & pool manager)
 │       ├── profile/                       # @omni/plugin-profile (Identity & key custody)
 │       ├── profile-viewer/                # @omni/plugin-profile-viewer (People & profile viewer)
-│       └── checklist/                     # @omni/plugin-checklist (Daily checklist widget)
+│       ├── checklist/                     # @omni/plugin-checklist (Daily checklist widget)
+│       └── publisher/                     # @omni/plugin-publisher (Plugin Studio & Blossom uploader)
 │
 └── docs/                                  # Consolidated System Documentation
     ├── 01-architecture.md                 # System Architecture & Core Runtime
