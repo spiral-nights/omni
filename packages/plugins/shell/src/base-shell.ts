@@ -68,9 +68,11 @@ export abstract class BaseShell implements OmniShellHost {
   // NIP-78 Workspace sync state
   public workspaceSyncStatus: "synced" | "unsynced" | "syncing" = "synced";
   public lastSyncedAt: number | null = null;
+  public localWorkspaceUpdatedAt: number = 0;
   public autoSyncNip78: boolean = true;
   protected syncDebounceTimer: any = null;
   public readonly LOCAL_WORKSPACE_KEY = "omni_workspace_state";
+  public readonly LOCAL_PLUGIN_BUNDLES_KEY = "omni_installed_plugin_bundles";
 
   constructor(options: OmniShellOptions) {
     this.root = options.root;
@@ -527,7 +529,7 @@ export abstract class BaseShell implements OmniShellHost {
       const placements = this.getPluginPlacements(p);
       for (const pl of placements) {
         if (pl.enabled === false) continue;
-        if (pl.viewport === "sidebar" || pl.viewport === "widgets") {
+        if (pl.viewport === "sidebar" || pl.viewport === "widgets" || pl.viewport === "header-actions") {
           const instanceKey = `${p.id}::${pl.id}`;
           if (this.pendingWidgetMounts.has(instanceKey)) continue;
           const existingSandbox = this.kernel.getSandbox(instanceKey);
@@ -663,13 +665,130 @@ export abstract class BaseShell implements OmniShellHost {
     return null;
   }
 
+  protected getSavedPluginBundles(): Record<string, Partial<InstalledPluginEntry>> {
+    try {
+      const storage = this.getStorage();
+      if (!storage) return {};
+      const raw = storage.getItem(this.LOCAL_PLUGIN_BUNDLES_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  protected savePluginBundlesToStorage(): void {
+    try {
+      const storage = this.getStorage();
+      if (!storage) return;
+      const existing = this.getSavedPluginBundles();
+      const bundles: Record<string, Partial<InstalledPluginEntry>> = {};
+      for (const p of this.installedPlugins) {
+        if (p.sourceUrl && p.sourceUrl.startsWith("local:@omni/")) continue;
+        const prev = existing[p.id] || {};
+        bundles[p.id] = {
+          id: p.id,
+          name: p.name ?? prev.name,
+          displayName: p.displayName ?? prev.displayName,
+          description: p.description ?? prev.description,
+          version: p.version ?? prev.version,
+          icon: p.icon ?? prev.icon,
+          viewport: p.viewport ?? prev.viewport,
+          views: p.views ?? prev.views,
+          manifest: p.manifest ?? prev.manifest,
+          htmlContent: p.htmlContent ?? prev.htmlContent,
+          scriptContent: p.scriptContent || prev.scriptContent || "",
+          sourceUrl: p.sourceUrl || prev.sourceUrl || `custom:${p.id}`,
+          naddr: p.naddr ?? prev.naddr,
+          authorNpub: p.authorNpub ?? prev.authorNpub
+        };
+      }
+      storage.setItem(this.LOCAL_PLUGIN_BUNDLES_KEY, JSON.stringify(bundles));
+    } catch (err) {
+      console.warn("Failed to persist custom plugin bundles:", err);
+    }
+  }
+
+  protected async hydrateRemotePluginEntry(entry: InstalledPluginEntry, target: string): Promise<void> {
+    const cleanTarget = target.trim().replace(/^nostr:/i, "");
+    if (cleanTarget.startsWith("naddr1") || /^\d+:[0-9a-fA-F]{64}:/.test(cleanTarget)) {
+      const resolved = await this.kernel.resolveNsitePlugin(cleanTarget);
+      if (resolved && resolved.scriptContent) {
+        entry.scriptContent = resolved.scriptContent;
+        entry.manifest = resolved.manifest || entry.manifest;
+        entry.views = resolved.manifest?.views || entry.views;
+        entry.naddr = resolved.naddr || entry.naddr;
+        entry.authorNpub = resolved.authorNpub || entry.authorNpub;
+        this.savePluginBundlesToStorage();
+        if (entry.enabled) {
+          await this.remountPlugin(entry);
+        }
+      }
+    }
+  }
+
+  protected restoreMissingPluginEntry(
+    item: OmniWorkspacePluginConfig,
+    bundles: Record<string, Partial<InstalledPluginEntry>>
+  ): InstalledPluginEntry {
+    const bundle = bundles[item.id];
+    const curated = CURATED_APPS.find((c) => c.id === item.id);
+    const scriptContent = bundle?.scriptContent || bundle?.htmlContent || curated?.htmlContent || "";
+    const name = item.name || bundle?.name || curated?.name || item.id;
+    const viewport = item.viewport || bundle?.viewport || curated?.viewport || "main";
+    const views =
+      bundle?.views ||
+      curated?.views ||
+      (scriptContent ? NostrPluginResolver.detectPluginViews(null, scriptContent) : [{ id: "main", title: name, path: "" }]);
+
+    const entry: InstalledPluginEntry = {
+      id: item.id,
+      name,
+      displayName: item.displayName || bundle?.displayName || name,
+      description: item.description ?? bundle?.description ?? curated?.description ?? "",
+      version: bundle?.version || curated?.version || "1.0.0",
+      icon: item.icon || bundle?.icon || curated?.icon || "widgets",
+      viewport,
+      route: item.route,
+      viewId: item.viewId,
+      views,
+      placements: item.placements,
+      manifest: bundle?.manifest,
+      htmlContent: bundle?.htmlContent,
+      scriptContent,
+      sourceUrl: item.sourceUrl || bundle?.sourceUrl || item.naddr || `custom:${item.id}`,
+      enabled: typeof item.enabled === "boolean" ? item.enabled : true,
+      pinned: item.pinned,
+      relays: Array.isArray(item.relays) ? item.relays : undefined,
+      handledIntents: item.handledIntents,
+      disabledIntents: item.disabledIntents,
+      naddr: item.naddr || bundle?.naddr,
+      authorNpub: bundle?.authorNpub
+    };
+
+    entry.manifest = this.ensurePluginManifest(entry);
+    this.installedPlugins.push(entry);
+
+    if (!entry.scriptContent && (entry.naddr || (entry.sourceUrl && /^https?:\/\//i.test(entry.sourceUrl)))) {
+      const target = entry.naddr || entry.sourceUrl;
+      this.hydrateRemotePluginEntry(entry, target).catch((err) => {
+        console.warn(`Could not hydrate remote plugin ${entry.id} from ${target}:`, err);
+      });
+    }
+
+    return entry;
+  }
+
   public saveLocalWorkspace(): void {
     try {
       const state = this.exportWorkspaceState();
+      this.localWorkspaceUpdatedAt = state.updatedAt;
       const storage = this.getStorage();
       if (storage) {
         storage.setItem(this.LOCAL_WORKSPACE_KEY, JSON.stringify(state));
       }
+      this.savePluginBundlesToStorage();
       this.workspaceSyncStatus = "unsynced";
       this.updateSyncUi();
       if (this.autoSyncNip78) {
@@ -706,8 +825,13 @@ export abstract class BaseShell implements OmniShellHost {
       }
     }
 
+    const bundles = this.getSavedPluginBundles();
+
     for (const item of state.plugins) {
-      const plugin = this.installedPlugins.find((p) => p.id === item.id);
+      let plugin = this.installedPlugins.find((p) => p.id === item.id);
+      if (!plugin && !(item.sourceUrl && item.sourceUrl.startsWith("local:@omni/"))) {
+        plugin = this.restoreMissingPluginEntry(item, bundles);
+      }
       if (plugin) {
         if (typeof item.enabled === "boolean") {
           plugin.enabled = item.enabled;
@@ -778,7 +902,16 @@ export abstract class BaseShell implements OmniShellHost {
       const storage = this.getStorage();
       if (storage) {
         try {
-          storage.setItem(this.LOCAL_WORKSPACE_KEY, JSON.stringify(state));
+          const mergedState = this.exportWorkspaceState();
+          if (typeof state.updatedAt === "number") {
+            mergedState.updatedAt = Math.max(mergedState.updatedAt, state.updatedAt);
+          }
+          if (state.activePage) {
+            mergedState.activePage = state.activePage;
+          }
+          this.localWorkspaceUpdatedAt = mergedState.updatedAt;
+          storage.setItem(this.LOCAL_WORKSPACE_KEY, JSON.stringify(mergedState));
+          this.savePluginBundlesToStorage();
         } catch {}
       }
     }
@@ -864,11 +997,18 @@ export abstract class BaseShell implements OmniShellHost {
       const storage = this.getStorage();
       if (!storage) return null;
       const saved = storage.getItem(this.LOCAL_WORKSPACE_KEY);
+      const bundles = this.getSavedPluginBundles();
       if (saved) {
         const state: OmniWorkspaceState = JSON.parse(saved);
+        if (state && typeof state.updatedAt === "number") {
+          this.localWorkspaceUpdatedAt = state.updatedAt;
+        }
         if (state && state.plugins) {
           for (const item of state.plugins) {
-            const plugin = this.installedPlugins.find((p) => p.id === item.id);
+            let plugin = this.installedPlugins.find((p) => p.id === item.id);
+            if (!plugin && !(item.sourceUrl && item.sourceUrl.startsWith("local:@omni/"))) {
+              plugin = this.restoreMissingPluginEntry(item, bundles);
+            }
             if (plugin) {
               if (item.viewport) plugin.viewport = item.viewport;
               if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
@@ -888,10 +1028,48 @@ export abstract class BaseShell implements OmniShellHost {
               if (item.viewId) plugin.viewId = item.viewId;
             }
           }
+          // Also ensure any persisted custom plugin bundle not listed in state.plugins is restored
+          for (const [bundleId, bundle] of Object.entries(bundles)) {
+            if (!this.installedPlugins.some((p) => p.id === bundleId)) {
+              this.restoreMissingPluginEntry(
+                {
+                  id: bundleId,
+                  viewport: bundle.viewport || "main",
+                  name: bundle.name,
+                  displayName: bundle.displayName,
+                  description: bundle.description,
+                  icon: bundle.icon,
+                  naddr: bundle.naddr,
+                  sourceUrl: bundle.sourceUrl,
+                  enabled: true
+                },
+                bundles
+              );
+            }
+          }
           if (typeof state.autoSync === "boolean") {
             this.autoSyncNip78 = state.autoSync;
           }
           return state;
+        }
+      } else if (Object.keys(bundles).length > 0) {
+        for (const [bundleId, bundle] of Object.entries(bundles)) {
+          if (!this.installedPlugins.some((p) => p.id === bundleId)) {
+            this.restoreMissingPluginEntry(
+              {
+                id: bundleId,
+                viewport: bundle.viewport || "main",
+                name: bundle.name,
+                displayName: bundle.displayName,
+                description: bundle.description,
+                icon: bundle.icon,
+                naddr: bundle.naddr,
+                sourceUrl: bundle.sourceUrl,
+                enabled: true
+              },
+              bundles
+            );
+          }
         }
       }
     } catch (err) {
@@ -1098,6 +1276,9 @@ export abstract class BaseShell implements OmniShellHost {
       resolvedAuthorNpub = resolved.authorNpub;
     } else {
       manifest = JSON.parse(trimmed);
+      if (typeof manifest.script === "string" && !scriptContent) {
+        scriptContent = manifest.script;
+      }
     }
 
     if (!manifest.id || !manifest.name) {

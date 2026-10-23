@@ -814,6 +814,7 @@ function mountPublisherStudio(root: HTMLElement) {
   let appVersion = "1.0.0";
   let appDescription = "";
   let appIcon = "globe";
+  let appViews: Array<{ id: string; title: string; path: string }> = [];
   let packagingMode: "inlined" | "multifile" = "multifile";
   let remoteUrlInputVal = "";
   let statusLogs: string[] = [];
@@ -900,6 +901,7 @@ function mountPublisherStudio(root: HTMLElement) {
     let detectedVer = "1.0.0";
     let detectedDesc = "";
     let detectedIcon = "globe";
+    let detectedViews: Array<{ id: string; title: string; path: string }> = [];
 
     if (manFile && manFile.textContent) {
       try {
@@ -909,6 +911,15 @@ function mountPublisherStudio(root: HTMLElement) {
         if (parsed.version) detectedVer = parsed.version;
         if (parsed.description) detectedDesc = parsed.description;
         if (parsed.icon) detectedIcon = parsed.icon;
+        if (Array.isArray(parsed.views)) {
+          detectedViews = parsed.views
+            .filter((v: any) => v && typeof v.id === "string")
+            .map((v: any) => ({
+              id: v.id,
+              title: v.title || v.id,
+              path: v.path || ""
+            }));
+        }
       } catch {}
     }
 
@@ -933,6 +944,7 @@ function mountPublisherStudio(root: HTMLElement) {
     appVersion = detectedVer;
     appDescription = detectedDesc || `Packaged nsite (${fileEntries.length} files).`;
     appIcon = detectedIcon;
+    appViews = detectedViews;
 
     rawEntryHtmlOutput = baseHtml;
     bundledHtmlOutput = inlineHtmlBundle(baseHtml, entryFilePath, fileMap);
@@ -1209,15 +1221,22 @@ function mountPublisherStudio(root: HTMLElement) {
     }
 
     // 2. Construct & Sign NIP-5A Event (kind: 35129)
+    const viewTags: string[][] =
+      appViews.length > 0
+        ? appViews.map((v) => ["view", v.id, v.title, v.path])
+        : [
+            ["view", "main", cleanName, ""],
+            ["view", "widget", `${cleanName} Widget`, "?view=widget"],
+            ["view", "settings", `${cleanName} Settings`, "?view=settings"]
+          ];
+
     const tags: string[][] = [
       ["d", cleanId],
       ["name", cleanName],
       ["version", cleanVer],
       ["description", cleanDesc],
       ["icon", appIcon || "globe"],
-      ["view", "main", cleanName, ""],
-      ["view", "widget", `${cleanName} Widget`, "?view=widget"],
-      ["view", "settings", `${cleanName} Settings`, "?view=settings"]
+      ...viewTags
     ];
 
     for (const f of filesToUpload) {

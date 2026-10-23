@@ -253,6 +253,7 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
 
     // 2. Panorama Shell (via @omni/plugin-publisher)
     {
+      localStorage.clear();
       document.body.innerHTML = `<div id="omni-root"></div>`;
       rootEl = document.getElementById("omni-root")!;
       let panoShell!: PanoramaShell;
@@ -284,6 +285,7 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
 
     // 3. Editorial Shell (via @omni/plugin-publisher)
     {
+      localStorage.clear();
       document.body.innerHTML = `<div id="omni-root"></div>`;
       rootEl = document.getElementById("omni-root")!;
       let edShell!: EditorialShell;
@@ -405,5 +407,112 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     expect(htmlInstalled?.scriptContent).toContain('<base href="https://apps.example.org/notes/">');
 
     shell.destroy();
+  });
+
+  it("persists user-installed .zip plugins across browser refreshes (loadInitialWorkspace on fresh shell)", async () => {
+    const zipBytes = createPluginZipArchive({
+      "index.html": `<!DOCTYPE html><html><head><title>Relay Ping Radar</title></head><body><div id="radar-root">Relay Ping Radar Ready</div></body></html>`,
+      "manifest.json": JSON.stringify({
+        id: "org.omni.plugin.relay-ping-radar",
+        name: "Relay Ping & Health Radar",
+        version: "1.0.0",
+        description: "Live WebSocket latency & RTT monitor.",
+        icon: "activity",
+        views: [
+          { id: "main", title: "Relay Ping Radar", path: "" },
+          { id: "widget", title: "Live Latency Card", path: "?view=widget" },
+          { id: "compact", title: "Header Status Pill", path: "?view=compact" }
+        ]
+      })
+    });
+
+    const mockZipFile = {
+      name: "relay-ping-radar.zip",
+      size: zipBytes.byteLength,
+      type: "application/zip",
+      arrayBuffer: async () =>
+        zipBytes.buffer.slice(zipBytes.byteOffset, zipBytes.byteOffset + zipBytes.byteLength)
+    };
+
+    const initialBuiltInPlugins: InstalledPluginEntry[] = [
+      {
+        id: "org.omni.plugin.publisher",
+        name: "Plugin Studio",
+        displayName: "Publisher",
+        description: "Package .zip archives into NIP-5A nsites.",
+        icon: "globe",
+        viewport: "main",
+        views: [{ id: "main", title: "Plugin Studio", path: "" }],
+        scriptContent: publisherScript,
+        sourceUrl: "local:@omni/plugin-publisher",
+        enabled: true
+      }
+    ];
+
+    // 1. Initial session: upload and install relay-ping-radar.zip
+    let shell1!: OmniShell;
+    const kernel1 = new OmniKernel({
+      bootstrapRelays: [],
+      runtimeScript,
+      slotResolver: (id, compId, slot) => shell1?.getContainerForPluginSlot(id, slot, compId),
+      onHandleUri: (uri, srcId) => shell1?.handleUri(uri, srcId)
+    });
+    shell1 = new OmniShell({
+      root: rootEl,
+      kernel: kernel1,
+      installedPlugins: initialBuiltInPlugins.map((p) => ({ ...p }))
+    });
+    shell1.loadInitialWorkspace();
+    shell1.mount();
+    await kernel1.boot();
+    await shell1.mountPlugin(shell1.installedPlugins[0]);
+    shell1.showPage("org.omni.plugin.publisher");
+    await wait(150);
+
+    const pubContainer = shell1.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
+    const dropzone = pubContainer.querySelector("#studio-zip-dropzone")!;
+    dropzone.dispatchEvent(new CustomEvent("drop", { detail: { files: [mockZipFile] } }));
+    await wait(150);
+
+    const btnInstallLocal = pubContainer.querySelector("#btn-install-local-direct") as HTMLButtonElement;
+    btnInstallLocal.click();
+    await wait(350);
+
+    expect(shell1.installedPlugins.some((p) => p.id === "org.omni.plugin.relay-ping-radar")).toBe(true);
+    shell1.destroy();
+
+    // 2. Simulate browser page refresh: fresh DOM, fresh OmniShell with ONLY initialBuiltInPlugins
+    document.body.innerHTML = `<div id="omni-root"></div>`;
+    rootEl = document.getElementById("omni-root")!;
+    let shell2!: OmniShell;
+    const kernel2 = new OmniKernel({
+      bootstrapRelays: [],
+      runtimeScript,
+      slotResolver: (id, compId, slot) => shell2?.getContainerForPluginSlot(id, slot, compId),
+      onHandleUri: (uri, srcId) => shell2?.handleUri(uri, srcId)
+    });
+    shell2 = new OmniShell({
+      root: rootEl,
+      kernel: kernel2,
+      installedPlugins: initialBuiltInPlugins.map((p) => ({ ...p }))
+    });
+
+    shell2.loadInitialWorkspace();
+    shell2.mount();
+    await kernel2.boot();
+
+    const restoredPlugin = shell2.installedPlugins.find((p) => p.id === "org.omni.plugin.relay-ping-radar");
+    expect(restoredPlugin).toBeDefined();
+    expect(restoredPlugin?.name).toBe("Relay Ping & Health Radar");
+    expect(restoredPlugin?.scriptContent).toContain("Relay Ping Radar Ready");
+    expect(restoredPlugin?.views?.some((v) => v.id === "compact")).toBe(true);
+
+    // Navigate to the restored plugin and verify it mounts & renders into the DOM
+    await shell2.showPage("org.omni.plugin.relay-ping-radar");
+    await wait(200);
+    const radarContainer = shell2.getContainerForPluginSlot("org.omni.plugin.relay-ping-radar", "main");
+    expect(radarContainer?.innerHTML).toContain("Relay Ping Radar Ready");
+
+    shell2.destroy();
   });
 });

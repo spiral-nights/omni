@@ -217,10 +217,15 @@ async function startApp() {
   // Check 0ms local event store for saved NIP-78 workspace event in background
   kernel.getWorkspaceState().then((cachedWorkspace) => {
     if (cachedWorkspace && cachedWorkspace.state) {
-      console.log("✦ [Omni Web] Restoring cached NIP-78 workspace layout from 0ms store...");
-      shell.applyWorkspaceState(cachedWorkspace.state, false, false);
-      shell.lastSyncedAt = cachedWorkspace.event.created_at * 1000;
-      shell.updateSyncUi();
+      const cachedUpdated =
+        cachedWorkspace.state.updatedAt ||
+        (cachedWorkspace.event?.created_at ? cachedWorkspace.event.created_at * 1000 : 0);
+      if (cachedUpdated >= (shell.localWorkspaceUpdatedAt || 0)) {
+        console.log("✦ [Omni Web] Restoring cached NIP-78 workspace layout from 0ms store...");
+        shell.applyWorkspaceState(cachedWorkspace.state, false, false);
+        shell.lastSyncedAt = cachedWorkspace.event.created_at * 1000;
+        shell.updateSyncUi();
+      }
     }
   }).catch((err) => {
     console.warn("Could not check local NIP-78 workspace store:", err);
@@ -234,11 +239,18 @@ async function startApp() {
     .fetchRemoteWorkspaceState(undefined, 4000)
     .then((remote) => {
       if (remote && remote.state) {
-        console.log("✦ [Omni Web] Received remote NIP-78 workspace update from relays.");
-        shell.applyWorkspaceState(remote.state, true, false);
-        shell.lastSyncedAt = remote.event.created_at * 1000;
-        shell.workspaceSyncStatus = "synced";
-        shell.updateSyncUi();
+        const remoteUpdated =
+          remote.state.updatedAt ||
+          (remote.event?.created_at ? remote.event.created_at * 1000 : 0);
+        if (remoteUpdated >= (shell.localWorkspaceUpdatedAt || 0)) {
+          console.log("✦ [Omni Web] Received remote NIP-78 workspace update from relays.");
+          shell.applyWorkspaceState(remote.state, true, false);
+          shell.lastSyncedAt = remote.event.created_at * 1000;
+          shell.workspaceSyncStatus = "synced";
+          shell.updateSyncUi();
+        } else if (shell.autoSyncNip78) {
+          shell.scheduleNip78Sync();
+        }
       }
     })
     .catch((err) => {
