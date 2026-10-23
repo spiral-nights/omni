@@ -75,8 +75,11 @@
           window.__OMNI_VIEW__ = sessionInfo.viewId;
         }
       }
-      portRemoteDom = event.ports ? event.ports[0] : null;
-      portKernelRpc = event.ports ? event.ports[1] : null;
+      const ports = (event.ports && event.ports.length >= 2)
+        ? event.ports
+        : (typeof window !== "undefined" && window.__omniTransferPorts ? window.__omniTransferPorts : []);
+      portRemoteDom = ports[0] || null;
+      portKernelRpc = ports[1] || null;
 
       setupKernelRpc();
       setupRemoteDom();
@@ -362,6 +365,48 @@
   window.WebSocket = VirtualWebSocket;
   if (typeof globalThis !== "undefined") {
     globalThis.WebSocket = VirtualWebSocket;
+  }
+
+  // 4b. Transparent Blossom PUT /upload Fetch Bridge (bypasses sandbox connect-src 'none' via host RPC)
+  const nativeFetch = typeof window.fetch === "function" ? window.fetch.bind(window) : null;
+  const virtualFetch = async function(input, init) {
+    const urlStr = typeof input === "string" ? input : (input && input.url ? String(input.url) : String(input || ""));
+    const method = (init && init.method ? String(init.method) : "GET").toUpperCase();
+    if (method === "PUT" && /^https?:\/\//i.test(urlStr)) {
+      await initPromise;
+      let bytes = new Uint8Array(0);
+      const body = init ? init.body : null;
+      if (body instanceof Uint8Array) {
+        bytes = body;
+      } else if (body instanceof ArrayBuffer) {
+        bytes = new Uint8Array(body);
+      } else if (typeof body === "string") {
+        bytes = new TextEncoder().encode(body);
+      }
+      const res = await callRpc("blossom.upload", {
+        url: urlStr,
+        method: "PUT",
+        headers: (init && init.headers) || {},
+        bytes
+      });
+      const bodyText = (res && res.bodyText) || "";
+      return {
+        ok: Boolean(res && res.ok),
+        status: (res && res.status) || 200,
+        text: async () => bodyText,
+        json: async () => {
+          try { return JSON.parse(bodyText); } catch (_) { return {}; }
+        }
+      };
+    }
+    if (nativeFetch) {
+      return nativeFetch(input, init);
+    }
+    throw new Error("Network fetch disabled in sandbox");
+  };
+  window.fetch = virtualFetch;
+  if (typeof globalThis !== "undefined") {
+    globalThis.fetch = virtualFetch;
   }
 
   // 5. Remote DOM Component Engine
@@ -980,17 +1025,55 @@
       if (nativeNode) {
         isDispatchingHostEvent = true;
         try {
+          let wrappedFiles = null;
           if (detail) {
-            if (detail.value !== undefined && "value" in nativeNode) nativeNode.value = detail.value;
-            if (detail.checked !== undefined && "checked" in nativeNode) nativeNode.checked = detail.checked;
+            if (detail.value !== undefined && "value" in nativeNode) {
+              try { nativeNode.value = detail.value; } catch (_) {}
+            }
+            if (detail.checked !== undefined && "checked" in nativeNode) {
+              try { nativeNode.checked = detail.checked; } catch (_) {}
+            }
+            if (Array.isArray(detail.files)) {
+              wrappedFiles = detail.files.map((f) => {
+                const u8 = f.bytes instanceof Uint8Array ? f.bytes : new Uint8Array(f.bytes || 0);
+                return {
+                  name: f.name || "file",
+                  size: f.size ?? u8.byteLength,
+                  type: f.type || "application/octet-stream",
+                  bytes: u8,
+                  arrayBuffer: () => Promise.resolve(u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)),
+                  text: () => Promise.resolve(new TextDecoder().decode(u8))
+                };
+              });
+              try {
+                Object.defineProperty(nativeNode, "files", {
+                  value: wrappedFiles,
+                  configurable: true
+                });
+              } catch (_) {}
+            }
           }
           let ev;
           if (eventName === "click") {
             ev = new MouseEvent("click", { bubbles: true, cancelable: true });
           } else if (eventName === "input" || eventName === "change") {
             ev = new Event(eventName, { bubbles: true, cancelable: true });
+            if (wrappedFiles) {
+              try {
+                Object.defineProperty(ev, "detail", { value: { ...detail, files: wrappedFiles }, configurable: true });
+              } catch (_) {}
+            }
           } else {
-            ev = new CustomEvent(eventName, { bubbles: true, cancelable: true, detail });
+            const customDetail = wrappedFiles ? { ...detail, files: wrappedFiles } : detail;
+            ev = new CustomEvent(eventName, { bubbles: true, cancelable: true, detail: customDetail });
+            if (wrappedFiles) {
+              try {
+                Object.defineProperty(ev, "dataTransfer", {
+                  value: { files: wrappedFiles },
+                  configurable: true
+                });
+              } catch (_) {}
+            }
           }
           nativeNode.dispatchEvent(ev);
         } finally {

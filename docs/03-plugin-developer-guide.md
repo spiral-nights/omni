@@ -253,8 +253,26 @@ Omni supports multiple swappable shells (Omni Classic, Panorama Hub, and Editori
 
 ## 6. Packaging & Publishing to Blossom & Nostr
 
+### Option 1: In-Browser Packaging & Upload via Plugin Studio (`@omni/plugin-publisher`)
+Omni ships with **Plugin Studio** (`@omni/plugin-publisher`), a first-class full-page application that automates packaging, Blossom uploading, and NIP-5A publishing without requiring external CLI tooling or self-hosted Blossom servers:
+1. **Drop a `.zip` Archive (or `.html`/`.js` file)**:
+   Plugin Studio extracts all files in-browser, computes SHA-256 digests, and infers metadata from `index.html`, `manifest.json`, or `package.json`.
+2. **Choose Packaging Format**:
+   - **Option A — Single-File Inlined Bundle**: Inlines relative `.css`, `.js`, and image assets into a single self-contained HTML bundle.
+   - **Option B — Multi-File Blossom Upload**: Uploads each extracted file individually to configured Blossom servers using BUD-06 (`kind: 24242`) Nostr authentication headers and records `["f", "<path>", "<sha256>", "<mime>"]` tags on the `kind: 35129` event.
+3. **Blossom Server Management & Discovery (`kind: 10063`)**:
+   The **Blossom Servers** tab manages public or custom Blossom endpoints and syncs your server list to Nostr via BUD-03 (`kind: 10063`).
+4. **My Published Plugins (`kind: 35129`)**:
+   The **My Published Plugins** tab queries your signed `kind: 35129` events from Omni's 0ms local store and Nostr relays, displaying each plugin's `naddr1...`, file hashes, and Blossom servers with one-click installation.
+
+### Option 2: Direct Blossom-Free Installation (`.zip`, `.html`, or Arbitrary URL)
+Across all three shells (**Omni Classic**, **Panorama Hub**, and **Editorial Shell**), the **+ Install Plugin** modal supports:
+- **Direct `.zip` or `.html` File Drop / Picker**: Extracts and bundles `.zip` archives in-browser and installs them immediately into Omni's local workspace without needing a Blossom server.
+- **Arbitrary Remote URLs (`https://...`)**: Installs directly from remote `.zip` release URLs, raw `.html`/`.js` URLs (with automatic `<base href>` injection for relative assets), or `naddr1...` addresses.
+
+### Option 3: Manual NIP-5A Event Structure (`kind: 35129`)
 1. **Host Assets on Blossom**:
-   Upload your compiled `index.html` (and any bundled assets) to a Blossom server (e.g. `https://cdn.satellite.earth`). Compute the SHA-256 hash of the bundle.
+   Upload your compiled `index.html` (and any companion assets) to a Blossom server (`PUT /upload` with a signed `kind: 24242` Nostr auth header). Compute the SHA-256 hash of each file.
 2. **Publish NIP-5A Event (`kind: 35129`)**:
    Publish a parameterized replaceable event:
    ```json
@@ -266,6 +284,8 @@ Omni supports multiple swappable shells (Omni Classic, Panorama Hub, and Editori
        ["description", "A decentralized tool for Omni."],
        ["icon", "layout"],
        ["f", "index.html", "<sha256_hash>", "text/html"],
+       ["f", "style.css", "<sha256_hash>", "text/css"],
+       ["f", "app.js", "<sha256_hash>", "application/javascript"],
        ["server", "https://cdn.satellite.earth"]
      ],
      "content": ""

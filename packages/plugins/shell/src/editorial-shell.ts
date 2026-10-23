@@ -1163,6 +1163,91 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     modal?.addEventListener("click", (e) => {
       if (e.target === modal) modal.classList.remove("open");
     });
+
+    // Wire Editorial Install Plugin Modal (.zip dropzone + naddr/URL input)
+    const pluginModal = this.root.querySelector("#editorial-install-plugin-modal") as HTMLElement | null;
+    const btnOpenPlugin = this.root.querySelector("#btn-editorial-open-install-plugin");
+    const btnClosePlugin = this.root.querySelector("#btn-editorial-close-install-plugin");
+    const urlInput = this.root.querySelector("#editorial-install-url") as HTMLInputElement | null;
+    const btnConfirm = this.root.querySelector("#btn-editorial-confirm-install") as HTMLButtonElement | null;
+    const dropzone = this.root.querySelector("#editorial-install-dropzone") as HTMLElement | null;
+    const fileInput = this.root.querySelector("#editorial-install-file-input") as HTMLInputElement | null;
+    const btnBrowse = this.root.querySelector("#btn-editorial-browse-file");
+
+    btnOpenPlugin?.addEventListener("click", () => {
+      pluginModal?.classList.add("open");
+    });
+    btnClosePlugin?.addEventListener("click", () => {
+      pluginModal?.classList.remove("open");
+    });
+    pluginModal?.addEventListener("click", (e) => {
+      if (e.target === pluginModal) pluginModal.classList.remove("open");
+    });
+
+    const handleEditorialFileInstall = async (files: FileList | any[] | null | undefined) => {
+      if (!files || files.length === 0) return;
+      const file = files[0];
+      try {
+        const installed = await this.installPluginFromFile(file);
+        pluginModal?.classList.remove("open");
+        if (urlInput) urlInput.value = "";
+        this.renderPluginSettingsList();
+        this.renderDock();
+        this.renderAppsIndex();
+        if (typeof alert === "function") {
+          try { alert(`Installed '${installed.name}' successfully!`); } catch (_) {}
+        }
+      } catch (err: any) {
+        if (typeof alert === "function") {
+          try { alert(`Install failed: ${err.message || String(err)}`); } catch (_) {}
+        }
+      }
+    };
+
+    btnBrowse?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      fileInput?.click();
+    });
+    fileInput?.addEventListener("change", () => {
+      handleEditorialFileInstall(fileInput.files);
+    });
+    dropzone?.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = "var(--omni-accent-primary)";
+    });
+    dropzone?.addEventListener("dragleave", () => {
+      dropzone.style.borderColor = "var(--omni-border-subtle)";
+    });
+    dropzone?.addEventListener("drop", (e: any) => {
+      e.preventDefault();
+      dropzone.style.borderColor = "var(--omni-border-subtle)";
+      handleEditorialFileInstall(e.dataTransfer?.files || e.detail?.files);
+    });
+
+    btnConfirm?.addEventListener("click", async () => {
+      const target = (urlInput?.value || "").trim();
+      if (!target) return;
+      btnConfirm.disabled = true;
+      btnConfirm.textContent = "Installing...";
+      try {
+        const installed = await this.resolveAndInstallNsite(target);
+        pluginModal?.classList.remove("open");
+        if (urlInput) urlInput.value = "";
+        this.renderPluginSettingsList();
+        this.renderDock();
+        this.renderAppsIndex();
+        if (typeof alert === "function") {
+          try { alert(`Installed '${installed.name}' successfully!`); } catch (_) {}
+        }
+      } catch (err: any) {
+        if (typeof alert === "function") {
+          try { alert(`Install failed: ${err.message || String(err)}`); } catch (_) {}
+        }
+      } finally {
+        btnConfirm.disabled = false;
+        btnConfirm.textContent = "Install Plugin";
+      }
+    });
   }
 
   // --- Installed Plugins Settings List ---
@@ -1626,8 +1711,13 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
             <!-- Section 4: Installed Plugins Overview -->
             <div class="editorial-pref-group">
               <div class="editorial-pref-header">
-                <span class="editorial-pref-label">Installed Plugins</span>
-                <span class="editorial-pref-status">Standalone nsites</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="editorial-pref-label">Installed Plugins</span>
+                  <span class="editorial-pref-status">Standalone nsites</span>
+                </div>
+                <button id="btn-editorial-open-install-plugin" class="editorial-btn-secondary" style="font-size: 0.7rem; padding: 4px 8px; color: var(--omni-accent-primary);">
+                  + Install Plugin
+                </button>
               </div>
               <div id="editorial-plugins-settings-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
             </div>
@@ -1669,6 +1759,48 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
             <div class="editorial-pref-group">
               <span class="editorial-pref-label">Curated Shell Catalog</span>
               <div id="editorial-curated-shell-catalog" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Install Plugin Modal -->
+      <div id="editorial-install-plugin-modal" class="editorial-modal-overlay">
+        <div class="editorial-modal-card" style="max-width: 500px;">
+          <div class="editorial-modal-header">
+            <div>
+              <h3 style="font-family: var(--omni-font-serif); font-size: 1.15rem; font-weight: 500; margin: 0;">Install New Plugin</h3>
+              <span style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); text-transform: uppercase;">Archive (.zip), NIP-5A naddr, or Web URL</span>
+            </div>
+            <button id="btn-editorial-close-install-plugin" class="editorial-header-btn">
+              ${icon("close", 18)}
+            </button>
+          </div>
+          <div class="editorial-modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 16px;">
+            <div
+              id="editorial-install-dropzone"
+              style="border: 1.5px dashed var(--omni-border-subtle); background: var(--omni-bg-elevated); border-radius: var(--omni-radius-sm); padding: 14px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;"
+            >
+              <span style="font-family: var(--omni-font-serif); font-size: 0.9rem; color: var(--omni-text-primary);">Drop a Plugin Archive (.zip) or .html File Here</span>
+              <span style="font-family: var(--omni-font-sans); font-size: 0.74rem; color: var(--omni-text-secondary);">Extracts &amp; installs directly in-browser</span>
+              <input id="editorial-install-file-input" type="file" accept=".zip,.html,.htm,.js" style="display: none;" />
+              <button type="button" id="btn-editorial-browse-file" class="editorial-btn-secondary" style="font-size: 0.72rem; margin-top: 2px;">Select .zip or .html File</button>
+            </div>
+
+            <label style="display: flex; flex-direction: column; gap: 4px; font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-secondary);">
+              Nostr naddr (NIP-5A) or Arbitrary App/ZIP URL:
+              <input
+                id="editorial-install-url"
+                type="text"
+                placeholder="naddr1... / https://.../app.zip / https://..."
+                style="background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); color: var(--omni-text-primary); padding: 8px 10px; border-radius: var(--omni-radius-sm); font-size: 0.8rem;"
+              />
+            </label>
+
+            <div style="display: flex; justify-content: flex-end;">
+              <button id="btn-editorial-confirm-install" class="editorial-btn-primary">
+                Install Plugin
+              </button>
             </div>
           </div>
         </div>

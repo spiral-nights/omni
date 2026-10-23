@@ -470,6 +470,37 @@ export class JsonRpcDispatcher {
         };
       }
 
+      case "blossom.upload": {
+        const url = String(params?.url || "");
+        const headers = params?.headers || {};
+        const bodyBytes =
+          params?.bytes instanceof Uint8Array
+            ? params.bytes
+            : Array.isArray(params?.bytes)
+            ? new Uint8Array(params.bytes)
+            : new Uint8Array(0);
+
+        if (!url || !/^https?:\/\//i.test(url)) {
+          throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Invalid Blossom upload URL" };
+        }
+        const resp = await fetch(url, {
+          method: params?.method || "PUT",
+          headers,
+          body: bodyBytes as any
+        });
+        let text = "";
+        try {
+          if (typeof resp.text === "function") {
+            text = await resp.text();
+          }
+        } catch {}
+        return {
+          ok: Boolean(resp?.ok),
+          status: resp?.status || 200,
+          bodyText: text
+        };
+      }
+
       default:
         throw { code: JsonRpcErrorCode.METHOD_NOT_FOUND, message: `Unknown method: ${method}` };
     }

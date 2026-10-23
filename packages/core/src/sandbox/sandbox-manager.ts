@@ -268,10 +268,14 @@ export class SandboxInstance {
       .replace(/\/\*#\s*sourceMappingURL=[\s\S]*?\*\//gi, "")
       .replace(/\/\/[#@]\s*sourceURL=[^\r\n]*/gi, "");
 
-    const isHtmlDoc = pluginCode.trim().startsWith("<!DOCTYPE") ||
-      pluginCode.trim().startsWith("<html") ||
-      /<head\b/i.test(pluginCode) ||
-      /<body\b/i.test(pluginCode);
+    const trimmedPluginCode = pluginCode.trim();
+    const isHtmlDoc =
+      trimmedPluginCode.startsWith("<") &&
+      (trimmedPluginCode.startsWith("<!DOCTYPE") ||
+        trimmedPluginCode.startsWith("<html") ||
+        /<head\b/i.test(trimmedPluginCode) ||
+        /<body\b/i.test(trimmedPluginCode) ||
+        /^<[a-zA-Z!]/.test(trimmedPluginCode));
 
     const routeVal = this.options.route || "";
     const viewIdVal = this.options.viewId || "main";
@@ -381,6 +385,13 @@ export class SandboxInstance {
         this.iframe.srcdoc = `<!DOCTYPE html>\n<html>\n<head>${injectedHead}</head>\n<body>\n${pluginCode}\n</body>\n</html>`;
       }
     } else {
+      const safeModuleCode = pluginCode
+        .replace(/<\/script/gi, "<\\/script")
+        .replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, "");
+      const hasEsModuleSyntax = /^\s*(import|export)\s+/m.test(safeModuleCode);
+      const scriptBlock = hasEsModuleSyntax
+        ? `<script type="module">\n${safeModuleCode}\n</script>`
+        : `<script>\n(async () => {\n${safeModuleCode}\n})();\n</script>`;
       this.iframe.srcdoc = `<!DOCTYPE html>
 <html>
 <head>
@@ -396,9 +407,7 @@ export class SandboxInstance {
   </script>
 </head>
 <body>
-  <script type="module">
-    ${pluginCode}
-  </script>
+  ${scriptBlock}
 </body>
 </html>`;
     }
@@ -436,10 +445,16 @@ export class SandboxInstance {
 
         // Transfer channel1 port2 (Remote DOM) and channel2 port2 (Kernel RPC) to iframe
         try {
-          this.iframe?.contentWindow?.postMessage(initMsg, "*", [
-            this.channel1!.port2,
-            this.channel2!.port2
-          ]);
+          const cw = this.iframe?.contentWindow as any;
+          if (cw) {
+            try {
+              cw.__omniTransferPorts = [this.channel1!.port2, this.channel2!.port2];
+            } catch (_) {}
+            cw.postMessage(initMsg, "*", [
+              this.channel1!.port2,
+              this.channel2!.port2
+            ]);
+          }
         } catch (e) {
           console.error(`[SandboxInstance] Failed to postMessage handshake:`, e);
         }

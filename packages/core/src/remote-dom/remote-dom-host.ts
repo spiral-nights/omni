@@ -30,6 +30,35 @@ export class RemoteDomHost {
     this.componentId = options.componentId;
     this.onEvent = (componentId, data) => {
       this.clickHandled = true;
+      if (data.detail && Array.isArray(data.detail.__omniRawFiles)) {
+        const rawFiles = data.detail.__omniRawFiles;
+        Promise.all(
+          rawFiles.map(async (f: any) => {
+            let bytes: Uint8Array;
+            if (f.bytes instanceof Uint8Array) {
+              bytes = f.bytes;
+            } else if (typeof f.arrayBuffer === "function") {
+              const ab = await f.arrayBuffer();
+              bytes = new Uint8Array(ab);
+            } else {
+              bytes = new Uint8Array(0);
+            }
+            return {
+              name: f.name || "file",
+              size: f.size ?? bytes.byteLength,
+              type: f.type || "application/octet-stream",
+              bytes
+            };
+          })
+        ).then((serializedFiles) => {
+          const cleanDetail = { ...data.detail, files: serializedFiles };
+          delete cleanDetail.__omniRawFiles;
+          options.onEvent(componentId, { ...data, detail: cleanDetail });
+        }).catch(() => {
+          options.onEvent(componentId, data);
+        });
+        return;
+      }
       options.onEvent(componentId, data);
     };
 
@@ -66,13 +95,17 @@ export class RemoteDomHost {
     const targetRoot = this.renderRoot;
     const enrichInputEvent = (e: Event) => {
       const target = e.target as any;
-      if (target && ("value" in target || "checked" in target)) {
+      if (target && ("value" in target || "checked" in target || "files" in target)) {
         try {
+          const detailVal: Record<string, any> = {
+            value: target.value !== undefined ? String(target.value) : "",
+            checked: Boolean(target.checked)
+          };
+          if (target.files && target.files.length > 0) {
+            detailVal.__omniRawFiles = Array.from(target.files);
+          }
           Object.defineProperty(e, "detail", {
-            value: {
-              value: target.value !== undefined ? String(target.value) : "",
-              checked: Boolean(target.checked)
-            },
+            value: detailVal,
             configurable: true
           });
         } catch {}
@@ -81,6 +114,36 @@ export class RemoteDomHost {
 
     targetRoot.addEventListener("input", enrichInputEvent, true);
     targetRoot.addEventListener("change", enrichInputEvent, true);
+
+    targetRoot.addEventListener("dragover", (e: Event) => {
+      e.preventDefault();
+    }, true);
+
+    targetRoot.addEventListener("drop", (e: any) => {
+      e.preventDefault();
+      this.clickHandled = false;
+      const rawFiles = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : [];
+      try {
+        Object.defineProperty(e, "detail", {
+          value: { __omniRawFiles: rawFiles },
+          configurable: true
+        });
+      } catch {}
+    }, true);
+
+    targetRoot.addEventListener("drop", (e: any) => {
+      if (this.clickHandled) return;
+      const rawFiles = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : (e.detail?.__omniRawFiles || []);
+      let el = (e.target as Element | null)?.parentElement || null;
+      while (el && el !== targetRoot && !this.clickHandled) {
+        const retargeted = new CustomEvent("drop", {
+          detail: { __omniRawFiles: rawFiles },
+          bubbles: false
+        });
+        el.dispatchEvent(retargeted);
+        el = el.parentElement;
+      }
+    });
 
     const enrichKeyboardEvent = (e: KeyboardEvent) => {
       const target = e.target as any;
@@ -245,7 +308,9 @@ export class RemoteDomHost {
   }
 
   destroy(): void {
-    this.receiver.disconnect();
+    try {
+      this.receiver.disconnect();
+    } catch {}
   }
 }
 

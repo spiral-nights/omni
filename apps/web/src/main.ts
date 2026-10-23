@@ -8,6 +8,7 @@ import relaysScript from "../../../packages/plugins/relays/dist/index.js?raw";
 import profileScript from "../../../packages/plugins/profile/dist/index.js?raw";
 import profileViewerScript from "../../../packages/plugins/profile-viewer/dist/index.js?raw";
 import checklistScript from "../../../packages/plugins/checklist/dist/index.js?raw";
+import publisherScript from "../../../packages/plugins/publisher/dist/index.js?raw";
 import omniRuntimeScript from "../../../packages/core/src/sandbox/omni-runtime.js?raw";
 
 const STORAGE_KEY_NSEC = "omni_privkey";
@@ -98,6 +99,23 @@ const initialPlugins: InstalledPluginEntry[] = [
     handledIntents: ["view_profile"],
     scriptContent: profileViewerScript,
     sourceUrl: "local:@omni/plugin-profile-viewer",
+    enabled: true
+  },
+  {
+    id: "org.omni.plugin.publisher",
+    name: "Plugin Studio",
+    displayName: "Publisher",
+    description: "Package .zip archives into NIP-5A nsites, upload to Blossom servers, and manage published plugins.",
+    icon: "globe",
+    viewport: "main",
+    views: [
+      { id: "main", title: "Plugin Studio", path: "" },
+      { id: "published", title: "My Published Plugins", path: "?view=published" },
+      { id: "servers", title: "Blossom Servers", path: "?view=servers" },
+      { id: "widget", title: "Publisher Status", path: "?view=widget" }
+    ],
+    scriptContent: publisherScript,
+    sourceUrl: "local:@omni/plugin-publisher",
     enabled: true
   }
 ];

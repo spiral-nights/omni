@@ -232,6 +232,32 @@ export class NostrPluginResolver {
 
         scriptContent = await NostrPluginResolver.fetchAndVerifyBlossomBlob(fileHash, servers);
         manifest.entry = targetFileKey;
+
+        // If this is a multi-file Blossom nsite (multiple 'f' tags), resolve & verify referenced companion CSS/JS blobs
+        const otherKeys = Object.keys(blossomHashes).filter((k) => k !== targetFileKey);
+        if (otherKeys.length > 0 && (targetFileKey.endsWith(".html") || targetFileKey.endsWith(".htm"))) {
+          for (const companionKey of otherKeys) {
+            const cleanRef = companionKey.replace(/^\.\//, "");
+            if (scriptContent.includes(cleanRef)) {
+              try {
+                const companionHash = blossomHashes[companionKey];
+                const companionText = await NostrPluginResolver.fetchAndVerifyBlossomBlob(companionHash, servers);
+                if (companionKey.endsWith(".css")) {
+                  const linkRegex = new RegExp(`<link\\b[^>]*?href=["'](?:\\.?\\/)?${cleanRef.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*?>`, "gi");
+                  scriptContent = scriptContent.replace(linkRegex, `<style data-blossom-hash="${companionHash}">\n${companionText}\n</style>`);
+                } else if (companionKey.endsWith(".js") || companionKey.endsWith(".mjs")) {
+                  const scriptRegex = new RegExp(`<script\\b([^>]*?)src=["'](?:\\.?\\/)?${cleanRef.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']([^>]*?)>\\s*<\\/script>`, "gi");
+                  scriptContent = scriptContent.replace(scriptRegex, (_m, a1, a2) => {
+                    const isMod = /type\s*=\s*["']module["']/i.test(a1 + a2);
+                    return `<script${isMod ? ' type="module"' : ""} data-blossom-hash="${companionHash}">\n${companionText}\n</script>`;
+                  });
+                }
+              } catch {
+                // Keep original reference if companion blob cannot be fetched
+              }
+            }
+          }
+        }
       }
     }
 

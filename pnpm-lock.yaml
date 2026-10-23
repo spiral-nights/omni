@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
     devDependencies:
       typescript:
         specifier: ^5.7.0
@@ -26,6 +30,9 @@ importers:
       '@omni/plugin-profile-viewer':
         specifier: workspace:*
         version: link:../../packages/plugins/profile-viewer
+      '@omni/plugin-publisher':
+        specifier: workspace:*
+        version: link:../../packages/plugins/publisher
       '@omni/plugin-shell':
         specifier: workspace:*
         version: link:../../packages/plugins/shell
@@ -57,6 +64,9 @@ importers:
       '@remote-dom/core':
         specifier: ^1.12.0
         version: 1.12.0
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -118,6 +128,15 @@ importers:
       vitest:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.20.4)(happy-dom@20.14.5)
+
+  packages/plugins/publisher:
+    devDependencies:
+      '@omni/types':
+        specifier: workspace:*
+        version: link:../../types
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
 
   packages/plugins/relays:
     devDependencies:
@@ -566,6 +585,9 @@ packages:
     resolution: {integrity: sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w==}
     engines: {node: '>=18'}
 
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -1012,6 +1034,8 @@ snapshots:
   expect-type@1.4.0: {}
 
   fake-indexeddb@6.2.5: {}
+
+  fflate@0.8.3: {}
 
   fsevents@2.3.3:
     optional: true

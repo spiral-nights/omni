@@ -10,6 +10,7 @@ export * from "./remote-dom/remote-dom-host.js";
 export * from "./ipc/json-rpc-dispatcher.js";
 export * from "./sandbox/sandbox-manager.js";
 export * from "./plugins/nostr-plugin-resolver.js";
+export * from "./plugins/zip-plugin-bundler.js";
 export * from "./kernel/omni-kernel.js";
 export * from "./layout/layout-manager.js";
 export * from "./intents/app-handler.js";

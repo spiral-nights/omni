@@ -1,4 +1,12 @@
-import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STANDARD_SLOTS } from "@omni/core";
+import {
+  OmniKernel,
+  WebCryptoKeystore,
+  NostrPluginResolver,
+  LayoutManager,
+  STANDARD_SLOTS,
+  extractPluginFromZip,
+  slugifyPluginId
+} from "@omni/core";
 import {
   OmniWorkspaceState,
   OmniWorkspacePluginConfig,
@@ -1020,6 +1028,83 @@ export abstract class BaseShell implements OmniShellHost {
     this.saveLocalWorkspace();
   }
 
+  public async installPluginFromZipBytes(
+    zipBytes: Uint8Array,
+    fileName = "plugin.zip"
+  ): Promise<InstalledPluginEntry> {
+    const extracted = extractPluginFromZip(zipBytes, { defaultName: fileName });
+    const meta = extracted.inferredMeta;
+
+    if (this.installedPlugins.some((p) => p.id === meta.id)) {
+      this.uninstallPlugin(meta.id);
+    }
+
+    const manifest = {
+      id: meta.id,
+      name: meta.name,
+      version: meta.version || "1.0.0",
+      description: meta.description || "",
+      icon: meta.icon || "globe",
+      entry: extracted.entryFile || "index.html",
+      components: [
+        {
+          id: `${meta.id}-main`,
+          slot: "main",
+          title: meta.name
+        }
+      ],
+      views: meta.views
+    };
+
+    const entry: InstalledPluginEntry = {
+      id: meta.id,
+      name: meta.name,
+      displayName: meta.name,
+      version: meta.version || "1.0.0",
+      description: meta.description || "",
+      icon: meta.icon || "globe",
+      viewport: "main",
+      views: meta.views && meta.views.length > 0 ? meta.views : [{ id: "main", title: meta.name, path: "" }],
+      handledIntents: meta.handledIntents,
+      manifest,
+      scriptContent: extracted.bundledHtml,
+      sourceUrl: `zip:${fileName}`,
+      enabled: true
+    };
+
+    await this.installPluginEntry(entry);
+    return entry;
+  }
+
+  public async installPluginFromFile(
+    file: File | { name?: string; bytes?: Uint8Array; arrayBuffer?: () => Promise<ArrayBuffer>; text?: () => Promise<string> }
+  ): Promise<InstalledPluginEntry> {
+    const fileName = file.name || "plugin.zip";
+    let bytes: Uint8Array;
+    if ((file as any).bytes instanceof Uint8Array) {
+      bytes = (file as any).bytes;
+    } else if (typeof file.arrayBuffer === "function") {
+      const ab = await file.arrayBuffer();
+      bytes = new Uint8Array(ab);
+    } else if (typeof file.text === "function") {
+      const txt = await file.text();
+      bytes = new TextEncoder().encode(txt);
+    } else {
+      throw new Error("Unsupported file object.");
+    }
+
+    const isZip =
+      fileName.toLowerCase().endsWith(".zip") ||
+      (bytes.byteLength >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b);
+
+    if (isZip) {
+      return this.installPluginFromZipBytes(bytes, fileName);
+    }
+
+    const text = new TextDecoder().decode(bytes);
+    return this.resolveAndInstallNsite(text);
+  }
+
   public async resolveAndInstallNsite(target: string): Promise<InstalledPluginEntry> {
     const trimmed = target.trim();
     let manifest: any = null;
@@ -1057,32 +1142,96 @@ export abstract class BaseShell implements OmniShellHost {
       scriptContent = trimmed;
       const titleMatch = trimmed.match(/<title>([^<]+)<\/title>/i);
       const title = titleMatch ? titleMatch[1].trim() : "Custom HTML App";
+      customViews = NostrPluginResolver.detectPluginViews(null, scriptContent);
       manifest = {
         id: `custom-app-${Date.now()}`,
         name: title,
         version: "1.0.0",
         entry: "index.html",
-        components: [{ id: "main", slot: "main", title }]
+        components: [{ id: "main", slot: "main", title }],
+        views: customViews
       };
     } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-      const res = await fetch(trimmed);
-      const text = await res.text();
-      if (text.startsWith("<") || text.startsWith("<!DOCTYPE") || /<html[\s>]/i.test(text)) {
-        scriptContent = text;
-        const titleMatch = text.match(/<title>([^<]+)<\/title>/i);
-        const title = titleMatch ? titleMatch[1].trim() : "Custom nsite";
+      const cleanUrlPath = trimmed.split("?")[0].split("#")[0];
+      const urlFileName = cleanUrlPath.split("/").pop() || "remote-app";
+
+      try {
+        const res = await fetch(trimmed);
+        const contentType = res.headers?.get?.("content-type") || "";
+        const isZipUrl =
+          cleanUrlPath.toLowerCase().endsWith(".zip") ||
+          contentType.toLowerCase().includes("application/zip");
+
+        if (isZipUrl && typeof res.arrayBuffer === "function") {
+          const ab = await res.arrayBuffer();
+          return this.installPluginFromZipBytes(new Uint8Array(ab), urlFileName);
+        }
+
+        const text = await res.text();
+        if (text.trim().startsWith("<") || text.trim().startsWith("<!DOCTYPE") || /<html[\s>]/i.test(text)) {
+          // Compute base href for relative scripts/styles on arbitrary URLs
+          const baseHref = trimmed.endsWith("/") ? trimmed : trimmed.replace(/\/[^/]*$/, "/");
+          let htmlWithBase = text;
+          if (!/<base\s/i.test(htmlWithBase)) {
+            if (/<head[^>]*>/i.test(htmlWithBase)) {
+              htmlWithBase = htmlWithBase.replace(/<head[^>]*>/i, (m) => `${m}\n  <base href="${baseHref}">`);
+            } else {
+              htmlWithBase = `<head><base href="${baseHref}"></head>\n${htmlWithBase}`;
+            }
+          }
+          scriptContent = htmlWithBase;
+          const titleMatch = text.match(/<title>([^<]+)<\/title>/i);
+          const title = titleMatch ? titleMatch[1].trim() : "Custom nsite";
+          const descMatch = text.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i);
+          customViews = NostrPluginResolver.detectPluginViews(null, scriptContent);
+          manifest = {
+            id: `nsite-${slugifyPluginId(title)}-${Date.now().toString().slice(-4)}`,
+            name: title,
+            description: descMatch ? descMatch[1].trim() : `Installed from ${trimmed}`,
+            version: "1.0.0",
+            entry: "index.html",
+            components: [{ id: "main", slot: "main", title }],
+            views: customViews
+          };
+        } else {
+          manifest = JSON.parse(text);
+          if (typeof manifest.script === "string" && !scriptContent) {
+            scriptContent = manifest.script;
+          }
+        }
+      } catch (fetchErr: any) {
+        // Fallback when arbitrary URL blocks direct fetch via CORS: synthesize an embedded web app wrapper
+        let hostTitle = "Remote Web App";
+        try {
+          const parsedUrl = new URL(trimmed);
+          hostTitle = parsedUrl.hostname.replace(/^www\./, "");
+        } catch {}
+        scriptContent = `<!DOCTYPE html>
+<html>
+<head>
+  <base href="${trimmed}">
+  <title>${hostTitle}</title>
+</head>
+<body>
+  <div style="padding: 16px; background: var(--omni-bg-surface, #191816); border: 1px solid var(--omni-border-subtle, #2e2b26); border-radius: 8px; color: var(--omni-text-primary, #ede8df);">
+    <h3 style="margin: 0 0 6px 0; font-size: 0.95rem;">${hostTitle}</h3>
+    <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: var(--omni-text-secondary, #9e988f);">Remote URL: <code>${trimmed}</code></p>
+    <a href="${trimmed}" target="_blank" rel="noopener noreferrer" style="color: var(--omni-accent-primary, #d4a373); font-size: 0.82rem;">Open External Application</a>
+  </div>
+</body>
+</html>`;
         manifest = {
-          id: `nsite-${Date.now()}`,
-          name: title,
+          id: `url-${slugifyPluginId(hostTitle)}`,
+          name: hostTitle,
+          description: `External web application (${trimmed})`,
           version: "1.0.0",
           entry: "index.html",
-          components: [{ id: "main", slot: "main", title }]
+          components: [{ id: "main", slot: "main", title: hostTitle }]
         };
-      } else {
-        manifest = JSON.parse(text);
       }
     } else if (trimmed.startsWith("naddr1") || trimmed.startsWith("nostr:naddr1") || /^\d+:[0-9a-fA-F]{64}:/.test(trimmed)) {
-      const resolved = await this.kernel.resolveNsitePlugin(trimmed);
+      const cleanTarget = trimmed.replace(/^nostr:/i, "");
+      const resolved = await this.kernel.resolveNsitePlugin(cleanTarget);
       manifest = resolved.manifest;
       scriptContent = resolved.scriptContent;
       resolvedNaddr = resolved.naddr;
@@ -1093,6 +1242,11 @@ export abstract class BaseShell implements OmniShellHost {
 
     if (!manifest.id || !manifest.name) {
       throw new Error("Invalid manifest: 'id' and 'name' are required.");
+    }
+
+    // If re-installing an already-installed nsite (e.g. updating from Plugin Studio), replace cleanly
+    if (this.installedPlugins.some((p) => p.id === manifest.id) && resolvedNaddr) {
+      this.uninstallPlugin(manifest.id);
     }
 
     const entry: InstalledPluginEntry = {
@@ -1529,6 +1683,20 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public async handleUri(uri: string, sourcePluginId?: string): Promise<any> {
+    const cleanTarget = uri.trim().replace(/^nostr:/i, "");
+    if (cleanTarget.startsWith("naddr1")) {
+      try {
+        const decoded = WebCryptoKeystore.decodeNaddr(cleanTarget);
+        if (!decoded.kind || decoded.kind === 35129) {
+          const installed = await this.resolveAndInstallNsite(cleanTarget);
+          this.showPage(installed.id);
+          return { handled: true, uri, handlerId: installed.id, installed: true };
+        }
+      } catch {
+        // Fall through to standard Open With chooser
+      }
+    }
+
     const chosenHandlerId = await this.promptOpenWith(uri);
     if (!chosenHandlerId) return { handled: false, uri };
 

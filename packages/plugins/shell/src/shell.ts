@@ -477,9 +477,11 @@ export class OmniShell extends BaseShell {
           // If no sandbox instance has been mounted to slot-main-${safeId}, mount the standalone app
           const appInstanceKey = `${plugin.id}::app`;
           const placements = this.getPluginPlacements(plugin);
-          const hasMainRunning = placements.some(
-            (pl) => pl.enabled !== false && pl.viewport === "main" && this.kernel.getSandbox(`${plugin.id}::${pl.id}`)
-          );
+          const hasMainRunning =
+            Boolean(this.kernel.getSandbox(plugin.id)) ||
+            placements.some(
+              (pl) => pl.enabled !== false && pl.viewport === "main" && this.kernel.getSandbox(`${plugin.id}::${pl.id}`)
+            );
 
           if (!hasMainRunning && !this.kernel.getSandbox(appInstanceKey) && !this.pendingAppMounts.has(appInstanceKey)) {
             this.pendingAppMounts.add(appInstanceKey);
@@ -881,6 +883,9 @@ export class OmniShell extends BaseShell {
         p.viewport = p.placements[0].viewport;
         p.route = p.placements[0].route;
         p.viewId = p.placements[0].viewId;
+        this.renderDockLaunchers();
+        this.renderSettingsNavAndPanes();
+        this.switchSettingsTab(p.id);
         await this.remountPlugin(p);
         this.renderDockLaunchers();
         this.renderSettingsNavAndPanes();
@@ -937,6 +942,9 @@ export class OmniShell extends BaseShell {
           if (primaryComp) {
             this.layoutManager.setComponentSlot(p.id, primaryComp.id, pl.viewport);
           }
+          this.renderDockLaunchers();
+          this.renderSettingsNavAndPanes();
+          this.switchSettingsTab(p.id);
           await this.remountPlugin(p);
           this.renderDockLaunchers();
           this.renderSettingsNavAndPanes();
@@ -1018,6 +1026,9 @@ export class OmniShell extends BaseShell {
             p.viewId = "";
             this.layoutManager.unregisterPlugin(p.id);
           }
+          this.renderDockLaunchers();
+          this.renderSettingsNavAndPanes();
+          this.switchSettingsTab(p.id);
           await this.remountPlugin(p);
           this.renderDockLaunchers();
           this.renderSettingsNavAndPanes();
@@ -2070,12 +2081,22 @@ export class OmniShell extends BaseShell {
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div
+              id="classic-install-dropzone"
+              style="border: 1.5px dashed var(--omni-border-strong); background: var(--omni-bg-surface); border-radius: var(--omni-radius-sm); padding: 14px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;"
+            >
+              <span style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-primary);">Drop a Plugin Archive (.zip) or .html File Here</span>
+              <span style="font-size: 0.73rem; color: var(--omni-text-muted);">Extracts &amp; installs directly in-browser (no Blossom server needed)</span>
+              <input id="classic-install-file-input" type="file" accept=".zip,.html,.htm,.js" style="display: none;" />
+              <button type="button" id="btn-classic-browse-file" class="btn-secondary" style="font-size: 0.74rem; margin-top: 2px;">Select .zip or .html File</button>
+            </div>
+
             <label style="font-size: 0.82rem; color: var(--omni-text-secondary); display: flex; flex-direction: column; gap: 4px;">
-              Nostr naddr (NIP-5A) or App URL:
+              Nostr naddr (NIP-5A) or Arbitrary App/ZIP URL:
               <input
                 id="install-manifest-url"
                 type="text"
-                placeholder="naddr1... / 35129:pubkey:d-tag / https://..."
+                placeholder="naddr1... / 35129:pubkey:d-tag / https://.../app.zip / https://..."
                 style="background: var(--omni-bg-subtle); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); padding: 8px 12px; border-radius: var(--omni-radius-sm); font-size: 0.85rem; outline: none;"
               />
             </label>
@@ -2504,6 +2525,58 @@ export class OmniShell extends BaseShell {
     const btnQuickNostr = document.getElementById("btn-quick-sample-nostr") as HTMLButtonElement;
     const btnQuickRaw = document.getElementById("btn-quick-sample-plugin") as HTMLButtonElement;
     const btnConfirm = document.getElementById("btn-confirm-install") as HTMLButtonElement;
+    const dropzone = document.getElementById("classic-install-dropzone");
+    const fileInput = document.getElementById("classic-install-file-input") as HTMLInputElement | null;
+    const btnBrowseFile = document.getElementById("btn-classic-browse-file");
+
+    const handleDirectFileInstall = async (files: FileList | any[] | null | undefined) => {
+      if (!files || files.length === 0) return;
+      const file = files[0];
+      if (btnConfirm) {
+        btnConfirm.disabled = true;
+        btnConfirm.textContent = "Extracting & Installing...";
+      }
+      try {
+        const installed = await this.installPluginFromFile(file);
+        this.renderDockLaunchers();
+        this.renderSettingsNavAndPanes();
+        this.installPluginModal.classList.remove("open");
+        if (urlInput) urlInput.value = "";
+        if (jsonInput) jsonInput.value = "";
+        if (typeof alert === "function") {
+          try { alert(`Plugin '${installed.name}' installed successfully!`); } catch (_) {}
+        }
+      } catch (err: any) {
+        if (typeof alert === "function") {
+          try { alert(`Install failed: ${err.message || String(err)}`); } catch (_) {}
+        }
+      } finally {
+        if (btnConfirm) {
+          btnConfirm.disabled = false;
+          btnConfirm.textContent = "Install Plugin";
+        }
+      }
+    };
+
+    btnBrowseFile?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      fileInput?.click();
+    });
+    fileInput?.addEventListener("change", () => {
+      handleDirectFileInstall(fileInput.files);
+    });
+    dropzone?.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = "var(--omni-accent-primary)";
+    });
+    dropzone?.addEventListener("dragleave", () => {
+      dropzone.style.borderColor = "var(--omni-border-strong)";
+    });
+    dropzone?.addEventListener("drop", (e: any) => {
+      e.preventDefault();
+      dropzone.style.borderColor = "var(--omni-border-strong)";
+      handleDirectFileInstall(e.dataTransfer?.files || e.detail?.files);
+    });
 
     btnShow?.addEventListener("click", () => this.installPluginModal.classList.add("open"));
     btnClose?.addEventListener("click", () => this.installPluginModal.classList.remove("open"));
