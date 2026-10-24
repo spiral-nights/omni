@@ -988,7 +988,7 @@
 
       if (nativeNode.nodeType === 3) {
         const parentTag = (nativeNode.parentNode && nativeNode.parentNode.nodeName || "").toUpperCase();
-        if (parentTag === "SCRIPT") {
+        if (parentTag === "SCRIPT" || parentTag === "HEAD" || parentTag === "HTML") {
           return null;
         }
         const isStyleText = parentTag === "STYLE";
@@ -1001,7 +1001,7 @@
 
       if (nativeNode.nodeType === 1) {
         const tag = nativeNode.tagName.toLowerCase();
-        if (tag === "script" || tag === "link") return null;
+        if (tag === "script" || tag === "link" || tag === "head" || tag === "title" || tag === "meta") return null;
 
         const remoteEl = ctx.root.createElement(tag);
         nativeToRemote.set(nativeNode, remoteEl);

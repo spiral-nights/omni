@@ -289,6 +289,13 @@ export class SandboxInstance {
       console.warn(`[SandboxInstance] Failed to read initial storage for [${this.manifest.id}]:`, err);
     }
 
+    function serializeForInlineScript(value: any): string {
+      return JSON.stringify(value)
+        .replace(/</g, "\\u003c")
+        .replace(/>/g, "\\u003e")
+        .replace(/&/g, "\\u0026");
+    }
+
     const routeInjectionScript = `
     // Transparent Sub-View & Route Injection for Pure nsites using standard Web APIs
     var __search = "";
@@ -314,9 +321,9 @@ export class SandboxInstance {
     }
 
     try {
-      window.__OMNI_ROUTE__ = ${JSON.stringify(routeVal)};
-      window.__OMNI_VIEW__ = ${JSON.stringify(viewIdVal)};
-      window.__OMNI_INITIAL_STORAGE__ = ${JSON.stringify(initialStorageMap)};
+      window.__OMNI_ROUTE__ = ${serializeForInlineScript(routeVal)};
+      window.__OMNI_VIEW__ = ${serializeForInlineScript(viewIdVal)};
+      window.__OMNI_INITIAL_STORAGE__ = ${serializeForInlineScript(initialStorageMap)};
       if (window.__OMNI_ROUTE__) {
         __parseRoute(window.__OMNI_ROUTE__);
       }
@@ -345,7 +352,7 @@ export class SandboxInstance {
         }
       });
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: "omni:guest-ready", pluginId: ${JSON.stringify(this.manifest.id)} }, "*");
+        window.parent.postMessage({ type: "omni:guest-ready", pluginId: ${serializeForInlineScript(this.manifest.id)} }, "*");
       }
     } catch (_) {}
 
@@ -384,8 +391,11 @@ export class SandboxInstance {
     } catch (_) {}
     `;
 
+    const safeRouteInjectionScript = routeInjectionScript.replace(/<\/script/gi, "<\\/script");
+    const safeRuntimeCode = runtimeCode.replace(/<\/script/gi, "<\\/script");
+
     if (isHtmlDoc) {
-      const injectedHead = `\n  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  <script>\n    window.addEventListener("error", function(e) {\n      console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);\n    });\n    ${routeInjectionScript}\n  </script>\n  <script>\n    ${runtimeCode}\n  </script>\n`;
+      const injectedHead = `\n  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  <script>\n    window.addEventListener("error", function(e) {\n      console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);\n    });\n    ${safeRouteInjectionScript}\n  </script>\n  <script>\n    ${safeRuntimeCode}\n  </script>\n`;
 
       if (/<head\b[^>]*>/i.test(pluginCode)) {
         this.iframe.srcdoc = pluginCode.replace(/<head\b[^>]*>/i, (match) => `${match}${injectedHead}`);
@@ -410,10 +420,10 @@ export class SandboxInstance {
     window.addEventListener("error", function(e) {
       console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);
     });
-    ${routeInjectionScript}
+    ${safeRouteInjectionScript}
   </script>
   <script>
-    ${runtimeCode}
+    ${safeRuntimeCode}
   </script>
 </head>
 <body>

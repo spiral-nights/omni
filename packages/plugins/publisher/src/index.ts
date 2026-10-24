@@ -763,12 +763,33 @@ function saveConfiguredServers(servers: Array<{ url: string; enabled: boolean; s
   } catch {}
 }
 
+function cleanPublishedRecord(app: any): PublishedAppRecord {
+  return {
+    ...app,
+    htmlContent: "",
+    rawEvent: app.rawEvent ? { ...app.rawEvent, content: "" } : undefined
+  };
+}
+
 function loadPublishedApps(): PublishedAppRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PUBLISHED);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) {
+        let needsResave = false;
+        const cleaned = parsed.map((app) => {
+          if (app && (app.htmlContent || (app.rawEvent && app.rawEvent.content))) {
+            needsResave = true;
+            return cleanPublishedRecord(app);
+          }
+          return app;
+        });
+        if (needsResave) {
+          savePublishedApps(cleaned);
+        }
+        return cleaned;
+      }
     }
   } catch {}
   return [];
@@ -776,7 +797,8 @@ function loadPublishedApps(): PublishedAppRecord[] {
 
 function savePublishedApps(apps: PublishedAppRecord[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY_PUBLISHED, JSON.stringify(apps));
+    const cleaned = apps.map(cleanPublishedRecord);
+    localStorage.setItem(STORAGE_KEY_PUBLISHED, JSON.stringify(cleaned));
   } catch {}
 }
 
@@ -1108,8 +1130,8 @@ function mountPublisherStudio(root: HTMLElement) {
                 fileCount: fTags.length || 1,
                 files: fTags,
                 servers: serverTags,
-                rawEvent: event,
-                htmlContent: event.content || ""
+                rawEvent: { ...event, content: "" },
+                htmlContent: ""
               };
 
               if (existingIdx === -1) {
@@ -1277,8 +1299,8 @@ function mountPublisherStudio(root: HTMLElement) {
         fileCount: filesToUpload.length,
         files: filesToUpload.map((f) => ({ path: f.path, sha256: f.sha256, mimeType: f.mimeType })),
         servers: activeServers,
-        rawEvent: signedEvent,
-        htmlContent: bundledHtmlOutput
+        rawEvent: { ...signedEvent, content: "" },
+        htmlContent: ""
       };
 
       const existingIdx = publishedApps.findIndex((p) => p.id === cleanId);
