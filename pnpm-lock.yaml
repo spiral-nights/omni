@@ -27,12 +27,21 @@ importers:
       '@omni/plugin-checklist':
         specifier: workspace:*
         version: link:../../packages/plugins/checklist
+      '@omni/plugin-feed':
+        specifier: workspace:*
+        version: link:../../packages/plugins/feed
+      '@omni/plugin-profile':
+        specifier: workspace:*
+        version: link:../../packages/plugins/profile
       '@omni/plugin-profile-viewer':
         specifier: workspace:*
         version: link:../../packages/plugins/profile-viewer
       '@omni/plugin-publisher':
         specifier: workspace:*
         version: link:../../packages/plugins/publisher
+      '@omni/plugin-relays':
+        specifier: workspace:*
+        version: link:../../packages/plugins/relays
       '@omni/plugin-shell':
         specifier: workspace:*
         version: link:../../packages/plugins/shell

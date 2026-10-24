@@ -253,7 +253,10 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
     // Click to open settings
     openSettingsBtn.click();
-    await new Promise((r) => setTimeout(r, 250));
+    for (let i = 0; i < 20; i++) {
+      if (openSettingsBtn.textContent === "Close Settings") break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
     const mountContainer = timerPane?.querySelector(".plugin-settings-mount-container") as HTMLElement;
     expect(mountContainer.style.display).toBe("block");
     expect(mountContainer.querySelector(".omni-component-slot")).toBeTruthy();

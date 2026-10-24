@@ -1,5 +1,5 @@
 // Omni Service Worker — Offline-First PWA Cache
-const CACHE_NAME = "omni-shell-v2";
+const CACHE_NAME = "omni-shell-v3";
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",

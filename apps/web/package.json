@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "pnpm --filter \"@omni/plugin-*\" run build",
     "build": "tsc && vite build && node -e \"const fs=require('fs');fs.copyFileSync('dist/index.html','dist/404.html')\"",
     "preview": "vite preview"
   },
@@ -11,6 +12,9 @@
     "@omni/core": "workspace:*",
     "@omni/types": "workspace:*",
     "@omni/plugin-shell": "workspace:*",
+    "@omni/plugin-feed": "workspace:*",
+    "@omni/plugin-relays": "workspace:*",
+    "@omni/plugin-profile": "workspace:*",
     "@omni/plugin-checklist": "workspace:*",
     "@omni/plugin-profile-viewer": "workspace:*",
     "@omni/plugin-publisher": "workspace:*",

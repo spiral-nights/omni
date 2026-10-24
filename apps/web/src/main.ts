@@ -264,7 +264,7 @@ async function startApp() {
     const registerSw = () => {
       const swUrl = `${import.meta.env.BASE_URL}sw.js`;
       navigator.serviceWorker
-        .register(swUrl)
+        .register(swUrl, { updateViaCache: "none" })
         .then((reg) => {
           console.log("✦ [Omni PWA] Service worker registered successfully:", reg.scope);
         })
