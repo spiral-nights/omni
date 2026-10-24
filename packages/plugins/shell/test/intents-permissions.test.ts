@@ -318,6 +318,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
           scriptContent: "console.log('profile editor');",
           sourceUrl: "local:@omni/plugin-profile",
           enabled: true,
+          pinned: true,
           viewport: "main"
         },
         {
@@ -328,6 +329,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
           scriptContent: "console.log('profile viewer');",
           sourceUrl: "local:@omni/plugin-profile-viewer",
           enabled: true,
+          pinned: true,
           viewport: "main"
         }
       ];

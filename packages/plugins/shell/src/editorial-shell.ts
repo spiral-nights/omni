@@ -509,9 +509,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   public getPinnedPlugins(): InstalledPluginEntry[] {
     return this.installedPlugins.filter((p) => {
       if (p.enabled === false) return false;
-      if (p.pinned !== undefined) return p.pinned;
-      const placements = this.getPluginPlacements(p);
-      return placements.some((pl) => pl.viewport === "dock" || pl.viewport === "main");
+      return this.isAppPinned(p);
     });
   }
 
@@ -540,6 +538,8 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       item.addEventListener("click", () => {
         this.openApp(plugin.id);
       });
+
+      this.bindAppContextMenu(item, plugin);
 
       this.dockContainer.appendChild(item);
     }
@@ -910,13 +910,14 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       return n.includes(query) || d.includes(query);
     });
 
-    const pinnedList = filtered.filter((p) => p.pinned !== false);
-    const unpinnedList = filtered.filter((p) => p.pinned === false);
+    const pinnedList = filtered.filter((p) => this.isAppPinned(p));
+    const unpinnedList = filtered.filter((p) => !this.isAppPinned(p));
 
     const renderCard = (plugin: InstalledPluginEntry, container: Element) => {
       const card = document.createElement("div");
       card.className = "editorial-plate-card";
       const iconKey = (plugin.icon as IconName) || "apps";
+      const isPinned = this.isAppPinned(plugin);
 
       card.innerHTML = `
         <div class="editorial-plate-card-header">
@@ -934,7 +935,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
             </div>
           </div>
           <button class="editorial-btn-secondary btn-toggle-pin" style="font-size: 0.65rem; padding: 3px 8px; flex-shrink: 0;">
-            ${plugin.pinned !== false ? "Unpin" : "Pin"}
+            ${isPinned ? "Unpin" : "Pin"}
           </button>
         </div>
         <p class="editorial-plate-card-desc">${plugin.description || "Decentralized micro-frontend application."}</p>
@@ -947,8 +948,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
       card.querySelector(".btn-toggle-pin")?.addEventListener("click", (e) => {
         e.stopPropagation();
-        plugin.pinned = plugin.pinned === false;
-        this.saveLocalWorkspace();
+        this.setAppPinned(plugin.id, !this.isAppPinned(plugin));
         this.renderDock();
         this.renderAppsIndex();
       });
@@ -1348,7 +1348,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       const synthManifest = this.ensurePluginManifest(plugin);
       const pluginViews = synthManifest.views || [{ id: "main", title: "Default View", path: "" }];
       const safeId = plugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
-      const isPinned = plugin.pinned !== false;
+      const isPinned = this.isAppPinned(plugin);
 
       card.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap;">
@@ -1372,7 +1372,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
               Configure Viewports ▾
             </button>
             <button class="editorial-btn-secondary btn-toggle-pin-pref" style="font-size: 0.68rem; padding: 4px 8px;">
-              ${isPinned ? "Pinned" : "Pin"}
+              ${isPinned ? "Unpin" : "Pin"}
             </button>
             <button class="editorial-btn-secondary btn-uninstall-plugin" style="color: #ff5555; border-color: #552222; font-size: 0.68rem; padding: 4px 8px;">
               Uninstall
@@ -1383,8 +1383,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       `;
 
       card.querySelector(".btn-toggle-pin-pref")?.addEventListener("click", () => {
-        plugin.pinned = plugin.pinned === false;
-        this.saveLocalWorkspace();
+        this.setAppPinned(plugin.id, !this.isAppPinned(plugin));
         this.renderDock();
         this.renderAppsIndex();
         this.renderPluginSettingsList();

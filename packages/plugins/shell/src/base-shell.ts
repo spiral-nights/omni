@@ -586,11 +586,11 @@ export abstract class BaseShell implements OmniShellHost {
 
   public isAppPinned(p: InstalledPluginEntry): boolean {
     if (p.id === "org.omni.plugin.feed" && p.pinned === undefined) return true;
+    if (Array.isArray(p.placements) && p.placements.length === 0) return false;
     if (p.pinned !== undefined) return p.pinned;
     const placements = this.getPluginPlacements(p);
     const mainPl = placements.find((pl) => pl.viewport === "main");
     if (mainPl && mainPl.pinned !== undefined) return mainPl.pinned;
-    if (mainPl) return true;
     const dockPl = placements.find((pl) => pl.viewport === "dock");
     if (dockPl) return true;
     return false;
@@ -1238,7 +1238,7 @@ export abstract class BaseShell implements OmniShellHost {
 
     const mergedEntry: InstalledPluginEntry = {
       ...entry,
-      pinned: existing?.pinned !== undefined ? existing.pinned : entry.pinned,
+      pinned: existing?.pinned !== undefined ? existing.pinned : (entry.pinned ?? false),
       viewport: targetSlot,
       placements: placements
     };
@@ -1317,7 +1317,7 @@ export abstract class BaseShell implements OmniShellHost {
 
     const menu = document.createElement("div");
     menu.className = "omni-app-context-menu";
-    const isPinned = plugin.pinned !== false;
+    const isPinned = this.isAppPinned(plugin);
 
     menu.innerHTML = `
       <div class="context-menu-header">
@@ -1383,9 +1383,7 @@ export abstract class BaseShell implements OmniShellHost {
 
     menu.querySelector(".ctx-btn-pin")?.addEventListener("click", () => {
       closeMenu();
-      plugin.pinned = plugin.pinned === false;
-      this.saveLocalWorkspace();
-      this.onWorkspaceUpdated();
+      this.setAppPinned(plugin.id, !isPinned);
     });
 
     menu.querySelector(".ctx-btn-settings")?.addEventListener("click", () => {

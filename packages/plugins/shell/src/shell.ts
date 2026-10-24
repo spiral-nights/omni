@@ -201,6 +201,8 @@ export class OmniShell extends BaseShell {
         this.showPage(plugin.id);
       });
 
+      this.bindAppContextMenu(btn, plugin);
+
       this.dockSlot.appendChild(btn);
     }
 

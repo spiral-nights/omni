@@ -365,6 +365,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       description: "Decentralized audio player",
       icon: "radio",
       viewport: "main",
+      pinned: true,
       scriptContent: "console.log('music');",
       sourceUrl: "local:@omni/plugin-music",
       enabled: true
@@ -941,6 +942,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
         icon: "user",
         viewport: "main",
         enabled: true,
+        pinned: true,
         scriptContent: "console.log('profile');",
         placements: [
           {
