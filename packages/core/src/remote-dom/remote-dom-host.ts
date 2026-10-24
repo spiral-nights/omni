@@ -303,8 +303,43 @@ export class RemoteDomHost {
       return orderA - orderB;
     });
 
+    const attachedMap = (this.receiver as any).attached as Map<string, Node> | undefined;
+
     try {
-      this.receiver.connection.mutate(filteredRecords);
+      for (const rec of filteredRecords) {
+        // Mutation 1 (MUTATION_TYPE_REMOVE_CHILD): [1, parentId, index]
+        if (rec[0] === 1) {
+          const parentId = rec[1];
+          const index = rec[2];
+          const parent = (parentId === "~" || parentId === "0" || !parentId)
+            ? (this.renderRoot as Node)
+            : attachedMap?.get(parentId);
+
+          if (!parent || !parent.childNodes || index < 0 || index >= parent.childNodes.length || !parent.childNodes[index]) {
+            // Child is already detached or index is out of bounds; safe skip
+            continue;
+          }
+        }
+
+        // Mutation 0 (MUTATION_TYPE_INSERT_CHILD): [0, parentId, child, index]
+        if (rec[0] === 0) {
+          const parentId = rec[1];
+          const parent = (parentId === "~" || parentId === "0" || !parentId)
+            ? (this.renderRoot as Node)
+            : attachedMap?.get(parentId);
+
+          if (!parent) {
+            // Parent target is not attached to DOM; safe skip
+            continue;
+          }
+        }
+
+        try {
+          this.receiver.connection.mutate([rec]);
+        } catch (recordErr) {
+          console.warn(`Remote DOM non-fatal mutation record error in [${this.componentId}]:`, recordErr, rec);
+        }
+      }
     } catch (err) {
       console.error(`Remote DOM mutation error in [${this.componentId}]:`, err);
     } finally {

@@ -41,36 +41,43 @@
   }
 
   // 1. Transparent LocalStorage Shim (handles sandboxed opaque origin restrictions)
+  const memoryStore = new Map();
+  if (typeof window !== "undefined" && window.__OMNI_INITIAL_STORAGE__ && typeof window.__OMNI_INITIAL_STORAGE__ === "object") {
+    for (const [k, v] of Object.entries(window.__OMNI_INITIAL_STORAGE__)) {
+      memoryStore.set(String(k), String(v));
+    }
+  }
+
+  const storageShim = {
+    getItem(key) {
+      return memoryStore.has(String(key)) ? memoryStore.get(String(key)) : null;
+    },
+    setItem(key, value) {
+      const k = String(key);
+      const v = String(value);
+      memoryStore.set(k, v);
+      initPromise.then(() => callRpc("storage.set", { key: k, value: v }).catch(() => {}));
+    },
+    removeItem(key) {
+      const k = String(key);
+      memoryStore.delete(k);
+      initPromise.then(() => callRpc("storage.delete", { key: k }).catch(() => {}));
+    },
+    clear() {
+      memoryStore.clear();
+      initPromise.then(() => callRpc("storage.clear").catch(() => {}));
+    },
+    key(i) {
+      return Array.from(memoryStore.keys())[i] || null;
+    },
+    get length() {
+      return memoryStore.size;
+    }
+  };
+
   try {
     window.localStorage.getItem("__omni_probe__");
   } catch (_) {
-    const memoryStore = new Map();
-    const storageShim = {
-      getItem(key) {
-        return memoryStore.has(String(key)) ? memoryStore.get(String(key)) : null;
-      },
-      setItem(key, value) {
-        const k = String(key);
-        const v = String(value);
-        memoryStore.set(k, v);
-        initPromise.then(() => callRpc("storage.set", { key: k, value: v }).catch(() => {}));
-      },
-      removeItem(key) {
-        const k = String(key);
-        memoryStore.delete(k);
-        initPromise.then(() => callRpc("storage.delete", { key: k }).catch(() => {}));
-      },
-      clear() {
-        memoryStore.clear();
-        initPromise.then(() => callRpc("storage.clear").catch(() => {}));
-      },
-      key(i) {
-        return Array.from(memoryStore.keys())[i] || null;
-      },
-      get length() {
-        return memoryStore.size;
-      }
-    };
     try {
       Object.defineProperty(window, "localStorage", {
         value: storageShim,
@@ -86,6 +93,11 @@
     if (data && data.type === "omni:init") {
       sessionInfo = data.payload;
       if (sessionInfo) {
+        if (sessionInfo.storage && typeof sessionInfo.storage === "object") {
+          for (const [k, v] of Object.entries(sessionInfo.storage)) {
+            memoryStore.set(String(k), String(v));
+          }
+        }
         if (sessionInfo.route) {
           window.__OMNI_ROUTE__ = sessionInfo.route;
         }

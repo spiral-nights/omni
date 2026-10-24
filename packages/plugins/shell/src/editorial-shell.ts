@@ -52,6 +52,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   private themeMode: EditorialThemeMode = "system";
   private mediaQueryDark: MediaQueryList | null = null;
   private mediaQueryListener: ((e: MediaQueryListEvent) => void) | null = null;
+  private isAppFullscreen = false;
 
   // Cached slot elements
   private headerActionsSlot!: HTMLElement;
@@ -236,9 +237,13 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       });
 
       this.boundKeydownHandler = (e: KeyboardEvent) => {
-        if (e.key === "Escape") {
-          const settingsModal = this.root.querySelector("#editorial-settings-modal");
-          if (settingsModal?.classList.contains("open")) {
+        if (e.key === "Escape" || e.key === "Esc") {
+          if (this.isAppFullscreen) {
+            this.toggleAppFullscreen(false);
+            return;
+          }
+          const settingsModal = document.querySelector("#editorial-settings-modal");
+          if (settingsModal && (settingsModal.classList.contains("open") || (settingsModal as HTMLElement).style.display === "flex")) {
             this.closeSettings();
             return;
           }
@@ -247,7 +252,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
             profileDrawer.classList.remove("open");
             return;
           }
-          const openWithModal = this.root.querySelector("#open-with-modal");
+          const openWithModal = document.querySelector("#open-with-modal");
           if (openWithModal?.classList.contains("open")) {
             openWithModal.classList.remove("open");
           }
@@ -344,11 +349,36 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     if (typeof document !== "undefined") {
       document.documentElement.setAttribute("data-theme-mode", resolvedMode);
       document.body?.setAttribute("data-theme-mode", resolvedMode);
+      try {
+        document.documentElement.style.colorScheme = resolvedMode;
+        if (document.body) {
+          document.body.style.backgroundColor = isDark ? "#1c1b20" : "#fbfbf9";
+          document.body.style.color = isDark ? "#e5e1e4" : "#0f172a";
+        }
+        document.documentElement.style.backgroundColor = isDark ? "#1c1b20" : "#fbfbf9";
+        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+        if (metaThemeColor) {
+          metaThemeColor.setAttribute("content", isDark ? "#1c1b20" : "#fbfbf9");
+        }
+      } catch (_) {}
     }
     this.root.setAttribute("data-theme-mode", resolvedMode);
 
     // Re-apply accent color for current mode
     this.applyAccentVariables();
+  }
+
+  public toggleAppFullscreen(fullscreen?: boolean): void {
+    this.isAppFullscreen = typeof fullscreen === "boolean" ? fullscreen : !this.isAppFullscreen;
+    if (this.isAppFullscreen) {
+      this.root.classList.add("app-fullscreen");
+    } else {
+      this.root.classList.remove("app-fullscreen");
+    }
+    const btn = this.root.querySelector("#btn-editorial-toggle-fullscreen");
+    if (btn) {
+      btn.classList.toggle("active", this.isAppFullscreen);
+    }
   }
 
   private updateThemeModeUi(): void {
@@ -593,18 +623,27 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     let targetContainer: HTMLElement;
 
     if (isFeed) {
+      this.root.classList.add("feed-active");
+      this.root.classList.remove("has-active-app");
       if (feedPage) {
         feedPage.classList.add("active");
         feedPage.style.display = "flex";
       }
       targetContainer = (this.mainAppContainer || this.root.querySelector("#editorial-main-app-container")) as HTMLElement;
     } else {
+      this.root.classList.add("has-active-app");
+      this.root.classList.remove("feed-active");
       targetContainer = this.ensureAppContainer(pluginId);
       const appPage = this.root.querySelector(`#editorial-app-page-${safeId}`) as HTMLElement | null;
       if (appPage) {
         appPage.classList.add("active");
         appPage.style.display = "flex";
       }
+    }
+
+    const btnFs = this.root.querySelector("#btn-editorial-toggle-fullscreen") as HTMLElement | null;
+    if (btnFs) {
+      btnFs.style.display = isFeed ? "none" : "flex";
     }
 
     // Ensure the nsite is mounted and its component is projected into targetContainer
@@ -705,6 +744,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     this.activePage = "apps";
     this.activePluginId = null;
+    this.root.classList.remove("has-active-app", "feed-active");
+    if (this.isAppFullscreen) this.toggleAppFullscreen(false);
+    const btnFsApps = this.root.querySelector("#btn-editorial-toggle-fullscreen") as HTMLElement | null;
+    if (btnFsApps) btnFsApps.style.display = "none";
 
     this.updateHeaderSubtitle("Apps");
 
@@ -744,6 +787,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     this.activePage = "widgets";
     this.activePluginId = null;
+    this.root.classList.remove("has-active-app", "feed-active");
+    if (this.isAppFullscreen) this.toggleAppFullscreen(false);
+    const btnFsWidgets = this.root.querySelector("#btn-editorial-toggle-fullscreen") as HTMLElement | null;
+    if (btnFsWidgets) btnFsWidgets.style.display = "none";
 
     this.updateHeaderSubtitle("Cards");
 
@@ -959,6 +1006,16 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     const btnProfile = this.root.querySelector("#btn-editorial-profile-toggle");
     btnProfile?.addEventListener("click", () => {
       this.dispatchIntent("view_profile", {}).catch(() => {});
+    });
+
+    const btnFullscreen = this.root.querySelector("#btn-editorial-toggle-fullscreen");
+    btnFullscreen?.addEventListener("click", () => {
+      this.toggleAppFullscreen();
+    });
+
+    const btnExitFullscreen = this.root.querySelector("#btn-editorial-exit-fullscreen");
+    btnExitFullscreen?.addEventListener("click", () => {
+      this.toggleAppFullscreen(false);
     });
   }
 
@@ -1532,6 +1589,11 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
           <div class="editorial-header-right">
             <div id="editorial-header-actions-slot" style="display: flex; align-items: center; gap: 4px;"></div>
+            <button id="btn-editorial-toggle-fullscreen" class="editorial-header-btn" title="Toggle Expansive Fullscreen" style="display: none;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+              </svg>
+            </button>
             <button id="btn-editorial-settings" class="editorial-header-btn" title="Preferences">
               ${icon("settings", 18)}
             </button>
@@ -1541,6 +1603,15 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           </div>
         </div>
       </header>
+
+      <!-- Floating Exit Fullscreen Button -->
+      <button id="btn-editorial-exit-fullscreen" class="editorial-floating-exit-fullscreen" title="Exit Fullscreen (Esc)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        <span>Exit Fullscreen</span>
+      </button>
 
       <!-- 2. Central Content Viewport -->
       <main class="editorial-main-content">

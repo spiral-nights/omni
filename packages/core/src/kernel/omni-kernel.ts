@@ -123,6 +123,11 @@ export class OmniKernel {
       try {
         this.aclEngine.registerManifest(manifest);
 
+        // Scoped key-value storage is partitioned per plugin and granted by default
+        if (this.capabilityStore.getGrant(manifest.id, "storage:kv") === null) {
+          this.capabilityStore.setGrant(manifest.id, "storage:kv", "always");
+        }
+
         // Initialize default permissions in capabilityStore if not already explicitly configured
         if (manifest.permissions) {
           if (manifest.permissions.storage && this.capabilityStore.getGrant(manifest.id, "storage:kv") === null) {

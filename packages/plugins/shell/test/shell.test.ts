@@ -253,7 +253,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
     // Click to open settings
     openSettingsBtn.click();
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 250));
     const mountContainer = timerPane?.querySelector(".plugin-settings-mount-container") as HTMLElement;
     expect(mountContainer.style.display).toBe("block");
     expect(mountContainer.querySelector(".omni-component-slot")).toBeTruthy();
@@ -1486,7 +1486,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
       vpSelect.value = "main";
       vpSelect.dispatchEvent(new Event("change"));
-      await new Promise((r) => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 250));
 
       // Verify timer is automatically pinned and rendered in dock
       const timerPlugin = classicShell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer")!;

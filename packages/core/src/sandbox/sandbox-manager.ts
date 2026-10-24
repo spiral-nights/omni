@@ -280,6 +280,15 @@ export class SandboxInstance {
     const routeVal = this.options.route || "";
     const viewIdVal = this.options.viewId || "main";
 
+    let initialStorageMap: Record<string, any> = {};
+    try {
+      if (this.options.storageManager) {
+        initialStorageMap = await this.options.storageManager.getAll(this.manifest.id);
+      }
+    } catch (err) {
+      console.warn(`[SandboxInstance] Failed to read initial storage for [${this.manifest.id}]:`, err);
+    }
+
     const routeInjectionScript = `
     // Transparent Sub-View & Route Injection for Pure nsites using standard Web APIs
     var __search = "";
@@ -307,6 +316,7 @@ export class SandboxInstance {
     try {
       window.__OMNI_ROUTE__ = ${JSON.stringify(routeVal)};
       window.__OMNI_VIEW__ = ${JSON.stringify(viewIdVal)};
+      window.__OMNI_INITIAL_STORAGE__ = ${JSON.stringify(initialStorageMap)};
       if (window.__OMNI_ROUTE__) {
         __parseRoute(window.__OMNI_ROUTE__);
       }
@@ -439,7 +449,8 @@ export class SandboxInstance {
             slots: Array.from(this.options.slotContainers.keys()),
             components: this.manifest.components?.map(c => c.id) || ["main"],
             route: routeVal,
-            viewId: viewIdVal
+            viewId: viewIdVal,
+            storage: initialStorageMap
           }
         };
 

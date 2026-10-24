@@ -45,6 +45,29 @@ export class PluginStorageManager {
     });
   }
 
+  async getAll(pluginId: string): Promise<Record<string, any>> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const tx = this.db!.transaction(["plugin_kv"], "readonly");
+      const store = tx.objectStore("plugin_kv");
+      const index = store.index("pluginId");
+      const req = index.openCursor(IDBKeyRange.only(pluginId));
+      const result: Record<string, any> = {};
+
+      req.onsuccess = (e) => {
+        const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+        if (cursor) {
+          result[cursor.value.key] = cursor.value.value;
+          cursor.continue();
+        } else {
+          resolve(result);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
   async set<T = unknown>(pluginId: string, key: string, value: T): Promise<void> {
     if (!this.db) await this.init();
 

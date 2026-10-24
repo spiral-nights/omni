@@ -85,5 +85,6 @@ export interface OmniInitMessage {
     scriptContent?: string;
     route?: string;
     viewId?: string;
+    storage?: Record<string, any>;
   };
 }
