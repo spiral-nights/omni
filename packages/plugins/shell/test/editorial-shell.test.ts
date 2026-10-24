@@ -286,6 +286,33 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(root.querySelector("#editorial-view-subtitle")?.textContent).toBe("Cards");
     });
 
+    it("does not render widgets dock item if no widgets are assigned in EditorialShell", () => {
+      shell.mount();
+
+      // Initially relays and checklist are in sidebar, widgets dock button is present
+      expect(shell.hasAssignedWidgets()).toBe(true);
+      expect(root.querySelector("#btn-editorial-dock-widgets")).toBeTruthy();
+
+      // Reassign all sidebar plugins to main
+      for (const p of shell.installedPlugins) {
+        p.viewport = "main";
+        p.placements = [{ id: "main", viewport: "main", route: "", viewId: "main", enabled: true }];
+      }
+      shell.renderDock();
+
+      expect(shell.hasAssignedWidgets()).toBe(false);
+      expect(root.querySelector("#btn-editorial-dock-widgets")).toBeNull();
+
+      // Reassign relays back to sidebar
+      const relays = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.relays")!;
+      relays.viewport = "sidebar";
+      relays.placements = [{ id: "sidebar", viewport: "sidebar", route: "", viewId: "main", enabled: true }];
+      shell.renderDock();
+
+      expect(shell.hasAssignedWidgets()).toBe(true);
+      expect(root.querySelector("#btn-editorial-dock-widgets")).toBeTruthy();
+    });
+
     it("pinning an app in Applications Index adds it to the dock immediately", () => {
       shell.mount();
       shell.showAppsIndex();

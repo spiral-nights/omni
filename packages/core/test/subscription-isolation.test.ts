@@ -11,8 +11,10 @@ describe("Milestone 2: Subscription Namespacing & Cache Isolation", () => {
 
   beforeEach(async () => {
     const uniqueId = `iso_${Math.random().toString(36).slice(2, 9)}`;
-    kernel = new OmniKernel({ runtimeScript: omniRuntimeScript,
+    kernel = new OmniKernel({
+      runtimeScript: omniRuntimeScript,
       bootstrapRelays: [],
+      persistRelays: false,
       eventStoreName: `test_event_store_${uniqueId}`,
       storageName: `test_storage_${uniqueId}`
     });

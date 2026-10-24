@@ -992,6 +992,30 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(root.querySelector("#page-feed")?.classList.contains("active")).toBe(true);
     });
 
+    it("hides widgets dock item if no widgets are assigned in OmniShell", () => {
+      // Initially timer is in sidebar, widgets dock button visible
+      expect(shell.hasAssignedWidgets()).toBe(true);
+      const widgetsBtn = root.querySelector("#dock-btn-widgets") as HTMLElement;
+      expect(widgetsBtn.style.display).not.toBe("none");
+
+      // Reassign timer to main
+      const timer = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer")!;
+      timer.viewport = "main";
+      timer.placements = [{ id: "main", viewport: "main", route: "", viewId: "main", enabled: true }];
+      shell.renderDockLaunchers();
+
+      expect(shell.hasAssignedWidgets()).toBe(false);
+      expect(widgetsBtn.style.display).toBe("none");
+
+      // Reassign back to sidebar
+      timer.viewport = "sidebar";
+      timer.placements = [{ id: "sidebar", viewport: "sidebar", route: "", viewId: "main", enabled: true }];
+      shell.renderDockLaunchers();
+
+      expect(shell.hasAssignedWidgets()).toBe(true);
+      expect(widgetsBtn.style.display).toBe("");
+    });
+
     it("pins and unpins full-page apps to/from dock slot and updates Apps Launcher", () => {
       // Add a third-party app with main placement
       const customApp: InstalledPluginEntry = {

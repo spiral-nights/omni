@@ -612,6 +612,18 @@ export abstract class BaseShell implements OmniShellHost {
     this.saveLocalWorkspace();
   }
 
+  public hasAssignedWidgets(): boolean {
+    return this.installedPlugins.some((p) => {
+      if (p.enabled === false) return false;
+      const placements = this.getPluginPlacements(p);
+      return placements.some(
+        (pl) =>
+          pl.enabled !== false &&
+          (pl.viewport === "sidebar" || pl.viewport === "widgets" || pl.viewport === "widget")
+      );
+    });
+  }
+
   // --- Workspace State Serialization & NIP-78 Sync ---
 
   public exportWorkspaceState(): OmniWorkspaceState {

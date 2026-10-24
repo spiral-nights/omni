@@ -150,9 +150,12 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     const btnPublish = pubContainer.querySelector("#btn-publish-blossom-nostr") as HTMLButtonElement;
     expect(btnPublish).toBeTruthy();
     btnPublish.click();
-    await wait(350);
+    let naddrEl = pubContainer.querySelector("#studio-result-naddr");
+    for (let i = 0; i < 40 && !naddrEl; i++) {
+      await wait(50);
+      naddrEl = pubContainer.querySelector("#studio-result-naddr");
+    }
 
-    const naddrEl = pubContainer.querySelector("#studio-result-naddr");
     expect(naddrEl, "LOGS: " + pubContainer.textContent?.slice(-400)).toBeTruthy();
     expect(naddrEl?.textContent?.startsWith("naddr1")).toBe(true);
 

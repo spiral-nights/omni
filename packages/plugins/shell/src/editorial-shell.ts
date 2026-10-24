@@ -558,19 +558,23 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     btnApps.addEventListener("click", () => this.showAppsIndex());
     this.dockContainer.appendChild(btnApps);
 
-    // Cards (Widgets) Button
-    const btnWidgets = document.createElement("button");
-    const isWidgetsActive = this.activePage === "widgets";
-    btnWidgets.className = `editorial-dock-item ${isWidgetsActive ? "active" : ""}`;
-    btnWidgets.id = "btn-editorial-dock-widgets";
-    btnWidgets.title = "Companion Cards";
-    btnWidgets.innerHTML = `
-      <div class="editorial-dock-icon">${icon("layout", 20)}</div>
-      <span class="editorial-dock-label">Widgets</span>
-      <span class="editorial-active-dot"></span>
-    `;
-    btnWidgets.addEventListener("click", () => this.showWidgetsView());
-    this.dockContainer.appendChild(btnWidgets);
+    // Cards (Widgets) Button - only shown if at least one widget is assigned
+    if (this.hasAssignedWidgets()) {
+      const btnWidgets = document.createElement("button");
+      const isWidgetsActive = this.activePage === "widgets";
+      btnWidgets.className = `editorial-dock-item ${isWidgetsActive ? "active" : ""}`;
+      btnWidgets.id = "btn-editorial-dock-widgets";
+      btnWidgets.title = "Companion Cards";
+      btnWidgets.innerHTML = `
+        <div class="editorial-dock-icon">${icon("layout", 20)}</div>
+        <span class="editorial-dock-label">Widgets</span>
+        <span class="editorial-active-dot"></span>
+      `;
+      btnWidgets.addEventListener("click", () => this.showWidgetsView());
+      this.dockContainer.appendChild(btnWidgets);
+    } else if (this.activePage === "widgets") {
+      this.showAppsIndex(false);
+    }
 
     // Prefs Button
     const btnPrefs = document.createElement("button");

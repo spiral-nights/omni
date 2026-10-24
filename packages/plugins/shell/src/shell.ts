@@ -203,6 +203,14 @@ export class OmniShell extends BaseShell {
 
       this.dockSlot.appendChild(btn);
     }
+
+    const widgetsBtn = this.dockBtnWidgets || (this.root.querySelector("#dock-btn-widgets") as HTMLElement | null);
+    if (widgetsBtn) {
+      widgetsBtn.style.display = this.hasAssignedWidgets() ? "" : "none";
+    }
+    if (this.getActivePageId() === "widgets" && !this.hasAssignedWidgets()) {
+      this.showPage("apps");
+    }
   }
 
   public renderAppsLauncher(): void {
