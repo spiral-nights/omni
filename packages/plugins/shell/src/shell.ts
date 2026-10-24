@@ -928,7 +928,7 @@ export class OmniShell extends BaseShell {
         vpSelect.addEventListener("change", async () => {
           pl.viewport = vpSelect.value;
           p.viewport = pl.viewport;
-          if (pl.viewport === "main" || pl.viewport === "dock") {
+          if (pl.viewport === "dock") {
             p.pinned = true;
           }
           const primaryComp = synthManifest.components?.[0];
@@ -1520,11 +1520,7 @@ export class OmniShell extends BaseShell {
         for (const pl of activePlacements) {
           const badge = document.createElement("span");
           badge.style.cssText = "font-size: 0.66rem; padding: 1px 6px; border-radius: var(--omni-radius-pill); border: 1px solid var(--omni-border-subtle); background: var(--omni-bg-subtle); color: var(--omni-text-secondary);";
-          if (pl.viewport === "main") {
-            badge.style.color = "var(--omni-accent-primary)";
-            badge.style.borderColor = "var(--omni-accent-primary)";
-            badge.textContent = "Full-Page App";
-          } else if (pl.viewport === "dock") {
+          if (pl.viewport === "dock") {
             badge.textContent = "Dock Shortcut";
           } else if (pl.viewport === "sidebar") {
             badge.textContent = "Widget";
@@ -1987,10 +1983,6 @@ export class OmniShell extends BaseShell {
                   </div>
                   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; font-size: 0.74rem; color: var(--omni-text-secondary); line-height: 1.4;">
                     <div style="background: var(--omni-bg-subtle); padding: 8px 10px; border-radius: var(--omni-radius-xs);">
-                      <strong style="color: var(--omni-text-primary); display: block; margin-bottom: 2px;">Full-Page App (main)</strong>
-                      Primary application view taking up the center stage. Pinned apps stay directly on your dock; unpinned apps remain accessible anytime via the Apps launcher.
-                    </div>
-                    <div style="background: var(--omni-bg-subtle); padding: 8px 10px; border-radius: var(--omni-radius-xs);">
                       <strong style="color: var(--omni-text-primary); display: block; margin-bottom: 2px;">Dock Shortcut (dock)</strong>
                       Quick launcher button pinned directly to the navigation dock for instant opening.
                     </div>
@@ -2049,7 +2041,7 @@ export class OmniShell extends BaseShell {
                 </div>
 
                 <p style="font-size: 0.78rem; color: var(--omni-text-muted); margin: 0;">
-                  Manage installed Nostr nsites, assign their navigation viewports (Full-Page App, Dock Shortcut, or Widget), and configure permissions.
+                  Manage installed Nostr nsites, assign their navigation viewports (Dock Shortcut, Widget, or Header Action), and configure permissions.
                 </p>
 
                 <div id="plugins-list" style="display: flex; flex-direction: column; gap: 10px;"></div>

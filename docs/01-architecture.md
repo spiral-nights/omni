@@ -31,13 +31,13 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
    - Sub-views and routes (`?view=settings`, `?view=widget`) are read via standard `window.location.search`.
    - Storage uses standard `window.localStorage` (transparently partitioned per plugin ID by the sandbox).
    - Identity & signing use standard `window.nostr` (NIP-07).
-5. **User-Defined Viewports (Zero Hardcoded Slots)**:
-   - Developers never declare or hardcode layout "slots".
-   - The **user** assigns apps and chooses routes in Settings:
-     - **Full-Page App** (`main`): Primary center viewport page with dedicated navigation dock link.
+5. **User-Defined Companion Viewports (Zero Hardcoded Slots)**:
+   - Developers never declare or hardcode layout "slots". Every installed plugin is inherently an application.
+   - The **user** can optionally assign companion viewports and routes in Settings:
      - **Navigation Dock Shortcut** (`dock`): Quick launcher pinned to the navigation dock.
      - **Workspace Widget** (`sidebar`): Interactive card inside the multi-column Widgets Dashboard.
      - **Header Quick Action** (`header-actions`): Compact status icon/pill in top navigation.
+   - *"Full-Page App" is not a viewport assignment option*: all plugins are full applications by default. Viewport assignment is reserved strictly for secondary/companion surfaces (dock shortcuts, dashboard widgets, and header actions).
 
 ---
 
@@ -208,16 +208,16 @@ Omni defines standard layout slots in [`STANDARD_SLOTS`](file:///home/spiralnigh
    - For `header-actions`: `<div class="header-action-slot">`
 3. The Kernel's `SandboxInstance` connects to this element and mounts a `RemoteDomHost` into it.
 
-#### 3. How the Settings Page Discovers Available Slots
+#### 3. How the Settings Page Discovers Available Viewports
 The Settings page is rendered by `OmniShell`. To ensure zero discrepancy between the layout engine and the user interface, `OmniShell` provides:
 ```typescript
 public getAvailableViewports(): { id: string; label: string; description: string }[] {
-  return STANDARD_SLOTS
-    .filter((s) => s.id !== "header-status")
+  return STANDARD_VIEWPORTS
+    .filter((s) => s.id !== "header-status" && s.id !== "main")
     .map((s) => ({ id: s.id, label: s.name, description: s.description }));
 }
 ```
-Both the **Plugins Overview** card and each plugin's **Dedicated Settings Tab** use `getAvailableViewports()` to populate the `<select class="plugin-viewport-select">` menus dynamically.
+Both the **Plugins Overview** card and each plugin's **Dedicated Settings Tab** use `getAvailableViewports()` to populate the `<select class="plugin-viewport-select">` menus dynamically with companion viewports (`dock`, `sidebar`, `header-actions`). Full-page application capability is native to every plugin and not selectable as an auxiliary viewport.
 
 ---
 
@@ -298,6 +298,10 @@ All existing plugins (`@omni/plugin-feed`, `@omni/plugin-relays`, `@omni/plugin-
 #### 4. Pluggable Plugin Settings Panels (`mountPluginSettings`)
 - Shells provide full control over plugin viewports, route assignments, and individual plugin configuration.
 - If a plugin declares a `settings` route (`?view=settings`), the shell dynamically mounts that plugin's remote DOM container directly inside the plugin's dedicated configuration card or drawer within Shell Preferences.
+
+#### 5. Smooth App Switching & Auto-Scroll (Editorial Shell)
+- When navigating between apps in the Editorial shell, outgoing views execute a smooth fade-out (`editorialAppFadeOut`), followed by the incoming view fading in with tactile easing (`editorialAppFadeIn`).
+- The shell automatically scrolls to the top (`scrollTop = 0`) of the incoming app page and container, preventing disorienting retained scroll positions when switching views.
 
 ---
 

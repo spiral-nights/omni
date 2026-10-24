@@ -1611,7 +1611,7 @@ export class PanoramaShell extends BaseShell {
           vpSelect.addEventListener("change", async () => {
             pl.viewport = vpSelect.value;
             plugin.viewport = pl.viewport;
-            if (pl.viewport === "main" || pl.viewport === "dock") {
+            if (pl.viewport === "dock") {
               plugin.pinned = true;
             }
             const primaryComp = synthManifest.components?.[0];

@@ -422,6 +422,61 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(addBtn).toBeTruthy();
     });
 
+    it("does not include 'main' or 'Full-Page App' in available viewport options", () => {
+      shell.mount();
+      const viewports = shell.getAvailableViewports();
+      const viewportIds = viewports.map((v) => v.id);
+      expect(viewportIds).not.toContain("main");
+      expect(viewports.map((v) => v.label)).not.toContain("Full-Page App");
+
+      shell.openSettings();
+      const list = root.querySelector("#editorial-plugins-settings-list");
+      const vpSelects = list?.querySelectorAll<HTMLSelectElement>(".plugin-viewport-select");
+      if (vpSelects && vpSelects.length > 0) {
+        for (const select of vpSelects) {
+          const optionValues = Array.from(select.options).map((o) => o.value);
+          expect(optionValues).not.toContain("main");
+        }
+      }
+    });
+
+    it("automatically scrolls to top and applies fade transition when switching between apps", async () => {
+      shell.mount();
+      await shell.openApp("org.omni.plugin.feed");
+
+      const feedContainer = shell.ensureAppContainer("org.omni.plugin.feed");
+      const feedPage = feedContainer.closest(".editorial-viewport-page") as HTMLElement;
+      expect(feedPage).toBeTruthy();
+
+      // Simulate scrolled down position on Feed
+      feedPage.scrollTop = 450;
+      feedContainer.scrollTop = 450;
+      expect(feedPage.scrollTop).toBe(450);
+
+      // Switch to Relays app
+      const switchPromise = shell.openApp("org.omni.plugin.relays");
+
+      // Verify outgoing page gets fade-out
+      expect(feedPage.classList.contains("fade-out")).toBe(true);
+
+      await switchPromise;
+
+      const relaysContainer = shell.ensureAppContainer("org.omni.plugin.relays");
+      const relaysPage = relaysContainer.closest(".editorial-viewport-page") as HTMLElement;
+      expect(relaysPage).toBeTruthy();
+      expect(relaysPage.classList.contains("active")).toBe(true);
+      expect(relaysPage.classList.contains("fade-in")).toBe(true);
+      expect(relaysPage.scrollTop).toBe(0);
+
+      // Now scroll down on Relays and switch back to Feed
+      relaysPage.scrollTop = 320;
+      await shell.openApp("org.omni.plugin.feed");
+
+      expect(feedPage.classList.contains("active")).toBe(true);
+      expect(feedPage.scrollTop).toBe(0);
+      expect(feedContainer.scrollTop).toBe(0);
+    });
+
     it("allows adding and reassigning viewports for a plugin in Editorial mode", async () => {
       shell.mount();
       shell.openSettings();

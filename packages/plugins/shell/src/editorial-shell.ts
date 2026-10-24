@@ -605,38 +605,97 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     // Update Header Title & Subtitle
     this.updateHeaderSubtitle(plugin.displayName || plugin.name || "App");
 
+    const targetContainer = this.ensureAppContainer(pluginId);
+    const targetPage = targetContainer.closest(".editorial-viewport-page") as HTMLElement | null;
+
+    // Fade out currently active outgoing pages if different from targetPage
+    const outgoingPages = Array.from(
+      this.root.querySelectorAll<HTMLElement>(".editorial-viewport-page.active, .editorial-app-page.active")
+    ).filter((p) => p !== targetPage);
+
+    if (outgoingPages.length > 0) {
+      for (const p of outgoingPages) {
+        p.classList.remove("fade-in");
+        p.classList.add("fade-out");
+      }
+      // Wait briefly for smooth fade-out transition
+      await new Promise((r) => setTimeout(r, 90));
+      for (const p of outgoingPages) {
+        p.classList.remove("active", "fade-out");
+        p.style.display = "none";
+      }
+    }
+
     // Hide Index & Cards Viewports
     const pageApps = this.root.querySelector("#editorial-page-apps") as HTMLElement | null;
     const pageWidgets = this.root.querySelector("#editorial-page-widgets") as HTMLElement | null;
-    if (pageApps) {
-      pageApps.classList.remove("active");
+    if (pageApps && pageApps !== targetPage) {
+      pageApps.classList.remove("active", "fade-out", "fade-in");
       pageApps.style.display = "none";
     }
-    if (pageWidgets) {
-      pageWidgets.classList.remove("active");
+    if (pageWidgets && pageWidgets !== targetPage) {
+      pageWidgets.classList.remove("active", "fade-out", "fade-in");
       pageWidgets.style.display = "none";
     }
 
-    // Hide all application viewports
+    // Hide all other application viewports
     const defaultPage = this.root.querySelector("#editorial-page-app") as HTMLElement | null;
     const allAppPages = this.root.querySelectorAll<HTMLElement>(".editorial-app-page");
 
     allAppPages.forEach((p) => {
-      p.classList.remove("active");
-      p.style.display = "none";
+      if (p !== targetPage) {
+        p.classList.remove("active", "fade-out", "fade-in");
+        p.style.display = "none";
+      }
     });
-    if (defaultPage) {
-      defaultPage.classList.remove("active");
+    if (defaultPage && defaultPage !== targetPage) {
+      defaultPage.classList.remove("active", "fade-out", "fade-in");
       defaultPage.style.display = "none";
     }
 
     this.root.classList.add("has-active-app");
 
-    const targetContainer = this.ensureAppContainer(pluginId);
-    const targetPage = targetContainer.closest(".editorial-viewport-page") as HTMLElement | null;
     if (targetPage) {
-      targetPage.classList.add("active");
+      targetPage.classList.remove("fade-out");
+      targetPage.classList.add("active", "fade-in");
       targetPage.style.display = "flex";
+
+      // Scroll to top automatically when switching to another app
+      targetPage.scrollTop = 0;
+      targetContainer.scrollTop = 0;
+      if (typeof (targetPage as any).scrollTo === "function") {
+        (targetPage as any).scrollTo({ top: 0, left: 0, behavior: "instant" });
+      }
+      const mainContent = this.root.querySelector<HTMLElement>(".editorial-main-content");
+      if (mainContent) {
+        mainContent.scrollTop = 0;
+        if (typeof (mainContent as any).scrollTo === "function") {
+          (mainContent as any).scrollTo({ top: 0, left: 0, behavior: "instant" });
+        }
+      }
+      if (typeof window !== "undefined") {
+        window.scrollTo(0, 0);
+      }
+      if (typeof document !== "undefined") {
+        if (document.documentElement) document.documentElement.scrollTop = 0;
+        if (document.body) document.body.scrollTop = 0;
+      }
+      const firstChild = targetContainer.firstElementChild as HTMLElement | null;
+      if (firstChild && typeof firstChild.scrollTop === "number") {
+        firstChild.scrollTop = 0;
+      }
+      const scrollableElements = targetContainer.querySelectorAll<HTMLElement>(".feed-container, .notes-stream, [data-scrollable]");
+      scrollableElements.forEach((el) => {
+        el.scrollTop = 0;
+      });
+
+      targetPage.addEventListener(
+        "animationend",
+        () => {
+          targetPage.classList.remove("fade-in");
+        },
+        { once: true }
+      );
     }
 
     const btnFs = this.root.querySelector("#btn-editorial-toggle-fullscreen") as HTMLElement | null;
@@ -755,21 +814,27 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     const allAppPages = this.root.querySelectorAll<HTMLElement>(".editorial-app-page");
 
     if (pageApps) {
-      pageApps.classList.add("active");
+      pageApps.classList.remove("fade-out");
+      pageApps.classList.add("active", "fade-in");
       pageApps.style.display = "block";
+      pageApps.scrollTop = 0;
     }
     if (pageWidgets) {
-      pageWidgets.classList.remove("active");
+      pageWidgets.classList.remove("active", "fade-out", "fade-in");
       pageWidgets.style.display = "none";
     }
     if (pageApp) {
-      pageApp.classList.remove("active");
+      pageApp.classList.remove("active", "fade-out", "fade-in");
       pageApp.style.display = "none";
     }
     allAppPages.forEach((p) => {
-      p.classList.remove("active");
+      p.classList.remove("active", "fade-out", "fade-in");
       p.style.display = "none";
     });
+
+    const mainContent = this.root.querySelector<HTMLElement>(".editorial-main-content");
+    if (mainContent) mainContent.scrollTop = 0;
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
 
     this.renderDock();
     this.renderAppsIndex();
@@ -798,21 +863,27 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     const allAppPages = this.root.querySelectorAll<HTMLElement>(".editorial-app-page");
 
     if (pageWidgets) {
-      pageWidgets.classList.add("active");
+      pageWidgets.classList.remove("fade-out");
+      pageWidgets.classList.add("active", "fade-in");
       pageWidgets.style.display = "block";
+      pageWidgets.scrollTop = 0;
     }
     if (pageApps) {
-      pageApps.classList.remove("active");
+      pageApps.classList.remove("active", "fade-out", "fade-in");
       pageApps.style.display = "none";
     }
     if (pageApp) {
-      pageApp.classList.remove("active");
+      pageApp.classList.remove("active", "fade-out", "fade-in");
       pageApp.style.display = "none";
     }
     allAppPages.forEach((p) => {
-      p.classList.remove("active");
+      p.classList.remove("active", "fade-out", "fade-in");
       p.style.display = "none";
     });
+
+    const mainContent = this.root.querySelector<HTMLElement>(".editorial-main-content");
+    if (mainContent) mainContent.scrollTop = 0;
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
 
     this.renderDock();
     this.ensureWidgetsMounted().catch(console.warn);
@@ -1539,7 +1610,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         vpSelect.addEventListener("change", async () => {
           pl.viewport = vpSelect.value;
           plugin.viewport = pl.viewport;
-          if (pl.viewport === "main" || pl.viewport === "dock") {
+          if (pl.viewport === "dock") {
             plugin.pinned = true;
           }
           const primaryComp = synthManifest.components?.[0];

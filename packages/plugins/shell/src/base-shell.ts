@@ -1,4 +1,4 @@
-import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STANDARD_SLOTS, extractPluginFromZip } from "@omni/core";
+import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STANDARD_SLOTS, STANDARD_VIEWPORTS, extractPluginFromZip } from "@omni/core";
 import {
   OmniWorkspaceState,
   OmniWorkspacePluginConfig,
@@ -659,8 +659,8 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public getAvailableViewports(): { id: string; label: string; description: string }[] {
-    return STANDARD_SLOTS
-      .filter((s) => s.id !== "header-status")
+    return STANDARD_VIEWPORTS
+      .filter((s) => s.id !== "header-status" && s.id !== "main")
       .map((s) => ({ id: s.id, label: s.name, description: s.description }));
   }
 

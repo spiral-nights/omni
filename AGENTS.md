@@ -36,13 +36,13 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
    - **Kernel (`@omni/core`) is Headless**: Manages sandboxes, WebCrypto keystore, relay pooling, 0ms local event caching, capability store (ACL), and Remote DOM transport. It has zero knowledge of UI layouts, slot semantics, or user pages.
    - **Shell (`@omni/plugin-shell`) Owns Presentation & Styling**: Manages viewport slots (`main`, `dock`, `sidebar`, `header-actions`), layout mapping (`LayoutManager`), desktop/mobile navigation docks, widgets dashboard grid, settings tabs, and NIP-78 workspace synchronization. Each shell bundles its own stylesheet self-contained in `packages/plugins/shell/src/styles/` (`classic-styles.ts`, `panorama-styles.ts`, `editorial-styles.ts`), injected dynamically into the host DOM upon `mount()`.
    - **User-Swappable Shell Registry (`ShellRegistry`)**: Shells are swappable first-class plugins registered in `shellRegistry`. Users can select between Omni Classic, Panorama Hub, Editorial Shell, or custom installed shells dynamically in Settings.
-5. **User-Defined Viewports & Route Assignment (Zero Hardcoded Slots)**:
-   - Developers never declare or configure "slots".
-   - Users assign apps and choose specific routes directly in Settings:
-     - **Full-Page App** (`main`): Primary center viewport page with dedicated navigation dock link.
+5. **User-Defined Companion Viewports & Route Assignment (Zero Hardcoded Slots)**:
+   - Developers never declare or configure "slots". Every installed plugin is an application by default.
+   - Users can optionally assign companion viewports and choose specific routes directly in Settings:
      - **Navigation Dock Shortcut** (`dock`): Quick launcher pinned to navigation dock.
      - **Workspace Widget** (`sidebar`): Interactive card inside the multi-column Widgets Dashboard.
      - **Header Quick Action** (`header-actions`): Compact status icon/pill in top navigation.
+   - *"Full-Page App" is not a viewport assignment*: full-page application presentation is native to every installed plugin. Viewport assignment is used strictly for companion surfaces.
    - Any declared `settings` route (`?view=settings`) is automatically surfaced in the plugin's dedicated section in the Settings menu.
 6. **Decentralized Workspace Sync (NIP-78)**:
    - Layout configurations, viewport assignments, route selections, and enabled plugins sync via `kind: 30078`, tag `["d", "omni/workspace/v1"]`, backed by 0ms local storage fallback.

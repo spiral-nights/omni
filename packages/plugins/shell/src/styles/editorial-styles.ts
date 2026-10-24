@@ -410,6 +410,51 @@ style, script, head, title, meta, link,
   display: flex;
 }
 
+/* Editorial App Switching Animations */
+@keyframes editorialAppFadeOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes editorialAppFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.editorial-viewport-page.fade-out,
+.editorial-app-page.fade-out {
+  animation: editorialAppFadeOut 0.12s ease-out forwards;
+  pointer-events: none;
+}
+
+.editorial-viewport-page.fade-in,
+.editorial-app-page.fade-in {
+  animation: editorialAppFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editorial-viewport-page.fade-out,
+  .editorial-app-page.fade-out,
+  .editorial-viewport-page.fade-in,
+  .editorial-app-page.fade-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 .editorial-app-container {
   width: 100%;
   flex: 1;

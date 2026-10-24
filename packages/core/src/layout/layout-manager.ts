@@ -22,7 +22,11 @@ export const STANDARD_SLOTS: AvailableSlot[] = [
   { id: "header-actions", name: "Header Quick Action", description: "Top right header area for quick actions and profile tools" }
 ];
 
-export const STANDARD_VIEWPORTS = STANDARD_SLOTS;
+export const STANDARD_VIEWPORTS: AvailableSlot[] = [
+  { id: "dock", name: "Navigation Dock Shortcut", description: "Shortcut button or companion icon in the left navigation dock" },
+  { id: "sidebar", name: "Widget", description: "Modular widget card displayed on the Widgets page" },
+  { id: "header-actions", name: "Header Quick Action", description: "Top right header area for quick actions and profile tools" }
+];
 
 export class LayoutManager {
   private mappings: SlotMapping[] = [];

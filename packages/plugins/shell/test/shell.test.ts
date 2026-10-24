@@ -316,14 +316,14 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     const timerPlugin = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer")!;
     expect(timerPlugin.placements?.length).toBe(2);
 
-    // First placement in sidebar, second placement in main
+    // First placement in sidebar, second placement in dock
     const selects = updatedTimerPane.querySelectorAll(".plugin-viewport-select") as NodeListOf<HTMLSelectElement>;
     expect(selects.length).toBe(2);
-    selects[1].value = "main";
+    selects[1].value = "dock";
     selects[1].dispatchEvent(new Event("change"));
     await new Promise((r) => setTimeout(r, 60));
 
-    expect(timerPlugin.placements?.[1].viewport).toBe("main");
+    expect(timerPlugin.placements?.[1].viewport).toBe("dock");
 
     // Verify workspace state exports both placements
     const exported = shell.exportWorkspaceState();
@@ -1096,7 +1096,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
       btnToggle?.click();
       expect(guideBox?.style.display).toBe("flex");
-      expect(guideBox?.textContent).toContain("Full-Page App (main)");
+      expect(guideBox?.textContent).not.toContain("Full-Page App (main)");
       expect(guideBox?.textContent).toContain("Dock Shortcut (dock)");
       expect(guideBox?.textContent).toContain("Widget (sidebar)");
 
@@ -1514,7 +1514,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       const vpSelect = classicRoot.querySelector("#settings-pane-org-omni-plugin-timer .plugin-viewport-select") as HTMLSelectElement;
       expect(vpSelect).toBeTruthy();
 
-      vpSelect.value = "main";
+      vpSelect.value = "dock";
       vpSelect.dispatchEvent(new Event("change"));
       for (let i = 0; i < 20; i++) {
         timerDockBtn = classicRoot.querySelector(".dock-item[data-plugin-id='org.omni.plugin.timer']");

@@ -14,7 +14,7 @@ Omni combines a **high-performance, local-first Nostr web client** with a **sand
 | **Host Bootloader** | Minimal Microkernel (~30 lines) | `apps/web` boots `OmniKernel` and passes container root to shell |
 | **App Model** | Pure Standalone nsites (Zero Manifests) | Standard HTML/JS apps mounting to `document.body` or `#root` |
 | **UI Projection** | Remote DOM (Zero Iframe Traps) | Shopify `@remote-dom/core` on dedicated mutation channel (Port 1) |
-| **User Viewports** | User-Configured Layout Containers | Full-Page App (`main`), Dock Shortcut (`dock`), Widget Card (`sidebar`), Header Action |
+| **User Viewports** | User-Configured Layout Containers | Dock Shortcut (`dock`), Widget Card (`sidebar`), Header Action (`header-actions`) |
 | **Workspace Sync** | Decentralized NIP-78 Sync | `kind: 30078`, `omni/workspace/v1` with 0ms local fallback & relay sync |
 | **Nostr Networking** | Transparent Virtual WebSocket | Virtual `window.WebSocket` multiplexed to `RelayPool` with subscription namespacing |
 | **Signer & Identity** | Standard NIP-07 Virtualization | `window.nostr` backed by host keystore (secp256k1 Schnorr) & ACL engine |
@@ -129,7 +129,7 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser.
    - Click the **Widgets** button in the navigation dock to open the multi-column tools dashboard containing active widgets (Daily Checklist, Relay Inspector).
 4. **Installed Plugins & User Viewports**:
    - Open **Settings (⚙️) -> Plugins**.
-   - Change any app's navigation viewport dynamically via the dropdown (Full-Page App, Navigation Dock Shortcut, Workspace Widget, or Header Quick Action).
+   - Change any app's companion viewport dynamically via the dropdown (Navigation Dock Shortcut, Workspace Widget, or Header Quick Action).
    - Notice how the layout instantly adapts.
 5. **NIP-78 Workspace Cloud Sync**:
    - View your workspace synchronization status at the top of the Plugins manager.

@@ -192,7 +192,7 @@ If `displayName` is omitted, Omni falls back cleanly to `name`.
 
 ### 4.5 Viewport & Route Assignment in Omni
 When a user assigns your plugin to a viewport in Omni:
-1. They select the **Target Viewport** (e.g. *Full-Page App*, *Widgets Dashboard*, *Dock Shortcut*, or *Header Action*).
+1. They select the **Target Viewport** (e.g. *Navigation Dock Shortcut*, *Widgets Dashboard*, or *Header Action*). Every plugin is an autonomous full-page app by default.
 2. They select the **Assigned Route** (e.g. `Main App (/)` or `Countdown Card (/?view=widget)`).
 3. If your plugin declares a `settings` route, an **"Open Settings Panel"** control is automatically rendered inside the plugin's card in Omni's Settings menu.
 
