@@ -341,36 +341,54 @@ style, script, head, title, meta, link,
 
 .editorial-floating-exit-fullscreen {
   position: fixed;
-  top: 14px;
+  top: 12px;
   right: 16px;
   z-index: 999999;
   display: none;
   align-items: center;
   gap: 6px;
-  background: rgba(20, 19, 18, 0.85);
-  color: #ede8df;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(20, 19, 18, 0.6);
+  color: var(--omni-text-primary, #ede8df);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 9999px;
-  padding: 6px 14px;
+  padding: 5px 12px;
   font-family: var(--omni-font-mono, monospace);
-  font-size: 0.72rem;
-  letter-spacing: 0.05em;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  transition: transform 0.15s ease, background 0.15s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  opacity: 0.25;
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.editorial-floating-exit-fullscreen:hover,
+.editorial-floating-exit-fullscreen:focus-visible,
+.editorial-floating-exit-fullscreen.active-reveal {
+  opacity: 1;
+  background: rgba(20, 19, 18, 0.95);
+  border-color: var(--omni-accent-primary, #d4a373);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  transform: translateY(0) scale(1.02);
 }
 
 .editorial-shell-root[data-theme-mode="light"] .editorial-floating-exit-fullscreen {
-  background: rgba(251, 251, 249, 0.9);
-  color: #0f172a;
-  border-color: rgba(0, 0, 0, 0.15);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  background: rgba(251, 251, 249, 0.6);
+  color: var(--omni-text-primary, #141312);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
 }
 
-.editorial-floating-exit-fullscreen:hover {
-  transform: scale(1.04);
+.editorial-shell-root[data-theme-mode="light"] .editorial-floating-exit-fullscreen:hover,
+.editorial-shell-root[data-theme-mode="light"] .editorial-floating-exit-fullscreen:focus-visible,
+.editorial-shell-root[data-theme-mode="light"] .editorial-floating-exit-fullscreen.active-reveal {
+  opacity: 1;
+  background: rgba(251, 251, 249, 0.98);
+  border-color: var(--omni-accent-primary, #d97706);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  transform: translateY(0) scale(1.02);
 }
 
 .editorial-shell-root.app-fullscreen .editorial-floating-exit-fullscreen {

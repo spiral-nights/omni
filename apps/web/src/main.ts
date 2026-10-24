@@ -25,7 +25,6 @@ const initialPlugins: InstalledPluginEntry[] = [
     name: "Feed",
     description: "Decentralized Nostr timeline notes and Schnorr-signed publishing.",
     icon: "feed",
-    viewport: "main",
     pinned: true,
     views: [
       { id: "main", title: "Feed", path: "" },
@@ -75,7 +74,6 @@ const initialPlugins: InstalledPluginEntry[] = [
     displayName: "My Profile",
     description: "Decentralized Nostr profile metadata and key custody.",
     icon: "profile",
-    viewport: "main",
     views: [
       { id: "main", title: "Profile", path: "" },
       { id: "compact", title: "Live Tile", path: "?view=compact" },
@@ -93,7 +91,6 @@ const initialPlugins: InstalledPluginEntry[] = [
     displayName: "People",
     description: "Nostr user profiles, following, and block list management.",
     icon: "users",
-    viewport: "main",
     views: [
       { id: "main", title: "People", path: "" }
     ],
@@ -108,7 +105,6 @@ const initialPlugins: InstalledPluginEntry[] = [
     displayName: "Publisher",
     description: "Package .zip archives into NIP-5A nsites, upload to Blossom servers, and manage published plugins.",
     icon: "globe",
-    viewport: "main",
     views: [
       { id: "main", title: "Plugin Studio", path: "" },
       { id: "published", title: "My Published Plugins", path: "?view=published" },

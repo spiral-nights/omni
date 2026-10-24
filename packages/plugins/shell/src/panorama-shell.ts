@@ -122,9 +122,15 @@ export class PanoramaShell extends BaseShell {
   public getMainAppPlugins(): InstalledPluginEntry[] {
     return this.installedPlugins.filter((p) => {
       if (p.enabled === false) return false;
+      if (p.viewport && p.viewport !== "main" && p.viewport !== "dock") return false;
       const placements = this.getPluginPlacements(p);
+      if (placements.length > 0 && !placements.some((pl) => pl.viewport === "main" || pl.viewport === "dock")) {
+        return false;
+      }
       return (
         p.viewport === "main" ||
+        p.id === "org.omni.plugin.feed" ||
+        (!p.viewport && p.manifest?.components?.[0]?.slot === "main") ||
         placements.some((pl) => pl.enabled !== false && pl.viewport === "main")
       );
     });
@@ -1600,12 +1606,24 @@ export class PanoramaShell extends BaseShell {
           vpSelect.className = "plugin-viewport-select";
           vpSelect.style.cssText = "background: #191919; border: 1px solid #333; color: #fff; font-size: 0.75rem; padding: 6px 8px; outline: none; cursor: pointer; width: 100%; height: 32px; box-sizing: border-box;";
 
+          let hasSelectedVp = false;
           for (const optDef of viewportOptions) {
             const opt = document.createElement("option");
             opt.value = optDef.id;
             opt.textContent = optDef.label;
-            if (optDef.id === pl.viewport) opt.selected = true;
+            if (optDef.id === pl.viewport) {
+              opt.selected = true;
+              hasSelectedVp = true;
+            }
             vpSelect.appendChild(opt);
+          }
+          if (!hasSelectedVp) {
+            const placeholder = document.createElement("option");
+            placeholder.value = "";
+            placeholder.textContent = "Select Viewport...";
+            placeholder.disabled = true;
+            placeholder.selected = true;
+            vpSelect.insertBefore(placeholder, vpSelect.firstChild);
           }
 
           vpSelect.addEventListener("change", async () => {

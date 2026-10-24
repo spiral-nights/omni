@@ -917,12 +917,24 @@ export class OmniShell extends BaseShell {
         vpSelect.style.cssText =
           "background: var(--omni-bg-surface); border: 1px solid var(--omni-border-strong); color: var(--omni-text-primary); font-size: 0.72rem; padding: 3px 6px; border-radius: var(--omni-radius-sm); outline: none; cursor: pointer;";
 
+        let hasSelectedVp = false;
         for (const optDef of viewportOptions) {
           const opt = document.createElement("option");
           opt.value = optDef.id;
           opt.textContent = optDef.label;
-          if (optDef.id === pl.viewport) opt.selected = true;
+          if (optDef.id === pl.viewport) {
+            opt.selected = true;
+            hasSelectedVp = true;
+          }
           vpSelect.appendChild(opt);
+        }
+        if (!hasSelectedVp) {
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = "Select Viewport...";
+          placeholder.disabled = true;
+          placeholder.selected = true;
+          vpSelect.insertBefore(placeholder, vpSelect.firstChild);
         }
 
         vpSelect.addEventListener("change", async () => {

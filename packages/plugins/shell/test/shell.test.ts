@@ -40,6 +40,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       },
       scriptContent: "console.log('feed');",
       sourceUrl: "local:@omni/plugin-feed",
+      viewport: "dock",
       enabled: true,
       pinned: true
     },
@@ -641,7 +642,7 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       expect(exported.autoSync).toBe(true);
       expect(exported.plugins).toHaveLength(2);
       expect(exported.plugins[0].id).toBe("org.omni.plugin.feed");
-      expect(exported.plugins[0].viewport).toBe("main");
+      expect(exported.plugins[0].viewport).toBe("dock");
       expect(exported.plugins[1].id).toBe("org.omni.plugin.timer");
       expect(exported.plugins[1].viewport).toBe("sidebar");
     });
@@ -905,12 +906,12 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
         plugins: [
           {
             id: "org.omni.plugin.feed",
-            viewport: "main",
+            viewport: "sidebar",
             enabled: true,
             placements: [
               {
-                id: "main-primary",
-                viewport: "main",
+                id: "feed-widget",
+                viewport: "sidebar",
                 route: "?view=compact",
                 viewId: "compact",
                 enabled: true
@@ -1109,11 +1110,11 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       const customApp: InstalledPluginEntry = {
         id: "com.example.draw",
         name: "Draw App",
-        viewport: "main",
+        viewport: "dock",
         enabled: true,
         pinned: false,
         scriptContent: "console.log('draw');",
-        placements: [{ id: "pl-draw", viewport: "main", route: "", viewId: "main", enabled: true }]
+        placements: [{ id: "pl-draw", viewport: "dock", route: "", viewId: "main", enabled: true }]
       };
       shell.installedPlugins.push(customApp);
 

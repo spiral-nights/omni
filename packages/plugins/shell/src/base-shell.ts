@@ -387,7 +387,8 @@ export abstract class BaseShell implements OmniShellHost {
     viewport: string;
   } {
     const displayName = p.displayName || p.manifest?.displayName || p.name || p.manifest?.name || p.id;
-    if (Array.isArray(p.placements) && p.placements.length === 0) {
+    const placements = this.getPluginPlacements(p);
+    if (placements.length === 0) {
       return {
         id: p.id,
         name: p.name || p.manifest?.name || p.id,
@@ -406,8 +407,8 @@ export abstract class BaseShell implements OmniShellHost {
       displayName,
       version: p.version || p.manifest?.version || "1.0.0",
       description: p.description || p.manifest?.description || "",
-      icon: p.icon || p.manifest?.icon || (p.viewport === "main" ? "feed" : "widgets"),
-      viewport: p.viewport || layoutSlot || p.manifest?.components?.[0]?.slot || "main"
+      icon: p.icon || p.manifest?.icon || (placements[0]?.viewport === "sidebar" ? "widgets" : "feed"),
+      viewport: placements[0]?.viewport || layoutSlot || "unassigned"
     };
   }
 
@@ -453,21 +454,34 @@ export abstract class BaseShell implements OmniShellHost {
 
   public getPluginPlacements(p: InstalledPluginEntry): PluginPlacement[] {
     if (Array.isArray(p.placements)) {
-      return p.placements;
+      return p.placements.filter(
+        (pl) => pl.viewport && pl.viewport !== "main" && !(pl.id === "main-primary" && pl.viewport === "dock")
+      );
     }
-    if (p.viewport === "") {
-      return [];
+    if (p.viewport && p.viewport !== "" && p.viewport !== "main") {
+      return [
+        {
+          id: `${p.viewport}-primary`,
+          viewport: p.viewport,
+          route: p.route !== undefined ? p.route : "",
+          viewId: p.viewId || "main",
+          enabled: p.enabled !== false
+        }
+      ];
     }
-    const vp = p.viewport || (p.manifest?.components?.[0]?.slot) || "main";
-    return [
-      {
-        id: `${vp}-primary`,
-        viewport: vp,
-        route: p.route !== undefined ? p.route : "",
-        viewId: p.viewId || "main",
-        enabled: p.enabled !== false
-      }
-    ];
+    const manifestSlot = p.manifest?.components?.[0]?.slot;
+    if (manifestSlot && manifestSlot !== "main") {
+      return [
+        {
+          id: `${manifestSlot}-primary`,
+          viewport: manifestSlot,
+          route: p.route !== undefined ? p.route : "",
+          viewId: p.viewId || "main",
+          enabled: p.enabled !== false
+        }
+      ];
+    }
+    return [];
   }
 
   public ensurePlacementManifest(p: InstalledPluginEntry, pl: PluginPlacement): any {
@@ -492,6 +506,32 @@ export abstract class BaseShell implements OmniShellHost {
     if (!plugin.enabled) return;
     const placements = this.getPluginPlacements(plugin);
     const slotContainers = this.getSlotContainers();
+
+    if (placements.length === 0) {
+      const targetSlot = plugin.viewport || "main";
+      const synth = this.ensurePluginManifest(plugin);
+      const targetContainer = this.getContainerForPluginSlot(plugin.id, targetSlot, synth.components?.[0]?.id);
+      const customSlotContainers = new Map(slotContainers);
+      if (targetContainer) {
+        customSlotContainers.set(targetSlot, targetContainer);
+      }
+      const instanceKey = `${plugin.id}::${targetSlot}-primary`;
+      if (!this.kernel.getSandbox(instanceKey) && !this.kernel.getSandbox(plugin.id)) {
+        await this.kernel.registerPlugin(
+          synth,
+          plugin.htmlContent || plugin.scriptContent,
+          customSlotContainers,
+          {
+            instanceId: instanceKey,
+            route: plugin.route || "",
+            viewId: plugin.viewId || "main",
+            targetSlot,
+            relays: plugin.relays
+          }
+        );
+      }
+      return;
+    }
 
     for (const pl of placements) {
       if (pl.enabled === false) continue;
@@ -560,9 +600,12 @@ export abstract class BaseShell implements OmniShellHost {
   public async remountPlugin(plugin: InstalledPluginEntry): Promise<void> {
     this.kernel.disablePlugin(plugin.id);
     const placements = this.getPluginPlacements(plugin);
-    const hasMainPlacement = placements.some(
-      (pl) => pl.enabled !== false && (pl.viewport === "main" || pl.viewport === "dock")
-    );
+    const hasMainPlacement =
+      plugin.viewport === "main" ||
+      (!plugin.viewport && plugin.manifest?.components?.[0]?.slot === "main") ||
+      placements.some(
+        (pl) => pl.enabled !== false && (pl.viewport === "main" || pl.viewport === "dock")
+      );
     if (!hasMainPlacement && plugin.id !== "org.omni.plugin.feed") {
       const safeId = plugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
       const pageEl = document.getElementById(`page-app-${safeId}`) || document.getElementById(`panorama-page-app-${safeId}`);
@@ -1027,7 +1070,11 @@ export abstract class BaseShell implements OmniShellHost {
               plugin = this.restoreMissingPluginEntry(item, bundles);
             }
             if (plugin) {
-              if (item.viewport) plugin.viewport = item.viewport;
+              if (item.viewport === "main") {
+                plugin.viewport = "";
+              } else if (item.viewport) {
+                plugin.viewport = item.viewport;
+              }
               if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
               if (typeof item.pinned === "boolean") plugin.pinned = item.pinned;
               if (item.displayName !== undefined) plugin.displayName = item.displayName;
@@ -1035,8 +1082,11 @@ export abstract class BaseShell implements OmniShellHost {
                 plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
               }
               if (item.placements && Array.isArray(item.placements)) {
-                plugin.placements = item.placements;
-                if (item.placements.length === 0) {
+                // Filter out legacy "main" placements and phantom "dock" placements that were converted from main-primary
+                plugin.placements = item.placements.filter(
+                  (pl) => pl.viewport && pl.viewport !== "main" && !(pl.id === "main-primary" && pl.viewport === "dock")
+                );
+                if (plugin.placements.length === 0) {
                   plugin.viewport = "";
                   this.layoutManager?.unregisterPlugin(plugin.id);
                 }
@@ -1051,7 +1101,7 @@ export abstract class BaseShell implements OmniShellHost {
               this.restoreMissingPluginEntry(
                 {
                   id: bundleId,
-                  viewport: bundle.viewport || "main",
+                  viewport: bundle.viewport === "main" ? "" : (bundle.viewport || ""),
                   name: bundle.name,
                   displayName: bundle.displayName,
                   description: bundle.description,
@@ -1075,7 +1125,7 @@ export abstract class BaseShell implements OmniShellHost {
             this.restoreMissingPluginEntry(
               {
                 id: bundleId,
-                viewport: bundle.viewport || "main",
+                viewport: bundle.viewport === "main" ? "" : (bundle.viewport || ""),
                 name: bundle.name,
                 displayName: bundle.displayName,
                 description: bundle.description,

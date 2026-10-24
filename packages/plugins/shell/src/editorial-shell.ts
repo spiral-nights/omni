@@ -62,6 +62,8 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   private pendingAppMounts = new Set<string>();
   private boundKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
   private boundScrollHandler: (() => void) | null = null;
+  private fullscreenFadeTimeout: any = null;
+  private boundFullscreenMouseHandler: ((e: MouseEvent) => void) | null = null;
 
   constructor(options: OmniShellOptions) {
     super(options);
@@ -272,6 +274,14 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   }
 
   public destroy(): void {
+    if (this.fullscreenFadeTimeout) {
+      clearTimeout(this.fullscreenFadeTimeout);
+      this.fullscreenFadeTimeout = null;
+    }
+    if (this.boundFullscreenMouseHandler && typeof window !== "undefined") {
+      window.removeEventListener("mousemove", this.boundFullscreenMouseHandler);
+      this.boundFullscreenMouseHandler = null;
+    }
     if (this.boundScrollHandler) {
       this.root.removeEventListener("scroll", this.boundScrollHandler, { capture: true } as any);
       this.boundScrollHandler = null;
@@ -379,11 +389,45 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
   public toggleAppFullscreen(fullscreen?: boolean): void {
     this.isAppFullscreen = typeof fullscreen === "boolean" ? fullscreen : !this.isAppFullscreen;
+    const btnExit = this.root.querySelector<HTMLElement>("#btn-editorial-exit-fullscreen");
+
+    if (this.fullscreenFadeTimeout) {
+      clearTimeout(this.fullscreenFadeTimeout);
+      this.fullscreenFadeTimeout = null;
+    }
+
     if (this.isAppFullscreen) {
       this.root.classList.add("app-fullscreen");
+      // Initially reveal exit button clearly
+      btnExit?.classList.add("active-reveal");
+      // Softly fade down to unobtrusive transparency after 2.5 seconds
+      this.fullscreenFadeTimeout = setTimeout(() => {
+        btnExit?.classList.remove("active-reveal");
+      }, 2500);
+
+      // Listen for cursor moving toward the top edge or top-right quadrant
+      if (!this.boundFullscreenMouseHandler && typeof window !== "undefined") {
+        this.boundFullscreenMouseHandler = (e: MouseEvent) => {
+          const isNearTopRight = e.clientY <= 90 || (window.innerWidth - e.clientX <= 180 && e.clientY <= 140);
+          if (isNearTopRight) {
+            btnExit?.classList.add("active-reveal");
+            if (this.fullscreenFadeTimeout) clearTimeout(this.fullscreenFadeTimeout);
+            this.fullscreenFadeTimeout = setTimeout(() => {
+              btnExit?.classList.remove("active-reveal");
+            }, 2500);
+          }
+        };
+        window.addEventListener("mousemove", this.boundFullscreenMouseHandler, { passive: true });
+      }
     } else {
       this.root.classList.remove("app-fullscreen");
+      btnExit?.classList.remove("active-reveal");
+      if (this.boundFullscreenMouseHandler && typeof window !== "undefined") {
+        window.removeEventListener("mousemove", this.boundFullscreenMouseHandler);
+        this.boundFullscreenMouseHandler = null;
+      }
     }
+
     const btn = this.root.querySelector("#btn-editorial-toggle-fullscreen");
     if (btn) {
       btn.classList.toggle("active", this.isAppFullscreen);
@@ -1599,12 +1643,24 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         const vpSelect = document.createElement("select");
         vpSelect.className = "plugin-viewport-select";
 
+        let hasSelectedVp = false;
         for (const optDef of viewportOptions) {
           const opt = document.createElement("option");
           opt.value = optDef.id;
           opt.textContent = optDef.label;
-          if (optDef.id === pl.viewport) opt.selected = true;
+          if (optDef.id === pl.viewport) {
+            opt.selected = true;
+            hasSelectedVp = true;
+          }
           vpSelect.appendChild(opt);
+        }
+        if (!hasSelectedVp) {
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = "Select Viewport...";
+          placeholder.disabled = true;
+          placeholder.selected = true;
+          vpSelect.insertBefore(placeholder, vpSelect.firstChild);
         }
 
         vpSelect.addEventListener("change", async () => {

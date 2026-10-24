@@ -128,7 +128,7 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
     shell = new EditorialShell({
       root,
       kernel,
-      installedPlugins: [...mockPlugins]
+      installedPlugins: JSON.parse(JSON.stringify(mockPlugins))
     });
   });
 
@@ -420,6 +420,40 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
 
       const addBtn = list?.querySelector(".btn-add-placement") as HTMLElement | null;
       expect(addBtn).toBeTruthy();
+    });
+
+    it("fades the exit fullscreen button in and out unobtrusively in fullscreen mode", async () => {
+      shell.mount();
+      const exitBtn = root.querySelector("#btn-editorial-exit-fullscreen") as HTMLElement;
+      expect(exitBtn).toBeTruthy();
+
+      // Enter fullscreen
+      shell.toggleAppFullscreen(true);
+      expect(root.classList.contains("app-fullscreen")).toBe(true);
+      expect(exitBtn.classList.contains("active-reveal")).toBe(true);
+
+      // Trigger mouse move near the top edge
+      window.dispatchEvent(new MouseEvent("mousemove", { clientX: 200, clientY: 40 }));
+      expect(exitBtn.classList.contains("active-reveal")).toBe(true);
+
+      // Exit fullscreen
+      shell.toggleAppFullscreen(false);
+      expect(root.classList.contains("app-fullscreen")).toBe(false);
+      expect(exitBtn.classList.contains("active-reveal")).toBe(false);
+    });
+
+    it("ensures plugins without companion viewports do not have phantom dock placements", () => {
+      shell.mount();
+      const feed = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.feed")!;
+      const feedPlacements = shell.getPluginPlacements(feed);
+      expect(feedPlacements.length).toBe(0);
+
+      shell.openSettings();
+      const feedDetails = root.querySelector("#plugin-details-org-omni-plugin-feed");
+      expect(feedDetails?.textContent).toContain("Unassigned");
+
+      const feedVpSelect = feedDetails?.querySelector(".plugin-viewport-select") as HTMLSelectElement | null;
+      expect(feedVpSelect).toBeNull();
     });
 
     it("does not include 'main' or 'Full-Page App' in available viewport options", () => {

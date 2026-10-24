@@ -23,8 +23,8 @@ export const STANDARD_SLOTS: AvailableSlot[] = [
 ];
 
 export const STANDARD_VIEWPORTS: AvailableSlot[] = [
-  { id: "dock", name: "Navigation Dock Shortcut", description: "Shortcut button or companion icon in the left navigation dock" },
   { id: "sidebar", name: "Widget", description: "Modular widget card displayed on the Widgets page" },
+  { id: "dock", name: "Navigation Dock Shortcut", description: "Shortcut button or companion icon in the left navigation dock" },
   { id: "header-actions", name: "Header Quick Action", description: "Top right header area for quick actions and profile tools" }
 ];
 
