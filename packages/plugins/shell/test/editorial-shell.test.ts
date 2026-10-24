@@ -333,6 +333,39 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       );
       expect(inDock).toBe(true);
     });
+
+    it("allows pinning and unpinning an app with empty companion placements to the dock", () => {
+      shell.mount();
+      const customApp: InstalledPluginEntry = {
+        id: "com.example.plainapp",
+        name: "Plain App",
+        pinned: false,
+        enabled: true,
+        placements: [],
+        scriptContent: "console.log('plain');"
+      };
+      shell.installedPlugins.push(customApp);
+
+      expect(shell.isAppPinned(customApp)).toBe(false);
+      shell.setAppPinned("com.example.plainapp", true);
+      expect(shell.isAppPinned(customApp)).toBe(true);
+      expect(customApp.pinned).toBe(true);
+
+      shell.renderDock();
+      const inDock = Array.from(root.querySelectorAll("#editorial-dock-items .editorial-dock-item")).some(
+        (el) => (el as HTMLElement).dataset.pluginId === "com.example.plainapp"
+      );
+      expect(inDock).toBe(true);
+
+      // Unpin
+      shell.setAppPinned("com.example.plainapp", false);
+      expect(shell.isAppPinned(customApp)).toBe(false);
+      shell.renderDock();
+      const inDockAfter = Array.from(root.querySelectorAll("#editorial-dock-items .editorial-dock-item")).some(
+        (el) => (el as HTMLElement).dataset.pluginId === "com.example.plainapp"
+      );
+      expect(inDockAfter).toBe(false);
+    });
   });
 
   describe("Settings & Preferences Modal & Installed Shells", () => {
