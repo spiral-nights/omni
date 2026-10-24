@@ -1057,6 +1057,22 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       if (e.target === modal) this.closeSettings();
     });
 
+    // Settings Navigation Tabs
+    const tabs = this.root.querySelectorAll(".editorial-settings-tab-btn");
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const tabKey = (tab as HTMLElement).dataset.tab;
+        if (!tabKey) return;
+        tabs.forEach((t) => t.classList.toggle("active", t === tab));
+        const panels = this.root.querySelectorAll(".editorial-settings-tab-panel");
+        panels.forEach((p) => {
+          const isMatch = p.id === `panel-editorial-${tabKey}`;
+          p.classList.toggle("active", isMatch);
+          (p as HTMLElement).style.display = isMatch ? "flex" : "none";
+        });
+      });
+    });
+
     // Theme Mode buttons
     const modeBtns = this.root.querySelectorAll(".editorial-mode-btn");
     modeBtns.forEach((btn) => {
@@ -1684,105 +1700,130 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         <div class="editorial-modal-card">
           <div class="editorial-modal-header">
             <div>
-              <h3 style="font-family: var(--omni-font-serif); font-size: 1.25rem; font-weight: 500; margin: 0;">Preferences & Custody</h3>
-              <span style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Theme, Display & Sovereignty</span>
+              <h3 style="font-family: var(--omni-font-serif); font-size: 1.35rem; font-weight: 600; margin: 0;">Settings & Preferences</h3>
+              <span style="font-family: var(--omni-font-mono); font-size: 0.68rem; color: var(--omni-text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Appearance, Plugins, Viewports & Workspace</span>
             </div>
             <button id="btn-editorial-close-settings" class="editorial-header-btn">
               ${icon("close", 18)}
             </button>
           </div>
 
+          <!-- Settings Tabbed Navigation -->
+          <div class="editorial-settings-tabs-bar">
+            <button class="editorial-settings-tab-btn active" data-tab="appearance" id="tab-editorial-appearance">
+              <span>🎨 Appearance & Shells</span>
+            </button>
+            <button class="editorial-settings-tab-btn" data-tab="plugins" id="tab-editorial-plugins">
+              <span>🧩 Installed Plugins</span>
+            </button>
+            <button class="editorial-settings-tab-btn" data-tab="workspace" id="tab-editorial-workspace">
+              <span>☁️ Workspace & Relays</span>
+            </button>
+          </div>
+
           <div class="editorial-modal-body">
-            <!-- Section 1: Display Mode (Light / Dark / System) -->
-            <div class="editorial-pref-group">
-              <div class="editorial-pref-header">
-                <span class="editorial-pref-label">Display Cadence</span>
-              </div>
-              <div class="editorial-pref-card">
-                <div class="editorial-mode-switcher">
-                  <button class="editorial-mode-btn" data-mode="light" id="btn-editorial-mode-light">
-                    <span>Papyrus</span>
-                  </button>
-                  <button class="editorial-mode-btn" data-mode="dark" id="btn-editorial-mode-dark">
-                    <span>Obsidian</span>
-                  </button>
-                  <button class="editorial-mode-btn" data-mode="system" id="btn-editorial-mode-system">
-                    <span>System</span>
-                  </button>
+            <!-- Tab Panel 1: Appearance & Shells -->
+            <div class="editorial-settings-tab-panel active" id="panel-editorial-appearance">
+              <!-- Section 1: Display Mode (Light / Dark / System) -->
+              <div class="editorial-pref-group">
+                <div class="editorial-pref-header">
+                  <span class="editorial-pref-label">Display Cadence</span>
                 </div>
-                <p style="font-family: var(--omni-font-sans); font-size: 0.76rem; color: var(--omni-text-muted); margin: 0;">
-                  Papyrus renders warm archival rag paper; Obsidian renders deep charcoal sanctuary.
-                </p>
-              </div>
-            </div>
-
-            <!-- Section 2: Theme Accent Selector -->
-            <div class="editorial-pref-group">
-              <div class="editorial-pref-header">
-                <span class="editorial-pref-label">Accent Illumination</span>
-                <span id="editorial-active-accent-name" class="editorial-pref-status">Cobalt Glow</span>
-              </div>
-              <div class="editorial-pref-card">
-                <div class="editorial-swatches-grid">
-                  ${EDITORIAL_ACCENTS.map(
-                    (a) => `
-                    <button class="editorial-swatch-item" data-accent-id="${a.id}" title="${a.name}">
-                      <div class="editorial-swatch-circle" style="background-color: ${a.darkColor};">
-                        <span class="editorial-swatch-check" style="display: none; font-size: 14px;">✓</span>
-                      </div>
-                      <span class="editorial-swatch-label">${a.name.split(" ")[0]}</span>
+                <div class="editorial-pref-card">
+                  <div class="editorial-mode-switcher">
+                    <button class="editorial-mode-btn" data-mode="light" id="btn-editorial-mode-light">
+                      <span>Papyrus (Light)</span>
                     </button>
-                  `
-                  ).join("")}
-                  <!-- Custom Picker -->
-                  <label class="editorial-swatch-item" title="Custom Hex">
-                    <input type="color" id="editorial-custom-accent-color" value="#1e40af" style="opacity: 0; width: 0; height: 0; position: absolute;" />
-                    <div class="editorial-swatch-circle" style="background: conic-gradient(red, yellow, green, cyan, blue, magenta, red); cursor: pointer;">
-                      <span style="font-size: 11px; font-weight: 700;">+</span>
-                    </div>
-                    <span class="editorial-swatch-label">Custom</span>
-                  </label>
+                    <button class="editorial-mode-btn" data-mode="dark" id="btn-editorial-mode-dark">
+                      <span>Obsidian (Dark)</span>
+                    </button>
+                    <button class="editorial-mode-btn" data-mode="system" id="btn-editorial-mode-system">
+                      <span>System Automatic</span>
+                    </button>
+                  </div>
+                  <p style="font-family: var(--omni-font-sans); font-size: 0.8rem; color: var(--omni-text-muted); margin: 0;">
+                    Papyrus renders warm archival rag paper; Obsidian renders deep charcoal sanctuary.
+                  </p>
                 </div>
               </div>
-            </div>
 
-            <!-- Section 3: Installed Shells Architecture -->
-            <div class="editorial-pref-group" id="editorial-shells-group">
-              <div class="editorial-pref-header">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span class="editorial-pref-label">Installed Shells</span>
-                  <span id="editorial-shell-count-badge" class="editorial-pref-status">3 installed</span>
+              <!-- Section 2: Theme Accent Selector -->
+              <div class="editorial-pref-group">
+                <div class="editorial-pref-header">
+                  <span class="editorial-pref-label">Accent Illumination</span>
+                  <span id="editorial-active-accent-name" class="editorial-pref-status">Cobalt Glow</span>
                 </div>
-                <button id="btn-editorial-open-install-shell" class="editorial-btn-secondary" style="font-size: 0.7rem; padding: 4px 8px; color: var(--omni-accent-primary);">
-                  + Install Shell
-                </button>
+                <div class="editorial-pref-card">
+                  <div class="editorial-swatches-grid">
+                    ${EDITORIAL_ACCENTS.map(
+                      (a) => `
+                      <button class="editorial-swatch-item" data-accent-id="${a.id}" title="${a.name}">
+                        <div class="editorial-swatch-circle" style="background-color: ${a.darkColor};">
+                          <span class="editorial-swatch-check" style="display: none; font-size: 14px;">✓</span>
+                        </div>
+                        <span class="editorial-swatch-label">${a.name.split(" ")[0]}</span>
+                      </button>
+                    `
+                    ).join("")}
+                    <!-- Custom Picker -->
+                    <label class="editorial-swatch-item" title="Custom Hex">
+                      <input type="color" id="editorial-custom-accent-color" value="#1e40af" style="opacity: 0; width: 0; height: 0; position: absolute;" />
+                      <div class="editorial-swatch-circle" style="background: conic-gradient(red, yellow, green, cyan, blue, magenta, red); cursor: pointer;">
+                        <span style="font-size: 11px; font-weight: 700;">+</span>
+                      </div>
+                      <span class="editorial-swatch-label">Custom</span>
+                    </label>
+                  </div>
+                </div>
               </div>
-              <div id="editorial-installed-shells-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
-            </div>
 
-            <!-- Section 4: Installed Plugins Overview -->
-            <div class="editorial-pref-group">
-              <div class="editorial-pref-header">
-                <span class="editorial-pref-label">Installed Plugins</span>
-                <span class="editorial-pref-status">Standalone nsites</span>
-              </div>
-              <div id="editorial-plugins-settings-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
-            </div>
-
-            <!-- Section 5: Decentralized Workspace Sync -->
-            <div class="editorial-pref-group">
-              <div class="editorial-pref-header">
-                <span class="editorial-pref-label">NIP-78 Workspace Sync</span>
-                <span class="editorial-pref-status">Decentralized</span>
-              </div>
-              <div class="editorial-pref-card">
-                <p style="font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-secondary); margin: 0;">
-                  Persist your pinned applications, viewport assignments, and themes directly to your Nostr relay list.
-                </p>
-                <div style="display: flex; justify-content: flex-end;">
-                  <button id="btn-editorial-sync-workspace" class="editorial-btn-primary">
-                    Sync to Relays
+              <!-- Section 3: Installed Shells Architecture -->
+              <div class="editorial-pref-group" id="editorial-shells-group">
+                <div class="editorial-pref-header">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="editorial-pref-label">Installed Shells</span>
+                    <span id="editorial-shell-count-badge" class="editorial-pref-status">3 installed</span>
+                  </div>
+                  <button id="btn-editorial-open-install-shell" class="editorial-btn-secondary" style="font-size: 0.72rem; padding: 4px 10px; color: var(--omni-accent-primary);">
+                    + Install Shell
                   </button>
+                </div>
+                <div id="editorial-installed-shells-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+              </div>
+            </div>
+
+            <!-- Tab Panel 2: Installed Plugins & Viewports -->
+            <div class="editorial-settings-tab-panel" id="panel-editorial-plugins" style="display: none;">
+              <div class="editorial-pref-group">
+                <div class="editorial-pref-header">
+                  <div>
+                    <span class="editorial-pref-label">Installed Standalone Plugins</span>
+                    <p style="font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-muted); margin: 2px 0 0;">
+                      Configure viewports, routes, dock pins, and custom settings for your decentralized applications.
+                    </p>
+                  </div>
+                  <span class="editorial-pref-status">Autonomous nsites</span>
+                </div>
+                <div id="editorial-plugins-settings-list" style="display: flex; flex-direction: column; gap: 14px;"></div>
+              </div>
+            </div>
+
+            <!-- Tab Panel 3: Workspace & Relays -->
+            <div class="editorial-settings-tab-panel" id="panel-editorial-workspace" style="display: none;">
+              <div class="editorial-pref-group">
+                <div class="editorial-pref-header">
+                  <span class="editorial-pref-label">NIP-78 Workspace Synchronization</span>
+                  <span class="editorial-pref-status">Decentralized</span>
+                </div>
+                <div class="editorial-pref-card">
+                  <p style="font-family: var(--omni-font-sans); font-size: 0.85rem; color: var(--omni-text-secondary); margin: 0; line-height: 1.5;">
+                    Synchronize your layout configurations, viewport assignments, enabled plugins, and themes across all your devices using Nostr (kind: 30078, tag: ["d", "omni/workspace/v1"]).
+                  </p>
+                  <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                    <button id="btn-editorial-sync-workspace" class="editorial-btn-primary">
+                      Sync Workspace to Relays
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

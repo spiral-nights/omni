@@ -6,7 +6,7 @@ export const ALLOWED_HTML_ELEMENTS = [
   "ul", "ol", "li", "article", "section", "header", "footer", "nav",
   "svg", "path", "circle", "rect", "line", "polyline", "polygon", "g",
   "img", "small", "strong", "em", "b", "i", "time", "blockquote",
-  "a", "code", "pre", "style",
+  "a", "code", "pre", "style", "mark", "abbr", "cite", "sub", "sup", "del", "ins", "kbd", "s", "u",
   "table", "thead", "tbody", "tfoot", "tr", "th", "td",
   "details", "summary", "hr", "br", "dl", "dt", "dd",
   "figure", "figcaption", "main", "aside", "canvas", "progress", "meter"
@@ -337,6 +337,19 @@ export class RemoteDomHost {
           if (!parent) {
             // Parent target is not attached to DOM; safe skip
             continue;
+          }
+        }
+
+        // Mutation 3 (MUTATION_TYPE_UPDATE_PROPERTY): [3, id, name, value, type]
+        // When type === 2 (UPDATE_PROPERTY_TYPE_ATTRIBUTE), DOMRemoteReceiver strictly enforces
+        // typeof value === 'string' or null. Convert booleans or other types safely.
+        if (rec[0] === 3 && rec[4] === 2) {
+          if (rec[3] === false || rec[3] === null || rec[3] === undefined) {
+            rec[3] = null;
+          } else if (rec[3] === true) {
+            rec[3] = "";
+          } else if (typeof rec[3] !== "string") {
+            rec[3] = String(rec[3]);
           }
         }
 

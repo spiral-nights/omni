@@ -1171,10 +1171,10 @@
             const attrName = m.attributeName;
             if (attrName) {
               const val = m.target.getAttribute(attrName);
-              if (val === null) {
+              if (val === null || val === false) {
                 remoteEl.removeAttribute(attrName);
               } else {
-                remoteEl.setAttribute(attrName, val);
+                remoteEl.setAttribute(attrName, val === true ? "" : String(val));
               }
             }
           }
