@@ -40,7 +40,8 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       },
       scriptContent: "console.log('feed');",
       sourceUrl: "local:@omni/plugin-feed",
-      enabled: true
+      enabled: true,
+      pinned: true
     },
     {
       id: "org.omni.plugin.timer",

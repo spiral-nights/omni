@@ -1063,20 +1063,32 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       if (e.target === modal) this.closeSettings();
     });
 
-    // Settings Navigation Tabs
+    // Settings Navigation Tabs & Mobile Dropdown
     const tabs = this.root.querySelectorAll(".editorial-settings-tab-btn");
+    const mobileSelect = this.root.querySelector("#editorial-settings-mobile-select") as HTMLSelectElement | null;
+
+    const activateTab = (tabKey: string) => {
+      tabs.forEach((t) => t.classList.toggle("active", (t as HTMLElement).dataset.tab === tabKey));
+      const panels = this.root.querySelectorAll(".editorial-settings-tab-panel");
+      panels.forEach((p) => {
+        const isMatch = p.id === `panel-editorial-${tabKey}`;
+        p.classList.toggle("active", isMatch);
+        (p as HTMLElement).style.display = isMatch ? "flex" : "none";
+      });
+      if (mobileSelect && mobileSelect.value !== tabKey) {
+        mobileSelect.value = tabKey;
+      }
+    };
+
     tabs.forEach((tab) => {
       tab.addEventListener("click", () => {
         const tabKey = (tab as HTMLElement).dataset.tab;
-        if (!tabKey) return;
-        tabs.forEach((t) => t.classList.toggle("active", t === tab));
-        const panels = this.root.querySelectorAll(".editorial-settings-tab-panel");
-        panels.forEach((p) => {
-          const isMatch = p.id === `panel-editorial-${tabKey}`;
-          p.classList.toggle("active", isMatch);
-          (p as HTMLElement).style.display = isMatch ? "flex" : "none";
-        });
+        if (tabKey) activateTab(tabKey);
       });
+    });
+
+    mobileSelect?.addEventListener("change", () => {
+      if (mobileSelect.value) activateTab(mobileSelect.value);
     });
 
     // Theme Mode buttons
@@ -1765,17 +1777,37 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
             </button>
           </div>
 
-          <!-- Settings Tabbed Navigation -->
-          <div class="editorial-settings-tabs-bar">
-            <button class="editorial-settings-tab-btn active" data-tab="appearance" id="tab-editorial-appearance">
-              <span>🎨 Appearance & Shells</span>
-            </button>
-            <button class="editorial-settings-tab-btn" data-tab="plugins" id="tab-editorial-plugins">
-              <span>🧩 Installed Plugins</span>
-            </button>
-            <button class="editorial-settings-tab-btn" data-tab="workspace" id="tab-editorial-workspace">
-              <span>☁️ Workspace & Relays</span>
-            </button>
+          <!-- Settings Navigation: Desktop Segmented Tabs + Mobile Sub-Menu Dropdown -->
+          <div class="editorial-settings-nav-wrapper">
+            <div class="editorial-settings-mobile-select-container">
+              <span class="editorial-settings-mobile-select-label">Section:</span>
+              <div class="editorial-settings-select-box">
+                <select id="editorial-settings-mobile-select" class="editorial-settings-mobile-select" aria-label="Settings Section">
+                  <option value="appearance">Appearance & Shells</option>
+                  <option value="plugins">Installed Plugins</option>
+                  <option value="workspace">Workspace & Relays</option>
+                </select>
+                <div class="editorial-settings-select-arrow">${icon("chevron-down", 14)}</div>
+              </div>
+            </div>
+
+            <div class="editorial-settings-tabs-bar">
+              <button class="editorial-settings-tab-btn active" data-tab="appearance" id="tab-editorial-appearance">
+                <span class="editorial-tab-icon">${icon("layout", 16)}</span>
+                <span class="editorial-tab-title">Appearance</span>
+                <span class="editorial-tab-sub">& Shells</span>
+              </button>
+              <button class="editorial-settings-tab-btn" data-tab="plugins" id="tab-editorial-plugins">
+                <span class="editorial-tab-icon">${icon("plugins", 16)}</span>
+                <span class="editorial-tab-title">Plugins</span>
+                <span class="editorial-tab-sub">& Viewports</span>
+              </button>
+              <button class="editorial-settings-tab-btn" data-tab="workspace" id="tab-editorial-workspace">
+                <span class="editorial-tab-icon">${icon("cloud", 16)}</span>
+                <span class="editorial-tab-title">Workspace</span>
+                <span class="editorial-tab-sub">& Relays</span>
+              </button>
+            </div>
           </div>
 
           <div class="editorial-modal-body">

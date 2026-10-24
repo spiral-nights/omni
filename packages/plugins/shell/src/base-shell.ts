@@ -585,7 +585,6 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public isAppPinned(p: InstalledPluginEntry): boolean {
-    if (p.id === "org.omni.plugin.feed" && p.pinned === undefined) return true;
     if (Array.isArray(p.placements) && p.placements.length === 0) return false;
     if (p.pinned !== undefined) return p.pinned;
     const placements = this.getPluginPlacements(p);

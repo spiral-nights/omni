@@ -26,6 +26,7 @@ const initialPlugins: InstalledPluginEntry[] = [
     description: "Decentralized Nostr timeline notes and Schnorr-signed publishing.",
     icon: "feed",
     viewport: "main",
+    pinned: true,
     views: [
       { id: "main", title: "Feed", path: "" },
       { id: "search", title: "Search", path: "?view=search" },
