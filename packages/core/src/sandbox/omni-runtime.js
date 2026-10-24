@@ -1125,10 +1125,28 @@
           } else {
             const customDetail = wrappedFiles ? { ...detail, files: wrappedFiles } : detail;
             ev = new CustomEvent(eventName, { bubbles: true, cancelable: true, detail: customDetail });
-            if (wrappedFiles) {
+          }
+
+          if (detail && typeof detail === "object") {
+            for (const prop of ["clientX", "clientY", "pageX", "pageY", "screenX", "screenY", "targetRect", "touches", "changedTouches"]) {
+              if (detail[prop] !== undefined && !(prop in ev)) {
+                try {
+                  Object.defineProperty(ev, prop, { value: detail[prop], configurable: true });
+                } catch (_) {}
+              }
+            }
+            if (eventName.startsWith("drag") || eventName === "drop" || wrappedFiles) {
+              const dragStore = new Map(Object.entries(detail.dragData || {}));
+              const dt = {
+                types: Array.from(dragStore.keys()),
+                files: wrappedFiles || [],
+                getData: (type) => dragStore.get(type) || "",
+                setData: (type, val) => { dragStore.set(type, String(val)); },
+                clearData: () => dragStore.clear()
+              };
               try {
                 Object.defineProperty(ev, "dataTransfer", {
-                  value: { files: wrappedFiles },
+                  value: dt,
                   configurable: true
                 });
               } catch (_) {}

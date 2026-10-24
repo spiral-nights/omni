@@ -1849,4 +1849,103 @@ body {
 .omni-pull-to-refresh.is-refreshing .omni-pull-icon svg {
   animation: omni-spin 0.6s linear infinite;
 }
+
+/* Universal App Context Menu */
+.omni-app-context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 200px;
+  background: var(--omni-bg-elevated, #22201d);
+  border: 1px solid var(--omni-border-subtle, #33302a);
+  border-radius: var(--omni-radius-md, 8px);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: omniCtxFadeIn 0.12s ease-out;
+}
+
+@keyframes omniCtxFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.context-menu-header {
+  padding: 8px 10px 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--omni-border-subtle, #33302a);
+  margin-bottom: 4px;
+}
+
+.context-menu-title {
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--omni-text-primary, #ede8df);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-menu-badge {
+  font-family: monospace;
+  font-size: 0.65rem;
+  color: var(--omni-text-muted, #9e988f);
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--omni-text-primary, #ede8df);
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.context-menu-item:hover {
+  background: var(--omni-bg-surface, #191816);
+  color: var(--omni-accent-primary, #d4a373);
+}
+
+.context-menu-item.danger {
+  color: #ff5555;
+}
+
+.context-menu-item.danger:hover {
+  background: rgba(255, 85, 85, 0.15);
+  color: #ff7777;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: var(--omni-border-subtle, #33302a);
+  margin: 3px 0;
+}
+
+/* Modal Overlay & Card for Update App */
+.omni-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+}
+
+.omni-modal-overlay.open {
+  display: flex;
+}
 `;

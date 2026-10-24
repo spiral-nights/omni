@@ -1021,6 +1021,14 @@ export class PanoramaShell extends BaseShell {
         ${icon("sliders", 14)}
         <span>App Info & Permissions</span>
       </button>
+      <button class="context-menu-item" data-action="update">
+        ${icon("refresh", 14)}
+        <span>Update App...</span>
+      </button>
+      <button class="context-menu-item" data-action="uninstall" style="color: #ff5555;">
+        ${icon("close", 14)}
+        <span>Uninstall App</span>
+      </button>
       <button class="context-menu-item context-menu-cancel" data-action="cancel">
         <span>Cancel</span>
       </button>
@@ -1056,6 +1064,13 @@ export class PanoramaShell extends BaseShell {
         this.onWorkspaceUpdated();
       } else if (action === "inspect") {
         this.openPluginInspector(plugin);
+      } else if (action === "update") {
+        this.openUpdatePluginModal(plugin);
+      } else if (action === "uninstall") {
+        if (confirm(`Uninstall ${meta.name}?`)) {
+          this.uninstallPlugin(plugin.id);
+          this.renderAppsTiles();
+        }
       }
     });
 

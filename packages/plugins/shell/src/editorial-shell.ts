@@ -949,6 +949,8 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         this.renderAppsIndex();
       });
 
+      this.bindAppContextMenu(card, plugin);
+
       container.appendChild(card);
     };
 
@@ -1107,6 +1109,24 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       } catch (err: any) {
         alert(`Sync failed: ${err.message || String(err)}`);
       }
+    });
+
+    // Plugins Filter & Expand All
+    const searchInput = this.root.querySelector("#editorial-plugins-search-input") as HTMLInputElement | null;
+    searchInput?.addEventListener("input", () => this.renderPluginSettingsList());
+
+    const btnExpandAll = this.root.querySelector("#btn-editorial-expand-all-plugins") as HTMLElement | null;
+    let areAllExpanded = false;
+    btnExpandAll?.addEventListener("click", () => {
+      areAllExpanded = !areAllExpanded;
+      this.root.querySelectorAll<HTMLElement>(".editorial-plugin-details-container").forEach((el) => {
+        el.style.display = areAllExpanded ? "flex" : "none";
+      });
+      this.root.querySelectorAll<HTMLElement>(".btn-toggle-placements").forEach((btn) => {
+        btn.textContent = areAllExpanded ? "Close Viewports ▴" : "Configure Viewports ▾";
+        btn.classList.toggle("active", areAllExpanded);
+      });
+      btnExpandAll.textContent = areAllExpanded ? "Collapse All Viewports" : "Expand All Viewports";
     });
   }
 
@@ -1307,9 +1327,18 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     const viewportOptions = this.getAvailableViewports();
 
-    for (const plugin of this.installedPlugins) {
+    const searchInput = this.root.querySelector("#editorial-plugins-search-input") as HTMLInputElement | null;
+    const filterQuery = (searchInput?.value || "").trim().toLowerCase();
+
+    const pluginsToRender = this.installedPlugins.filter((p) => {
+      if (!filterQuery) return true;
+      const hay = `${p.displayName || ""} ${p.name || ""} ${p.id} ${p.description || ""}`.toLowerCase();
+      return hay.includes(filterQuery);
+    });
+
+    for (const plugin of pluginsToRender) {
       const card = document.createElement("div");
-      card.className = "editorial-pref-card";
+      card.className = "editorial-pref-card compact-plugin-card";
 
       const iconKey = (plugin.icon as IconName) || "apps";
       const synthManifest = this.ensurePluginManifest(plugin);
@@ -1318,29 +1347,35 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       const isPinned = plugin.pinned !== false;
 
       card.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="width: 32px; height: 32px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+            <div style="width: 34px; height: 34px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
               ${ICONS[iconKey] ? icon(iconKey, 18) : icon("apps", 18)}
             </div>
-            <div>
-              <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 <strong style="font-family: var(--omni-font-serif); font-size: 0.95rem; color: var(--omni-text-primary);">${plugin.displayName || plugin.name || plugin.id}</strong>
                 <span style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted);">v${plugin.version || "1.0.0"}</span>
               </div>
-              <div style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); margin-top: 1px;">${plugin.id}</div>
+              <div style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); margin-top: 1px; word-break: break-all;">${plugin.id}</div>
             </div>
           </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <button class="editorial-btn-secondary btn-toggle-pin-pref" style="font-size: 0.68rem; padding: 3px 8px;">
-              ${isPinned ? "Pinned to Dock" : "Pin to Dock"}
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <button class="editorial-btn-secondary btn-update-plugin" style="font-size: 0.68rem; padding: 4px 8px; color: var(--omni-accent-primary); border-color: var(--omni-border-subtle);">
+              Update
             </button>
-            <button class="editorial-btn-secondary btn-uninstall-plugin" style="color: #ff5555; border-color: #552222; font-size: 0.68rem; padding: 3px 8px;">
+            <button class="editorial-btn-secondary btn-toggle-placements" id="btn-toggle-placements-${safeId}" style="font-size: 0.68rem; padding: 4px 8px;">
+              Configure Viewports ▾
+            </button>
+            <button class="editorial-btn-secondary btn-toggle-pin-pref" style="font-size: 0.68rem; padding: 4px 8px;">
+              ${isPinned ? "Pinned" : "Pin"}
+            </button>
+            <button class="editorial-btn-secondary btn-uninstall-plugin" style="color: #ff5555; border-color: #552222; font-size: 0.68rem; padding: 4px 8px;">
               Uninstall
             </button>
           </div>
         </div>
-        <p style="font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-secondary); margin: 0;">${plugin.description || "Micro-frontend plugin."}</p>
+        <p style="font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-secondary); margin: 0; line-height: 1.4;">${plugin.description || "Micro-frontend plugin."}</p>
       `;
 
       card.querySelector(".btn-toggle-pin-pref")?.addEventListener("click", () => {
@@ -1359,6 +1394,24 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           this.renderAppsIndex();
           this.renderWidgetsView();
         }
+      });
+
+      card.querySelector(".btn-update-plugin")?.addEventListener("click", () => {
+        this.openUpdatePluginModal(plugin);
+      });
+
+      // Collapsible details container (placements, settings, rules) - collapsed by default
+      const detailsContainer = document.createElement("div");
+      detailsContainer.className = "editorial-plugin-details-container";
+      detailsContainer.id = `plugin-details-${safeId}`;
+      detailsContainer.style.cssText = "display: none; flex-direction: column; gap: 14px; margin-top: 10px; border-top: 1px solid var(--omni-border-subtle); padding-top: 12px;";
+
+      const togglePlacementsBtn = card.querySelector(`#btn-toggle-placements-${safeId}`) as HTMLElement | null;
+      togglePlacementsBtn?.addEventListener("click", () => {
+        const isHidden = detailsContainer.style.display === "none";
+        detailsContainer.style.display = isHidden ? "flex" : "none";
+        togglePlacementsBtn.textContent = isHidden ? "Close Viewports ▴" : "Configure Viewports ▾";
+        togglePlacementsBtn.classList.toggle("active", isHidden);
       });
 
       // 1. Placements & Viewports Section
@@ -1521,7 +1574,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         row.appendChild(fieldsGrid);
         placementsBox.appendChild(row);
       }
-      card.appendChild(placementsBox);
+      detailsContainer.appendChild(placementsBox);
 
       // 2. Custom Plugin Settings View (e.g. for Feed filtering)
       const settingsView = pluginViews.find((v: any) => v.id === "settings" || v.path?.includes("view=settings"));
@@ -1576,9 +1629,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         settingsHeader.appendChild(btnToggleSettings);
         settingsBox.appendChild(settingsHeader);
         settingsBox.appendChild(mountContainer);
-        card.appendChild(settingsBox);
+        detailsContainer.appendChild(settingsBox);
       }
 
+      card.appendChild(detailsContainer);
       container.appendChild(card);
     }
   }
@@ -1799,10 +1853,16 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
                   <div>
                     <span class="editorial-pref-label">Installed Standalone Plugins</span>
                     <p style="font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-muted); margin: 2px 0 0;">
-                      Configure viewports, routes, dock pins, and custom settings for your decentralized applications.
+                      Configure viewports, routes, dock pins, updates, and custom settings for your apps.
                     </p>
                   </div>
                   <span class="editorial-pref-status">Autonomous nsites</span>
+                </div>
+                <div style="display: flex; gap: 8px; margin-bottom: 2px;">
+                  <input type="text" id="editorial-plugins-search-input" placeholder="Search installed plugins..." style="flex: 1; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 8px 12px; font-family: var(--omni-font-sans); font-size: 0.8rem; color: var(--omni-text-primary);" />
+                  <button id="btn-editorial-expand-all-plugins" class="editorial-btn-secondary" style="font-size: 0.72rem; padding: 4px 10px; white-space: nowrap;">
+                    Expand All Viewports
+                  </button>
                 </div>
                 <div id="editorial-plugins-settings-list" style="display: flex; flex-direction: column; gap: 14px;"></div>
               </div>

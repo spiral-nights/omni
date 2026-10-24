@@ -349,6 +349,8 @@ export class OmniShell extends BaseShell {
       bottomRow.appendChild(btnOpen);
       card.appendChild(bottomRow);
 
+      this.bindAppContextMenu(card, plugin);
+
       if (isPinned) {
         pinnedGrid.appendChild(card);
         pinnedCount++;
@@ -1188,7 +1190,16 @@ export class OmniShell extends BaseShell {
         }
       });
 
+      const btnUpdate = document.createElement("button");
+      btnUpdate.className = "btn-secondary";
+      btnUpdate.style.cssText = "font-size: 0.75rem; padding: 4px 10px;";
+      btnUpdate.textContent = "Update App...";
+      btnUpdate.addEventListener("click", () => {
+        this.openUpdatePluginModal(p);
+      });
+
       actionsRow.appendChild(btnInspect);
+      actionsRow.appendChild(btnUpdate);
       actionsRow.appendChild(btnClearDb);
       actionsRow.appendChild(btnUninstall);
       pane.appendChild(actionsRow);

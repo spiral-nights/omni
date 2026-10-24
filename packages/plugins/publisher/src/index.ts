@@ -1668,7 +1668,7 @@ function mountPublisherStudio(root: HTMLElement) {
               Copy naddr
             </button>
             <a href="nostr:${escapeHtml(res.naddr)}" id="btn-install-result-now" style="background: var(--omni-accent-primary, #d4a373); color: #141312; text-decoration: none; padding: 6px 14px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
-              Install / Open in Omni
+              Install / Update in Omni
             </a>
           </div>
         `;
@@ -1749,10 +1749,13 @@ function mountPublisherStudio(root: HTMLElement) {
                 </div>
                 <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: var(--omni-text-secondary, #9e988f); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">${escapeHtml(app.description)}</p>
               </div>
-              <div style="display: flex; gap: 6px; flex-shrink: 0;">
+              <div style="display: flex; gap: 6px; flex-shrink: 0; align-items: center; flex-wrap: wrap;">
                 <a href="nostr:${escapeHtml(app.naddr)}" class="btn-install-published" style="background: var(--omni-accent-primary, #d4a373); color: #141312; text-decoration: none; padding: 6px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.76rem; font-weight: 600;">
-                  Install in Omni
+                  Install / Update
                 </a>
+                <button class="btn-update-zip-app" data-app-id="${escapeHtml(app.id)}" data-app-name="${escapeHtml(app.name)}" style="background: var(--omni-bg-card, #22201d); color: var(--omni-accent-primary, #d4a373); border: 1px solid var(--omni-border-strong, #3d3933); padding: 6px 10px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.76rem; cursor: pointer; font-weight: 600;">
+                  Update .zip
+                </button>
                 <button class="btn-copy-published-naddr" style="background: var(--omni-bg-card, #22201d); color: var(--omni-text-primary, #ede8df); border: 1px solid var(--omni-border-strong, #3d3933); padding: 6px 10px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.76rem; cursor: pointer;">
                   Copy naddr
                 </button>
@@ -1783,6 +1786,20 @@ function mountPublisherStudio(root: HTMLElement) {
             publishedApps = publishedApps.filter((p) => p.id !== app.id);
             savePublishedApps(publishedApps);
             renderStudio();
+          });
+
+          card.querySelector(".btn-update-zip-app")?.addEventListener("click", () => {
+            activeTab = "create";
+            appId = app.id;
+            appName = app.name;
+            appDescription = app.description || "";
+            const verParts = (app.version || "1.0.0").split(".");
+            if (verParts.length === 3) {
+              appVersion = `${verParts[0]}.${verParts[1]}.${parseInt(verParts[2], 10) + 1}`;
+            }
+            renderStudio();
+            const fileInput = container.querySelector("#studio-file-input") as HTMLInputElement | null;
+            fileInput?.click();
           });
 
           pubPane.appendChild(card);

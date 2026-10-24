@@ -129,6 +129,83 @@ export class RemoteDomHost {
     targetRoot.addEventListener("input", enrichInputEvent, true);
     targetRoot.addEventListener("change", enrichInputEvent, true);
 
+    const enrichDragAndPointerEvent = (e: any) => {
+      const target = e.target as HTMLElement | null;
+      let targetRect: any = undefined;
+      if (target && typeof target.getBoundingClientRect === "function") {
+        try {
+          const r = target.getBoundingClientRect();
+          targetRect = { left: r.left, top: r.top, width: r.width, height: r.height };
+        } catch {}
+      }
+      const rawFiles = e.dataTransfer?.files && e.dataTransfer.files.length > 0
+        ? Array.from(e.dataTransfer.files)
+        : e.detail?.files
+        ? Array.from(e.detail.files)
+        : e.detail?.__omniRawFiles || [];
+
+      let dragData: Record<string, string> = {};
+      if (e.dataTransfer) {
+        try {
+          if (e.dataTransfer.types) {
+            for (const t of e.dataTransfer.types) {
+              const val = e.dataTransfer.getData(t);
+              if (val) dragData[t] = val;
+            }
+          }
+        } catch {}
+      }
+
+      const touches = e.touches
+        ? Array.from(e.touches).map((t: any) => ({
+            clientX: t.clientX,
+            clientY: t.clientY,
+            pageX: t.pageX,
+            pageY: t.pageY
+          }))
+        : undefined;
+
+      const changedTouches = e.changedTouches
+        ? Array.from(e.changedTouches).map((t: any) => ({
+            clientX: t.clientX,
+            clientY: t.clientY,
+            pageX: t.pageX,
+            pageY: t.pageY
+          }))
+        : undefined;
+
+      const existingDetail = typeof e.detail === "object" && e.detail !== null ? e.detail : {};
+      try {
+        Object.defineProperty(e, "detail", {
+          value: {
+            ...existingDetail,
+            clientX: e.clientX,
+            clientY: e.clientY,
+            pageX: e.pageX,
+            pageY: e.pageY,
+            screenX: e.screenX,
+            screenY: e.screenY,
+            targetRect,
+            dragData,
+            touches,
+            changedTouches,
+            __omniRawFiles: rawFiles
+          },
+          configurable: true
+        });
+      } catch {}
+    };
+
+    const dragPointerEvents = [
+      "dragstart", "dragenter", "dragover", "dragleave", "drop", "dragend",
+      "pointerdown", "pointermove", "pointerup", "pointercancel",
+      "mousedown", "mousemove", "mouseup",
+      "touchstart", "touchmove", "touchend", "touchcancel"
+    ];
+    for (const evName of dragPointerEvents) {
+      targetRoot.addEventListener(evName, enrichDragAndPointerEvent, true);
+    }
+
     targetRoot.addEventListener("dragenter", (e: any) => {
       e.preventDefault();
       if (e.dataTransfer) {
@@ -154,7 +231,7 @@ export class RemoteDomHost {
         : e.detail?.__omniRawFiles || [];
       try {
         Object.defineProperty(e, "detail", {
-          value: { __omniRawFiles: rawFiles },
+          value: { ...(e.detail || {}), __omniRawFiles: rawFiles },
           configurable: true
         });
       } catch {}
@@ -170,7 +247,7 @@ export class RemoteDomHost {
       let el = (e.target as Element | null)?.parentElement || null;
       while (el && el !== targetRoot && !this.clickHandled) {
         const retargeted: any = new CustomEvent("drop", {
-          detail: { __omniRawFiles: rawFiles },
+          detail: { ...(e.detail || {}), __omniRawFiles: rawFiles },
           bubbles: false
         });
         retargeted.__omniRetargeted = true;

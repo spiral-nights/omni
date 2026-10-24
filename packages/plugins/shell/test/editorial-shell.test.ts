@@ -406,6 +406,62 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(placements.length).toBeGreaterThanOrEqual(2);
     });
 
+    it("collapses viewports section by default and toggles open on click", () => {
+      shell.mount();
+      shell.openSettings();
+
+      const toggleBtn = root.querySelector("#btn-toggle-placements-org-omni-plugin-checklist") as HTMLElement | null;
+      expect(toggleBtn).toBeTruthy();
+      expect(toggleBtn?.textContent).toContain("Configure Viewports");
+
+      const details = root.querySelector("#plugin-details-org-omni-plugin-checklist") as HTMLElement | null;
+      expect(details).toBeTruthy();
+      expect(details?.style.display).toBe("none");
+
+      toggleBtn?.click();
+      expect(details?.style.display).toBe("flex");
+      expect(toggleBtn?.textContent).toContain("Close Viewports");
+
+      toggleBtn?.click();
+      expect(details?.style.display).toBe("none");
+    });
+
+    it("triggers context menu on app card via right-click and mobile long-press", async () => {
+      shell.mount();
+      shell.showAppsIndex();
+
+      const appCard = root.querySelector(".editorial-plate-card") as HTMLElement | null;
+      expect(appCard).toBeTruthy();
+
+      // Right-click contextmenu
+      appCard?.dispatchEvent(new MouseEvent("contextmenu", { clientX: 120, clientY: 150, bubbles: true }));
+      const menu = document.querySelector(".omni-app-context-menu");
+      expect(menu).toBeTruthy();
+      expect(menu?.querySelector(".ctx-btn-update")).toBeTruthy();
+      expect(menu?.querySelector(".ctx-btn-uninstall")).toBeTruthy();
+
+      // Close menu
+      await new Promise((r) => setTimeout(r, 20));
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      expect(document.querySelector(".omni-app-context-menu")).toBeNull();
+    });
+
+    it("updates installed plugin seamlessly without throwing 'already installed' error", async () => {
+      shell.mount();
+      const existing = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.checklist")!;
+      expect(existing).toBeTruthy();
+
+      await shell.installPluginEntry({
+        ...existing,
+        version: "2.0.0",
+        scriptContent: "document.body.innerHTML = '<h1>Checklist v2</h1>';"
+      });
+
+      const updated = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.checklist")!;
+      expect(updated.version).toBe("2.0.0");
+      expect(updated.scriptContent).toContain("Checklist v2");
+    });
+
     it("supports browser popstate navigation across app, apps, and widgets views", () => {
       shell.mount();
       shell.openApp("org.omni.plugin.feed");
