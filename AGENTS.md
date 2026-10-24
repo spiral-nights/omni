@@ -46,6 +46,14 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
    - Any declared `settings` route (`?view=settings`) is automatically surfaced in the plugin's dedicated section in the Settings menu.
 6. **Decentralized Workspace Sync (NIP-78)**:
    - Layout configurations, viewport assignments, route selections, and enabled plugins sync via `kind: 30078`, tag `["d", "omni/workspace/v1"]`, backed by 0ms local storage fallback.
+7. **Strict Shell & Style Plugin Agnosticism (Zero Hard-Coded Plugin Exceptions)**:
+   - Shells (`@omni/plugin-shell`) and shell stylesheets (`classic-styles.ts`, `panorama-styles.ts`, `editorial-styles.ts`) must NEVER contain hard-coded plugin IDs (e.g. `isFeed = pluginId === "org.omni.plugin.feed"`, `:not(.feed-active)`), hard-coded plugin conditional checks, or special casing for specific apps.
+   - All plugins are equal, autonomous citizens.
+   - **Full-Page App Determination**:
+     - Any app mapped or opened in the primary `main` viewport is an active full-page app.
+     - The shell main viewport container provides expansive, responsive bounds (`max-width: 1360px`, `width: 100%`) so broad applications (dashboards, publishers, games, visual tools) have full breathing room.
+     - Content-heavy or reading-focused apps (like feeds or article readers) self-constrain their own reading widths internally (e.g. `.feed-container { max-width: 720px; margin: 0 auto; }`) rather than the shell imposing arbitrary narrow bounds.
+     - Fullscreen presentation (`#btn-*-toggle-fullscreen` or W3C Web App Manifest `"display": "fullscreen"`) is a generic presentation capability offered uniformly to all applications.
 
 ---
 

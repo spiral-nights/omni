@@ -987,10 +987,11 @@
       if (nativeToRemote.has(nativeNode)) return nativeToRemote.get(nativeNode);
 
       if (nativeNode.nodeType === 3) {
-        if (nativeNode.parentNode && nativeNode.parentNode.nodeName === "SCRIPT") {
+        const parentTag = (nativeNode.parentNode && nativeNode.parentNode.nodeName || "").toUpperCase();
+        if (parentTag === "SCRIPT") {
           return null;
         }
-        const isStyleText = nativeNode.parentNode && nativeNode.parentNode.nodeName === "STYLE";
+        const isStyleText = parentTag === "STYLE";
         const textData = isStyleText ? scopePluginCss(nativeNode.data || "") : (nativeNode.data || "");
         const remoteText = ctx.root.createTextNode(textData);
         nativeToRemote.set(nativeNode, remoteText);

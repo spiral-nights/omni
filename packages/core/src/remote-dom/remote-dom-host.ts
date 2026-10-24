@@ -85,11 +85,17 @@ export class RemoteDomHost {
       this.renderRoot = this.container.shadowRoot || this.container.attachShadow({ mode: "open" });
       if (typeof document !== "undefined") {
         const baseStyle = document.createElement("style");
-        baseStyle.textContent = `:host { display: block; width: 100%; height: 100%; box-sizing: border-box; } * { box-sizing: border-box; }`;
+        baseStyle.textContent = `:host { display: block; width: 100%; height: 100%; box-sizing: border-box; } * { box-sizing: border-box; } style, script, head, title, meta, link { display: none !important; }`;
         this.renderRoot.appendChild(baseStyle);
       }
     } else {
       this.renderRoot = this.container;
+      if (typeof document !== "undefined" && !document.getElementById("omni-nonvisual-protection")) {
+        const nonVisStyle = document.createElement("style");
+        nonVisStyle.id = "omni-nonvisual-protection";
+        nonVisStyle.textContent = `style, script, head, title, meta, link, .omni-component-slot style, .editorial-app-container style, .omni-slot style { display: none !important; }`;
+        document.head?.appendChild(nonVisStyle);
+      }
     }
 
     this.receiver = new DOMRemoteReceiver({

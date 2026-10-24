@@ -930,7 +930,7 @@ function mountPublisherStudio(root: HTMLElement) {
 
     const descMatch = baseHtml.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i);
     if (descMatch && !detectedDesc) {
-      detectedDesc = descMatch[1].trim();
+      detectedDesc = descMatch[1].trim().slice(0, 300);
     }
 
     appName = detectedName || "Custom Nsite";
@@ -942,7 +942,7 @@ function mountPublisherStudio(root: HTMLElement) {
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-+|-+$/g, "");
     appVersion = detectedVer;
-    appDescription = detectedDesc || `Packaged nsite (${fileEntries.length} files).`;
+    appDescription = (detectedDesc || `Packaged nsite (${fileEntries.length} files).`).slice(0, 300);
     appIcon = detectedIcon;
     appViews = detectedViews;
 
@@ -1531,7 +1531,7 @@ function mountPublisherStudio(root: HTMLElement) {
             <strong style="font-size: 0.88rem; color: var(--omni-text-primary, #ede8df);">Extracted Archive Files (${extractedFiles.length})</strong>
             <span style="font-size: 0.75rem; color: var(--omni-accent-primary, #d4a373); font-family: monospace;">Entry: ${escapeHtml(entryFilePath)}</span>
           </div>
-          <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; padding-right: 4px;">
             ${extractedFiles
               .map(
                 (f) => `
@@ -1640,7 +1640,7 @@ function mountPublisherStudio(root: HTMLElement) {
             <strong style="font-size: 0.92rem; color: var(--omni-accent-primary, #d4a373);">Published Nsite Ready: ${escapeHtml(res.name)} (v${escapeHtml(res.version)})</strong>
             <span style="font-size: 0.72rem; color: var(--omni-text-secondary, #9e988f);">Kind 35129 • ${res.fileCount} file(s)</span>
           </div>
-          <div style="background: var(--omni-bg-card, #22201d); padding: 8px 10px; border-radius: var(--omni-radius-sm, 6px); font-family: monospace; font-size: 0.75rem; word-break: break-all; color: var(--omni-text-primary, #ede8df);" id="studio-result-naddr">${escapeHtml(res.naddr)}</div>
+          <div style="background: var(--omni-bg-card, #22201d); padding: 8px 10px; border-radius: var(--omni-radius-sm, 6px); font-family: monospace; font-size: 0.75rem; word-break: break-all; max-height: 80px; overflow-y: auto; color: var(--omni-text-primary, #ede8df);" id="studio-result-naddr">${escapeHtml(res.naddr)}</div>
           <div style="display: flex; gap: 8px; justify-content: flex-end;">
             <button id="btn-copy-result-naddr" style="background: var(--omni-bg-subtle, #2a2723); color: var(--omni-text-primary, #ede8df); border: 1px solid var(--omni-border-strong, #3d3933); padding: 6px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.78rem; cursor: pointer;">
               Copy naddr
@@ -1665,8 +1665,8 @@ function mountPublisherStudio(root: HTMLElement) {
       if (statusLogs.length > 0) {
         const logCard = document.createElement("div");
         logCard.style.cssText =
-          "background: var(--omni-bg-card, #22201d); border: 1px solid var(--omni-border-subtle, #2e2b26); border-radius: var(--omni-radius-sm, 6px); padding: 12px; font-family: monospace; font-size: 0.75rem; color: var(--omni-text-secondary, #9e988f); display: flex; flex-direction: column; gap: 4px;";
-        logCard.innerHTML = statusLogs.map((l) => `<div>&gt; ${escapeHtml(l)}</div>`).join("");
+          "background: var(--omni-bg-card, #22201d); border: 1px solid var(--omni-border-subtle, #2e2b26); border-radius: var(--omni-radius-sm, 6px); padding: 12px; font-family: monospace; font-size: 0.75rem; color: var(--omni-text-secondary, #9e988f); display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; overflow-x: hidden;";
+        logCard.innerHTML = statusLogs.map((l) => `<div style="word-break: break-all;">&gt; ${escapeHtml(l)}</div>`).join("");
         createPane.appendChild(logCard);
       }
 
@@ -1713,15 +1713,19 @@ function mountPublisherStudio(root: HTMLElement) {
               ? app.servers.map((s) => `<span style="background: var(--omni-bg-subtle, #2a2723); padding: 2px 7px; border-radius: 4px; font-size: 0.7rem; color: var(--omni-text-secondary, #9e988f);">${escapeHtml(s)}</span>`).join(" ")
               : `<span style="background: var(--omni-bg-subtle, #2a2723); padding: 2px 7px; border-radius: 4px; font-size: 0.7rem; color: var(--omni-text-secondary, #9e988f);">Inline Nostr Event / Local Store</span>`;
 
+          const filesListText = app.files && app.files.length > 5
+            ? app.files.slice(0, 5).map((f) => escapeHtml(f.path)).join(", ") + ` (+${app.files.length - 5} more)`
+            : (app.files?.map((f) => escapeHtml(f.path)).join(", ") || "index.html");
+
           card.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
-              <div>
+              <div style="min-width: 0; flex: 1;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <strong style="font-size: 0.96rem; color: var(--omni-text-primary, #ede8df);">${escapeHtml(app.name)}</strong>
                   <span style="font-size: 0.72rem; background: var(--omni-bg-card, #22201d); border: 1px solid var(--omni-border-strong, #3d3933); padding: 1px 6px; border-radius: 4px; color: var(--omni-accent-primary, #d4a373);">v${escapeHtml(app.version)}</span>
                   <span style="font-size: 0.7rem; color: var(--omni-text-muted, #6b665f); font-family: monospace;">d:${escapeHtml(app.id)}</span>
                 </div>
-                <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: var(--omni-text-secondary, #9e988f);">${escapeHtml(app.description)}</p>
+                <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: var(--omni-text-secondary, #9e988f); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">${escapeHtml(app.description)}</p>
               </div>
               <div style="display: flex; gap: 6px; flex-shrink: 0;">
                 <a href="nostr:${escapeHtml(app.naddr)}" class="btn-install-published" style="background: var(--omni-accent-primary, #d4a373); color: #141312; text-decoration: none; padding: 6px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.76rem; font-weight: 600;">
@@ -1737,9 +1741,9 @@ function mountPublisherStudio(root: HTMLElement) {
             </div>
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.74rem; color: var(--omni-text-muted, #6b665f);">
               <span>Blossom Storage:</span> ${serversBadge}
-              <span>• Files (${app.files?.length || 1}): ${app.files?.map((f) => escapeHtml(f.path)).join(", ") || "index.html"}</span>
+              <span>• Files (${app.files?.length || 1}): ${filesListText}</span>
             </div>
-            <div style="background: var(--omni-bg-card, #22201d); padding: 6px 10px; border-radius: 4px; font-family: monospace; font-size: 0.72rem; color: var(--omni-text-secondary, #9e988f); word-break: break-all;">
+            <div style="background: var(--omni-bg-card, #22201d); padding: 6px 10px; border-radius: 4px; font-family: monospace; font-size: 0.72rem; color: var(--omni-text-secondary, #9e988f); word-break: break-all; max-height: 60px; overflow-y: auto;">
               ${escapeHtml(app.naddr)}
             </div>
           `;

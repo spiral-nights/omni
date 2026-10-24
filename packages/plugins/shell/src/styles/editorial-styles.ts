@@ -116,6 +116,14 @@ body.theme-editorial {
   color: var(--omni-text-primary) !important;
 }
 
+/* Guarantee non-visual elements are never displayed in host DOM */
+style, script, head, title, meta, link,
+.omni-component-slot style,
+.editorial-app-container style,
+.omni-slot style {
+  display: none !important;
+}
+
 /* Reset and Global Viewport */
 .editorial-shell-root {
   background-color: var(--omni-bg-canvas);
@@ -284,17 +292,17 @@ body.theme-editorial {
 }
 
 /* Expansive viewport for full-page apps */
-.editorial-shell-root.has-active-app:not(.feed-active) .editorial-main-content {
+.editorial-shell-root.has-active-app .editorial-main-content {
   max-width: 1360px;
   padding-left: 20px;
   padding-right: 20px;
 }
 
-.editorial-shell-root.has-active-app:not(.feed-active) .editorial-app-page {
+.editorial-shell-root.has-active-app .editorial-app-page {
   max-width: 100%;
 }
 
-.editorial-shell-root.has-active-app:not(.feed-active) .editorial-app-container {
+.editorial-shell-root.has-active-app .editorial-app-container {
   max-width: 100%;
   padding: 12px 0 24px;
 }
@@ -1538,9 +1546,6 @@ body.theme-editorial {
   display: flex;
   flex-direction: column;
   padding: 16px 16px 24px;
-  box-sizing: border-box;
-}
-  padding: 20px 16px 40px;
   box-sizing: border-box;
 }
 

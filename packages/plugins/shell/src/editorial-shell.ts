@@ -72,46 +72,55 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   }
 
   public getActivePageId(): string {
-    return this.activePluginId || "org.omni.plugin.feed";
+    if (this.activePluginId) return this.activePluginId;
+    const defaultPage = this.root?.querySelector("#editorial-page-app") as HTMLElement | null;
+    if (defaultPage?.dataset.pluginId) return defaultPage.dataset.pluginId;
+    const firstMain = this.installedPlugins.find((p) => p.viewport === "main" || p.pinned);
+    return firstMain?.id || "";
   }
 
   public ensureAppContainer(pluginId: string): HTMLElement {
-    if (pluginId === "org.omni.plugin.feed" || pluginId === "feed") {
-      const feedContainer = this.root.querySelector("#editorial-main-app-container") as HTMLElement | null;
-      if (feedContainer) return feedContainer;
+    const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const existing = this.root.querySelector<HTMLElement>(`#editorial-app-page-${safeId}`);
+    if (existing) {
+      return existing.querySelector(".editorial-app-container") as HTMLElement;
     }
 
-    const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
-    let appPage = this.root.querySelector(`#editorial-app-page-${safeId}`) as HTMLElement | null;
-    if (!appPage) {
-      appPage = document.createElement("section");
-      appPage.id = `editorial-app-page-${safeId}`;
-      appPage.className = "editorial-viewport-page editorial-app-page";
-      appPage.dataset.pluginId = pluginId;
-      appPage.style.cssText = "display: none; width: 100%; min-height: 100%; flex-direction: column;";
+    // Bind to the default unassigned app container if available
+    const defaultPage = this.root.querySelector<HTMLElement>("#editorial-page-app");
+    if (defaultPage && (!defaultPage.dataset.pluginId || defaultPage.dataset.pluginId === pluginId)) {
+      defaultPage.dataset.pluginId = pluginId;
+      const defaultContainer = defaultPage.querySelector<HTMLElement>(".editorial-app-container");
+      if (defaultContainer) return defaultContainer;
+    }
 
-      const slotInner = document.createElement("div");
-      slotInner.id = `editorial-slot-main-${safeId}`;
-      slotInner.className = "omni-slot editorial-app-container";
-      slotInner.style.cssText = "width: 100%; min-height: 100%; flex: 1; display: flex; flex-direction: column;";
-      appPage.appendChild(slotInner);
+    const appPage = document.createElement("section");
+    appPage.id = `editorial-app-page-${safeId}`;
+    appPage.className = "editorial-viewport-page editorial-app-page";
+    appPage.dataset.pluginId = pluginId;
+    appPage.style.cssText = "display: none; width: 100%; min-height: 100%; flex-direction: column;";
 
-      const streamEnd = document.createElement("div");
-      streamEnd.className = "editorial-stream-end";
-      streamEnd.innerHTML = `
-        <div class="editorial-stream-end-line">
-          <span>○ Synchronized</span>
-        </div>
-      `;
-      appPage.appendChild(streamEnd);
+    const slotInner = document.createElement("div");
+    slotInner.id = `editorial-slot-main-${safeId}`;
+    slotInner.className = "omni-slot editorial-app-container";
+    slotInner.style.cssText = "width: 100%; min-height: 100%; flex: 1; display: flex; flex-direction: column;";
+    appPage.appendChild(slotInner);
 
-      const mainContent = this.root.querySelector(".editorial-main-content");
-      const pageApps = this.root.querySelector("#editorial-page-apps");
-      if (mainContent && pageApps) {
-        mainContent.insertBefore(appPage, pageApps);
-      } else if (mainContent) {
-        mainContent.appendChild(appPage);
-      }
+    const streamEnd = document.createElement("div");
+    streamEnd.className = "editorial-stream-end";
+    streamEnd.innerHTML = `
+      <div class="editorial-stream-end-line">
+        <span>○ Synchronized</span>
+      </div>
+    `;
+    appPage.appendChild(streamEnd);
+
+    const mainContent = this.root.querySelector(".editorial-main-content");
+    const pageApps = this.root.querySelector("#editorial-page-apps");
+    if (mainContent && pageApps) {
+      mainContent.insertBefore(appPage, pageApps);
+    } else if (mainContent) {
+      mainContent.appendChild(appPage);
     }
     return appPage.querySelector(".editorial-app-container") as HTMLElement;
   }
@@ -606,44 +615,30 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     }
 
     // Hide all application viewports
-    const isFeed = pluginId === "org.omni.plugin.feed" || pluginId === "feed";
-    const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
-    const feedPage = this.root.querySelector("#editorial-page-app") as HTMLElement | null;
+    const defaultPage = this.root.querySelector("#editorial-page-app") as HTMLElement | null;
     const allAppPages = this.root.querySelectorAll<HTMLElement>(".editorial-app-page");
 
     allAppPages.forEach((p) => {
       p.classList.remove("active");
       p.style.display = "none";
     });
-    if (feedPage) {
-      feedPage.classList.remove("active");
-      feedPage.style.display = "none";
+    if (defaultPage) {
+      defaultPage.classList.remove("active");
+      defaultPage.style.display = "none";
     }
 
-    let targetContainer: HTMLElement;
+    this.root.classList.add("has-active-app");
 
-    if (isFeed) {
-      this.root.classList.add("feed-active");
-      this.root.classList.remove("has-active-app");
-      if (feedPage) {
-        feedPage.classList.add("active");
-        feedPage.style.display = "flex";
-      }
-      targetContainer = (this.mainAppContainer || this.root.querySelector("#editorial-main-app-container")) as HTMLElement;
-    } else {
-      this.root.classList.add("has-active-app");
-      this.root.classList.remove("feed-active");
-      targetContainer = this.ensureAppContainer(pluginId);
-      const appPage = this.root.querySelector(`#editorial-app-page-${safeId}`) as HTMLElement | null;
-      if (appPage) {
-        appPage.classList.add("active");
-        appPage.style.display = "flex";
-      }
+    const targetContainer = this.ensureAppContainer(pluginId);
+    const targetPage = targetContainer.closest(".editorial-viewport-page") as HTMLElement | null;
+    if (targetPage) {
+      targetPage.classList.add("active");
+      targetPage.style.display = "flex";
     }
 
     const btnFs = this.root.querySelector("#btn-editorial-toggle-fullscreen") as HTMLElement | null;
     if (btnFs) {
-      btnFs.style.display = isFeed ? "none" : "flex";
+      btnFs.style.display = "flex";
     }
 
     // Ensure the nsite is mounted and its component is projected into targetContainer
@@ -744,7 +739,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     this.activePage = "apps";
     this.activePluginId = null;
-    this.root.classList.remove("has-active-app", "feed-active");
+    this.root.classList.remove("has-active-app");
     if (this.isAppFullscreen) this.toggleAppFullscreen(false);
     const btnFsApps = this.root.querySelector("#btn-editorial-toggle-fullscreen") as HTMLElement | null;
     if (btnFsApps) btnFsApps.style.display = "none";
@@ -787,7 +782,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     this.activePage = "widgets";
     this.activePluginId = null;
-    this.root.classList.remove("has-active-app", "feed-active");
+    this.root.classList.remove("has-active-app");
     if (this.isAppFullscreen) this.toggleAppFullscreen(false);
     const btnFsWidgets = this.root.querySelector("#btn-editorial-toggle-fullscreen") as HTMLElement | null;
     if (btnFsWidgets) btnFsWidgets.style.display = "none";
@@ -831,7 +826,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     const pinned = this.getPinnedPlugins();
     for (const plugin of pinned) {
       if (!plugin.enabled) continue;
-      if (plugin.id === "org.omni.plugin.feed") continue;
       const placements = this.getPluginPlacements(plugin);
       const hasRunning = placements.some((pl) => Boolean(this.kernel.getSandbox(`${plugin.id}::${pl.id}`))) ||
         Boolean(this.kernel.getSandbox(plugin.id)) ||

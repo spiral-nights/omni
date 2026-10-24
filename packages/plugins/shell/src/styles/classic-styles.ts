@@ -69,6 +69,13 @@ export const CLASSIC_SHELL_CSS = /* css */ `
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Guarantee non-visual elements are never displayed in host DOM */
+style, script, head, title, meta, link,
+.omni-component-slot style,
+.omni-slot style {
+  display: none !important;
+}
+
 html, body {
   height: 100%;
   margin: 0;

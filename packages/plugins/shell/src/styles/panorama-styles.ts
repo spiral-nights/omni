@@ -88,6 +88,13 @@ body.theme-panorama,
   height: 0;
 }
 
+/* Guarantee non-visual elements are never displayed in host DOM */
+style, script, head, title, meta, link,
+.omni-component-slot style,
+.omni-slot style {
+  display: none !important;
+}
+
 /* 1. Panorama Hero Header & Pivot Navigation */
 .panorama-hero-header {
   padding: 10px 16px 6px 16px;

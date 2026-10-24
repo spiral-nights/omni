@@ -24,3 +24,11 @@ html, body {
   overscroll-behavior-y: contain;
   position: relative;
 }
+
+/* Guarantee non-visual elements are never displayed in host DOM */
+style, script, head, title, meta, link,
+.omni-component-slot style,
+.editorial-app-container style,
+.omni-slot style {
+  display: none !important;
+}
