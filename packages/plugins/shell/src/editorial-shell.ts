@@ -64,6 +64,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   private boundScrollHandler: (() => void) | null = null;
   private fullscreenFadeTimeout: any = null;
   private boundFullscreenMouseHandler: ((e: MouseEvent) => void) | null = null;
+  private boundFullscreenTouchHandler: ((e: TouchEvent) => void) | null = null;
 
   constructor(options: OmniShellOptions) {
     super(options);
@@ -282,6 +283,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       window.removeEventListener("mousemove", this.boundFullscreenMouseHandler);
       this.boundFullscreenMouseHandler = null;
     }
+    if (this.boundFullscreenTouchHandler && typeof window !== "undefined") {
+      window.removeEventListener("touchstart", this.boundFullscreenTouchHandler);
+      this.boundFullscreenTouchHandler = null;
+    }
     if (this.boundScrollHandler) {
       this.root.removeEventListener("scroll", this.boundScrollHandler, { capture: true } as any);
       this.boundScrollHandler = null;
@@ -419,12 +424,33 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         };
         window.addEventListener("mousemove", this.boundFullscreenMouseHandler, { passive: true });
       }
+
+      // Listen for touch taps near the top edge or top-right quadrant on mobile devices
+      if (!this.boundFullscreenTouchHandler && typeof window !== "undefined") {
+        this.boundFullscreenTouchHandler = (e: TouchEvent) => {
+          const touch = e.touches[0];
+          if (!touch) return;
+          const isNearTopRight = touch.clientY <= 90 || (window.innerWidth - touch.clientX <= 180 && touch.clientY <= 140);
+          if (isNearTopRight) {
+            btnExit?.classList.add("active-reveal");
+            if (this.fullscreenFadeTimeout) clearTimeout(this.fullscreenFadeTimeout);
+            this.fullscreenFadeTimeout = setTimeout(() => {
+              btnExit?.classList.remove("active-reveal");
+            }, 3000);
+          }
+        };
+        window.addEventListener("touchstart", this.boundFullscreenTouchHandler, { passive: true });
+      }
     } else {
       this.root.classList.remove("app-fullscreen");
       btnExit?.classList.remove("active-reveal");
       if (this.boundFullscreenMouseHandler && typeof window !== "undefined") {
         window.removeEventListener("mousemove", this.boundFullscreenMouseHandler);
         this.boundFullscreenMouseHandler = null;
+      }
+      if (this.boundFullscreenTouchHandler && typeof window !== "undefined") {
+        window.removeEventListener("touchstart", this.boundFullscreenTouchHandler);
+        this.boundFullscreenTouchHandler = null;
       }
     }
 

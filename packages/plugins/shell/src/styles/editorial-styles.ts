@@ -395,6 +395,27 @@ style, script, head, title, meta, link,
   display: flex !important;
 }
 
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  .editorial-floating-exit-fullscreen {
+    opacity: 0.42;
+    padding: 7px 14px;
+    font-size: 0.72rem;
+    min-height: 34px;
+    top: 14px;
+    right: 14px;
+  }
+  .editorial-floating-exit-fullscreen:active,
+  .editorial-floating-exit-fullscreen.active-reveal {
+    opacity: 1;
+    background: rgba(20, 19, 18, 0.98);
+    transform: scale(1.03);
+  }
+  .editorial-shell-root[data-theme-mode="light"] .editorial-floating-exit-fullscreen:active,
+  .editorial-shell-root[data-theme-mode="light"] .editorial-floating-exit-fullscreen.active-reveal {
+    background: rgba(251, 251, 249, 0.98);
+  }
+}
+
 .editorial-viewport-page {
   flex: 1;
   width: 100%;

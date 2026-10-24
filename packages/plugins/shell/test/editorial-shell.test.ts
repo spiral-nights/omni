@@ -436,6 +436,12 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       window.dispatchEvent(new MouseEvent("mousemove", { clientX: 200, clientY: 40 }));
       expect(exitBtn.classList.contains("active-reveal")).toBe(true);
 
+      // Trigger touchstart near the top edge for mobile touch devices
+      const touchEvent = new CustomEvent("touchstart", { bubbles: true }) as any;
+      touchEvent.touches = [{ clientX: 200, clientY: 45 }];
+      window.dispatchEvent(touchEvent);
+      expect(exitBtn.classList.contains("active-reveal")).toBe(true);
+
       // Exit fullscreen
       shell.toggleAppFullscreen(false);
       expect(root.classList.contains("app-fullscreen")).toBe(false);
