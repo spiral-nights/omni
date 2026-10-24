@@ -1124,6 +1124,83 @@ body {
   text-decoration: underline;
 }
 
+/* NIP-21 Mentions & References */
+.feed-nostr-entity {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--omni-bg-surface, #191816);
+  border: 1px solid var(--omni-border-subtle, #272522);
+  border-radius: var(--omni-radius-sm, 4px);
+  padding: 1px 6px;
+  font-size: 0.8rem;
+  color: var(--omni-accent-primary, #d4a373);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  vertical-align: baseline;
+}
+
+.feed-nostr-entity:hover {
+  background: var(--omni-bg-elevated, #22201d);
+  border-color: var(--omni-accent-primary, #d4a373);
+  text-decoration: none;
+}
+
+.feed-nostr-entity .nostr-badge-code {
+  font-family: var(--omni-font-mono, monospace);
+  font-size: 0.76rem;
+}
+
+/* NIP-21 / Quote Repost Preview Cards */
+.feed-quote-card {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: var(--omni-bg-surface, #191816);
+  border: 1px solid var(--omni-border-subtle, #272522);
+  border-left: 3px solid var(--omni-accent-primary, #d4a373);
+  border-radius: var(--omni-radius-sm, 6px);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.feed-quote-card:hover {
+  background: var(--omni-bg-elevated, #22201d);
+  border-color: var(--omni-border-strong, #3a3832);
+  border-left-color: var(--omni-accent-primary, #d4a373);
+}
+
+.feed-quote-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--omni-text-muted, #78716c);
+}
+
+.feed-quote-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--omni-accent-primary, #d4a373);
+}
+
+.feed-quote-author {
+  font-weight: 600;
+  color: var(--omni-text-primary, #ede8df);
+}
+
+.feed-quote-content {
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--omni-text-primary, #ede8df);
+  word-break: break-word;
+}
+
 .feed-post-actions,
 .note-actions {
   display: flex;

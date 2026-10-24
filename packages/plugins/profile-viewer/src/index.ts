@@ -24,10 +24,18 @@ function escapeHtml(str: string): string {
 function formatContent(text: string): string {
   const escaped = escapeHtml(text || "");
   const urlRegex = /(https?:\/\/[^\s<]+)/g;
-  return escaped.replace(urlRegex, (rawUrl) => {
+  let formatted = escaped.replace(urlRegex, (rawUrl) => {
     const url = rawUrl.replace(/^http:\/\//i, "https://");
     return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary, #d4a373); text-decoration: underline;">${url}</a>`;
   });
+
+  const nostrRegex = /(?:nostr:)?((?:npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{20,})/gi;
+  formatted = formatted.replace(nostrRegex, (match, entity) => {
+    const short = `${entity.slice(0, 9)}…${entity.slice(-4)}`;
+    return `<span class="pv-nostr-entity" style="color: var(--accent-primary, #d4a373); font-family: var(--font-mono, monospace); font-size: 0.8rem; background: var(--bg-canvas, #141312); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border-subtle, #272522);">${escapeHtml(short)}</span>`;
+  });
+
+  return formatted;
 }
 
 function formatTime(unixSec: number): string {
@@ -961,12 +969,34 @@ async function mountProfileViewer(root: HTMLElement) {
     updateActionButtons(pubkey);
   }
 
+  function openNoteInFeed(eventId: string) {
+    if (!eventId) return;
+    try {
+      localStorage.setItem("omni_active_note_id", eventId);
+    } catch (_) {}
+
+    const omniRef = (window as any).omni;
+    if (omniRef?.intents?.dispatch) {
+      omniRef.intents.dispatch("view_note", { eventId, id: eventId }).catch(() => {});
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("intent", {
+        detail: { action: "view_note", data: { eventId, id: eventId } }
+      })
+    );
+    window.dispatchEvent(
+      new CustomEvent("omni:intent", {
+        detail: { action: "view_note", data: { eventId, id: eventId } }
+      })
+    );
+  }
+
   function renderNoteCard(event: any): HTMLElement {
     const timeStr = event.created_at ? formatTime(event.created_at) : "just now";
     const card = html<HTMLDivElement>`
-      <div class="pv-note-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-sm, 8px); padding: 14px; display: flex; flex-direction: column; gap: 8px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted, #78716c);">
-          <span style="font-family: var(--font-mono, monospace);">kind: 1</span>
+      <div class="pv-note-card" data-note-id="${escapeHtml(event.id || "")}" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-sm, 8px); padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease;" title="View thread in Feed">
+        <div style="display: flex; justify-content: flex-end; align-items: center; font-size: 0.75rem; color: var(--text-muted, #78716c);">
           <span>${escapeHtml(timeStr)}</span>
         </div>
         <div style="font-size: 0.88rem; line-height: 1.45; color: var(--text-primary, #ede8df); white-space: pre-wrap; word-break: break-word;">
@@ -974,6 +1004,22 @@ async function mountProfileViewer(root: HTMLElement) {
         </div>
       </div>
     `;
+
+    card.addEventListener("mouseenter", () => {
+      card.style.borderColor = "var(--border-strong, #44413c)";
+      card.style.background = "var(--bg-elevated, #22201d)";
+    });
+    card.addEventListener("mouseleave", () => {
+      card.style.borderColor = "var(--border-subtle, #272522)";
+      card.style.background = "var(--bg-surface, #191816)";
+    });
+
+    card.addEventListener("click", (e) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("a, button")) return;
+      openNoteInFeed(event.id);
+    });
+
     return card;
   }
 

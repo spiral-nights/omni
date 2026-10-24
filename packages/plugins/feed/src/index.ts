@@ -145,7 +145,7 @@ export interface DecodedNostrEntity {
 }
 
 export function decodeNostrEntity(raw: string): DecodedNostrEntity | null {
-  const s = raw.trim().toLowerCase();
+  const s = raw.trim().replace(/^nostr:/i, "").toLowerCase();
   if (!/^(npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+$/.test(s)) return null;
   const decoded = bech32Decode(s);
   if (!decoded) return null;
@@ -201,6 +201,14 @@ export function decodeNostrEntity(raw: string): DecodedNostrEntity | null {
   }
 }
 
+export function extractQuotedNoteId(content: string): string | null {
+  if (!content) return null;
+  const match = content.match(/(?:nostr:)?((?:note|nevent)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{20,})/i);
+  if (!match) return null;
+  const decoded = decodeNostrEntity(match[1]);
+  return (decoded?.type === "note" || decoded?.type === "nevent") && decoded.hex ? decoded.hex : null;
+}
+
 export interface ParsedSearchQuery {
   authors: string[];
   keyword: string;
@@ -227,13 +235,42 @@ export function isNostrIdentifier(raw: string): boolean {
   return decodeNostrEntity(s) !== null;
 }
 
-function formatContent(text: string): string {
+export function formatContent(text: string): string {
   const escaped = escapeHtml(text || "");
   const urlRegex = /(https?:\/\/[^\s<]+)/g;
-  return escaped.replace(urlRegex, (rawUrl) => {
+  let formatted = escaped.replace(urlRegex, (rawUrl) => {
     const url = rawUrl.replace(/^http:\/\//i, "https://");
     return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="feed-link">${url}</a>`;
   });
+
+  // NIP-21: nostr:<bech32> URI scheme & bare Nostr entities
+  const nostrRegex = /(?:nostr:)?((?:npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{20,})/gi;
+  formatted = formatted.replace(nostrRegex, (match, entity) => {
+    const decoded = decodeNostrEntity(entity);
+    if (!decoded) return match;
+
+    if (decoded.type === "note" || decoded.type === "nevent") {
+      const hex = decoded.hex;
+      const label = decoded.type === "nevent" ? "Event" : "Note";
+      const short = `${entity.slice(0, 10)}…${entity.slice(-4)}`;
+      return `<a href="nostr:${entity}" data-nostr-entity="${entity}" data-note-id="${hex || ""}" class="feed-nostr-entity feed-nostr-note" title="View Note Thread"><span class="nostr-badge-icon">💬</span> ${label} <code class="nostr-badge-code">${short}</code></a>`;
+    }
+
+    if (decoded.type === "npub" || decoded.type === "nprofile") {
+      const pubkey = decoded.hex || decoded.pubkey;
+      const short = `${entity.slice(0, 9)}…${entity.slice(-4)}`;
+      return `<a href="nostr:${entity}" data-nostr-entity="${entity}" data-pubkey="${pubkey || ""}" class="feed-nostr-entity feed-nostr-profile" title="View Profile"><span class="nostr-badge-icon">@</span><code class="nostr-badge-code">${short}</code></a>`;
+    }
+
+    if (decoded.type === "naddr") {
+      const label = decoded.identifier || `${entity.slice(0, 10)}…`;
+      return `<a href="nostr:${entity}" data-nostr-entity="${entity}" class="feed-nostr-entity feed-nostr-addr" title="View Addressable Event"><span class="nostr-badge-icon">📜</span> <code class="nostr-badge-code">${escapeHtml(label)}</code></a>`;
+    }
+
+    return match;
+  });
+
+  return formatted;
 }
 
 // Crisp geometric monochrome SVG line icons (Bluesky style)
@@ -685,6 +722,31 @@ function mountFeed(root: any) {
     return true;
   }
 
+  container.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    const nostrNote = target.closest<HTMLElement>(".feed-nostr-note");
+    if (nostrNote) {
+      e.preventDefault();
+      e.stopPropagation();
+      const noteId = nostrNote.dataset.noteId;
+      if (noteId) {
+        openThread(noteId);
+      }
+      return;
+    }
+
+    const nostrProfile = target.closest<HTMLElement>(".feed-nostr-profile");
+    if (nostrProfile) {
+      e.preventDefault();
+      e.stopPropagation();
+      const pubkey = nostrProfile.dataset.pubkey;
+      if (pubkey) {
+        dispatchViewProfile(pubkey);
+      }
+      return;
+    }
+  });
+
   // Initialize composer avatar with user pubkey if available
   try {
     const nostr = (window as any).nostr;
@@ -839,6 +901,41 @@ function mountFeed(root: any) {
     const initReposts = pseudoRand % 7;
     const initReplies = pseudoRand % 5;
 
+    const quotedNoteId = extractQuotedNoteId(event.content || "");
+    let quoteCardMarkup = "";
+    if (quotedNoteId && quotedNoteId !== event.id) {
+      const quoted = allKnownNotes.get(quotedNoteId);
+      if (quoted) {
+        const qMeta = getAuthorMeta(quoted.pubkey);
+        const qTime = quoted.created_at ? formatTime(quoted.created_at) : "";
+        quoteCardMarkup = `
+          <div class="feed-quote-card" data-note-id="${quotedNoteId}">
+            <div class="feed-quote-header">
+              <span class="feed-quote-badge">Quoted Note</span>
+              <strong class="feed-quote-author">${escapeHtml(qMeta.name || qMeta.handle || "Author")}</strong>
+              <span class="feed-quote-time">${escapeHtml(qTime)}</span>
+            </div>
+            <div class="feed-quote-content">${formatContent(quoted.content || "")}</div>
+          </div>
+        `;
+      } else {
+        quoteCardMarkup = `
+          <div class="feed-quote-card loading" data-note-id="${quotedNoteId}">
+            <div class="feed-quote-header">
+              <span class="feed-quote-badge">Quoted Note</span>
+              <span class="feed-quote-id">${quotedNoteId.slice(0, 8)}…${quotedNoteId.slice(-4)}</span>
+            </div>
+            <div class="feed-quote-content" style="color: var(--text-muted, #78716c); font-style: italic;">Loading quoted note…</div>
+          </div>
+        `;
+        if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+          try {
+            activeWs.send(JSON.stringify(["REQ", `quote_${quotedNoteId.slice(0, 8)}`, { ids: [quotedNoteId], limit: 1 }]));
+          } catch (_) {}
+        }
+      }
+    }
+
     const card = html<HTMLElement>`
       <article class="feed-post note-card" data-note-id="${escapeHtml(event.id || "")}" data-author-pubkey="${escapeHtml(event.pubkey || "")}" title="Click to view conversation thread">
         <div class="feed-post-avatar-col">
@@ -857,6 +954,7 @@ function mountFeed(root: any) {
           </div>
           ${isReply ? `<div class="feed-reply-badge">↳ Replying to thread</div>` : ""}
           <div class="feed-post-content note-content">${formatContent(event.content || "")}</div>
+          ${quoteCardMarkup}
           <div class="feed-post-actions note-actions">
             <button class="feed-action-btn note-action-btn action-reply btn-reply" title="Reply">
               ${ICONS.reply}
@@ -931,10 +1029,19 @@ function mountFeed(root: any) {
       openThread(event, true);
     });
 
-    // Clicking note card (excluding links, action buttons, and author details) opens the full thread
+    // Quote card click opens quoted thread
+    const quoteEl = card.querySelector<HTMLElement>(".feed-quote-card");
+    if (quoteEl && quotedNoteId) {
+      quoteEl.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openThread(quotedNoteId);
+      });
+    }
+
+    // Clicking note card (excluding links, action buttons, quote card, and author details) opens the full thread
     card.addEventListener("click", (e) => {
       const target = e.target as HTMLElement;
-      if (target.closest(".feed-avatar, .feed-author-name, .feed-author-handle, .note-action-btn, a, button")) {
+      if (target.closest(".feed-avatar, .feed-author-name, .feed-author-handle, .note-action-btn, .feed-quote-card, a, button")) {
         return;
       }
       openThread(event);
@@ -971,9 +1078,29 @@ function mountFeed(root: any) {
     return card;
   }
 
+  function updateQuoteCards(ev: any) {
+    if (!ev || !ev.id) return;
+    const cards = container.querySelectorAll<HTMLElement>(`.feed-quote-card[data-note-id="${ev.id}"]`);
+    if (cards.length === 0) return;
+    const meta = getAuthorMeta(ev.pubkey);
+    const timeStr = ev.created_at ? formatTime(ev.created_at) : "";
+    cards.forEach((card) => {
+      card.classList.remove("loading");
+      card.innerHTML = `
+        <div class="feed-quote-header">
+          <span class="feed-quote-badge">Quoted Note</span>
+          <strong class="feed-quote-author">${escapeHtml(meta.name || meta.handle || "Author")}</strong>
+          <span class="feed-quote-time">${escapeHtml(timeStr)}</span>
+        </div>
+        <div class="feed-quote-content">${formatContent(ev.content || "")}</div>
+      `;
+    });
+  }
+
   function handleIncomingEvent(event: any, prepend = false) {
     if (!event || !event.id) return;
     allKnownNotes.set(event.id, event);
+    updateQuoteCards(event);
     if (renderedIds.has(event.id)) return;
     if (isContentFiltered(event.content || "", filterPatterns)) return;
     if (!shouldDisplayInActiveTab(event)) return;
@@ -2041,6 +2168,12 @@ function mountFeed(root: any) {
 
               clearTimeout(initialLoadTimeout);
               allKnownNotes.set(ev.id, ev);
+              updateQuoteCards(ev);
+
+              // Handle quote arrivals
+              if (subId?.startsWith("quote_")) {
+                return;
+              }
 
               // Handle thread-specific arrivals
               if (subId?.startsWith("thread_focus_")) {

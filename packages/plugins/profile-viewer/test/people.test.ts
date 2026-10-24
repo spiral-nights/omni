@@ -73,7 +73,7 @@ describe("People plugin (profile, follows, mutes)", () => {
       }))
     };
     (window as any).omni = {
-      intents: { handle: vi.fn() }
+      intents: { handle: vi.fn(), dispatch: vi.fn(async () => ({ handled: true })) }
     };
     (window as any).location.search = "";
     (window as any).location.hash = "";
@@ -318,5 +318,44 @@ describe("People plugin (profile, follows, mutes)", () => {
     cards = peopleRoot().querySelectorAll(".people-user-card");
     expect(cards.length).toBe(1);
     expect(cards[0].getAttribute("data-pubkey")).toBe(friendPubkey);
+  });
+
+  it("renders timeline notes without 'Kind 1' badge and clicking a note card dispatches view_note intent", async () => {
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+    const notesReq = ws.sent.find((m: any[]) => m[0] === "REQ" && String(m[1]).startsWith("pv_notes_"));
+    const subId = notesReq ? notesReq[1] : undefined;
+
+    // Deliver note for active profile
+    ws.deliver(["EVENT", subId, {
+      id: "note-123456",
+      pubkey: myPubkey,
+      kind: 1,
+      created_at: 1700000000,
+      tags: [],
+      content: "Hello from Nostr! Check nostr:nevent1qqs8xyzqpzry9x8gf2tvdw0s3jn54khce6mua7l"
+    }]);
+    await flush();
+
+    const noteCard = peopleRoot().querySelector<HTMLElement>(".pv-note-card");
+    expect(noteCard).toBeTruthy();
+
+    // Verify "kind: 1" badge is omitted
+    expect(noteCard?.textContent).not.toContain("kind: 1");
+
+    // Verify NIP-21 entity is linkified / badge-styled
+    const entity = noteCard?.querySelector(".pv-nostr-entity");
+    expect(entity).toBeTruthy();
+
+    // Click note card
+    noteCard?.click();
+    await flush();
+
+    // Verify view_note intent was dispatched
+    expect((window as any).omni.intents.dispatch).toHaveBeenCalledWith("view_note", {
+      eventId: "note-123456",
+      id: "note-123456"
+    });
+    expect(localStorage.getItem("omni_active_note_id")).toBe("note-123456");
   });
 });

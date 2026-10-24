@@ -279,4 +279,51 @@ describe("feed plugin thread view and following tabs", () => {
     const repliesList = threadPage.querySelector<HTMLElement>(".thread-replies-list")!;
     expect(repliesList.textContent).toContain("I totally agree with this point!");
   });
+
+  it("handles NIP-21 URIs and renders interactive entity links and quote cards", async () => {
+    await flush();
+    feed().querySelector<HTMLButtonElement>(".btn-tab-global")!.click();
+    const ws = FakeWebSocket.instances[0];
+
+    // Deliver note containing NIP-21 note reference
+    const quotedHex = "f".repeat(64);
+    // npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6
+    const testNpub = "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6";
+    // note107u6a908g2wuv8z0swc4e3ludv2m7p8x0y7u6a908g2wuv8z0swc5mclst
+    const testNote = "note16gv8m3wdywc2r9d5krrzhxaar070ped9t7xmwcdx6kkdr3455vlqs6qdre";
+
+    ws.deliver(["EVENT", "feed-initial", {
+      id: "quoting-note-1",
+      pubkey: strangerPubkey,
+      kind: 1,
+      created_at: 1700000050,
+      content: `Check this out nostr:${testNote} from nostr:${testNpub}`,
+      tags: []
+    }]);
+    await flush();
+
+    const noteCard = feed().querySelector<HTMLElement>(".note-card")!;
+    expect(noteCard).toBeTruthy();
+
+    // Verify NIP-21 links are rendered
+    const noteLink = noteCard.querySelector<HTMLAnchorElement>(".feed-nostr-note");
+    expect(noteLink).toBeTruthy();
+    expect(noteLink?.textContent).toContain("Note");
+
+    const profileLink = noteCard.querySelector<HTMLAnchorElement>(".feed-nostr-profile");
+    expect(profileLink).toBeTruthy();
+    expect(profileLink?.textContent).toContain("@");
+
+    // Verify quote card is rendered
+    const quoteCard = noteCard.querySelector<HTMLElement>(".feed-quote-card");
+    expect(quoteCard).toBeTruthy();
+    expect(quoteCard?.textContent).toContain("Quoted Note");
+
+    // Click on quote card to open thread
+    quoteCard?.click();
+    await flush();
+
+    const threadPage = feed().querySelector<HTMLElement>(".feed-thread-page")!;
+    expect(threadPage.style.display).toBe("block");
+  });
 });

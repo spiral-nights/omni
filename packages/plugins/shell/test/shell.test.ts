@@ -942,14 +942,13 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
         name: "Profile",
         description: "Profile management",
         icon: "user",
-        viewport: "main",
+        viewport: "dock",
         enabled: true,
-        pinned: true,
         scriptContent: "console.log('profile');",
         placements: [
           {
-            id: "main-primary",
-            viewport: "main",
+            id: "dock-primary",
+            viewport: "dock",
             route: "",
             viewId: "main",
             enabled: true
