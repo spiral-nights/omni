@@ -732,4 +732,86 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(root.innerHTML).toContain("✨");
     });
   });
+
+  describe("Relay Management & Relay Access Scoping in Editorial", () => {
+    it("renders Relay Access section in plugin settings and persists custom relay selections", async () => {
+      shell.mount();
+      shell.openSettings();
+
+      // Configure a relay in the pool
+      kernel.relayPool.addRelay("wss://relay.damus.io");
+      kernel.relayPool.addRelay("wss://relay.ditto.pub");
+
+      shell.renderPluginSettingsList();
+
+      const feedDetails = root.querySelector("#plugin-details-org-omni-plugin-feed");
+      expect(feedDetails).toBeTruthy();
+
+      const relayBox = feedDetails?.querySelector(".plugin-relay-access-box");
+      expect(relayBox).toBeTruthy();
+
+      const radCustom = relayBox?.querySelector("input[type=radio][value='custom'], input[type=radio]:not([checked])") as HTMLInputElement | null;
+      expect(radCustom).toBeTruthy();
+
+      // Select custom radio
+      const radRadios = relayBox?.querySelectorAll("input[type=radio]");
+      const radAll = radRadios?.[0] as HTMLInputElement;
+      const radCustomBtn = radRadios?.[1] as HTMLInputElement;
+      expect(radAll).toBeTruthy();
+      expect(radCustomBtn).toBeTruthy();
+
+      radCustomBtn.click();
+      radCustomBtn.dispatchEvent(new Event("change"));
+
+      const feedPlugin = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.feed")!;
+      expect(feedPlugin.relays).toBeDefined();
+      expect(Array.isArray(feedPlugin.relays)).toBe(true);
+
+      // Verify it was persisted to localStorage
+      const savedWs = JSON.parse(localStorage.getItem(shell.LOCAL_WORKSPACE_KEY) || "{}");
+      const savedFeed = savedWs.plugins?.find((p: any) => p.id === "org.omni.plugin.feed");
+      expect(savedFeed.relays).toBeDefined();
+    });
+
+    it("renders Connected Relays Mesh in Workspace & Relays tab and allows adding/removing relays dynamically", () => {
+      shell.mount();
+      shell.openSettings();
+
+      const tabWorkspace = root.querySelector("#tab-editorial-workspace") as HTMLElement | null;
+      expect(tabWorkspace).toBeTruthy();
+      tabWorkspace?.click();
+
+      const panelWorkspace = root.querySelector("#panel-editorial-workspace");
+      expect(panelWorkspace).toBeTruthy();
+
+      const relayList = panelWorkspace?.querySelector("#editorial-relays-list");
+      expect(relayList).toBeTruthy();
+
+      // Add a relay via input
+      const input = panelWorkspace?.querySelector("#editorial-add-relay-input") as HTMLInputElement;
+      const btnAdd = panelWorkspace?.querySelector("#btn-editorial-add-relay") as HTMLButtonElement;
+      expect(input).toBeTruthy();
+      expect(btnAdd).toBeTruthy();
+
+      input.value = "wss://nos.lol";
+      btnAdd.click();
+
+      expect(kernel.relayPool.getAllRelays().some((r) => r.url === "wss://nos.lol")).toBe(true);
+      expect(panelWorkspace?.innerHTML).toContain("wss://nos.lol");
+
+      // Quick add via preset
+      const presetDamus = panelWorkspace?.querySelector(".btn-editorial-preset-relay[data-url='wss://relay.damus.io']") as HTMLButtonElement;
+      expect(presetDamus).toBeTruthy();
+      presetDamus.click();
+
+      expect(kernel.relayPool.getAllRelays().some((r) => r.url === "wss://relay.damus.io")).toBe(true);
+
+      // Remove relay via delete button
+      const removeBtns = panelWorkspace?.querySelectorAll(".btn-remove-editorial-relay");
+      expect(removeBtns?.length).toBeGreaterThanOrEqual(2);
+      (removeBtns?.[0] as HTMLButtonElement).click();
+
+      expect(panelWorkspace?.querySelectorAll(".editorial-relay-item").length).toBe(1);
+    });
+  });
 });

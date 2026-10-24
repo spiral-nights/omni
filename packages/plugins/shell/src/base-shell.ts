@@ -684,7 +684,7 @@ export abstract class BaseShell implements OmniShellHost {
           route: p.route,
           viewId: p.viewId,
           pinned: p.pinned,
-          relays: p.relays,
+          relays: Array.isArray(p.relays) && p.relays.length > 0 ? p.relays : [],
           handledIntents: p.handledIntents,
           disabledIntents: p.disabledIntents,
           placements,
@@ -902,7 +902,7 @@ export abstract class BaseShell implements OmniShellHost {
           plugin.displayName = item.displayName;
         }
         if (item.relays !== undefined) {
-          plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
+          plugin.relays = Array.isArray(item.relays) && item.relays.length > 0 ? item.relays : undefined;
         }
         if (item.handledIntents !== undefined) {
           plugin.handledIntents = item.handledIntents;
@@ -1078,7 +1078,7 @@ export abstract class BaseShell implements OmniShellHost {
               if (typeof item.pinned === "boolean") plugin.pinned = item.pinned;
               if (item.displayName !== undefined) plugin.displayName = item.displayName;
               if (item.relays !== undefined) {
-                plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
+                plugin.relays = Array.isArray(item.relays) && item.relays.length > 0 ? item.relays : undefined;
               }
               if (item.placements && Array.isArray(item.placements)) {
                 // Filter out legacy "main" placements and phantom "dock" placements that were converted from main-primary

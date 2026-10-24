@@ -85,6 +85,12 @@ describe("RelayPool Management (Issue 5)", () => {
 
     const thirdPool = new RelayPool();
     expect(thirdPool.getAllRelays().some((r) => r.url === "wss://relay.primal.net")).toBe(false);
+
+    // Add relay again via thirdPool
+    thirdPool.addRelay("wss://relay.primal.net");
+    // New instance WITH bootstrapRelays option (as in apps/web/main.ts on refresh) must still load persisted relays
+    const fourthPool = new RelayPool({ bootstrapRelays: ["wss://relay.damus.io", "wss://nos.lol"] });
+    expect(fourthPool.getAllRelays().some((r) => r.url === "wss://relay.primal.net")).toBe(true);
   });
 
   it("auto-prefixes wss:// when protocol is omitted", () => {
