@@ -773,45 +773,25 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(savedFeed.relays).toBeDefined();
     });
 
-    it("renders Connected Relays Mesh in Workspace & Relays tab and allows adding/removing relays dynamically", () => {
+    it("renders Workspace & Sync tab for NIP-78 synchronization without duplicating relays plugin UI", () => {
       shell.mount();
       shell.openSettings();
 
       const tabWorkspace = root.querySelector("#tab-editorial-workspace") as HTMLElement | null;
       expect(tabWorkspace).toBeTruthy();
+      expect(tabWorkspace?.textContent).toContain("Workspace");
+      expect(tabWorkspace?.textContent).toContain("Sync");
       tabWorkspace?.click();
 
       const panelWorkspace = root.querySelector("#panel-editorial-workspace");
       expect(panelWorkspace).toBeTruthy();
 
-      const relayList = panelWorkspace?.querySelector("#editorial-relays-list");
-      expect(relayList).toBeTruthy();
+      // NIP-78 Sync button is present
+      const btnSync = panelWorkspace?.querySelector("#btn-editorial-sync-workspace");
+      expect(btnSync).toBeTruthy();
 
-      // Add a relay via input
-      const input = panelWorkspace?.querySelector("#editorial-add-relay-input") as HTMLInputElement;
-      const btnAdd = panelWorkspace?.querySelector("#btn-editorial-add-relay") as HTMLButtonElement;
-      expect(input).toBeTruthy();
-      expect(btnAdd).toBeTruthy();
-
-      input.value = "wss://nos.lol";
-      btnAdd.click();
-
-      expect(kernel.relayPool.getAllRelays().some((r) => r.url === "wss://nos.lol")).toBe(true);
-      expect(panelWorkspace?.innerHTML).toContain("wss://nos.lol");
-
-      // Quick add via preset
-      const presetDamus = panelWorkspace?.querySelector(".btn-editorial-preset-relay[data-url='wss://relay.damus.io']") as HTMLButtonElement;
-      expect(presetDamus).toBeTruthy();
-      presetDamus.click();
-
-      expect(kernel.relayPool.getAllRelays().some((r) => r.url === "wss://relay.damus.io")).toBe(true);
-
-      // Remove relay via delete button
-      const removeBtns = panelWorkspace?.querySelectorAll(".btn-remove-editorial-relay");
-      expect(removeBtns?.length).toBeGreaterThanOrEqual(2);
-      (removeBtns?.[0] as HTMLButtonElement).click();
-
-      expect(panelWorkspace?.querySelectorAll(".editorial-relay-item").length).toBe(1);
+      // Does not contain a duplicated relay mesh in settings (relays belong to @omni/plugin-relays)
+      expect(panelWorkspace?.querySelector("#editorial-relays-list")).toBeNull();
     });
   });
 });

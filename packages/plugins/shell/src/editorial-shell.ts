@@ -232,14 +232,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     // 10. Pull-to-refresh
     this.initPullToRefresh();
 
-    // 10b. Relay pool status listener for settings modal
-    this.kernel.relayPool.onStatusChange(() => {
-      const modal = this.root.querySelector("#editorial-settings-modal");
-      if (modal?.classList.contains("open")) {
-        this.renderRelaysManager();
-      }
-    });
-
     // 11. Listen for browser back / forward navigation & Escape key
     if (typeof window !== "undefined") {
       window.addEventListener("popstate", (e: PopStateEvent) => {
@@ -321,7 +313,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.renderWidgetsView();
     this.renderShellManager();
     this.renderPluginSettingsList();
-    this.renderRelaysManager();
   }
 
   // --- Theme Mode & Accent Illumination ---
@@ -1191,7 +1182,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     modal?.classList.add("open");
     this.renderPluginSettingsList();
     this.renderShellManager();
-    this.renderRelaysManager();
   }
 
   public closeSettings(pushState = true): void {
@@ -1225,9 +1215,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         p.classList.toggle("active", isMatch);
         (p as HTMLElement).style.display = isMatch ? "flex" : "none";
       });
-      if (tabKey === "workspace") {
-        this.renderRelaysManager();
-      }
       if (mobileSelect && mobileSelect.value !== tabKey) {
         mobileSelect.value = tabKey;
       }
@@ -1278,39 +1265,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       } catch (err: any) {
         alert(`Sync failed: ${err.message || String(err)}`);
       }
-    });
-
-    // Relay Management in Settings
-    const addRelayInput = this.root.querySelector("#editorial-add-relay-input") as HTMLInputElement | null;
-    const btnAddRelay = this.root.querySelector("#btn-editorial-add-relay") as HTMLButtonElement | null;
-
-    const handleAddRelay = (urlRaw: string) => {
-      let url = urlRaw.trim();
-      if (!url) return;
-      if (!url.startsWith("ws://") && !url.startsWith("wss://")) {
-        url = `wss://${url}`;
-      }
-      this.kernel.relayPool.addRelay(url);
-      if (addRelayInput) addRelayInput.value = "";
-      this.renderRelaysManager();
-      this.renderPluginSettingsList();
-    };
-
-    btnAddRelay?.addEventListener("click", () => {
-      if (addRelayInput) handleAddRelay(addRelayInput.value);
-    });
-
-    addRelayInput?.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        handleAddRelay(addRelayInput.value);
-      }
-    });
-
-    this.root.querySelectorAll(".btn-editorial-preset-relay").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const url = (btn as HTMLElement).dataset.url;
-        if (url) handleAddRelay(url);
-      });
     });
 
     // Plugins Filter & Expand All
@@ -1518,69 +1472,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         }
       }
     });
-  }
-
-  // --- Connected Relays Manager ---
-
-  public renderRelaysManager(): void {
-    const listContainer = this.root.querySelector("#editorial-relays-list");
-    const countBadge = this.root.querySelector("#editorial-relays-count-badge");
-    if (!listContainer) return;
-
-    const relays = this.kernel.relayPool.getAllRelays();
-    const connectedCount = relays.filter((r) => r.status === "connected").length;
-
-    if (countBadge) {
-      countBadge.textContent = `${connectedCount} / ${relays.length} connected`;
-    }
-
-    listContainer.innerHTML = "";
-
-    if (relays.length === 0) {
-      const empty = document.createElement("div");
-      empty.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted); padding: 8px 0; text-align: center;";
-      empty.textContent = "No relays connected. Operating in 0ms local offline mode.";
-      listContainer.appendChild(empty);
-      return;
-    }
-
-    for (const r of relays) {
-      const isConnected = r.status === "connected";
-      const isConnecting = r.status === "connecting";
-
-      let statusColor = "#ef4444";
-      let statusLabel = "Offline";
-      if (isConnected) {
-        statusColor = "var(--omni-accent-primary)";
-        statusLabel = "Connected";
-      } else if (isConnecting) {
-        statusColor = "#f59e0b";
-        statusLabel = "Connecting...";
-      }
-
-      const row = document.createElement("div");
-      row.className = "editorial-relay-item";
-      row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 6px 10px; font-size: 0.78rem;";
-
-      row.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; flex: 1; min-width: 0;">
-          <span style="width: 7px; height: 7px; border-radius: 50%; background: ${statusColor}; flex-shrink: 0;" title="${statusLabel}"></span>
-          <div style="display: flex; flex-direction: column; overflow: hidden; min-width: 0; flex: 1;">
-            <span style="font-family: var(--omni-font-mono); font-size: 0.75rem; color: var(--omni-text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${r.url}</span>
-            <span style="font-family: var(--omni-font-mono); font-size: 0.62rem; color: ${statusColor}; line-height: 1; margin-top: 2px;">${statusLabel}</span>
-          </div>
-        </div>
-        <button class="btn-remove-editorial-relay" title="Disconnect & Remove Relay" style="background: transparent; border: none; color: var(--omni-text-muted); font-size: 0.85rem; cursor: pointer; padding: 2px 6px; line-height: 1; border-radius: 4px;">✕</button>
-      `;
-
-      row.querySelector(".btn-remove-editorial-relay")?.addEventListener("click", () => {
-        this.kernel.relayPool.removeRelay(r.url);
-        this.renderRelaysManager();
-        this.renderPluginSettingsList();
-      });
-
-      listContainer.appendChild(row);
-    }
   }
 
   // --- Installed Plugins Settings List ---
@@ -2158,7 +2049,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
                 <select id="editorial-settings-mobile-select" class="editorial-settings-mobile-select" aria-label="Settings Section">
                   <option value="appearance">Appearance & Shells</option>
                   <option value="plugins">Installed Plugins</option>
-                  <option value="workspace">Workspace & Relays</option>
+                  <option value="workspace">Workspace & Sync</option>
                 </select>
                 <div class="editorial-settings-select-arrow">${icon("chevron-down", 14)}</div>
               </div>
@@ -2178,7 +2069,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
               <button class="editorial-settings-tab-btn" data-tab="workspace" id="tab-editorial-workspace">
                 <span class="editorial-tab-icon">${icon("cloud", 16)}</span>
                 <span class="editorial-tab-title">Workspace</span>
-                <span class="editorial-tab-sub">& Relays</span>
+                <span class="editorial-tab-sub">& Sync</span>
               </button>
             </div>
           </div>
@@ -2276,49 +2167,9 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
               </div>
             </div>
 
-            <!-- Tab Panel 3: Workspace & Relays -->
+            <!-- Tab Panel 3: Workspace & Sync -->
             <div class="editorial-settings-tab-panel" id="panel-editorial-workspace" style="display: none;">
-              <!-- Section A: Connected Relays Mesh -->
               <div class="editorial-pref-group">
-                <div class="editorial-pref-header">
-                  <div>
-                    <span class="editorial-pref-label">Decentralized Relay Mesh</span>
-                    <p style="font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-muted); margin: 2px 0 0;">
-                      Configure connected WebSocket relays for real-time gossip routing and sync.
-                    </p>
-                  </div>
-                  <span id="editorial-relays-count-badge" class="editorial-pref-status">0 connected</span>
-                </div>
-                <div class="editorial-pref-card" style="display: flex; flex-direction: column; gap: 10px;">
-                  <div id="editorial-relays-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
-
-                  <div style="display: flex; gap: 8px; margin-top: 4px;">
-                    <input
-                      id="editorial-add-relay-input"
-                      type="text"
-                      placeholder="wss://relay.example.com"
-                      style="flex: 1; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 6px 10px; font-family: var(--omni-font-mono); font-size: 0.75rem; color: var(--omni-text-primary);"
-                    />
-                    <button id="btn-editorial-add-relay" class="editorial-btn-primary" style="font-size: 0.72rem; padding: 4px 12px; white-space: nowrap;">
-                      + Add Relay
-                    </button>
-                  </div>
-
-                  <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px;">
-                    <span style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); text-transform: uppercase;">Quick Add Popular Relays:</span>
-                    <div id="editorial-relay-presets" style="display: flex; flex-wrap: wrap; gap: 4px;">
-                      <button class="editorial-btn-secondary btn-editorial-preset-relay" data-url="wss://relay.damus.io" style="font-size: 0.68rem; padding: 2px 8px;">+ Damus</button>
-                      <button class="editorial-btn-secondary btn-editorial-preset-relay" data-url="wss://relay.ditto.pub" style="font-size: 0.68rem; padding: 2px 8px;">+ Ditto</button>
-                      <button class="editorial-btn-secondary btn-editorial-preset-relay" data-url="wss://nos.lol" style="font-size: 0.68rem; padding: 2px 8px;">+ Nos.lol</button>
-                      <button class="editorial-btn-secondary btn-editorial-preset-relay" data-url="wss://relay.primal.net" style="font-size: 0.68rem; padding: 2px 8px;">+ Primal</button>
-                      <button class="editorial-btn-secondary btn-editorial-preset-relay" data-url="wss://relay.nostr.band" style="font-size: 0.68rem; padding: 2px 8px;">+ Nostr.band</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Section B: NIP-78 Workspace Synchronization -->
-              <div class="editorial-pref-group" style="margin-top: 14px;">
                 <div class="editorial-pref-header">
                   <span class="editorial-pref-label">NIP-78 Workspace Synchronization</span>
                   <span class="editorial-pref-status">Decentralized</span>
@@ -2332,6 +2183,9 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
                       Sync Workspace to Relays
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
                 </div>
               </div>
             </div>
