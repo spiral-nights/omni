@@ -455,6 +455,26 @@
   // and autoplay restrictions on sandboxed cross-origin frames.
   if (typeof window !== "undefined") {
     const origSpeech = window.speechSynthesis;
+    let cachedHostVoices = [];
+    let hostVoicesQueried = false;
+
+    function queryHostVoices() {
+      if (hostVoicesQueried) return;
+      hostVoicesQueried = true;
+      callRpc("system.getVoices", {})
+        .then((res) => {
+          if (res && Array.isArray(res.voices)) {
+            cachedHostVoices = res.voices;
+            if (typeof virtualSpeech.onvoiceschanged === "function") {
+              try {
+                virtualSpeech.onvoiceschanged(new Event("voiceschanged"));
+              } catch (_) {}
+            }
+          }
+        })
+        .catch(() => {});
+    }
+
     const virtualSpeech = {
       get speaking() {
         return origSpeech ? origSpeech.speaking : false;
@@ -472,7 +492,14 @@
         if (origSpeech) origSpeech.onvoiceschanged = fn;
       },
       getVoices() {
-        return origSpeech ? origSpeech.getVoices() : [];
+        if (origSpeech && typeof origSpeech.getVoices === "function") {
+          const v = origSpeech.getVoices();
+          if (v && v.length > 0) return v;
+        }
+        if (cachedHostVoices.length === 0) {
+          queryHostVoices();
+        }
+        return cachedHostVoices;
       },
       cancel() {
         if (origSpeech) {
@@ -497,6 +524,7 @@
         const rate = utterance.rate || 1;
         const pitch = utterance.pitch || 1;
         const lang = utterance.lang || "";
+        const voice = utterance.voice ? (utterance.voice.name || utterance.voice.voiceURI) : undefined;
 
         // Attempt native speech inside sandbox if browser allows it
         if (origSpeech) {
@@ -507,7 +535,7 @@
         }
 
         // Bridge to host top-level window where user gesture and audio permissions are guaranteed
-        callRpc("system.speak", { text, rate, pitch, lang }).catch(() => {});
+        callRpc("system.speak", { text, rate, pitch, lang, voice }).catch(() => {});
       }
     };
 

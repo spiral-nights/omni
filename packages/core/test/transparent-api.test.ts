@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import "fake-indexeddb/auto";
 import { OmniKernel } from "../src/kernel/omni-kernel.js";
-import { JsonRpcDispatcher } from "../src/ipc/json-rpc-dispatcher.js";
+import { JsonRpcDispatcher, selectBestVoice } from "../src/ipc/json-rpc-dispatcher.js";
 import omniRuntimeScript from "../src/sandbox/omni-runtime.js?raw";
 
 describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto-Mount)", () => {
@@ -316,17 +316,27 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
     channelKernelRpc.port2.close();
   });
 
-  it("bridges system.speak and system.cancelSpeech over JsonRpcDispatcher to host speech synthesis", async () => {
+  it("bridges system.speak, system.getVoices, and system.cancelSpeech over JsonRpcDispatcher to host speech synthesis with high-quality voice selection", async () => {
     const channelKernelRpc = new MessageChannel();
 
-    const mockSpeak = vi.fn();
+    let lastUtterance: any = null;
+    const mockSpeak = vi.fn().mockImplementation((utt) => {
+      lastUtterance = utt;
+    });
     const mockCancel = vi.fn();
     const mockResume = vi.fn();
+
+    const fakeVoices = [
+      { name: "eSpeak", lang: "en-US", voiceURI: "espeak", default: true, localService: true },
+      { name: "Google US English", lang: "en-US", voiceURI: "Google US English", default: false, localService: false },
+      { name: "Microsoft Jenny Online (Natural)", lang: "en-US", voiceURI: "jenny", default: false, localService: false }
+    ];
 
     (globalThis as any).speechSynthesis = {
       speak: mockSpeak,
       cancel: mockCancel,
       resume: mockResume,
+      getVoices: vi.fn().mockReturnValue(fakeVoices),
       paused: false,
       speaking: false
     };
@@ -336,6 +346,7 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
       rate: number = 1;
       pitch: number = 1;
       lang: string = "";
+      voice: any = null;
       constructor(text: string) {
         this.text = text;
       }
@@ -353,15 +364,28 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
       eventStore: kernel.eventStore
     });
 
+    // Test system.getVoices
+    const getVoicesPromise = new Promise<any>((resolve) => {
+      channelKernelRpc.port2.onmessage = (e) => resolve(e.data);
+    });
+    channelKernelRpc.port2.postMessage({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "system.getVoices",
+      params: {}
+    });
+    const getVoicesRes = await getVoicesPromise;
+    expect(getVoicesRes.result?.voices?.length).toBe(3);
+    expect(getVoicesRes.result?.voices[1].name).toBe("Google US English");
+
+    // Test system.speak - should automatically select Google US English over robotic eSpeak
     const speakPromise = new Promise<any>((resolve) => {
-      channelKernelRpc.port2.onmessage = (e) => {
-        resolve(e.data);
-      };
+      channelKernelRpc.port2.onmessage = (e) => resolve(e.data);
     });
 
     channelKernelRpc.port2.postMessage({
       jsonrpc: "2.0",
-      id: 1,
+      id: 2,
       method: "system.speak",
       params: { text: "Hello Starbright", rate: 0.85, pitch: 1.15 }
     });
@@ -373,6 +397,16 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
     // Wait for the Chrome async delay (15ms)
     await new Promise((r) => setTimeout(r, 30));
     expect(mockSpeak).toHaveBeenCalledTimes(1);
+    expect(lastUtterance).toBeDefined();
+    // Verify high-quality voice was picked, bypassing robotic eSpeak
+    expect(lastUtterance.voice?.name).toBe("Google US English");
+
+    // Test selectBestVoice directly
+    const bestNatural = selectBestVoice(fakeVoices as any, "en-US");
+    expect(bestNatural?.name).toBe("Google US English");
+
+    const preferredMatch = selectBestVoice(fakeVoices as any, "en-US", "jenny");
+    expect(preferredMatch?.name).toBe("Microsoft Jenny Online (Natural)");
 
     channelKernelRpc.port1.close();
     channelKernelRpc.port2.close();

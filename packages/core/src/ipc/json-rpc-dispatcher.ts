@@ -14,6 +14,115 @@ import { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import { RelayPool } from "../nostr/relay-pool.js";
 import { LocalEventStore } from "../nostr/event-store.js";
 
+let cachedHostVoices: SpeechSynthesisVoice[] = [];
+let voiceListenerAttached = false;
+
+function ensureVoiceListener(): void {
+  if (typeof window === "undefined" || !("speechSynthesis" in window) || voiceListenerAttached) {
+    return;
+  }
+  voiceListenerAttached = true;
+  try {
+    if (typeof window.speechSynthesis.getVoices === "function") {
+      const v = window.speechSynthesis.getVoices();
+      if (Array.isArray(v) && v.length > 0) {
+        cachedHostVoices = v;
+      }
+    }
+    if (typeof window.speechSynthesis.addEventListener === "function") {
+      window.speechSynthesis.addEventListener("voiceschanged", () => {
+        try {
+          cachedHostVoices = window.speechSynthesis.getVoices();
+        } catch (_) {}
+      });
+    }
+    const prevOnVoices = window.speechSynthesis.onvoiceschanged;
+    window.speechSynthesis.onvoiceschanged = (ev) => {
+      try {
+        cachedHostVoices = window.speechSynthesis.getVoices();
+      } catch (_) {}
+      if (typeof prevOnVoices === "function") {
+        prevOnVoices.call(window.speechSynthesis, ev);
+      }
+    };
+  } catch (_) {}
+}
+
+export function selectBestVoice(
+  voices: SpeechSynthesisVoice[],
+  targetLang: string = "en-US",
+  preferredVoiceName?: string
+): SpeechSynthesisVoice | null {
+  if (!voices || voices.length === 0) return null;
+
+  // 1. Explicit preference match
+  if (preferredVoiceName) {
+    const cleanPref = preferredVoiceName.toLowerCase();
+    const exact = voices.find(
+      (v) => (v.name && v.name.toLowerCase() === cleanPref) || (v.voiceURI && v.voiceURI.toLowerCase() === cleanPref)
+    );
+    if (exact) return exact;
+    const partial = voices.find(
+      (v) => (v.name && v.name.toLowerCase().includes(cleanPref)) || (v.voiceURI && v.voiceURI.toLowerCase().includes(cleanPref))
+    );
+    if (partial) return partial;
+  }
+
+  const langPrefix = (targetLang || "en").split("-")[0].toLowerCase();
+  const matchingVoices = voices.filter((v) => {
+    const vLang = (v.lang || "").replace("_", "-").toLowerCase();
+    return vLang.startsWith(langPrefix);
+  });
+
+  const pool = matchingVoices.length > 0 ? matchingVoices : voices;
+
+  function scoreVoice(v: SpeechSynthesisVoice): number {
+    const name = (v.name || "").toLowerCase();
+    const uri = (v.voiceURI || "").toLowerCase();
+    let score = 0;
+
+    // Heavily penalize robotic engines like eSpeak
+    if (name.includes("espeak") || uri.includes("espeak")) {
+      return -100;
+    }
+
+    // Chrome's built-in Google voices & Natural neural voices
+    if (name.includes("google us english")) score += 80;
+    else if (name.includes("google") && name.includes("english")) score += 70;
+    else if (name.includes("natural")) score += 65;
+    else if (name.includes("google")) score += 50;
+    else if (name.includes("premium") || name.includes("enhanced")) score += 45;
+    else if (name.includes("samantha") || name.includes("jenny") || name.includes("aria") || name.includes("ava")) score += 35;
+
+    // Non-local service in Chrome indicates high-quality remote/network synthesizer
+    if (!v.localService) score += 20;
+
+    // Exact language match (e.g. en-US vs just en)
+    const targetNorm = targetLang.replace("_", "-").toLowerCase();
+    const voiceNorm = (v.lang || "").replace("_", "-").toLowerCase();
+    if (voiceNorm === targetNorm) score += 10;
+    else if (voiceNorm.startsWith(langPrefix)) score += 5;
+
+    // Browser default voice flag (only positive if not espeak)
+    if (v.default) score += 2;
+
+    return score;
+  }
+
+  let bestVoice = pool[0];
+  let highestScore = scoreVoice(bestVoice);
+
+  for (let i = 1; i < pool.length; i++) {
+    const s = scoreVoice(pool[i]);
+    if (s > highestScore) {
+      highestScore = s;
+      bestVoice = pool[i];
+    }
+  }
+
+  return bestVoice;
+}
+
 export interface DispatcherContext {
   pluginId: string;
   manifest?: OmniManifest;
@@ -517,11 +626,35 @@ export class JsonRpcDispatcher {
       }
 
       // 12. Host Speech Synthesis Bridge (Text-to-Speech)
+      case "system.getVoices": {
+        ensureVoiceListener();
+        let list: any[] = [];
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          try {
+            let voices = cachedHostVoices;
+            if ((!voices || voices.length === 0) && typeof window.speechSynthesis.getVoices === "function") {
+              voices = cachedHostVoices = window.speechSynthesis.getVoices();
+            }
+            if (Array.isArray(voices)) {
+              list = voices.map((v) => ({
+                name: v.name,
+                lang: v.lang,
+                voiceURI: v.voiceURI,
+                default: v.default,
+                localService: v.localService
+              }));
+            }
+          } catch (_) {}
+        }
+        return { voices: list };
+      }
+
       case "system.speak": {
         const text = String(params?.text || "").trim();
         if (!text) return { success: false };
         if (typeof window !== "undefined" && "speechSynthesis" in window) {
           try {
+            ensureVoiceListener();
             if (window.speechSynthesis.paused) {
               window.speechSynthesis.resume();
             }
@@ -531,6 +664,21 @@ export class JsonRpcDispatcher {
             if (params.rate) utterance.rate = Number(params.rate);
             if (params.pitch) utterance.pitch = Number(params.pitch);
             if (params.lang) utterance.lang = String(params.lang);
+
+            // Select highest quality / natural voice for clear speech
+            let voices = cachedHostVoices;
+            if (!voices || voices.length === 0) {
+              if (typeof window.speechSynthesis.getVoices === "function") {
+                const fresh = window.speechSynthesis.getVoices();
+                if (Array.isArray(fresh) && fresh.length > 0) {
+                  voices = cachedHostVoices = fresh;
+                }
+              }
+            }
+            const chosenVoice = selectBestVoice(voices, params?.lang || "en-US", params?.voice);
+            if (chosenVoice) {
+              utterance.voice = chosenVoice;
+            }
 
             // Keep reference on window to prevent Chrome V8 garbage-collection bug
             (window as any).__omniActiveUtterance = utterance;

@@ -1486,7 +1486,11 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
       vpSelect.value = "main";
       vpSelect.dispatchEvent(new Event("change"));
-      await new Promise((r) => setTimeout(r, 250));
+      for (let i = 0; i < 20; i++) {
+        timerDockBtn = classicRoot.querySelector(".dock-item[data-plugin-id='org.omni.plugin.timer']");
+        if (timerDockBtn) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
 
       // Verify timer is automatically pinned and rendered in dock
       const timerPlugin = classicShell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer")!;
@@ -1494,6 +1498,9 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
 
       timerDockBtn = classicRoot.querySelector(".dock-item[data-plugin-id='org.omni.plugin.timer']");
       expect(timerDockBtn).toBeTruthy();
+
+      classicShell.destroy();
+      classicRoot.remove();
     });
   });
 
