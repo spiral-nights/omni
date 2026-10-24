@@ -435,6 +435,65 @@ describe("RemoteDomHost Standard HTML Projection", () => {
     host.destroy();
     document.body.removeChild(container);
   });
+
+  it("scopes guest <style> elements containing body and :root rules to avoid host DOM style leakage", () => {
+    const container = document.createElement("div");
+    container.id = "test-comp-slot";
+    document.body.appendChild(container);
+
+    const onEvent = vi.fn();
+    const host = new RemoteDomHost({
+      container,
+      componentId: "org.omni.plugin.sample-app",
+      onEvent
+    });
+
+    expect(container.getAttribute("data-omni-comp-id")).toBe("org.omni.plugin.sample-app");
+
+    // Insert a guest <style> tag with global body and :root rules
+    host.mutate([
+      [
+        0,
+        "~",
+        {
+          id: "style-1",
+          type: 1,
+          element: "style",
+          attributes: {},
+          children: [
+            {
+              id: "txt-style-1",
+              type: 3,
+              data: `
+                :root { --app-accent: #ff00ff; color-scheme: light; }
+                body { background-color: #fdfaf7; color: #1e1b4b; margin: 0; }
+                * { box-sizing: border-box; }
+                .app-card { background: white; padding: 12px; }
+              `
+            }
+          ]
+        },
+        0
+      ]
+    ]);
+
+    const styleEl = container.querySelector("style");
+    expect(styleEl).not.toBeNull();
+    const scopedCss = styleEl?.textContent || "";
+
+    // The container selector should be used
+    const scopeSel = '[data-omni-comp-id="org.omni.plugin.sample-app"]';
+    expect(scopedCss).toContain(scopeSel);
+    expect(scopedCss).toContain(`${scopeSel} * { box-sizing: border-box; }`);
+    expect(scopedCss).toContain(`${scopeSel} .app-card { background: white; padding: 12px; }`);
+
+    // Verify it NEVER contains unscoped body or :root selectors
+    expect(/(?:^|[^\w-])body\s*\{/.test(scopedCss)).toBe(false);
+    expect(/(?:^|[^\w-]):root\s*\{/.test(scopedCss)).toBe(false);
+
+    host.destroy();
+    document.body.removeChild(container);
+  });
 });
 
 

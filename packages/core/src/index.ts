@@ -7,6 +7,7 @@ export * from "./acl/acl-engine.js";
 export * from "./storage/plugin-storage-manager.js";
 export * from "./intents/intent-broker.js";
 export * from "./remote-dom/remote-dom-host.js";
+export * from "./remote-dom/css-scoper.js";
 export * from "./ipc/json-rpc-dispatcher.js";
 export * from "./sandbox/sandbox-manager.js";
 export * from "./plugins/nostr-plugin-resolver.js";

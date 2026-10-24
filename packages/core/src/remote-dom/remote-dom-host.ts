@@ -1,4 +1,5 @@
 import { DOMRemoteReceiver } from "@remote-dom/core/receivers";
+import { scopeCss } from "./css-scoper.js";
 
 export const ALLOWED_HTML_ELEMENTS = [
   "div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6",
@@ -25,6 +26,7 @@ export class RemoteDomHost {
   readonly componentId: string;
   readonly container: Element;
   readonly renderRoot: Element | ShadowRoot;
+  private readonly scopeSelector: string;
   private onEvent: (componentId: string, data: { id: string; eventName: string; detail: any }) => void;
   private clickHandled = false;
 
@@ -71,13 +73,18 @@ export class RemoteDomHost {
 
     const allowed = options.allowedElements || ALLOWED_HTML_ELEMENTS;
 
-    // Apply CSS containment to slot container
+    // Apply CSS containment and scoping attribute to slot container
+    this.scopeSelector = `[data-omni-comp-id="${this.componentId}"]`;
     if (this.container instanceof HTMLElement) {
+      this.container.setAttribute("data-omni-comp-id", this.componentId);
+      const safeId = this.componentId.replace(/[^a-zA-Z0-9_-]/g, "-");
+      this.container.classList.add(`omni-comp-${safeId}`);
       this.container.style.position = "relative";
       const isCompact = this.container.closest("#dock-slot, #header-status-slot, #header-actions-slot");
       if (!isCompact) {
         this.container.style.contain = "layout paint";
         this.container.style.overflow = "auto";
+        this.container.style.width = "100%";
       }
     }
 
@@ -307,9 +314,20 @@ export class RemoteDomHost {
 
   mutate(records: any[]): void {
     const wrappedRecords = records.map((rec) => {
-      // Mutation 0 (MUTATION_TYPE_INSERT_CHILD): wrap all eventListeners in inserted tree
+      // Mutation 0 (MUTATION_TYPE_INSERT_CHILD): wrap all eventListeners in inserted tree and scope styles
       if (rec[0] === 0 && rec[2]) {
+        this.scopeNodeStyles(rec[2]);
         this.wrapNodeEventListeners(rec[2]);
+        return rec;
+      }
+
+      // Mutation 2 (MUTATION_TYPE_UPDATE_TEXT): scope text if inside a <style> tag
+      if (rec[0] === 2 && typeof rec[2] === "string") {
+        const attachedMap = (this.receiver as any).attached as Map<string, Node> | undefined;
+        const targetNode = attachedMap?.get(rec[1]);
+        if (targetNode?.parentElement?.tagName === "STYLE" || targetNode?.parentNode?.nodeName === "STYLE") {
+          rec[2] = scopeCss(rec[2], this.scopeSelector);
+        }
         return rec;
       }
 
@@ -327,6 +345,15 @@ export class RemoteDomHost {
             });
           };
           return [3, id, property, listener, 3];
+        }
+      }
+
+      // Mutation 3: scope textContent or innerHTML if updating a <style> element
+      if (rec[0] === 3 && (rec[2] === "textContent" || rec[2] === "innerHTML") && typeof rec[3] === "string") {
+        const attachedMap = (this.receiver as any).attached as Map<string, Node> | undefined;
+        const targetNode = attachedMap?.get(rec[1]);
+        if (targetNode instanceof HTMLElement && targetNode.tagName === "STYLE") {
+          rec[3] = scopeCss(rec[3], this.scopeSelector);
         }
       }
       return rec;
@@ -442,7 +469,43 @@ export class RemoteDomHost {
       if (origCreate && typeof document !== "undefined") {
         document.createElement = origCreate;
       }
+      this.ensureRenderRootStylesScoped();
     }
+  }
+
+  private scopeNodeStyles(node: any): void {
+    if (!node || typeof node !== "object") return;
+    if (typeof node.element === "string" && node.element.toLowerCase() === "style") {
+      if (Array.isArray(node.children)) {
+        for (const c of node.children) {
+          if (c.type === 3 && typeof c.data === "string") {
+            c.data = scopeCss(c.data, this.scopeSelector);
+          }
+        }
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        this.scopeNodeStyles(child);
+      }
+    }
+  }
+
+  private ensureRenderRootStylesScoped(): void {
+    if (!this.renderRoot || typeof (this.renderRoot as any).querySelectorAll !== "function") return;
+    try {
+      const styleEls = (this.renderRoot as any).querySelectorAll("style");
+      for (let i = 0; i < styleEls.length; i++) {
+        const s = styleEls[i];
+        if (!s.getAttribute("data-omni-scoped")) {
+          const origText = s.textContent || "";
+          if (origText) {
+            s.textContent = scopeCss(origText, this.scopeSelector);
+          }
+          s.setAttribute("data-omni-scoped", "true");
+        }
+      }
+    } catch (_) {}
   }
 
   call(id: string, method: string, args: any[] = []): any {
