@@ -516,6 +516,61 @@ export class JsonRpcDispatcher {
         };
       }
 
+      // 12. Host Speech Synthesis Bridge (Text-to-Speech)
+      case "system.speak": {
+        const text = String(params?.text || "").trim();
+        if (!text) return { success: false };
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          try {
+            if (window.speechSynthesis.paused) {
+              window.speechSynthesis.resume();
+            }
+            window.speechSynthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            if (params.rate) utterance.rate = Number(params.rate);
+            if (params.pitch) utterance.pitch = Number(params.pitch);
+            if (params.lang) utterance.lang = String(params.lang);
+
+            // Keep reference on window to prevent Chrome V8 garbage-collection bug
+            (window as any).__omniActiveUtterance = utterance;
+            utterance.onend = utterance.onerror = () => {
+              if ((window as any).__omniActiveUtterance === utterance) {
+                (window as any).__omniActiveUtterance = null;
+              }
+            };
+
+            // In Chrome, cancel() is asynchronous; small timeout ensures utterance is queued properly
+            setTimeout(() => {
+              try {
+                if (window.speechSynthesis.paused) {
+                  window.speechSynthesis.resume();
+                }
+                window.speechSynthesis.speak(utterance);
+              } catch (e) {
+                console.warn("[Omni Host] Speech speak error:", e);
+              }
+            }, 15);
+
+            return { success: true };
+          } catch (err: any) {
+            console.warn("[Omni Host] SpeechSynthesis dispatch error:", err);
+            return { success: false, error: String(err) };
+          }
+        }
+        return { success: false, reason: "SpeechSynthesis not supported on host" };
+      }
+
+      case "system.cancelSpeech": {
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          try {
+            window.speechSynthesis.cancel();
+            (window as any).__omniActiveUtterance = null;
+          } catch (_) {}
+        }
+        return { success: true };
+      }
+
       default:
         throw { code: JsonRpcErrorCode.METHOD_NOT_FOUND, message: `Unknown method: ${method}` };
     }

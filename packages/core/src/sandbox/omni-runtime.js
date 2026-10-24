@@ -450,6 +450,85 @@
     globalThis.fetch = virtualFetch;
   }
 
+  // 4b. Virtual SpeechSynthesis Shim
+  // Bridges standard window.speechSynthesis to the host window to bypass Chrome's iframe user-activation
+  // and autoplay restrictions on sandboxed cross-origin frames.
+  if (typeof window !== "undefined") {
+    const origSpeech = window.speechSynthesis;
+    const virtualSpeech = {
+      get speaking() {
+        return origSpeech ? origSpeech.speaking : false;
+      },
+      get paused() {
+        return origSpeech ? origSpeech.paused : false;
+      },
+      get pending() {
+        return origSpeech ? origSpeech.pending : false;
+      },
+      get onvoiceschanged() {
+        return origSpeech ? origSpeech.onvoiceschanged : null;
+      },
+      set onvoiceschanged(fn) {
+        if (origSpeech) origSpeech.onvoiceschanged = fn;
+      },
+      getVoices() {
+        return origSpeech ? origSpeech.getVoices() : [];
+      },
+      cancel() {
+        if (origSpeech) {
+          try { origSpeech.cancel(); } catch (_) {}
+        }
+        callRpc("system.cancelSpeech", {}).catch(() => {});
+      },
+      pause() {
+        if (origSpeech) {
+          try { origSpeech.pause(); } catch (_) {}
+        }
+        callRpc("system.cancelSpeech", {}).catch(() => {});
+      },
+      resume() {
+        if (origSpeech) {
+          try { origSpeech.resume(); } catch (_) {}
+        }
+      },
+      speak(utterance) {
+        if (!utterance) return;
+        const text = utterance.text || String(utterance);
+        const rate = utterance.rate || 1;
+        const pitch = utterance.pitch || 1;
+        const lang = utterance.lang || "";
+
+        // Attempt native speech inside sandbox if browser allows it
+        if (origSpeech) {
+          try {
+            if (origSpeech.paused) origSpeech.resume();
+            origSpeech.speak(utterance);
+          } catch (_) {}
+        }
+
+        // Bridge to host top-level window where user gesture and audio permissions are guaranteed
+        callRpc("system.speak", { text, rate, pitch, lang }).catch(() => {});
+      }
+    };
+
+    try {
+      Object.defineProperty(window, "speechSynthesis", {
+        value: virtualSpeech,
+        configurable: true,
+        writable: true
+      });
+    } catch (_) {
+      try {
+        window.speechSynthesis = virtualSpeech;
+      } catch (_) {}
+    }
+    if (typeof globalThis !== "undefined") {
+      try {
+        globalThis.speechSynthesis = virtualSpeech;
+      } catch (_) {}
+    }
+  }
+
   // 5. Remote DOM Component Engine
   class RemoteDomContext {
     constructor(componentId) {

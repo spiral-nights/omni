@@ -315,5 +315,67 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
     channelKernelRpc.port1.close();
     channelKernelRpc.port2.close();
   });
+
+  it("bridges system.speak and system.cancelSpeech over JsonRpcDispatcher to host speech synthesis", async () => {
+    const channelKernelRpc = new MessageChannel();
+
+    const mockSpeak = vi.fn();
+    const mockCancel = vi.fn();
+    const mockResume = vi.fn();
+
+    (globalThis as any).speechSynthesis = {
+      speak: mockSpeak,
+      cancel: mockCancel,
+      resume: mockResume,
+      paused: false,
+      speaking: false
+    };
+
+    (globalThis as any).SpeechSynthesisUtterance = class {
+      text: string;
+      rate: number = 1;
+      pitch: number = 1;
+      lang: string = "";
+      constructor(text: string) {
+        this.text = text;
+      }
+    };
+
+    const dispatcher = new JsonRpcDispatcher({
+      pluginId: "test-speech-app",
+      port: channelKernelRpc.port1,
+      aclEngine: kernel.aclEngine,
+      storageManager: kernel.storageManager,
+      intentBroker: kernel.intentBroker,
+      subscriptionCoordinator: kernel.subscriptionCoordinator,
+      keystore: kernel.keystore,
+      relayPool: kernel.relayPool,
+      eventStore: kernel.eventStore
+    });
+
+    const speakPromise = new Promise<any>((resolve) => {
+      channelKernelRpc.port2.onmessage = (e) => {
+        resolve(e.data);
+      };
+    });
+
+    channelKernelRpc.port2.postMessage({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "system.speak",
+      params: { text: "Hello Starbright", rate: 0.85, pitch: 1.15 }
+    });
+
+    const res = await speakPromise;
+    expect(res.result?.success).toBe(true);
+    expect(mockCancel).toHaveBeenCalled();
+
+    // Wait for the Chrome async delay (15ms)
+    await new Promise((r) => setTimeout(r, 30));
+    expect(mockSpeak).toHaveBeenCalledTimes(1);
+
+    channelKernelRpc.port1.close();
+    channelKernelRpc.port2.close();
+  });
 });
 
