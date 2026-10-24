@@ -426,6 +426,11 @@ ${baseHtml}
     inferredId = slugifyPluginId(inferredName);
   }
 
+  // Starbright app icon heuristic fallback
+  if ((!inferredIcon || inferredIcon === "globe") && (inferredId.toLowerCase().includes("starbright") || inferredName.toLowerCase().includes("starbright"))) {
+    inferredIcon = "✨";
+  }
+
   // Build Option A (Single-file inlined HTML bundle)
   const bundledHtml = inlineAssetsIntoHtml(baseHtml, entryFile, fileMap);
 

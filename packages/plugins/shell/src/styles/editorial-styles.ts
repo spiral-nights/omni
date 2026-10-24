@@ -1420,7 +1420,32 @@ style, script, head, title, meta, link,
   color: var(--omni-text-secondary);
 }
 
+.editorial-plugins-search-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 @media (max-width: 680px) {
+  .editorial-plugins-search-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .editorial-plugins-search-bar input {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .editorial-plugins-search-bar .editorial-btn-secondary {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+    padding: 8px 12px !important;
+    white-space: normal !important;
+  }
+
   .editorial-settings-mobile-select-container {
     display: flex !important;
   }

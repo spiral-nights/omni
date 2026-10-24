@@ -6,7 +6,7 @@ import {
   OmniShellHost
 } from "@omni/types";
 import { BaseShell, InstalledPluginEntry, OmniShellOptions } from "./base-shell.js";
-import { ICONS, icon, IconName } from "./icons.js";
+import { ICONS, icon, IconName, renderPluginIcon } from "./icons.js";
 import { mountShellStyles, unmountShellStyles } from "./styles/loader.js";
 import { EDITORIAL_SHELL_CSS } from "./styles/editorial-styles.js";
 import { shellRegistry } from "./shell-registry.js";
@@ -526,8 +526,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       item.dataset.pluginId = plugin.id;
       item.title = plugin.name || plugin.id;
 
-      const iconKey = (plugin.icon as IconName) || "apps";
-      const iconMarkup = ICONS[iconKey] ? icon(iconKey, 20) : icon("apps", 20);
+      const iconMarkup = renderPluginIcon(plugin.icon, 20, "", plugin.id || plugin.name);
 
       item.innerHTML = `
         <div class="editorial-dock-icon">${iconMarkup}</div>
@@ -923,7 +922,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         <div class="editorial-plate-card-header">
           <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
             <div class="editorial-plate-card-icon">
-              ${ICONS[iconKey] ? icon(iconKey, 18) : icon("apps", 18)}
+              ${renderPluginIcon(plugin.icon, 18, "", plugin.id || plugin.name)}
             </div>
             <div style="min-width: 0;">
               <div class="editorial-plate-card-name" style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
@@ -1366,7 +1365,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap;">
           <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
             <div style="width: 34px; height: 34px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
-              ${ICONS[iconKey] ? icon(iconKey, 18) : icon("apps", 18)}
+              ${renderPluginIcon(plugin.icon, 18, "", plugin.id || plugin.name)}
             </div>
             <div style="min-width: 0;">
               <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
@@ -1893,9 +1892,9 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
                   </div>
                   <span class="editorial-pref-status">Autonomous nsites</span>
                 </div>
-                <div style="display: flex; gap: 8px; margin-bottom: 2px;">
+                <div class="editorial-plugins-search-bar" style="display: flex; gap: 8px; margin-bottom: 8px;">
                   <input type="text" id="editorial-plugins-search-input" placeholder="Search installed plugins..." style="flex: 1; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 8px 12px; font-family: var(--omni-font-sans); font-size: 0.8rem; color: var(--omni-text-primary);" />
-                  <button id="btn-editorial-expand-all-plugins" class="editorial-btn-secondary" style="font-size: 0.72rem; padding: 4px 10px; white-space: nowrap;">
+                  <button id="btn-editorial-expand-all-plugins" class="editorial-btn-secondary btn-editorial-expand-all" style="font-size: 0.72rem; padding: 4px 10px; white-space: nowrap;">
                     Expand All Viewports
                   </button>
                 </div>

@@ -759,7 +759,13 @@ export abstract class BaseShell implements OmniShellHost {
       displayName: item.displayName || bundle?.displayName || name,
       description: item.description ?? bundle?.description ?? curated?.description ?? "",
       version: bundle?.version || curated?.version || "1.0.0",
-      icon: item.icon || bundle?.icon || curated?.icon || "widgets",
+      icon:
+        item.icon ||
+        bundle?.icon ||
+        curated?.icon ||
+        (item.id.toLowerCase().includes("starbright") || name.toLowerCase().includes("starbright")
+          ? "✨"
+          : "widgets"),
       viewport,
       route: item.route,
       viewId: item.viewId,

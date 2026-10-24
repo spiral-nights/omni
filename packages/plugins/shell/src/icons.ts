@@ -42,7 +42,10 @@ export type IconName =
   | "check-circle"
   | "relays"
   | "users"
-  | "windows";
+  | "windows"
+  | "star"
+  | "sparkle"
+  | "sparkles";
 
 export const ICONS: Record<IconName, string> = {
   "arrow-left": `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -278,6 +281,19 @@ export const ICONS: Record<IconName, string> = {
 
   "chevron-right": `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <polyline points="9 18 15 12 9 6"/>
+  </svg>`,
+
+  star: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+  </svg>`,
+
+  sparkle: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2C12 7.523 16.477 12 22 12C16.477 12 12 16.477 12 22C12 16.477 7.523 12 2 12C7.523 12 12 7.523 12 2Z"/>
+  </svg>`,
+
+  sparkles: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3c0 4.5 3.5 8 8 8-4.5 0-8 3.5-8 8 0-4.5-3.5-8-8-8 4.5 0 8-3.5 8-8z"/>
+    <path d="M19 17c0 2 1.5 3.5 3.5 3.5-2 0-3.5 1.5-3.5 3.5 0-2-1.5-3.5-3.5-3.5 2 0 3.5-1.5 3.5-3.5z"/>
   </svg>`
 };
 
@@ -285,4 +301,71 @@ export function icon(name: IconName, size = 18, className = ""): string {
   const svg = ICONS[name] || "";
   const cls = className ? `omni-icon ${className}` : "omni-icon";
   return `<span class="${cls}" style="display: inline-flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px; vertical-align: middle;">${svg}</span>`;
+}
+
+/**
+ * Renders a plugin's icon whether it's an emoji (⭐, ✨), an SVG string,
+ * an icon key from ICONS, or an image URL.
+ */
+export function renderPluginIcon(
+  rawIcon?: string,
+  size = 18,
+  className = "",
+  pluginIdentifier?: string
+): string {
+  let iconValue = (rawIcon || "").trim();
+
+  // If missing or generic, check if the plugin identifier suggests starbright
+  if (!iconValue || iconValue === "apps" || iconValue === "widgets" || iconValue === "globe") {
+    if (pluginIdentifier && pluginIdentifier.toLowerCase().includes("starbright")) {
+      iconValue = "✨";
+    }
+  }
+
+  if (!iconValue) {
+    return icon("apps", size, className);
+  }
+
+  // 1. Direct SVG markup
+  if (iconValue.startsWith("<svg") && iconValue.includes("</svg>")) {
+    const cls = className ? `omni-icon ${className}` : "omni-icon";
+    return `<span class="${cls}" style="display: inline-flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px; vertical-align: middle;">${iconValue}</span>`;
+  }
+
+  // 2. Image URL / data URI
+  if (
+    iconValue.startsWith("data:image/") ||
+    iconValue.startsWith("http://") ||
+    iconValue.startsWith("https://") ||
+    iconValue.startsWith("blob:") ||
+    /\.(png|jpg|jpeg|svg|webp|ico)$/i.test(iconValue)
+  ) {
+    const cls = className ? `omni-icon-img ${className}` : "omni-icon-img";
+    return `<img src="${iconValue}" class="${cls}" style="width: ${size}px; height: ${size}px; object-fit: contain; vertical-align: middle;" alt="app icon" />`;
+  }
+
+  // 3. Known key in ICONS
+  if (ICONS[iconValue as IconName]) {
+    return icon(iconValue as IconName, size, className);
+  }
+
+  // 3b. Common icon name aliases
+  if (iconValue === "star" || iconValue === "star-outline") return icon("star", size, className);
+  if (iconValue === "sparkle" || iconValue === "sparkles") return icon("sparkle", size, className);
+  if (iconValue === "feed" || iconValue === "rss") return icon("feed", size, className);
+  if (iconValue === "profile" || iconValue === "user") return icon("user", size, className);
+  if (iconValue === "relays" || iconValue === "relay") return icon("relay", size, className);
+
+  // 4. Unicode Emoji (e.g. ✨, ⭐, 🌟, 💫, 🚀, etc.)
+  const isEmoji =
+    /\p{Extended_Pictographic}/u.test(iconValue) ||
+    /[\u2600-\u27BF\u{1F300}-\u{1F9FF}]/u.test(iconValue);
+  if (isEmoji) {
+    const cls = className ? `omni-icon-emoji ${className}` : "omni-icon-emoji";
+    const fontSize = Math.max(14, Math.round(size * 0.9));
+    return `<span class="${cls}" style="display: inline-flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px; font-size: ${fontSize}px; line-height: 1; vertical-align: middle; user-select: none;">${iconValue}</span>`;
+  }
+
+  // Default fallback
+  return icon("apps", size, className);
 }

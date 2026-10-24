@@ -17,7 +17,7 @@ export type {
   AppPage,
   SettingsTab
 } from "./shell.js";
-export { ICONS, icon } from "./icons.js";
+export { ICONS, icon, renderPluginIcon } from "./icons.js";
 export type { IconName } from "./icons.js";
 export {
   LayoutManager,

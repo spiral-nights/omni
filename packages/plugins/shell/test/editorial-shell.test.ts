@@ -11,7 +11,9 @@ import {
   STORAGE_KEY_EDITORIAL_ACCENT_ID,
   InstalledPluginEntry,
   shellRegistry,
-  OMNI_SHELL_STYLE_ELEMENT_ID
+  OMNI_SHELL_STYLE_ELEMENT_ID,
+  renderPluginIcon,
+  ICONS
 } from "../src/index.js";
 
 describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => {
@@ -527,6 +529,79 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(created.getShellType()).toBe("editorial");
       created.destroy();
       testRoot.remove();
+    });
+  });
+
+  describe("Plugin Icons & Mobile Search Bar Layout", () => {
+    it("renders emoji, SVG, image, and starbright heuristics via renderPluginIcon", () => {
+      // Emojis
+      const sparkleEmoji = renderPluginIcon("✨", 20);
+      expect(sparkleEmoji).toContain("omni-icon-emoji");
+      expect(sparkleEmoji).toContain("✨");
+
+      const starEmoji = renderPluginIcon("⭐", 20);
+      expect(starEmoji).toContain("omni-icon-emoji");
+      expect(starEmoji).toContain("⭐");
+
+      // Star / Sparkle icon names
+      const starIcon = renderPluginIcon("star", 18);
+      expect(starIcon).toContain("omni-icon");
+      expect(starIcon).toContain("<polygon");
+
+      const sparkleIcon = renderPluginIcon("sparkle", 18);
+      expect(sparkleIcon).toContain("omni-icon");
+      expect(sparkleIcon).toContain("<svg");
+
+      // Starbright heuristic
+      const starbrightDefault = renderPluginIcon("", 20, "", "org.starbright.app");
+      expect(starbrightDefault).toContain("omni-icon-emoji");
+      expect(starbrightDefault).toContain("✨");
+
+      // Image URL
+      const imgIcon = renderPluginIcon("https://example.com/icon.png", 24);
+      expect(imgIcon).toContain("<img");
+      expect(imgIcon).toContain('src="https://example.com/icon.png"');
+    });
+
+    it("renders search bar with .editorial-plugins-search-bar for mobile responsive stacking", () => {
+      shell.mount();
+      shell.openSettings();
+
+      const searchBar = root.querySelector(".editorial-plugins-search-bar");
+      expect(searchBar).toBeTruthy();
+
+      const searchInput = searchBar?.querySelector("#editorial-plugins-search-input");
+      const expandBtn = searchBar?.querySelector("#btn-editorial-expand-all-plugins");
+      expect(searchInput).toBeTruthy();
+      expect(expandBtn).toBeTruthy();
+    });
+
+    it("renders Starbright with sparkle/star icon in dock and apps index", () => {
+      const starbrightPlugin: InstalledPluginEntry = {
+        id: "org.starbright.app",
+        name: "Starbright",
+        displayName: "Starbright Notes",
+        description: "A sparkling note client.",
+        version: "1.0.0",
+        icon: "✨",
+        viewport: "main",
+        enabled: true,
+        pinned: true,
+        htmlContent: "<html><body>Starbright</body></html>"
+      };
+
+      shell.installedPlugins.push(starbrightPlugin);
+      shell.mount();
+
+      // In Dock
+      const dockItem = root.querySelector('.editorial-dock-item[data-plugin-id="org.starbright.app"]');
+      expect(dockItem).toBeTruthy();
+      expect(dockItem?.innerHTML).toContain("✨");
+
+      // In Apps Index
+      shell.showAppsIndex();
+      const card = root.querySelector(".editorial-plate-card");
+      expect(root.innerHTML).toContain("✨");
     });
   });
 });

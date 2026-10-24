@@ -1,6 +1,6 @@
 import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STANDARD_SLOTS } from "@omni/core";
 import { OmniWorkspaceState, OmniWorkspacePluginConfig, PluginPlacement, OMNI_WORKSPACE_D_TAG, NostrEvent, PluginViewDeclaration, OmniShellHost } from "@omni/types";
-import { ICONS, icon, IconName } from "./icons.js";
+import { ICONS, icon, IconName, renderPluginIcon } from "./icons.js";
 import {
   renderNostrWritePermissionsSection,
   renderHandledIntentsSection,
@@ -170,14 +170,7 @@ export class OmniShell extends BaseShell {
         btn.classList.add("active");
       }
 
-      let iconSvg = "";
-      if (meta.icon && ICONS[meta.icon as IconName]) {
-        iconSvg = icon(meta.icon as IconName, 20);
-      } else if (plugin.id === "org.omni.plugin.profile" || meta.icon === "profile") {
-        iconSvg = icon("user", 20);
-      } else {
-        iconSvg = icon("feed", 20);
-      }
+      const iconSvg = renderPluginIcon(meta.icon, 20, "", plugin.id || meta.name);
 
       let label = plugin.displayName || meta.displayName;
       if (!label) {
@@ -268,14 +261,7 @@ export class OmniShell extends BaseShell {
       const topRow = document.createElement("div");
       topRow.style.cssText = "display: flex; align-items: flex-start; gap: 10px;";
 
-      let iconSvg = "";
-      if (meta.icon && ICONS[meta.icon as IconName]) {
-        iconSvg = icon(meta.icon as IconName, 22);
-      } else if (plugin.id === "org.omni.plugin.profile" || meta.icon === "profile") {
-        iconSvg = icon("user", 22);
-      } else {
-        iconSvg = icon("feed", 22);
-      }
+      const iconSvg = renderPluginIcon(meta.icon, 22, "", plugin.id || meta.name);
 
       const iconWrap = document.createElement("div");
       iconWrap.style.cssText =
@@ -732,7 +718,7 @@ export class OmniShell extends BaseShell {
         (ICONS[meta.icon as IconName] ? (meta.icon as IconName) : "plugins");
 
       tabBtn.innerHTML = `
-        ${icon(safeIconName, 16)}
+        ${renderPluginIcon(meta.icon, 16, "", p.id || meta.name)}
         <span>${meta.name}</span>
       `;
       tabBtn.addEventListener("click", () => this.switchSettingsTab(p.id));
@@ -1509,14 +1495,7 @@ export class OmniShell extends BaseShell {
       const headerLeft = document.createElement("div");
       headerLeft.style.cssText = "display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; flex-wrap: wrap;";
 
-      let iconSvg = "";
-      if (meta.icon && ICONS[meta.icon as IconName]) {
-        iconSvg = icon(meta.icon as IconName, 18);
-      } else if (p.id === "org.omni.plugin.profile" || meta.icon === "profile") {
-        iconSvg = icon("user", 18);
-      } else {
-        iconSvg = icon("plugins", 18);
-      }
+      const iconSvg = renderPluginIcon(meta.icon, 18, "", p.id || meta.name);
       const iconWrap = document.createElement("div");
       iconWrap.style.cssText = "display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;";
       iconWrap.innerHTML = iconSvg;

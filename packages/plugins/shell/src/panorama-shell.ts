@@ -1,6 +1,6 @@
 import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STANDARD_SLOTS } from "@omni/core";
 import { OmniWorkspaceState, OmniWorkspacePluginConfig, PluginPlacement, OMNI_WORKSPACE_D_TAG, NostrEvent, PluginViewDeclaration, OmniShellHost } from "@omni/types";
-import { ICONS, icon, IconName } from "./icons.js";
+import { ICONS, icon, IconName, renderPluginIcon } from "./icons.js";
 import { BaseShell, InstalledPluginEntry, OmniShellOptions } from "./base-shell.js";
 import {
   renderNostrWritePermissionsSection,
@@ -820,14 +820,7 @@ export class PanoramaShell extends BaseShell {
       tile.dataset.pluginId = plugin.id;
       tile.style.backgroundColor = color;
 
-      let iconSvg = "";
-      if (meta.icon && ICONS[meta.icon as IconName]) {
-        iconSvg = icon(meta.icon as IconName, 28);
-      } else if (plugin.id === "org.omni.plugin.profile" || meta.icon === "profile") {
-        iconSvg = icon("user", 28);
-      } else {
-        iconSvg = icon("apps", 28);
-      }
+      const iconSvg = renderPluginIcon(meta.icon, 28, "", plugin.id || meta.name);
 
       const synthManifest = this.ensurePluginManifest(plugin);
       const views = plugin.views || synthManifest.views || [];
@@ -1380,7 +1373,7 @@ export class PanoramaShell extends BaseShell {
 
       const iconBox = document.createElement("div");
       iconBox.style.cssText = "width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary, #00a4ef); flex-shrink: 0;";
-      iconBox.innerHTML = icon(safeIconName, 18);
+      iconBox.innerHTML = renderPluginIcon(meta.icon, 18, "", plugin.id || meta.name);
 
       const titleCol = document.createElement("div");
       titleCol.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
