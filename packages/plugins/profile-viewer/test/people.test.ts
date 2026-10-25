@@ -382,32 +382,26 @@ describe("People plugin (profile, follows, mutes)", () => {
     expect(title?.textContent).toBe("Profiles");
   });
 
-  it("viewing own profile shows 'Edit Profile' and 'Keys' buttons and allows publishing kind 0 metadata", async () => {
+  it("viewing own profile shows 'Edit Profile' and 'Keys' tabs and allows publishing kind 0 metadata", async () => {
     await flush();
     const btnEdit = peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-edit-profile")!;
     const btnKeys = peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-keys")!;
     const btnFollow = peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-follow")!;
     const btnBlock = peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-block")!;
-    const editPanel = peopleRoot().querySelector<HTMLElement>(".pv-edit-panel")!;
+    const paneProfile = peopleRoot().querySelector<HTMLElement>(".pane-profile")!;
 
-    // On own profile, Follow/Block are hidden, Edit & Keys are visible
+    // On own profile, Follow/Block are hidden, Edit & Keys tabs are visible
     expect(btnEdit.style.display).not.toBe("none");
     expect(btnKeys.style.display).not.toBe("none");
     expect(btnFollow.style.display).toBe("none");
     expect(btnBlock.style.display).toBe("none");
-    expect(editPanel.style.display).toBe("none");
-
-    // Click Edit Profile
-    btnEdit.click();
-    expect(editPanel.style.display).toBe("flex");
-    const paneProfile = editPanel.querySelector<HTMLElement>(".pane-profile")!;
     expect(paneProfile.style.display).not.toBe("none");
 
     // Fill form fields
-    const nameInput = editPanel.querySelector<HTMLInputElement>("#prof-display-name")!;
-    const handleInput = editPanel.querySelector<HTMLInputElement>("#prof-name")!;
-    const aboutInput = editPanel.querySelector<HTMLTextAreaElement>("#prof-about")!;
-    const btnSave = editPanel.querySelector<HTMLButtonElement>("#btn-save-profile")!;
+    const nameInput = peopleRoot().querySelector<HTMLInputElement>("#prof-display-name")!;
+    const handleInput = peopleRoot().querySelector<HTMLInputElement>("#prof-name")!;
+    const aboutInput = peopleRoot().querySelector<HTMLTextAreaElement>("#prof-about")!;
+    const btnSave = peopleRoot().querySelector<HTMLButtonElement>("#btn-save-profile")!;
 
     nameInput.value = "Alice in Nostrland";
     handleInput.value = "alice";
@@ -429,7 +423,7 @@ describe("People plugin (profile, follows, mutes)", () => {
     expect(parsedMeta.about).toBe("Building decentralized apps on Omni");
 
     // Verify profile card in UI immediately updated
-    const displayNameEl = peopleRoot().querySelector<HTMLElement>(".pv-display-name")!;
+    const displayNameEl = peopleRoot().querySelector<HTMLElement>(".pv-my-display-name")!;
     expect(displayNameEl.textContent).toBe("Alice in Nostrland");
   });
 
@@ -474,22 +468,22 @@ describe("People plugin (profile, follows, mutes)", () => {
     expect(keyNsec.value).toBe("nsec1testsecretkey123456789");
   });
 
-  it("responds to edit_profile intent by opening the edit drawer", async () => {
+  it("responds to edit_profile intent by activating the edit profile tab", async () => {
     await flush();
     const editHandler = (window as any).omni.intents.handle.mock.calls.find(
       (c: any[]) => c[0] === "edit_profile"
     )?.[1];
     expect(editHandler).toBeDefined();
 
-    const editPanel = peopleRoot().querySelector<HTMLElement>(".pv-edit-panel")!;
-    expect(editPanel.style.display).toBe("none");
+    // Switch to keys first
+    peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-keys")!.click();
+    expect(peopleRoot().querySelector<HTMLElement>(".pane-keys")!.style.display).not.toBe("none");
 
     // Dispatch edit_profile intent
     editHandler({ pubkey: myPubkey });
     await flush();
 
-    expect(editPanel.style.display).toBe("flex");
-    const paneProfile = editPanel.querySelector<HTMLElement>(".pane-profile")!;
+    const paneProfile = peopleRoot().querySelector<HTMLElement>(".pane-profile")!;
     expect(paneProfile.style.display).not.toBe("none");
   });
 });

@@ -2072,7 +2072,7 @@ style, script, head, title, meta, link,
   display: flex !important;
   flex-direction: column !important;
   gap: 18px !important;
-  max-width: 680px !important;
+  max-width: 100% !important;
   width: 100% !important;
   margin: 0 auto !important;
   padding: 8px 4px 40px !important;

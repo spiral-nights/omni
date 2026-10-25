@@ -576,6 +576,7 @@ async function mountProfileViewer(root: HTMLElement) {
               }
               myNoteCount++;
               if (myNotesCountEl) myNotesCountEl.textContent = `${myNoteCount} note${myNoteCount === 1 ? "" : "s"}`;
+              if (myNotesCountPill) myNotesCountPill.textContent = String(myNoteCount);
               if (myNotesListEl) myNotesListEl.appendChild(renderNoteCard(ev));
             }
           }
@@ -612,6 +613,7 @@ async function mountProfileViewer(root: HTMLElement) {
           if (myNoteCount === 0 && myNotesListEl) {
             myNotesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">You haven't published any public notes yet.</div>`;
             if (myNotesCountEl) myNotesCountEl.textContent = "0 notes";
+            if (myNotesCountPill) myNotesCountPill.textContent = "0";
           }
         }
       }
@@ -641,13 +643,13 @@ async function mountProfileViewer(root: HTMLElement) {
       <!-- 1. MY PROFILE TAB VIEW -->
       <div class="pv-tab-content pv-tab-my-profile pv-tab-profile">
         <!-- My Profile Card -->
-        <div class="pv-card pv-my-card" style="border-radius: var(--radius-md, 10px); overflow: hidden; display: flex; flex-direction: column;">
+        <div class="pv-card pv-my-card" style="border-radius: var(--radius-md, 10px); overflow: hidden; display: flex; flex-direction: column; width: 100%; box-sizing: border-box;">
           
           <!-- Banner Image / Header -->
-          <div class="pv-banner pv-my-banner" style="height: 140px; background: linear-gradient(135deg, #1f1d1a, #2a2723); background-size: cover; background-position: center; position: relative;"></div>
+          <div class="pv-banner pv-my-banner" style="height: 140px; background: linear-gradient(135deg, #1f1d1a, #2a2723); background-size: cover; background-position: center; position: relative; width: 100%;"></div>
 
           <!-- Identity & Metadata Section -->
-          <div class="pv-info-section" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; position: relative;">
+          <div class="pv-info-section" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; position: relative; width: 100%; box-sizing: border-box;">
             
             <!-- Avatar Overlapping Banner -->
             <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: -54px; margin-bottom: 4px;">
@@ -655,18 +657,10 @@ async function mountProfileViewer(root: HTMLElement) {
                 <div class="pv-avatar-fallback pv-my-avatar-fallback" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff;">?</div>
               </div>
               
-              <div class="pv-action-buttons pv-my-action-buttons" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <button class="pv-btn-edit-profile btn-secondary" title="Edit Profile Info">
-                  ${ICONS.edit}
-                  <span>Edit Profile</span>
-                </button>
-                <button class="pv-btn-keys btn-secondary" title="Keys & Custody">
-                  ${ICONS.key}
-                  <span>Keys</span>
-                </button>
-                <button class="pv-btn-my-sync btn-secondary" title="Sync from Relays">
+              <div class="pv-action-buttons pv-my-action-buttons" style="display: flex; align-items: center; gap: 8px;">
+                <button class="pv-btn-my-sync btn-secondary" title="Sync metadata from Relays">
                   ${ICONS.refresh}
-                  <span>Sync</span>
+                  <span>Sync from Relays</span>
                 </button>
               </div>
             </div>
@@ -711,77 +705,63 @@ async function mountProfileViewer(root: HTMLElement) {
           </div>
         </div>
 
-        <!-- Inline Profile Editor & Key Custody Drawer (Exclusively for My Profile) -->
-        <div class="pv-edit-panel profile-full-container" style="display: none; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 10px); padding: 16px 20px; margin-top: 14px; flex-direction: column; gap: 14px;">
+        <!-- My Profile Subtabs Navigation -->
+        <div class="pv-my-subtabs modal-tabs" style="display: flex; gap: 8px; border-bottom: 1px solid var(--border-subtle, #272522); padding: 4px 0 8px 0; margin-top: 14px; width: 100%;">
+          <button class="modal-tab-btn pv-btn-edit-profile active" id="btn-tab-profile" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 600; cursor: pointer; color: var(--accent-primary, #d4a373); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-sm, 6px);">
+            ${ICONS.user} <span>Profile Info</span>
+          </button>
+          <button class="modal-tab-btn pv-btn-keys" id="btn-tab-keys" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 500; cursor: pointer; color: var(--text-muted, #78716c); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-sm, 6px);">
+            ${ICONS.key} <span>Keys & Custody</span>
+          </button>
+          <button class="modal-tab-btn pv-btn-my-notes" id="btn-tab-my-notes" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 500; cursor: pointer; color: var(--text-muted, #78716c); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-sm, 6px);">
+            ${ICONS.notes} <span>My Notes (<span class="pv-my-notes-count-pill">0</span>)</span>
+          </button>
+        </div>
+
+        <!-- Integrated Profile Panels (Full Width) -->
+        <div class="pv-edit-panel profile-full-container" style="display: flex; width: 100%; box-sizing: border-box; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 10px); padding: 18px 20px; margin-top: 10px; flex-direction: column; gap: 14px;">
           
           <!-- Non-blocking inline Toast notification banner -->
           <div id="prof-toast" style="display: none; padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.8rem; font-weight: 500; align-items: center; gap: 8px; transition: all 0.2s ease;"></div>
 
-          <!-- Drawer Header & Mode Tabs -->
-          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle, #272522); padding-bottom: 8px;">
-            <div class="modal-tabs" style="display: flex; gap: 6px;">
-              <button class="modal-tab-btn active" id="btn-tab-profile" style="background: transparent; border: none; font-size: 0.82rem; font-weight: 500; cursor: pointer; color: var(--accent-primary, #d4a373); padding: 4px 8px; display: flex; align-items: center; gap: 6px;">
-                ${ICONS.user} Profile Info (kind 0)
-              </button>
-              <button class="modal-tab-btn" id="btn-tab-keys" style="background: transparent; border: none; font-size: 0.82rem; font-weight: 500; cursor: pointer; color: var(--text-muted, #78716c); padding: 4px 8px; display: flex; align-items: center; gap: 6px;">
-                ${ICONS.key} Keys & Custody
-              </button>
-            </div>
-            <button class="btn-close-edit btn-secondary" title="Close editor" style="padding: 4px 8px;">
-              ${ICONS.x}
-              <span>Close</span>
-            </button>
-          </div>
-
           <!-- Pane 1: Profile Info -->
-          <div class="pane-profile" style="display: flex; flex-direction: column; gap: 12px;">
-            <!-- Live Profile Card Preview -->
-            <div class="preview-box" style="display: flex; align-items: center; gap: 12px; background: var(--bg-canvas, #141312); padding: 12px 14px; border-radius: var(--radius-sm, 6px); border: 1px solid var(--border-subtle, #272522);">
-              <div id="prof-avatar-preview" style="width: 48px; height: 48px; border-radius: 50%; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 1.1rem; color: var(--accent-primary, #d4a373); flex-shrink: 0;">
-                ${ICONS.user}
-              </div>
-              <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; min-width: 0;">
-                <span class="preview-name" style="font-weight: 600; font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Active Identity</span>
-                <span class="preview-npub" style="font-family: var(--font-mono, monospace); font-size: 0.72rem; color: var(--text-muted, #78716c); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Loading identity...</span>
-              </div>
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div class="pane-profile" style="display: flex; flex-direction: column; gap: 12px; width: 100%; box-sizing: border-box;">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
               <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
                 Display Name:
-                <input id="prof-display-name" type="text" placeholder="e.g. Alice Smith" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+                <input id="prof-display-name" type="text" placeholder="e.g. Alice Smith" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
               <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
                 Username / Handle:
-                <input id="prof-name" type="text" placeholder="e.g. alice" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+                <input id="prof-name" type="text" placeholder="e.g. alice" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
               <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
                 About / Bio:
-                <textarea id="prof-about" rows="2" placeholder="Tell the Nostr network about yourself..." style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none; resize: vertical;"></textarea>
+                <textarea id="prof-about" rows="3" placeholder="Tell the Nostr network about yourself..." style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; resize: vertical; width: 100%; box-sizing: border-box;"></textarea>
               </label>
               <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
                 Avatar URL:
-                <input id="prof-picture" type="text" placeholder="https://example.com/avatar.jpg" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+                <input id="prof-picture" type="text" placeholder="https://example.com/avatar.jpg" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
               <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
                 Banner URL:
-                <input id="prof-banner" type="text" placeholder="https://example.com/banner.jpg" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+                <input id="prof-banner" type="text" placeholder="https://example.com/banner.jpg" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
               <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
                 NIP-05 Identifier:
-                <input id="prof-nip05" type="text" placeholder="alice@domain.com" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+                <input id="prof-nip05" type="text" placeholder="alice@domain.com" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
               <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
                 Lightning Address (lud16):
-                <input id="prof-lud16" type="text" placeholder="alice@getalby.com" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+                <input id="prof-lud16" type="text" placeholder="alice@getalby.com" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
               <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
                 Website:
-                <input id="prof-website" type="text" placeholder="https://alice.example.com" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+                <input id="prof-website" type="text" placeholder="https://alice.example.com" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
             </div>
 
-            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px;">
               <button id="btn-sync-profile" class="btn-secondary">
                 ${ICONS.refresh} <span>Sync from Relays</span>
               </button>
@@ -790,7 +770,7 @@ async function mountProfileViewer(root: HTMLElement) {
           </div>
 
           <!-- Pane 2: Keys & Custody -->
-          <div class="pane-keys" style="display: none; flex-direction: column; gap: 14px;">
+          <div class="pane-keys" style="display: none; flex-direction: column; gap: 14px; width: 100%; box-sizing: border-box;">
             <div style="display: flex; flex-direction: column; gap: 4px;">
               <span style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e);">Public Key (npub):</span>
               <div style="display: flex; gap: 6px;">
@@ -845,23 +825,24 @@ async function mountProfileViewer(root: HTMLElement) {
               <button id="btn-import-key" class="btn-publish" style="align-self: flex-end;">Import & Switch</button>
             </div>
           </div>
-        </div>
 
-        <!-- My Notes Feed Section -->
-        <div class="pv-notes-section pv-my-notes-section" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle, #272522); padding-bottom: 8px;">
-            <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary, #ede8df);">
-              ${ICONS.notes}
-              <span>My Published Notes</span>
-            </h3>
-            <span class="pv-notes-count pv-my-notes-count" style="font-size: 0.75rem; color: var(--text-muted, #78716c);">0 notes</span>
-          </div>
+          <!-- Pane 3: My Notes Feed Section -->
+          <div class="pane-notes pv-notes-section pv-my-notes-section" style="display: none; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle, #272522); padding-bottom: 8px;">
+              <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary, #ede8df);">
+                ${ICONS.notes}
+                <span>My Published Notes</span>
+              </h3>
+              <span class="pv-notes-count pv-my-notes-count" style="font-size: 0.75rem; color: var(--text-muted, #78716c);">0 notes</span>
+            </div>
 
-          <div class="pv-notes-list pv-my-notes-list" style="display: flex; flex-direction: column; gap: 10px;">
-            <div class="pv-notes-loading" style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">
-              Loading timeline notes...
+            <div class="pv-notes-list pv-my-notes-list" style="display: flex; flex-direction: column; gap: 10px;">
+              <div class="pv-notes-loading" style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">
+                Loading timeline notes...
+              </div>
             </div>
           </div>
+
         </div>
       </div>
 
@@ -1078,25 +1059,26 @@ async function mountProfileViewer(root: HTMLElement) {
   const myWebsiteLink = tabMyProfile.querySelector<HTMLAnchorElement>(".pv-my-website-link")!;
   const myBtnEditProfile = tabMyProfile.querySelector<HTMLButtonElement>(".pv-btn-edit-profile")!;
   const myBtnKeys = tabMyProfile.querySelector<HTMLButtonElement>(".pv-btn-keys")!;
+  const myBtnMyNotes = tabMyProfile.querySelector<HTMLButtonElement>(".pv-btn-my-notes");
   const myBtnSync = tabMyProfile.querySelector<HTMLButtonElement>(".pv-btn-my-sync")!;
   const myNotesListEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-notes-list")!;
   const myNotesCountEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-notes-count")!;
+  const myNotesCountPill = tabMyProfile.querySelector<HTMLElement>(".pv-my-notes-count-pill");
 
-  // Edit Drawer elements (inside My Profile)
+  // Edit Panel elements (inside My Profile)
   const editPanel = tabMyProfile.querySelector<HTMLElement>(".pv-edit-panel")!;
   const btnEditProfile = myBtnEditProfile;
   const btnKeys = myBtnKeys;
-  const btnCloseEdit = container.querySelector<HTMLButtonElement>(".btn-close-edit")!;
-  const btnInnerTabProfile = editPanel.querySelector<HTMLButtonElement>("#btn-tab-profile")!;
-  const btnInnerTabKeys = editPanel.querySelector<HTMLButtonElement>("#btn-tab-keys")!;
+  const btnCloseEdit = container.querySelector<HTMLButtonElement>(".btn-close-edit");
+  const btnInnerTabProfile = tabMyProfile.querySelector<HTMLButtonElement>("#btn-tab-profile")!;
+  const btnInnerTabKeys = tabMyProfile.querySelector<HTMLButtonElement>("#btn-tab-keys")!;
+  const btnInnerTabMyNotes = tabMyProfile.querySelector<HTMLButtonElement>("#btn-tab-my-notes");
   const paneProfile = editPanel.querySelector<HTMLElement>(".pane-profile")!;
   const paneKeys = editPanel.querySelector<HTMLElement>(".pane-keys")!;
+  const paneNotes = editPanel.querySelector<HTMLElement>(".pane-notes");
   const toastBanner = editPanel.querySelector<HTMLElement>("#prof-toast")!;
 
   // Edit form fields
-  const spanPreviewName = editPanel.querySelector<HTMLElement>(".preview-name")!;
-  const spanPreviewNpub = editPanel.querySelector<HTMLElement>(".preview-npub")!;
-  const avatarPreview = editPanel.querySelector<HTMLElement>("#prof-avatar-preview")!;
   const rowDName = editPanel.querySelector<HTMLInputElement>("#prof-display-name")!;
   const rowName = editPanel.querySelector<HTMLInputElement>("#prof-name")!;
   const inpAbout = editPanel.querySelector<HTMLTextAreaElement>("#prof-about")!;
@@ -1140,33 +1122,56 @@ async function mountProfileViewer(root: HTMLElement) {
   };
 
   const updateLiveAvatarPreview = (url?: string) => {
-    if (!avatarPreview) return;
     const cleanUrl = url?.trim();
     if (cleanUrl && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://") || cleanUrl.startsWith("data:image/"))) {
       const fixedUrl = cleanUrl.replace(/^http:\/\//i, "https://");
-      avatarPreview.innerHTML = `<img src="${escapeHtml(fixedUrl)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
-      const img = avatarPreview.querySelector("img");
+      myAvatarWrapEl.innerHTML = `<img src="${escapeHtml(fixedUrl)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
+      const img = myAvatarWrapEl.querySelector("img");
       img?.addEventListener("error", () => {
-        avatarPreview.innerHTML = ICONS.user;
+        const initial = (rowDName.value || rowName.value || myPubkey || "?")[0]?.toUpperCase() || "?";
+        myAvatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(myPubkey || "default")};">${escapeHtml(initial)}</div>`;
       });
     } else {
-      avatarPreview.innerHTML = ICONS.user;
+      const initial = (rowDName.value || rowName.value || myPubkey || "?")[0]?.toUpperCase() || "?";
+      myAvatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(myPubkey || "default")};">${escapeHtml(initial)}</div>`;
     }
   };
 
   rowPic.addEventListener("input", () => {
     updateLiveAvatarPreview(rowPic.value);
   });
+  rowBanner.addEventListener("input", () => {
+    let banner = (rowBanner.value || "").trim();
+    if (banner.startsWith("http://")) banner = banner.replace(/^http:\/\//i, "https://");
+    if (banner.startsWith("https://") || banner.startsWith("data:image/")) {
+      myBannerEl.style.backgroundImage = `url("${banner}")`;
+    } else {
+      myBannerEl.style.backgroundImage = `linear-gradient(135deg, #1f1d1a, #2a2723)`;
+    }
+  });
+  rowDName.addEventListener("input", () => {
+    myDisplayNameEl.textContent = rowDName.value.trim() || (myPubkey ? `nostr:${myPubkey.slice(0, 8)}` : "Active Identity");
+  });
+  rowName.addEventListener("input", () => {
+    myHandleEl.textContent = rowName.value.trim() ? `@${rowName.value.trim()}` : `@npub1${(myPubkey || "").slice(0, 8)}`;
+  });
+  rowNip05.addEventListener("input", () => {
+    const val = rowNip05.value.trim();
+    if (val) {
+      myNip05TextEl.textContent = val;
+      myNip05BadgeEl.style.display = "inline-flex";
+    } else {
+      myNip05BadgeEl.style.display = "none";
+    }
+  });
 
   function populateEditForm(meta: ProfileMetadata | null) {
     if (myPubkey) {
       const npub = hexToNpub(myPubkey);
-      if (spanPreviewNpub) spanPreviewNpub.textContent = npub;
       if (inpNpub) inpNpub.value = npub;
       if (inpPubkey) inpPubkey.value = myPubkey;
     }
     if (meta) {
-      if (spanPreviewName) spanPreviewName.textContent = meta.display_name || meta.name || "Active Identity";
       rowDName.value = meta.display_name || "";
       rowName.value = meta.name || "";
       inpAbout.value = meta.about || "";
@@ -1179,30 +1184,24 @@ async function mountProfileViewer(root: HTMLElement) {
     }
   }
 
-  function toggleEditPanel(targetPane: "profile" | "keys" = "profile", forceOpen?: boolean) {
-    const isCurrentlyOpen = editPanel.style.display === "flex";
-    const shouldOpen = forceOpen !== undefined ? forceOpen : (!isCurrentlyOpen || (targetPane === "keys" && paneProfile.style.display === "flex") || (targetPane === "profile" && paneKeys.style.display === "flex"));
+  function toggleEditPanel(targetPane: "profile" | "keys" | "notes" = "profile", _forceOpen?: boolean) {
+    editPanel.style.display = "flex";
 
-    if (!shouldOpen) {
-      editPanel.style.display = "none";
-      return;
+    btnInnerTabProfile.classList.toggle("active", targetPane === "profile");
+    btnInnerTabProfile.style.color = targetPane === "profile" ? "var(--accent-primary, #d4a373)" : "var(--text-muted, #78716c)";
+
+    btnInnerTabKeys.classList.toggle("active", targetPane === "keys");
+    btnInnerTabKeys.style.color = targetPane === "keys" ? "var(--accent-primary, #d4a373)" : "var(--text-muted, #78716c)";
+
+    if (btnInnerTabMyNotes) {
+      btnInnerTabMyNotes.classList.toggle("active", targetPane === "notes");
+      btnInnerTabMyNotes.style.color = targetPane === "notes" ? "var(--accent-primary, #d4a373)" : "var(--text-muted, #78716c)";
     }
 
-    editPanel.style.display = "flex";
-    if (targetPane === "keys") {
-      btnInnerTabKeys.classList.add("active");
-      btnInnerTabKeys.style.color = "var(--accent-primary, #d4a373)";
-      btnInnerTabProfile.classList.remove("active");
-      btnInnerTabProfile.style.color = "var(--text-muted, #78716c)";
-      paneKeys.style.display = "flex";
-      paneProfile.style.display = "none";
-    } else {
-      btnInnerTabProfile.classList.add("active");
-      btnInnerTabProfile.style.color = "var(--accent-primary, #d4a373)";
-      btnInnerTabKeys.classList.remove("active");
-      btnInnerTabKeys.style.color = "var(--text-muted, #78716c)";
-      paneProfile.style.display = "flex";
-      paneKeys.style.display = "none";
+    paneProfile.style.display = targetPane === "profile" ? "flex" : "none";
+    paneKeys.style.display = targetPane === "keys" ? "flex" : "none";
+    if (paneNotes) {
+      paneNotes.style.display = targetPane === "notes" ? "flex" : "none";
     }
 
     if (myPubkey) {
@@ -1211,12 +1210,12 @@ async function mountProfileViewer(root: HTMLElement) {
     }
   }
 
-  btnEditProfile.addEventListener("click", () => toggleEditPanel("profile"));
-  btnKeys.addEventListener("click", () => toggleEditPanel("keys"));
-  btnCloseEdit.addEventListener("click", () => toggleEditPanel("profile", false));
-
-  btnInnerTabProfile.addEventListener("click", () => toggleEditPanel("profile", true));
-  btnInnerTabKeys.addEventListener("click", () => toggleEditPanel("keys", true));
+  btnInnerTabProfile.addEventListener("click", () => toggleEditPanel("profile"));
+  btnInnerTabKeys.addEventListener("click", () => toggleEditPanel("keys"));
+  if (btnInnerTabMyNotes) {
+    btnInnerTabMyNotes.addEventListener("click", () => toggleEditPanel("notes"));
+  }
+  btnCloseEdit?.addEventListener("click", () => toggleEditPanel("profile"));
 
   // Key Copy Handlers
   const copyText = (val: string, btn: HTMLButtonElement) => {
@@ -1291,7 +1290,7 @@ async function mountProfileViewer(root: HTMLElement) {
         }
         if (switchRes?.npub) {
           inpNpub.value = switchRes.npub;
-          spanPreviewNpub.textContent = switchRes.npub;
+          if (myNpubTextEl) myNpubTextEl.textContent = switchRes.npub;
         }
         inpImport.value = "";
         nsecBox.style.display = "none";
@@ -1965,6 +1964,7 @@ async function mountProfileViewer(root: HTMLElement) {
 
     const cached = profileCache.get(pubkey);
     renderMyProfileMetadata(pubkey, cached || null);
+    populateEditForm(cached || null);
 
     if (activeMyProfileSubId) {
       sendWs(["CLOSE", activeMyProfileSubId]);
@@ -1988,6 +1988,7 @@ async function mountProfileViewer(root: HTMLElement) {
       if (myNoteCount === 0) {
         myNotesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">No public notes published yet.</div>`;
         myNotesCountEl.textContent = "0 notes";
+        if (myNotesCountPill) myNotesCountPill.textContent = "0";
       }
     }, 3000);
   }

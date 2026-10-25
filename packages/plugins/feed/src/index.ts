@@ -747,6 +747,23 @@ function mountFeed(root: any) {
     }
   });
 
+  function loadCachedFollowingList(pk: string) {
+    if (!pk) return;
+    try {
+      const raw = localStorage.getItem(`omni_people_follows_${pk}`);
+      if (raw) {
+        const tags = JSON.parse(raw);
+        if (Array.isArray(tags)) {
+          for (const t of tags) {
+            if (t[0] === "p" && t[1]) {
+              followingPubkeys.add(t[1]);
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   // Initialize composer avatar with user pubkey if available
   try {
     const nostr = (window as any).nostr;
@@ -755,6 +772,7 @@ function mountFeed(root: any) {
         if (pk) {
           myUserPubkey = pk;
           followingPubkeys.add(pk);
+          loadCachedFollowingList(pk);
           if (myAvatarEl) {
             myAvatarEl.style.background = getAvatarGradient(pk);
             myAvatarEl.textContent = (pk[0] || "U").toUpperCase();
@@ -764,7 +782,7 @@ function mountFeed(root: any) {
             threadComposerAvatar.textContent = (pk[0] || "U").toUpperCase();
           }
           fetchFollowingList(pk);
-          if (activeTab === "following") {
+          if (activeTab === "following" && followingPubkeys.size > 0) {
             subscribeFollowingNotes();
           }
         }
@@ -831,9 +849,15 @@ function mountFeed(root: any) {
             </svg>
           </div>
           <div class="empty-state-title">No notes from followed accounts yet</div>
-          <div class="empty-state-subtitle">Follow accounts in the People app or switch to the Global tab.</div>
+          <div class="empty-state-subtitle">Follow accounts in the Profiles app or switch to the Global tab.</div>
+          <button class="btn-empty-switch-global btn-secondary" style="margin-top: 10px; font-size: 0.8rem; padding: 6px 14px; cursor: pointer; border-radius: var(--radius-sm, 6px); background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df);">
+            Switch to Global Feed
+          </button>
         </div>
       `;
+      emptyEl.querySelector<HTMLButtonElement>(".btn-empty-switch-global")?.addEventListener("click", () => {
+        switchFeedTab("global");
+      });
       notesList.appendChild(emptyEl);
     }
   }
@@ -2159,6 +2183,9 @@ function mountFeed(root: any) {
                     followingPubkeys.add(tag[1]);
                   }
                 }
+                try {
+                  localStorage.setItem(`omni_people_follows_${myUserPubkey}`, JSON.stringify(ev.tags || []));
+                } catch (_) {}
                 if (activeTab === "following") {
                   renderActiveFeedTab();
                   subscribeFollowingNotes();
