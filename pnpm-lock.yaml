@@ -30,9 +30,6 @@ importers:
       '@omni/plugin-feed':
         specifier: workspace:*
         version: link:../../packages/plugins/feed
-      '@omni/plugin-profile':
-        specifier: workspace:*
-        version: link:../../packages/plugins/profile
       '@omni/plugin-profile-viewer':
         specifier: workspace:*
         version: link:../../packages/plugins/profile-viewer
@@ -113,15 +110,6 @@ importers:
       fake-indexeddb:
         specifier: ^6.2.5
         version: 6.2.5
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-
-  packages/plugins/profile:
-    devDependencies:
-      '@omni/types':
-        specifier: workspace:*
-        version: link:../../types
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

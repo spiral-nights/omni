@@ -14,7 +14,6 @@
     "@omni/plugin-shell": "workspace:*",
     "@omni/plugin-feed": "workspace:*",
     "@omni/plugin-relays": "workspace:*",
-    "@omni/plugin-profile": "workspace:*",
     "@omni/plugin-checklist": "workspace:*",
     "@omni/plugin-profile-viewer": "workspace:*",
     "@omni/plugin-publisher": "workspace:*",

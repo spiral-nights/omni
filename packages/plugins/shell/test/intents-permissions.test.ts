@@ -311,22 +311,22 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
     it("renders displayName on OmniShell dock launchers and preserves it in workspace export", () => {
       const plugins: InstalledPluginEntry[] = [
         {
-          id: "org.omni.plugin.profile",
-          name: "Profile Editor",
-          displayName: "My Profile",
+          id: "org.omni.plugin.checklist",
+          name: "Task Checklist",
+          displayName: "Daily",
           version: "1.0.0",
-          scriptContent: "console.log('profile editor');",
-          sourceUrl: "local:@omni/plugin-profile",
+          scriptContent: "console.log('checklist');",
+          sourceUrl: "local:@omni/plugin-checklist",
           enabled: true,
           pinned: true,
           viewport: "main"
         },
         {
           id: "org.omni.plugin.profile-viewer",
-          name: "Profile Viewer",
-          displayName: "Profile",
+          name: "Profiles Application",
+          displayName: "Profiles",
           version: "1.0.0",
-          scriptContent: "console.log('profile viewer');",
+          scriptContent: "console.log('profiles');",
           sourceUrl: "local:@omni/plugin-profile-viewer",
           enabled: true,
           pinned: true,
@@ -337,37 +337,37 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
       const shell = new OmniShell({ root, kernel, installedPlugins: plugins });
       shell.mount();
 
-      const metaEditor = shell.getPluginMeta(plugins[0]);
-      expect(metaEditor.name).toBe("Profile Editor");
-      expect(metaEditor.displayName).toBe("My Profile");
+      const metaChecklist = shell.getPluginMeta(plugins[0]);
+      expect(metaChecklist.name).toBe("Task Checklist");
+      expect(metaChecklist.displayName).toBe("Daily");
 
-      const metaViewer = shell.getPluginMeta(plugins[1]);
-      expect(metaViewer.name).toBe("Profile Viewer");
-      expect(metaViewer.displayName).toBe("Profile");
+      const metaProfiles = shell.getPluginMeta(plugins[1]);
+      expect(metaProfiles.name).toBe("Profiles Application");
+      expect(metaProfiles.displayName).toBe("Profiles");
 
       // Verify dock items display the distinct displayNames
       const dockItems = Array.from(root.querySelectorAll<HTMLElement>(".dock-item"));
-      const editorDock = dockItems.find((el) => el.textContent?.includes("My Profile"));
-      const viewerDock = dockItems.find((el) => el.textContent?.includes("Profile"));
+      const checklistDock = dockItems.find((el) => el.textContent?.includes("Daily"));
+      const profilesDock = dockItems.find((el) => el.textContent?.includes("Profiles"));
 
-      expect(editorDock).toBeDefined();
-      expect(viewerDock).toBeDefined();
+      expect(checklistDock).toBeDefined();
+      expect(profilesDock).toBeDefined();
 
       // Verify export preserves displayName
       const exported = shell.exportWorkspaceState();
-      expect(exported.plugins.find((p) => p.id === "org.omni.plugin.profile")?.displayName).toBe("My Profile");
-      expect(exported.plugins.find((p) => p.id === "org.omni.plugin.profile-viewer")?.displayName).toBe("Profile");
+      expect(exported.plugins.find((p) => p.id === "org.omni.plugin.checklist")?.displayName).toBe("Daily");
+      expect(exported.plugins.find((p) => p.id === "org.omni.plugin.profile-viewer")?.displayName).toBe("Profiles");
     });
 
     it("renders displayName on PanoramaShell and round-trips through workspace", () => {
       const plugins: InstalledPluginEntry[] = [
         {
-          id: "org.omni.plugin.profile",
-          name: "Profile Editor",
-          displayName: "My Profile",
+          id: "org.omni.plugin.profile-viewer",
+          name: "Profiles Application",
+          displayName: "Profiles",
           version: "1.0.0",
-          scriptContent: "console.log('profile editor');",
-          sourceUrl: "local:@omni/plugin-profile",
+          scriptContent: "console.log('profiles');",
+          sourceUrl: "local:@omni/plugin-profile-viewer",
           enabled: true,
           viewport: "main"
         }
@@ -377,10 +377,10 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
       panorama.mount();
 
       const meta = panorama.getPluginMeta(plugins[0]);
-      expect(meta.displayName).toBe("My Profile");
+      expect(meta.displayName).toBe("Profiles");
 
       const exported = panorama.exportWorkspaceState();
-      expect(exported.plugins[0].displayName).toBe("My Profile");
+      expect(exported.plugins[0].displayName).toBe("Profiles");
     });
   });
 
@@ -399,8 +399,8 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
         },
         {
           id: "org.omni.plugin.profile-viewer",
-          name: "Profile Viewer",
-          displayName: "Profile",
+          name: "Profiles",
+          displayName: "Profiles",
           version: "1.0.0",
           handledIntents: ["view_profile"],
           scriptContent: "console.log('viewer');",
@@ -436,8 +436,8 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
         },
         {
           id: "org.omni.plugin.profile-viewer",
-          name: "Profile Viewer",
-          displayName: "Profile",
+          name: "Profiles",
+          displayName: "Profiles",
           version: "1.0.0",
           handledIntents: ["view_profile"],
           scriptContent: "console.log('viewer');",
@@ -483,8 +483,8 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
         },
         {
           id: "org.omni.plugin.profile-viewer",
-          name: "Profile Viewer",
-          displayName: "Profile",
+          name: "Profiles",
+          displayName: "Profiles",
           version: "1.0.0",
           handledIntents: ["view_profile"],
           scriptContent: "console.log('viewer');",
@@ -532,8 +532,8 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
         },
         {
           id: "org.omni.plugin.profile-viewer",
-          name: "Profile Viewer",
-          displayName: "Profile",
+          name: "Profiles",
+          displayName: "Profiles",
           version: "1.0.0",
           handledIntents: ["view_profile"],
           scriptContent: "console.log('viewer');",

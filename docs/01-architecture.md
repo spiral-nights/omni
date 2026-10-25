@@ -13,8 +13,7 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
 1. **Every Functional Domain is a Standalone Plugin**:
    - The timeline feed & composer (`@omni/plugin-feed`) is a plugin.
    - The relay inspector & connection manager (`@omni/plugin-relays`) is a plugin.
-   - The profile editor & key custody manager (`@omni/plugin-profile`) is a plugin.
-   - The profile & people viewer (`@omni/plugin-profile-viewer`) is a plugin.
+   - The profile editor, key custody, and people browser (`@omni/plugin-profile-viewer`) is a unified "Profiles" plugin.
    - The task list (`@omni/plugin-checklist`) is a plugin.
    - The plugin studio & Blossom publisher (`@omni/plugin-publisher`) is a plugin.
    - The shell UI frame itself (`@omni/plugin-shell`) is a first-class plugin.
@@ -74,8 +73,7 @@ omni/
 │       ├── shell/                         # @omni/plugin-shell (Header, dock, pages, settings)
 │       ├── feed/                          # @omni/plugin-feed (Timeline notes & note composer)
 │       ├── relays/                        # @omni/plugin-relays (Relay inspector & manager)
-│       ├── profile/                       # @omni/plugin-profile (Identity & key custody)
-│       ├── profile-viewer/                # @omni/plugin-profile-viewer (People & profile viewer)
+│       ├── profile-viewer/                # @omni/plugin-profile-viewer ("Profiles": people, metadata editor & key custody)
 │       ├── checklist/                     # @omni/plugin-checklist (Daily checklist widget)
 │       └── publisher/                     # @omni/plugin-publisher (Plugin Studio & Blossom uploader)
 ```

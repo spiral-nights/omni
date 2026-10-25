@@ -386,12 +386,19 @@ export abstract class BaseShell implements OmniShellHost {
     icon: string;
     viewport: string;
   } {
-    const displayName = p.displayName || p.manifest?.displayName || p.name || p.manifest?.name || p.id;
+    let displayName = p.displayName || p.manifest?.displayName || p.name || p.manifest?.name || p.id;
+    if (p.id === "org.omni.plugin.profile-viewer" && (displayName === "Profile" || displayName === "People" || displayName === "Profile Viewer")) {
+      displayName = "Profiles";
+    }
+    let name = p.name || p.manifest?.name || p.id;
+    if (p.id === "org.omni.plugin.profile-viewer" && (name === "Profile" || name === "People" || name === "Profile Viewer")) {
+      name = "Profiles";
+    }
     const placements = this.getPluginPlacements(p);
     if (placements.length === 0) {
       return {
         id: p.id,
-        name: p.name || p.manifest?.name || p.id,
+        name,
         displayName,
         version: p.version || p.manifest?.version || "1.0.0",
         description: p.description || p.manifest?.description || "",
@@ -403,7 +410,7 @@ export abstract class BaseShell implements OmniShellHost {
     const layoutSlot = this.layoutManager.getSlotForComponent(p.id, primaryCompId);
     return {
       id: p.id,
-      name: p.name || p.manifest?.name || p.id,
+      name,
       displayName,
       version: p.version || p.manifest?.version || "1.0.0",
       description: p.description || p.manifest?.description || "",
@@ -887,11 +894,16 @@ export abstract class BaseShell implements OmniShellHost {
     const bundles = this.getSavedPluginBundles();
 
     for (const item of state.plugins) {
+      if (item.id === "org.omni.plugin.profile") continue;
       let plugin = this.installedPlugins.find((p) => p.id === item.id);
       if (!plugin && !(item.sourceUrl && item.sourceUrl.startsWith("local:@omni/"))) {
         plugin = this.restoreMissingPluginEntry(item, bundles);
       }
       if (plugin) {
+        if (plugin.id === "org.omni.plugin.profile-viewer") {
+          plugin.name = "Profiles";
+          plugin.displayName = "Profiles";
+        }
         if (typeof item.enabled === "boolean") {
           plugin.enabled = item.enabled;
         }
@@ -899,7 +911,11 @@ export abstract class BaseShell implements OmniShellHost {
           plugin.pinned = item.pinned;
         }
         if (item.displayName !== undefined) {
-          plugin.displayName = item.displayName;
+          if (plugin.id === "org.omni.plugin.profile-viewer") {
+            plugin.displayName = (item.displayName !== "Profile" && item.displayName !== "People" && item.displayName !== "Profile Viewer") ? item.displayName : "Profiles";
+          } else {
+            plugin.displayName = item.displayName;
+          }
         }
         if (item.relays !== undefined) {
           plugin.relays = Array.isArray(item.relays) && item.relays.length > 0 ? item.relays : undefined;
@@ -951,8 +967,11 @@ export abstract class BaseShell implements OmniShellHost {
       }
     }
 
+    this.installedPlugins = this.installedPlugins.filter((p) => p.id !== "org.omni.plugin.profile");
+
     if (switchPage && state.activePage && state.activePage !== this.getActivePageId()) {
-      this.showPage(state.activePage);
+      const targetPage = state.activePage === "org.omni.plugin.profile" ? "org.omni.plugin.profile-viewer" : state.activePage;
+      this.showPage(targetPage);
     }
 
     this.onWorkspaceUpdated();
@@ -1064,11 +1083,16 @@ export abstract class BaseShell implements OmniShellHost {
         }
         if (state && state.plugins) {
           for (const item of state.plugins) {
+            if (item.id === "org.omni.plugin.profile") continue;
             let plugin = this.installedPlugins.find((p) => p.id === item.id);
             if (!plugin && !(item.sourceUrl && item.sourceUrl.startsWith("local:@omni/"))) {
               plugin = this.restoreMissingPluginEntry(item, bundles);
             }
             if (plugin) {
+              if (plugin.id === "org.omni.plugin.profile-viewer") {
+                plugin.name = "Profiles";
+                plugin.displayName = "Profiles";
+              }
               if (item.viewport === "main") {
                 plugin.viewport = "";
               } else if (item.viewport) {
@@ -1076,7 +1100,13 @@ export abstract class BaseShell implements OmniShellHost {
               }
               if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
               if (typeof item.pinned === "boolean") plugin.pinned = item.pinned;
-              if (item.displayName !== undefined) plugin.displayName = item.displayName;
+              if (item.displayName !== undefined) {
+                if (plugin.id === "org.omni.plugin.profile-viewer") {
+                  plugin.displayName = (item.displayName !== "Profile" && item.displayName !== "People" && item.displayName !== "Profile Viewer") ? item.displayName : "Profiles";
+                } else {
+                  plugin.displayName = item.displayName;
+                }
+              }
               if (item.relays !== undefined) {
                 plugin.relays = Array.isArray(item.relays) && item.relays.length > 0 ? item.relays : undefined;
               }
@@ -1116,6 +1146,7 @@ export abstract class BaseShell implements OmniShellHost {
           if (typeof state.autoSync === "boolean") {
             this.autoSyncNip78 = state.autoSync;
           }
+          this.installedPlugins = this.installedPlugins.filter((p) => p.id !== "org.omni.plugin.profile");
           return state;
         }
       } else if (Object.keys(bundles).length > 0) {
