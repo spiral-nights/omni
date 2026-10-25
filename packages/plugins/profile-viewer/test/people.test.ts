@@ -86,17 +86,23 @@ describe("People plugin (profile, follows, mutes)", () => {
 
   it("renders People tabs and switches views", async () => {
     await flush();
-    const btnProfile = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-profile")!;
+    const btnMyProfile = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-my-profile")!;
+    const btnUserProfile = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-user-profile")!;
     const btnFollowing = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-following")!;
     const btnBlocked = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-blocked")!;
 
-    expect(btnProfile.classList.contains("active")).toBe(true);
-    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-profile")!.style.display).not.toBe("none");
+    expect(btnMyProfile.classList.contains("active")).toBe(true);
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-my-profile")!.style.display).not.toBe("none");
+
+    btnUserProfile.click();
+    expect(btnUserProfile.classList.contains("active")).toBe(true);
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-user-profile")!.style.display).not.toBe("none");
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-my-profile")!.style.display).toBe("none");
 
     btnFollowing.click();
     expect(btnFollowing.classList.contains("active")).toBe(true);
     expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-following")!.style.display).not.toBe("none");
-    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-profile")!.style.display).toBe("none");
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-user-profile")!.style.display).toBe("none");
 
     btnBlocked.click();
     expect(btnBlocked.classList.contains("active")).toBe(true);
@@ -228,15 +234,24 @@ describe("People plugin (profile, follows, mutes)", () => {
     // Switch to Blocked tab first
     peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-blocked")!.click();
 
-    // Dispatch intent
+    // Dispatch intent with friendPubkey (external user)
     intentHandler({ pubkey: friendPubkey });
     await flush();
 
-    // Verify it switched back to Profile tab and loaded friendPubkey
-    const btnProfile = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-profile")!;
-    expect(btnProfile.classList.contains("active")).toBe(true);
-    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-profile")!.style.display).not.toBe("none");
-    expect(peopleRoot().querySelector<HTMLElement>(".pv-npub-text")!.textContent).toBeDefined();
+    // Verify it switched to User Profile tab and loaded friendPubkey
+    const btnUserProfile = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-user-profile")!;
+    expect(btnUserProfile.classList.contains("active")).toBe(true);
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-user-profile")!.style.display).not.toBe("none");
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-user-npub-text")!.textContent).toBeDefined();
+
+    // Dispatch intent with own pubkey
+    intentHandler({ pubkey: myPubkey });
+    await flush();
+
+    // Verify it switched to My Profile tab
+    const btnMyProfile = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-my-profile")!;
+    expect(btnMyProfile.classList.contains("active")).toBe(true);
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-my-profile")!.style.display).not.toBe("none");
   });
 
   it("toggles npub lookup bar visibility on demand", async () => {
@@ -273,12 +288,12 @@ describe("People plugin (profile, follows, mutes)", () => {
     const userCard = peopleRoot().querySelector<HTMLElement>(".people-user-card")!;
     expect(userCard).toBeDefined();
 
-    // Click user avatar to view profile
+    // Click user avatar to view user profile
     userCard.querySelector<HTMLElement>(".people-avatar")!.click();
     await flush();
 
-    // Verify switched to Profile tab
-    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-profile")!.style.display).not.toBe("none");
+    // Verify switched to User Profile tab
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-user-profile")!.style.display).not.toBe("none");
     const btnBack = peopleRoot().querySelector<HTMLButtonElement>(".btn-profile-back")!;
     expect(btnBack.style.display).not.toBe("none");
     expect(btnBack.textContent).toContain("Back to Following");
@@ -289,7 +304,7 @@ describe("People plugin (profile, follows, mutes)", () => {
 
     // Should return to Following tab
     expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-following")!.style.display).not.toBe("none");
-    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-profile")!.style.display).toBe("none");
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-user-profile")!.style.display).toBe("none");
   });
 
   it("filters followed accounts by query string", async () => {

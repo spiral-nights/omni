@@ -357,7 +357,8 @@ async function mountProfileViewer(root: HTMLElement) {
     return mountProfileWidget(root);
   }
 
-  let activeTab: "profile" | "following" | "blocked" = "profile";
+  let activeTab: "my-profile" | "user-profile" | "following" | "blocked" | "profile" = "my-profile";
+  let activeUserPubkey = "";
   let activePubkey = "";
   let myPubkey = "";
   let myFollows = new Set<string>();
@@ -366,12 +367,17 @@ async function mountProfileViewer(root: HTMLElement) {
   let myMuteTags: string[][] = [];
 
   let activeWs: WebSocket | null = null;
-  let activeNotesSubId: string | null = null;
-  let activeProfileSubId: string | null = null;
+  let activeUserNotesSubId: string | null = null;
+  let activeUserProfileSubId: string | null = null;
+  let activeMyNotesSubId: string | null = null;
+  let activeMyProfileSubId: string | null = null;
   let isLoading = false;
   let eoseTimeout: any = null;
   const renderedNoteIds = new Set<string>();
   let noteCount = 0;
+  const myRenderedNoteIds = new Set<string>();
+  let myNoteCount = 0;
+  let myProfileRendered = false;
 
   function getFollowsStorageKey(pk: string): string {
     return `omni_people_follows_${pk}`;
@@ -548,34 +554,50 @@ async function mountProfileViewer(root: HTMLElement) {
           try {
             const meta: ProfileMetadata = JSON.parse(ev.content);
             profileCache.set(ev.pubkey, meta);
-            if (ev.pubkey === activePubkey) {
-              renderProfileMetadata(activePubkey, meta);
-            }
             if (ev.pubkey === myPubkey) {
+              renderMyProfileMetadata(meta);
               populateEditForm(meta);
+            }
+            if (ev.pubkey === activeUserPubkey) {
+              renderUserProfileMetadata(activeUserPubkey, meta);
             }
             updateUserCards(ev.pubkey, meta);
           } catch (_) {}
         }
 
-        // Kind 1: Timeline Notes for activePubkey
-        else if (k === 1 && (subId === activeNotesSubId || (!subId && ev.pubkey === activePubkey))) {
-          if (eoseTimeout) {
-            clearTimeout(eoseTimeout);
-            eoseTimeout = null;
-          }
-          if (!renderedNoteIds.has(ev.id)) {
-            renderedNoteIds.add(ev.id);
-            if (noteCount === 0 && notesListEl) {
-              notesListEl.innerHTML = "";
+        // Kind 1: Timeline Notes
+        else if (k === 1) {
+          // My profile notes
+          if (subId === activeMyNotesSubId || (!subId && myPubkey && ev.pubkey === myPubkey)) {
+            if (!myRenderedNoteIds.has(ev.id)) {
+              myRenderedNoteIds.add(ev.id);
+              if (myNoteCount === 0 && myNotesListEl) {
+                myNotesListEl.innerHTML = "";
+              }
+              myNoteCount++;
+              if (myNotesCountEl) myNotesCountEl.textContent = `${myNoteCount} note${myNoteCount === 1 ? "" : "s"}`;
+              if (myNotesListEl) myNotesListEl.appendChild(renderNoteCard(ev));
             }
-            noteCount++;
-            if (notesCountEl) notesCountEl.textContent = `${noteCount} note${noteCount === 1 ? "" : "s"}`;
-            if (notesListEl) notesListEl.appendChild(renderNoteCard(ev));
+          }
+          // User profile notes
+          if (subId === activeUserNotesSubId || (!subId && activeUserPubkey && ev.pubkey === activeUserPubkey)) {
+            if (eoseTimeout) {
+              clearTimeout(eoseTimeout);
+              eoseTimeout = null;
+            }
+            if (!renderedNoteIds.has(ev.id)) {
+              renderedNoteIds.add(ev.id);
+              if (noteCount === 0 && notesListEl) {
+                notesListEl.innerHTML = "";
+              }
+              noteCount++;
+              if (notesCountEl) notesCountEl.textContent = `${noteCount} note${noteCount === 1 ? "" : "s"}`;
+              if (notesListEl) notesListEl.appendChild(renderNoteCard(ev));
+            }
           }
         }
       } else if (type === "EOSE") {
-        if (subId === activeNotesSubId) {
+        if (subId === activeUserNotesSubId) {
           if (eoseTimeout) {
             clearTimeout(eoseTimeout);
             eoseTimeout = null;
@@ -584,6 +606,12 @@ async function mountProfileViewer(root: HTMLElement) {
           if (noteCount === 0 && notesListEl) {
             notesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">No public notes published by this user yet.</div>`;
             if (notesCountEl) notesCountEl.textContent = "0 notes";
+          }
+        }
+        if (subId === activeMyNotesSubId) {
+          if (myNoteCount === 0 && myNotesListEl) {
+            myNotesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">You haven't published any public notes yet.</div>`;
+            if (myNotesCountEl) myNotesCountEl.textContent = "0 notes";
           }
         }
       }
@@ -598,7 +626,8 @@ async function mountProfileViewer(root: HTMLElement) {
         <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
           <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-primary, #ede8df);">Profiles</h2>
           <div class="people-tabs">
-            <button class="people-tab-btn btn-tab-profile active" data-tab="profile">Profile</button>
+            <button class="people-tab-btn btn-tab-profile btn-tab-my-profile active" data-tab="my-profile">My Profile</button>
+            <button class="people-tab-btn btn-tab-user-profile btn-tab-user" data-tab="user-profile">User Profile</button>
             <button class="people-tab-btn btn-tab-following" data-tab="following">Following (<span class="count-following">0</span>)</button>
             <button class="people-tab-btn btn-tab-blocked" data-tab="blocked">Blocked (<span class="count-blocked">0</span>)</button>
           </div>
@@ -609,55 +638,35 @@ async function mountProfileViewer(root: HTMLElement) {
         </button>
       </div>
 
-      <!-- PROFILE TAB VIEW -->
-      <div class="pv-tab-content pv-tab-profile">
-        <!-- Back button when opened from Following / Blocked list -->
-        <div class="pv-profile-top-bar" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px;">
-          <button class="btn-profile-back btn-secondary" style="display: none;">
-            ${ICONS.arrowLeft}
-            <span class="btn-profile-back-text">Back to Following</span>
-          </button>
-        </div>
-
-        <!-- Top Search & Switch Bar (Hidden by default, toggled on demand) -->
-        <div class="pv-search-bar" style="display: none; align-items: center; gap: 8px; padding: 6px 10px; margin-bottom: 16px;">
-          <span style="color: var(--text-muted, #78716c); display: flex; align-items: center;">${ICONS.search}</span>
-          <input class="pv-search-input" type="text" placeholder="Lookup pubkey (hex) or npub1..." style="flex: 1; background: transparent; border: none; outline: none; color: inherit; font-family: var(--font-mono, monospace); font-size: 0.8rem;" />
-          <button class="pv-search-btn btn-secondary">Lookup</button>
-        </div>
-
-        <!-- Hero Banner & Card -->
-        <div class="pv-card" style="border-radius: var(--radius-md, 10px); overflow: hidden; display: flex; flex-direction: column;">
+      <!-- 1. MY PROFILE TAB VIEW -->
+      <div class="pv-tab-content pv-tab-my-profile pv-tab-profile">
+        <!-- My Profile Card -->
+        <div class="pv-card pv-my-card" style="border-radius: var(--radius-md, 10px); overflow: hidden; display: flex; flex-direction: column;">
           
           <!-- Banner Image / Header -->
-          <div class="pv-banner" style="height: 140px; background: linear-gradient(135deg, #1f1d1a, #2a2723); background-size: cover; background-position: center; position: relative;"></div>
+          <div class="pv-banner pv-my-banner" style="height: 140px; background: linear-gradient(135deg, #1f1d1a, #2a2723); background-size: cover; background-position: center; position: relative;"></div>
 
           <!-- Identity & Metadata Section -->
           <div class="pv-info-section" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; position: relative;">
             
             <!-- Avatar Overlapping Banner -->
             <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: -54px; margin-bottom: 4px;">
-              <div class="pv-avatar-wrap" style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0;">
-                <div class="pv-avatar-fallback" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff;">?</div>
+              <div class="pv-avatar-wrap pv-my-avatar-wrap" style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0;">
+                <div class="pv-avatar-fallback pv-my-avatar-fallback" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff;">?</div>
               </div>
               
-              <div class="pv-action-buttons" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <!-- Self management buttons (shown when viewing self) -->
-                <button class="pv-btn-edit-profile btn-secondary" title="Edit Profile Info" style="display: none;">
+              <div class="pv-action-buttons pv-my-action-buttons" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <button class="pv-btn-edit-profile btn-secondary" title="Edit Profile Info">
                   ${ICONS.edit}
                   <span>Edit Profile</span>
                 </button>
-                <button class="pv-btn-keys btn-secondary" title="Keys & Custody" style="display: none;">
+                <button class="pv-btn-keys btn-secondary" title="Keys & Custody">
                   ${ICONS.key}
                   <span>Keys</span>
                 </button>
-
-                <!-- Social actions (shown when viewing other users) -->
-                <button class="pv-btn-follow btn-follow-toggle" title="Follow or Unfollow user" style="display: none;">Follow</button>
-                <button class="pv-btn-block btn-block-toggle" title="Block or Unblock user" style="display: none;">Block</button>
-                <button class="pv-btn-refresh btn-secondary" title="Refresh Profile & Notes">
+                <button class="pv-btn-my-sync btn-secondary" title="Sync from Relays">
                   ${ICONS.refresh}
-                  <span>Refresh</span>
+                  <span>Sync</span>
                 </button>
               </div>
             </div>
@@ -665,44 +674,44 @@ async function mountProfileViewer(root: HTMLElement) {
             <!-- Name & Handles -->
             <div style="display: flex; flex-direction: column; gap: 3px;">
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <h2 class="pv-display-name" style="margin: 0; font-size: 1.25rem; font-weight: 700;">Loading Profile...</h2>
-                <span class="pv-nip05-badge" style="display: none; align-items: center; gap: 4px; font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(212, 163, 115, 0.15); color: var(--accent-primary, #d4a373); border: 1px solid rgba(212, 163, 115, 0.3);">
+                <h2 class="pv-display-name pv-my-display-name" style="margin: 0; font-size: 1.25rem; font-weight: 700;">Loading Profile...</h2>
+                <span class="pv-nip05-badge pv-my-nip05-badge" style="display: none; align-items: center; gap: 4px; font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(212, 163, 115, 0.15); color: var(--accent-primary, #d4a373); border: 1px solid rgba(212, 163, 115, 0.3);">
                   ${ICONS.checkCircle}
-                  <span class="pv-nip05-text"></span>
+                  <span class="pv-nip05-text pv-my-nip05-text"></span>
                 </span>
               </div>
-              <div class="pv-handle" style="font-size: 0.84rem; color: var(--text-secondary, #9e988f);">@...</div>
+              <div class="pv-handle pv-my-handle" style="font-size: 0.84rem; color: var(--text-secondary, #9e988f);">@...</div>
             </div>
 
             <!-- Npub Copy Pill -->
             <div class="pv-npub-row" style="display: flex; align-items: center; gap: 8px;">
-              <div class="pv-npub-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; color: var(--text-muted, #78716c); max-width: 100%; overflow: hidden;">
-                <span class="pv-npub-text" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">npub...</span>
+              <div class="pv-npub-pill pv-my-npub-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; color: var(--text-muted, #78716c); max-width: 100%; overflow: hidden;">
+                <span class="pv-npub-text pv-my-npub-text" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">npub...</span>
               </div>
-              <button class="pv-btn-copy-npub btn-secondary" title="Copy npub to clipboard">
+              <button class="pv-btn-copy-npub pv-btn-copy-my-npub btn-secondary" title="Copy npub to clipboard">
                 ${ICONS.copy}
-                <span class="pv-copy-label">Copy</span>
+                <span class="pv-copy-label pv-my-copy-label">Copy</span>
               </button>
             </div>
 
             <!-- Bio / About -->
-            <div class="pv-about" style="font-size: 0.88rem; line-height: 1.5; color: var(--text-primary, #ede8df); white-space: pre-wrap; word-break: break-word; display: none;"></div>
+            <div class="pv-about pv-my-about" style="font-size: 0.88rem; line-height: 1.5; color: var(--text-primary, #ede8df); white-space: pre-wrap; word-break: break-word; display: none;"></div>
 
             <!-- Extra Metadata Row (Website / Lightning) -->
-            <div class="pv-meta-links" style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 0.78rem; border-top: 1px solid var(--border-subtle, #272522); padding-top: 10px; margin-top: 2px;">
-              <div class="pv-lud16-wrap" style="display: none; align-items: center; gap: 4px; color: var(--accent-primary, #d4a373);">
+            <div class="pv-meta-links pv-my-meta-links" style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 0.78rem; border-top: 1px solid var(--border-subtle, #272522); padding-top: 10px; margin-top: 2px;">
+              <div class="pv-lud16-wrap pv-my-lud16-wrap" style="display: none; align-items: center; gap: 4px; color: var(--accent-primary, #d4a373);">
                 ${ICONS.bolt}
-                <span class="pv-lud16-text"></span>
+                <span class="pv-lud16-text pv-my-lud16-text"></span>
               </div>
-              <div class="pv-website-wrap" style="display: none; align-items: center; gap: 4px; color: var(--text-secondary, #9e988f);">
+              <div class="pv-website-wrap pv-my-website-wrap" style="display: none; align-items: center; gap: 4px; color: var(--text-secondary, #9e988f);">
                 ${ICONS.link}
-                <a class="pv-website-link" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: none;"></a>
+                <a class="pv-website-link pv-my-website-link" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: none;"></a>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Inline Profile Editor & Key Custody Drawer -->
+        <!-- Inline Profile Editor & Key Custody Drawer (Exclusively for My Profile) -->
         <div class="pv-edit-panel profile-full-container" style="display: none; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 10px); padding: 16px 20px; margin-top: 14px; flex-direction: column; gap: 14px;">
           
           <!-- Non-blocking inline Toast notification banner -->
@@ -838,17 +847,17 @@ async function mountProfileViewer(root: HTMLElement) {
           </div>
         </div>
 
-        <!-- Notes Feed Section -->
-        <div class="pv-notes-section" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
+        <!-- My Notes Feed Section -->
+        <div class="pv-notes-section pv-my-notes-section" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
           <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle, #272522); padding-bottom: 8px;">
             <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary, #ede8df);">
               ${ICONS.notes}
-              <span>Recent Notes</span>
+              <span>My Published Notes</span>
             </h3>
-            <span class="pv-notes-count" style="font-size: 0.75rem; color: var(--text-muted, #78716c);">0 notes</span>
+            <span class="pv-notes-count pv-my-notes-count" style="font-size: 0.75rem; color: var(--text-muted, #78716c);">0 notes</span>
           </div>
 
-          <div class="pv-notes-list" style="display: flex; flex-direction: column; gap: 10px;">
+          <div class="pv-notes-list pv-my-notes-list" style="display: flex; flex-direction: column; gap: 10px;">
             <div class="pv-notes-loading" style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">
               Loading timeline notes...
             </div>
@@ -856,7 +865,123 @@ async function mountProfileViewer(root: HTMLElement) {
         </div>
       </div>
 
-      <!-- FOLLOWING TAB VIEW -->
+      <!-- 2. USER PROFILE TAB VIEW (INSPECT EXTERNAL USER) -->
+      <div class="pv-tab-content pv-tab-user-profile pv-tab-user" style="display: none;">
+        <!-- Top bar with Back button -->
+        <div class="pv-profile-top-bar" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px;">
+          <button class="btn-profile-back btn-secondary" style="display: none;">
+            ${ICONS.arrowLeft}
+            <span class="btn-profile-back-text">Back to Following</span>
+          </button>
+        </div>
+
+        <!-- Top Search Bar -->
+        <div class="pv-search-bar" style="display: none; align-items: center; gap: 8px; padding: 6px 10px; margin-bottom: 16px;">
+          <span style="color: var(--text-muted, #78716c); display: flex; align-items: center;">${ICONS.search}</span>
+          <input class="pv-search-input" type="text" placeholder="Lookup pubkey (hex) or npub1..." style="flex: 1; background: transparent; border: none; outline: none; color: inherit; font-family: var(--font-mono, monospace); font-size: 0.8rem;" />
+          <button class="pv-search-btn btn-secondary">Lookup</button>
+        </div>
+
+        <!-- Empty state when no external user is selected -->
+        <div class="pv-user-empty-state" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 10px); padding: 36px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--bg-subtle, #2a2824); display: flex; align-items: center; justify-content: center; color: var(--accent-primary, #d4a373);">
+            ${ICONS.user}
+          </div>
+          <h3 style="margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--text-primary, #ede8df);">Inspect a Profile</h3>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary, #9e988f); max-width: 420px; line-height: 1.5;">
+            Enter an npub or hex public key above, or select an account from your Following list to inspect their profile and notes.
+          </p>
+          <div style="display: flex; gap: 8px; margin-top: 6px;">
+            <button class="btn-empty-browse-following btn-secondary" style="padding: 6px 14px; font-size: 0.82rem;">
+              ${ICONS.users} Browse Following
+            </button>
+          </div>
+        </div>
+
+        <!-- Target User Card -->
+        <div class="pv-card pv-user-card" style="display: none; border-radius: var(--radius-md, 10px); overflow: hidden; flex-direction: column;">
+          
+          <!-- Banner Image / Header -->
+          <div class="pv-banner pv-user-banner" style="height: 140px; background: linear-gradient(135deg, #1f1d1a, #2a2723); background-size: cover; background-position: center; position: relative;"></div>
+
+          <!-- Identity & Metadata Section -->
+          <div class="pv-info-section" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; position: relative;">
+            
+            <!-- Avatar Overlapping Banner -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: -54px; margin-bottom: 4px;">
+              <div class="pv-avatar-wrap pv-user-avatar-wrap" style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0;">
+                <div class="pv-avatar-fallback pv-user-avatar-fallback" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff;">?</div>
+              </div>
+              
+              <div class="pv-action-buttons pv-user-action-buttons" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <button class="pv-btn-follow btn-follow-toggle" style="display: none;" title="Follow or Unfollow user">Follow</button>
+                <button class="pv-btn-block btn-block-toggle" style="display: none;" title="Block or Unblock user">Block</button>
+                <button class="pv-btn-refresh btn-secondary" title="Refresh Profile & Notes">
+                  ${ICONS.refresh}
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Name & Handles -->
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <h2 class="pv-display-name pv-user-display-name" style="margin: 0; font-size: 1.25rem; font-weight: 700;">Loading Profile...</h2>
+                <span class="pv-nip05-badge pv-user-nip05-badge" style="display: none; align-items: center; gap: 4px; font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(212, 163, 115, 0.15); color: var(--accent-primary, #d4a373); border: 1px solid rgba(212, 163, 115, 0.3);">
+                  ${ICONS.checkCircle}
+                  <span class="pv-nip05-text pv-user-nip05-text"></span>
+                </span>
+              </div>
+              <div class="pv-handle pv-user-handle" style="font-size: 0.84rem; color: var(--text-secondary, #9e988f);">@...</div>
+            </div>
+
+            <!-- Npub Copy Pill -->
+            <div class="pv-npub-row" style="display: flex; align-items: center; gap: 8px;">
+              <div class="pv-npub-pill pv-user-npub-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; color: var(--text-muted, #78716c); max-width: 100%; overflow: hidden;">
+                <span class="pv-npub-text pv-user-npub-text" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">npub...</span>
+              </div>
+              <button class="pv-btn-copy-npub pv-btn-copy-user-npub btn-secondary" title="Copy npub to clipboard">
+                ${ICONS.copy}
+                <span class="pv-copy-label pv-user-copy-label">Copy</span>
+              </button>
+            </div>
+
+            <!-- Bio / About -->
+            <div class="pv-about pv-user-about" style="font-size: 0.88rem; line-height: 1.5; color: var(--text-primary, #ede8df); white-space: pre-wrap; word-break: break-word; display: none;"></div>
+
+            <!-- Extra Metadata Row (Website / Lightning) -->
+            <div class="pv-meta-links pv-user-meta-links" style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 0.78rem; border-top: 1px solid var(--border-subtle, #272522); padding-top: 10px; margin-top: 2px;">
+              <div class="pv-lud16-wrap pv-user-lud16-wrap" style="display: none; align-items: center; gap: 4px; color: var(--accent-primary, #d4a373);">
+                ${ICONS.bolt}
+                <span class="pv-lud16-text pv-user-lud16-text"></span>
+              </div>
+              <div class="pv-website-wrap pv-user-website-wrap" style="display: none; align-items: center; gap: 4px; color: var(--text-secondary, #9e988f);">
+                ${ICONS.link}
+                <a class="pv-website-link pv-user-website-link" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: none;"></a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Target User Notes Feed Section -->
+        <div class="pv-notes-section pv-user-notes-section" style="display: none; flex-direction: column; gap: 10px; margin-top: 16px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle, #272522); padding-bottom: 8px;">
+            <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary, #ede8df);">
+              ${ICONS.notes}
+              <span>Recent Notes</span>
+            </h3>
+            <span class="pv-notes-count pv-user-notes-count" style="font-size: 0.75rem; color: var(--text-muted, #78716c);">0 notes</span>
+          </div>
+
+          <div class="pv-notes-list pv-user-notes-list" style="display: flex; flex-direction: column; gap: 10px;">
+            <div class="pv-notes-loading" style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">
+              Loading timeline notes...
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. FOLLOWING TAB VIEW -->
       <div class="pv-tab-content pv-tab-following" style="display: none;">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
           <input class="following-filter-input" type="text" placeholder="Filter followed accounts..." style="flex: 1; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 8px); padding: 8px 12px; color: var(--text-primary, #ede8df); outline: none; font-size: 0.82rem;" />
@@ -868,7 +993,7 @@ async function mountProfileViewer(root: HTMLElement) {
         </div>
       </div>
 
-      <!-- BLOCKED TAB VIEW -->
+      <!-- 4. BLOCKED TAB VIEW -->
       <div class="pv-tab-content pv-tab-blocked" style="display: none;">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
           <input class="blocked-filter-input" type="text" placeholder="Filter blocked accounts..." style="flex: 1; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 8px); padding: 8px 12px; color: var(--text-primary, #ede8df); outline: none; font-size: 0.82rem;" />
@@ -884,13 +1009,17 @@ async function mountProfileViewer(root: HTMLElement) {
   `;
 
   // Tab elements
-  const btnTabProfile = container.querySelector<HTMLButtonElement>(".btn-tab-profile")!;
+  const btnTabMyProfile = container.querySelector<HTMLButtonElement>(".btn-tab-my-profile")!;
+  const btnTabUserProfile = container.querySelector<HTMLButtonElement>(".btn-tab-user-profile")!;
+  const btnTabProfile = btnTabMyProfile; // Alias for backward compatibility
   const btnTabFollowing = container.querySelector<HTMLButtonElement>(".btn-tab-following")!;
   const btnTabBlocked = container.querySelector<HTMLButtonElement>(".btn-tab-blocked")!;
   const countFollowingEl = container.querySelector<HTMLElement>(".count-following")!;
   const countBlockedEl = container.querySelector<HTMLElement>(".count-blocked")!;
 
-  const tabProfile = container.querySelector<HTMLElement>(".pv-tab-profile")!;
+  const tabMyProfile = container.querySelector<HTMLElement>(".pv-tab-my-profile")!;
+  const tabUserProfile = container.querySelector<HTMLElement>(".pv-tab-user-profile")!;
+  const tabProfile = tabMyProfile; // Alias for backward compatibility
   const tabFollowing = container.querySelector<HTMLElement>(".pv-tab-following")!;
   const tabBlocked = container.querySelector<HTMLElement>(".pv-tab-blocked")!;
 
@@ -899,38 +1028,64 @@ async function mountProfileViewer(root: HTMLElement) {
   const followingFilterInput = container.querySelector<HTMLInputElement>(".following-filter-input")!;
   const blockedFilterInput = container.querySelector<HTMLInputElement>(".blocked-filter-input")!;
 
-  // Profile elements
+  // User Profile elements (for inspecting external users)
+  const userEmptyState = tabUserProfile.querySelector<HTMLElement>(".pv-user-empty-state")!;
+  const userCardEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-card")!;
+  const userNotesSectionEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-notes-section")!;
+  const btnEmptyBrowseFollowing = tabUserProfile.querySelector<HTMLButtonElement>(".btn-empty-browse-following")!;
+
   const btnToggleLookup = container.querySelector<HTMLButtonElement>(".btn-toggle-lookup")!;
-  const btnProfileBack = container.querySelector<HTMLButtonElement>(".btn-profile-back")!;
-  const btnProfileBackText = container.querySelector<HTMLElement>(".btn-profile-back-text")!;
-  const searchBarEl = container.querySelector<HTMLElement>(".pv-search-bar")!;
+  const btnProfileBack = tabUserProfile.querySelector<HTMLButtonElement>(".btn-profile-back")!;
+  const btnProfileBackText = tabUserProfile.querySelector<HTMLElement>(".btn-profile-back-text")!;
+  const searchBarEl = tabUserProfile.querySelector<HTMLElement>(".pv-search-bar")!;
 
-  const bannerEl = container.querySelector<HTMLElement>(".pv-banner")!;
-  const avatarWrapEl = container.querySelector<HTMLElement>(".pv-avatar-wrap")!;
-  const displayNameEl = container.querySelector<HTMLElement>(".pv-display-name")!;
-  const handleEl = container.querySelector<HTMLElement>(".pv-handle")!;
-  const nip05BadgeEl = container.querySelector<HTMLElement>(".pv-nip05-badge")!;
-  const nip05TextEl = container.querySelector<HTMLElement>(".pv-nip05-text")!;
-  const npubTextEl = container.querySelector<HTMLElement>(".pv-npub-text")!;
-  const copyBtn = container.querySelector<HTMLButtonElement>(".pv-btn-copy-npub")!;
-  const copyLabel = container.querySelector<HTMLElement>(".pv-copy-label")!;
-  const aboutEl = container.querySelector<HTMLElement>(".pv-about")!;
-  const lud16Wrap = container.querySelector<HTMLElement>(".pv-lud16-wrap")!;
-  const lud16Text = container.querySelector<HTMLElement>(".pv-lud16-text")!;
-  const websiteWrap = container.querySelector<HTMLElement>(".pv-website-wrap")!;
-  const websiteLink = container.querySelector<HTMLAnchorElement>(".pv-website-link")!;
-  const notesListEl = container.querySelector<HTMLElement>(".pv-notes-list")!;
-  const notesCountEl = container.querySelector<HTMLElement>(".pv-notes-count")!;
-  const searchInput = container.querySelector<HTMLInputElement>(".pv-search-input")!;
-  const searchBtn = container.querySelector<HTMLButtonElement>(".pv-search-btn")!;
-  const btnRefresh = container.querySelector<HTMLButtonElement>(".pv-btn-refresh")!;
-  const btnFollow = container.querySelector<HTMLButtonElement>(".pv-btn-follow")!;
-  const btnBlock = container.querySelector<HTMLButtonElement>(".pv-btn-block")!;
+  const bannerEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-banner")!;
+  const avatarWrapEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-avatar-wrap")!;
+  const displayNameEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-display-name")!;
+  const handleEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-handle")!;
+  const nip05BadgeEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-nip05-badge")!;
+  const nip05TextEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-nip05-text")!;
+  const npubTextEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-npub-text")!;
+  const copyBtn = tabUserProfile.querySelector<HTMLButtonElement>(".pv-btn-copy-npub")!;
+  const copyLabel = tabUserProfile.querySelector<HTMLElement>(".pv-user-copy-label")!;
+  const aboutEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-about")!;
+  const lud16Wrap = tabUserProfile.querySelector<HTMLElement>(".pv-user-lud16-wrap")!;
+  const lud16Text = tabUserProfile.querySelector<HTMLElement>(".pv-user-lud16-text")!;
+  const websiteWrap = tabUserProfile.querySelector<HTMLElement>(".pv-user-website-wrap")!;
+  const websiteLink = tabUserProfile.querySelector<HTMLAnchorElement>(".pv-user-website-link")!;
+  const notesListEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-notes-list")!;
+  const notesCountEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-notes-count")!;
+  const searchInput = tabUserProfile.querySelector<HTMLInputElement>(".pv-search-input")!;
+  const searchBtn = tabUserProfile.querySelector<HTMLButtonElement>(".pv-search-btn")!;
+  const btnRefresh = tabUserProfile.querySelector<HTMLButtonElement>(".pv-btn-refresh")!;
+  const btnFollow = tabUserProfile.querySelector<HTMLButtonElement>(".pv-btn-follow")!;
+  const btnBlock = tabUserProfile.querySelector<HTMLButtonElement>(".pv-btn-block")!;
 
-  // Edit Drawer elements
-  const editPanel = container.querySelector<HTMLElement>(".pv-edit-panel")!;
-  const btnEditProfile = container.querySelector<HTMLButtonElement>(".pv-btn-edit-profile")!;
-  const btnKeys = container.querySelector<HTMLButtonElement>(".pv-btn-keys")!;
+  // My Profile elements (for authenticated identity)
+  const myBannerEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-banner")!;
+  const myAvatarWrapEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-avatar-wrap")!;
+  const myDisplayNameEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-display-name")!;
+  const myHandleEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-handle")!;
+  const myNip05BadgeEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-nip05-badge")!;
+  const myNip05TextEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-nip05-text")!;
+  const myNpubTextEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-npub-text")!;
+  const myCopyBtn = tabMyProfile.querySelector<HTMLButtonElement>(".pv-btn-copy-my-npub")!;
+  const myCopyLabel = tabMyProfile.querySelector<HTMLElement>(".pv-my-copy-label")!;
+  const myAboutEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-about")!;
+  const myLud16Wrap = tabMyProfile.querySelector<HTMLElement>(".pv-my-lud16-wrap")!;
+  const myLud16Text = tabMyProfile.querySelector<HTMLElement>(".pv-my-lud16-text")!;
+  const myWebsiteWrap = tabMyProfile.querySelector<HTMLElement>(".pv-my-website-wrap")!;
+  const myWebsiteLink = tabMyProfile.querySelector<HTMLAnchorElement>(".pv-my-website-link")!;
+  const myBtnEditProfile = tabMyProfile.querySelector<HTMLButtonElement>(".pv-btn-edit-profile")!;
+  const myBtnKeys = tabMyProfile.querySelector<HTMLButtonElement>(".pv-btn-keys")!;
+  const myBtnSync = tabMyProfile.querySelector<HTMLButtonElement>(".pv-btn-my-sync")!;
+  const myNotesListEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-notes-list")!;
+  const myNotesCountEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-notes-count")!;
+
+  // Edit Drawer elements (inside My Profile)
+  const editPanel = tabMyProfile.querySelector<HTMLElement>(".pv-edit-panel")!;
+  const btnEditProfile = myBtnEditProfile;
+  const btnKeys = myBtnKeys;
   const btnCloseEdit = container.querySelector<HTMLButtonElement>(".btn-close-edit")!;
   const btnInnerTabProfile = editPanel.querySelector<HTMLButtonElement>("#btn-tab-profile")!;
   const btnInnerTabKeys = editPanel.querySelector<HTMLButtonElement>("#btn-tab-keys")!;
@@ -1190,9 +1345,7 @@ async function mountProfileViewer(root: HTMLElement) {
 
       if (myPubkey) {
         profileCache.set(myPubkey, meta);
-        if (activePubkey === myPubkey) {
-          renderProfileMetadata(myPubkey, meta);
-        }
+        renderMyProfileMetadata(myPubkey, meta);
       }
 
       btnSave.textContent = "Profile Published!";
@@ -1228,7 +1381,7 @@ async function mountProfileViewer(root: HTMLElement) {
   });
 
   function updateProfileBackButton() {
-    if (previousTab && activeTab === "profile") {
+    if (previousTab && (activeTab === "user-profile" || (activeTab as any) === "profile")) {
       btnProfileBack.style.display = "inline-flex";
       btnProfileBackText.textContent = previousTab === "blocked" ? "Back to Blocked" : "Back to Following";
     } else {
@@ -1237,47 +1390,69 @@ async function mountProfileViewer(root: HTMLElement) {
   }
 
   // Tab switching with optional pushState
-  function switchTab(tab: "profile" | "following" | "blocked", pushState = true) {
-    const isSameTab = activeTab === tab;
-    activeTab = tab;
-    btnTabProfile.classList.toggle("active", tab === "profile");
-    btnTabFollowing.classList.toggle("active", tab === "following");
-    btnTabBlocked.classList.toggle("active", tab === "blocked");
+  function switchTab(
+    tab: "my-profile" | "user-profile" | "following" | "blocked" | "profile",
+    pushState = true
+  ) {
+    const normalizedTab = tab === "profile" ? "my-profile" : tab;
+    const isSameTab = activeTab === normalizedTab;
+    activeTab = normalizedTab;
 
-    tabProfile.style.display = tab === "profile" ? "block" : "none";
-    tabFollowing.style.display = tab === "following" ? "block" : "none";
-    tabBlocked.style.display = tab === "blocked" ? "block" : "none";
+    btnTabMyProfile.classList.toggle("active", normalizedTab === "my-profile");
+    btnTabUserProfile.classList.toggle("active", normalizedTab === "user-profile");
+    btnTabFollowing.classList.toggle("active", normalizedTab === "following");
+    btnTabBlocked.classList.toggle("active", normalizedTab === "blocked");
+
+    tabMyProfile.style.display = normalizedTab === "my-profile" ? "block" : "none";
+    tabUserProfile.style.display = normalizedTab === "user-profile" ? "block" : "none";
+    tabFollowing.style.display = normalizedTab === "following" ? "block" : "none";
+    tabBlocked.style.display = normalizedTab === "blocked" ? "block" : "none";
 
     updateProfileBackButton();
 
     if (pushState && !isSameTab) {
       try {
+        const queryPubkey = normalizedTab === "user-profile" ? activeUserPubkey : "";
         window.history.pushState(
-          { type: "omni-people-view", tab, pubkey: activePubkey, from: previousTab },
+          { type: "omni-people-view", tab: normalizedTab, pubkey: queryPubkey, from: previousTab },
           "",
-          `?view=${tab}${tab === "profile" && activePubkey ? `&pubkey=${activePubkey}` : ""}`
+          `?view=${normalizedTab}${queryPubkey ? `&pubkey=${queryPubkey}` : ""}`
         );
       } catch (_) {}
     }
 
-    if (tab === "following") {
+    if (normalizedTab === "following") {
       if (myPubkey && myFollows.size === 0) {
         loadCachedSocialGraph(myPubkey);
         sendWs(["REQ", "pv_my_contacts", { kinds: [3], authors: [myPubkey], limit: 1 }]);
       }
       renderFollowingList();
-    } else if (tab === "blocked") {
+    } else if (normalizedTab === "blocked") {
       if (myPubkey && myMutes.size === 0) {
         loadCachedSocialGraph(myPubkey);
         sendWs(["REQ", "pv_my_mutes", { kinds: [10000], authors: [myPubkey], limit: 1 }]);
       }
       renderBlockedList();
+    } else if (normalizedTab === "my-profile") {
+      if (myPubkey && !myProfileRendered) {
+        loadMyProfile(myPubkey);
+      }
+    } else if (normalizedTab === "user-profile") {
+      if (activeUserPubkey) {
+        loadUserProfile(activeUserPubkey);
+      } else {
+        renderUserProfileMetadata("", null);
+      }
     }
   }
 
-  btnTabProfile.addEventListener("click", () => {
+  btnTabMyProfile.addEventListener("click", () => {
     previousTab = null;
-    switchTab("profile", true);
+    switchTab("my-profile", true);
+  });
+  btnTabUserProfile.addEventListener("click", () => {
+    previousTab = null;
+    switchTab("user-profile", true);
   });
   btnTabFollowing.addEventListener("click", () => {
     previousTab = null;
@@ -1286,6 +1461,10 @@ async function mountProfileViewer(root: HTMLElement) {
   btnTabBlocked.addEventListener("click", () => {
     previousTab = null;
     switchTab("blocked", true);
+  });
+  btnEmptyBrowseFollowing.addEventListener("click", () => {
+    previousTab = null;
+    switchTab("following", true);
   });
 
   // Profile back button handler
@@ -1305,23 +1484,36 @@ async function mountProfileViewer(root: HTMLElement) {
     const isHidden = searchBarEl.style.display === "none" || !searchBarEl.style.display;
     searchBarEl.style.display = isHidden ? "flex" : "none";
     if (isHidden) {
-      if (activeTab !== "profile") {
+      if (activeTab !== "user-profile") {
         previousTab = null;
-        switchTab("profile", true);
+        switchTab("user-profile", true);
       }
       setTimeout(() => searchInput.focus(), 50);
     }
   });
 
-  // Copy npub handler
+  // Copy npub handlers
   copyBtn.addEventListener("click", async () => {
-    const npub = hexToNpub(activePubkey);
+    const target = activeUserPubkey || activePubkey;
+    const npub = hexToNpub(target);
     if (!npub) return;
     try {
       await navigator.clipboard.writeText(npub);
       copyLabel.textContent = "Copied!";
       setTimeout(() => {
         copyLabel.textContent = "Copy";
+      }, 1500);
+    } catch (_) {}
+  });
+
+  myCopyBtn.addEventListener("click", async () => {
+    const npub = hexToNpub(myPubkey);
+    if (!npub) return;
+    try {
+      await navigator.clipboard.writeText(npub);
+      myCopyLabel.textContent = "Copied!";
+      setTimeout(() => {
+        myCopyLabel.textContent = "Copy";
       }, 1500);
     } catch (_) {}
   });
@@ -1335,8 +1527,8 @@ async function mountProfileViewer(root: HTMLElement) {
     }
     if (raw.length === 64) {
       previousTab = null;
-      loadProfile(raw);
-      switchTab("profile", true);
+      loadUserProfile(raw);
+      switchTab("user-profile", true);
     } else {
       alert("Please enter a valid 64-character hex pubkey or bech32 npub1 string.");
     }
@@ -1348,26 +1540,16 @@ async function mountProfileViewer(root: HTMLElement) {
   });
 
   btnRefresh.addEventListener("click", () => {
-    if (activePubkey) {
-      loadProfile(activePubkey);
+    if (activeUserPubkey) {
+      loadUserProfile(activeUserPubkey);
     }
   });
 
-  function updateActionButtons(pubkey: string) {
-    const isSelf = Boolean(pubkey && myPubkey && pubkey === myPubkey);
+  function updateActionButtons(pubkey?: string) {
+    const target = pubkey || activeUserPubkey;
+    const isSelf = Boolean(target && myPubkey && target === myPubkey);
 
-    if (isSelf) {
-      btnFollow.style.display = "none";
-      btnBlock.style.display = "none";
-      btnEditProfile.style.display = "inline-flex";
-      btnKeys.style.display = "inline-flex";
-      return;
-    }
-
-    btnEditProfile.style.display = "none";
-    btnKeys.style.display = "none";
-
-    if (!pubkey) {
+    if (isSelf || !target) {
       btnFollow.style.display = "none";
       btnBlock.style.display = "none";
       return;
@@ -1375,13 +1557,13 @@ async function mountProfileViewer(root: HTMLElement) {
 
     // Follow button
     btnFollow.style.display = "inline-flex";
-    const isFollowing = myFollows.has(pubkey);
+    const isFollowing = myFollows.has(target);
     btnFollow.classList.toggle("is-following", isFollowing);
     btnFollow.textContent = isFollowing ? "Following" : "Follow";
 
     // Block button
     btnBlock.style.display = "inline-flex";
-    const isBlocked = myMutes.has(pubkey);
+    const isBlocked = myMutes.has(target);
     btnBlock.classList.toggle("is-blocked", isBlocked);
     btnBlock.textContent = isBlocked ? "Blocked" : "Block";
   }
@@ -1408,7 +1590,7 @@ async function mountProfileViewer(root: HTMLElement) {
     }
 
     countFollowingEl.textContent = String(myFollows.size);
-    updateActionButtons(activePubkey);
+    updateActionButtons(activeUserPubkey);
     if (activeTab === "following") {
       renderFollowingList();
     }
@@ -1453,7 +1635,7 @@ async function mountProfileViewer(root: HTMLElement) {
     }
 
     countBlockedEl.textContent = String(myMutes.size);
-    updateActionButtons(activePubkey);
+    updateActionButtons(activeUserPubkey);
     if (activeTab === "blocked") {
       renderBlockedList();
     }
@@ -1476,10 +1658,21 @@ async function mountProfileViewer(root: HTMLElement) {
     }
   }
 
-  btnFollow.addEventListener("click", () => toggleFollow(activePubkey));
-  btnBlock.addEventListener("click", () => toggleBlock(activePubkey));
+  btnFollow.addEventListener("click", () => toggleFollow(activeUserPubkey));
+  btnBlock.addEventListener("click", () => toggleBlock(activeUserPubkey));
 
-  function renderProfileMetadata(pubkey: string, meta: ProfileMetadata | null) {
+  function renderUserProfileMetadata(pubkey: string, meta: ProfileMetadata | null) {
+    if (!pubkey) {
+      userEmptyState.style.display = "flex";
+      userCardEl.style.display = "none";
+      userNotesSectionEl.style.display = "none";
+      return;
+    }
+
+    userEmptyState.style.display = "none";
+    userCardEl.style.display = "flex";
+    userNotesSectionEl.style.display = "flex";
+
     const npub = hexToNpub(pubkey);
     const initial = (meta?.display_name || meta?.name || pubkey)[0]?.toUpperCase() || "?";
 
@@ -1562,6 +1755,100 @@ async function mountProfileViewer(root: HTMLElement) {
     updateActionButtons(pubkey);
   }
 
+  function renderMyProfileMetadata(pubkeyOrMeta?: any, maybeMeta?: any) {
+    const pubkey = (typeof pubkeyOrMeta === "string" ? pubkeyOrMeta : myPubkey) || "";
+    const meta: ProfileMetadata | null = typeof pubkeyOrMeta === "object" && pubkeyOrMeta !== null ? pubkeyOrMeta : (maybeMeta || null);
+    if (!pubkey) return;
+
+    myProfileRendered = true;
+    const npub = hexToNpub(pubkey);
+    const initial = (meta?.display_name || meta?.name || pubkey)[0]?.toUpperCase() || "?";
+
+    myNpubTextEl.textContent = npub || pubkey;
+
+    // Avatar
+    myAvatarWrapEl.innerHTML = "";
+    if (meta?.picture && typeof meta.picture === "string") {
+      let pic = meta.picture.trim();
+      if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
+      if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
+        const img = document.createElement("img");
+        img.src = pic;
+        img.alt = meta.display_name || meta.name || "";
+        img.style.cssText = "width: 100%; height: 100%; object-fit: cover; border-radius: 50%;";
+        img.addEventListener("error", () => {
+          myAvatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(pubkey)};">${escapeHtml(initial)}</div>`;
+        });
+        myAvatarWrapEl.appendChild(img);
+      } else {
+        myAvatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(pubkey)};">${escapeHtml(initial)}</div>`;
+      }
+    } else {
+      myAvatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(pubkey)};">${escapeHtml(initial)}</div>`;
+    }
+
+    // Banner
+    if (meta?.banner && typeof meta.banner === "string") {
+      let banner = meta.banner.trim();
+      if (banner.startsWith("http://")) banner = banner.replace(/^http:\/\//i, "https://");
+      if (banner.startsWith("https://") || banner.startsWith("data:image/")) {
+        myBannerEl.style.backgroundImage = `url("${banner}")`;
+      } else {
+        myBannerEl.style.backgroundImage = `linear-gradient(135deg, #1f1d1a, #2a2723)`;
+      }
+    } else {
+      myBannerEl.style.backgroundImage = `linear-gradient(135deg, #1f1d1a, #2a2723)`;
+    }
+
+    // Names
+    myDisplayNameEl.textContent = meta?.display_name || meta?.name || `nostr:${pubkey.slice(0, 8)}`;
+    myHandleEl.textContent = meta?.name ? `@${meta.name}` : `@npub1${pubkey.slice(0, 8)}`;
+
+    // NIP-05
+    if (meta?.nip05) {
+      myNip05TextEl.textContent = meta.nip05;
+      myNip05BadgeEl.style.display = "inline-flex";
+    } else {
+      myNip05BadgeEl.style.display = "none";
+    }
+
+    // About
+    if (meta?.about) {
+      myAboutEl.innerHTML = formatContent(meta.about);
+      myAboutEl.style.display = "block";
+    } else {
+      myAboutEl.style.display = "none";
+    }
+
+    // Lightning Address (LUD-16)
+    if (meta?.lud16) {
+      myLud16Text.textContent = meta.lud16;
+      myLud16Wrap.style.display = "inline-flex";
+    } else {
+      myLud16Wrap.style.display = "none";
+    }
+
+    // Website
+    if (meta?.website && typeof meta.website === "string") {
+      let site = meta.website.trim();
+      if (site.startsWith("http://")) site = site.replace(/^http:\/\//i, "https://");
+      else if (!site.startsWith("https://")) site = `https://${site}`;
+      myWebsiteLink.href = site;
+      myWebsiteLink.textContent = site.replace(/^https?:\/\//i, "");
+      myWebsiteWrap.style.display = "inline-flex";
+    } else {
+      myWebsiteWrap.style.display = "none";
+    }
+  }
+
+  function renderProfileMetadata(pubkey: string, meta: ProfileMetadata | null) {
+    if (pubkey && myPubkey && pubkey === myPubkey) {
+      renderMyProfileMetadata(pubkey, meta);
+    } else {
+      renderUserProfileMetadata(pubkey, meta);
+    }
+  }
+
   function openNoteInFeed(eventId: string) {
     if (!eventId) return;
     try {
@@ -1616,11 +1903,13 @@ async function mountProfileViewer(root: HTMLElement) {
     return card;
   }
 
-  function loadProfile(pubkey: string) {
-    if (!pubkey) return;
-    if (pubkey === activePubkey && (isLoading || activeProfileSubId)) {
+  function loadUserProfile(pubkey: string) {
+    if (!pubkey) {
+      activeUserPubkey = "";
+      renderUserProfileMetadata("", null);
       return;
     }
+    activeUserPubkey = pubkey;
     activePubkey = pubkey;
     isLoading = true;
 
@@ -1637,19 +1926,19 @@ async function mountProfileViewer(root: HTMLElement) {
     notesCountEl.textContent = "Loading...";
 
     const cached = profileCache.get(pubkey);
-    renderProfileMetadata(pubkey, cached || null);
+    renderUserProfileMetadata(pubkey, cached || null);
 
-    if (activeProfileSubId) {
-      sendWs(["CLOSE", activeProfileSubId]);
+    if (activeUserProfileSubId) {
+      sendWs(["CLOSE", activeUserProfileSubId]);
     }
-    if (activeNotesSubId) {
-      sendWs(["CLOSE", activeNotesSubId]);
+    if (activeUserNotesSubId) {
+      sendWs(["CLOSE", activeUserNotesSubId]);
     }
 
     const profileSubId = `pv_prof_${Math.random().toString(36).slice(2, 8)}`;
     const notesSubId = `pv_notes_${Math.random().toString(36).slice(2, 8)}`;
-    activeProfileSubId = profileSubId;
-    activeNotesSubId = notesSubId;
+    activeUserProfileSubId = profileSubId;
+    activeUserNotesSubId = notesSubId;
 
     renderedNoteIds.clear();
     noteCount = 0;
@@ -1665,6 +1954,51 @@ async function mountProfileViewer(root: HTMLElement) {
         notesCountEl.textContent = "0 notes";
       }
     }, 3000);
+  }
+
+  function loadMyProfile(pubkey: string) {
+    if (!pubkey) return;
+    myPubkey = pubkey;
+    if (!activeUserPubkey) {
+      activePubkey = pubkey;
+    }
+
+    const cached = profileCache.get(pubkey);
+    renderMyProfileMetadata(pubkey, cached || null);
+
+    if (activeMyProfileSubId) {
+      sendWs(["CLOSE", activeMyProfileSubId]);
+    }
+    if (activeMyNotesSubId) {
+      sendWs(["CLOSE", activeMyNotesSubId]);
+    }
+
+    const myProfSubId = `pv_myprof_${Math.random().toString(36).slice(2, 8)}`;
+    const myNotesSubId = `pv_mynotes_${Math.random().toString(36).slice(2, 8)}`;
+    activeMyProfileSubId = myProfSubId;
+    activeMyNotesSubId = myNotesSubId;
+
+    myRenderedNoteIds.clear();
+    myNoteCount = 0;
+
+    sendWs(["REQ", myProfSubId, { kinds: [0], authors: [pubkey], limit: 1 }]);
+    sendWs(["REQ", myNotesSubId, { kinds: [1], authors: [pubkey], limit: 30 }]);
+
+    setTimeout(() => {
+      if (myNoteCount === 0) {
+        myNotesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">No public notes published yet.</div>`;
+        myNotesCountEl.textContent = "0 notes";
+      }
+    }, 3000);
+  }
+
+  function loadProfile(pubkey: string) {
+    if (!pubkey) return;
+    if (myPubkey && pubkey === myPubkey) {
+      loadMyProfile(pubkey);
+    } else {
+      loadUserProfile(pubkey);
+    }
   }
 
   // Build user card row for Following / Blocked lists
@@ -1694,11 +2028,11 @@ async function mountProfileViewer(root: HTMLElement) {
       </div>
     `;
 
-    // Click on info/avatar navigates to profile tab
+    // Click on info/avatar navigates to user profile tab
     const openUser = () => {
       previousTab = isBlockList ? "blocked" : "following";
-      loadProfile(pubkey);
-      switchTab("profile", true);
+      loadUserProfile(pubkey);
+      switchTab("user-profile", true);
     };
     card.querySelector<HTMLElement>(".people-avatar")?.addEventListener("click", openUser);
     card.querySelector<HTMLElement>(".people-user-info")?.addEventListener("click", openUser);
@@ -1814,23 +2148,22 @@ async function mountProfileViewer(root: HTMLElement) {
 
   // Register Intent Handler for 'view_profile' and 'edit_profile'
   const handleViewProfile = (data: any) => {
-    if (data?.pubkey) {
-      loadProfile(data.pubkey);
-      toggleEditPanel("profile", false);
-      switchTab("profile", false);
-    } else if (myPubkey) {
-      loadProfile(myPubkey);
-      toggleEditPanel("profile", false);
-      switchTab("profile", false);
+    const pk = data?.pubkey;
+    if (pk && pk !== myPubkey) {
+      loadUserProfile(pk);
+      switchTab("user-profile", false);
+    } else {
+      if (myPubkey) loadMyProfile(myPubkey);
+      switchTab("my-profile", false);
     }
+    toggleEditPanel("profile", false);
   };
 
   const handleEditProfile = (data: any) => {
-    const target = data?.pubkey || myPubkey;
-    if (target) {
-      loadProfile(target);
+    if (myPubkey) {
+      loadMyProfile(myPubkey);
     }
-    switchTab("profile", false);
+    switchTab("my-profile", false);
     toggleEditPanel("profile", true);
   };
 
@@ -1854,7 +2187,11 @@ async function mountProfileViewer(root: HTMLElement) {
         const state = e.state;
         previousTab = state.from || null;
         if (state.pubkey && state.pubkey !== activePubkey) {
-          loadProfile(state.pubkey);
+          if (myPubkey && state.pubkey === myPubkey) {
+            loadMyProfile(state.pubkey);
+          } else {
+            loadUserProfile(state.pubkey);
+          }
         }
         switchTab(state.tab, false);
         return;
@@ -1863,18 +2200,23 @@ async function mountProfileViewer(root: HTMLElement) {
       const searchParams = new URLSearchParams(window.location.search || window.location.hash.replace("#", "?"));
       const pk = searchParams.get("pubkey");
       const v = searchParams.get("view");
-      if (v === "following" || v === "blocked" || v === "profile") {
+      if (v === "following" || v === "blocked" || v === "user-profile" || v === "my-profile" || v === "profile") {
         switchTab(v as any, false);
       } else if (v === "edit") {
-        switchTab("profile", false);
+        switchTab("my-profile", false);
         toggleEditPanel("profile", true);
       } else if (previousTab) {
         const target = previousTab;
         previousTab = null;
         switchTab(target, false);
       }
-      if (pk && pk !== activePubkey) {
-        loadProfile(pk);
+      if (pk) {
+        if (myPubkey && pk === myPubkey) {
+          loadMyProfile(pk);
+        } else {
+          loadUserProfile(pk);
+          if (!v) switchTab("user-profile", false);
+        }
       }
     } catch (_) {}
   };
@@ -1913,10 +2255,10 @@ async function mountProfileViewer(root: HTMLElement) {
     const searchParams = new URLSearchParams(window.location.search || window.location.hash.replace("#", "?"));
     initialPubkey = searchParams.get("pubkey") || "";
     const v = searchParams.get("view");
-    if (v === "following" || v === "blocked") {
+    if (v === "following" || v === "blocked" || v === "user-profile" || v === "my-profile") {
       switchTab(v as any, false);
     } else if (v === "edit") {
-      switchTab("profile", false);
+      switchTab("my-profile", false);
       toggleEditPanel("profile", true);
     }
   } catch (_) {}
@@ -1927,37 +2269,39 @@ async function mountProfileViewer(root: HTMLElement) {
     } catch (_) {}
   }
 
-  if (initialPubkey) {
-    loadProfile(initialPubkey);
-  }
-
   resolveUserPubkey().then((pk) => {
     if (pk) {
       myPubkey = pk;
       initUserSocialGraph(pk);
-      if (!initialPubkey && !activePubkey) {
-        loadProfile(pk);
-      } else {
-        updateActionButtons(activePubkey);
+      loadMyProfile(pk);
+      if (initialPubkey && initialPubkey !== pk) {
+        loadUserProfile(initialPubkey);
+        if (activeTab === "user-profile") {
+          updateActionButtons(initialPubkey);
+        }
       }
-    } else if (!initialPubkey && !activePubkey) {
-      displayNameEl.textContent = "Enter a pubkey or npub above to view profile";
+    } else if (initialPubkey) {
+      loadUserProfile(initialPubkey);
     }
   }).catch(() => {
-    if (!initialPubkey && !activePubkey) {
-      displayNameEl.textContent = "Enter a pubkey or npub above to view profile";
+    if (initialPubkey) {
+      loadUserProfile(initialPubkey);
     }
   });
 
   return {
     switchTab,
     loadProfile,
+    loadUserProfile,
+    loadMyProfile,
     toggleFollow,
     toggleBlock,
     toggleEditPanel,
     getMyFollows: () => myFollows,
     getMyMutes: () => myMutes,
-    getActivePubkey: () => activePubkey
+    getActivePubkey: () => activePubkey,
+    getActiveUserPubkey: () => activeUserPubkey,
+    getMyPubkey: () => myPubkey
   };
 }
 
