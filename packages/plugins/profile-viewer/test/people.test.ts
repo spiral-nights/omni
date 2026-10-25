@@ -6,7 +6,9 @@ import { join } from "node:path";
 const peopleCode = readFileSync(
   join(__dirname, "../dist/index.js"),
   "utf8"
-).replace(/^export /gm, "");
+)
+  .replace(/^export\s*\{[^}]*\}\s*;?/gm, "")
+  .replace(/^export\s+/gm, "");
 
 class FakeWebSocket {
   static OPEN = 1;
@@ -357,5 +359,122 @@ describe("People plugin (profile, follows, mutes)", () => {
       id: "note-123456"
     });
     expect(localStorage.getItem("omni_active_note_id")).toBe("note-123456");
+  });
+
+  it("renders 'Profiles' app title in header", async () => {
+    await flush();
+    const title = peopleRoot().querySelector<HTMLElement>(".people-header h2");
+    expect(title?.textContent).toBe("Profiles");
+  });
+
+  it("viewing own profile shows 'Edit Profile' and 'Keys' buttons and allows publishing kind 0 metadata", async () => {
+    await flush();
+    const btnEdit = peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-edit-profile")!;
+    const btnKeys = peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-keys")!;
+    const btnFollow = peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-follow")!;
+    const btnBlock = peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-block")!;
+    const editPanel = peopleRoot().querySelector<HTMLElement>(".pv-edit-panel")!;
+
+    // On own profile, Follow/Block are hidden, Edit & Keys are visible
+    expect(btnEdit.style.display).not.toBe("none");
+    expect(btnKeys.style.display).not.toBe("none");
+    expect(btnFollow.style.display).toBe("none");
+    expect(btnBlock.style.display).toBe("none");
+    expect(editPanel.style.display).toBe("none");
+
+    // Click Edit Profile
+    btnEdit.click();
+    expect(editPanel.style.display).toBe("flex");
+    const paneProfile = editPanel.querySelector<HTMLElement>(".pane-profile")!;
+    expect(paneProfile.style.display).not.toBe("none");
+
+    // Fill form fields
+    const nameInput = editPanel.querySelector<HTMLInputElement>("#prof-display-name")!;
+    const handleInput = editPanel.querySelector<HTMLInputElement>("#prof-name")!;
+    const aboutInput = editPanel.querySelector<HTMLTextAreaElement>("#prof-about")!;
+    const btnSave = editPanel.querySelector<HTMLButtonElement>("#btn-save-profile")!;
+
+    nameInput.value = "Alice in Nostrland";
+    handleInput.value = "alice";
+    aboutInput.value = "Building decentralized apps on Omni";
+
+    // Click Save & Publish
+    btnSave.click();
+    await flush();
+
+    // Verify kind 0 signed and published
+    const signEventSpy = (window as any).nostr.signEvent;
+    expect(signEventSpy).toHaveBeenCalled();
+    const calls = signEventSpy.mock.calls;
+    const kind0Call = calls.find((c: any[]) => c[0].kind === 0)?.[0];
+    expect(kind0Call).toBeDefined();
+    const parsedMeta = JSON.parse(kind0Call.content);
+    expect(parsedMeta.display_name).toBe("Alice in Nostrland");
+    expect(parsedMeta.name).toBe("alice");
+    expect(parsedMeta.about).toBe("Building decentralized apps on Omni");
+
+    // Verify profile card in UI immediately updated
+    const displayNameEl = peopleRoot().querySelector<HTMLElement>(".pv-display-name")!;
+    expect(displayNameEl.textContent).toBe("Alice in Nostrland");
+  });
+
+  it("keys & custody tab displays npub/hex and allows revealing private key with warning", async () => {
+    await flush();
+    const btnKeys = peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-keys")!;
+    const editPanel = peopleRoot().querySelector<HTMLElement>(".pv-edit-panel")!;
+
+    btnKeys.click();
+    expect(editPanel.style.display).toBe("flex");
+
+    const paneKeys = editPanel.querySelector<HTMLElement>(".pane-keys")!;
+    expect(paneKeys.style.display).not.toBe("none");
+
+    // Check npub and hex pubkey fields
+    const keyNpub = editPanel.querySelector<HTMLInputElement>("#key-npub")!;
+    const keyHex = editPanel.querySelector<HTMLInputElement>("#key-hex")!;
+    expect(keyHex.value).toBe(myPubkey);
+    expect(keyNpub.value).toContain("npub1");
+
+    // Reveal private key flow
+    (window as any).omni.auth = {
+      getNsec: vi.fn(async () => "nsec1testsecretkey123456789"),
+      switchKey: vi.fn(async () => ({ pubkey: "9".repeat(64), npub: "npub1switched" }))
+    };
+
+    const btnReveal = editPanel.querySelector<HTMLButtonElement>("#btn-reveal-nsec")!;
+    const confirmBox = editPanel.querySelector<HTMLElement>("#box-nsec-confirm")!;
+    const btnConfirmReveal = editPanel.querySelector<HTMLButtonElement>("#btn-confirm-reveal")!;
+    const nsecBox = editPanel.querySelector<HTMLElement>("#box-nsec")!;
+    const keyNsec = editPanel.querySelector<HTMLInputElement>("#key-nsec")!;
+
+    expect(confirmBox.style.display).toBe("none");
+    btnReveal.click();
+    expect(confirmBox.style.display).toBe("flex");
+
+    btnConfirmReveal.click();
+    await flush();
+
+    expect(confirmBox.style.display).toBe("none");
+    expect(nsecBox.style.display).toBe("flex");
+    expect(keyNsec.value).toBe("nsec1testsecretkey123456789");
+  });
+
+  it("responds to edit_profile intent by opening the edit drawer", async () => {
+    await flush();
+    const editHandler = (window as any).omni.intents.handle.mock.calls.find(
+      (c: any[]) => c[0] === "edit_profile"
+    )?.[1];
+    expect(editHandler).toBeDefined();
+
+    const editPanel = peopleRoot().querySelector<HTMLElement>(".pv-edit-panel")!;
+    expect(editPanel.style.display).toBe("none");
+
+    // Dispatch edit_profile intent
+    editHandler({ pubkey: myPubkey });
+    await flush();
+
+    expect(editPanel.style.display).toBe("flex");
+    const paneProfile = editPanel.querySelector<HTMLElement>(".pane-profile")!;
+    expect(paneProfile.style.display).not.toBe("none");
   });
 });

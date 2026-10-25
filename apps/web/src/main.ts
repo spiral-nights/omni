@@ -5,7 +5,6 @@ import { OmniShellHost } from "@omni/types";
 // Import compiled plugin scripts (using Vite ?raw import)
 import feedScript from "../../../packages/plugins/feed/dist/index.js?raw";
 import relaysScript from "../../../packages/plugins/relays/dist/index.js?raw";
-import profileScript from "../../../packages/plugins/profile/dist/index.js?raw";
 import profileViewerScript from "../../../packages/plugins/profile-viewer/dist/index.js?raw";
 import checklistScript from "../../../packages/plugins/checklist/dist/index.js?raw";
 import publisherScript from "../../../packages/plugins/publisher/dist/index.js?raw";
@@ -69,32 +68,18 @@ const initialPlugins: InstalledPluginEntry[] = [
     enabled: true
   },
   {
-    id: "org.omni.plugin.profile",
-    name: "Profile Editor",
-    displayName: "My Profile",
-    description: "Decentralized Nostr profile metadata and key custody.",
-    icon: "profile",
-    views: [
-      { id: "main", title: "Profile", path: "" },
-      { id: "compact", title: "Live Tile", path: "?view=compact" },
-      { id: "widget", title: "User Badge Pill", path: "?view=widget" },
-      { id: "settings", title: "Profile Settings", path: "?view=settings" }
-    ],
-    handledIntents: ["edit_profile"],
-    scriptContent: profileScript,
-    sourceUrl: "local:@omni/plugin-profile",
-    enabled: true
-  },
-  {
     id: "org.omni.plugin.profile-viewer",
-    name: "People",
-    displayName: "People",
-    description: "Nostr user profiles, following, and block list management.",
+    name: "Profiles",
+    displayName: "Profiles",
+    description: "Nostr user profiles, identity metadata, following, and key custody.",
     icon: "users",
     views: [
-      { id: "main", title: "People", path: "" }
+      { id: "main", title: "Profiles", path: "" },
+      { id: "edit", title: "Edit My Profile", path: "?view=edit" },
+      { id: "compact", title: "Live Tile", path: "?view=compact" },
+      { id: "widget", title: "Profile Card", path: "?view=widget" }
     ],
-    handledIntents: ["view_profile"],
+    handledIntents: ["view_profile", "edit_profile"],
     scriptContent: profileViewerScript,
     sourceUrl: "local:@omni/plugin-profile-viewer",
     enabled: true

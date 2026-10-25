@@ -1885,6 +1885,11 @@ export abstract class BaseShell implements OmniShellHost {
         desc: "Open user identity profiles, contacts, and metadata."
       },
       {
+        action: "edit_profile",
+        label: "Edit Profile",
+        desc: "Edit user profile metadata and manage key custody."
+      },
+      {
         action: "share",
         label: "Web Share Target",
         desc: "Receive text and links forwarded from other apps or external shares."

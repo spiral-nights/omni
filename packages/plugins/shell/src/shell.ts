@@ -178,8 +178,7 @@ export class OmniShell extends BaseShell {
         else if (plugin.id === "org.omni.plugin.timer") label = "Timer";
         else if (plugin.id === "org.omni.plugin.checklist") label = "Daily";
         else if (plugin.id === "org.omni.plugin.relays") label = "Relays";
-        else if (plugin.id === "org.omni.plugin.profile") label = "My Profile";
-        else if (plugin.id === "org.omni.plugin.profile-viewer") label = "Profile";
+        else if (plugin.id === "org.omni.plugin.profile" || plugin.id === "org.omni.plugin.profile-viewer") label = "Profiles";
         else label = meta.name.split(" ")[0];
       }
 
@@ -591,7 +590,7 @@ export class OmniShell extends BaseShell {
   public switchSettingsTab(tab: string): void {
     let targetTab = tab;
     if (targetTab === "profile") {
-      const profilePlugin = this.installedPlugins.find((p) => p.id === "org.omni.plugin.profile" || p.id.includes("profile"));
+      const profilePlugin = this.installedPlugins.find((p) => p.id === "org.omni.plugin.profile-viewer" || p.id === "org.omni.plugin.profile" || p.id.includes("profile"));
       if (profilePlugin) {
         targetTab = profilePlugin.id;
       }
@@ -2643,7 +2642,14 @@ export class OmniShell extends BaseShell {
 
   private wireProfileControls(): void {
     const userBadge = document.getElementById("user-badge");
-    userBadge?.addEventListener("click", () => this.openSettings("profile"));
+    userBadge?.addEventListener("click", () => {
+      const profilePlugin = this.installedPlugins.find((p) => p.id === "org.omni.plugin.profile-viewer" || p.id === "org.omni.plugin.profile" || p.id.includes("profile"));
+      if (profilePlugin && profilePlugin.enabled) {
+        this.showPage(profilePlugin.id);
+      } else {
+        this.openSettings("profile");
+      }
+    });
   }
 
   private wireRelaysManager(): void {

@@ -30,7 +30,7 @@ function formatContent(text: string): string {
   });
 
   const nostrRegex = /(?:nostr:)?((?:npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{20,})/gi;
-  formatted = formatted.replace(nostrRegex, (match, entity) => {
+  formatted = formatted.replace(nostrRegex, (_match, entity) => {
     const short = `${entity.slice(0, 9)}…${entity.slice(-4)}`;
     return `<span class="pv-nostr-entity" style="color: var(--accent-primary, #d4a373); font-family: var(--font-mono, monospace); font-size: 0.8rem; background: var(--bg-canvas, #141312); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border-subtle, #272522);">${escapeHtml(short)}</span>`;
   });
@@ -50,7 +50,7 @@ function formatTime(unixSec: number): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-// Compact standard Bech32 encoder for Nostr npub addresses
+// Compact standard Bech32 encoder/decoder for Nostr npub addresses
 const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
 function polymod(values: number[]): number {
@@ -162,6 +162,25 @@ const ICONS = {
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
     <circle cx="12" cy="7" r="4"/>
   </svg>`,
+  edit: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>`,
+  key: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="7.5" cy="15.5" r="5.5"/>
+    <path d="m21 2-9.6 9.6"/>
+    <path d="m15.5 7.5 3 3"/>
+  </svg>`,
+  shield: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+  </svg>`,
+  check: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>`,
+  x: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>`,
   arrowLeft: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <line x1="19" y1="12" x2="5" y2="12"/>
     <polyline points="12 19 5 12 12 5"/>
@@ -222,7 +241,122 @@ export interface ProfileMetadata {
 
 const profileCache = new Map<string, ProfileMetadata>();
 
+function getCurrentView(): string {
+  const route =
+    (typeof window !== "undefined" && window.location?.search) ||
+    (typeof window !== "undefined" && window.location?.hash?.replace("#", "?")) ||
+    (typeof window !== "undefined" && (window as any).__OMNI_ROUTE__) ||
+    "";
+  if (route) {
+    try {
+      const q = route.includes("?") ? route.slice(route.indexOf("?")) : `?${route.replace(/^#/, "")}`;
+      const params = new URLSearchParams(q);
+      const v = params.get("view");
+      if (v) return v;
+    } catch (_) {}
+  }
+  return "main";
+}
+
+/**
+ * Compact Live Tile View (pinned to dock or companion surface)
+ */
+async function mountProfileCompact(root: HTMLElement) {
+  const card = html<HTMLDivElement>`
+    <div class="profile-compact-card" style="background: transparent; border: none; padding: 0 2px 2px 2px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; width: 100%; box-sizing: border-box; color: #ffffff;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="profile-compact-avatar" style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: rgba(255, 255, 255, 0.22); border: 1px solid rgba(255, 255, 255, 0.45); display: flex; align-items: center; justify-content: center; color: #ffffff; flex-shrink: 0;">
+          ${ICONS.user}
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1px; overflow: hidden; min-width: 0;">
+          <strong class="profile-compact-name" style="font-size: 0.85rem; font-weight: 600; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.45); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Loading...</strong>
+          <span class="profile-compact-npub" style="font-family: var(--font-mono, monospace); font-size: 0.68rem; color: rgba(255, 255, 255, 0.85); text-shadow: 0 1px 2px rgba(0,0,0,0.45); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">...</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const strongEl = card.querySelector<HTMLElement>(".profile-compact-name")!;
+  const npubEl = card.querySelector<HTMLElement>(".profile-compact-npub")!;
+  const avatarEl = card.querySelector<HTMLElement>(".profile-compact-avatar")!;
+
+  root.appendChild(card);
+
+  (async () => {
+    try {
+      let pubkey = "";
+      if (typeof window !== "undefined" && (window as any).nostr?.getPublicKey) {
+        pubkey = await (window as any).nostr.getPublicKey();
+      }
+      const npub = pubkey ? hexToNpub(pubkey) : "";
+      const meta = pubkey ? profileCache.get(pubkey) : null;
+      strongEl.textContent = meta?.display_name || meta?.name || "Active Identity";
+      npubEl.textContent = npub ? `${npub.slice(0, 8)}...${npub.slice(-4)}` : (pubkey ? `${pubkey.slice(0, 8)}...${pubkey.slice(-4)}` : "No Key");
+      if (meta?.picture) {
+        avatarEl.innerHTML = `<img src="${escapeHtml(meta.picture)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
+      }
+    } catch (_) {}
+  })();
+}
+
+/**
+ * Companion Widget View (cards dashboard)
+ */
+async function mountProfileWidget(root: HTMLElement) {
+  const card = html<HTMLDivElement>`
+    <div class="profile-widget-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 10px; color: var(--text-primary, #ede8df);">
+      <div class="widget-header" style="display: flex; align-items: center; justify-content: space-between;">
+        <h3 style="margin: 0; font-size: 0.92rem; font-weight: 600; color: var(--text-primary, #ede8df); display: flex; align-items: center; gap: 7px;">
+          <span style="color: var(--accent-primary, #d4a373); display: flex; align-items: center;">${ICONS.user}</span> Active Identity
+        </h3>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; margin-top: 2px;">
+        <div class="profile-widget-avatar" style="width: 36px; height: 36px; border-radius: 50%; overflow: hidden; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); display: flex; align-items: center; justify-content: center; color: var(--accent-primary, #d4a373); flex-shrink: 0;">
+          ${ICONS.user}
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; min-width: 0;">
+          <strong class="profile-widget-name" style="font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Loading identity...</strong>
+          <span class="profile-widget-npub" style="font-family: var(--font-mono, monospace); font-size: 0.72rem; color: var(--text-muted, #78716c); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">...</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const strongEl = card.querySelector<HTMLElement>(".profile-widget-name")!;
+  const npubEl = card.querySelector<HTMLElement>(".profile-widget-npub")!;
+  const avatarEl = card.querySelector<HTMLElement>(".profile-widget-avatar")!;
+
+  root.appendChild(card);
+
+  (async () => {
+    try {
+      let pubkey = "";
+      if (typeof window !== "undefined" && (window as any).nostr?.getPublicKey) {
+        pubkey = await (window as any).nostr.getPublicKey();
+      }
+      const npub = pubkey ? hexToNpub(pubkey) : "";
+      const meta = pubkey ? profileCache.get(pubkey) : null;
+      strongEl.textContent = meta?.display_name || meta?.name || "Active Identity";
+      npubEl.textContent = npub ? `${npub.slice(0, 10)}...${npub.slice(-6)}` : (pubkey ? `${pubkey.slice(0, 10)}...${pubkey.slice(-4)}` : "No Key Loaded");
+      if (meta?.picture) {
+        avatarEl.innerHTML = `<img src="${escapeHtml(meta.picture)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
+      }
+    } catch (_) {}
+  })();
+}
+
+/**
+ * Unified Standalone Profiles Application (View, Edit, Custody, Following, Blocked)
+ */
 async function mountProfileViewer(root: HTMLElement) {
+  const currentView = getCurrentView();
+  if (currentView === "compact") {
+    return mountProfileCompact(root);
+  }
+  if (currentView === "widget" || currentView === "pill" || currentView === "badge") {
+    return mountProfileWidget(root);
+  }
+
   let activeTab: "profile" | "following" | "blocked" = "profile";
   let activePubkey = "";
   let myPubkey = "";
@@ -417,6 +551,9 @@ async function mountProfileViewer(root: HTMLElement) {
             if (ev.pubkey === activePubkey) {
               renderProfileMetadata(activePubkey, meta);
             }
+            if (ev.pubkey === myPubkey) {
+              populateEditForm(meta);
+            }
             updateUserCards(ev.pubkey, meta);
           } catch (_) {}
         }
@@ -459,7 +596,7 @@ async function mountProfileViewer(root: HTMLElement) {
       <!-- Top App Header & Viewport Tabs -->
       <div class="people-header" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 0; flex-wrap: wrap;">
         <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-          <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-primary, #ede8df);">People</h2>
+          <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-primary, #ede8df);">Profiles</h2>
           <div class="people-tabs">
             <button class="people-tab-btn btn-tab-profile active" data-tab="profile">Profile</button>
             <button class="people-tab-btn btn-tab-following" data-tab="following">Following (<span class="count-following">0</span>)</button>
@@ -504,7 +641,18 @@ async function mountProfileViewer(root: HTMLElement) {
                 <div class="pv-avatar-fallback" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff;">?</div>
               </div>
               
-              <div class="pv-action-buttons" style="display: flex; align-items: center; gap: 8px;">
+              <div class="pv-action-buttons" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <!-- Self management buttons (shown when viewing self) -->
+                <button class="pv-btn-edit-profile btn-secondary" title="Edit Profile Info" style="display: none;">
+                  ${ICONS.edit}
+                  <span>Edit Profile</span>
+                </button>
+                <button class="pv-btn-keys btn-secondary" title="Keys & Custody" style="display: none;">
+                  ${ICONS.key}
+                  <span>Keys</span>
+                </button>
+
+                <!-- Social actions (shown when viewing other users) -->
                 <button class="pv-btn-follow btn-follow-toggle" title="Follow or Unfollow user" style="display: none;">Follow</button>
                 <button class="pv-btn-block btn-block-toggle" title="Block or Unblock user" style="display: none;">Block</button>
                 <button class="pv-btn-refresh btn-secondary" title="Refresh Profile & Notes">
@@ -550,6 +698,142 @@ async function mountProfileViewer(root: HTMLElement) {
                 ${ICONS.link}
                 <a class="pv-website-link" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: none;"></a>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inline Profile Editor & Key Custody Drawer -->
+        <div class="pv-edit-panel profile-full-container" style="display: none; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 10px); padding: 16px 20px; margin-top: 14px; flex-direction: column; gap: 14px;">
+          
+          <!-- Non-blocking inline Toast notification banner -->
+          <div id="prof-toast" style="display: none; padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.8rem; font-weight: 500; align-items: center; gap: 8px; transition: all 0.2s ease;"></div>
+
+          <!-- Drawer Header & Mode Tabs -->
+          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle, #272522); padding-bottom: 8px;">
+            <div class="modal-tabs" style="display: flex; gap: 6px;">
+              <button class="modal-tab-btn active" id="btn-tab-profile" style="background: transparent; border: none; font-size: 0.82rem; font-weight: 500; cursor: pointer; color: var(--accent-primary, #d4a373); padding: 4px 8px; display: flex; align-items: center; gap: 6px;">
+                ${ICONS.user} Profile Info (kind 0)
+              </button>
+              <button class="modal-tab-btn" id="btn-tab-keys" style="background: transparent; border: none; font-size: 0.82rem; font-weight: 500; cursor: pointer; color: var(--text-muted, #78716c); padding: 4px 8px; display: flex; align-items: center; gap: 6px;">
+                ${ICONS.key} Keys & Custody
+              </button>
+            </div>
+            <button class="btn-close-edit btn-secondary" title="Close editor" style="padding: 4px 8px;">
+              ${ICONS.x}
+              <span>Close</span>
+            </button>
+          </div>
+
+          <!-- Pane 1: Profile Info -->
+          <div class="pane-profile" style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- Live Profile Card Preview -->
+            <div class="preview-box" style="display: flex; align-items: center; gap: 12px; background: var(--bg-canvas, #141312); padding: 12px 14px; border-radius: var(--radius-sm, 6px); border: 1px solid var(--border-subtle, #272522);">
+              <div id="prof-avatar-preview" style="width: 48px; height: 48px; border-radius: 50%; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 1.1rem; color: var(--accent-primary, #d4a373); flex-shrink: 0;">
+                ${ICONS.user}
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; min-width: 0;">
+                <span class="preview-name" style="font-weight: 600; font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Active Identity</span>
+                <span class="preview-npub" style="font-family: var(--font-mono, monospace); font-size: 0.72rem; color: var(--text-muted, #78716c); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Loading identity...</span>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+                Display Name:
+                <input id="prof-display-name" type="text" placeholder="e.g. Alice Smith" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+              </label>
+              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+                Username / Handle:
+                <input id="prof-name" type="text" placeholder="e.g. alice" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+              </label>
+              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+                About / Bio:
+                <textarea id="prof-about" rows="2" placeholder="Tell the Nostr network about yourself..." style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none; resize: vertical;"></textarea>
+              </label>
+              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+                Avatar URL:
+                <input id="prof-picture" type="text" placeholder="https://example.com/avatar.jpg" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+              </label>
+              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+                Banner URL:
+                <input id="prof-banner" type="text" placeholder="https://example.com/banner.jpg" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+              </label>
+              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+                NIP-05 Identifier:
+                <input id="prof-nip05" type="text" placeholder="alice@domain.com" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+              </label>
+              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+                Lightning Address (lud16):
+                <input id="prof-lud16" type="text" placeholder="alice@getalby.com" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+              </label>
+              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+                Website:
+                <input id="prof-website" type="text" placeholder="https://alice.example.com" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 7px 10px; border-radius: var(--radius-sm, 6px); font-size: 0.82rem; outline: none;" />
+              </label>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+              <button id="btn-sync-profile" class="btn-secondary">
+                ${ICONS.refresh} <span>Sync from Relays</span>
+              </button>
+              <button id="btn-save-profile" class="btn-publish">Save & Publish Profile (kind 0)</button>
+            </div>
+          </div>
+
+          <!-- Pane 2: Keys & Custody -->
+          <div class="pane-keys" style="display: none; flex-direction: column; gap: 14px;">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e);">Public Key (npub):</span>
+              <div style="display: flex; gap: 6px;">
+                <input id="key-npub" type="text" readonly style="flex: 1; padding: 6px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" placeholder="Loading npub..." value="" />
+                <button id="btn-copy-npub" class="btn-secondary">
+                  ${ICONS.copy} <span>Copy</span>
+                </button>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e);">Public Key (Hex):</span>
+              <div style="display: flex; gap: 6px;">
+                <input id="key-hex" type="text" readonly style="flex: 1; padding: 6px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" placeholder="Loading hex pubkey..." value="" />
+                <button id="btn-copy-hex" class="btn-secondary">
+                  ${ICONS.copy} <span>Copy</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Private Key reveal section -->
+            <div style="border-top: 1px solid var(--border-subtle, #272522); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary, #a8a29e);">Private Key (nsec):</span>
+                <button id="btn-reveal-nsec" class="btn-secondary">Reveal Private Key</button>
+              </div>
+
+              <!-- Inline Warning Confirmation Box -->
+              <div id="box-nsec-confirm" style="display: none; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-sm, 6px); padding: 10px 12px; flex-direction: column; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; color: #f87171; font-size: 0.78rem; font-weight: 500;">
+                  <span style="display: flex; align-items: center; flex-shrink: 0;">${ICONS.shield}</span>
+                  <span>Never share your private key (nsec). Anyone with this key has full control over your Nostr identity.</span>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                  <button id="btn-cancel-reveal" class="btn-secondary">Cancel</button>
+                  <button id="btn-confirm-reveal" class="btn-danger">I Understand, Reveal</button>
+                </div>
+              </div>
+
+              <div id="box-nsec" style="display: none; gap: 6px;">
+                <input id="key-nsec" type="text" readonly style="flex: 1; border: 1px solid rgba(239,68,68,0.4); color: #f87171; padding: 6px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" />
+                <button id="btn-copy-nsec" class="btn-secondary">
+                  ${ICONS.copy} <span>Copy</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Switch identity / Import key -->
+            <div style="border-top: 1px solid var(--border-subtle, #272522); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary, #a8a29e);">Switch Identity / Import Key:</span>
+              <input id="key-import" type="password" placeholder="Paste nsec1... or 64-char hex private key" style="padding: 7px 10px; font-size: 0.82rem; outline: none;" />
+              <button id="btn-import-key" class="btn-publish" style="align-self: flex-end;">Import & Switch</button>
             </div>
           </div>
         </div>
@@ -643,9 +927,305 @@ async function mountProfileViewer(root: HTMLElement) {
   const btnFollow = container.querySelector<HTMLButtonElement>(".pv-btn-follow")!;
   const btnBlock = container.querySelector<HTMLButtonElement>(".pv-btn-block")!;
 
+  // Edit Drawer elements
+  const editPanel = container.querySelector<HTMLElement>(".pv-edit-panel")!;
+  const btnEditProfile = container.querySelector<HTMLButtonElement>(".pv-btn-edit-profile")!;
+  const btnKeys = container.querySelector<HTMLButtonElement>(".pv-btn-keys")!;
+  const btnCloseEdit = container.querySelector<HTMLButtonElement>(".btn-close-edit")!;
+  const btnInnerTabProfile = editPanel.querySelector<HTMLButtonElement>("#btn-tab-profile")!;
+  const btnInnerTabKeys = editPanel.querySelector<HTMLButtonElement>("#btn-tab-keys")!;
+  const paneProfile = editPanel.querySelector<HTMLElement>(".pane-profile")!;
+  const paneKeys = editPanel.querySelector<HTMLElement>(".pane-keys")!;
+  const toastBanner = editPanel.querySelector<HTMLElement>("#prof-toast")!;
+
+  // Edit form fields
+  const spanPreviewName = editPanel.querySelector<HTMLElement>(".preview-name")!;
+  const spanPreviewNpub = editPanel.querySelector<HTMLElement>(".preview-npub")!;
+  const avatarPreview = editPanel.querySelector<HTMLElement>("#prof-avatar-preview")!;
+  const rowDName = editPanel.querySelector<HTMLInputElement>("#prof-display-name")!;
+  const rowName = editPanel.querySelector<HTMLInputElement>("#prof-name")!;
+  const inpAbout = editPanel.querySelector<HTMLTextAreaElement>("#prof-about")!;
+  const rowPic = editPanel.querySelector<HTMLInputElement>("#prof-picture")!;
+  const rowBanner = editPanel.querySelector<HTMLInputElement>("#prof-banner")!;
+  const rowNip05 = editPanel.querySelector<HTMLInputElement>("#prof-nip05")!;
+  const rowLud16 = editPanel.querySelector<HTMLInputElement>("#prof-lud16")!;
+  const rowWebsite = editPanel.querySelector<HTMLInputElement>("#prof-website")!;
+  const btnSave = editPanel.querySelector<HTMLButtonElement>("#btn-save-profile")!;
+  const btnSync = editPanel.querySelector<HTMLButtonElement>("#btn-sync-profile")!;
+
+  // Keys fields
+  const inpNpub = editPanel.querySelector<HTMLInputElement>("#key-npub")!;
+  const inpPubkey = editPanel.querySelector<HTMLInputElement>("#key-hex")!;
+  const btnCopyNpub = editPanel.querySelector<HTMLButtonElement>("#btn-copy-npub")!;
+  const btnCopyHex = editPanel.querySelector<HTMLButtonElement>("#btn-copy-hex")!;
+  const btnReveal = editPanel.querySelector<HTMLButtonElement>("#btn-reveal-nsec")!;
+  const nsecConfirmBox = editPanel.querySelector<HTMLElement>("#box-nsec-confirm")!;
+  const btnCancelReveal = editPanel.querySelector<HTMLButtonElement>("#btn-cancel-reveal")!;
+  const btnConfirmReveal = editPanel.querySelector<HTMLButtonElement>("#btn-confirm-reveal")!;
+  const nsecBox = editPanel.querySelector<HTMLElement>("#box-nsec")!;
+  const inpNsec = editPanel.querySelector<HTMLInputElement>("#key-nsec")!;
+  const btnCopyNsec = editPanel.querySelector<HTMLButtonElement>("#btn-copy-nsec")!;
+  const inpImport = editPanel.querySelector<HTMLInputElement>("#key-import")!;
+  const btnImport = editPanel.querySelector<HTMLButtonElement>("#btn-import-key")!;
+
   root.appendChild(container);
 
   let previousTab: "following" | "blocked" | null = null;
+
+  const showToast = (message: string, isError = false) => {
+    if (!toastBanner) return;
+    toastBanner.style.display = "flex";
+    toastBanner.style.background = isError ? "rgba(239, 68, 68, 0.15)" : "rgba(34, 197, 94, 0.15)";
+    toastBanner.style.color = isError ? "#f87171" : "#4ade80";
+    toastBanner.style.border = `1px solid ${isError ? "rgba(239, 68, 68, 0.3)" : "rgba(34, 197, 94, 0.3)"}`;
+    toastBanner.innerHTML = `<span style="flex-shrink: 0; display: flex; align-items: center;">${isError ? ICONS.shield : ICONS.check}</span><span>${escapeHtml(message)}</span>`;
+    setTimeout(() => {
+      toastBanner.style.display = "none";
+    }, 3500);
+  };
+
+  const updateLiveAvatarPreview = (url?: string) => {
+    if (!avatarPreview) return;
+    const cleanUrl = url?.trim();
+    if (cleanUrl && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://") || cleanUrl.startsWith("data:image/"))) {
+      const fixedUrl = cleanUrl.replace(/^http:\/\//i, "https://");
+      avatarPreview.innerHTML = `<img src="${escapeHtml(fixedUrl)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
+      const img = avatarPreview.querySelector("img");
+      img?.addEventListener("error", () => {
+        avatarPreview.innerHTML = ICONS.user;
+      });
+    } else {
+      avatarPreview.innerHTML = ICONS.user;
+    }
+  };
+
+  rowPic.addEventListener("input", () => {
+    updateLiveAvatarPreview(rowPic.value);
+  });
+
+  function populateEditForm(meta: ProfileMetadata | null) {
+    if (myPubkey) {
+      const npub = hexToNpub(myPubkey);
+      if (spanPreviewNpub) spanPreviewNpub.textContent = npub;
+      if (inpNpub) inpNpub.value = npub;
+      if (inpPubkey) inpPubkey.value = myPubkey;
+    }
+    if (meta) {
+      if (spanPreviewName) spanPreviewName.textContent = meta.display_name || meta.name || "Active Identity";
+      rowDName.value = meta.display_name || "";
+      rowName.value = meta.name || "";
+      inpAbout.value = meta.about || "";
+      rowPic.value = meta.picture || "";
+      rowBanner.value = meta.banner || "";
+      rowNip05.value = meta.nip05 || "";
+      rowLud16.value = meta.lud16 || "";
+      rowWebsite.value = meta.website || "";
+      updateLiveAvatarPreview(meta.picture);
+    }
+  }
+
+  function toggleEditPanel(targetPane: "profile" | "keys" = "profile", forceOpen?: boolean) {
+    const isCurrentlyOpen = editPanel.style.display === "flex";
+    const shouldOpen = forceOpen !== undefined ? forceOpen : (!isCurrentlyOpen || (targetPane === "keys" && paneProfile.style.display === "flex") || (targetPane === "profile" && paneKeys.style.display === "flex"));
+
+    if (!shouldOpen) {
+      editPanel.style.display = "none";
+      return;
+    }
+
+    editPanel.style.display = "flex";
+    if (targetPane === "keys") {
+      btnInnerTabKeys.classList.add("active");
+      btnInnerTabKeys.style.color = "var(--accent-primary, #d4a373)";
+      btnInnerTabProfile.classList.remove("active");
+      btnInnerTabProfile.style.color = "var(--text-muted, #78716c)";
+      paneKeys.style.display = "flex";
+      paneProfile.style.display = "none";
+    } else {
+      btnInnerTabProfile.classList.add("active");
+      btnInnerTabProfile.style.color = "var(--accent-primary, #d4a373)";
+      btnInnerTabKeys.classList.remove("active");
+      btnInnerTabKeys.style.color = "var(--text-muted, #78716c)";
+      paneProfile.style.display = "flex";
+      paneKeys.style.display = "none";
+    }
+
+    if (myPubkey) {
+      const cached = profileCache.get(myPubkey);
+      populateEditForm(cached || null);
+    }
+  }
+
+  btnEditProfile.addEventListener("click", () => toggleEditPanel("profile"));
+  btnKeys.addEventListener("click", () => toggleEditPanel("keys"));
+  btnCloseEdit.addEventListener("click", () => toggleEditPanel("profile", false));
+
+  btnInnerTabProfile.addEventListener("click", () => toggleEditPanel("profile", true));
+  btnInnerTabKeys.addEventListener("click", () => toggleEditPanel("keys", true));
+
+  // Key Copy Handlers
+  const copyText = (val: string, btn: HTMLButtonElement) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard && val) {
+      navigator.clipboard.writeText(val);
+      const span = btn.querySelector("span");
+      if (span) span.textContent = "Copied!";
+      setTimeout(() => {
+        if (span) span.textContent = "Copy";
+      }, 1400);
+    }
+  };
+
+  btnCopyNpub.addEventListener("click", () => copyText(inpNpub.value, btnCopyNpub));
+  btnCopyHex.addEventListener("click", () => copyText(inpPubkey.value, btnCopyHex));
+  btnCopyNsec.addEventListener("click", () => copyText(inpNsec.value, btnCopyNsec));
+
+  // Reveal nsec flow
+  btnReveal.addEventListener("click", () => {
+    if (nsecBox.style.display === "flex") {
+      nsecBox.style.display = "none";
+      inpNsec.value = "";
+      btnReveal.textContent = "Reveal Private Key";
+      return;
+    }
+    if (nsecConfirmBox.style.display === "flex") {
+      nsecConfirmBox.style.display = "none";
+      return;
+    }
+    nsecConfirmBox.style.display = "flex";
+  });
+
+  btnCancelReveal.addEventListener("click", () => {
+    nsecConfirmBox.style.display = "none";
+  });
+
+  btnConfirmReveal.addEventListener("click", async () => {
+    nsecConfirmBox.style.display = "none";
+    try {
+      const omniObj = typeof window !== "undefined" ? (window as any).omni : null;
+      if (omniObj?.auth?.getNsec) {
+        const nsec = await omniObj.auth.getNsec();
+        inpNsec.value = nsec;
+        nsecBox.style.display = "flex";
+        btnReveal.textContent = "Hide Private Key";
+      } else {
+        showToast("Keystore custody provider unavailable", true);
+      }
+    } catch (err: any) {
+      showToast(`Could not retrieve private key: ${err?.message || String(err)}`, true);
+    }
+  });
+
+  // Switch identity / Import key
+  btnImport.addEventListener("click", async () => {
+    const val = inpImport.value?.trim();
+    if (!val) {
+      showToast("Please enter a private key (nsec or hex)", true);
+      return;
+    }
+    btnImport.disabled = true;
+    const origText = btnImport.textContent;
+    btnImport.textContent = "Switching Key...";
+    try {
+      const omniObj = typeof window !== "undefined" ? (window as any).omni : null;
+      if (omniObj?.auth?.switchKey) {
+        const switchRes = await omniObj.auth.switchKey(val);
+        if (switchRes?.pubkey) {
+          myPubkey = switchRes.pubkey;
+          activePubkey = myPubkey;
+          inpPubkey.value = switchRes.pubkey;
+        }
+        if (switchRes?.npub) {
+          inpNpub.value = switchRes.npub;
+          spanPreviewNpub.textContent = switchRes.npub;
+        }
+        inpImport.value = "";
+        nsecBox.style.display = "none";
+        inpNsec.value = "";
+        btnReveal.textContent = "Reveal Private Key";
+
+        // Sync social graph and profile for switched key
+        initUserSocialGraph(myPubkey);
+        loadProfile(myPubkey);
+        showToast("Switched identity and synced profile!");
+        toggleEditPanel("profile", true);
+      }
+    } catch (err: any) {
+      showToast(`Failed to switch key: ${err?.message || String(err)}`, true);
+    } finally {
+      btnImport.disabled = false;
+      btnImport.textContent = origText || "Import & Switch";
+    }
+  });
+
+  // Save & Publish Profile (kind 0)
+  btnSave.addEventListener("click", async () => {
+    btnSave.disabled = true;
+    btnSave.textContent = "Publishing to Nostr...";
+    try {
+      const meta: ProfileMetadata = {};
+      if (rowDName.value.trim()) meta.display_name = rowDName.value.trim();
+      if (rowName.value.trim()) meta.name = rowName.value.trim();
+      if (inpAbout.value.trim()) meta.about = inpAbout.value.trim();
+      if (rowPic.value.trim()) meta.picture = rowPic.value.trim();
+      if (rowBanner.value.trim()) meta.banner = rowBanner.value.trim();
+      if (rowNip05.value.trim()) meta.nip05 = rowNip05.value.trim();
+      if (rowLud16.value.trim()) meta.lud16 = rowLud16.value.trim();
+      if (rowWebsite.value.trim()) meta.website = rowWebsite.value.trim();
+
+      const omniObj = typeof window !== "undefined" ? (window as any).omni : null;
+      const nostr = typeof window !== "undefined" ? (window as any).nostr : null;
+
+      if (omniObj?.profile?.publish) {
+        await omniObj.profile.publish(meta);
+      } else if (nostr?.signEvent) {
+        const draft = {
+          kind: 0,
+          content: JSON.stringify(meta),
+          tags: [],
+          created_at: Math.floor(Date.now() / 1000)
+        };
+        const signed = await nostr.signEvent(draft);
+        sendWs(["EVENT", signed]);
+      }
+
+      if (myPubkey) {
+        profileCache.set(myPubkey, meta);
+        if (activePubkey === myPubkey) {
+          renderProfileMetadata(myPubkey, meta);
+        }
+      }
+
+      btnSave.textContent = "Profile Published!";
+      showToast("Profile published to Nostr relays!");
+      setTimeout(() => {
+        btnSave.disabled = false;
+        btnSave.textContent = "Save & Publish Profile (kind 0)";
+      }, 1800);
+    } catch (err: any) {
+      showToast(`Failed to publish profile: ${err?.message || String(err)}`, true);
+      btnSave.disabled = false;
+      btnSave.textContent = "Save & Publish Profile (kind 0)";
+    }
+  });
+
+  // Sync profile metadata from relays
+  btnSync.addEventListener("click", async () => {
+    btnSync.disabled = true;
+    btnSync.innerHTML = `${ICONS.refresh} Syncing...`;
+    try {
+      if (myPubkey) {
+        sendWs(["REQ", `pv_sync_${Date.now()}`, { kinds: [0], authors: [myPubkey], limit: 1 }]);
+      }
+      setTimeout(() => {
+        btnSync.disabled = false;
+        btnSync.innerHTML = `${ICONS.refresh} Sync from Relays`;
+        showToast("Synchronized profile metadata from relays!");
+      }, 1000);
+    } catch (_) {
+      btnSync.disabled = false;
+      btnSync.innerHTML = `${ICONS.refresh} Sync from Relays`;
+    }
+  });
 
   function updateProfileBackButton() {
     if (previousTab && activeTab === "profile") {
@@ -774,7 +1354,20 @@ async function mountProfileViewer(root: HTMLElement) {
   });
 
   function updateActionButtons(pubkey: string) {
-    if (!pubkey || (myPubkey && pubkey === myPubkey)) {
+    const isSelf = Boolean(pubkey && myPubkey && pubkey === myPubkey);
+
+    if (isSelf) {
+      btnFollow.style.display = "none";
+      btnBlock.style.display = "none";
+      btnEditProfile.style.display = "inline-flex";
+      btnKeys.style.display = "inline-flex";
+      return;
+    }
+
+    btnEditProfile.style.display = "none";
+    btnKeys.style.display = "none";
+
+    if (!pubkey) {
       btnFollow.style.display = "none";
       btnBlock.style.display = "none";
       return;
@@ -1081,7 +1674,6 @@ async function mountProfileViewer(root: HTMLElement) {
     const displayName = meta?.display_name || meta?.name || `nostr:${pubkey.slice(0, 8)}`;
     const handle = meta?.name ? `@${meta.name}` : `@npub1${pubkey.slice(0, 8)}`;
     const about = meta?.about || "";
-    const npub = hexToNpub(pubkey);
 
     const card = html<HTMLDivElement>`
       <div class="people-user-card" data-pubkey="${escapeHtml(pubkey)}">
@@ -1220,20 +1812,37 @@ async function mountProfileViewer(root: HTMLElement) {
     sendWs(["REQ", "pv_my_mutes", { kinds: [10000], authors: [pk], limit: 1 }]);
   }
 
-  // Register Intent Handler for 'view_profile'
+  // Register Intent Handler for 'view_profile' and 'edit_profile'
   const handleViewProfile = (data: any) => {
     if (data?.pubkey) {
       loadProfile(data.pubkey);
+      toggleEditPanel("profile", false);
+      switchTab("profile", false);
+    } else if (myPubkey) {
+      loadProfile(myPubkey);
+      toggleEditPanel("profile", false);
       switchTab("profile", false);
     }
   };
 
+  const handleEditProfile = (data: any) => {
+    const target = data?.pubkey || myPubkey;
+    if (target) {
+      loadProfile(target);
+    }
+    switchTab("profile", false);
+    toggleEditPanel("profile", true);
+  };
+
   if (typeof (window as any).omni !== "undefined" && (window as any).omni.intents?.handle) {
     (window as any).omni.intents.handle("view_profile", handleViewProfile);
+    (window as any).omni.intents.handle("edit_profile", handleEditProfile);
   } else {
     window.addEventListener("omni:intent", (e: any) => {
       if (e.detail?.action === "view_profile" && e.detail?.data) {
         handleViewProfile(e.detail.data);
+      } else if (e.detail?.action === "edit_profile") {
+        handleEditProfile(e.detail?.data);
       }
     });
   }
@@ -1256,6 +1865,9 @@ async function mountProfileViewer(root: HTMLElement) {
       const v = searchParams.get("view");
       if (v === "following" || v === "blocked" || v === "profile") {
         switchTab(v as any, false);
+      } else if (v === "edit") {
+        switchTab("profile", false);
+        toggleEditPanel("profile", true);
       } else if (previousTab) {
         const target = previousTab;
         previousTab = null;
@@ -1303,6 +1915,9 @@ async function mountProfileViewer(root: HTMLElement) {
     const v = searchParams.get("view");
     if (v === "following" || v === "blocked") {
       switchTab(v as any, false);
+    } else if (v === "edit") {
+      switchTab("profile", false);
+      toggleEditPanel("profile", true);
     }
   } catch (_) {}
 
@@ -1318,9 +1933,12 @@ async function mountProfileViewer(root: HTMLElement) {
 
   resolveUserPubkey().then((pk) => {
     if (pk) {
+      myPubkey = pk;
       initUserSocialGraph(pk);
       if (!initialPubkey && !activePubkey) {
         loadProfile(pk);
+      } else {
+        updateActionButtons(activePubkey);
       }
     } else if (!initialPubkey && !activePubkey) {
       displayNameEl.textContent = "Enter a pubkey or npub above to view profile";
@@ -1336,19 +1954,36 @@ async function mountProfileViewer(root: HTMLElement) {
     loadProfile,
     toggleFollow,
     toggleBlock,
+    toggleEditPanel,
     getMyFollows: () => myFollows,
     getMyMutes: () => myMutes,
     getActivePubkey: () => activePubkey
   };
 }
 
+let mounted = false;
+function initMount(root: HTMLElement) {
+  if (mounted) return;
+  mounted = true;
+  mountProfileViewer(root);
+}
+
 // Auto-mount
 if (typeof document !== "undefined") {
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => mountProfileViewer(document.body));
+    document.addEventListener("DOMContentLoaded", () => initMount(document.body));
   } else {
-    mountProfileViewer(document.body);
+    initMount(document.body);
   }
 }
 
-export { mountProfileViewer };
+const mountProfiles = mountProfileViewer;
+const mountProfile = mountProfileViewer;
+
+export {
+  mountProfileViewer,
+  mountProfiles,
+  mountProfile,
+  mountProfileCompact,
+  mountProfileWidget
+};

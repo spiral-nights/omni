@@ -2754,9 +2754,9 @@ export class PanoramaShell extends BaseShell {
 
     // Profile / Identity quick navigation
     const openProfile = () => {
-      const profilePlugin = this.installedPlugins.find((p) => p.id === "org.omni.plugin.profile");
+      const profilePlugin = this.installedPlugins.find((p) => p.id === "org.omni.plugin.profile-viewer" || p.id === "org.omni.plugin.profile" || p.id.includes("profile"));
       if (profilePlugin && profilePlugin.enabled) {
-        this.showPage("org.omni.plugin.profile");
+        this.showPage(profilePlugin.id);
       } else {
         this.showPivot("system");
       }
