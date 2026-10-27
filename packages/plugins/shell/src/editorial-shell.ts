@@ -811,20 +811,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     // Ensure the nsite is mounted and its component is projected into targetContainer
     const appInstanceKey = `${plugin.id}::app`;
-    const placements = this.getPluginPlacements(plugin);
-    const runningMainPlacement = placements.find(
-      (pl) => pl.enabled !== false && (pl.viewport === "main" || pl.viewport === "dock") && this.kernel.getSandbox(`${plugin.id}::${pl.id}`)
-    );
     const directSandbox = this.kernel.getSandbox(plugin.id);
     const appSandbox = this.kernel.getSandbox(appInstanceKey);
 
-    if (runningMainPlacement) {
-      const sb = this.kernel.getSandbox(`${plugin.id}::${runningMainPlacement.id}`);
-      const liveComp = sb?.getFirstPopulatedComponentContainer();
-      if (liveComp && !targetContainer.contains(liveComp)) {
-        this.kernel.reparentLiveComponent(`${plugin.id}::${runningMainPlacement.id}`, targetContainer);
-      }
-    } else if (directSandbox) {
+    if (directSandbox) {
       const liveComp = directSandbox.getFirstPopulatedComponentContainer();
       if (liveComp && !targetContainer.contains(liveComp)) {
         this.kernel.reparentLiveComponent(plugin.id, targetContainer);
@@ -835,59 +825,45 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         this.kernel.reparentLiveComponent(appInstanceKey, targetContainer);
       }
     } else {
-      const hasMainPlacement = placements.some((pl) => pl.enabled !== false && (pl.viewport === "main" || pl.viewport === "dock"));
-      if (hasMainPlacement) {
-        if (!this.pendingAppMounts.has(plugin.id)) {
-          this.pendingAppMounts.add(plugin.id);
-          try {
-            await this.mountPlugin(plugin);
-          } catch (err) {
-            console.warn(`Failed to mount plugin ${plugin.id}:`, err);
-          } finally {
-            this.pendingAppMounts.delete(plugin.id);
-          }
-        }
-      } else {
-        if (!this.pendingAppMounts.has(appInstanceKey)) {
-          this.pendingAppMounts.add(appInstanceKey);
-          try {
-            const synthManifest = this.ensurePluginManifest(plugin);
-            const appManifest = {
-              ...synthManifest,
-              components: [
-                {
-                  id: `${plugin.id}-app-main`,
-                  type: "main",
-                  title: plugin.name || plugin.id,
-                  slot: "main"
-                }
-              ]
-            };
-            const customSlotContainers = new Map(this.getSlotContainers());
-            customSlotContainers.set("main", targetContainer);
-            customSlotContainers.set("sidebar", targetContainer);
-            if (synthManifest.components) {
-              for (const comp of synthManifest.components) {
-                if (comp.slot) customSlotContainers.set(comp.slot, targetContainer);
-              }
-            }
-            await this.kernel.registerPlugin(
-              appManifest,
-              plugin.htmlContent || plugin.scriptContent,
-              customSlotContainers,
+      if (!this.pendingAppMounts.has(appInstanceKey)) {
+        this.pendingAppMounts.add(appInstanceKey);
+        try {
+          const synthManifest = this.ensurePluginManifest(plugin);
+          const appManifest = {
+            ...synthManifest,
+            components: [
               {
-                instanceId: appInstanceKey,
-                route: plugin.route || "",
-                viewId: "main",
-                targetSlot: "main",
-                relays: plugin.relays
+                id: `${plugin.id}-app-main`,
+                type: "main",
+                title: plugin.name || plugin.id,
+                slot: "main"
               }
-            );
-          } catch (err) {
-            console.warn(`Failed to register app instance for ${plugin.id}:`, err);
-          } finally {
-            this.pendingAppMounts.delete(appInstanceKey);
+            ]
+          };
+          const customSlotContainers = new Map(this.getSlotContainers());
+          customSlotContainers.set("main", targetContainer);
+          customSlotContainers.set("sidebar", targetContainer);
+          if (synthManifest.components) {
+            for (const comp of synthManifest.components) {
+              if (comp.slot) customSlotContainers.set(comp.slot, targetContainer);
+            }
           }
+          await this.kernel.registerPlugin(
+            appManifest,
+            plugin.htmlContent || plugin.scriptContent,
+            customSlotContainers,
+            {
+              instanceId: appInstanceKey,
+              route: "",
+              viewId: "main",
+              targetSlot: "main",
+              relays: plugin.relays
+            }
+          );
+        } catch (err) {
+          console.warn(`Failed to register app instance for ${plugin.id}:`, err);
+        } finally {
+          this.pendingAppMounts.delete(appInstanceKey);
         }
       }
     }
@@ -1659,8 +1635,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         };
         plugin.placements = [...currentPlacements, newPl];
         plugin.viewport = plugin.placements[0].viewport;
-        plugin.route = plugin.placements[0].route;
-        plugin.viewId = plugin.placements[0].viewId;
         this.saveLocalWorkspace();
         await this.remountPlugin(plugin);
         this.renderPluginSettingsList();
@@ -1701,12 +1675,8 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           plugin.placements = placements.filter((_, idx) => idx !== plIdx);
           if (plugin.placements.length > 0) {
             plugin.viewport = plugin.placements[0].viewport;
-            plugin.route = plugin.placements[0].route;
-            plugin.viewId = plugin.placements[0].viewId;
           } else {
             plugin.viewport = "";
-            plugin.route = "";
-            plugin.viewId = "";
             this.layoutManager?.unregisterPlugin(plugin.id);
           }
           this.saveLocalWorkspace();
@@ -1793,10 +1763,9 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           pl.route = routeSelect.value;
           const matchedView = pluginViews.find((v: any) => (v.path || "") === pl.route);
           if (matchedView) pl.viewId = matchedView.id;
-          plugin.route = pl.route;
-          plugin.viewId = pl.viewId;
           this.saveLocalWorkspace();
           await this.remountPlugin(plugin);
+          this.renderWidgetsView();
         });
         routeCol.appendChild(routeSelect);
         fieldsGrid.appendChild(routeCol);

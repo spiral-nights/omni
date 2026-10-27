@@ -1540,8 +1540,6 @@ export class PanoramaShell extends BaseShell {
           };
           plugin.placements = [...currentPlacements, newPl];
           plugin.viewport = plugin.placements[0].viewport;
-          plugin.route = plugin.placements[0].route;
-          plugin.viewId = plugin.placements[0].viewId;
           await this.remountPlugin(plugin);
         });
         placementsHeader.appendChild(btnAddPlacement);
@@ -1579,12 +1577,8 @@ export class PanoramaShell extends BaseShell {
             plugin.placements = placements.filter((_, idx) => idx !== plIdx);
             if (plugin.placements.length > 0) {
               plugin.viewport = plugin.placements[0].viewport;
-              plugin.route = plugin.placements[0].route;
-              plugin.viewId = plugin.placements[0].viewId;
             } else {
               plugin.viewport = "";
-              plugin.route = "";
-              plugin.viewId = "";
               this.layoutManager.unregisterPlugin(plugin.id);
             }
             await this.remountPlugin(plugin);
@@ -1665,8 +1659,6 @@ export class PanoramaShell extends BaseShell {
             pl.route = routeSelect.value;
             const matchedView = pluginViews.find((v: any) => v.path === routeSelect.value);
             pl.viewId = matchedView?.id || "main";
-            plugin.route = pl.route;
-            plugin.viewId = pl.viewId;
             await this.remountPlugin(plugin);
           });
           routeCol.appendChild(routeSelect);
@@ -2115,7 +2107,7 @@ export class PanoramaShell extends BaseShell {
         customSlotContainers,
         {
           instanceId: overlayInstanceKey,
-          route: plugin.route || "",
+          route: "",
           viewId: "main",
           targetSlot: "main",
           relays: plugin.relays

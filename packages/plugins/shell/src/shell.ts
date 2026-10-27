@@ -509,7 +509,7 @@ export class OmniShell extends BaseShell {
               customSlotContainers,
               {
                 instanceId: appInstanceKey,
-                route: plugin.route || "",
+                route: "",
                 viewId: "main",
                 targetSlot: "main",
                 relays: plugin.relays
@@ -877,8 +877,6 @@ export class OmniShell extends BaseShell {
         };
         p.placements = [...currentPlacements, newPl];
         p.viewport = p.placements[0].viewport;
-        p.route = p.placements[0].route;
-        p.viewId = p.placements[0].viewId;
         await this.remountPlugin(p);
         this.renderDockLaunchers();
         this.renderSettingsNavAndPanes();
@@ -976,8 +974,6 @@ export class OmniShell extends BaseShell {
           pl.route = routeSelect.value;
           const matchedView = pluginViews.find((v: any) => v.path === routeSelect.value);
           pl.viewId = matchedView?.id || "main";
-          p.route = pl.route;
-          p.viewId = pl.viewId;
           await this.remountPlugin(p);
         });
 
@@ -1020,12 +1016,8 @@ export class OmniShell extends BaseShell {
           p.placements = placements.filter((_, idx) => idx !== plIdx);
           if (p.placements.length > 0) {
             p.viewport = p.placements[0].viewport;
-            p.route = p.placements[0].route;
-            p.viewId = p.placements[0].viewId;
           } else {
             p.viewport = "";
-            p.route = "";
-            p.viewId = "";
             this.layoutManager.unregisterPlugin(p.id);
           }
           await this.remountPlugin(p);
