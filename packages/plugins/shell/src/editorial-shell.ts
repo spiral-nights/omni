@@ -664,9 +664,40 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.dockContainer.appendChild(btnPrefs);
   }
 
+  private unloadAppIfStandalone(pluginId: string): void {
+    if (!pluginId) return;
+    const plugin = this.installedPlugins.find((p) => p.id === pluginId);
+    if (!plugin) return;
+
+    // Check if plugin has persistent companion viewports (e.g. sidebar widget)
+    const placements = this.getPluginPlacements(plugin);
+    const hasCompanionViewport = placements.some(
+      (pl) => pl.enabled !== false && pl.viewport === "sidebar"
+    );
+
+    // If it has a dedicated full-page app instance, unload it so it reloads fresh next time
+    const appInstanceKey = `${pluginId}::app`;
+    if (this.kernel.getSandbox(appInstanceKey)) {
+      this.kernel.unloadPluginInstance(appInstanceKey);
+    } else if (!hasCompanionViewport && this.kernel.getSandbox(pluginId)) {
+      this.kernel.unloadPluginInstance(pluginId);
+    }
+
+    const safeId = pluginId.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const container = this.root.querySelector(`#editorial-app-page-${safeId} .editorial-app-container`);
+    if (container) {
+      container.innerHTML = "";
+    }
+  }
+
   public async openApp(pluginId: string, pushState = true): Promise<void> {
     const plugin = this.installedPlugins.find((p) => p.id === pluginId);
     if (!plugin) return;
+
+    const prevPluginId = this.activePluginId;
+    if (prevPluginId && prevPluginId !== pluginId) {
+      this.unloadAppIfStandalone(prevPluginId);
+    }
 
     if (pushState && typeof window !== "undefined" && (this.activePluginId !== pluginId || this.activePage !== "app")) {
       try {
@@ -861,7 +892,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       }
     }
 
-    this.kernel.notifyAppActivated(plugin.id, { reset: true });
     this.renderDock();
     this.saveLocalWorkspace();
     this.boundScrollHandler?.();
@@ -872,6 +902,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       try {
         window.history.pushState({ type: "omni-editorial-view", page: "apps" }, "");
       } catch (_) {}
+    }
+
+    if (this.activePluginId) {
+      this.unloadAppIfStandalone(this.activePluginId);
     }
 
     this.activePage = "apps";
@@ -926,6 +960,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       try {
         window.history.pushState({ type: "omni-editorial-view", page: "widgets" }, "");
       } catch (_) {}
+    }
+
+    if (this.activePluginId) {
+      this.unloadAppIfStandalone(this.activePluginId);
     }
 
     this.activePage = "widgets";

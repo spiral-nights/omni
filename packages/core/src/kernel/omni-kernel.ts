@@ -24,7 +24,8 @@ export interface OmniKernelOptions {
   slotResolver?: (pluginId: string, componentId: string, slot: string) => Element | undefined;
   eventStoreName?: string;
   storageName?: string;
-  maxFeedNotes?: number;
+  maxNotes?: number;
+  maxFeedNotes?: number; // Backwards-compatible alias for maxNotes
   theme?: any;
   useShadowDom?: boolean;
   persistRelays?: boolean;
@@ -60,7 +61,7 @@ export class OmniKernel {
     this.keystore = new WebCryptoKeystore(options.privateKeyHex);
     this.eventStore = new LocalEventStore({
       dbName: options.eventStoreName,
-      maxFeedNotes: options.maxFeedNotes ?? 100
+      maxNotes: options.maxNotes ?? options.maxFeedNotes ?? 100
     });
     this.relayPool = new RelayPool({
       bootstrapRelays: options.bootstrapRelays,
@@ -285,10 +286,6 @@ export class OmniKernel {
     }
   }
 
-  notifyAppActivated(pluginId: string, params?: any): void {
-    this.notifyPlugin(pluginId, "app.activate", params || {});
-  }
-
   reparentPluginComponent(
     pluginId: string,
     componentId: string,
@@ -330,6 +327,15 @@ export class OmniKernel {
       }
     }
     return false;
+  }
+
+  unloadPluginInstance(instanceKey: string): void {
+    const sandbox = this.sandboxes.get(instanceKey);
+    if (sandbox) {
+      sandbox.destroy();
+      this.sandboxes.delete(instanceKey);
+    }
+    this.pendingRegistrations.delete(instanceKey);
   }
 
   disablePlugin(pluginId: string): void {
@@ -905,7 +911,13 @@ export class OmniKernel {
     const handlers: AppHandler[] = [];
 
     // 1. Gather active sandboxes and extra/installed plugins
-    const candidates: Array<{ id: string; name: string; icon?: string; description?: string }> = [];
+    const candidates: Array<{
+      id: string;
+      name: string;
+      icon?: string;
+      description?: string;
+      handledIntents?: string[];
+    }> = [];
 
     for (const [id, sandbox] of this.sandboxes.entries()) {
       const pluginId = sandbox.manifest?.id || id.split("::")[0];
@@ -914,7 +926,8 @@ export class OmniKernel {
           id: pluginId,
           name: sandbox.manifest?.name || pluginId,
           icon: sandbox.manifest?.icon,
-          description: sandbox.manifest?.description
+          description: sandbox.manifest?.description,
+          handledIntents: (sandbox.manifest as any)?.handledIntents || sandbox.manifest?.permissions?.intents?.handle
         });
       }
     }
@@ -926,7 +939,8 @@ export class OmniKernel {
             id: p.id,
             name: p.manifest?.name || p.name || p.id,
             icon: p.manifest?.icon,
-            description: p.manifest?.description || p.description
+            description: p.manifest?.description || p.description,
+            handledIntents: (p as any).handledIntents || p.manifest?.handledIntents || p.manifest?.permissions?.intents?.handle
           });
         }
       }
@@ -938,42 +952,41 @@ export class OmniKernel {
       let matched = false;
       const schemes: string[] = [];
 
+      const declaredIntents = cand.handledIntents || [];
+      const brokerActions = this.intentBroker.getRegisteredActions().filter((action) =>
+        this.intentBroker.getHandlers(action).some((h) => h.pluginId === id)
+      );
+      const allIntents = new Set<string>([...declaredIntents, ...brokerActions]);
+
       if (scheme === "nostr") {
-        if (
-          id.includes("feed") ||
-          name.toLowerCase().includes("feed") ||
-          name.toLowerCase().includes("timeline")
-        ) {
-          matched = true;
-          schemes.push("nostr");
-        } else if (
-          id.includes("profile") ||
-          name.toLowerCase().includes("profile")
-        ) {
-          if (kind === 0) matched = true;
-          schemes.push("nostr");
+        if (kind === 0) {
+          if (allIntents.has("view_profile") || allIntents.has("edit_profile")) {
+            matched = true;
+          }
         } else {
-          schemes.push("nostr");
+          if (
+            allIntents.has("view_note") ||
+            allIntents.has("create_note") ||
+            allIntents.has("compose_note")
+          ) {
+            matched = true;
+          }
+        }
+        // Fallback for general Nostr applications if no specialized intent is declared
+        if (!matched && (allIntents.size === 0 || allIntents.has("share"))) {
           matched = true;
         }
+        schemes.push("nostr");
       } else if (scheme === "lightning") {
-        if (
-          id.includes("wallet") ||
-          id.includes("lightning") ||
-          name.toLowerCase().includes("wallet")
-        ) {
+        if (allIntents.has("pay_invoice") || allIntents.has("wallet") || allIntents.has("lightning")) {
           matched = true;
-          schemes.push("lightning");
         }
+        schemes.push("lightning");
       } else if (scheme === "cashu") {
-        if (
-          id.includes("cashu") ||
-          name.toLowerCase().includes("cashu") ||
-          id.includes("wallet")
-        ) {
+        if (allIntents.has("pay_invoice") || allIntents.has("cashu") || allIntents.has("wallet")) {
           matched = true;
-          schemes.push("cashu");
         }
+        schemes.push("cashu");
       }
 
       if (matched) {

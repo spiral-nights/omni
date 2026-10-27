@@ -528,11 +528,6 @@ export class OmniShell extends BaseShell {
         this.pageFeed.classList.add("active");
       }
 
-      const activePlugin = this.installedPlugins.find((p) => p.id === page);
-      if (activePlugin) {
-        this.kernel.notifyAppActivated(activePlugin.id, { reset: true });
-      }
-
       const targetBtn = this.dockSlot?.querySelector<HTMLElement>(`[data-plugin-id="${page}"]`);
       if (targetBtn) {
         targetBtn.classList.add("active");

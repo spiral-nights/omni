@@ -2,7 +2,8 @@ import { NostrEvent, NostrFilter } from "@omni/types";
 
 export interface LocalEventStoreOptions {
   dbName?: string;
-  maxFeedNotes?: number; // Maximum non-user feed notes (kinds 1, 6, 7) to keep in IndexedDB. Default: 100
+  maxNotes?: number; // Maximum non-user transient notes (kinds 1, 6, 7) to keep in IndexedDB. Default: 100
+  maxFeedNotes?: number; // Backwards-compatible alias for maxNotes
   maxMemoryCacheSize?: number; // In-memory LRU cache size limit. Default: 500
   userPubkey?: string;
 }
@@ -10,7 +11,7 @@ export interface LocalEventStoreOptions {
 export class LocalEventStore {
   private db: IDBDatabase | null = null;
   private dbName: string;
-  private maxFeedNotes: number;
+  private maxNotes: number;
   private maxMemoryCacheSize: number;
   private userPubkey?: string;
   private memoryCache: Map<string, NostrEvent> = new Map();
@@ -19,11 +20,11 @@ export class LocalEventStore {
   constructor(options?: string | LocalEventStoreOptions) {
     if (typeof options === "string") {
       this.dbName = options;
-      this.maxFeedNotes = 100;
+      this.maxNotes = 100;
       this.maxMemoryCacheSize = 500;
     } else {
       this.dbName = options?.dbName || "omni_event_store";
-      this.maxFeedNotes = options?.maxFeedNotes ?? 100;
+      this.maxNotes = options?.maxNotes ?? options?.maxFeedNotes ?? 100;
       this.maxMemoryCacheSize = options?.maxMemoryCacheSize ?? 500;
       this.userPubkey = options?.userPubkey;
     }
@@ -53,8 +54,12 @@ export class LocalEventStore {
     return event.kind >= 30000 && event.kind < 40000;
   }
 
-  public isFeedNote(event: NostrEvent): boolean {
+  public isTransientNote(event: NostrEvent): boolean {
     return event.kind === 1 || event.kind === 6 || event.kind === 7;
+  }
+
+  public isFeedNote(event: NostrEvent): boolean {
+    return this.isTransientNote(event);
   }
 
   async init(): Promise<void> {
@@ -173,11 +178,11 @@ export class LocalEventStore {
     this.pruneScheduled = true;
     setTimeout(() => {
       this.pruneScheduled = false;
-      this.pruneFeedNotes().catch(() => {});
+      this.pruneTransientNotes().catch(() => {});
     }, 500);
   }
 
-  async pruneFeedNotes(maxNotes: number = this.maxFeedNotes): Promise<number> {
+  async pruneTransientNotes(maxNotes: number = this.maxNotes): Promise<number> {
     if (!this.db) await this.init();
 
     return new Promise((resolve) => {
@@ -222,6 +227,10 @@ export class LocalEventStore {
     });
   }
 
+  async pruneFeedNotes(maxNotes?: number): Promise<number> {
+    return this.pruneTransientNotes(maxNotes ?? this.maxNotes);
+  }
+
   async saveEvent(event: NostrEvent): Promise<boolean> {
     if (!this.db) await this.init();
 
@@ -261,8 +270,8 @@ export class LocalEventStore {
             this.cleanOlderReplaceable(event).catch(() => {});
           }
 
-          // If public feed note and not the user's own note, schedule LRU prune
-          if (this.isFeedNote(event) && (!this.userPubkey || event.pubkey !== this.userPubkey)) {
+          // If transient public note and not the user's own note, schedule LRU prune
+          if (this.isTransientNote(event) && (!this.userPubkey || event.pubkey !== this.userPubkey)) {
             this.schedulePrune();
           }
 

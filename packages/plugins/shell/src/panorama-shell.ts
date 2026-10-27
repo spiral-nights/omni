@@ -1994,7 +1994,6 @@ export class PanoramaShell extends BaseShell {
     }
 
     this.currentOpenedAppId = pluginId;
-    this.kernel.notifyAppActivated(pluginId, { reset: true });
     const meta = this.getPluginMeta(plugin);
     const titleEl = document.getElementById("panorama-overlay-title");
     if (titleEl) titleEl.textContent = meta.name;

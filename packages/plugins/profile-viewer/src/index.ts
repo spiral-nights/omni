@@ -2260,20 +2260,6 @@ async function mountProfileViewer(root: HTMLElement) {
     }
   } catch (_) {}
 
-  // Lifecycle listeners to reset state when opened normally
-  window.addEventListener("omni:activate", (e: any) => {
-    if (!e?.detail?.pubkey) {
-      previousTab = null;
-      activeUserPubkey = "";
-      switchTab("my-profile", false);
-    }
-  });
-  window.addEventListener("omni:reset", () => {
-    previousTab = null;
-    activeUserPubkey = "";
-    switchTab("my-profile", false);
-  });
-
   resolveUserPubkey().then((pk) => {
     if (pk) {
       myPubkey = pk;

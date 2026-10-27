@@ -260,13 +260,6 @@
             pendingIntentInvocations.get(action).push(data);
           }
         }
-      } else if (msg.method === "app.activate" || msg.method === "app.reset") {
-        try {
-          if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-            window.dispatchEvent(new CustomEvent("omni:activate", { detail: msg.params || {} }));
-            window.dispatchEvent(new CustomEvent("omni:reset", { detail: msg.params || {} }));
-          }
-        } catch (_) {}
       }
     };
   }
