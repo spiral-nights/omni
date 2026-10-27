@@ -103,7 +103,7 @@ export class SandboxInstance {
     this.iframe = document.createElement("iframe");
     // Use strict allow-scripts without allow-same-origin to prevent browser sandbox elevation warnings
     // and maintain proper origin isolation (opaque 'null' origin).
-    this.iframe.setAttribute("sandbox", "allow-scripts");
+    this.iframe.setAttribute("sandbox", "allow-scripts allow-modals");
     this.iframe.setAttribute("allow", "autoplay; geolocation");
     this.iframe.style.display = "none";
     this.iframe.setAttribute("data-plugin-id", this.manifest.id);

@@ -1281,10 +1281,6 @@ function mountPublisherStudio(root: HTMLElement) {
   }
 
   async function deletePublishedApp(app: PublishedAppRecord) {
-    if (!confirm(`Permanently delete "${app.name || app.id}" from relays and Blossom servers?`)) {
-      return;
-    }
-
     deletedAppIds.add(app.id);
     if (app.eventId) deletedAppIds.add(app.eventId);
     saveDeletedAppIds(deletedAppIds);
@@ -2004,8 +2000,28 @@ function mountPublisherStudio(root: HTMLElement) {
             } catch {}
           });
 
-          card.querySelector(".btn-delete-published")?.addEventListener("click", () => {
-            deletePublishedApp(app);
+          const delBtn = card.querySelector(".btn-delete-published") as HTMLButtonElement | null;
+          let confirmTimeout: any = null;
+          delBtn?.addEventListener("click", () => {
+            if (delBtn.classList.contains("btn-delete-confirming")) {
+              clearTimeout(confirmTimeout);
+              deletePublishedApp(app);
+            } else {
+              delBtn.classList.add("btn-delete-confirming");
+              delBtn.style.background = "rgba(235, 87, 87, 0.18)";
+              delBtn.style.color = "#ff6b6b";
+              delBtn.style.borderColor = "#ff6b6b";
+              delBtn.innerHTML = "Delete?";
+              confirmTimeout = setTimeout(() => {
+                if (card.contains(delBtn)) {
+                  delBtn.classList.remove("btn-delete-confirming");
+                  delBtn.style.background = "var(--omni-bg-card, #22201d)";
+                  delBtn.style.color = "var(--omni-text-muted, #6b665f)";
+                  delBtn.style.borderColor = "var(--omni-border-subtle, #2e2b26)";
+                  delBtn.innerHTML = svgIcon("trash", 13);
+                }
+              }, 4000);
+            }
           });
 
           card.querySelector(".btn-update-zip-app")?.addEventListener("click", () => {
