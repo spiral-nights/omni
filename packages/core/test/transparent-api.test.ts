@@ -411,5 +411,61 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
     channelKernelRpc.port1.close();
     channelKernelRpc.port2.close();
   });
+
+  it("handles nostr.publish with localOnly: true by saving to LocalEventStore and bypassing RelayPool", async () => {
+    kernel.capabilityStore.setGrant("test-publisher", "nostr:write", "always");
+    const publishSpy = vi.spyOn(kernel.relayPool, "publish");
+
+    const channel = new MessageChannel();
+    const dispatcher = new JsonRpcDispatcher({
+      pluginId: "test-publisher",
+      port: channel.port1,
+      aclEngine: kernel.aclEngine,
+      storageManager: kernel.storageManager,
+      intentBroker: kernel.intentBroker,
+      subscriptionCoordinator: kernel.subscriptionCoordinator,
+      keystore: kernel.keystore,
+      relayPool: kernel.relayPool,
+      eventStore: kernel.eventStore
+    });
+
+    const responsePromise = new Promise<any>((resolve) => {
+      channel.port2.onmessage = (e) => resolve(e.data);
+    });
+
+    const draft = {
+      kind: 35129,
+      created_at: 1700000000,
+      tags: [["d", "local-test-app"]],
+      content: "<h1>Local App</h1>"
+    };
+
+    channel.port2.postMessage({
+      jsonrpc: "2.0",
+      id: 99,
+      method: "nostr.publish",
+      params: { event: draft, localOnly: true }
+    });
+
+    const res = await responsePromise;
+    expect(res.error).toBeUndefined();
+    expect(res.result).toBeDefined();
+    expect(res.result.relays).toEqual([]);
+
+    // 1. Verify relayPool.publish was NEVER called
+    expect(publishSpy).not.toHaveBeenCalled();
+
+    // 2. Verify saved directly in 0ms LocalEventStore
+    const localEvents = await kernel.eventStore.getEvents({
+      kinds: [35129],
+      "#d": ["local-test-app"]
+    });
+    expect(localEvents.length).toBe(1);
+    expect(localEvents[0].content).toBe("<h1>Local App</h1>");
+
+    channel.port1.close();
+    channel.port2.close();
+    publishSpy.mockRestore();
+  });
 });
 

@@ -426,14 +426,12 @@ ${baseHtml}
     inferredId = slugifyPluginId(inferredName);
   }
 
-  // Starbright app icon heuristic fallback
-  if ((!inferredIcon || inferredIcon === "globe") && (inferredId.toLowerCase().includes("starbright") || inferredName.toLowerCase().includes("starbright"))) {
-    inferredIcon = "✨";
-  }
-
-  // Weather app icon heuristic fallback
-  if ((!inferredIcon || inferredIcon === "globe") && (inferredId.toLowerCase().includes("weather") || inferredName.toLowerCase().includes("weather"))) {
-    inferredIcon = "sun";
+  // Detect icon from HTML or manifest
+  if (!inferredIcon || inferredIcon === "globe" || inferredIcon === "widgets") {
+    const detected = NostrPluginResolver.detectPluginIcon(null, baseHtml);
+    if (detected && detected !== "widgets") {
+      inferredIcon = detected;
+    }
   }
 
   // Build Option A (Single-file inlined HTML bundle)

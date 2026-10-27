@@ -158,18 +158,7 @@ export class NostrPluginResolver {
       const descTag = event.tags.find((t) => t[0] === "description")?.[1] ||
                       event.tags.find((t) => t[0] === "about")?.[1] ||
                       "";
-      let iconTag = event.tags.find((t) => t[0] === "icon" || t[0] === "image")?.[1] || "";
-      if (!iconTag || iconTag === "globe") {
-        const idLower = (dTag || event.id).toLowerCase();
-        const nameLower = (nameTag || "").toLowerCase();
-        if (idLower.includes("weather") || nameLower.includes("weather")) {
-          iconTag = "sun";
-        } else if (idLower.includes("starbright") || nameLower.includes("starbright")) {
-          iconTag = "✨";
-        } else {
-          iconTag = "globe";
-        }
-      }
+      const iconTag = NostrPluginResolver.detectPluginIcon(event, scriptContent);
       const slotTags = event.tags.filter((t) => t[0] === "slot").map((t) => t[1]);
       const permTags = event.tags.filter((t) => t[0] === "permission").map((t) => t[1]);
 
@@ -280,6 +269,14 @@ export class NostrPluginResolver {
 
     // Detect sub-views and routes from Nostr event tags and HTML/manifest
     manifest.views = NostrPluginResolver.detectPluginViews(event, scriptContent);
+
+    // Refine icon from HTML/manifest if not specified in event tags
+    if (!manifest.icon || manifest.icon === "widgets" || manifest.icon === "globe") {
+      const detectedIcon = NostrPluginResolver.detectPluginIcon(event, scriptContent);
+      if (detectedIcon && detectedIcon !== "widgets") {
+        manifest.icon = detectedIcon;
+      }
+    }
 
     const naddr = WebCryptoKeystore.toNaddr({
       identifier: manifest.id,
@@ -394,6 +391,59 @@ export class NostrPluginResolver {
     }
 
     return Array.from(viewsMap.values());
+  }
+
+  /**
+   * Discovers the app icon declared by an nsite without hardcoding or guesswork:
+   * - Tier 1: Nostr-native event tag (["icon", "<id|svg|url>"] or ["image", "..."])
+   * - Tier 2: HTML standard <meta name="icon" content="..."> / <meta name="app-icon" content="...">
+   * - Tier 3: HTML standard <link rel="icon" href="..."> / <link rel="shortcut icon" href="...">
+   * - Tier 4: Embedded Web App Manifest / JSON ("icon": "..." or "icons": [...])
+   * Default fallback is "widgets" if completely unspecified.
+   */
+  static detectPluginIcon(event?: NostrEvent | null, htmlOrScript?: string | null): string {
+    // Tier 1: Nostr-Native Event Tags
+    if (event && Array.isArray(event.tags)) {
+      const iconTag = event.tags.find((t) => t[0] === "icon" || t[0] === "image")?.[1];
+      if (iconTag && iconTag.trim() && iconTag.trim() !== "globe") {
+        return iconTag.trim();
+      }
+    }
+
+    // Tier 2 & 3: Standard HTML metadata
+    if (htmlOrScript && typeof htmlOrScript === "string") {
+      const metaIconMatch =
+        htmlOrScript.match(/<meta\s+name=["'](?:icon|app-icon)["']\s+content=["']([^"']+)["']/i) ||
+        htmlOrScript.match(/<meta\s+content=["']([^"']+)["']\s+name=["'](?:icon|app-icon)["']/i);
+      if (metaIconMatch && metaIconMatch[1]?.trim()) {
+        return metaIconMatch[1].trim();
+      }
+
+      const linkIconMatch =
+        htmlOrScript.match(/<link\s+[^>]*?rel=["'](?:shortcut\s+)?icon["'][^>]*?href=["']([^"']+)["']/i) ||
+        htmlOrScript.match(/<link\s+[^>]*?href=["']([^"']+)["'][^>]*?rel=["'](?:shortcut\s+)?icon["']/i);
+      if (linkIconMatch && linkIconMatch[1]?.trim()) {
+        const href = linkIconMatch[1].trim();
+        // If it's a simple identifier or SVG/URL, return it
+        if (/^[a-z0-9_-]+$/i.test(href)) {
+          return href;
+        }
+      }
+
+      // Tier 4: Web App Manifest
+      const iconManifestMatch = htmlOrScript.match(/"icon"\s*:\s*["']([^"']+)["']/i);
+      if (iconManifestMatch && iconManifestMatch[1]?.trim()) {
+        return iconManifestMatch[1].trim();
+      }
+    }
+
+    // If Nostr event tag had a fallback value (like "globe"), use it
+    if (event && Array.isArray(event.tags)) {
+      const iconTag = event.tags.find((t) => t[0] === "icon" || t[0] === "image")?.[1];
+      if (iconTag && iconTag.trim()) return iconTag.trim();
+    }
+
+    return "widgets";
   }
 
   /**

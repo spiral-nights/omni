@@ -395,14 +395,7 @@ export abstract class BaseShell implements OmniShellHost {
       name = "Profiles";
     }
     const placements = this.getPluginPlacements(p);
-    const defaultWeatherOrStar =
-      (p.id.toLowerCase().includes("weather") || (name && name.toLowerCase().includes("weather"))) ? "sun" :
-      (p.id.toLowerCase().includes("starbright") || (name && name.toLowerCase().includes("starbright"))) ? "✨" : null;
-
-    let icon = p.icon || p.manifest?.icon || defaultWeatherOrStar || (placements.length === 0 ? "widgets" : (placements[0]?.viewport === "sidebar" ? "widgets" : "feed"));
-    if (defaultWeatherOrStar && (icon === "widgets" || icon === "globe" || icon === "apps")) {
-      icon = defaultWeatherOrStar;
-    }
+    let icon = p.icon || p.manifest?.icon || (placements.length === 0 ? "widgets" : (placements[0]?.viewport === "sidebar" ? "widgets" : "feed"));
 
     if (placements.length === 0) {
       return {
@@ -1689,10 +1682,12 @@ export abstract class BaseShell implements OmniShellHost {
       const titleMatch = trimmed.match(/<title>([^<]+)<\/title>/i);
       const title = titleMatch ? titleMatch[1].trim() : "Custom HTML App";
       customViews = NostrPluginResolver.detectPluginViews(null, scriptContent);
+      const detectedIcon = NostrPluginResolver.detectPluginIcon(null, scriptContent);
       manifest = {
         id: `custom-app-${Date.now()}`,
         name: title,
         version: "1.0.0",
+        icon: detectedIcon,
         entry: "index.html",
         components: [{ id: "main", slot: "main", title }],
         views: customViews

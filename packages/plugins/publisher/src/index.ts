@@ -1035,9 +1035,20 @@ function mountPublisherStudio(root: HTMLElement) {
       detectedDesc = descMatch[1].trim().slice(0, 300);
     }
 
-    const iconMetaMatch = baseHtml.match(/<meta\s+name=["']icon["']\s+content=["']([^"']+)["']/i);
-    if (iconMetaMatch && (!detectedIcon || detectedIcon === "globe")) {
+    const iconMetaMatch =
+      baseHtml.match(/<meta\s+name=["'](?:icon|app-icon)["']\s+content=["']([^"']+)["']/i) ||
+      baseHtml.match(/<meta\s+content=["']([^"']+)["']\s+name=["'](?:icon|app-icon)["']/i);
+    if (iconMetaMatch && (!detectedIcon || detectedIcon === "globe" || detectedIcon === "widgets")) {
       detectedIcon = iconMetaMatch[1].trim();
+    }
+    const iconLinkMatch =
+      baseHtml.match(/<link\s+[^>]*?rel=["'](?:shortcut\s+)?icon["'][^>]*?href=["']([^"']+)["']/i) ||
+      baseHtml.match(/<link\s+[^>]*?href=["']([^"']+)["'][^>]*?rel=["'](?:shortcut\s+)?icon["']/i);
+    if (iconLinkMatch && (!detectedIcon || detectedIcon === "globe" || detectedIcon === "widgets")) {
+      const href = iconLinkMatch[1].trim();
+      if (!href.startsWith("http") && !href.startsWith("/") && !href.startsWith(".")) {
+        detectedIcon = href;
+      }
     }
 
     appName = detectedName || "Custom Nsite";
@@ -1051,14 +1062,7 @@ function mountPublisherStudio(root: HTMLElement) {
     appVersion = detectedVer;
     appDescription = (detectedDesc || `Packaged nsite (${fileEntries.length} files).`).slice(0, 300);
 
-    if (!detectedIcon || detectedIcon === "globe") {
-      if (appId.toLowerCase().includes("weather") || appName.toLowerCase().includes("weather")) {
-        detectedIcon = "sun";
-      } else if (appId.toLowerCase().includes("starbright") || appName.toLowerCase().includes("starbright")) {
-        detectedIcon = "✨";
-      }
-    }
-    appIcon = detectedIcon;
+    appIcon = detectedIcon || "widgets";
     appViews = detectedViews;
 
     rawEntryHtmlOutput = baseHtml;
@@ -1226,16 +1230,7 @@ function mountPublisherStudio(root: HTMLElement) {
               const nameTag = event.tags.find((t: string[]) => t[0] === "name" || t[0] === "title")?.[1] || dTag;
               const verTag = event.tags.find((t: string[]) => t[0] === "version")?.[1] || "1.0.0";
               const descTag = event.tags.find((t: string[]) => t[0] === "description")?.[1] || "";
-              let iconTag = event.tags.find((t: string[]) => t[0] === "icon")?.[1] || "";
-              if (!iconTag || iconTag === "globe") {
-                if (dTag.toLowerCase().includes("weather") || nameTag.toLowerCase().includes("weather")) {
-                  iconTag = "sun";
-                } else if (dTag.toLowerCase().includes("starbright") || nameTag.toLowerCase().includes("starbright")) {
-                  iconTag = "✨";
-                } else {
-                  iconTag = "globe";
-                }
-              }
+              const iconTag = event.tags.find((t: string[]) => t[0] === "icon" || t[0] === "image")?.[1] || "widgets";
               const fTags = event.tags
                 .filter((t: string[]) => t[0] === "f" && t.length >= 3)
                 .map((t: string[]) => ({ path: t[1], sha256: t[2], mimeType: t[3] || "text/html" }));
@@ -1506,7 +1501,7 @@ function mountPublisherStudio(root: HTMLElement) {
         identifier: cleanId,
         pubkey: signedEvent.pubkey,
         kind: 35129,
-        relays: ["wss://relay.damus.io"]
+        relays: skipBlossom ? [] : ["wss://relay.damus.io"]
       });
 
       const record: PublishedAppRecord = {
@@ -1514,7 +1509,7 @@ function mountPublisherStudio(root: HTMLElement) {
         name: cleanName,
         version: cleanVer,
         description: cleanDesc,
-        icon: appIcon || "globe",
+        icon: appIcon || "widgets",
         naddr,
         eventId: signedEvent.id,
         pubkey: signedEvent.pubkey,

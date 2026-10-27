@@ -338,15 +338,10 @@ export function renderPluginIcon(
 ): string {
   let iconValue = (rawIcon || "").trim();
 
-  // If missing or generic, check if the plugin identifier suggests starbright or weather
+  // If missing or generic, check if the plugin identifier suggests starbright
   if (!iconValue || iconValue === "apps" || iconValue === "widgets" || iconValue === "globe") {
     if (pluginIdentifier && pluginIdentifier.toLowerCase().includes("starbright")) {
       iconValue = "✨";
-    } else if (
-      pluginIdentifier &&
-      (pluginIdentifier.toLowerCase().includes("weather") || pluginIdentifier.toLowerCase().includes("forecast"))
-    ) {
-      iconValue = "sun";
     }
   }
 

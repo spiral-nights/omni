@@ -206,5 +206,45 @@ describe("NIP-19 naddr Codec & NIP-5A Nostr Plugin Resolver", () => {
     expect(viewsFromHtml.find((v) => v.id === "settings")?.title).toBe("Custom Settings");
     expect(viewsFromHtml.find((v) => v.id === "dashboard")?.path).toBe("?view=dashboard");
   });
+
+  it("extracts plugin icon directly from standard HTML metadata without hardcoded heuristics", () => {
+    // 1. Meta tag icon
+    const htmlWithMetaIcon = `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="icon" content="sun" />
+  <title>App</title>
+</head>
+<body><h1>App</h1></body>
+</html>`;
+    expect(NostrPluginResolver.detectPluginIcon(null, htmlWithMetaIcon)).toBe("sun");
+
+    // 2. Link rel="icon"
+    const htmlWithLinkIcon = `<!DOCTYPE html>
+<html>
+<head>
+  <link rel="icon" href="compass" />
+  <title>App</title>
+</head>
+<body><h1>App</h1></body>
+</html>`;
+    expect(NostrPluginResolver.detectPluginIcon(null, htmlWithLinkIcon)).toBe("compass");
+
+    // 3. Nostr event tag
+    const eventWithIconTag = {
+      id: "abc",
+      pubkey: "11".repeat(32),
+      created_at: 1000,
+      kind: NSITE_MANIFEST_KIND,
+      tags: [["d", "my-app"], ["icon", "umbrella"]],
+      content: "",
+      sig: "def"
+    };
+    expect(NostrPluginResolver.detectPluginIcon(eventWithIconTag as any, "")).toBe("umbrella");
+
+    // 4. Default fallback when unspecified
+    const htmlWithoutIcon = `<!DOCTYPE html><html><head><title>App</title></head><body></body></html>`;
+    expect(NostrPluginResolver.detectPluginIcon(null, htmlWithoutIcon)).toBe("widgets");
+  });
 });
 
