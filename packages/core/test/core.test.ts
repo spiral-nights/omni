@@ -266,6 +266,22 @@ describe("CapabilityStore & AclEngine", () => {
     const denied = await acl.checkPermission("test.plugin", "nostr:write");
     expect(denied).toBe(false);
   });
+
+  it("handles geolocation permission check and toggling per plugin", async () => {
+    const capStore = new CapabilityStore("test_geo_grants");
+    const acl = new AclEngine(capStore);
+
+    // Initial check without grant
+    expect(capStore.getGrant("weather.plugin", "system:geolocation")).toBeNull();
+
+    // Grant geolocation
+    capStore.setGrant("weather.plugin", "system:geolocation", "always");
+    expect(await acl.checkPermission("weather.plugin", "system:geolocation")).toBe(true);
+
+    // Revoke/deny geolocation
+    capStore.setGrant("weather.plugin", "system:geolocation", "deny");
+    expect(await acl.checkPermission("weather.plugin", "system:geolocation")).toBe(false);
+  });
 });
 
 describe("OmniKernel Profile Management", () => {

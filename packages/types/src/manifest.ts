@@ -44,7 +44,8 @@ export const ManifestPermissionsSchema = z.object({
   relays: z.object({
     manage: z.boolean().optional(),
     read: z.boolean().optional()
-  }).optional()
+  }).optional(),
+  geolocation: z.boolean().optional()
 }).default({});
 export type ManifestPermissions = z.infer<typeof ManifestPermissionsSchema>;
 

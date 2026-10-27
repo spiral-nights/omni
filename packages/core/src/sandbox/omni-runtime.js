@@ -260,6 +260,13 @@
             pendingIntentInvocations.get(action).push(data);
           }
         }
+      } else if (msg.method === "app.activate" || msg.method === "app.reset") {
+        try {
+          if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+            window.dispatchEvent(new CustomEvent("omni:activate", { detail: msg.params || {} }));
+            window.dispatchEvent(new CustomEvent("omni:reset", { detail: msg.params || {} }));
+          }
+        } catch (_) {}
       }
     };
   }
@@ -1593,7 +1600,6 @@
     };
 
     // 11. Geolocation API Virtualization Shim
-    const origGeo = navigator.geolocation;
     navigator.geolocation = {
       getCurrentPosition: function(successCallback, errorCallback, options) {
         initPromise.then(() => {
@@ -1606,19 +1612,16 @@
               }
             })
             .catch((err) => {
-              if (origGeo && typeof origGeo.getCurrentPosition === "function") {
-                try {
-                  origGeo.getCurrentPosition(successCallback, errorCallback, options);
-                  return;
-                } catch (_) {}
-              }
               if (typeof errorCallback === "function") {
                 errorCallback({ code: 1, message: err?.message || "Geolocation permission denied" });
               }
             });
         });
       },
-      watchPosition: function() { return 0; },
+      watchPosition: function(successCallback, errorCallback, options) {
+        this.getCurrentPosition(successCallback, errorCallback, options);
+        return 1;
+      },
       clearWatch: function() {}
     };
   }

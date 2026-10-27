@@ -1994,6 +1994,7 @@ export class PanoramaShell extends BaseShell {
     }
 
     this.currentOpenedAppId = pluginId;
+    this.kernel.notifyAppActivated(pluginId, { reset: true });
     const meta = this.getPluginMeta(plugin);
     const titleEl = document.getElementById("panorama-overlay-title");
     if (titleEl) titleEl.textContent = meta.name;
@@ -2109,14 +2110,13 @@ export class PanoramaShell extends BaseShell {
         }
       }
 
-      const activePubkey = localStorage.getItem("omni_active_profile_pubkey") || "";
       await this.kernel.registerPlugin(
         overlayManifest,
         plugin.htmlContent || plugin.scriptContent,
         customSlotContainers,
         {
           instanceId: overlayInstanceKey,
-          route: (plugin.id === "org.omni.plugin.profile-viewer" && activePubkey) ? `?pubkey=${activePubkey}` : "",
+          route: plugin.route || "",
           viewId: "main",
           targetSlot: "main",
           relays: plugin.relays

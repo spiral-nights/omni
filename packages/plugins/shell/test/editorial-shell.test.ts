@@ -550,17 +550,71 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(feedContainer.scrollTop).toBe(0);
     });
 
-    it("allows adding and reassigning viewports for a plugin in Editorial mode", async () => {
+    it("allows adding and reassigning viewports for a plugin in Editorial mode without collapsing viewports section", async () => {
       shell.mount();
       shell.openSettings();
 
       const checklist = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.checklist")!;
+      const toggleBtn = root.querySelector("#btn-toggle-placements-org-omni-plugin-checklist") as HTMLElement | null;
+      toggleBtn?.click();
+      const detailsBefore = root.querySelector("#plugin-details-org-omni-plugin-checklist") as HTMLElement | null;
+      expect(detailsBefore?.style.display).toBe("flex");
+
       const addBtn = root.querySelector("#btn-add-placement-org-omni-plugin-checklist") as HTMLElement | null;
       expect(addBtn).toBeTruthy();
       addBtn?.click();
 
       const placements = shell.getPluginPlacements(checklist);
       expect(placements.length).toBeGreaterThanOrEqual(2);
+
+      // Verify viewports section did NOT collapse after clicking Add Location
+      const detailsAfter = root.querySelector("#plugin-details-org-omni-plugin-checklist") as HTMLElement | null;
+      expect(detailsAfter?.style.display).toBe("flex");
+    });
+
+    it("clears apps search input when navigating to apps page", () => {
+      shell.mount();
+      shell.showAppsIndex();
+
+      const searchInput = root.querySelector("#editorial-apps-search-input") as HTMLInputElement | null;
+      expect(searchInput).toBeTruthy();
+      searchInput!.value = "weather query";
+
+      shell.openApp("org.omni.plugin.feed");
+      expect(shell.activePage).toBe("app");
+
+      shell.showAppsIndex();
+      expect(shell.activePage).toBe("apps");
+      expect(searchInput!.value).toBe("");
+    });
+
+    it("renders permissions section with device location toggle and updates kernel grant", () => {
+      shell.mount();
+      shell.openSettings();
+
+      const toggleBtn = root.querySelector("#btn-toggle-placements-org-omni-plugin-checklist") as HTMLElement | null;
+      toggleBtn?.click();
+
+      const details = root.querySelector("#plugin-details-org-omni-plugin-checklist") as HTMLElement | null;
+      expect(details).toBeTruthy();
+
+      const permSection = details?.querySelector(".plugin-permissions-section");
+      expect(permSection).toBeTruthy();
+      expect(permSection?.textContent).toContain("Device Location (GPS)");
+
+      const gpsToggle = Array.from(permSection?.querySelectorAll("input[type=checkbox]") || []).find((input) => {
+        const text = input.closest("div")?.textContent || "";
+        return text.includes("Device Location (GPS)");
+      }) as HTMLInputElement | undefined;
+
+      expect(gpsToggle).toBeDefined();
+      expect(gpsToggle?.checked).toBe(false);
+
+      gpsToggle?.click();
+      expect(kernel.getPluginPermission("org.omni.plugin.checklist", "system:geolocation")).toBe(true);
+
+      gpsToggle?.click();
+      expect(kernel.getPluginPermission("org.omni.plugin.checklist", "system:geolocation")).toBe(false);
     });
 
     it("collapses viewports section by default and toggles open on click", () => {

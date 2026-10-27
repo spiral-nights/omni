@@ -1912,10 +1912,6 @@ async function mountProfileViewer(root: HTMLElement) {
     activePubkey = pubkey;
     isLoading = true;
 
-    try {
-      localStorage.setItem("omni_active_profile_pubkey", pubkey);
-    } catch (_) {}
-
     if (eoseTimeout) {
       clearTimeout(eoseTimeout);
       eoseTimeout = null;
@@ -2264,11 +2260,19 @@ async function mountProfileViewer(root: HTMLElement) {
     }
   } catch (_) {}
 
-  if (!initialPubkey) {
-    try {
-      initialPubkey = localStorage.getItem("omni_active_profile_pubkey") || "";
-    } catch (_) {}
-  }
+  // Lifecycle listeners to reset state when opened normally
+  window.addEventListener("omni:activate", (e: any) => {
+    if (!e?.detail?.pubkey) {
+      previousTab = null;
+      activeUserPubkey = "";
+      switchTab("my-profile", false);
+    }
+  });
+  window.addEventListener("omni:reset", () => {
+    previousTab = null;
+    activeUserPubkey = "";
+    switchTab("my-profile", false);
+  });
 
   resolveUserPubkey().then((pk) => {
     if (pk) {

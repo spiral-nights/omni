@@ -58,6 +58,18 @@ export class AclEngine {
       return userChoice === "always" || userChoice === "session";
     }
 
+    // Default interactive prompt fallback in browser environment for geolocation
+    if (category === "system:geolocation" || category === "geolocation") {
+      if (typeof window !== "undefined" && typeof window.confirm === "function") {
+        const manifest = this.manifests.get(pluginId);
+        const appName = manifest?.displayName || manifest?.name || pluginId;
+        const granted = window.confirm(`"${appName}" wants to access your device location (GPS). Allow location access?`);
+        const choice: GrantLevel = granted ? "always" : "deny";
+        this.store.setGrant(pluginId, category, choice, scope);
+        return granted;
+      }
+    }
+
     return false;
   }
 

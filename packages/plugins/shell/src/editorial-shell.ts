@@ -10,6 +10,10 @@ import { ICONS, icon, IconName, renderPluginIcon } from "./icons.js";
 import { mountShellStyles, unmountShellStyles } from "./styles/loader.js";
 import { EDITORIAL_SHELL_CSS } from "./styles/editorial-styles.js";
 import { shellRegistry } from "./shell-registry.js";
+import {
+  renderNostrWritePermissionsSection,
+  renderHandledIntentsSection
+} from "./permissions-intents-ui.js";
 
 export type EditorialThemeMode = "light" | "dark" | "system";
 
@@ -65,6 +69,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   private fullscreenFadeTimeout: any = null;
   private boundFullscreenMouseHandler: ((e: MouseEvent) => void) | null = null;
   private boundFullscreenTouchHandler: ((e: TouchEvent) => void) | null = null;
+  private expandedPluginDetails: Set<string> = new Set();
 
   constructor(options: OmniShellOptions) {
     super(options);
@@ -835,14 +840,13 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
                 if (comp.slot) customSlotContainers.set(comp.slot, targetContainer);
               }
             }
-            const activePubkey = typeof localStorage !== "undefined" ? localStorage.getItem("omni_active_profile_pubkey") || "" : "";
             await this.kernel.registerPlugin(
               appManifest,
               plugin.htmlContent || plugin.scriptContent,
               customSlotContainers,
               {
                 instanceId: appInstanceKey,
-                route: (plugin.id === "org.omni.plugin.profile-viewer" && activePubkey) ? `?pubkey=${activePubkey}` : "",
+                route: plugin.route || "",
                 viewId: "main",
                 targetSlot: "main",
                 relays: plugin.relays
@@ -857,6 +861,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       }
     }
 
+    this.kernel.notifyAppActivated(plugin.id, { reset: true });
     this.renderDock();
     this.saveLocalWorkspace();
     this.boundScrollHandler?.();
@@ -905,6 +910,11 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     const mainContent = this.root.querySelector<HTMLElement>(".editorial-main-content");
     if (mainContent) mainContent.scrollTop = 0;
     if (typeof window !== "undefined") window.scrollTo(0, 0);
+
+    const filterInput = this.root.querySelector("#editorial-apps-search-input") as HTMLInputElement | null;
+    if (filterInput) {
+      filterInput.value = "";
+    }
 
     this.renderDock();
     this.renderAppsIndex();
@@ -1555,19 +1565,32 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         this.openUpdatePluginModal(plugin);
       });
 
-      // Collapsible details container (placements, settings, rules) - collapsed by default
+      // Collapsible details container (placements, settings, rules) - remembers expanded state
       const detailsContainer = document.createElement("div");
       detailsContainer.className = "editorial-plugin-details-container";
       detailsContainer.id = `plugin-details-${safeId}`;
-      detailsContainer.style.cssText = "display: none; flex-direction: column; gap: 14px; margin-top: 10px; border-top: 1px solid var(--omni-border-subtle); padding-top: 12px;";
+      const isExpanded = this.expandedPluginDetails.has(plugin.id);
+      detailsContainer.style.cssText = `display: ${isExpanded ? "flex" : "none"}; flex-direction: column; gap: 14px; margin-top: 10px; border-top: 1px solid var(--omni-border-subtle); padding-top: 12px;`;
 
       const togglePlacementsBtn = card.querySelector(`#btn-toggle-placements-${safeId}`) as HTMLElement | null;
-      togglePlacementsBtn?.addEventListener("click", () => {
-        const isHidden = detailsContainer.style.display === "none";
-        detailsContainer.style.display = isHidden ? "flex" : "none";
-        togglePlacementsBtn.textContent = isHidden ? "Close Viewports ▴" : "Configure Viewports ▾";
-        togglePlacementsBtn.classList.toggle("active", isHidden);
-      });
+      if (togglePlacementsBtn) {
+        togglePlacementsBtn.textContent = isExpanded ? "Close Viewports ▴" : "Configure Viewports ▾";
+        togglePlacementsBtn.classList.toggle("active", isExpanded);
+        togglePlacementsBtn.addEventListener("click", () => {
+          const currentlyExpanded = this.expandedPluginDetails.has(plugin.id);
+          if (currentlyExpanded) {
+            this.expandedPluginDetails.delete(plugin.id);
+            detailsContainer.style.display = "none";
+            togglePlacementsBtn.textContent = "Configure Viewports ▾";
+            togglePlacementsBtn.classList.remove("active");
+          } else {
+            this.expandedPluginDetails.add(plugin.id);
+            detailsContainer.style.display = "flex";
+            togglePlacementsBtn.textContent = "Close Viewports ▴";
+            togglePlacementsBtn.classList.add("active");
+          }
+        });
+      }
 
       // 1. Placements & Viewports Section
       const placementsBox = document.createElement("div");
@@ -1587,6 +1610,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       btnAddPlacement.style.cssText = "font-size: 0.68rem; padding: 3px 8px;";
       btnAddPlacement.textContent = "+ Add Location";
       btnAddPlacement.addEventListener("click", async () => {
+        this.expandedPluginDetails.add(plugin.id);
         const currentPlacements = this.getPluginPlacements(plugin);
         const newPl: PluginPlacement = {
           id: `placement-${Date.now()}`,
@@ -1635,6 +1659,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         btnRemovePl.style.cssText = "font-size: 0.65rem; padding: 2px 6px; color: #ff5555; border-color: #552222;";
         btnRemovePl.textContent = placements.length > 1 ? "Remove" : "Unassign";
         btnRemovePl.addEventListener("click", async () => {
+          this.expandedPluginDetails.add(plugin.id);
           plugin.placements = placements.filter((_, idx) => idx !== plIdx);
           if (plugin.placements.length > 0) {
             plugin.viewport = plugin.placements[0].viewport;
@@ -1910,6 +1935,109 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       relayOptionsWrap.appendChild(customCheckboxesContainer);
       relayAccessBox.appendChild(relayOptionsWrap);
       detailsContainer.appendChild(relayAccessBox);
+
+      // 4. Permissions & Capabilities Section
+      const permSection = document.createElement("div");
+      permSection.className = "plugin-permissions-section";
+      permSection.style.cssText = "display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--omni-border-subtle); padding-top: 10px;";
+
+      const permHeader = document.createElement("div");
+      permHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
+
+      const permTitle = document.createElement("span");
+      permTitle.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--omni-text-primary);";
+      permTitle.textContent = "Permissions & Capabilities";
+      permHeader.appendChild(permTitle);
+      permSection.appendChild(permHeader);
+
+      const permList = document.createElement("div");
+      permList.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 4px;";
+
+      const declaredPerms: Array<{ key: string; name: string; desc: string }> = [
+        {
+          key: "system:geolocation",
+          name: "Device Location (GPS)",
+          desc: "Allow this app to access your device GPS coordinates for local weather and location features"
+        },
+        {
+          key: "nostr:read",
+          name: "Nostr Subscriptions (Read)",
+          desc: "Subscribe to public notes, profiles, and live timeline streams"
+        }
+      ];
+
+      if (
+        synthManifest.permissions?.relays ||
+        this.kernel.getPluginPermission(plugin.id, "relays:manage") ||
+        plugin.id === "org.omni.plugin.relays"
+      ) {
+        declaredPerms.push({
+          key: "relays:manage",
+          name: "Relay Management (relays:manage)",
+          desc: "Add, remove, and monitor connected WebSocket relays in the host relay pool"
+        });
+      }
+
+      for (const perm of declaredPerms) {
+        const row = document.createElement("div");
+        row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 8px 10px;";
+
+        const info = document.createElement("div");
+        info.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+
+        const pName = document.createElement("strong");
+        pName.style.cssText = "font-size: 0.78rem; font-weight: 600; color: var(--omni-text-primary);";
+        pName.textContent = perm.name;
+
+        const pDesc = document.createElement("span");
+        pDesc.style.cssText = "font-size: 0.7rem; color: var(--omni-text-muted); line-height: 1.3;";
+        pDesc.textContent = perm.desc;
+
+        info.appendChild(pName);
+        info.appendChild(pDesc);
+
+        const toggle = document.createElement("label");
+        toggle.className = "omni-toggle";
+
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = this.kernel.getPluginPermission(plugin.id, perm.key);
+        input.addEventListener("change", () => {
+          this.kernel.setPluginPermission(plugin.id, perm.key, input.checked);
+        });
+
+        const slider = document.createElement("span");
+        slider.className = "toggle-slider";
+
+        toggle.appendChild(input);
+        toggle.appendChild(slider);
+
+        row.appendChild(info);
+        row.appendChild(toggle);
+        permList.appendChild(row);
+      }
+
+      permSection.appendChild(permList);
+
+      // Collapsible Nostr Write Permissions
+      const writeSection = renderNostrWritePermissionsSection({
+        kernel: this.kernel,
+        pluginId: plugin.id,
+        theme: "classic",
+        onUpdate: () => this.saveLocalWorkspace()
+      });
+      permSection.appendChild(writeSection);
+
+      // Handled Intents Section
+      const intentsSection = renderHandledIntentsSection({
+        kernel: this.kernel,
+        plugin,
+        theme: "classic",
+        onUpdate: () => this.saveLocalWorkspace()
+      });
+      permSection.appendChild(intentsSection);
+
+      detailsContainer.appendChild(permSection);
 
       card.appendChild(detailsContainer);
       container.appendChild(card);

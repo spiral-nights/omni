@@ -720,30 +720,63 @@ export class JsonRpcDispatcher {
       }
 
       case "system.getGeolocation": {
+        const allowed = await this.ctx.aclEngine.checkPermission(
+          this.ctx.pluginId,
+          "system:geolocation"
+        );
+        if (!allowed) {
+          throw {
+            code: JsonRpcErrorCode.PERMISSION_DENIED,
+            message: `Location access denied for "${this.ctx.pluginId}". Enable GPS in Omni Settings -> Plugins.`
+          };
+        }
+
         if (typeof navigator === "undefined" || !navigator.geolocation) {
           throw { code: JsonRpcErrorCode.INTERNAL_ERROR, message: "Geolocation not supported by host environment" };
         }
+
         return new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              resolve({
-                coords: {
-                  latitude: pos.coords.latitude,
-                  longitude: pos.coords.longitude,
-                  accuracy: pos.coords.accuracy,
-                  altitude: pos.coords.altitude,
-                  altitudeAccuracy: pos.coords.altitudeAccuracy,
-                  heading: pos.coords.heading,
-                  speed: pos.coords.speed
-                },
-                timestamp: pos.timestamp
-              });
-            },
-            (err) => {
-              reject({ code: JsonRpcErrorCode.INTERNAL_ERROR, message: err.message || "Geolocation permission denied" });
-            },
-            params || { timeout: 10000, enableHighAccuracy: true }
-          );
+          const timeout = typeof params?.timeout === "number" ? Math.max(params.timeout, 15000) : 15000;
+          const highAccuracy = params?.enableHighAccuracy ?? true;
+
+          const requestCoords = (useHighAccuracy: boolean) => {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                resolve({
+                  coords: {
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy,
+                    altitude: pos.coords.altitude,
+                    altitudeAccuracy: pos.coords.altitudeAccuracy,
+                    heading: pos.coords.heading,
+                    speed: pos.coords.speed
+                  },
+                  timestamp: pos.timestamp
+                });
+              },
+              (err) => {
+                // If high accuracy failed (e.g. timeout or unavailable on Linux/desktop without GPS hardware),
+                // automatically retry with standard accuracy.
+                if (useHighAccuracy && (err.code === 2 || err.code === 3)) {
+                  requestCoords(false);
+                  return;
+                }
+                let msg = err.message || "Geolocation permission denied";
+                if (err.code === 1) {
+                  msg = "Browser location permission denied. Check your browser address bar location settings.";
+                } else if (err.code === 2) {
+                  msg = "Location unavailable. Please search by city or zip code.";
+                } else if (err.code === 3) {
+                  msg = "Location request timed out. Please try again or search by city.";
+                }
+                reject({ code: JsonRpcErrorCode.INTERNAL_ERROR, message: msg });
+              },
+              { enableHighAccuracy: useHighAccuracy, timeout, maximumAge: 60000 }
+            );
+          };
+
+          requestCoords(highAccuracy);
         });
       }
 

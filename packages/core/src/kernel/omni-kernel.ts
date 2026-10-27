@@ -170,6 +170,11 @@ export class OmniKernel {
               this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
             }
           }
+          if (manifest.permissions?.geolocation) {
+            if (this.capabilityStore.getGrant(manifest.id, "system:geolocation") === null) {
+              this.capabilityStore.setGrant(manifest.id, "system:geolocation", "always");
+            }
+          }
         } else if (manifest.id === "org.omni.plugin.relays" || manifest.trusted || manifest.id.startsWith("org.omni.")) {
           if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null && manifest.id === "org.omni.plugin.relays") {
             this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
@@ -278,6 +283,10 @@ export class OmniKernel {
       }
       this.pendingNotifications.get(pluginId)!.push({ method, params });
     }
+  }
+
+  notifyAppActivated(pluginId: string, params?: any): void {
+    this.notifyPlugin(pluginId, "app.activate", params || {});
   }
 
   reparentPluginComponent(

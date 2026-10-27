@@ -486,4 +486,27 @@ describe("People plugin (profile, follows, mutes)", () => {
     const paneProfile = peopleRoot().querySelector<HTMLElement>(".pane-profile")!;
     expect(paneProfile.style.display).not.toBe("none");
   });
+
+  it("resets to My Profile tab when omni:activate event is dispatched without a specific pubkey", async () => {
+    await flush();
+
+    // First view another user's profile
+    const intentHandler = (window as any).omni.intents.handle.mock.calls.find(
+      (c: any[]) => c[0] === "view_profile"
+    )?.[1];
+    intentHandler({ pubkey: friendPubkey });
+    await flush();
+
+    const btnUserProfile = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-user-profile")!;
+    expect(btnUserProfile.classList.contains("active")).toBe(true);
+
+    // Simulate returning to the app: omni:activate event without pubkey
+    window.dispatchEvent(new CustomEvent("omni:activate", { detail: { reset: true } }));
+    await flush();
+
+    const btnMyProfile = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-my-profile")!;
+    expect(btnMyProfile.classList.contains("active")).toBe(true);
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-my-profile")!.style.display).not.toBe("none");
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-user-profile")!.style.display).toBe("none");
+  });
 });

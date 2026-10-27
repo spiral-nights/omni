@@ -450,6 +450,8 @@ export class OmniShell extends BaseShell {
     if (page === "apps") {
       this.pageApps?.classList.add("active");
       this.dockBtnApps?.classList.add("active");
+      const searchInput = document.getElementById("apps-search-input") as HTMLInputElement | null;
+      if (searchInput) searchInput.value = "";
       this.renderAppsLauncher();
     } else if (page === "widgets" || page === "dashboard") {
       this.pageWidgets.classList.add("active");
@@ -501,14 +503,13 @@ export class OmniShell extends BaseShell {
               }
             }
 
-            const activePubkey = localStorage.getItem("omni_active_profile_pubkey") || "";
             this.kernel.registerPlugin(
               appManifest,
               plugin.htmlContent || plugin.scriptContent,
               customSlotContainers,
               {
                 instanceId: appInstanceKey,
-                route: (plugin.id === "org.omni.plugin.profile-viewer" && activePubkey) ? `?pubkey=${activePubkey}` : "",
+                route: plugin.route || "",
                 viewId: "main",
                 targetSlot: "main",
                 relays: plugin.relays
@@ -525,6 +526,11 @@ export class OmniShell extends BaseShell {
         targetPage.classList.add("active");
       } else if (this.pageFeed) {
         this.pageFeed.classList.add("active");
+      }
+
+      const activePlugin = this.installedPlugins.find((p) => p.id === page);
+      if (activePlugin) {
+        this.kernel.notifyAppActivated(activePlugin.id, { reset: true });
       }
 
       const targetBtn = this.dockSlot?.querySelector<HTMLElement>(`[data-plugin-id="${page}"]`);
@@ -1689,6 +1695,11 @@ export class OmniShell extends BaseShell {
           desc: "Allow cross-plugin intent calls and events"
         });
       }
+      declaredPerms.push({
+        key: "system:geolocation",
+        name: "Device Location (GPS)",
+        desc: "Allow this app to access your device GPS coordinates for local weather and location features"
+      });
       declaredPerms.push({
         key: "nostr:read",
         name: "Nostr Subscriptions (Read)",
