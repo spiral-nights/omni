@@ -158,7 +158,18 @@ export class NostrPluginResolver {
       const descTag = event.tags.find((t) => t[0] === "description")?.[1] ||
                       event.tags.find((t) => t[0] === "about")?.[1] ||
                       "";
-      const iconTag = event.tags.find((t) => t[0] === "icon" || t[0] === "image")?.[1] || "globe";
+      let iconTag = event.tags.find((t) => t[0] === "icon" || t[0] === "image")?.[1] || "";
+      if (!iconTag || iconTag === "globe") {
+        const idLower = (dTag || event.id).toLowerCase();
+        const nameLower = (nameTag || "").toLowerCase();
+        if (idLower.includes("weather") || nameLower.includes("weather")) {
+          iconTag = "sun";
+        } else if (idLower.includes("starbright") || nameLower.includes("starbright")) {
+          iconTag = "✨";
+        } else {
+          iconTag = "globe";
+        }
+      }
       const slotTags = event.tags.filter((t) => t[0] === "slot").map((t) => t[1]);
       const permTags = event.tags.filter((t) => t[0] === "permission").map((t) => t[1]);
 

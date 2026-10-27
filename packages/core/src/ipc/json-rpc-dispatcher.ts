@@ -258,6 +258,16 @@ export class JsonRpcDispatcher {
 
         const signed = await this.ctx.keystore.signEvent(draft);
         await this.ctx.eventStore.saveEvent(signed);
+
+        if (params?.localOnly === true) {
+          return {
+            id: signed.id,
+            pubkey: signed.pubkey,
+            sig: signed.sig,
+            relays: []
+          };
+        }
+
         const acceptedRelays = await this.ctx.relayPool.publish(signed, this.getAllowedRelays());
 
         return {

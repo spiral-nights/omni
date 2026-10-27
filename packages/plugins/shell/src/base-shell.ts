@@ -395,6 +395,15 @@ export abstract class BaseShell implements OmniShellHost {
       name = "Profiles";
     }
     const placements = this.getPluginPlacements(p);
+    const defaultWeatherOrStar =
+      (p.id.toLowerCase().includes("weather") || (name && name.toLowerCase().includes("weather"))) ? "sun" :
+      (p.id.toLowerCase().includes("starbright") || (name && name.toLowerCase().includes("starbright"))) ? "✨" : null;
+
+    let icon = p.icon || p.manifest?.icon || defaultWeatherOrStar || (placements.length === 0 ? "widgets" : (placements[0]?.viewport === "sidebar" ? "widgets" : "feed"));
+    if (defaultWeatherOrStar && (icon === "widgets" || icon === "globe" || icon === "apps")) {
+      icon = defaultWeatherOrStar;
+    }
+
     if (placements.length === 0) {
       return {
         id: p.id,
@@ -402,7 +411,7 @@ export abstract class BaseShell implements OmniShellHost {
         displayName,
         version: p.version || p.manifest?.version || "1.0.0",
         description: p.description || p.manifest?.description || "",
-        icon: p.icon || p.manifest?.icon || "widgets",
+        icon,
         viewport: "unassigned"
       };
     }
@@ -414,7 +423,7 @@ export abstract class BaseShell implements OmniShellHost {
       displayName,
       version: p.version || p.manifest?.version || "1.0.0",
       description: p.description || p.manifest?.description || "",
-      icon: p.icon || p.manifest?.icon || (placements[0]?.viewport === "sidebar" ? "widgets" : "feed"),
+      icon,
       viewport: placements[0]?.viewport || layoutSlot || "unassigned"
     };
   }

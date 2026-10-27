@@ -350,10 +350,11 @@
             await callRpc("nostr.unsubscribe", { subscriptionId: subId });
           } else if (type === "EVENT") {
             const event = frame[1];
+            const isLocalOnly = this.url.includes("local") || this.url.includes("offline");
             try {
-              await callRpc("nostr.publish", { event });
+              await callRpc("nostr.publish", { event, localOnly: isLocalOnly });
               const okEv = new MessageEvent("message", {
-                data: JSON.stringify(["OK", event?.id || "", true, ""])
+                data: JSON.stringify(["OK", event?.id || "", true, isLocalOnly ? "saved-locally" : ""])
               });
               if (typeof this.onmessage === "function") this.onmessage(okEv);
               this.dispatchEvent(okEv);

@@ -173,6 +173,60 @@ export class LocalEventStore {
     });
   }
 
+  private async processDeletionEvent(deletionEvent: NostrEvent): Promise<void> {
+    if (!this.db || deletionEvent.kind !== 5) return;
+
+    return new Promise((resolve) => {
+      try {
+        const tx = this.db!.transaction(["events", "event_tags"], "readwrite");
+        const store = tx.objectStore("events");
+        const tagStore = tx.objectStore("event_tags");
+        const pubkeyIndex = store.index("pubkey");
+        const req = pubkeyIndex.openCursor(IDBKeyRange.only(deletionEvent.pubkey));
+
+        const targetEventIds = new Set(
+          deletionEvent.tags.filter((t) => t[0] === "e" && t[1]).map((t) => t[1])
+        );
+        const targetCoordinates = new Set(
+          deletionEvent.tags.filter((t) => t[0] === "a" && t[1]).map((t) => t[1])
+        );
+
+        req.onsuccess = (e) => {
+          const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+          if (!cursor) return;
+
+          const existing = cursor.value as NostrEvent;
+          let shouldDelete = false;
+
+          if (targetEventIds.has(existing.id)) {
+            shouldDelete = true;
+          }
+
+          if (!shouldDelete && targetCoordinates.size > 0 && this.isParameterizedReplaceable(existing)) {
+            const existingDTag = existing.tags.find((t) => t[0] === "d")?.[1] || "";
+            const coord = `${existing.kind}:${existing.pubkey}:${existingDTag}`;
+            if (targetCoordinates.has(coord)) {
+              shouldDelete = true;
+            }
+          }
+
+          if (shouldDelete) {
+            cursor.delete();
+            this.deleteTagsForEvent(tagStore, existing.id);
+            this.memoryCache.delete(existing.id);
+          }
+
+          cursor.continue();
+        };
+
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      } catch {
+        resolve();
+      }
+    });
+  }
+
   private schedulePrune(): void {
     if (this.pruneScheduled) return;
     this.pruneScheduled = true;
@@ -265,6 +319,11 @@ export class LocalEventStore {
         };
 
         tx.oncomplete = () => {
+          // If NIP-09 event deletion (kind 5), remove matching authored events from storage
+          if (event.kind === 5) {
+            this.processDeletionEvent(event).catch(() => {});
+          }
+
           // If replaceable or parameterized-replaceable, clean older versions
           if (this.isReplaceable(event) || this.isParameterizedReplaceable(event)) {
             this.cleanOlderReplaceable(event).catch(() => {});

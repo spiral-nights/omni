@@ -528,6 +528,7 @@ const DEFAULT_SERVERS = [
 
 const STORAGE_KEY_SERVERS = "omni_publisher_blossom_servers";
 const STORAGE_KEY_PUBLISHED = "omni_publisher_published_apps";
+const STORAGE_KEY_DELETED = "omni_publisher_deleted_apps_v1";
 const STORAGE_KEY_PREFS = "omni_publisher_preferences";
 
 function getMimeInfo(filePath: string): { mime: string; isText: boolean } {
@@ -802,6 +803,21 @@ function savePublishedApps(apps: PublishedAppRecord[]): void {
   } catch {}
 }
 
+function loadDeletedAppIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DELETED);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDeletedAppIds(set: Set<string>): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
 function getCurrentRouteView(): string {
   try {
     const search = window.location.search || (window as any).__OMNI_SEARCH__ || "";
@@ -822,7 +838,8 @@ function mountPublisherStudio(root: HTMLElement) {
   else if (getCurrentRouteView() === "published") activeTab = "published";
 
   let servers = loadConfiguredServers();
-  let publishedApps = loadPublishedApps();
+  const deletedAppIds = loadDeletedAppIds();
+  let publishedApps = loadPublishedApps().filter((p) => !deletedAppIds.has(p.id) && !deletedAppIds.has(p.eventId || ""));
 
   // Extracted zip state
   let extractedFiles: StudioFileEntry[] = [];
@@ -955,6 +972,11 @@ function mountPublisherStudio(root: HTMLElement) {
       detectedDesc = descMatch[1].trim().slice(0, 300);
     }
 
+    const iconMetaMatch = baseHtml.match(/<meta\s+name=["']icon["']\s+content=["']([^"']+)["']/i);
+    if (iconMetaMatch && (!detectedIcon || detectedIcon === "globe")) {
+      detectedIcon = iconMetaMatch[1].trim();
+    }
+
     appName = detectedName || "Custom Nsite";
     appId =
       detectedId ||
@@ -965,6 +987,14 @@ function mountPublisherStudio(root: HTMLElement) {
           .replace(/^-+|-+$/g, "");
     appVersion = detectedVer;
     appDescription = (detectedDesc || `Packaged nsite (${fileEntries.length} files).`).slice(0, 300);
+
+    if (!detectedIcon || detectedIcon === "globe") {
+      if (appId.toLowerCase().includes("weather") || appName.toLowerCase().includes("weather")) {
+        detectedIcon = "sun";
+      } else if (appId.toLowerCase().includes("starbright") || appName.toLowerCase().includes("starbright")) {
+        detectedIcon = "✨";
+      }
+    }
     appIcon = detectedIcon;
     appViews = detectedViews;
 
@@ -1079,14 +1109,41 @@ function mountPublisherStudio(root: HTMLElement) {
       const ws = new WebSocket("wss://relay.damus.io");
       const subId = `pub-studio-${Date.now()}`;
       ws.onopen = () => {
-        ws.send(JSON.stringify(["REQ", subId, { kinds: [35129, 10063], authors: [myPubkey], limit: 50 }]));
+        ws.send(JSON.stringify(["REQ", subId, { kinds: [5, 35129, 10063], authors: [myPubkey], limit: 50 }]));
       };
       ws.onmessage = (ev) => {
         try {
           const frame = JSON.parse(ev.data);
           if (frame[0] === "EVENT" && frame[2]) {
             const event = frame[2];
-            if (event.kind === 10063 && Array.isArray(event.tags)) {
+            // Process NIP-09 deletion requests (kind: 5)
+            if (event.kind === 5 && Array.isArray(event.tags)) {
+              let updated = false;
+              for (const t of event.tags) {
+                if (t[0] === "a" && t[1]?.startsWith("35129:")) {
+                  const parts = t[1].split(":");
+                  if (parts.length >= 3) {
+                    const deletedId = parts.slice(2).join(":");
+                    if (!deletedAppIds.has(deletedId)) {
+                      deletedAppIds.add(deletedId);
+                      updated = true;
+                    }
+                  }
+                }
+                if (t[0] === "e" && t[1]) {
+                  if (!deletedAppIds.has(t[1])) {
+                    deletedAppIds.add(t[1]);
+                    updated = true;
+                  }
+                }
+              }
+              if (updated) {
+                saveDeletedAppIds(deletedAppIds);
+                publishedApps = publishedApps.filter((p) => !deletedAppIds.has(p.id) && !deletedAppIds.has(p.eventId || ""));
+                savePublishedApps(publishedApps);
+                if (activeTab === "published") renderStudio();
+              }
+            } else if (event.kind === 10063 && Array.isArray(event.tags)) {
               const relayServers = event.tags
                 .filter((t: string[]) => t[0] === "server" && t[1])
                 .map((t: string[]) => t[1]);
@@ -1100,10 +1157,22 @@ function mountPublisherStudio(root: HTMLElement) {
               }
             } else if (event.kind === 35129 && Array.isArray(event.tags)) {
               const dTag = event.tags.find((t: string[]) => t[0] === "d")?.[1] || event.id;
+              if (deletedAppIds.has(dTag) || deletedAppIds.has(event.id)) {
+                return;
+              }
               const nameTag = event.tags.find((t: string[]) => t[0] === "name" || t[0] === "title")?.[1] || dTag;
               const verTag = event.tags.find((t: string[]) => t[0] === "version")?.[1] || "1.0.0";
               const descTag = event.tags.find((t: string[]) => t[0] === "description")?.[1] || "";
-              const iconTag = event.tags.find((t: string[]) => t[0] === "icon")?.[1] || "globe";
+              let iconTag = event.tags.find((t: string[]) => t[0] === "icon")?.[1] || "";
+              if (!iconTag || iconTag === "globe") {
+                if (dTag.toLowerCase().includes("weather") || nameTag.toLowerCase().includes("weather")) {
+                  iconTag = "sun";
+                } else if (dTag.toLowerCase().includes("starbright") || nameTag.toLowerCase().includes("starbright")) {
+                  iconTag = "✨";
+                } else {
+                  iconTag = "globe";
+                }
+              }
               const fTags = event.tags
                 .filter((t: string[]) => t[0] === "f" && t.length >= 3)
                 .map((t: string[]) => ({ path: t[1], sha256: t[2], mimeType: t[3] || "text/html" }));
@@ -1151,6 +1220,98 @@ function mountPublisherStudio(root: HTMLElement) {
         } catch {}
       };
     } catch {}
+  }
+
+  async function deletePublishedApp(app: PublishedAppRecord) {
+    if (!confirm(`Permanently delete "${app.name || app.id}" from relays and Blossom servers?`)) {
+      return;
+    }
+
+    deletedAppIds.add(app.id);
+    if (app.eventId) deletedAppIds.add(app.eventId);
+    saveDeletedAppIds(deletedAppIds);
+
+    // 1. Instantly remove from local UI list
+    publishedApps = publishedApps.filter((p) => p.id !== app.id);
+    savePublishedApps(publishedApps);
+    renderStudio();
+
+    const nostr = (window as any).nostr;
+
+    // 2. Publish NIP-09 event deletion (kind: 5) to Nostr relays and local event store
+    if (nostr && typeof nostr.signEvent === "function") {
+      try {
+        const myPubkey = await nostr.getPublicKey();
+        const deleteDraft = {
+          kind: 5,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ["a", `35129:${app.pubkey || myPubkey}:${app.id}`],
+            ["k", "35129"],
+            ...(app.eventId ? [["e", app.eventId]] : [])
+          ],
+          content: `Deleted app ${app.name || app.id}`
+        };
+        const signedDelete = await nostr.signEvent(deleteDraft);
+
+        await new Promise<void>((resolve) => {
+          try {
+            const ws = new WebSocket("wss://relay.damus.io");
+            const timer = setTimeout(() => resolve(), 800);
+            ws.onopen = () => {
+              ws.send(JSON.stringify(["EVENT", signedDelete]));
+            };
+            ws.onmessage = () => {
+              clearTimeout(timer);
+              ws.close();
+              resolve();
+            };
+            ws.onerror = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+          } catch {
+            resolve();
+          }
+        });
+        appendLog(`Published NIP-09 deletion request (kind: 5) for ${app.id} to Nostr relays.`);
+      } catch (err: any) {
+        appendLog(`Warning: Failed to publish kind: 5 deletion event: ${err?.message || err}`);
+      }
+    }
+
+    // 3. Attempt Blossom server blob deletion (BUD-02 / BUD-06)
+    if (nostr && Array.isArray(app.servers) && app.servers.length > 0 && Array.isArray(app.files) && app.files.length > 0) {
+      for (const srv of app.servers) {
+        const cleanSrv = srv.replace(/\/+$/, "");
+        for (const file of app.files) {
+          try {
+            const now = Math.floor(Date.now() / 1000);
+            const authDraft = {
+              kind: 24242,
+              content: `delete ${file.sha256}`,
+              tags: [
+                ["t", "delete"],
+                ["x", file.sha256],
+                ["expiration", String(now + 3600)]
+              ],
+              created_at: now
+            };
+            const signedAuth = await nostr.signEvent(authDraft);
+            const authHeader = `Nostr ${uint8ToBase64(new TextEncoder().encode(JSON.stringify(signedAuth)))}`;
+            if (typeof fetch === "function") {
+              const resp = await fetch(`${cleanSrv}/${file.sha256}`, {
+                method: "DELETE",
+                headers: { Authorization: authHeader }
+              });
+              if (resp.ok) {
+                appendLog(`Deleted blob ${file.sha256.slice(0, 10)}... from Blossom ${cleanSrv}`);
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    }
   }
 
   async function executePublishWorkflow(skipBlossom = false) {
@@ -1315,11 +1476,11 @@ function mountPublisherStudio(root: HTMLElement) {
       appendLog(`Signed & published NIP-5A event (kind: 35129, id: ${signedEvent.id.slice(0, 12)}...).`);
       appendLog(`Ready! Address: ${naddr}`);
 
-      // Broadcast over Virtual WebSocket (writes to 0ms LocalEventStore + connected Nostr relays)
+      // Broadcast over Virtual WebSocket (local only writes to 0ms LocalEventStore; Blossom/Nostr publishes to relays)
       await new Promise<void>((resolve) => {
         try {
-          const ws = new WebSocket("wss://relay.damus.io");
-          const timer = setTimeout(() => resolve(), 250);
+          const ws = new WebSocket(skipBlossom ? "ws://local" : "wss://relay.damus.io");
+          const timer = setTimeout(() => resolve(), 350);
           ws.onopen = () => {
             ws.send(JSON.stringify(["EVENT", signedEvent]));
           };
@@ -1338,10 +1499,13 @@ function mountPublisherStudio(root: HTMLElement) {
       });
 
       if (skipBlossom) {
+        appendLog(`Saved to local 0ms store only (not broadcasted to remote relays).`);
         // Trigger immediate installation in Omni via protocol handler
         try {
           window.open(`nostr:${naddr}`);
         } catch {}
+      } else {
+        appendLog(`Broadcasted to connected Nostr relays.`);
       }
     } catch (err: any) {
       appendLog(`Failed to sign/publish NIP-5A event: ${err?.message || String(err)}`);
@@ -1613,7 +1777,7 @@ function mountPublisherStudio(root: HTMLElement) {
 
           <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; padding-top: 6px; border-top: 1px solid var(--omni-border-subtle, #2e2b26);">
             <button id="btn-install-local-direct" style="background: var(--omni-bg-card, #22201d); color: var(--omni-text-primary, #ede8df); border: 1px solid var(--omni-border-strong, #3d3933); padding: 9px 16px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.82rem; font-weight: 600; cursor: pointer;">
-              Install Locally in Omni (No Blossom Needed)
+              Install Locally in Omni (Local Only — No Relays, No Blossom)
             </button>
             <button id="btn-publish-blossom-nostr" style="background: var(--omni-accent-primary, #d4a373); color: #141312; border: none; padding: 9px 18px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.82rem; font-weight: 600; cursor: pointer;">
               Upload to Blossom & Publish to Nostr (NIP-5A)
@@ -1783,9 +1947,7 @@ function mountPublisherStudio(root: HTMLElement) {
           });
 
           card.querySelector(".btn-delete-published")?.addEventListener("click", () => {
-            publishedApps = publishedApps.filter((p) => p.id !== app.id);
-            savePublishedApps(publishedApps);
-            renderStudio();
+            deletePublishedApp(app);
           });
 
           card.querySelector(".btn-update-zip-app")?.addEventListener("click", () => {
