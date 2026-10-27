@@ -862,7 +862,70 @@ function mountPublisherStudio(root: HTMLElement) {
   const container = document.createElement("div");
   container.className = "publisher-studio-container";
   container.style.cssText =
-    "display: flex; flex-direction: column; gap: 18px; padding: 20px; color: var(--omni-text-primary, #ede8df); font-family: var(--omni-font-sans, system-ui, sans-serif); max-width: 960px; margin: 0 auto; box-sizing: border-box;";
+    "display: flex; flex-direction: column; gap: 18px; padding: 16px; color: var(--omni-text-primary, #ede8df); font-family: var(--omni-font-sans, system-ui, sans-serif); max-width: 960px; margin: 0 auto; box-sizing: border-box; width: 100%;";
+
+  const styleEl = document.createElement("style");
+  styleEl.textContent = `
+    .publisher-studio-container {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .published-top-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    @media (min-width: 640px) {
+      .published-top-bar {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+      }
+    }
+    .published-app-header {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    @media (min-width: 680px) {
+      .published-app-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+    }
+    .published-app-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .published-app-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 10px;
+      margin-bottom: 4px;
+    }
+    .studio-tab-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      width: 100%;
+    }
+    @media (min-width: 640px) {
+      .studio-tab-bar {
+        width: auto;
+      }
+    }
+    @media (max-width: 640px) {
+      .studio-tab-btn {
+        flex: 1 1 auto;
+        text-align: center;
+      }
+    }
+  `;
+  container.appendChild(styleEl);
 
   function appendLog(msg: string) {
     statusLogs.push(msg);
@@ -1552,7 +1615,7 @@ function mountPublisherStudio(root: HTMLElement) {
           <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--omni-text-secondary, #9e988f);">Package .zip archives into NIP-5A nsites, upload to Blossom servers, or install directly.</p>
         </div>
       </div>
-      <div style="display: flex; gap: 6px;">
+      <div class="studio-tab-bar">
         <button id="tab-btn-create" class="studio-tab-btn" style="padding: 7px 14px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid ${activeTab === "create" ? "var(--omni-accent-primary, #d4a373)" : "var(--omni-border-strong, #3d3933)"}; background: ${activeTab === "create" ? "var(--omni-accent-primary, #d4a373)" : "var(--omni-bg-card, #22201d)"}; color: ${activeTab === "create" ? "#141312" : "var(--omni-text-primary, #ede8df)"};">
           Create & Upload
         </button>
@@ -1867,12 +1930,12 @@ function mountPublisherStudio(root: HTMLElement) {
       pubPane.style.cssText = "display: flex; flex-direction: column; gap: 14px;";
 
       const topBar = document.createElement("div");
-      topBar.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
+      topBar.className = "published-top-bar";
       topBar.innerHTML = `
-        <div style="font-size: 0.84rem; color: var(--omni-text-secondary, #9e988f);">
+        <div style="font-size: 0.84rem; color: var(--omni-text-secondary, #9e988f); flex: 1;">
           Plugins signed by your Nostr identity (stored in Omni's 0ms local cache and connected Nostr relays as <code>kind: 35129</code> events).
         </div>
-        <button id="btn-refresh-published" style="background: var(--omni-bg-card, #22201d); color: var(--omni-text-primary, #ede8df); border: 1px solid var(--omni-border-strong, #3d3933); padding: 6px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.78rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+        <button id="btn-refresh-published" style="background: var(--omni-bg-card, #22201d); color: var(--omni-text-primary, #ede8df); border: 1px solid var(--omni-border-strong, #3d3933); padding: 7px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.78rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; white-space: nowrap;">
           ${svgIcon("refresh", 13)} Query Relays
         </button>
       `;
@@ -1904,26 +1967,26 @@ function mountPublisherStudio(root: HTMLElement) {
             : (app.files?.map((f) => escapeHtml(f.path)).join(", ") || "index.html");
 
           card.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+            <div class="published-app-header">
               <div style="min-width: 0; flex: 1;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <strong style="font-size: 0.96rem; color: var(--omni-text-primary, #ede8df);">${escapeHtml(app.name)}</strong>
-                  <span style="font-size: 0.72rem; background: var(--omni-bg-card, #22201d); border: 1px solid var(--omni-border-strong, #3d3933); padding: 1px 6px; border-radius: 4px; color: var(--omni-accent-primary, #d4a373);">v${escapeHtml(app.version)}</span>
-                  <span style="font-size: 0.7rem; color: var(--omni-text-muted, #6b665f); font-family: monospace;">d:${escapeHtml(app.id)}</span>
+                <div class="published-app-title-row">
+                  <strong style="font-size: 0.98rem; color: var(--omni-text-primary, #ede8df); word-break: break-word;">${escapeHtml(app.name)}</strong>
+                  <span style="font-size: 0.72rem; background: var(--omni-bg-card, #22201d); border: 1px solid var(--omni-border-strong, #3d3933); padding: 1px 6px; border-radius: 4px; color: var(--omni-accent-primary, #d4a373); white-space: nowrap;">v${escapeHtml(app.version)}</span>
+                  <span style="font-size: 0.7rem; color: var(--omni-text-muted, #6b665f); font-family: monospace; word-break: break-all;">d:${escapeHtml(app.id)}</span>
                 </div>
-                <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: var(--omni-text-secondary, #9e988f); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">${escapeHtml(app.description)}</p>
+                <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: var(--omni-text-secondary, #9e988f); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word;">${escapeHtml(app.description)}</p>
               </div>
-              <div style="display: flex; gap: 6px; flex-shrink: 0; align-items: center; flex-wrap: wrap;">
-                <a href="nostr:${escapeHtml(app.naddr)}" class="btn-install-published" style="background: var(--omni-accent-primary, #d4a373); color: #141312; text-decoration: none; padding: 6px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.76rem; font-weight: 600;">
+              <div class="published-app-actions">
+                <a href="nostr:${escapeHtml(app.naddr)}" class="btn-install-published" style="background: var(--omni-accent-primary, #d4a373); color: #141312; text-decoration: none; padding: 6px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.76rem; font-weight: 600; white-space: nowrap;">
                   Install / Update
                 </a>
-                <button class="btn-update-zip-app" data-app-id="${escapeHtml(app.id)}" data-app-name="${escapeHtml(app.name)}" style="background: var(--omni-bg-card, #22201d); color: var(--omni-accent-primary, #d4a373); border: 1px solid var(--omni-border-strong, #3d3933); padding: 6px 10px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.76rem; cursor: pointer; font-weight: 600;">
+                <button class="btn-update-zip-app" data-app-id="${escapeHtml(app.id)}" data-app-name="${escapeHtml(app.name)}" style="background: var(--omni-bg-card, #22201d); color: var(--omni-accent-primary, #d4a373); border: 1px solid var(--omni-border-strong, #3d3933); padding: 6px 10px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.76rem; cursor: pointer; font-weight: 600; white-space: nowrap;">
                   Update .zip
                 </button>
-                <button class="btn-copy-published-naddr" style="background: var(--omni-bg-card, #22201d); color: var(--omni-text-primary, #ede8df); border: 1px solid var(--omni-border-strong, #3d3933); padding: 6px 10px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.76rem; cursor: pointer;">
+                <button class="btn-copy-published-naddr" style="background: var(--omni-bg-card, #22201d); color: var(--omni-text-primary, #ede8df); border: 1px solid var(--omni-border-strong, #3d3933); padding: 6px 10px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.76rem; cursor: pointer; white-space: nowrap;">
                   Copy naddr
                 </button>
-                <button class="btn-delete-published" style="background: var(--omni-bg-card, #22201d); color: var(--omni-text-muted, #6b665f); border: 1px solid var(--omni-border-subtle, #2e2b26); padding: 6px 8px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.76rem; cursor: pointer;" title="Remove from list">
+                <button class="btn-delete-published" style="background: var(--omni-bg-card, #22201d); color: var(--omni-text-muted, #6b665f); border: 1px solid var(--omni-border-subtle, #2e2b26); padding: 6px 8px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.76rem; cursor: pointer;" title="Delete app from relays and Blossom">
                   ${svgIcon("trash", 13)}
                 </button>
               </div>
