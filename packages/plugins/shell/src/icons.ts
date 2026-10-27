@@ -24,6 +24,8 @@ export type IconName =
   | "sliders"
   | "move"
   | "cloud"
+  | "sun"
+  | "weather"
   | "refresh"
   | "upload"
   | "download"
@@ -103,6 +105,27 @@ export const ICONS: Record<IconName, string> = {
 
   cloud: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
     <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+  </svg>`,
+
+  sun: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="4.5"/>
+    <line x1="12" y1="2" x2="12" y2="4.5"/>
+    <line x1="12" y1="19.5" x2="12" y2="22"/>
+    <line x1="4.93" y1="4.93" x2="6.7" y2="6.7"/>
+    <line x1="17.3" y1="17.3" x2="19.07" y2="19.07"/>
+    <line x1="2" y1="12" x2="4.5" y2="12"/>
+    <line x1="19.5" y1="12" x2="22" y2="12"/>
+    <line x1="4.93" y1="19.07" x2="6.7" y2="17.3"/>
+    <line x1="17.3" y1="6.7" x2="19.07" y2="4.93"/>
+  </svg>`,
+
+  weather: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2v2"/>
+    <path d="M4.93 4.93l1.41 1.41"/>
+    <path d="M20 12h2"/>
+    <path d="M19.07 4.93l-1.41 1.41"/>
+    <path d="M15.5 8.5a4 4 0 0 0-4-4 4 4 0 0 0-3.8 2.7"/>
+    <path d="M7 16a4 4 0 0 1 0-8 4.2 4.2 0 0 1 3.5 1.9A5 5 0 0 1 20 13a4.5 4.5 0 0 1-4.5 4.5H7z"/>
   </svg>`,
 
   refresh: `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -355,6 +378,9 @@ export function renderPluginIcon(
   if (iconValue === "feed" || iconValue === "rss") return icon("feed", size, className);
   if (iconValue === "profile" || iconValue === "user") return icon("user", size, className);
   if (iconValue === "relays" || iconValue === "relay") return icon("relay", size, className);
+  if (iconValue === "sun" || iconValue === "sunny") return icon("sun", size, className);
+  if (iconValue === "cloud" || iconValue === "cloudy") return icon("cloud", size, className);
+  if (iconValue === "weather") return icon("weather", size, className);
 
   // 4. Unicode Emoji (e.g. ✨, ⭐, 🌟, 💫, 🚀, etc.)
   const isEmoji =

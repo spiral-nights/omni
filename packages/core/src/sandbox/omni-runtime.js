@@ -1591,6 +1591,36 @@
         url: data ? data.url : undefined
       });
     };
+
+    // 11. Geolocation API Virtualization Shim
+    const origGeo = navigator.geolocation;
+    navigator.geolocation = {
+      getCurrentPosition: function(successCallback, errorCallback, options) {
+        initPromise.then(() => {
+          callRpc("system.getGeolocation", options || {})
+            .then((pos) => {
+              if (pos && pos.coords) {
+                if (typeof successCallback === "function") successCallback(pos);
+              } else if (typeof errorCallback === "function") {
+                errorCallback({ code: 1, message: "Geolocation denied" });
+              }
+            })
+            .catch((err) => {
+              if (origGeo && typeof origGeo.getCurrentPosition === "function") {
+                try {
+                  origGeo.getCurrentPosition(successCallback, errorCallback, options);
+                  return;
+                } catch (_) {}
+              }
+              if (typeof errorCallback === "function") {
+                errorCallback({ code: 1, message: err?.message || "Geolocation permission denied" });
+              }
+            });
+        });
+      },
+      watchPosition: function() { return 0; },
+      clearWatch: function() {}
+    };
   }
 
   // 11. Standard Web Intent CustomEvent Interception

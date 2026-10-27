@@ -719,6 +719,34 @@ export class JsonRpcDispatcher {
         return { success: true };
       }
 
+      case "system.getGeolocation": {
+        if (typeof navigator === "undefined" || !navigator.geolocation) {
+          throw { code: JsonRpcErrorCode.INTERNAL_ERROR, message: "Geolocation not supported by host environment" };
+        }
+        return new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              resolve({
+                coords: {
+                  latitude: pos.coords.latitude,
+                  longitude: pos.coords.longitude,
+                  accuracy: pos.coords.accuracy,
+                  altitude: pos.coords.altitude,
+                  altitudeAccuracy: pos.coords.altitudeAccuracy,
+                  heading: pos.coords.heading,
+                  speed: pos.coords.speed
+                },
+                timestamp: pos.timestamp
+              });
+            },
+            (err) => {
+              reject({ code: JsonRpcErrorCode.INTERNAL_ERROR, message: err.message || "Geolocation permission denied" });
+            },
+            params || { timeout: 10000, enableHighAccuracy: true }
+          );
+        });
+      }
+
       default:
         throw { code: JsonRpcErrorCode.METHOD_NOT_FOUND, message: `Unknown method: ${method}` };
     }

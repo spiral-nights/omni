@@ -431,6 +431,11 @@ ${baseHtml}
     inferredIcon = "✨";
   }
 
+  // Weather app icon heuristic fallback
+  if ((!inferredIcon || inferredIcon === "globe") && (inferredId.toLowerCase().includes("weather") || inferredName.toLowerCase().includes("weather"))) {
+    inferredIcon = "sun";
+  }
+
   // Build Option A (Single-file inlined HTML bundle)
   const bundledHtml = inlineAssetsIntoHtml(baseHtml, entryFile, fileMap);
 
