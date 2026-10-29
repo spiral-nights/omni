@@ -873,13 +873,13 @@ async function mountProfileViewer(root: HTMLElement) {
           <div class="pv-info-section" style="padding: 20px; display: flex; flex-direction: column; gap: 14px; position: relative; width: 100%; box-sizing: border-box;">
             
             <!-- Avatar & Actions Header -->
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <div class="pv-avatar-wrap pv-my-avatar-wrap" style="width: 76px; height: 76px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0; padding: 0;">
+            <div class="pv-avatar-actions-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 8px; flex-wrap: wrap; width: 100%; box-sizing: border-box;">
+              <div class="pv-avatar-wrap pv-my-avatar-wrap" style="width: 72px; height: 72px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0; padding: 0;">
                 <div class="pv-avatar-fallback pv-my-avatar-fallback" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff;">?</div>
               </div>
               
-              <div class="pv-action-buttons pv-my-action-buttons" style="display: flex; align-items: center; gap: 8px;">
-                <button class="pv-btn-my-sync btn-secondary" title="Sync metadata from Relays">
+              <div class="pv-action-buttons pv-my-action-buttons" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; min-width: 0; flex-shrink: 1;">
+                <button class="pv-btn-my-sync btn-secondary" style="white-space: nowrap; flex-shrink: 0;" title="Sync metadata from Relays">
                   ${ICONS.refresh}
                   <span>Sync from Relays</span>
                 </button>
@@ -1108,21 +1108,21 @@ async function mountProfileViewer(root: HTMLElement) {
         </div>
 
         <!-- Target User Card -->
-        <div class="pv-card pv-user-card" style="display: none; background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); overflow: hidden; flex-direction: column;">
+        <div class="pv-card pv-user-card" style="display: none; background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); overflow: hidden; flex-direction: column; width: 100%; max-width: 100%; box-sizing: border-box;">
           
           <!-- Identity & Metadata Section -->
-          <div class="pv-info-section" style="padding: 20px; display: flex; flex-direction: column; gap: 14px; position: relative;">
+          <div class="pv-info-section" style="padding: 16px; display: flex; flex-direction: column; gap: 14px; position: relative; width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden;">
             
             <!-- Avatar & Actions Header -->
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <div class="pv-avatar-wrap pv-user-avatar-wrap" style="width: 76px; height: 76px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0; padding: 0;">
+            <div class="pv-avatar-actions-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 8px; flex-wrap: wrap; width: 100%; box-sizing: border-box;">
+              <div class="pv-avatar-wrap pv-user-avatar-wrap" style="width: 72px; height: 72px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0; padding: 0;">
                 <div class="pv-avatar-fallback pv-user-avatar-fallback" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff;">?</div>
               </div>
               
-              <div class="pv-action-buttons pv-user-action-buttons" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <button class="pv-btn-follow btn-follow-toggle" style="display: none;" title="Follow or Unfollow user">Follow</button>
-                <button class="pv-btn-block btn-block-toggle" style="display: none;" title="Block or Unblock user">Block</button>
-                <button class="pv-btn-refresh btn-secondary" title="Refresh Profile & Notes">
+              <div class="pv-action-buttons pv-user-action-buttons" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; min-width: 0; flex-shrink: 1;">
+                <button class="pv-btn-follow btn-follow-toggle" style="display: none; white-space: nowrap; flex-shrink: 0;" title="Follow or Unfollow user">Follow</button>
+                <button class="pv-btn-block btn-block-toggle" style="display: none; white-space: nowrap; flex-shrink: 0;" title="Block or Unblock user">Block</button>
+                <button class="pv-btn-refresh btn-secondary" style="white-space: nowrap; flex-shrink: 0;" title="Refresh Profile & Notes">
                   ${ICONS.refresh}
                   <span>Refresh</span>
                 </button>
@@ -1628,6 +1628,18 @@ async function mountProfileViewer(root: HTMLElement) {
 
     updateProfileBackButton();
 
+    // Ensure viewport resets to top when navigating across tabs or profiles
+    try {
+      if (typeof window !== "undefined") {
+        if (typeof window.scrollTo === "function") {
+          window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+        }
+        if (document.documentElement) document.documentElement.scrollTop = 0;
+        if (document.body) document.body.scrollTop = 0;
+      }
+      container.scrollIntoView({ behavior: "instant", block: "start" });
+    } catch (_) {}
+
     if (pushState && !isSameTab) {
       try {
         const queryPubkey = normalizedTab === "user-profile" ? activeUserPubkey : "";
@@ -1695,6 +1707,18 @@ async function mountProfileViewer(root: HTMLElement) {
       const target = previousTab || "following";
       previousTab = null;
       updateProfileBackButton();
+
+    // Ensure viewport resets to top when navigating across tabs or profiles
+    try {
+      if (typeof window !== "undefined") {
+        if (typeof window.scrollTo === "function") {
+          window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+        }
+        if (document.documentElement) document.documentElement.scrollTop = 0;
+        if (document.body) document.body.scrollTop = 0;
+      }
+      container.scrollIntoView({ behavior: "instant", block: "start" });
+    } catch (_) {}
       switchTab(target, false);
     }
   });
@@ -2163,6 +2187,14 @@ async function mountProfileViewer(root: HTMLElement) {
     activeUserPubkey = pubkey;
     activePubkey = pubkey;
     isLoading = true;
+
+    // Reset viewport scroll to top when opening an inspected user profile
+    try {
+      if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+        window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+      }
+      container.scrollIntoView({ behavior: "instant", block: "start" });
+    } catch (_) {}
 
     oldestUserNoteTimestamp = Infinity;
     isLoadingOlderUserNotes = false;

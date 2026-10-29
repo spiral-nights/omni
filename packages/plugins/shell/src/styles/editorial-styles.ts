@@ -2496,6 +2496,35 @@ style, script, head, title, meta, link,
   height: 13px !important;
 }
 
+@media (max-width: 600px) {
+  .pv-info-section {
+    padding: 14px 10px !important;
+  }
+  .pv-avatar-actions-header {
+    gap: 8px !important;
+  }
+  .pv-action-buttons {
+    gap: 6px !important;
+    justify-content: flex-end !important;
+    max-width: 100% !important;
+  }
+  .btn-follow-toggle,
+  .pv-btn-follow {
+    padding: 6px 10px !important;
+    font-size: 0.68rem !important;
+  }
+  .btn-block-toggle,
+  .pv-btn-block {
+    padding: 6px 10px !important;
+    font-size: 0.68rem !important;
+  }
+  .pv-btn-refresh,
+  .pv-btn-my-sync {
+    padding: 6px 8px !important;
+    font-size: 0.68rem !important;
+  }
+}
+
 .pv-btn-copy-npub {
   background: var(--omni-bg-surface) !important;
   border: 1px solid var(--omni-border-subtle) !important;

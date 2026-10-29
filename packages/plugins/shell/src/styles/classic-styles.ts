@@ -894,6 +894,35 @@ body {
   color: #f87171;
 }
 
+@media (max-width: 600px) {
+  .pv-info-section {
+    padding: 14px 10px !important;
+  }
+  .pv-avatar-actions-header {
+    gap: 8px !important;
+  }
+  .pv-action-buttons {
+    gap: 6px !important;
+    justify-content: flex-end !important;
+    max-width: 100% !important;
+  }
+  .btn-follow-toggle,
+  .pv-btn-follow {
+    padding: 5px 10px !important;
+    font-size: 0.72rem !important;
+  }
+  .btn-block-toggle,
+  .pv-btn-block {
+    padding: 5px 10px !important;
+    font-size: 0.72rem !important;
+  }
+  .pv-btn-refresh,
+  .pv-btn-my-sync {
+    padding: 5px 8px !important;
+    font-size: 0.72rem !important;
+  }
+}
+
 /* Note Composer (Bluesky Seamless Post Box) */
 .feed-composer,
 .composer-card {

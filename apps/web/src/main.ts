@@ -125,6 +125,9 @@ const kernel = new OmniKernel({
   onSlotAction: (action, slot) => {
     (shell as any)?.handleSlotAction?.(action, slot);
   },
+  onScrollTo: (params) => {
+    (shell as any)?.scrollToTop?.(params);
+  },
   onHandleUri: (uri, srcId) => {
     return (shell as any)?.handleUri?.(uri, srcId);
   },

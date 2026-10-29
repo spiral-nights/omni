@@ -41,6 +41,47 @@
   }
 
   // 1. Transparent LocalStorage Shim (handles sandboxed opaque origin restrictions)
+  // 1b. Standard Scroll API Shim (forwards scrollTo & scrollIntoView to host container)
+  if (typeof window !== "undefined") {
+    const origScrollTo = window.scrollTo;
+    window.scrollTo = function (optionsOrX, y) {
+      let top = 0;
+      let left = 0;
+      let behavior = "instant";
+      if (typeof optionsOrX === "object" && optionsOrX !== null) {
+        top = optionsOrX.top ?? 0;
+        left = optionsOrX.left ?? 0;
+        behavior = optionsOrX.behavior || "instant";
+      } else {
+        left = Number(optionsOrX) || 0;
+        top = Number(y) || 0;
+      }
+      try {
+        if (typeof origScrollTo === "function") {
+          origScrollTo.apply(window, arguments);
+        }
+      } catch (_) {}
+      initPromise.then(() => {
+        callRpc("ui.scrollTo", { top, left, behavior }).catch(() => {});
+      });
+    };
+    window.scroll = window.scrollTo;
+  }
+
+  if (typeof Element !== "undefined" && Element.prototype) {
+    const origScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (arg) {
+      try {
+        if (typeof origScrollIntoView === "function") {
+          origScrollIntoView.apply(this, arguments);
+        }
+      } catch (_) {}
+      initPromise.then(() => {
+        callRpc("ui.scrollTo", { top: 0, left: 0, behavior: "instant" }).catch(() => {});
+      });
+    };
+  }
+
   const memoryStore = new Map();
   if (typeof window !== "undefined" && window.__OMNI_INITIAL_STORAGE__ && typeof window.__OMNI_INITIAL_STORAGE__ === "object") {
     for (const [k, v] of Object.entries(window.__OMNI_INITIAL_STORAGE__)) {
@@ -113,6 +154,20 @@
 
       setupKernelRpc();
       setupRemoteDom();
+
+      // Flush any queued mutations that were waiting for portRemoteDom
+      if (portRemoteDom) {
+        for (const ctx of componentContexts.values()) {
+          if (ctx.mutationQueue && ctx.mutationQueue.length > 0) {
+            portRemoteDom.postMessage({
+              type: "mutate",
+              componentId: ctx.componentId,
+              records: ctx.mutationQueue
+            });
+            ctx.mutationQueue = [];
+          }
+        }
+      }
 
       // Apply Host Theme Tokens to Guest DOM
       if (sessionInfo && sessionInfo.theme && sessionInfo.theme.colors) {
@@ -1024,8 +1079,11 @@
   }
 
   // 6. Transparent DOM Auto-Mount for Pure nsites
+  let domAutoMountInitialized = false;
   function setupDomAutoMount() {
+    if (domAutoMountInitialized) return;
     if (registeredComponents.size > 0) return;
+    domAutoMountInitialized = true;
 
     const compId = (sessionInfo && sessionInfo.components && sessionInfo.components[0]) ||
                    (sessionInfo && sessionInfo.slots && sessionInfo.slots[0]) ||

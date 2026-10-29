@@ -182,6 +182,30 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       this.openSettings();
     } else if (action === "compose") {
       this.dispatchIntent("compose_note", {}).catch(() => {});
+    } else if (action === "scrollToTop" || action === "scroll_to_top") {
+      this.scrollToTop();
+    }
+  }
+
+  public scrollToTop(): void {
+    const mainContent = this.root.querySelector<HTMLElement>(".editorial-main-content");
+    if (mainContent) {
+      mainContent.scrollTop = 0;
+      if (typeof (mainContent as any).scrollTo === "function") {
+        (mainContent as any).scrollTo({ top: 0, left: 0, behavior: "instant" });
+      }
+    }
+    const activePage = this.root.querySelector<HTMLElement>(".editorial-viewport-page.active");
+    if (activePage) {
+      activePage.scrollTop = 0;
+      if (typeof (activePage as any).scrollTo === "function") {
+        (activePage as any).scrollTo({ top: 0, left: 0, behavior: "instant" });
+      }
+    }
+    if (typeof window !== "undefined") {
+      window.scrollTo(0, 0);
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
     }
   }
 
@@ -677,14 +701,19 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     // Check if plugin has persistent companion viewports (e.g. sidebar widget)
     const placements = this.getPluginPlacements(plugin);
     const hasCompanionViewport = placements.some(
-      (pl) => pl.enabled !== false && pl.viewport === "sidebar"
+      (pl) => pl.enabled !== false && (pl.viewport === "sidebar" || pl.viewport === "widgets")
     );
 
-    // If it has a dedicated full-page app instance, unload it so it reloads fresh next time
+    // If it has dedicated full-page app instances, unload them cleanly
     const appInstanceKey = `${pluginId}::app`;
-    if (this.kernel.getSandbox(appInstanceKey)) {
+    const primaryKey = `${pluginId}::main-primary`;
+    if (this.kernel.getSandboxExact?.(appInstanceKey)) {
       this.kernel.unloadPluginInstance(appInstanceKey);
-    } else if (!hasCompanionViewport && this.kernel.getSandbox(pluginId)) {
+    }
+    if (this.kernel.getSandboxExact?.(primaryKey)) {
+      this.kernel.unloadPluginInstance(primaryKey);
+    }
+    if (!hasCompanionViewport && this.kernel.getSandboxExact?.(pluginId)) {
       this.kernel.unloadPluginInstance(pluginId);
     }
 
@@ -816,60 +845,74 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     // Ensure the nsite is mounted and its component is projected into targetContainer
     const appInstanceKey = `${plugin.id}::app`;
-    const directSandbox = this.kernel.getSandbox(plugin.id);
-    const appSandbox = this.kernel.getSandbox(appInstanceKey);
+    const primaryKey = `${plugin.id}::main-primary`;
 
-    if (directSandbox) {
-      const liveComp = directSandbox.getFirstPopulatedComponentContainer();
-      if (liveComp && !targetContainer.contains(liveComp)) {
-        this.kernel.reparentLiveComponent(plugin.id, targetContainer);
-      }
-    } else if (appSandbox) {
+    // Only look for sandboxes dedicated to the full-page app presentation (not widgets)
+    const appSandbox =
+      this.kernel.getSandboxExact?.(appInstanceKey) ||
+      this.kernel.getSandboxExact?.(primaryKey) ||
+      this.kernel.getSandboxExact?.(plugin.id);
+
+    if (appSandbox) {
       const liveComp = appSandbox.getFirstPopulatedComponentContainer();
-      if (liveComp && !targetContainer.contains(liveComp)) {
-        this.kernel.reparentLiveComponent(appInstanceKey, targetContainer);
-      }
-    } else {
-      if (!this.pendingAppMounts.has(appInstanceKey)) {
-        this.pendingAppMounts.add(appInstanceKey);
-        try {
-          const synthManifest = this.ensurePluginManifest(plugin);
-          const appManifest = {
-            ...synthManifest,
-            components: [
-              {
-                id: `${plugin.id}-app-main`,
-                type: "main",
-                title: plugin.name || plugin.id,
-                slot: "main"
-              }
-            ]
-          };
-          const customSlotContainers = new Map(this.getSlotContainers());
-          customSlotContainers.set("main", targetContainer);
-          customSlotContainers.set("sidebar", targetContainer);
-          if (synthManifest.components) {
-            for (const comp of synthManifest.components) {
-              if (comp.slot) customSlotContainers.set(comp.slot, targetContainer);
-            }
-          }
-          await this.kernel.registerPlugin(
-            appManifest,
-            plugin.htmlContent || plugin.scriptContent,
-            customSlotContainers,
-            {
-              instanceId: appInstanceKey,
-              route: "",
-              viewId: "main",
-              targetSlot: "main",
-              relays: plugin.relays
-            }
-          );
-        } catch (err) {
-          console.warn(`Failed to register app instance for ${plugin.id}:`, err);
-        } finally {
-          this.pendingAppMounts.delete(appInstanceKey);
+      if (liveComp) {
+        // Ensure only this live component is present in targetContainer (no duplicates)
+        const compSlots = targetContainer.querySelectorAll(".omni-component-slot");
+        compSlots.forEach((slot) => {
+          if (slot !== liveComp) slot.remove();
+        });
+        if (!targetContainer.contains(liveComp)) {
+          targetContainer.appendChild(liveComp);
         }
+        this.renderDock();
+        this.saveLocalWorkspace();
+        this.boundScrollHandler?.();
+        return;
+      }
+    }
+
+    if (!this.pendingAppMounts.has(appInstanceKey)) {
+      this.pendingAppMounts.add(appInstanceKey);
+      try {
+        // Clean up any stale or empty slots before registering fresh
+        targetContainer.innerHTML = "";
+
+        const synthManifest = this.ensurePluginManifest(plugin);
+        const appManifest = {
+          ...synthManifest,
+          components: [
+            {
+              id: `${plugin.id}-app-main`,
+              type: "main",
+              title: plugin.name || plugin.id,
+              slot: "main"
+            }
+          ]
+        };
+        const customSlotContainers = new Map(this.getSlotContainers());
+        customSlotContainers.set("main", targetContainer);
+        customSlotContainers.set("sidebar", targetContainer);
+        if (synthManifest.components) {
+          for (const comp of synthManifest.components) {
+            if (comp.slot) customSlotContainers.set(comp.slot, targetContainer);
+          }
+        }
+        await this.kernel.registerPlugin(
+          appManifest,
+          plugin.htmlContent || plugin.scriptContent,
+          customSlotContainers,
+          {
+            instanceId: appInstanceKey,
+            route: "",
+            viewId: "main",
+            targetSlot: "main",
+            relays: plugin.relays
+          }
+        );
+      } catch (err) {
+        console.warn(`Failed to register app instance for ${plugin.id}:`, err);
+      } finally {
+        this.pendingAppMounts.delete(appInstanceKey);
       }
     }
 

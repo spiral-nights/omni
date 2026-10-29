@@ -29,7 +29,8 @@ export interface SandboxInstanceOptions {
   viewId?: string;
   instanceId?: string;
   allowedRelays?: string[];
-  onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
+  onSlotAction?: (action: "toggle" | "open" | "close" | "scrollToTop", slot: string) => void;
+  onScrollTo?: (params: any) => void;
   onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
   onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
   onHistoryPush?: (params: { state: any; title: string; url: string }) => Promise<any> | any;
@@ -243,6 +244,7 @@ export class SandboxInstance {
       eventStore: this.options.eventStore,
       allowedRelays: this.options.allowedRelays,
       onSlotAction: this.options.onSlotAction,
+      onScrollTo: this.options.onScrollTo,
       onHandleUri: this.options.onHandleUri,
       onHandleShare: this.options.onHandleShare,
       onHistoryPush: this.options.onHistoryPush,

@@ -574,4 +574,39 @@ describe("People plugin (profile, follows, mutes)", () => {
     const allCards = peopleRoot().querySelectorAll(".pv-user-notes-list .pv-note-card");
     expect(allCards.length).toBe(11);
   });
+
+  it("resets scroll to top when switching tabs and inspecting profiles", async () => {
+    await flush();
+    const scrollToSpy = vi.fn();
+    window.scrollTo = scrollToSpy;
+
+    // Navigate to Following tab
+    const btnFollowing = peopleRoot().querySelector<HTMLButtonElement>(".btn-tab-following")!;
+    btnFollowing.click();
+    await flush();
+    expect(scrollToSpy).toHaveBeenCalled();
+    scrollToSpy.mockClear();
+
+    // Inspect user profile via intent handler or search
+    const intentHandler = ((window as any).omni.intents.handle as any).mock.calls.find(
+      (c: any[]) => c[0] === "view_profile"
+    )?.[1];
+    expect(intentHandler).toBeDefined();
+
+    intentHandler({ pubkey: friendPubkey });
+    await flush();
+    expect(scrollToSpy).toHaveBeenCalled();
+  });
+
+  it("renders mobile-responsive action buttons header container with wrap support", async () => {
+    await flush();
+    const userCard = peopleRoot().querySelector<HTMLElement>(".pv-user-card")!;
+    const headerRow = userCard.querySelector<HTMLElement>(".pv-avatar-actions-header")!;
+    const actionsWrap = userCard.querySelector<HTMLElement>(".pv-user-action-buttons")!;
+
+    expect(headerRow).toBeTruthy();
+    expect(headerRow.style.flexWrap).toBe("wrap");
+    expect(actionsWrap.style.flexWrap).toBe("wrap");
+    expect(actionsWrap.style.justifyContent).toBe("flex-end");
+  });
 });

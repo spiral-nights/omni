@@ -18,7 +18,8 @@ export interface OmniKernelOptions {
   promptHandler?: PermissionPromptHandler;
   layoutManager?: LayoutManager;
   runtimeScript?: string;
-  onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
+  onSlotAction?: (action: "toggle" | "open" | "close" | "scrollToTop", slot: string) => void;
+  onScrollTo?: (params: any) => void;
   onHandleUri?: (uri: string, sourcePluginId?: string) => Promise<any>;
   onHandleShare?: (payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string) => Promise<any>;
   onHistoryPush?: (pluginId: string, params: { state: any; title: string; url: string }) => Promise<any> | any;
@@ -54,7 +55,8 @@ export class OmniKernel {
   private pendingNotifications: Map<string, Array<{ method: string; params?: any }>> = new Map();
   private runtimeScript?: string;
   private slotResolver?: (pluginId: string, componentId: string, slot: string) => Element | undefined;
-  private onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
+  private onSlotAction?: (action: "toggle" | "open" | "close" | "scrollToTop", slot: string) => void;
+  private onScrollTo?: (params: any) => void;
   private onHandleUri?: (uri: string, sourcePluginId?: string) => Promise<any>;
   private onHandleShare?: (payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string) => Promise<any>;
   private onHistoryPush?: (pluginId: string, params: { state: any; title: string; url: string }) => Promise<any> | any;
@@ -84,6 +86,7 @@ export class OmniKernel {
     this.runtimeScript = options.runtimeScript;
     this.slotResolver = options.slotResolver;
     this.onSlotAction = options.onSlotAction;
+    this.onScrollTo = options.onScrollTo;
     this.onHandleUri = options.onHandleUri;
     this.onHandleShare = options.onHandleShare;
     this.onHistoryPush = options.onHistoryPush;
@@ -225,6 +228,7 @@ export class OmniKernel {
           relayPool: this.relayPool,
           eventStore: this.eventStore,
           onSlotAction: this.onSlotAction,
+          onScrollTo: this.onScrollTo,
           onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
           onHandleShare: (payload, srcId) => this.handleShare(payload, srcId),
           onHistoryPush: (params) => this.onHistoryPush?.(manifest.id, params),
@@ -271,12 +275,24 @@ export class OmniKernel {
     if (this.sandboxes.has(pluginId)) {
       return this.sandboxes.get(pluginId);
     }
+    const appKey = `${pluginId}::app`;
+    if (this.sandboxes.has(appKey)) {
+      return this.sandboxes.get(appKey);
+    }
+    const primaryKey = `${pluginId}::main-primary`;
+    if (this.sandboxes.has(primaryKey)) {
+      return this.sandboxes.get(primaryKey);
+    }
     for (const [key, sandbox] of this.sandboxes.entries()) {
       if (key.startsWith(`${pluginId}::`)) {
         return sandbox;
       }
     }
     return undefined;
+  }
+
+  getSandboxExact(instanceKey: string): SandboxInstance | undefined {
+    return this.sandboxes.get(instanceKey);
   }
 
   notifyPlugin(pluginId: string, method: string, params?: any): void {
@@ -326,17 +342,34 @@ export class OmniKernel {
     if (exact) {
       const container = exact.getFirstPopulatedComponentContainer();
       if (container) {
-        targetContainer.appendChild(container);
+        if (!targetContainer.contains(container)) {
+          targetContainer.appendChild(container);
+        }
         return true;
       }
     }
     if (!pluginId.includes("::")) {
+      const preferredKeys = [`${pluginId}::app`, `${pluginId}::main-primary`];
+      for (const pk of preferredKeys) {
+        const sb = this.sandboxes.get(pk);
+        if (sb) {
+          const container = sb.getFirstPopulatedComponentContainer();
+          if (container) {
+            if (!targetContainer.contains(container)) {
+              targetContainer.appendChild(container);
+            }
+            return true;
+          }
+        }
+      }
       for (const [key, sandbox] of this.sandboxes.entries()) {
         if (key.startsWith(`${pluginId}::`)) {
-          if (key.endsWith("::compact") || key.endsWith("::widget")) continue;
+          if (key.endsWith("::compact") || key.endsWith("::widget") || key.endsWith("::sidebar")) continue;
           const container = sandbox.getFirstPopulatedComponentContainer();
           if (container) {
-            targetContainer.appendChild(container);
+            if (!targetContainer.contains(container)) {
+              targetContainer.appendChild(container);
+            }
             return true;
           }
         }
@@ -346,12 +379,27 @@ export class OmniKernel {
   }
 
   unloadPluginInstance(instanceKey: string): void {
-    const sandbox = this.sandboxes.get(instanceKey);
-    if (sandbox) {
-      sandbox.destroy();
+    const exact = this.sandboxes.get(instanceKey);
+    if (exact) {
+      exact.destroy();
       this.sandboxes.delete(instanceKey);
     }
     this.pendingRegistrations.delete(instanceKey);
+
+    if (!instanceKey.includes("::")) {
+      const appKey = `${instanceKey}::app`;
+      const primaryKey = `${instanceKey}::main-primary`;
+      if (this.sandboxes.has(appKey)) {
+        this.sandboxes.get(appKey)?.destroy();
+        this.sandboxes.delete(appKey);
+        this.pendingRegistrations.delete(appKey);
+      }
+      if (this.sandboxes.has(primaryKey)) {
+        this.sandboxes.get(primaryKey)?.destroy();
+        this.sandboxes.delete(primaryKey);
+        this.pendingRegistrations.delete(primaryKey);
+      }
+    }
   }
 
   disablePlugin(pluginId: string): void {

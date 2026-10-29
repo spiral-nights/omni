@@ -135,7 +135,8 @@ export interface DispatcherContext {
   relayPool: RelayPool;
   eventStore: LocalEventStore;
   allowedRelays?: string[];
-  onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
+  onSlotAction?: (action: "toggle" | "open" | "close" | "scrollToTop", slot: string) => void;
+  onScrollTo?: (params: any) => void;
   onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
   onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
   onHistoryPush?: (params: { state: any; title: string; url: string }) => Promise<any> | any;
@@ -518,6 +519,15 @@ export class JsonRpcDispatcher {
       }
 
       // 8. UI Slot Actions
+      case "ui.scrollTo": {
+        if (this.ctx.onScrollTo) {
+          this.ctx.onScrollTo(params);
+        } else if (this.ctx.onSlotAction) {
+          this.ctx.onSlotAction("scrollToTop", params?.slot || "main");
+        }
+        return { success: true };
+      }
+
       case "ui.toggleSlot": {
         if (this.ctx.onSlotAction) this.ctx.onSlotAction("toggle", params.slot);
         return { success: true };

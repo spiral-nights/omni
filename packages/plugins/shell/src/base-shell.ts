@@ -597,7 +597,12 @@ export abstract class BaseShell implements OmniShellHost {
         customSlotContainers.set(targetSlot, targetContainer);
       }
       const instanceKey = `${plugin.id}::${targetSlot}-primary`;
-      if (!this.kernel.getSandbox(instanceKey) && !this.kernel.getSandbox(plugin.id)) {
+      const appKey = `${plugin.id}::app`;
+      if (
+        !this.kernel.getSandbox(instanceKey) &&
+        !this.kernel.getSandbox(plugin.id) &&
+        !this.kernel.getSandbox(appKey)
+      ) {
         await this.kernel.registerPlugin(
           synth,
           plugin.htmlContent || plugin.scriptContent,
