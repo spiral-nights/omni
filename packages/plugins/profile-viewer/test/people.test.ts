@@ -504,4 +504,74 @@ describe("People plugin (profile, follows, mutes)", () => {
 
     expect(localStorage.getItem("omni_active_profile_pubkey")).toBeNull();
   });
+
+  it("fetches 10 notes initially and lazy-loads older notes on scroll / button click", async () => {
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    // Navigate to friend's profile
+    const intentHandler = (window as any).omni.intents.handle.mock.calls.find(
+      (c: any[]) => c[0] === "view_profile"
+    )?.[1];
+    intentHandler({ pubkey: friendPubkey });
+    await flush();
+
+    // Verify initial REQ requested limit: 10
+    const notesReq = ws.sent.find(
+      (m: any[]) => m[0] === "REQ" && String(m[1]).startsWith("pv_notes_") && m[2]?.authors?.[0] === friendPubkey
+    );
+    expect(notesReq).toBeDefined();
+    expect(notesReq[2].limit).toBe(10);
+    const subId = notesReq[1];
+
+    // Deliver 10 notes with decreasing timestamps
+    for (let i = 0; i < 10; i++) {
+      ws.deliver(["EVENT", subId, {
+        id: `note-${i}`,
+        pubkey: friendPubkey,
+        kind: 1,
+        created_at: 1700000000 - (i * 100),
+        tags: [],
+        content: `Note number ${i}`
+      }]);
+    }
+    ws.deliver(["EOSE", subId]);
+    await flush();
+
+    // Sentinel and Load More button should now be visible
+    const sentinel = peopleRoot().querySelector<HTMLElement>(".pv-user-sentinel")!;
+    const btnLoadMore = peopleRoot().querySelector<HTMLButtonElement>(".btn-user-notes-load-more")!;
+    expect(sentinel).toBeTruthy();
+    expect(sentinel.style.display).toBe("flex");
+    expect(btnLoadMore).toBeTruthy();
+    expect(btnLoadMore.textContent).toContain("Load more notes");
+
+    // Click load more button to trigger infinite scroll
+    btnLoadMore.click();
+    await flush();
+
+    // Verify older notes REQ was sent with until: 1699999100 - 1 and limit: 10
+    const olderReq = ws.sent.find(
+      (m: any[]) => m[0] === "REQ" && String(m[1]).startsWith("pv_older_user_")
+    );
+    expect(olderReq).toBeDefined();
+    expect(olderReq[2].limit).toBe(10);
+    expect(olderReq[2].until).toBe(1700000000 - (9 * 100) - 1);
+
+    // Deliver older note
+    const olderSubId = olderReq[1];
+    ws.deliver(["EVENT", olderSubId, {
+      id: "older-note-1",
+      pubkey: friendPubkey,
+      kind: 1,
+      created_at: 1699998000,
+      tags: [],
+      content: "Older note content"
+    }]);
+    ws.deliver(["EOSE", olderSubId]);
+    await flush();
+
+    const allCards = peopleRoot().querySelectorAll(".pv-user-notes-list .pv-note-card");
+    expect(allCards.length).toBe(11);
+  });
 });

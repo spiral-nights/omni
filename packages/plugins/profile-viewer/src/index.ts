@@ -354,7 +354,9 @@ function persistProfileCache(cache: Map<string, ProfileMetadata>) {
         records[pubkey] = { meta, timestamp: now };
       }
       localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(records));
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
   }, 1000);
 }
 
@@ -372,7 +374,9 @@ function getCurrentView(): string {
       const params = new URLSearchParams(q);
       const v = params.get("view");
       if (v) return v;
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
   }
   return "main";
 }
@@ -415,7 +419,9 @@ async function mountProfileCompact(root: HTMLElement) {
         const initial = (strongEl.textContent || "U")[0]?.toUpperCase() || "U";
         avatarEl.innerHTML = getAvatarSvg(pubkey, initial);
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
   })();
 }
 
@@ -462,7 +468,9 @@ async function mountProfileWidget(root: HTMLElement) {
         const initial = (strongEl.textContent || "U")[0]?.toUpperCase() || "U";
         avatarEl.innerHTML = getAvatarSvg(pubkey, initial);
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
   })();
 }
 
@@ -490,8 +498,18 @@ async function mountProfileViewer(root: HTMLElement) {
   let activeWs: WebSocket | null = null;
   let activeUserNotesSubId: string | null = null;
   let activeUserProfileSubId: string | null = null;
+  let activeOlderUserSubId: string | null = null;
+  let oldestUserNoteTimestamp = Infinity;
+  let isLoadingOlderUserNotes = false;
+  let olderUserNotesBatchCount = 0;
+
   let activeMyNotesSubId: string | null = null;
   let activeMyProfileSubId: string | null = null;
+  let activeOlderMySubId: string | null = null;
+  let oldestMyNoteTimestamp = Infinity;
+  let isLoadingOlderMyNotes = false;
+  let olderMyNotesBatchCount = 0;
+
   let isLoading = false;
   let eoseTimeout: any = null;
   const renderedNoteIds = new Set<string>();
@@ -526,7 +544,9 @@ async function mountProfileViewer(root: HTMLElement) {
           }
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
 
     try {
       const raw = localStorage.getItem(getMutesStorageKey(pk));
@@ -545,7 +565,9 @@ async function mountProfileViewer(root: HTMLElement) {
           }
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
   }
 
   function addWsListener(ws: any, type: string, handler: Function) {
@@ -576,7 +598,9 @@ async function mountProfileViewer(root: HTMLElement) {
     if (ws.readyState === WebSocket.OPEN) {
       try {
         ws.send(raw);
-      } catch (_) {}
+      } catch (err) {
+      console.error("WS message error:", err);
+    }
     } else {
       let fired = false;
       const onOpen = () => {
@@ -584,7 +608,9 @@ async function mountProfileViewer(root: HTMLElement) {
         fired = true;
         try {
           ws.send(raw);
-        } catch (_) {}
+        } catch (err) {
+      console.error("WS message error:", err);
+    }
         if (typeof ws.removeEventListener === "function") {
           ws.removeEventListener("open", onOpen);
         }
@@ -636,7 +662,9 @@ async function mountProfileViewer(root: HTMLElement) {
           if (myPubkey) {
             try {
               localStorage.setItem(getFollowsStorageKey(myPubkey), JSON.stringify(myFollowTags));
-            } catch (_) {}
+            } catch (err) {
+      console.error("WS message error:", err);
+    }
           }
           if (countFollowingEl) countFollowingEl.textContent = String(myFollows.size);
           updateActionButtons(activePubkey);
@@ -658,7 +686,9 @@ async function mountProfileViewer(root: HTMLElement) {
           if (myPubkey) {
             try {
               localStorage.setItem(getMutesStorageKey(myPubkey), JSON.stringify(myMuteTags));
-            } catch (_) {}
+            } catch (err) {
+      console.error("WS message error:", err);
+    }
           }
           if (countBlockedEl) countBlockedEl.textContent = String(myMutes.size);
           updateActionButtons(activePubkey);
@@ -681,44 +711,78 @@ async function mountProfileViewer(root: HTMLElement) {
               renderUserProfileMetadata(activeUserPubkey, meta);
             }
             updateUserCards(ev.pubkey, meta);
-          } catch (_) {}
+          } catch (err) {
+      console.error("WS message error:", err);
+    }
         }
 
         // Kind 1: Timeline Notes
         else if (k === 1) {
           // My profile notes
-          if (subId === activeMyNotesSubId || (!subId && myPubkey && ev.pubkey === myPubkey)) {
+          if (subId === activeMyNotesSubId || subId === activeOlderMySubId || (!subId && myPubkey && ev.pubkey === myPubkey)) {
             if (!myRenderedNoteIds.has(ev.id)) {
               myRenderedNoteIds.add(ev.id);
+              if (ev.created_at && ev.created_at < oldestMyNoteTimestamp) {
+                oldestMyNoteTimestamp = ev.created_at;
+              }
+              if (subId === activeOlderMySubId) {
+                olderMyNotesBatchCount++;
+              }
               if (myNoteCount === 0 && myNotesListEl) {
                 myNotesListEl.innerHTML = "";
               }
               myNoteCount++;
               if (myNotesCountEl) myNotesCountEl.textContent = `${myNoteCount} note${myNoteCount === 1 ? "" : "s"}`;
               if (myNotesCountPill) myNotesCountPill.textContent = String(myNoteCount);
-              if (myNotesListEl) myNotesListEl.appendChild(renderNoteCard(ev));
+              if (myNotesListEl) insertNoteCard(myNotesListEl, ev);
+              if (mySentinelEl && myNoteCount >= 10) {
+                mySentinelEl.style.display = "flex";
+              }
             }
           }
           // User profile notes
-          if (subId === activeUserNotesSubId || (!subId && activeUserPubkey && ev.pubkey === activeUserPubkey)) {
+          if (subId === activeUserNotesSubId || subId === activeOlderUserSubId || (!subId && activeUserPubkey && ev.pubkey === activeUserPubkey)) {
             if (eoseTimeout) {
               clearTimeout(eoseTimeout);
               eoseTimeout = null;
             }
             if (!renderedNoteIds.has(ev.id)) {
               renderedNoteIds.add(ev.id);
+              if (ev.created_at && ev.created_at < oldestUserNoteTimestamp) {
+                oldestUserNoteTimestamp = ev.created_at;
+              }
+              if (subId === activeOlderUserSubId) {
+                olderUserNotesBatchCount++;
+              }
               if (noteCount === 0 && notesListEl) {
                 notesListEl.innerHTML = "";
               }
               noteCount++;
               if (notesCountEl) notesCountEl.textContent = `${noteCount} note${noteCount === 1 ? "" : "s"}`;
-              if (notesListEl) notesListEl.appendChild(renderNoteCard(ev));
+              if (notesListEl) insertNoteCard(notesListEl, ev);
+              if (userSentinelEl && noteCount >= 10) {
+                userSentinelEl.style.display = "flex";
+              }
             }
           }
         }
       } else if (type === "EOSE") {
         if (subId?.startsWith("pv_batch_") || subId?.startsWith("pv_sync_")) {
           sendWs(["CLOSE", subId]);
+        }
+        if (subId === activeOlderUserSubId) {
+          sendWs(["CLOSE", subId]);
+          isLoadingOlderUserNotes = false;
+          activeOlderUserSubId = null;
+          if (btnUserNotesLoadMore) {
+            if (olderUserNotesBatchCount === 0 || olderUserNotesBatchCount < 10) {
+              btnUserNotesLoadMore.textContent = "No more notes";
+              btnUserNotesLoadMore.disabled = true;
+            } else {
+              btnUserNotesLoadMore.textContent = "Load more notes";
+              btnUserNotesLoadMore.disabled = false;
+            }
+          }
         }
         if (subId === activeUserNotesSubId) {
           if (eoseTimeout) {
@@ -729,6 +793,31 @@ async function mountProfileViewer(root: HTMLElement) {
           if (noteCount === 0 && notesListEl) {
             notesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">No public notes published by this user yet.</div>`;
             if (notesCountEl) notesCountEl.textContent = "0 notes";
+            if (userSentinelEl) userSentinelEl.style.display = "none";
+          } else if (noteCount > 0 && userSentinelEl) {
+            if (noteCount < 10) {
+              userSentinelEl.style.display = "none";
+            } else {
+              userSentinelEl.style.display = "flex";
+              if (btnUserNotesLoadMore) {
+                btnUserNotesLoadMore.textContent = "Load more notes";
+                btnUserNotesLoadMore.disabled = false;
+              }
+            }
+          }
+        }
+        if (subId === activeOlderMySubId) {
+          sendWs(["CLOSE", subId]);
+          isLoadingOlderMyNotes = false;
+          activeOlderMySubId = null;
+          if (btnMyNotesLoadMore) {
+            if (olderMyNotesBatchCount === 0 || olderMyNotesBatchCount < 10) {
+              btnMyNotesLoadMore.textContent = "No more notes";
+              btnMyNotesLoadMore.disabled = true;
+            } else {
+              btnMyNotesLoadMore.textContent = "Load more notes";
+              btnMyNotesLoadMore.disabled = false;
+            }
           }
         }
         if (subId === activeMyNotesSubId) {
@@ -736,10 +825,23 @@ async function mountProfileViewer(root: HTMLElement) {
             myNotesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">You haven't published any public notes yet.</div>`;
             if (myNotesCountEl) myNotesCountEl.textContent = "0 notes";
             if (myNotesCountPill) myNotesCountPill.textContent = "0";
+            if (mySentinelEl) mySentinelEl.style.display = "none";
+          } else if (myNoteCount > 0 && mySentinelEl) {
+            if (myNoteCount < 10) {
+              mySentinelEl.style.display = "none";
+            } else {
+              mySentinelEl.style.display = "flex";
+              if (btnMyNotesLoadMore) {
+                btnMyNotesLoadMore.textContent = "Load more notes";
+                btnMyNotesLoadMore.disabled = false;
+              }
+            }
           }
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
   }
 
   const container = html<HTMLDivElement>`
@@ -960,6 +1062,13 @@ async function mountProfileViewer(root: HTMLElement) {
                 Loading timeline notes...
               </div>
             </div>
+
+            <!-- Infinite Scroll Sentinel & Load More Trigger -->
+            <div class="pv-sentinel pv-my-sentinel" data-sentinel="true" style="display: none; justify-content: center; padding: 16px 0 8px 0;">
+              <button class="btn-feed-load-more btn-my-notes-load-more btn-secondary" style="font-size: 0.84rem; padding: 8px 24px; border-radius: 20px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                <span>Load more notes</span>
+              </button>
+            </div>
           </div>
 
         </div>
@@ -1075,6 +1184,13 @@ async function mountProfileViewer(root: HTMLElement) {
               Loading timeline notes...
             </div>
           </div>
+
+          <!-- Infinite Scroll Sentinel & Load More Trigger -->
+          <div class="pv-sentinel pv-user-sentinel" data-sentinel="true" style="display: none; justify-content: center; padding: 16px 0 8px 0;">
+            <button class="btn-feed-load-more btn-user-notes-load-more btn-secondary" style="font-size: 0.84rem; padding: 8px 24px; border-radius: 20px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+              <span>Load more notes</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1151,6 +1267,8 @@ async function mountProfileViewer(root: HTMLElement) {
   const websiteWrap = tabUserProfile.querySelector<HTMLElement>(".pv-user-website-wrap")!;
   const websiteLink = tabUserProfile.querySelector<HTMLAnchorElement>(".pv-user-website-link")!;
   const notesListEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-notes-list")!;
+  const userSentinelEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-sentinel")!;
+  const btnUserNotesLoadMore = tabUserProfile.querySelector<HTMLButtonElement>(".btn-user-notes-load-more")!;
   const notesCountEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-notes-count")!;
   const searchInput = tabUserProfile.querySelector<HTMLInputElement>(".pv-search-input")!;
   const searchBtn = tabUserProfile.querySelector<HTMLButtonElement>(".pv-search-btn")!;
@@ -1178,6 +1296,8 @@ async function mountProfileViewer(root: HTMLElement) {
   const myBtnMyNotes = tabMyProfile.querySelector<HTMLButtonElement>(".pv-btn-my-notes");
   const myBtnSync = tabMyProfile.querySelector<HTMLButtonElement>(".pv-btn-my-sync")!;
   const myNotesListEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-notes-list")!;
+  const mySentinelEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-sentinel")!;
+  const btnMyNotesLoadMore = tabMyProfile.querySelector<HTMLButtonElement>(".btn-my-notes-load-more")!;
   const myNotesCountEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-notes-count")!;
   const myNotesCountPill = tabMyProfile.querySelector<HTMLElement>(".pv-my-notes-count-pill");
 
@@ -1516,7 +1636,9 @@ async function mountProfileViewer(root: HTMLElement) {
           "",
           `?view=${normalizedTab}${queryPubkey ? `&pubkey=${queryPubkey}` : ""}`
         );
-      } catch (_) {}
+      } catch (err) {
+      console.error("WS message error:", err);
+    }
     }
 
     if (normalizedTab === "following") {
@@ -1536,9 +1658,9 @@ async function mountProfileViewer(root: HTMLElement) {
         loadMyProfile(myPubkey);
       }
     } else if (normalizedTab === "user-profile") {
-      if (activeUserPubkey) {
+      if (activeUserPubkey && activePubkey !== activeUserPubkey) {
         loadUserProfile(activeUserPubkey);
-      } else {
+      } else if (!activeUserPubkey) {
         renderUserProfileMetadata("", null);
       }
     }
@@ -1601,7 +1723,9 @@ async function mountProfileViewer(root: HTMLElement) {
       setTimeout(() => {
         copyLabel.textContent = "Copy";
       }, 1500);
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
   });
 
   myCopyBtn.addEventListener("click", async () => {
@@ -1613,7 +1737,9 @@ async function mountProfileViewer(root: HTMLElement) {
       setTimeout(() => {
         myCopyLabel.textContent = "Copy";
       }, 1500);
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
   });
 
   // Search / Lookup handler
@@ -1684,7 +1810,9 @@ async function mountProfileViewer(root: HTMLElement) {
     if (myPubkey) {
       try {
         localStorage.setItem(getFollowsStorageKey(myPubkey), JSON.stringify(myFollowTags));
-      } catch (_) {}
+      } catch (err) {
+      console.error("WS message error:", err);
+    }
     }
 
     countFollowingEl.textContent = String(myFollows.size);
@@ -1729,7 +1857,9 @@ async function mountProfileViewer(root: HTMLElement) {
     if (myPubkey) {
       try {
         localStorage.setItem(getMutesStorageKey(myPubkey), JSON.stringify(myMuteTags));
-      } catch (_) {}
+      } catch (err) {
+      console.error("WS message error:", err);
+    }
     }
 
     countBlockedEl.textContent = String(myMutes.size);
@@ -1889,7 +2019,9 @@ async function mountProfileViewer(root: HTMLElement) {
     if (!eventId) return;
     try {
       localStorage.setItem("omni_active_note_id", eventId);
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
 
     const omniRef = (window as any).omni;
     if (omniRef?.intents?.dispatch) {
@@ -1911,7 +2043,7 @@ async function mountProfileViewer(root: HTMLElement) {
   function renderNoteCard(event: any): HTMLElement {
     const timeStr = event.created_at ? formatTime(event.created_at) : "just now";
     const card = html<HTMLDivElement>`
-      <div class="pv-note-card" data-note-id="${escapeHtml(event.id || "")}" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-sm, 8px); padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease;" title="View thread in Feed">
+      <div class="pv-note-card" data-note-id="${escapeHtml(event.id || "")}" data-timestamp="${event.created_at || 0}" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-sm, 8px); padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease;" title="View thread in Feed">
         <div style="display: flex; justify-content: flex-end; align-items: center; font-size: 0.75rem; color: var(--text-muted, #78716c);">
           <span>${escapeHtml(timeStr)}</span>
         </div>
@@ -1939,6 +2071,89 @@ async function mountProfileViewer(root: HTMLElement) {
     return card;
   }
 
+  function insertNoteCard(listEl: HTMLElement, event: any) {
+    const card = renderNoteCard(event);
+    card.setAttribute("data-timestamp", String(event.created_at || 0));
+    const ts = event.created_at || 0;
+
+    const children = Array.from(listEl.children) as HTMLElement[];
+    for (const child of children) {
+      if (child.classList?.contains("pv-notes-loading")) continue;
+      const childTs = Number(child.getAttribute("data-timestamp") || 0);
+      if (ts > childTs) {
+        listEl.insertBefore(card, child);
+        return;
+      }
+    }
+    listEl.appendChild(card);
+  }
+
+  function loadOlderUserNotes() {
+    if (isLoadingOlderUserNotes || oldestUserNoteTimestamp === Infinity || !activeUserPubkey || !activeWs || activeWs.readyState !== WebSocket.OPEN) return;
+    isLoadingOlderUserNotes = true;
+    olderUserNotesBatchCount = 0;
+    if (btnUserNotesLoadMore) {
+      btnUserNotesLoadMore.disabled = true;
+      btnUserNotesLoadMore.textContent = "Loading older notes...";
+    }
+    const olderSubId = `pv_older_user_${Date.now()}`;
+    activeOlderUserSubId = olderSubId;
+    sendWs(["REQ", olderSubId, { kinds: [1], authors: [activeUserPubkey], until: oldestUserNoteTimestamp - 1, limit: 10 }]);
+  }
+
+  function loadOlderMyNotes() {
+    if (isLoadingOlderMyNotes || oldestMyNoteTimestamp === Infinity || !myPubkey || !activeWs || activeWs.readyState !== WebSocket.OPEN) return;
+    isLoadingOlderMyNotes = true;
+    olderMyNotesBatchCount = 0;
+    if (btnMyNotesLoadMore) {
+      btnMyNotesLoadMore.disabled = true;
+      btnMyNotesLoadMore.textContent = "Loading older notes...";
+    }
+    const olderSubId = `pv_older_my_${Date.now()}`;
+    activeOlderMySubId = olderSubId;
+    sendWs(["REQ", olderSubId, { kinds: [1], authors: [myPubkey], until: oldestMyNoteTimestamp - 1, limit: 10 }]);
+  }
+
+  if (userSentinelEl) {
+    userSentinelEl.addEventListener("click", () => loadOlderUserNotes());
+    userSentinelEl.addEventListener("intersect", () => loadOlderUserNotes());
+  }
+  if (btnUserNotesLoadMore) {
+    btnUserNotesLoadMore.addEventListener("click", () => loadOlderUserNotes());
+  }
+  if (userSentinelEl && typeof IntersectionObserver !== "undefined") {
+    try {
+      const obs = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !isLoadingOlderUserNotes && oldestUserNoteTimestamp !== Infinity) {
+          loadOlderUserNotes();
+        }
+      }, { rootMargin: "400px" });
+      obs.observe(userSentinelEl);
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
+  }
+
+  if (mySentinelEl) {
+    mySentinelEl.addEventListener("click", () => loadOlderMyNotes());
+    mySentinelEl.addEventListener("intersect", () => loadOlderMyNotes());
+  }
+  if (btnMyNotesLoadMore) {
+    btnMyNotesLoadMore.addEventListener("click", () => loadOlderMyNotes());
+  }
+  if (mySentinelEl && typeof IntersectionObserver !== "undefined") {
+    try {
+      const obs = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !isLoadingOlderMyNotes && oldestMyNoteTimestamp !== Infinity) {
+          loadOlderMyNotes();
+        }
+      }, { rootMargin: "400px" });
+      obs.observe(mySentinelEl);
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
+  }
+
   function loadUserProfile(pubkey: string) {
     if (!pubkey) {
       activeUserPubkey = "";
@@ -1948,6 +2163,15 @@ async function mountProfileViewer(root: HTMLElement) {
     activeUserPubkey = pubkey;
     activePubkey = pubkey;
     isLoading = true;
+
+    oldestUserNoteTimestamp = Infinity;
+    isLoadingOlderUserNotes = false;
+    olderUserNotesBatchCount = 0;
+    if (userSentinelEl) userSentinelEl.style.display = "none";
+    if (btnUserNotesLoadMore) {
+      btnUserNotesLoadMore.textContent = "Load more notes";
+      btnUserNotesLoadMore.disabled = false;
+    }
 
     if (eoseTimeout) {
       clearTimeout(eoseTimeout);
@@ -1966,6 +2190,10 @@ async function mountProfileViewer(root: HTMLElement) {
     if (activeUserNotesSubId) {
       sendWs(["CLOSE", activeUserNotesSubId]);
     }
+    if (activeOlderUserSubId) {
+      sendWs(["CLOSE", activeOlderUserSubId]);
+      activeOlderUserSubId = null;
+    }
 
     const profileSubId = `pv_prof_${Math.random().toString(36).slice(2, 8)}`;
     const notesSubId = `pv_notes_${Math.random().toString(36).slice(2, 8)}`;
@@ -1977,7 +2205,7 @@ async function mountProfileViewer(root: HTMLElement) {
 
     // Send subscriptions safely via sendWs (buffered if socket not open yet)
     sendWs(["REQ", profileSubId, { kinds: [0], authors: [pubkey], limit: 1 }]);
-    sendWs(["REQ", notesSubId, { kinds: [1], authors: [pubkey], limit: 30 }]);
+    sendWs(["REQ", notesSubId, { kinds: [1], authors: [pubkey], limit: 10 }]);
 
     eoseTimeout = setTimeout(() => {
       isLoading = false;
@@ -1995,6 +2223,15 @@ async function mountProfileViewer(root: HTMLElement) {
       activePubkey = pubkey;
     }
 
+    oldestMyNoteTimestamp = Infinity;
+    isLoadingOlderMyNotes = false;
+    olderMyNotesBatchCount = 0;
+    if (mySentinelEl) mySentinelEl.style.display = "none";
+    if (btnMyNotesLoadMore) {
+      btnMyNotesLoadMore.textContent = "Load more notes";
+      btnMyNotesLoadMore.disabled = false;
+    }
+
     const cached = profileCache.get(pubkey);
     renderMyProfileMetadata(pubkey, cached || null);
     populateEditForm(cached || null);
@@ -2004,6 +2241,10 @@ async function mountProfileViewer(root: HTMLElement) {
     }
     if (activeMyNotesSubId) {
       sendWs(["CLOSE", activeMyNotesSubId]);
+    }
+    if (activeOlderMySubId) {
+      sendWs(["CLOSE", activeOlderMySubId]);
+      activeOlderMySubId = null;
     }
 
     const myProfSubId = `pv_myprof_${Math.random().toString(36).slice(2, 8)}`;
@@ -2015,7 +2256,7 @@ async function mountProfileViewer(root: HTMLElement) {
     myNoteCount = 0;
 
     sendWs(["REQ", myProfSubId, { kinds: [0], authors: [pubkey], limit: 1 }]);
-    sendWs(["REQ", myNotesSubId, { kinds: [1], authors: [pubkey], limit: 30 }]);
+    sendWs(["REQ", myNotesSubId, { kinds: [1], authors: [pubkey], limit: 10 }]);
 
     setTimeout(() => {
       if (myNoteCount === 0) {
@@ -2241,7 +2482,9 @@ async function mountProfileViewer(root: HTMLElement) {
           if (!v) switchTab("user-profile", false);
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
   };
 
   window.addEventListener("popstate", syncRouteFromLocation);
@@ -2255,20 +2498,26 @@ async function mountProfileViewer(root: HTMLElement) {
         const pk = await nostr.getPublicKey();
         if (pk) return pk;
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
     try {
       const omniObj = typeof window !== "undefined" ? (window as any).omni : null;
       if (omniObj?.nostr?.getPublicKey) {
         const pk = await omniObj.nostr.getPublicKey();
         if (pk) return pk;
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
     try {
       const omniObj = typeof window !== "undefined" ? (window as any).omni : null;
       if (omniObj?.session?.userPubkey) {
         return omniObj.session.userPubkey;
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
     return "";
   }
 
