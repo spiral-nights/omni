@@ -313,6 +313,46 @@ export class RemoteDomHost {
         el = el.parentElement;
       }
     });
+
+    this.setupHostIntersectionObserver();
+  }
+
+  private setupHostIntersectionObserver(): void {
+    if (typeof IntersectionObserver === "undefined" || !this.renderRoot) return;
+
+    try {
+      const hostObserver = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              const el = entry.target as HTMLElement;
+              try {
+                el.dispatchEvent(new CustomEvent("intersect", { bubbles: true }));
+                el.click();
+              } catch (_) {}
+            }
+          }
+        },
+        { rootMargin: "300px" }
+      );
+
+      const observeSentinels = () => {
+        if (!this.renderRoot || typeof (this.renderRoot as any).querySelectorAll !== "function") return;
+        const sentinels = (this.renderRoot as Element).querySelectorAll(
+          ".feed-sentinel, [data-sentinel], [data-infinite-scroll], .btn-feed-load-more"
+        );
+        sentinels.forEach((s) => hostObserver.observe(s));
+      };
+
+      observeSentinels();
+
+      if (typeof MutationObserver !== "undefined") {
+        const mo = new MutationObserver(() => {
+          observeSentinels();
+        });
+        mo.observe(this.renderRoot, { childList: true, subtree: true });
+      }
+    } catch (_) {}
   }
 
   mutate(records: any[]): void {
@@ -401,13 +441,38 @@ export class RemoteDomHost {
       filteredRecords.push(rec);
     }
 
-    const SVG_TAGS = new Set(["svg", "path", "circle", "rect", "line", "polyline", "polygon", "g"]);
+    const SVG_TAGS_MAP: Record<string, string> = {
+      svg: "svg",
+      path: "path",
+      circle: "circle",
+      rect: "rect",
+      line: "line",
+      polyline: "polyline",
+      polygon: "polygon",
+      g: "g",
+      text: "text",
+      tspan: "tspan",
+      defs: "defs",
+      lineargradient: "linearGradient",
+      radialgradient: "radialGradient",
+      stop: "stop",
+      filter: "filter",
+      fedropshadow: "feDropShadow",
+      fegaussianblur: "feGaussianBlur",
+      feoffset: "feOffset",
+      femerge: "feMerge",
+      femergenode: "feMergeNode",
+      clippath: "clipPath",
+      use: "use",
+      symbol: "symbol"
+    };
     let origCreate: any = null;
     if (typeof document !== "undefined") {
       origCreate = document.createElement.bind(document);
       document.createElement = function (tagName: string, options?: any) {
-        if (SVG_TAGS.has(tagName.toLowerCase())) {
-          return document.createElementNS("http://www.w3.org/2000/svg", tagName);
+        const lower = tagName.toLowerCase();
+        if (lower in SVG_TAGS_MAP) {
+          return document.createElementNS("http://www.w3.org/2000/svg", SVG_TAGS_MAP[lower]);
         }
         return origCreate(tagName, options);
       };

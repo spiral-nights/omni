@@ -70,52 +70,42 @@ function getAvatarSvg(pubkey: string, letter: string): string {
 
   // Terracotta & Warm Earth Color Harmonies
   const palettes = [
-    ["#b85d43", "#2a2320"],
-    ["#c86d51", "#1f1a18"],
-    ["#a34f38", "#241c19"],
-    ["#d47b58", "#2d1f19"],
-    ["#bf6b45", "#332219"],
-    ["#c2613e", "#1e1916"],
-    ["#ab5c44", "#261e1b"],
-    ["#b0523b", "#211d1c"]
+    ["#b85d43", "#3d1f16"],
+    ["#c86d51", "#2e160e"],
+    ["#d47b58", "#381a10"],
+    ["#a34f38", "#2c150e"],
+    ["#bf6b45", "#3a1d12"],
+    ["#c2613e", "#29130b"],
+    ["#ab5c44", "#30170f"],
+    ["#b0523b", "#2b140d"]
   ];
   const [stop1, stop2] = palettes[seed % palettes.length];
-  const uid = "sh_" + seed.toString(36) + "_" + (letter || "x").charCodeAt(0);
 
   // Varied placement of nested circles derived from pubkey entropy
-  const c1_x = 18 + (seed % 64);
-  const c1_y = 18 + ((seed >> 4) % 64);
-  const c1_r = 24 + ((seed >> 8) % 18);
+  const c1_x = 20 + (seed % 60);
+  const c1_y = 20 + ((seed >> 4) % 60);
+  const c1_r = 24 + ((seed >> 8) % 16);
   const c1_color = (seed % 2 === 0) ? "#d4a373" : "#ede8df";
-  const c1_opacity = (0.18 + ((seed % 8) * 0.015)).toFixed(2);
+  const c1_opacity = (0.24 + ((seed % 8) * 0.015)).toFixed(2);
 
   const c2_x = 100 - c1_x;
   const c2_y = 100 - c1_y;
-  const c2_r = 22 + ((seed >> 12) % 22);
+  const c2_r = 20 + ((seed >> 12) % 20);
 
   // Varied curved bottom contour
-  const waveY = 62 + (seed % 12);
-  const waveControlY = 38 + ((seed >> 3) % 15);
-  const waveEndY = 68 + ((seed >> 6) % 15);
+  const waveY = 64 + (seed % 10);
+  const waveControlY = 40 + ((seed >> 3) % 14);
+  const waveEndY = 68 + ((seed >> 6) % 12);
 
   const cleanLetter = (letter || "?").slice(0, 1).toUpperCase();
 
-  return `<svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="grad-${uid}" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="${stop1}" />
-      <stop offset="100%" stop-color="${stop2}" />
-    </linearGradient>
-    <filter id="sh-${uid}" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000" flood-opacity="0.5" />
-    </filter>
-  </defs>
-  <rect width="100" height="100" rx="50" fill="url(#grad-${uid})" />
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%" style="display: block; border-radius: 50%;">
+  <rect width="100" height="100" rx="50" fill="${stop1}" />
   <circle cx="${c1_x}" cy="${c1_y}" r="${c1_r}" fill="${c1_color}" fill-opacity="${c1_opacity}" />
-  <circle cx="${c2_x}" cy="${c2_y}" r="${c2_r}" fill="#141312" fill-opacity="0.32" />
+  <circle cx="${c2_x}" cy="${c2_y}" r="${c2_r}" fill="${stop2}" fill-opacity="0.4" />
   <path d="M 0 ${waveY} Q 50 ${waveControlY} 100 ${waveEndY} L 100 100 L 0 100 Z" fill="#141312" fill-opacity="0.3" />
-  <circle cx="50" cy="50" r="47.5" fill="none" stroke="#ede8df" stroke-opacity="0.2" stroke-width="1.5" />
-  <text x="50" y="53" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="44" font-weight="800" fill="#fcfaf6" text-anchor="middle" dominant-baseline="central" filter="url(#sh-${uid})">${cleanLetter}</text>
+  <circle cx="50" cy="50" r="47.5" fill="none" stroke="#ede8df" stroke-opacity="0.25" stroke-width="1.5" />
+  <text x="50" y="52" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="46" font-weight="900" fill="#ffffff" stroke="#141312" stroke-width="2" stroke-opacity="0.5" text-anchor="middle" dominant-baseline="central" paint-order="stroke fill">${cleanLetter}</text>
 </svg>`;
 }
 
