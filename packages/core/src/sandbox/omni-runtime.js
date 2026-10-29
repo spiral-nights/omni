@@ -260,6 +260,11 @@
             pendingIntentInvocations.get(action).push(data);
           }
         }
+      } else if (msg.method === "history.popstate") {
+        const delta = Number(msg.params && msg.params.delta) || -1;
+        const state = msg.params && msg.params.state;
+        const targetUrl = msg.params && msg.params.url;
+        applyHistoryNavigate(delta, state, targetUrl);
       }
     };
   }
@@ -1631,6 +1636,166 @@
         }));
       }
     });
+  }
+
+  // 12. Standard Web History & Sub-Route Virtualization Shim
+  const initialSearch = (typeof window !== "undefined" && window.location && window.location.search) || "";
+  const initialHash = (typeof window !== "undefined" && window.location && window.location.hash) || "";
+  const initialHref = (typeof window !== "undefined" && window.location && window.location.href) || "";
+
+  let virtualSearch = initialSearch;
+  let virtualHash = initialHash;
+
+  const virtualHistory = {
+    entries: [{
+      state: (typeof window !== "undefined" && window.history && window.history.state) || null,
+      title: (typeof document !== "undefined" && document.title) || "",
+      url: initialHref,
+      search: initialSearch,
+      hash: initialHash
+    }],
+    index: 0
+  };
+
+  function parseUrlParts(urlStr) {
+    if (!urlStr || typeof urlStr !== "string") return { search: virtualSearch, hash: virtualHash };
+    let search = "";
+    let hash = "";
+    const hashIdx = urlStr.indexOf("#");
+    let beforeHash = urlStr;
+    if (hashIdx !== -1) {
+      hash = urlStr.slice(hashIdx);
+      beforeHash = urlStr.slice(0, hashIdx);
+    }
+    const qIdx = beforeHash.indexOf("?");
+    if (qIdx !== -1) {
+      search = beforeHash.slice(qIdx);
+    }
+    return { search, hash };
+  }
+
+  function updateVirtualLocation(search, hash) {
+    if (search !== undefined && search !== null) {
+      virtualSearch = search ? (search.startsWith("?") ? search : `?${search}`) : "";
+    }
+    if (hash !== undefined && hash !== null) {
+      virtualHash = hash ? (hash.startsWith("#") ? hash : `#${hash}`) : "";
+    }
+  }
+
+  function applyHistoryNavigate(delta, state, targetUrl) {
+    if (virtualHistory.entries.length > 0) {
+      virtualHistory.index = Math.max(0, Math.min(virtualHistory.entries.length - 1, virtualHistory.index + delta));
+      const entry = virtualHistory.entries[virtualHistory.index];
+      if (entry) {
+        if (state !== undefined) entry.state = state;
+        updateVirtualLocation(entry.search, entry.hash);
+      }
+    } else if (targetUrl) {
+      const { search, hash } = parseUrlParts(targetUrl);
+      updateVirtualLocation(search, hash);
+    }
+    const popState = state !== undefined ? state : (virtualHistory.entries[virtualHistory.index]?.state ?? null);
+    try {
+      const popEv = new PopStateEvent("popstate", { state: popState });
+      window.dispatchEvent(popEv);
+      if (typeof window.onpopstate === "function") {
+        window.onpopstate(popEv);
+      }
+    } catch (e) {
+      console.error("Error dispatching virtual popstate:", e);
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    // Intercept History API
+    if (window.History) {
+      try {
+        Object.defineProperty(window.History.prototype, "state", {
+          get() {
+            return virtualHistory.entries[virtualHistory.index]?.state ?? null;
+          },
+          configurable: true
+        });
+        Object.defineProperty(window.History.prototype, "length", {
+          get() {
+            return virtualHistory.entries.length;
+          },
+          configurable: true
+        });
+        window.History.prototype.pushState = function(state, title, url) {
+          const { search, hash } = parseUrlParts(url);
+          if (virtualHistory.index < virtualHistory.entries.length - 1) {
+            virtualHistory.entries = virtualHistory.entries.slice(0, virtualHistory.index + 1);
+          }
+          virtualHistory.entries.push({
+            state,
+            title: title || "",
+            url: String(url || ""),
+            search,
+            hash
+          });
+          virtualHistory.index = virtualHistory.entries.length - 1;
+          updateVirtualLocation(search, hash);
+          initPromise.then(() => callRpc("kernel.historyPush", {
+            state,
+            title: title || "",
+            url: String(url || "")
+          })).catch(() => {});
+        };
+        window.History.prototype.replaceState = function(state, title, url) {
+          const { search, hash } = parseUrlParts(url);
+          if (virtualHistory.entries[virtualHistory.index]) {
+            virtualHistory.entries[virtualHistory.index] = {
+              state,
+              title: title || "",
+              url: String(url || ""),
+              search,
+              hash
+            };
+          }
+          updateVirtualLocation(search, hash);
+          initPromise.then(() => callRpc("kernel.historyReplace", {
+            state,
+            title: title || "",
+            url: String(url || "")
+          })).catch(() => {});
+        };
+        window.History.prototype.back = function() {
+          initPromise.then(() => callRpc("kernel.historyBack", {})).catch(() => {});
+        };
+        window.History.prototype.forward = function() {
+          initPromise.then(() => callRpc("kernel.historyGo", { delta: 1 })).catch(() => {});
+        };
+        window.History.prototype.go = function(delta) {
+          initPromise.then(() => callRpc("kernel.historyGo", { delta: Number(delta) || 0 })).catch(() => {});
+        };
+      } catch (e) {
+        console.warn("Could not shim History.prototype:", e);
+      }
+    }
+
+    // Intercept Location search and hash getters
+    if (window.Location) {
+      try {
+        Object.defineProperty(window.Location.prototype, "search", {
+          get() { return virtualSearch; },
+          set(val) {
+            virtualSearch = val ? (String(val).startsWith("?") ? String(val) : `?${val}`) : "";
+          },
+          configurable: true
+        });
+        Object.defineProperty(window.Location.prototype, "hash", {
+          get() { return virtualHash; },
+          set(val) {
+            virtualHash = val ? (String(val).startsWith("#") ? String(val) : `#${val}`) : "";
+          },
+          configurable: true
+        });
+      } catch (e) {
+        console.warn("Could not shim Location.prototype:", e);
+      }
+    }
   }
 
   console.log("⚡ [Omni Sandbox] Injected runtime loaded.");

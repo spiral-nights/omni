@@ -138,6 +138,10 @@ export interface DispatcherContext {
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
   onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
   onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
+  onHistoryPush?: (params: { state: any; title: string; url: string }) => Promise<any> | any;
+  onHistoryReplace?: (params: { state: any; title: string; url: string }) => Promise<any> | any;
+  onHistoryBack?: () => Promise<any> | any;
+  onHistoryGo?: (delta?: number) => Promise<any> | any;
 }
 
 export class JsonRpcDispatcher {
@@ -482,6 +486,35 @@ export class JsonRpcDispatcher {
           return this.ctx.onHandleShare(params, this.ctx.pluginId);
         }
         return { success: true, handled: false };
+      }
+
+      // 7d. History & Navigation Virtualization
+      case "kernel.historyPush": {
+        if (this.ctx.onHistoryPush) {
+          return this.ctx.onHistoryPush(params);
+        }
+        return { success: true };
+      }
+
+      case "kernel.historyReplace": {
+        if (this.ctx.onHistoryReplace) {
+          return this.ctx.onHistoryReplace(params);
+        }
+        return { success: true };
+      }
+
+      case "kernel.historyBack": {
+        if (this.ctx.onHistoryBack) {
+          return this.ctx.onHistoryBack();
+        }
+        return { success: true };
+      }
+
+      case "kernel.historyGo": {
+        if (this.ctx.onHistoryGo) {
+          return this.ctx.onHistoryGo(params?.delta);
+        }
+        return { success: true };
       }
 
       // 8. UI Slot Actions

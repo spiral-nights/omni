@@ -240,10 +240,15 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     // 11. Listen for browser back / forward navigation & Escape key
     if (typeof window !== "undefined") {
       window.addEventListener("popstate", (e: PopStateEvent) => {
+        if (this.handlePopState(e)) return;
         const state = e.state;
         if (!state || state.type !== "omni-editorial-view") return;
         if (state.page === "app" && state.pluginId) {
-          this.openApp(state.pluginId, false);
+          if (this.activePluginId === state.pluginId) {
+            this.kernel.dispatchHistoryPopstate(state.pluginId, { delta: -1, state: null, url: "" });
+          } else {
+            this.openApp(state.pluginId, false);
+          }
         } else if (state.page === "apps") {
           this.showAppsIndex(false);
         } else if (state.page === "widgets") {

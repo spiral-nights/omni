@@ -1468,7 +1468,7 @@ async function mountProfileViewer(root: HTMLElement) {
 
   // Profile back button handler
   btnProfileBack.addEventListener("click", () => {
-    if (typeof window !== "undefined" && window.history.state?.type === "omni-people-view") {
+    if (typeof window !== "undefined" && (window.history.state?.type === "omni-people-view" || window.history.length > 1)) {
       window.history.back();
     } else {
       const target = previousTab || "following";

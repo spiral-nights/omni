@@ -32,6 +32,10 @@ export interface SandboxInstanceOptions {
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
   onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
   onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
+  onHistoryPush?: (params: { state: any; title: string; url: string }) => Promise<any> | any;
+  onHistoryReplace?: (params: { state: any; title: string; url: string }) => Promise<any> | any;
+  onHistoryBack?: () => Promise<any> | any;
+  onHistoryGo?: (delta?: number) => Promise<any> | any;
   theme?: any;
   useShadowDom?: boolean;
 }
@@ -240,7 +244,11 @@ export class SandboxInstance {
       allowedRelays: this.options.allowedRelays,
       onSlotAction: this.options.onSlotAction,
       onHandleUri: this.options.onHandleUri,
-      onHandleShare: this.options.onHandleShare
+      onHandleShare: this.options.onHandleShare,
+      onHistoryPush: this.options.onHistoryPush,
+      onHistoryReplace: this.options.onHistoryReplace,
+      onHistoryBack: this.options.onHistoryBack,
+      onHistoryGo: this.options.onHistoryGo
     });
 
     // 5. Build srcdoc injecting omni-runtime.js + plugin script
@@ -516,6 +524,16 @@ export class SandboxInstance {
         }
       }, 50);
     });
+  }
+
+  public dispatchHistoryPopstate(delta: number, state: any, url?: string): void {
+    if (this.channel2 && this.channel2.port1) {
+      this.channel2.port1.postMessage({
+        jsonrpc: "2.0",
+        method: "history.popstate",
+        params: { delta, state, url }
+      });
+    }
   }
 
   destroy(): void {

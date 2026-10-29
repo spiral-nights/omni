@@ -2772,6 +2772,7 @@ export class PanoramaShell extends BaseShell {
 
     if (typeof window !== "undefined") {
       window.addEventListener("popstate", (e) => {
+        if (this.handlePopState(e)) return;
         if (this.currentOpenedAppId) {
           if (e.state?.type !== "omni-panorama-app" && e.state?.type !== "omni-people-view") {
             this.closeApp();

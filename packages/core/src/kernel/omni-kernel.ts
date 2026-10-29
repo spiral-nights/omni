@@ -21,6 +21,10 @@ export interface OmniKernelOptions {
   onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
   onHandleUri?: (uri: string, sourcePluginId?: string) => Promise<any>;
   onHandleShare?: (payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string) => Promise<any>;
+  onHistoryPush?: (pluginId: string, params: { state: any; title: string; url: string }) => Promise<any> | any;
+  onHistoryReplace?: (pluginId: string, params: { state: any; title: string; url: string }) => Promise<any> | any;
+  onHistoryBack?: (pluginId: string) => Promise<any> | any;
+  onHistoryGo?: (pluginId: string, delta?: number) => Promise<any> | any;
   slotResolver?: (pluginId: string, componentId: string, slot: string) => Element | undefined;
   eventStoreName?: string;
   storageName?: string;
@@ -53,6 +57,10 @@ export class OmniKernel {
   private onSlotAction?: (action: "toggle" | "open" | "close", slot: string) => void;
   private onHandleUri?: (uri: string, sourcePluginId?: string) => Promise<any>;
   private onHandleShare?: (payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string) => Promise<any>;
+  private onHistoryPush?: (pluginId: string, params: { state: any; title: string; url: string }) => Promise<any> | any;
+  private onHistoryReplace?: (pluginId: string, params: { state: any; title: string; url: string }) => Promise<any> | any;
+  private onHistoryBack?: (pluginId: string) => Promise<any> | any;
+  private onHistoryGo?: (pluginId: string, delta?: number) => Promise<any> | any;
   private defaultHandlersMemory: Record<string, string> = {};
 
   constructor(options: OmniKernelOptions = {}) {
@@ -78,6 +86,10 @@ export class OmniKernel {
     this.onSlotAction = options.onSlotAction;
     this.onHandleUri = options.onHandleUri;
     this.onHandleShare = options.onHandleShare;
+    this.onHistoryPush = options.onHistoryPush;
+    this.onHistoryReplace = options.onHistoryReplace;
+    this.onHistoryBack = options.onHistoryBack;
+    this.onHistoryGo = options.onHistoryGo;
   }
 
   onKeyChange(listener: (privkeyHex: string) => void): () => void {
@@ -215,6 +227,10 @@ export class OmniKernel {
           onSlotAction: this.onSlotAction,
           onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
           onHandleShare: (payload, srcId) => this.handleShare(payload, srcId),
+          onHistoryPush: (params) => this.onHistoryPush?.(manifest.id, params),
+          onHistoryReplace: (params) => this.onHistoryReplace?.(manifest.id, params),
+          onHistoryBack: () => this.onHistoryBack?.(manifest.id),
+          onHistoryGo: (delta) => this.onHistoryGo?.(manifest.id, delta),
           useShadowDom: this.useShadowDom
         });
 
@@ -410,6 +426,10 @@ export class OmniKernel {
       onSlotAction: this.onSlotAction,
       onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
       onHandleShare: (payload, srcId) => this.handleShare(payload, srcId),
+      onHistoryPush: (params) => this.onHistoryPush?.(manifest.id, params),
+      onHistoryReplace: (params) => this.onHistoryReplace?.(manifest.id, params),
+      onHistoryBack: () => this.onHistoryBack?.(manifest.id),
+      onHistoryGo: (delta) => this.onHistoryGo?.(manifest.id, delta),
       useShadowDom: this.useShadowDom
     });
 
@@ -428,6 +448,18 @@ export class OmniKernel {
 
   getPluginSettingsSandbox(pluginId: string): SandboxInstance | undefined {
     return this.settingsSandboxes.get(pluginId);
+  }
+
+  dispatchHistoryPopstate(pluginId: string, payload: { delta: number; state: any; url?: string }): void {
+    for (const [key, sandbox] of this.sandboxes.entries()) {
+      if (sandbox.manifest.id === pluginId || key === pluginId) {
+        sandbox.dispatchHistoryPopstate(payload.delta, payload.state, payload.url);
+      }
+    }
+    const settingsSandbox = this.settingsSandboxes.get(pluginId);
+    if (settingsSandbox) {
+      settingsSandbox.dispatchHistoryPopstate(payload.delta, payload.state, payload.url);
+    }
   }
 
   setPluginPermission(pluginId: string, category: string, granted: boolean, scope?: string): void {

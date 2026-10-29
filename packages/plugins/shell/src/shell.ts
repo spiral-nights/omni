@@ -2326,6 +2326,7 @@ export class OmniShell extends BaseShell {
 
     if (typeof window !== "undefined") {
       window.addEventListener("popstate", (e) => {
+        if (this.handlePopState(e)) return;
         if (e.state?.type === "omni-classic-page" && e.state.page) {
           this.showPage(e.state.page, false);
         } else if (!e.state || !e.state.type) {

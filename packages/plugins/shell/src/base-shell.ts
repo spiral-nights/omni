@@ -2218,6 +2218,69 @@ export abstract class BaseShell implements OmniShellHost {
     }
   }
 
+  public handleHistoryPush(pluginId: string, params: { state: any; title: string; url: string }): void {
+    if (typeof window === "undefined") return;
+    try {
+      window.history.pushState(
+        {
+          type: "omni-plugin-history",
+          pluginId,
+          pluginState: params.state,
+          url: params.url
+        },
+        params.title || document.title,
+        window.location.href
+      );
+    } catch (_) {}
+  }
+
+  public handleHistoryReplace(pluginId: string, params: { state: any; title: string; url: string }): void {
+    if (typeof window === "undefined") return;
+    try {
+      window.history.replaceState(
+        {
+          type: "omni-plugin-history",
+          pluginId,
+          pluginState: params.state,
+          url: params.url
+        },
+        params.title || document.title,
+        window.location.href
+      );
+    } catch (_) {}
+  }
+
+  public handleHistoryBack(pluginId: string): void {
+    if (typeof window === "undefined") return;
+    window.history.back();
+  }
+
+  public handleHistoryGo(pluginId: string, delta?: number): void {
+    if (typeof window === "undefined") return;
+    window.history.go(delta ?? 0);
+  }
+
+  public handlePopState(e: PopStateEvent): boolean {
+    const state = e.state;
+    if (state && state.type === "omni-plugin-history" && state.pluginId) {
+      const activeAppId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
+      if (activeAppId !== state.pluginId) {
+        if ((this as any).openApp) {
+          (this as any).openApp(state.pluginId, false);
+        } else {
+          this.showPage(state.pluginId);
+        }
+      }
+      this.kernel.dispatchHistoryPopstate(state.pluginId, {
+        delta: 0,
+        state: state.pluginState,
+        url: state.url
+      });
+      return true;
+    }
+    return false;
+  }
+
   public destroy(): void {
     unmountShellStyles();
     this.destroyPullToRefresh();

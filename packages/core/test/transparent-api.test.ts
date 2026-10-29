@@ -467,5 +467,57 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
     channel.port2.close();
     publishSpy.mockRestore();
   });
+
+  it("handles historyPush, historyReplace, historyBack, and historyGo in JsonRpcDispatcher", async () => {
+    const channel = new MessageChannel();
+    const onHistoryPush = vi.fn();
+    const onHistoryReplace = vi.fn();
+    const onHistoryBack = vi.fn();
+    const onHistoryGo = vi.fn();
+
+    const dispatcher = new JsonRpcDispatcher({
+      pluginId: "test-history-plugin",
+      port: channel.port1,
+      aclEngine: kernel.aclEngine,
+      storageManager: kernel.storageManager,
+      intentBroker: kernel.intentBroker,
+      subscriptionCoordinator: kernel.subscriptionCoordinator,
+      keystore: kernel.keystore,
+      relayPool: kernel.relayPool,
+      eventStore: kernel.eventStore,
+      onHistoryPush,
+      onHistoryReplace,
+      onHistoryBack,
+      onHistoryGo
+    });
+
+    const sendRpc = (method: string, params: any) => {
+      return new Promise<any>((resolve) => {
+        channel.port2.onmessage = (e) => resolve(e.data);
+        channel.port2.postMessage({
+          jsonrpc: "2.0",
+          id: Math.floor(Math.random() * 10000),
+          method,
+          params
+        });
+      });
+    };
+
+    await sendRpc("kernel.historyPush", { state: { view: "followers" }, title: "", url: "?view=followers" });
+    expect(onHistoryPush).toHaveBeenCalledWith({ state: { view: "followers" }, title: "", url: "?view=followers" });
+
+    await sendRpc("kernel.historyReplace", { state: { view: "following" }, title: "", url: "?view=following" });
+    expect(onHistoryReplace).toHaveBeenCalledWith({ state: { view: "following" }, title: "", url: "?view=following" });
+
+    await sendRpc("kernel.historyBack", {});
+    expect(onHistoryBack).toHaveBeenCalled();
+
+    await sendRpc("kernel.historyGo", { delta: -2 });
+    expect(onHistoryGo).toHaveBeenCalledWith(-2);
+
+    dispatcher.destroy();
+    channel.port1.close();
+    channel.port2.close();
+  });
 });
 

@@ -130,6 +130,18 @@ const kernel = new OmniKernel({
   },
   onHandleShare: (payload, srcId) => {
     return (shell as any)?.handleShare?.(payload, srcId);
+  },
+  onHistoryPush: (pluginId, params) => {
+    return (shell as any)?.handleHistoryPush?.(pluginId, params);
+  },
+  onHistoryReplace: (pluginId, params) => {
+    return (shell as any)?.handleHistoryReplace?.(pluginId, params);
+  },
+  onHistoryBack: (pluginId) => {
+    return (shell as any)?.handleHistoryBack?.(pluginId);
+  },
+  onHistoryGo: (pluginId, delta) => {
+    return (shell as any)?.handleHistoryGo?.(pluginId, delta);
   }
 });
 
