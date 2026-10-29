@@ -854,7 +854,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       this.kernel.getSandboxExact?.(plugin.id);
 
     if (appSandbox) {
-      const liveComp = appSandbox.getFirstPopulatedComponentContainer();
+      const liveComp =
+        appSandbox.getFirstPopulatedComponentContainer() ||
+        appSandbox.getComponentContainer(`${plugin.id}-app-main`) ||
+        (appSandbox as any).compContainers?.[0];
       if (liveComp) {
         // Ensure only this live component is present in targetContainer (no duplicates)
         const compSlots = targetContainer.querySelectorAll(".omni-component-slot");
@@ -1217,7 +1220,14 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     const btnProfile = this.root.querySelector("#btn-editorial-profile-toggle");
     btnProfile?.addEventListener("click", () => {
-      this.dispatchIntent("view_profile", {}).catch(() => {});
+      const profilePlugin = this.installedPlugins.find(
+        (p) => p.id === "org.omni.plugin.profile-viewer" || p.id === "org.omni.plugin.profile" || p.id.includes("profile")
+      );
+      if (profilePlugin && profilePlugin.enabled) {
+        this.openApp(profilePlugin.id);
+      } else {
+        this.dispatchIntent("view_profile", {}).catch(() => {});
+      }
     });
 
     const btnFullscreen = this.root.querySelector("#btn-editorial-toggle-fullscreen");

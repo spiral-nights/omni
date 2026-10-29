@@ -2558,6 +2558,12 @@ async function mountProfileViewer(root: HTMLElement) {
   try {
     const searchParams = new URLSearchParams(window.location.search || window.location.hash.replace("#", "?"));
     initialPubkey = searchParams.get("pubkey") || "";
+    if (!initialPubkey && typeof localStorage !== "undefined") {
+      initialPubkey = localStorage.getItem("omni_active_profile_pubkey") || "";
+      if (initialPubkey) {
+        localStorage.removeItem("omni_active_profile_pubkey");
+      }
+    }
     const v = searchParams.get("view");
     if (v === "following" || v === "blocked" || v === "user-profile" || v === "my-profile") {
       switchTab(v as any, false);
