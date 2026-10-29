@@ -316,6 +316,7 @@ export class RemoteDomHost {
     const wrappedRecords = records.map((rec) => {
       // Mutation 0 (MUTATION_TYPE_INSERT_CHILD): wrap all eventListeners in inserted tree and scope styles
       if (rec[0] === 0 && rec[2]) {
+        this.sanitizeNodeProperties(rec[2]);
         this.scopeNodeStyles(rec[2]);
         this.wrapNodeEventListeners(rec[2]);
         return rec;
@@ -361,6 +362,11 @@ export class RemoteDomHost {
 
     const filteredRecords: any[] = [];
     for (const rec of wrappedRecords) {
+      // Drop unallowed inline on* event attributes (e.g. onerror, onclick)
+      if (rec[0] === 3 && rec[4] === 2 && typeof rec[2] === "string" && /^on[a-z]/i.test(rec[2])) {
+        continue;
+      }
+
       // Intercept property mutations (type 3) targeting ROOT_ID ("~" or "0")
       // DOMRemoteReceiver doesn't index ROOT_ID in its attached map and throws on property updates
       if (rec[0] === 3 && (rec[1] === "~" || rec[1] === "0")) {
@@ -470,6 +476,22 @@ export class RemoteDomHost {
         document.createElement = origCreate;
       }
       this.ensureRenderRootStylesScoped();
+    }
+  }
+
+  private sanitizeNodeProperties(node: any): void {
+    if (!node || typeof node !== "object") return;
+    if (node.properties && typeof node.properties === "object") {
+      for (const key of Object.keys(node.properties)) {
+        if (/^on[a-z]/i.test(key)) {
+          delete node.properties[key];
+        }
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        this.sanitizeNodeProperties(child);
+      }
     }
   }
 

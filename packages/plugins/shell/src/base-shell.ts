@@ -1217,7 +1217,7 @@ export abstract class BaseShell implements OmniShellHost {
       const optPic = profile?.picture ? getOptimizedImageUrl(profile.picture, 96, 96) : "";
       if (classicAvatar) {
         if (optPic) {
-          classicAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar" onerror="this.style.display='none'">`;
+          classicAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
         } else {
           classicAvatar.innerHTML = ICONS.user || ICONS.profile;
         }
@@ -1231,7 +1231,7 @@ export abstract class BaseShell implements OmniShellHost {
       const panoNpub = document.getElementById("panorama-header-npub");
       if (panoAvatar) {
         if (optPic) {
-          panoAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0px;" alt="Avatar" onerror="this.style.display='none'">`;
+          panoAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0px;" alt="Avatar">`;
         } else {
           panoAvatar.innerHTML = ICONS.user || ICONS.profile;
         }
@@ -1245,7 +1245,7 @@ export abstract class BaseShell implements OmniShellHost {
       const panoSysNpub = document.getElementById("panorama-npub");
       if (panoSysAvatar) {
         if (optPic) {
-          panoSysAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0px;" alt="Avatar" onerror="this.style.display='none'">`;
+          panoSysAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0px;" alt="Avatar">`;
         } else {
           panoSysAvatar.innerHTML = ICONS.user || ICONS.profile;
         }
@@ -1257,7 +1257,7 @@ export abstract class BaseShell implements OmniShellHost {
       const editorialAvatar = document.getElementById("btn-editorial-profile-toggle");
       if (editorialAvatar) {
         if (optPic) {
-          editorialAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar" onerror="this.style.display='none'">`;
+          editorialAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
         } else {
           editorialAvatar.innerHTML = `<span>${(displayName || "Ω").slice(0, 1).toUpperCase()}</span>`;
         }

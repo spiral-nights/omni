@@ -1003,7 +1003,7 @@ function mountFeed(root: any) {
 
     let sanitizedPic = picture ? getOptimizedImageUrl(picture, 96, 96) : "";
     const avatarInner = (sanitizedPic && (sanitizedPic.startsWith("https://") || sanitizedPic.startsWith("data:image/")))
-      ? `<img src="${escapeHtml(sanitizedPic)}" alt="" loading="lazy" decoding="async" width="40" height="40" onerror="this.style.display='none'" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
+      ? `<img src="${escapeHtml(sanitizedPic)}" alt="" loading="lazy" decoding="async" width="40" height="40" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
       : `<span>${escapeHtml(initial)}</span>`;
 
     // Deterministic counts based on note id to give authentic social feed feel
@@ -1752,7 +1752,7 @@ function mountFeed(root: any) {
       const about = (meta.about || "").slice(0, 120);
       let pic = meta.picture ? getOptimizedImageUrl(String(meta.picture), 96, 96) : "";
       const avatarInner = (pic && (pic.startsWith("https://") || pic.startsWith("data:image/")))
-        ? `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" width="40" height="40" onerror="this.style.display='none'" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
+        ? `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" width="40" height="40" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
         : `<span>${escapeHtml(name[0] || "?").toUpperCase()}</span>`;
 
       const row = html<HTMLDivElement>`
@@ -2253,7 +2253,7 @@ function mountFeed(root: any) {
                     if (aEl && parsed.picture) {
                       let pic = getOptimizedImageUrl(String(parsed.picture), 96, 96);
                       if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
-                        aEl.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" width="40" height="40" onerror="this.style.display='none'" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                        aEl.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" width="40" height="40" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
                       }
                     }
                   }

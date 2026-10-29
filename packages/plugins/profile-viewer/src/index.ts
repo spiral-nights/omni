@@ -356,7 +356,7 @@ async function mountProfileCompact(root: HTMLElement) {
       npubEl.textContent = npub ? `${npub.slice(0, 8)}...${npub.slice(-4)}` : (pubkey ? `${pubkey.slice(0, 8)}...${pubkey.slice(-4)}` : "No Key");
       if (meta?.picture) {
         const pic = getOptimizedImageUrl(meta.picture, 96, 96);
-        avatarEl.innerHTML = `<img src="${escapeHtml(pic)}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar" onerror="this.style.display='none'">`;
+        avatarEl.innerHTML = `<img src="${escapeHtml(pic)}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
       }
     } catch (_) {}
   })();
@@ -403,7 +403,7 @@ async function mountProfileWidget(root: HTMLElement) {
       npubEl.textContent = npub ? `${npub.slice(0, 10)}...${npub.slice(-6)}` : (pubkey ? `${pubkey.slice(0, 10)}...${pubkey.slice(-4)}` : "No Key Loaded");
       if (meta?.picture) {
         const pic = getOptimizedImageUrl(meta.picture, 96, 96);
-        avatarEl.innerHTML = `<img src="${escapeHtml(pic)}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar" onerror="this.style.display='none'">`;
+        avatarEl.innerHTML = `<img src="${escapeHtml(pic)}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
       }
     } catch (_) {}
   })();
@@ -550,7 +550,7 @@ async function mountProfileViewer(root: HTMLElement) {
       if (aWrap && meta.picture) {
         let pic = getOptimizedImageUrl(meta.picture, 96, 96);
         if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
-          aWrap.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.style.display='none'">`;
+          aWrap.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
         }
       }
     });
@@ -2121,7 +2121,7 @@ async function mountProfileViewer(root: HTMLElement) {
       if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
         const aWrap = card.querySelector<HTMLElement>(".people-avatar");
         if (aWrap) {
-          aWrap.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.style.display='none'">`;
+          aWrap.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
         }
       }
     }
