@@ -68,24 +68,32 @@ function getAvatarSvg(pubkey: string, letter: string): string {
   }
   const seed = Math.abs(hash);
 
-  // Terracotta & Warm Earth Color Harmonies
+  // Diverse spectrum of vibrant, sophisticated color harmonies
   const palettes = [
-    ["#b85d43", "#3d1f16"],
-    ["#c86d51", "#2e160e"],
-    ["#d47b58", "#381a10"],
-    ["#a34f38", "#2c150e"],
-    ["#bf6b45", "#3a1d12"],
-    ["#c2613e", "#29130b"],
-    ["#ab5c44", "#30170f"],
-    ["#b0523b", "#2b140d"]
+    ["#c85d3e", "#3d190e", "#ffd2c2"], // Terracotta / Rust
+    ["#288755", "#0b2e1b", "#bcf5d4"], // Emerald / Forest
+    ["#356ec4", "#102347", "#cce0ff"], // Cobalt / Royal Blue
+    ["#85419c", "#2b1036", "#f3cbff"], // Plum / Violet
+    ["#aa3148", "#3b0d17", "#ffd0d9"], // Crimson / Wine
+    ["#23858a", "#0a2d2f", "#bdf4f7"], // Deep Teal / Marine
+    ["#b88320", "#3d2905", "#ffe6b0"], // Ochre / Amber Gold
+    ["#4d5ec2", "#161b42", "#d4dcff"], // Indigo / Dusk
+    ["#c24965", "#3b0f1b", "#ffd2dc"], // Coral / Rose
+    ["#6b8028", "#222c09", "#e4f7a8"], // Olive / Moss
+    ["#8e4a7d", "#2e1227", "#f9d0ee"], // Berry / Heather
+    ["#1c83a8", "#072b38", "#bceeff"], // Azure / Vibrant Cyan
+    ["#bd5726", "#381506", "#ffd3bb"], // Burnt Sienna
+    ["#6a47b8", "#1e113d", "#e0d4ff"], // Violet / Lavender
+    ["#25846f", "#092d24", "#bcf5e6"], // Jade / Spruce
+    ["#a16328", "#331c07", "#fedec0"]  // Warm Copper / Cinnamon
   ];
-  const [stop1, stop2] = palettes[seed % palettes.length];
+  const [stop1, stop2, accent] = palettes[seed % palettes.length];
 
   // Varied placement of nested circles derived from pubkey entropy
   const c1_x = 20 + (seed % 60);
   const c1_y = 20 + ((seed >> 4) % 60);
   const c1_r = 24 + ((seed >> 8) % 16);
-  const c1_color = (seed % 2 === 0) ? "#d4a373" : "#ede8df";
+  const c1_color = (seed % 2 === 0) ? accent : "#ede8df";
   const c1_opacity = (0.24 + ((seed % 8) * 0.015)).toFixed(2);
 
   const c2_x = 100 - c1_x;
