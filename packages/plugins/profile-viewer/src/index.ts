@@ -239,6 +239,21 @@ export interface ProfileMetadata {
   website?: string;
 }
 
+function getOptimizedImageUrl(rawUrl: string, width = 96, height = 96): string {
+  if (!rawUrl || typeof rawUrl !== "string") return "";
+  let trimmed = rawUrl.trim();
+  if (trimmed.startsWith("http://")) {
+    trimmed = trimmed.replace(/^http:\/\//i, "https://");
+  }
+  if (!trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  if (trimmed.includes("images.weserv.nl")) {
+    return trimmed;
+  }
+  return `https://images.weserv.nl/?url=${encodeURIComponent(trimmed)}&w=${width}&h=${height}&fit=cover&output=webp&q=80`;
+}
+
 const PROFILE_CACHE_KEY = "omni_profile_viewer_cache_v2";
 const PROFILE_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days expiration (2 weeks)
 
@@ -340,7 +355,8 @@ async function mountProfileCompact(root: HTMLElement) {
       strongEl.textContent = meta?.display_name || meta?.name || "Active Identity";
       npubEl.textContent = npub ? `${npub.slice(0, 8)}...${npub.slice(-4)}` : (pubkey ? `${pubkey.slice(0, 8)}...${pubkey.slice(-4)}` : "No Key");
       if (meta?.picture) {
-        avatarEl.innerHTML = `<img src="${escapeHtml(meta.picture)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
+        const pic = getOptimizedImageUrl(meta.picture, 96, 96);
+        avatarEl.innerHTML = `<img src="${escapeHtml(pic)}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar" onerror="this.style.display='none'">`;
       }
     } catch (_) {}
   })();
@@ -386,7 +402,8 @@ async function mountProfileWidget(root: HTMLElement) {
       strongEl.textContent = meta?.display_name || meta?.name || "Active Identity";
       npubEl.textContent = npub ? `${npub.slice(0, 10)}...${npub.slice(-6)}` : (pubkey ? `${pubkey.slice(0, 10)}...${pubkey.slice(-4)}` : "No Key Loaded");
       if (meta?.picture) {
-        avatarEl.innerHTML = `<img src="${escapeHtml(meta.picture)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
+        const pic = getOptimizedImageUrl(meta.picture, 96, 96);
+        avatarEl.innerHTML = `<img src="${escapeHtml(pic)}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar" onerror="this.style.display='none'">`;
       }
     } catch (_) {}
   })();
@@ -531,10 +548,9 @@ async function mountProfileViewer(root: HTMLElement) {
       if (handleEl && meta.name) handleEl.textContent = `@${meta.name}`;
       if (aboutEl && meta.about) aboutEl.textContent = meta.about;
       if (aWrap && meta.picture) {
-        let pic = String(meta.picture).trim();
-        if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
+        let pic = getOptimizedImageUrl(meta.picture, 96, 96);
         if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
-          aWrap.innerHTML = `<img src="${escapeHtml(pic)}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+          aWrap.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.style.display='none'">`;
         }
       }
     });
@@ -1732,11 +1748,12 @@ async function mountProfileViewer(root: HTMLElement) {
     // Avatar
     avatarWrapEl.innerHTML = "";
     if (meta?.picture && typeof meta.picture === "string") {
-      let pic = meta.picture.trim();
-      if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
+      let pic = getOptimizedImageUrl(meta.picture, 140, 140);
       if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
         const img = document.createElement("img");
         img.src = pic;
+        img.loading = "lazy";
+        (img as any).decoding = "async";
         img.alt = meta.display_name || meta.name || "";
         img.style.cssText = "width: 100%; height: 100%; object-fit: cover; border-radius: 50%;";
         img.addEventListener("error", () => {
@@ -1752,8 +1769,7 @@ async function mountProfileViewer(root: HTMLElement) {
 
     // Banner
     if (meta?.banner && typeof meta.banner === "string") {
-      let banner = meta.banner.trim();
-      if (banner.startsWith("http://")) banner = banner.replace(/^http:\/\//i, "https://");
+      let banner = getOptimizedImageUrl(meta.banner, 720, 240);
       if (banner.startsWith("https://") || banner.startsWith("data:image/")) {
         bannerEl.style.backgroundImage = `url("${banner}")`;
       } else {
@@ -1820,11 +1836,12 @@ async function mountProfileViewer(root: HTMLElement) {
     // Avatar
     myAvatarWrapEl.innerHTML = "";
     if (meta?.picture && typeof meta.picture === "string") {
-      let pic = meta.picture.trim();
-      if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
+      let pic = getOptimizedImageUrl(meta.picture, 140, 140);
       if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
         const img = document.createElement("img");
         img.src = pic;
+        img.loading = "lazy";
+        (img as any).decoding = "async";
         img.alt = meta.display_name || meta.name || "";
         img.style.cssText = "width: 100%; height: 100%; object-fit: cover; border-radius: 50%;";
         img.addEventListener("error", () => {
@@ -1840,8 +1857,7 @@ async function mountProfileViewer(root: HTMLElement) {
 
     // Banner
     if (meta?.banner && typeof meta.banner === "string") {
-      let banner = meta.banner.trim();
-      if (banner.startsWith("http://")) banner = banner.replace(/^http:\/\//i, "https://");
+      let banner = getOptimizedImageUrl(meta.banner, 720, 240);
       if (banner.startsWith("https://") || banner.startsWith("data:image/")) {
         myBannerEl.style.backgroundImage = `url("${banner}")`;
       } else {
@@ -2101,12 +2117,11 @@ async function mountProfileViewer(root: HTMLElement) {
     }
 
     if (meta?.picture) {
-      let pic = String(meta.picture).trim();
-      if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
+      let pic = getOptimizedImageUrl(String(meta.picture), 96, 96);
       if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
         const aWrap = card.querySelector<HTMLElement>(".people-avatar");
         if (aWrap) {
-          aWrap.innerHTML = `<img src="${escapeHtml(pic)}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+          aWrap.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.style.display='none'">`;
         }
       }
     }

@@ -53,6 +53,21 @@ function getAvatarGradient(pubkey: string): string {
   return AVATAR_GRADIENTS[idx];
 }
 
+function getOptimizedImageUrl(rawUrl: string, width = 96, height = 96): string {
+  if (!rawUrl || typeof rawUrl !== "string") return "";
+  let trimmed = rawUrl.trim();
+  if (trimmed.startsWith("http://")) {
+    trimmed = trimmed.replace(/^http:\/\//i, "https://");
+  }
+  if (!trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  if (trimmed.includes("images.weserv.nl")) {
+    return trimmed;
+  }
+  return `https://images.weserv.nl/?url=${encodeURIComponent(trimmed)}&w=${width}&h=${height}&fit=cover&output=webp&q=80`;
+}
+
 const PROFILE_CACHE_KEY = "omni_profile_cache_v2";
 const PROFILE_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days expiration (2 weeks)
 
@@ -986,10 +1001,9 @@ function mountFeed(root: any) {
     const timeStr = event.created_at ? formatTime(event.created_at) : "just now";
     const isReply = (event.tags || []).some((t: any[]) => t[0] === "e");
 
-    let sanitizedPic = picture ? picture.trim() : "";
-    if (sanitizedPic.startsWith("http://")) sanitizedPic = sanitizedPic.replace(/^http:\/\//i, "https://");
+    let sanitizedPic = picture ? getOptimizedImageUrl(picture, 96, 96) : "";
     const avatarInner = (sanitizedPic && (sanitizedPic.startsWith("https://") || sanitizedPic.startsWith("data:image/")))
-      ? `<img src="${escapeHtml(sanitizedPic)}" alt="" loading="lazy" decoding="async" width="40" height="40" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
+      ? `<img src="${escapeHtml(sanitizedPic)}" alt="" loading="lazy" decoding="async" width="40" height="40" onerror="this.style.display='none'" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
       : `<span>${escapeHtml(initial)}</span>`;
 
     // Deterministic counts based on note id to give authentic social feed feel
@@ -1736,10 +1750,9 @@ function mountFeed(root: any) {
       const name = meta.display_name || meta.name || `nostr:${person.pubkey.slice(0, 6)}`;
       const handle = meta.nip05 ? `@${meta.nip05}` : `@npub1${person.pubkey.slice(0, 6)}`;
       const about = (meta.about || "").slice(0, 120);
-      let pic = String(meta.picture || "").trim();
-      if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
+      let pic = meta.picture ? getOptimizedImageUrl(String(meta.picture), 96, 96) : "";
       const avatarInner = (pic && (pic.startsWith("https://") || pic.startsWith("data:image/")))
-        ? `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" width="40" height="40" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
+        ? `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" width="40" height="40" onerror="this.style.display='none'" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
         : `<span>${escapeHtml(name[0] || "?").toUpperCase()}</span>`;
 
       const row = html<HTMLDivElement>`
@@ -2238,10 +2251,9 @@ function mountFeed(root: any) {
                       hEl.textContent = `@${parsed.nip05}`;
                     }
                     if (aEl && parsed.picture) {
-                      let pic = String(parsed.picture).trim();
-                      if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
+                      let pic = getOptimizedImageUrl(String(parsed.picture), 96, 96);
                       if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
-                        aEl.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" width="40" height="40" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                        aEl.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" width="40" height="40" onerror="this.style.display='none'" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
                       }
                     }
                   }

@@ -45,6 +45,21 @@ export interface OmniShellOptions {
   installedPlugins?: InstalledPluginEntry[];
 }
 
+function getOptimizedImageUrl(rawUrl: string, width = 96, height = 96): string {
+  if (!rawUrl || typeof rawUrl !== "string") return "";
+  let trimmed = rawUrl.trim();
+  if (trimmed.startsWith("http://")) {
+    trimmed = trimmed.replace(/^http:\/\//i, "https://");
+  }
+  if (!trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  if (trimmed.includes("images.weserv.nl")) {
+    return trimmed;
+  }
+  return `https://images.weserv.nl/?url=${encodeURIComponent(trimmed)}&w=${width}&h=${height}&fit=cover&output=webp&q=80`;
+}
+
 /**
  * BaseShell: Abstract base class consolidating all shared Omni Shell business logic:
  * - Plugin Lifecycle & Manifest Synthesis
@@ -1199,9 +1214,10 @@ export abstract class BaseShell implements OmniShellHost {
       const classicAvatar = document.getElementById("header-profile-avatar");
       const classicName = document.getElementById("header-profile-name");
       const classicNpub = document.getElementById("header-profile-npub");
+      const optPic = profile?.picture ? getOptimizedImageUrl(profile.picture, 96, 96) : "";
       if (classicAvatar) {
-        if (profile?.picture) {
-          classicAvatar.innerHTML = `<img src="${profile.picture}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
+        if (optPic) {
+          classicAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar" onerror="this.style.display='none'">`;
         } else {
           classicAvatar.innerHTML = ICONS.user || ICONS.profile;
         }
@@ -1214,8 +1230,8 @@ export abstract class BaseShell implements OmniShellHost {
       const panoName = document.getElementById("panorama-header-name");
       const panoNpub = document.getElementById("panorama-header-npub");
       if (panoAvatar) {
-        if (profile?.picture) {
-          panoAvatar.innerHTML = `<img src="${profile.picture}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0px;" alt="Avatar">`;
+        if (optPic) {
+          panoAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0px;" alt="Avatar" onerror="this.style.display='none'">`;
         } else {
           panoAvatar.innerHTML = ICONS.user || ICONS.profile;
         }
@@ -1228,8 +1244,8 @@ export abstract class BaseShell implements OmniShellHost {
       const panoSysName = document.getElementById("panorama-display-name");
       const panoSysNpub = document.getElementById("panorama-npub");
       if (panoSysAvatar) {
-        if (profile?.picture) {
-          panoSysAvatar.innerHTML = `<img src="${profile.picture}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0px;" alt="Avatar">`;
+        if (optPic) {
+          panoSysAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0px;" alt="Avatar" onerror="this.style.display='none'">`;
         } else {
           panoSysAvatar.innerHTML = ICONS.user || ICONS.profile;
         }
@@ -1240,8 +1256,8 @@ export abstract class BaseShell implements OmniShellHost {
       // Update Editorial header profile elements
       const editorialAvatar = document.getElementById("btn-editorial-profile-toggle");
       if (editorialAvatar) {
-        if (profile?.picture) {
-          editorialAvatar.innerHTML = `<img src="${profile.picture}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
+        if (optPic) {
+          editorialAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar" onerror="this.style.display='none'">`;
         } else {
           editorialAvatar.innerHTML = `<span>${(displayName || "Ω").slice(0, 1).toUpperCase()}</span>`;
         }
