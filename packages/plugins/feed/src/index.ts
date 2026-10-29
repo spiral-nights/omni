@@ -53,8 +53,82 @@ function getAvatarGradient(pubkey: string): string {
   return AVATAR_GRADIENTS[idx];
 }
 
-const profileCache = new Map<string, { name?: string; display_name?: string; picture?: string; nip05?: string }>();
+const PROFILE_CACHE_KEY = "omni_profile_cache_v2";
+const PROFILE_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days expiration (2 weeks)
+
+interface CachedProfileEntry {
+  meta: { name?: string; display_name?: string; picture?: string; nip05?: string };
+  timestamp: number;
+}
+
+function loadPersistedProfileCache(): Map<string, { name?: string; display_name?: string; picture?: string; nip05?: string }> {
+  const map = new Map<string, { name?: string; display_name?: string; picture?: string; nip05?: string }>();
+  try {
+    if (typeof localStorage === "undefined") return map;
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return map;
+    const records: Record<string, CachedProfileEntry> = JSON.parse(raw);
+    const now = Date.now();
+    let hasExpired = false;
+    for (const [pubkey, entry] of Object.entries(records)) {
+      if (entry && entry.timestamp && (now - entry.timestamp) < PROFILE_CACHE_TTL) {
+        map.set(pubkey, entry.meta);
+      } else {
+        hasExpired = true;
+      }
+    }
+    if (hasExpired) {
+      persistProfileCache(map);
+    }
+  } catch (_) {}
+  return map;
+}
+
+let saveCacheTimer: any = null;
+function persistProfileCache(cache: Map<string, any>) {
+  if (typeof localStorage === "undefined") return;
+  if (saveCacheTimer) clearTimeout(saveCacheTimer);
+  saveCacheTimer = setTimeout(() => {
+    try {
+      const records: Record<string, CachedProfileEntry> = {};
+      const now = Date.now();
+      for (const [pubkey, meta] of cache.entries()) {
+        records[pubkey] = { meta, timestamp: now };
+      }
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(records));
+    } catch (_) {}
+  }, 1000);
+}
+
+const profileCache = loadPersistedProfileCache();
 const pendingProfileFetches = new Set<string>();
+const queuedProfilePubkeys = new Set<string>();
+let profileBatchTimer: any = null;
+let activeWs: any = null;
+
+function queueProfileFetch(pubkey: string) {
+  if (!pubkey || profileCache.has(pubkey) || pendingProfileFetches.has(pubkey)) return;
+  queuedProfilePubkeys.add(pubkey);
+  if (!profileBatchTimer) {
+    profileBatchTimer = setTimeout(flushProfileBatch, 80);
+  }
+}
+
+function flushProfileBatch() {
+  profileBatchTimer = null;
+  if (queuedProfilePubkeys.size === 0 || !activeWs || activeWs.readyState !== WebSocket.OPEN) return;
+
+  const batch = Array.from(queuedProfilePubkeys).slice(0, 50);
+  for (const pk of batch) {
+    queuedProfilePubkeys.delete(pk);
+    pendingProfileFetches.add(pk);
+  }
+
+  const subId = `prof_batch_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  try {
+    activeWs.send(JSON.stringify(["REQ", subId, { kinds: [0], authors: batch, limit: batch.length }]));
+  } catch (_) {}
+}
 
 function getAuthorMeta(pubkey: string) {
   if (!pubkey) return { name: "anonymous", handle: "@anon", initial: "?", picture: "" };
@@ -797,7 +871,6 @@ function mountFeed(root: any) {
   let oldestTimestamp = Infinity;
   let latestTimestamp = 0;
   let isLoadingOlder = false;
-  let activeWs: any = null;
 
   function fetchFollowingList(pk: string) {
     if (!pk || !activeWs || activeWs.readyState !== WebSocket.OPEN) return;
@@ -809,7 +882,7 @@ function mountFeed(root: any) {
   function subscribeFollowingNotes() {
     if (!activeWs || activeWs.readyState !== WebSocket.OPEN || followingPubkeys.size === 0) return;
     try {
-      activeWs.send(JSON.stringify(["REQ", "feed-following", { kinds: [1], authors: Array.from(followingPubkeys).slice(0, 100), limit: 50 }]));
+      activeWs.send(JSON.stringify(["REQ", "feed-following", { kinds: [1], authors: Array.from(followingPubkeys).slice(0, 100), limit: 10 }]));
     } catch (_) {}
   }
 
@@ -916,7 +989,7 @@ function mountFeed(root: any) {
     let sanitizedPic = picture ? picture.trim() : "";
     if (sanitizedPic.startsWith("http://")) sanitizedPic = sanitizedPic.replace(/^http:\/\//i, "https://");
     const avatarInner = (sanitizedPic && (sanitizedPic.startsWith("https://") || sanitizedPic.startsWith("data:image/")))
-      ? `<img src="${escapeHtml(sanitizedPic)}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
+      ? `<img src="${escapeHtml(sanitizedPic)}" alt="" loading="lazy" decoding="async" width="40" height="40" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
       : `<span>${escapeHtml(initial)}</span>`;
 
     // Deterministic counts based on note id to give authentic social feed feel
@@ -1088,15 +1161,9 @@ function mountFeed(root: any) {
     authorNameEl?.addEventListener("click", onProfileClick);
     authorHandleEl?.addEventListener("click", onProfileClick);
 
-    // Queue author metadata lookup if not in cache
-    if (event.pubkey && !profileCache.has(event.pubkey) && !pendingProfileFetches.has(event.pubkey)) {
-      pendingProfileFetches.add(event.pubkey);
-      if (activeWs && activeWs.readyState === WebSocket.OPEN) {
-        const subId = `prof_${event.pubkey.slice(0, 8)}`;
-        try {
-          activeWs.send(JSON.stringify(["REQ", subId, { kinds: [0], authors: [event.pubkey], limit: 1 }]));
-        } catch (_) {}
-      }
+    // Queue author metadata lookup if not in cache (batched)
+    if (event.pubkey && !profileCache.has(event.pubkey)) {
+      queueProfileFetch(event.pubkey);
     }
 
     return card;
@@ -1205,13 +1272,13 @@ function mountFeed(root: any) {
       activeWs.send(JSON.stringify([
         "REQ",
         refreshSubId,
-        { kinds: [1], authors: Array.from(followingPubkeys).slice(0, 100), limit: 40 }
+        { kinds: [1], authors: Array.from(followingPubkeys).slice(0, 100), limit: 10 }
       ]));
     } else {
       activeWs.send(JSON.stringify([
         "REQ",
         refreshSubId,
-        { kinds: [1], limit: 40 }
+        { kinds: [1], limit: 10 }
       ]));
     }
 
@@ -1672,7 +1739,7 @@ function mountFeed(root: any) {
       let pic = String(meta.picture || "").trim();
       if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
       const avatarInner = (pic && (pic.startsWith("https://") || pic.startsWith("data:image/")))
-        ? `<img src="${escapeHtml(pic)}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
+        ? `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" width="40" height="40" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
         : `<span>${escapeHtml(name[0] || "?").toUpperCase()}</span>`;
 
       const row = html<HTMLDivElement>`
@@ -2057,7 +2124,11 @@ function mountFeed(root: any) {
     if (isLoadingOlder || oldestTimestamp === Infinity || !activeWs || activeWs.readyState !== WebSocket.OPEN) return;
     isLoadingOlder = true;
     const olderSubId = `older-${Date.now()}`;
-    activeWs.send(JSON.stringify(["REQ", olderSubId, { kinds: [1], until: oldestTimestamp - 1, limit: 25 }]));
+    if (activeTab === "following" && followingPubkeys.size > 0) {
+      activeWs.send(JSON.stringify(["REQ", olderSubId, { kinds: [1], authors: Array.from(followingPubkeys).slice(0, 100), until: oldestTimestamp - 1, limit: 15 }]));
+    } else {
+      activeWs.send(JSON.stringify(["REQ", olderSubId, { kinds: [1], until: oldestTimestamp - 1, limit: 15 }]));
+    }
   }
 
   if (sentinelEl && typeof IntersectionObserver !== "undefined") {
@@ -2138,7 +2209,7 @@ function mountFeed(root: any) {
           if (activeTab === "following" && followingPubkeys.size > 0) {
             subscribeFollowingNotes();
           } else {
-            ws.send(JSON.stringify(["REQ", "feed-initial", { kinds: [1], limit: 40 }]));
+            ws.send(JSON.stringify(["REQ", "feed-initial", { kinds: [1], limit: 10 }]));
           }
         };
 
@@ -2154,6 +2225,7 @@ function mountFeed(root: any) {
                 try {
                   const parsed = JSON.parse(ev.content);
                   profileCache.set(ev.pubkey, parsed);
+                  persistProfileCache(profileCache);
                   const cards = container.querySelectorAll(`[data-author-pubkey="${ev.pubkey}"]`);
                   for (const c of Array.from(cards)) {
                     const nEl = c.querySelector<HTMLElement>(".feed-author-name");
@@ -2169,7 +2241,7 @@ function mountFeed(root: any) {
                       let pic = String(parsed.picture).trim();
                       if (pic.startsWith("http://")) pic = pic.replace(/^http:\/\//i, "https://");
                       if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
-                        aEl.innerHTML = `<img src="${escapeHtml(pic)}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                        aEl.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" width="40" height="40" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
                       }
                     }
                   }
@@ -2252,6 +2324,10 @@ function mountFeed(root: any) {
                 }
                 // Close initial subscription to prevent continuous noisy background firehose
                 ws.send(JSON.stringify(["CLOSE", "feed-initial"]));
+              } else if (subId === "feed-following") {
+                ws.send(JSON.stringify(["CLOSE", "feed-following"]));
+              } else if (subId?.startsWith("prof_")) {
+                ws.send(JSON.stringify(["CLOSE", subId]));
               } else if (subId?.startsWith("older-")) {
                 isLoadingOlder = false;
                 ws.send(JSON.stringify(["CLOSE", subId]));
@@ -2297,7 +2373,7 @@ function mountFeed(root: any) {
       initFeedSocket();
     } else if (typeof omni !== "undefined" && (omni as any).nostr?.subscribe) {
       (omni as any).nostr.subscribe(
-        [{ kinds: [1], limit: 40 }],
+        [{ kinds: [1], limit: 10 }],
         (ev: any) => {
           clearTimeout(initialLoadTimeout);
           handleIncomingEvent(ev);

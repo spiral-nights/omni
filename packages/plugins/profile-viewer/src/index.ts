@@ -239,7 +239,54 @@ export interface ProfileMetadata {
   website?: string;
 }
 
-const profileCache = new Map<string, ProfileMetadata>();
+const PROFILE_CACHE_KEY = "omni_profile_viewer_cache_v2";
+const PROFILE_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days expiration (2 weeks)
+
+interface CachedProfileViewerEntry {
+  meta: ProfileMetadata;
+  timestamp: number;
+}
+
+function loadPersistedProfileCache(): Map<string, ProfileMetadata> {
+  const map = new Map<string, ProfileMetadata>();
+  try {
+    if (typeof localStorage === "undefined") return map;
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return map;
+    const records: Record<string, CachedProfileViewerEntry> = JSON.parse(raw);
+    const now = Date.now();
+    let hasExpired = false;
+    for (const [pubkey, entry] of Object.entries(records)) {
+      if (entry && entry.timestamp && (now - entry.timestamp) < PROFILE_CACHE_TTL) {
+        map.set(pubkey, entry.meta);
+      } else {
+        hasExpired = true;
+      }
+    }
+    if (hasExpired) {
+      persistProfileCache(map);
+    }
+  } catch (_) {}
+  return map;
+}
+
+let saveCacheTimer: any = null;
+function persistProfileCache(cache: Map<string, ProfileMetadata>) {
+  if (typeof localStorage === "undefined") return;
+  if (saveCacheTimer) clearTimeout(saveCacheTimer);
+  saveCacheTimer = setTimeout(() => {
+    try {
+      const records: Record<string, CachedProfileViewerEntry> = {};
+      const now = Date.now();
+      for (const [pubkey, meta] of cache.entries()) {
+        records[pubkey] = { meta, timestamp: now };
+      }
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(records));
+    } catch (_) {}
+  }, 1000);
+}
+
+const profileCache = loadPersistedProfileCache();
 
 function getCurrentView(): string {
   const route =
@@ -554,6 +601,7 @@ async function mountProfileViewer(root: HTMLElement) {
           try {
             const meta: ProfileMetadata = JSON.parse(ev.content);
             profileCache.set(ev.pubkey, meta);
+            persistProfileCache(profileCache);
             if (ev.pubkey === myPubkey) {
               renderMyProfileMetadata(meta);
               populateEditForm(meta);
@@ -598,6 +646,9 @@ async function mountProfileViewer(root: HTMLElement) {
           }
         }
       } else if (type === "EOSE") {
+        if (subId?.startsWith("pv_batch_") || subId?.startsWith("pv_sync_")) {
+          sendWs(["CLOSE", subId]);
+        }
         if (subId === activeUserNotesSubId) {
           if (eoseTimeout) {
             clearTimeout(eoseTimeout);
@@ -1344,6 +1395,7 @@ async function mountProfileViewer(root: HTMLElement) {
 
       if (myPubkey) {
         profileCache.set(myPubkey, meta);
+        persistProfileCache(profileCache);
         renderMyProfileMetadata(myPubkey, meta);
       }
 
