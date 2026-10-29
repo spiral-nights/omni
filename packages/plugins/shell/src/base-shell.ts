@@ -60,6 +60,65 @@ function getOptimizedImageUrl(rawUrl: string, width = 96, height = 96): string {
   return `https://images.weserv.nl/?url=${encodeURIComponent(trimmed)}&w=${width}&h=${height}&fit=cover&output=webp&q=80`;
 }
 
+function getAvatarSvg(pubkey: string, letter: string): string {
+  let hash = 0;
+  for (let i = 0; i < (pubkey || "").length; i++) {
+    hash = (hash << 5) - hash + pubkey.charCodeAt(i);
+    hash |= 0;
+  }
+  const seed = Math.abs(hash);
+
+  // Terracotta & Warm Earth Color Harmonies
+  const palettes = [
+    ["#b85d43", "#2a2320"],
+    ["#c86d51", "#1f1a18"],
+    ["#a34f38", "#241c19"],
+    ["#d47b58", "#2d1f19"],
+    ["#bf6b45", "#332219"],
+    ["#c2613e", "#1e1916"],
+    ["#ab5c44", "#261e1b"],
+    ["#b0523b", "#211d1c"]
+  ];
+  const [stop1, stop2] = palettes[seed % palettes.length];
+  const uid = "sh_" + seed.toString(36) + "_" + (letter || "x").charCodeAt(0);
+
+  // Varied placement of nested circles derived from pubkey entropy
+  const c1_x = 18 + (seed % 64);
+  const c1_y = 18 + ((seed >> 4) % 64);
+  const c1_r = 24 + ((seed >> 8) % 18);
+  const c1_color = (seed % 2 === 0) ? "#d4a373" : "#ede8df";
+  const c1_opacity = (0.18 + ((seed % 8) * 0.015)).toFixed(2);
+
+  const c2_x = 100 - c1_x;
+  const c2_y = 100 - c1_y;
+  const c2_r = 22 + ((seed >> 12) % 22);
+
+  // Varied curved bottom contour
+  const waveY = 62 + (seed % 12);
+  const waveControlY = 38 + ((seed >> 3) % 15);
+  const waveEndY = 68 + ((seed >> 6) % 15);
+
+  const cleanLetter = (letter || "?").slice(0, 1).toUpperCase();
+
+  return `<svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad-${uid}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${stop1}" />
+      <stop offset="100%" stop-color="${stop2}" />
+    </linearGradient>
+    <filter id="sh-${uid}" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+  <rect width="100" height="100" rx="50" fill="url(#grad-${uid})" />
+  <circle cx="${c1_x}" cy="${c1_y}" r="${c1_r}" fill="${c1_color}" fill-opacity="${c1_opacity}" />
+  <circle cx="${c2_x}" cy="${c2_y}" r="${c2_r}" fill="#141312" fill-opacity="0.32" />
+  <path d="M 0 ${waveY} Q 50 ${waveControlY} 100 ${waveEndY} L 100 100 L 0 100 Z" fill="#141312" fill-opacity="0.3" />
+  <circle cx="50" cy="50" r="47.5" fill="none" stroke="#ede8df" stroke-opacity="0.2" stroke-width="1.5" />
+  <text x="50" y="53" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="44" font-weight="800" fill="#fcfaf6" text-anchor="middle" dominant-baseline="central" filter="url(#sh-${uid})">${cleanLetter}</text>
+</svg>`;
+}
+
 /**
  * BaseShell: Abstract base class consolidating all shared Omni Shell business logic:
  * - Plugin Lifecycle & Manifest Synthesis
@@ -1209,18 +1268,15 @@ export abstract class BaseShell implements OmniShellHost {
       }
 
       const displayName = profile?.display_name || profile?.name || shortNpub;
+      const initial = (displayName || "Ω").slice(0, 1).toUpperCase();
+      const avatarSvg = getAvatarSvg(pubkey, initial);
 
       // Update Classic header profile elements
       const classicAvatar = document.getElementById("header-profile-avatar");
       const classicName = document.getElementById("header-profile-name");
       const classicNpub = document.getElementById("header-profile-npub");
-      const optPic = profile?.picture ? getOptimizedImageUrl(profile.picture, 96, 96) : "";
       if (classicAvatar) {
-        if (optPic) {
-          classicAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
-        } else {
-          classicAvatar.innerHTML = ICONS.user || ICONS.profile;
-        }
+        classicAvatar.innerHTML = avatarSvg;
       }
       if (classicName) classicName.textContent = displayName;
       if (classicNpub) classicNpub.textContent = shortNpub;
@@ -1230,11 +1286,7 @@ export abstract class BaseShell implements OmniShellHost {
       const panoName = document.getElementById("panorama-header-name");
       const panoNpub = document.getElementById("panorama-header-npub");
       if (panoAvatar) {
-        if (optPic) {
-          panoAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0px;" alt="Avatar">`;
-        } else {
-          panoAvatar.innerHTML = ICONS.user || ICONS.profile;
-        }
+        panoAvatar.innerHTML = avatarSvg;
       }
       if (panoName) panoName.textContent = displayName;
       if (panoNpub) panoNpub.textContent = shortNpub;
@@ -1244,11 +1296,7 @@ export abstract class BaseShell implements OmniShellHost {
       const panoSysName = document.getElementById("panorama-display-name");
       const panoSysNpub = document.getElementById("panorama-npub");
       if (panoSysAvatar) {
-        if (optPic) {
-          panoSysAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0px;" alt="Avatar">`;
-        } else {
-          panoSysAvatar.innerHTML = ICONS.user || ICONS.profile;
-        }
+        panoSysAvatar.innerHTML = avatarSvg;
       }
       if (panoSysName) panoSysName.textContent = displayName;
       if (panoSysNpub) panoSysNpub.textContent = shortNpub;
@@ -1256,11 +1304,7 @@ export abstract class BaseShell implements OmniShellHost {
       // Update Editorial header profile elements
       const editorialAvatar = document.getElementById("btn-editorial-profile-toggle");
       if (editorialAvatar) {
-        if (optPic) {
-          editorialAvatar.innerHTML = `<img src="${optPic}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
-        } else {
-          editorialAvatar.innerHTML = `<span>${(displayName || "Ω").slice(0, 1).toUpperCase()}</span>`;
-        }
+        editorialAvatar.innerHTML = avatarSvg;
         editorialAvatar.title = `${displayName}\n${npub}`;
       }
 

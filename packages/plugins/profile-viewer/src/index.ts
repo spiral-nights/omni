@@ -254,6 +254,65 @@ function getOptimizedImageUrl(rawUrl: string, width = 96, height = 96): string {
   return `https://images.weserv.nl/?url=${encodeURIComponent(trimmed)}&w=${width}&h=${height}&fit=cover&output=webp&q=80`;
 }
 
+function getAvatarSvg(pubkey: string, letter: string): string {
+  let hash = 0;
+  for (let i = 0; i < (pubkey || "").length; i++) {
+    hash = (hash << 5) - hash + pubkey.charCodeAt(i);
+    hash |= 0;
+  }
+  const seed = Math.abs(hash);
+
+  // Terracotta & Warm Earth Color Harmonies
+  const palettes = [
+    ["#b85d43", "#2a2320"],
+    ["#c86d51", "#1f1a18"],
+    ["#a34f38", "#241c19"],
+    ["#d47b58", "#2d1f19"],
+    ["#bf6b45", "#332219"],
+    ["#c2613e", "#1e1916"],
+    ["#ab5c44", "#261e1b"],
+    ["#b0523b", "#211d1c"]
+  ];
+  const [stop1, stop2] = palettes[seed % palettes.length];
+  const uid = "pv_" + seed.toString(36) + "_" + (letter || "x").charCodeAt(0);
+
+  // Varied placement of nested circles derived from pubkey entropy
+  const c1_x = 18 + (seed % 64);
+  const c1_y = 18 + ((seed >> 4) % 64);
+  const c1_r = 24 + ((seed >> 8) % 18);
+  const c1_color = (seed % 2 === 0) ? "#d4a373" : "#ede8df";
+  const c1_opacity = (0.18 + ((seed % 8) * 0.015)).toFixed(2);
+
+  const c2_x = 100 - c1_x;
+  const c2_y = 100 - c1_y;
+  const c2_r = 22 + ((seed >> 12) % 22);
+
+  // Varied curved bottom contour
+  const waveY = 62 + (seed % 12);
+  const waveControlY = 38 + ((seed >> 3) % 15);
+  const waveEndY = 68 + ((seed >> 6) % 15);
+
+  const cleanLetter = (letter || "?").slice(0, 1).toUpperCase();
+
+  return `<svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad-${uid}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${stop1}" />
+      <stop offset="100%" stop-color="${stop2}" />
+    </linearGradient>
+    <filter id="sh-${uid}" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+  <rect width="100" height="100" rx="50" fill="url(#grad-${uid})" />
+  <circle cx="${c1_x}" cy="${c1_y}" r="${c1_r}" fill="${c1_color}" fill-opacity="${c1_opacity}" />
+  <circle cx="${c2_x}" cy="${c2_y}" r="${c2_r}" fill="#141312" fill-opacity="0.32" />
+  <path d="M 0 ${waveY} Q 50 ${waveControlY} 100 ${waveEndY} L 100 100 L 0 100 Z" fill="#141312" fill-opacity="0.3" />
+  <circle cx="50" cy="50" r="47.5" fill="none" stroke="#ede8df" stroke-opacity="0.2" stroke-width="1.5" />
+  <text x="50" y="53" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="44" font-weight="800" fill="#fcfaf6" text-anchor="middle" dominant-baseline="central" filter="url(#sh-${uid})">${cleanLetter}</text>
+</svg>`;
+}
+
 const PROFILE_CACHE_KEY = "omni_profile_viewer_cache_v2";
 const PROFILE_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days expiration (2 weeks)
 
@@ -354,9 +413,9 @@ async function mountProfileCompact(root: HTMLElement) {
       const meta = pubkey ? profileCache.get(pubkey) : null;
       strongEl.textContent = meta?.display_name || meta?.name || "Active Identity";
       npubEl.textContent = npub ? `${npub.slice(0, 8)}...${npub.slice(-4)}` : (pubkey ? `${pubkey.slice(0, 8)}...${pubkey.slice(-4)}` : "No Key");
-      if (meta?.picture) {
-        const pic = getOptimizedImageUrl(meta.picture, 96, 96);
-        avatarEl.innerHTML = `<img src="${escapeHtml(pic)}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
+      if (pubkey) {
+        const initial = (strongEl.textContent || "U")[0]?.toUpperCase() || "U";
+        avatarEl.innerHTML = getAvatarSvg(pubkey, initial);
       }
     } catch (_) {}
   })();
@@ -401,9 +460,9 @@ async function mountProfileWidget(root: HTMLElement) {
       const meta = pubkey ? profileCache.get(pubkey) : null;
       strongEl.textContent = meta?.display_name || meta?.name || "Active Identity";
       npubEl.textContent = npub ? `${npub.slice(0, 10)}...${npub.slice(-6)}` : (pubkey ? `${pubkey.slice(0, 10)}...${pubkey.slice(-4)}` : "No Key Loaded");
-      if (meta?.picture) {
-        const pic = getOptimizedImageUrl(meta.picture, 96, 96);
-        avatarEl.innerHTML = `<img src="${escapeHtml(pic)}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
+      if (pubkey) {
+        const initial = (strongEl.textContent || "U")[0]?.toUpperCase() || "U";
+        avatarEl.innerHTML = getAvatarSvg(pubkey, initial);
       }
     } catch (_) {}
   })();
@@ -547,11 +606,9 @@ async function mountProfileViewer(root: HTMLElement) {
       if (nameEl && (meta.display_name || meta.name)) nameEl.textContent = meta.display_name || meta.name || "";
       if (handleEl && meta.name) handleEl.textContent = `@${meta.name}`;
       if (aboutEl && meta.about) aboutEl.textContent = meta.about;
-      if (aWrap && meta.picture) {
-        let pic = getOptimizedImageUrl(meta.picture, 96, 96);
-        if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
-          aWrap.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
-        }
+      if (aWrap) {
+        const initial = (meta.display_name || meta.name || pubkey)[0]?.toUpperCase() || "?";
+        aWrap.innerHTML = getAvatarSvg(pubkey, initial);
       }
     });
   }
@@ -710,17 +767,14 @@ async function mountProfileViewer(root: HTMLElement) {
       <!-- 1. MY PROFILE TAB VIEW -->
       <div class="pv-tab-content pv-tab-my-profile pv-tab-profile">
         <!-- My Profile Card -->
-        <div class="pv-card pv-my-card" style="border-radius: var(--radius-md, 10px); overflow: hidden; display: flex; flex-direction: column; width: 100%; box-sizing: border-box;">
+        <div class="pv-card pv-my-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); overflow: hidden; display: flex; flex-direction: column; width: 100%; box-sizing: border-box;">
           
-          <!-- Banner Image / Header -->
-          <div class="pv-banner pv-my-banner" style="height: 140px; background: linear-gradient(135deg, #1f1d1a, #2a2723); background-size: cover; background-position: center; position: relative; width: 100%;"></div>
-
           <!-- Identity & Metadata Section -->
-          <div class="pv-info-section" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; position: relative; width: 100%; box-sizing: border-box;">
+          <div class="pv-info-section" style="padding: 20px; display: flex; flex-direction: column; gap: 14px; position: relative; width: 100%; box-sizing: border-box;">
             
-            <!-- Avatar Overlapping Banner -->
-            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: -54px; margin-bottom: 4px;">
-              <div class="pv-avatar-wrap pv-my-avatar-wrap" style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0;">
+            <!-- Avatar & Actions Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <div class="pv-avatar-wrap pv-my-avatar-wrap" style="width: 76px; height: 76px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0; padding: 0;">
                 <div class="pv-avatar-fallback pv-my-avatar-fallback" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff;">?</div>
               </div>
               
@@ -947,17 +1001,14 @@ async function mountProfileViewer(root: HTMLElement) {
         </div>
 
         <!-- Target User Card -->
-        <div class="pv-card pv-user-card" style="display: none; border-radius: var(--radius-md, 10px); overflow: hidden; flex-direction: column;">
+        <div class="pv-card pv-user-card" style="display: none; background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); overflow: hidden; flex-direction: column;">
           
-          <!-- Banner Image / Header -->
-          <div class="pv-banner pv-user-banner" style="height: 140px; background: linear-gradient(135deg, #1f1d1a, #2a2723); background-size: cover; background-position: center; position: relative;"></div>
-
           <!-- Identity & Metadata Section -->
-          <div class="pv-info-section" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; position: relative;">
+          <div class="pv-info-section" style="padding: 20px; display: flex; flex-direction: column; gap: 14px; position: relative;">
             
-            <!-- Avatar Overlapping Banner -->
-            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: -54px; margin-bottom: 4px;">
-              <div class="pv-avatar-wrap pv-user-avatar-wrap" style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0;">
+            <!-- Avatar & Actions Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <div class="pv-avatar-wrap pv-user-avatar-wrap" style="width: 76px; height: 76px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0; padding: 0;">
                 <div class="pv-avatar-fallback pv-user-avatar-fallback" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff;">?</div>
               </div>
               
@@ -1087,7 +1138,7 @@ async function mountProfileViewer(root: HTMLElement) {
   const btnProfileBackText = tabUserProfile.querySelector<HTMLElement>(".btn-profile-back-text")!;
   const searchBarEl = tabUserProfile.querySelector<HTMLElement>(".pv-search-bar")!;
 
-  const bannerEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-banner")!;
+  const bannerEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-banner");
   const avatarWrapEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-avatar-wrap")!;
   const displayNameEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-display-name")!;
   const handleEl = tabUserProfile.querySelector<HTMLElement>(".pv-user-handle")!;
@@ -1110,7 +1161,7 @@ async function mountProfileViewer(root: HTMLElement) {
   const btnBlock = tabUserProfile.querySelector<HTMLButtonElement>(".pv-btn-block")!;
 
   // My Profile elements (for authenticated identity)
-  const myBannerEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-banner")!;
+  const myBannerEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-banner");
   const myAvatarWrapEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-avatar-wrap")!;
   const myDisplayNameEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-display-name")!;
   const myHandleEl = tabMyProfile.querySelector<HTMLElement>(".pv-my-handle")!;
@@ -1188,38 +1239,20 @@ async function mountProfileViewer(root: HTMLElement) {
     }, 3500);
   };
 
-  const updateLiveAvatarPreview = (url?: string) => {
-    const cleanUrl = url?.trim();
-    if (cleanUrl && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://") || cleanUrl.startsWith("data:image/"))) {
-      const fixedUrl = cleanUrl.replace(/^http:\/\//i, "https://");
-      myAvatarWrapEl.innerHTML = `<img src="${escapeHtml(fixedUrl)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Avatar">`;
-      const img = myAvatarWrapEl.querySelector("img");
-      img?.addEventListener("error", () => {
-        const initial = (rowDName.value || rowName.value || myPubkey || "?")[0]?.toUpperCase() || "?";
-        myAvatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(myPubkey || "default")};">${escapeHtml(initial)}</div>`;
-      });
-    } else {
-      const initial = (rowDName.value || rowName.value || myPubkey || "?")[0]?.toUpperCase() || "?";
-      myAvatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(myPubkey || "default")};">${escapeHtml(initial)}</div>`;
-    }
+  const updateLiveAvatarPreview = (_url?: string) => {
+    const initial = (rowDName.value || rowName.value || myPubkey || "?")[0]?.toUpperCase() || "?";
+    myAvatarWrapEl.innerHTML = getAvatarSvg(myPubkey || "default", initial);
   };
 
   rowPic.addEventListener("input", () => {
     updateLiveAvatarPreview(rowPic.value);
   });
-  rowBanner.addEventListener("input", () => {
-    let banner = (rowBanner.value || "").trim();
-    if (banner.startsWith("http://")) banner = banner.replace(/^http:\/\//i, "https://");
-    if (banner.startsWith("https://") || banner.startsWith("data:image/")) {
-      myBannerEl.style.backgroundImage = `url("${banner}")`;
-    } else {
-      myBannerEl.style.backgroundImage = `linear-gradient(135deg, #1f1d1a, #2a2723)`;
-    }
-  });
   rowDName.addEventListener("input", () => {
+    updateLiveAvatarPreview();
     myDisplayNameEl.textContent = rowDName.value.trim() || (myPubkey ? `nostr:${myPubkey.slice(0, 8)}` : "Active Identity");
   });
   rowName.addEventListener("input", () => {
+    updateLiveAvatarPreview();
     myHandleEl.textContent = rowName.value.trim() ? `@${rowName.value.trim()}` : `@npub1${(myPubkey || "").slice(0, 8)}`;
   });
   rowNip05.addEventListener("input", () => {
@@ -1745,39 +1778,8 @@ async function mountProfileViewer(root: HTMLElement) {
 
     npubTextEl.textContent = npub || pubkey;
 
-    // Avatar
-    avatarWrapEl.innerHTML = "";
-    if (meta?.picture && typeof meta.picture === "string") {
-      let pic = getOptimizedImageUrl(meta.picture, 140, 140);
-      if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
-        const img = document.createElement("img");
-        img.src = pic;
-        img.loading = "lazy";
-        (img as any).decoding = "async";
-        img.alt = meta.display_name || meta.name || "";
-        img.style.cssText = "width: 100%; height: 100%; object-fit: cover; border-radius: 50%;";
-        img.addEventListener("error", () => {
-          avatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(pubkey)};">${escapeHtml(initial)}</div>`;
-        });
-        avatarWrapEl.appendChild(img);
-      } else {
-        avatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(pubkey)};">${escapeHtml(initial)}</div>`;
-      }
-    } else {
-      avatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(pubkey)};">${escapeHtml(initial)}</div>`;
-    }
-
-    // Banner
-    if (meta?.banner && typeof meta.banner === "string") {
-      let banner = getOptimizedImageUrl(meta.banner, 720, 240);
-      if (banner.startsWith("https://") || banner.startsWith("data:image/")) {
-        bannerEl.style.backgroundImage = `url("${banner}")`;
-      } else {
-        bannerEl.style.backgroundImage = `linear-gradient(135deg, #1f1d1a, #2a2723)`;
-      }
-    } else {
-      bannerEl.style.backgroundImage = `linear-gradient(135deg, #1f1d1a, #2a2723)`;
-    }
+    // Dynamic vector avatar (0 KB remote downloads)
+    avatarWrapEl.innerHTML = getAvatarSvg(pubkey, initial);
 
     // Names
     displayNameEl.textContent = meta?.display_name || meta?.name || `nostr:${pubkey.slice(0, 8)}`;
@@ -1833,39 +1835,8 @@ async function mountProfileViewer(root: HTMLElement) {
 
     myNpubTextEl.textContent = npub || pubkey;
 
-    // Avatar
-    myAvatarWrapEl.innerHTML = "";
-    if (meta?.picture && typeof meta.picture === "string") {
-      let pic = getOptimizedImageUrl(meta.picture, 140, 140);
-      if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
-        const img = document.createElement("img");
-        img.src = pic;
-        img.loading = "lazy";
-        (img as any).decoding = "async";
-        img.alt = meta.display_name || meta.name || "";
-        img.style.cssText = "width: 100%; height: 100%; object-fit: cover; border-radius: 50%;";
-        img.addEventListener("error", () => {
-          myAvatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(pubkey)};">${escapeHtml(initial)}</div>`;
-        });
-        myAvatarWrapEl.appendChild(img);
-      } else {
-        myAvatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(pubkey)};">${escapeHtml(initial)}</div>`;
-      }
-    } else {
-      myAvatarWrapEl.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; background: ${getAvatarGradient(pubkey)};">${escapeHtml(initial)}</div>`;
-    }
-
-    // Banner
-    if (meta?.banner && typeof meta.banner === "string") {
-      let banner = getOptimizedImageUrl(meta.banner, 720, 240);
-      if (banner.startsWith("https://") || banner.startsWith("data:image/")) {
-        myBannerEl.style.backgroundImage = `url("${banner}")`;
-      } else {
-        myBannerEl.style.backgroundImage = `linear-gradient(135deg, #1f1d1a, #2a2723)`;
-      }
-    } else {
-      myBannerEl.style.backgroundImage = `linear-gradient(135deg, #1f1d1a, #2a2723)`;
-    }
+    // Dynamic vector avatar (0 KB remote downloads)
+    myAvatarWrapEl.innerHTML = getAvatarSvg(pubkey, initial);
 
     // Names
     myDisplayNameEl.textContent = meta?.display_name || meta?.name || `nostr:${pubkey.slice(0, 8)}`;
@@ -2076,8 +2047,8 @@ async function mountProfileViewer(root: HTMLElement) {
 
     const card = html<HTMLDivElement>`
       <div class="people-user-card" data-pubkey="${escapeHtml(pubkey)}">
-        <div class="people-avatar" style="width: 44px; height: 44px; border-radius: 50%; overflow: hidden; background: ${getAvatarGradient(pubkey)}; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; flex-shrink: 0; cursor: pointer;">
-          <span>${escapeHtml(initial)}</span>
+        <div class="people-avatar" style="width: 44px; height: 44px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; padding: 0;">
+          ${getAvatarSvg(pubkey, initial)}
         </div>
         <div class="people-user-info">
           <div class="people-user-name">${escapeHtml(displayName)}</div>
@@ -2114,16 +2085,6 @@ async function mountProfileViewer(root: HTMLElement) {
         await toggleFollow(pubkey);
         card.remove();
       });
-    }
-
-    if (meta?.picture) {
-      let pic = getOptimizedImageUrl(String(meta.picture), 96, 96);
-      if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
-        const aWrap = card.querySelector<HTMLElement>(".people-avatar");
-        if (aWrap) {
-          aWrap.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
-        }
-      }
     }
 
     return card;

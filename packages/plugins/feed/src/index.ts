@@ -53,19 +53,63 @@ function getAvatarGradient(pubkey: string): string {
   return AVATAR_GRADIENTS[idx];
 }
 
-function getOptimizedImageUrl(rawUrl: string, width = 96, height = 96): string {
-  if (!rawUrl || typeof rawUrl !== "string") return "";
-  let trimmed = rawUrl.trim();
-  if (trimmed.startsWith("http://")) {
-    trimmed = trimmed.replace(/^http:\/\//i, "https://");
+function getAvatarSvg(pubkey: string, letter: string): string {
+  let hash = 0;
+  for (let i = 0; i < (pubkey || "").length; i++) {
+    hash = (hash << 5) - hash + pubkey.charCodeAt(i);
+    hash |= 0;
   }
-  if (!trimmed.startsWith("https://")) {
-    return trimmed;
-  }
-  if (trimmed.includes("images.weserv.nl")) {
-    return trimmed;
-  }
-  return `https://images.weserv.nl/?url=${encodeURIComponent(trimmed)}&w=${width}&h=${height}&fit=cover&output=webp&q=80`;
+  const seed = Math.abs(hash);
+
+  // Terracotta & Warm Earth Color Harmonies
+  const palettes = [
+    ["#b85d43", "#2a2320"],
+    ["#c86d51", "#1f1a18"],
+    ["#a34f38", "#241c19"],
+    ["#d47b58", "#2d1f19"],
+    ["#bf6b45", "#332219"],
+    ["#c2613e", "#1e1916"],
+    ["#ab5c44", "#261e1b"],
+    ["#b0523b", "#211d1c"]
+  ];
+  const [stop1, stop2] = palettes[seed % palettes.length];
+  const uid = "av_" + seed.toString(36) + "_" + (letter || "x").charCodeAt(0);
+
+  // Varied placement of nested circles derived from pubkey entropy
+  const c1_x = 18 + (seed % 64);
+  const c1_y = 18 + ((seed >> 4) % 64);
+  const c1_r = 24 + ((seed >> 8) % 18);
+  const c1_color = (seed % 2 === 0) ? "#d4a373" : "#ede8df";
+  const c1_opacity = (0.18 + ((seed % 8) * 0.015)).toFixed(2);
+
+  const c2_x = 100 - c1_x;
+  const c2_y = 100 - c1_y;
+  const c2_r = 22 + ((seed >> 12) % 22);
+
+  // Varied curved bottom contour
+  const waveY = 62 + (seed % 12);
+  const waveControlY = 38 + ((seed >> 3) % 15);
+  const waveEndY = 68 + ((seed >> 6) % 15);
+
+  const cleanLetter = (letter || "?").slice(0, 1).toUpperCase();
+
+  return `<svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad-${uid}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${stop1}" />
+      <stop offset="100%" stop-color="${stop2}" />
+    </linearGradient>
+    <filter id="sh-${uid}" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+  <rect width="100" height="100" rx="50" fill="url(#grad-${uid})" />
+  <circle cx="${c1_x}" cy="${c1_y}" r="${c1_r}" fill="${c1_color}" fill-opacity="${c1_opacity}" />
+  <circle cx="${c2_x}" cy="${c2_y}" r="${c2_r}" fill="#141312" fill-opacity="0.32" />
+  <path d="M 0 ${waveY} Q 50 ${waveControlY} 100 ${waveEndY} L 100 100 L 0 100 Z" fill="#141312" fill-opacity="0.3" />
+  <circle cx="50" cy="50" r="47.5" fill="none" stroke="#ede8df" stroke-opacity="0.2" stroke-width="1.5" />
+  <text x="50" y="53" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="44" font-weight="800" fill="#fcfaf6" text-anchor="middle" dominant-baseline="central" filter="url(#sh-${uid})">${cleanLetter}</text>
+</svg>`;
 }
 
 const PROFILE_CACHE_KEY = "omni_profile_cache_v2";
@@ -863,12 +907,10 @@ function mountFeed(root: any) {
           followingPubkeys.add(pk);
           loadCachedFollowingList(pk);
           if (myAvatarEl) {
-            myAvatarEl.style.background = getAvatarGradient(pk);
-            myAvatarEl.textContent = (pk[0] || "U").toUpperCase();
+            myAvatarEl.innerHTML = getAvatarSvg(pk, (pk[0] || "U").toUpperCase());
           }
           if (threadComposerAvatar) {
-            threadComposerAvatar.style.background = getAvatarGradient(pk);
-            threadComposerAvatar.textContent = (pk[0] || "U").toUpperCase();
+            threadComposerAvatar.innerHTML = getAvatarSvg(pk, (pk[0] || "U").toUpperCase());
           }
           fetchFollowingList(pk);
           if (activeTab === "following" && followingPubkeys.size > 0) {
@@ -996,15 +1038,11 @@ function mountFeed(root: any) {
 
   function buildNoteCard(event: any): HTMLElement {
 
-    const { name, handle, initial, picture } = getAuthorMeta(event.pubkey);
-    const avatarGradient = getAvatarGradient(event.pubkey || "");
+    const { name, handle, initial } = getAuthorMeta(event.pubkey);
     const timeStr = event.created_at ? formatTime(event.created_at) : "just now";
     const isReply = (event.tags || []).some((t: any[]) => t[0] === "e");
 
-    let sanitizedPic = picture ? getOptimizedImageUrl(picture, 96, 96) : "";
-    const avatarInner = (sanitizedPic && (sanitizedPic.startsWith("https://") || sanitizedPic.startsWith("data:image/")))
-      ? `<img src="${escapeHtml(sanitizedPic)}" alt="" loading="lazy" decoding="async" width="40" height="40" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
-      : `<span>${escapeHtml(initial)}</span>`;
+    const avatarInner = getAvatarSvg(event.pubkey || "", initial);
 
     // Deterministic counts based on note id to give authentic social feed feel
     const pseudoRand = (event.id || "").split("").reduce((acc: number, ch: string) => acc + ch.charCodeAt(0), 0);
@@ -1050,7 +1088,7 @@ function mountFeed(root: any) {
     const card = html<HTMLElement>`
       <article class="feed-post note-card" data-note-id="${escapeHtml(event.id || "")}" data-author-pubkey="${escapeHtml(event.pubkey || "")}" title="Click to view conversation thread">
         <div class="feed-post-avatar-col">
-          <div class="feed-avatar" role="button" tabindex="0" style="background: ${avatarGradient}; cursor: pointer;" title="View profile">
+          <div class="feed-avatar" role="button" tabindex="0" style="cursor: pointer; padding: 0; overflow: hidden; border-radius: 50%;" title="View profile">
             ${avatarInner}
           </div>
         </div>
@@ -1750,14 +1788,12 @@ function mountFeed(root: any) {
       const name = meta.display_name || meta.name || `nostr:${person.pubkey.slice(0, 6)}`;
       const handle = meta.nip05 ? `@${meta.nip05}` : `@npub1${person.pubkey.slice(0, 6)}`;
       const about = (meta.about || "").slice(0, 120);
-      let pic = meta.picture ? getOptimizedImageUrl(String(meta.picture), 96, 96) : "";
-      const avatarInner = (pic && (pic.startsWith("https://") || pic.startsWith("data:image/")))
-        ? `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" width="40" height="40" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
-        : `<span>${escapeHtml(name[0] || "?").toUpperCase()}</span>`;
+      const initial = (name[0] || "?").toUpperCase();
+      const avatarInner = getAvatarSvg(person.pubkey, initial);
 
       const row = html<HTMLDivElement>`
         <div class="search-person-row" role="button" tabindex="0">
-          <div class="feed-avatar" style="background: ${getAvatarGradient(person.pubkey)};">${avatarInner}</div>
+          <div class="feed-avatar" style="padding: 0; overflow: hidden; border-radius: 50%;">${avatarInner}</div>
           <div class="search-person-info">
             <strong class="search-person-name">${escapeHtml(name)}</strong>
             <span class="feed-author-handle">${escapeHtml(handle)}</span>
@@ -2250,11 +2286,9 @@ function mountFeed(root: any) {
                     if (hEl && parsed.nip05) {
                       hEl.textContent = `@${parsed.nip05}`;
                     }
-                    if (aEl && parsed.picture) {
-                      let pic = getOptimizedImageUrl(String(parsed.picture), 96, 96);
-                      if (pic.startsWith("https://") || pic.startsWith("data:image/")) {
-                        aEl.innerHTML = `<img src="${escapeHtml(pic)}" alt="" loading="lazy" decoding="async" width="40" height="40" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
-                      }
+                    if (aEl) {
+                      const initial = (parsed.display_name || parsed.name || "?").slice(0, 1).toUpperCase();
+                      aEl.innerHTML = getAvatarSvg(ev.pubkey, initial);
                     }
                   }
                 } catch (_) {}
