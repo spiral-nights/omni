@@ -434,11 +434,18 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(EDITORIAL_SHELL_CSS).toContain("noiseFilter");
       expect(EDITORIAL_SHELL_CSS).toContain("mix-blend-mode: screen");
       expect(EDITORIAL_SHELL_CSS).toContain("#1c1b20");
-      expect(EDITORIAL_SHELL_CSS).toContain(".feed-container");
-      expect(EDITORIAL_SHELL_CSS).toContain(".feed-composer");
-      expect(EDITORIAL_SHELL_CSS).toContain(".note-card");
-      expect(EDITORIAL_SHELL_CSS).toContain(".relays-container");
-      expect(EDITORIAL_SHELL_CSS).toContain(".checklist-widget-card");
+      expect(EDITORIAL_SHELL_CSS).toContain(".editorial-shell-root");
+      expect(EDITORIAL_SHELL_CSS).toContain(".editorial-dock");
+      expect(EDITORIAL_SHELL_CSS).toContain(".editorial-app-page");
+      expect(EDITORIAL_SHELL_CSS).toContain("#editorial-widgets-slot");
+
+      // Verify strict shell plugin agnosticism (Rule 7: Zero hardcoded plugin classes in shell stylesheet)
+      expect(EDITORIAL_SHELL_CSS).not.toContain(".feed-container");
+      expect(EDITORIAL_SHELL_CSS).not.toContain(".feed-composer");
+      expect(EDITORIAL_SHELL_CSS).not.toContain(".note-card");
+      expect(EDITORIAL_SHELL_CSS).not.toContain(".relays-container");
+      expect(EDITORIAL_SHELL_CSS).not.toContain(".checklist-widget-card");
+      expect(EDITORIAL_SHELL_CSS).not.toContain(".people-user-card");
     });
   });
 

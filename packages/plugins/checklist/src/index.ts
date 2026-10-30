@@ -1,5 +1,117 @@
 /// <reference types="@omni/types" />
 
+const CHECKLIST_CSS = /* css */ `
+.checklist-widget-card {
+  background: var(--omni-bg-elevated, var(--bg-surface, #191816));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #383530));
+  border-radius: var(--omni-radius-sm, 8px);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+}
+
+.checklist-widget-card .widget-header h3 {
+  font-family: var(--omni-font-serif, inherit);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  margin: 0;
+}
+
+.task-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.task-input-row input {
+  flex: 1;
+  background: var(--omni-bg-surface, var(--bg-subtle, #2a2824));
+  border: 1px solid var(--omni-border-subtle, var(--border-strong, #383530));
+  border-radius: var(--omni-radius-sm, 6px);
+  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  font-family: var(--omni-font-sans, inherit);
+  font-size: 0.88rem;
+  padding: 8px 12px;
+  outline: none;
+}
+
+.task-input-row input:focus {
+  border-color: var(--omni-accent-primary, #d4a373);
+}
+
+.task-input-row button {
+  background: var(--omni-accent-primary, #d4a373);
+  color: var(--omni-accent-contrast, #141312);
+  border: none;
+  border-radius: var(--omni-radius-sm, 6px);
+  font-family: var(--omni-font-mono, monospace);
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0 14px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.task-input-row button:hover {
+  opacity: 0.9;
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--omni-border-subtle, #272522);
+  font-family: var(--omni-font-sans, inherit);
+  font-size: 0.9rem;
+  color: var(--omni-text-primary, #ede8df);
+}
+
+.task-checkbox {
+  accent-color: var(--omni-accent-primary, #d4a373);
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.task-text {
+  flex: 1;
+  margin-left: 10px;
+}
+
+.delete-task-btn {
+  background: transparent;
+  color: var(--omni-text-muted, #78716c);
+  border: none;
+  font-size: 1.1rem;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: var(--omni-radius-sm, 4px);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.delete-task-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+`;
+
 /**
  * Native zero-dependency HTML template helper using standard <template>.
  */
@@ -51,6 +163,7 @@ async function mountChecklist(root: any) {
 
   const card = html<HTMLDivElement>`
     <div class="checklist-widget-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 12px; color: var(--text-primary, #ede8df);">
+      <style>${CHECKLIST_CSS}</style>
       <div class="widget-header" style="display: flex; justify-content: space-between; align-items: center;">
         <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary, #ede8df);">Daily Tasks</h3>
       </div>

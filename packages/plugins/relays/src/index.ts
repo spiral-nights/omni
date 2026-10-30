@@ -1,5 +1,119 @@
 /// <reference types="@omni/types" />
 
+const RELAYS_CSS = /* css */ `
+@keyframes omni-relay-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.8); }
+}
+
+.relays-widget-card,
+.relays-container {
+  background: var(--omni-bg-elevated, var(--bg-surface, #191816));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #383530));
+  border-radius: var(--omni-radius-sm, 10px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  max-width: 660px;
+  width: 100%;
+  margin: 0 auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  box-sizing: border-box;
+}
+
+.relays-widget-card .widget-header h3,
+.relays-container .widget-header h3 {
+  font-family: var(--omni-font-serif, inherit);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  margin: 0;
+}
+
+.relay-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--omni-bg-surface, var(--bg-subtle, #2a2824));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  border-radius: var(--omni-radius-sm, 6px);
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  margin-bottom: 6px;
+  transition: border-color 0.15s ease;
+}
+
+.relay-row:hover {
+  border-color: var(--omni-border-strong, #383530);
+}
+
+.btn-remove-relay {
+  background: transparent;
+  border: none;
+  color: var(--omni-text-muted, #78716c);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+  border-radius: var(--omni-radius-sm, 4px);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.btn-remove-relay:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.btn-preset-relay {
+  font-size: 0.7rem;
+  padding: 4px 10px;
+  background: var(--omni-bg-surface, var(--bg-subtle, #2a2824));
+  border: 1px solid var(--omni-border-subtle, #272522);
+  color: var(--omni-text-secondary, #a8a29e);
+  border-radius: var(--omni-radius-sm, 6px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-preset-relay:hover {
+  border-color: var(--omni-border-strong, #383530);
+  color: var(--omni-text-primary, #ede8df);
+}
+
+.input-relay-url {
+  flex: 1;
+  background: var(--omni-bg-surface, var(--bg-subtle, #2a2824));
+  border: 1px solid var(--omni-border-subtle, var(--border-strong, #383530));
+  border-radius: var(--omni-radius-sm, 6px);
+  color: var(--omni-text-primary, #ede8df);
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  outline: none;
+}
+
+.input-relay-url:focus {
+  border-color: var(--omni-accent-primary, #d4a373);
+}
+
+.btn-add-relay {
+  font-size: 0.75rem;
+  padding: 6px 14px;
+  background: var(--omni-accent-primary, #d4a373);
+  border: 1px solid var(--omni-accent-primary, #d4a373);
+  color: var(--omni-accent-contrast, #141312);
+  border-radius: var(--omni-radius-sm, 6px);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.btn-add-relay:hover {
+  opacity: 0.9;
+}
+`;
+
 /**
  * Native zero-dependency HTML template helper using standard <template>.
  */
@@ -40,20 +154,8 @@ function mountRelays(root: any) {
   ];
 
   const card = html<HTMLDivElement>`
-    <div class="checklist-widget-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 10px; color: var(--text-primary, #ede8df);">
-      <style>
-        @keyframes omni-relay-pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.35; transform: scale(0.8); }
-        }
-        .relay-row:hover {
-          border-color: var(--border-strong, #383530) !important;
-        }
-        .btn-remove-relay:hover {
-          color: #ef4444 !important;
-          background: rgba(239, 68, 68, 0.12) !important;
-        }
-      </style>
+    <div class="relays-widget-card relays-container" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 10px; color: var(--text-primary, #ede8df);">
+      <style>${RELAYS_CSS}</style>
       <div class="widget-header" style="display: flex; justify-content: space-between; align-items: center;">
         <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary, #ede8df);">✦ Relays</h3>
       </div>
