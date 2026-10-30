@@ -1502,8 +1502,8 @@ async function mountProfileViewer(root: HTMLElement) {
         <div class="people-header-left" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: 100%; min-width: 0;">
           <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-primary, #ede8df); flex-shrink: 0;">Profiles</h2>
           <div class="people-tabs" style="display: inline-flex; align-items: center; gap: 2px; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; box-sizing: border-box;">
-            <button class="people-tab-btn btn-tab-profile btn-tab-my-profile active" data-tab="my-profile">My Profile</button>
-            <button class="people-tab-btn btn-tab-user-profile btn-tab-user" data-tab="user-profile">User Profile</button>
+            <button class="people-tab-btn btn-tab-profile btn-tab-my-profile active" data-tab="my-profile">Profile</button>
+            <button class="people-tab-btn btn-tab-user-profile btn-tab-user" data-tab="user-profile" style="display: none;">User Profile</button>
             <button class="people-tab-btn btn-tab-following" data-tab="following">Following (<span class="count-following">0</span>)</button>
             <button class="people-tab-btn btn-tab-blocked" data-tab="blocked">Blocked (<span class="count-blocked">0</span>)</button>
           </div>
@@ -1529,6 +1529,10 @@ async function mountProfileViewer(root: HTMLElement) {
               </div>
               
               <div class="pv-action-buttons pv-my-action-buttons" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; min-width: 0; flex-shrink: 1;">
+                <button class="pv-btn-edit-profile-card btn-secondary" style="white-space: nowrap; flex-shrink: 0;" title="Edit Profile Details">
+                  ${ICONS.edit}
+                  <span>Edit Profile</span>
+                </button>
                 <button class="pv-btn-my-sync btn-secondary" style="white-space: nowrap; flex-shrink: 0;" title="Sync metadata from Relays">
                   ${ICONS.refresh}
                   <span>Sync from Relays</span>
@@ -1578,14 +1582,14 @@ async function mountProfileViewer(root: HTMLElement) {
 
         <!-- My Profile Subtabs Navigation -->
         <div class="pv-my-subtabs modal-tabs" style="display: flex; gap: 8px; border-bottom: 1px solid var(--border-subtle, #272522); padding: 4px 0 8px 0; margin-top: 14px; width: 100%;">
-          <button class="modal-tab-btn pv-btn-edit-profile active" id="btn-tab-profile" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 600; cursor: pointer; color: var(--accent-primary, #d4a373); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-sm, 6px);">
-            ${ICONS.user} <span>Profile Info</span>
+          <button class="modal-tab-btn pv-btn-my-notes active" id="btn-tab-my-notes" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 600; cursor: pointer; color: var(--accent-primary, #d4a373); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-sm, 6px);">
+            ${ICONS.notes} <span>Notes (<span class="pv-my-notes-count-pill">0</span>)</span>
+          </button>
+          <button class="modal-tab-btn pv-btn-edit-profile" id="btn-tab-profile" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 500; cursor: pointer; color: var(--text-muted, #78716c); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-sm, 6px);">
+            ${ICONS.edit} <span>Edit Profile</span>
           </button>
           <button class="modal-tab-btn pv-btn-keys" id="btn-tab-keys" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 500; cursor: pointer; color: var(--text-muted, #78716c); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-sm, 6px);">
             ${ICONS.key} <span>Keys & Custody</span>
-          </button>
-          <button class="modal-tab-btn pv-btn-my-notes" id="btn-tab-my-notes" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 500; cursor: pointer; color: var(--text-muted, #78716c); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-sm, 6px);">
-            ${ICONS.notes} <span>My Notes (<span class="pv-my-notes-count-pill">0</span>)</span>
           </button>
         </div>
 
@@ -1596,7 +1600,7 @@ async function mountProfileViewer(root: HTMLElement) {
           <div id="prof-toast" style="display: none; padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.8rem; font-weight: 500; align-items: center; gap: 8px; transition: all 0.2s ease;"></div>
 
           <!-- Pane 1: Profile Info -->
-          <div class="pane-profile" style="display: flex; flex-direction: column; gap: 12px; width: 100%; box-sizing: border-box;">
+          <div class="pane-profile" style="display: none; flex-direction: column; gap: 12px; width: 100%; box-sizing: border-box;">
             <div style="display: flex; flex-direction: column; gap: 10px;">
               <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
                 Display Name:
@@ -1695,7 +1699,7 @@ async function mountProfileViewer(root: HTMLElement) {
           </div>
 
           <!-- Pane 3: My Notes Feed Section -->
-          <div class="pane-notes pv-notes-section pv-my-notes-section" style="display: none; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
+          <div class="pane-notes pv-notes-section pv-my-notes-section" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
             <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle, #272522); padding-bottom: 8px;">
               <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary, #ede8df);">
                 ${ICONS.notes}
@@ -2043,7 +2047,7 @@ async function mountProfileViewer(root: HTMLElement) {
     }
   }
 
-  function toggleEditPanel(targetPane: "profile" | "keys" | "notes" = "profile", _forceOpen?: boolean) {
+  function toggleEditPanel(targetPane: "profile" | "keys" | "notes" = "notes", _forceOpen?: boolean) {
     editPanel.style.display = "flex";
 
     btnInnerTabProfile.classList.toggle("active", targetPane === "profile");
@@ -2068,6 +2072,12 @@ async function mountProfileViewer(root: HTMLElement) {
       populateEditForm(cached || null);
     }
   }
+
+  const btnEditCard = tabMyProfile.querySelector<HTMLButtonElement>(".pv-btn-edit-profile-card");
+  btnEditCard?.addEventListener("click", () => {
+    toggleEditPanel("profile");
+    editPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
   btnInnerTabProfile.addEventListener("click", () => toggleEditPanel("profile"));
   btnInnerTabKeys.addEventListener("click", () => toggleEditPanel("keys"));
@@ -2251,6 +2261,12 @@ async function mountProfileViewer(root: HTMLElement) {
     btnTabFollowing.classList.toggle("active", normalizedTab === "following");
     btnTabBlocked.classList.toggle("active", normalizedTab === "blocked");
 
+    if (normalizedTab === "user-profile") {
+      btnTabUserProfile.style.display = "inline-flex";
+    } else if (!activeUserPubkey) {
+      btnTabUserProfile.style.display = "none";
+    }
+
     tabMyProfile.style.display = normalizedTab === "my-profile" ? "block" : "none";
     tabUserProfile.style.display = normalizedTab === "user-profile" ? "block" : "none";
     tabFollowing.style.display = normalizedTab === "following" ? "block" : "none";
@@ -2310,27 +2326,38 @@ async function mountProfileViewer(root: HTMLElement) {
 
   btnTabMyProfile.addEventListener("click", () => {
     previousTab = null;
+    activeUserPubkey = "";
+    btnTabUserProfile.style.display = "none";
     switchTab("my-profile", true);
   });
   btnTabUserProfile.addEventListener("click", () => {
     previousTab = null;
+    btnTabUserProfile.style.display = "inline-flex";
     switchTab("user-profile", true);
   });
   btnTabFollowing.addEventListener("click", () => {
     previousTab = null;
+    activeUserPubkey = "";
+    btnTabUserProfile.style.display = "none";
     switchTab("following", true);
   });
   btnTabBlocked.addEventListener("click", () => {
     previousTab = null;
+    activeUserPubkey = "";
+    btnTabUserProfile.style.display = "none";
     switchTab("blocked", true);
   });
   btnEmptyBrowseFollowing.addEventListener("click", () => {
     previousTab = null;
+    activeUserPubkey = "";
+    btnTabUserProfile.style.display = "none";
     switchTab("following", true);
   });
 
   // Profile back button handler
   btnProfileBack.addEventListener("click", () => {
+    activeUserPubkey = "";
+    btnTabUserProfile.style.display = "none";
     if (typeof window !== "undefined" && (window.history.state?.type === "omni-people-view" || window.history.length > 1)) {
       window.history.back();
     } else {
@@ -2811,10 +2838,12 @@ async function mountProfileViewer(root: HTMLElement) {
   function loadUserProfile(pubkey: string) {
     if (!pubkey) {
       activeUserPubkey = "";
+      btnTabUserProfile.style.display = "none";
       renderUserProfileMetadata("", null);
       return;
     }
     activeUserPubkey = pubkey;
+    btnTabUserProfile.style.display = "inline-flex";
     activePubkey = pubkey;
     isLoading = true;
 
@@ -3085,13 +3114,17 @@ async function mountProfileViewer(root: HTMLElement) {
       loadUserProfile(pk);
       switchTab("user-profile", false);
     } else {
+      activeUserPubkey = "";
+      btnTabUserProfile.style.display = "none";
       if (myPubkey) loadMyProfile(myPubkey);
       switchTab("my-profile", false);
     }
-    toggleEditPanel("profile", false);
+    toggleEditPanel("notes", false);
   };
 
   const handleEditProfile = (data: any) => {
+    activeUserPubkey = "";
+    btnTabUserProfile.style.display = "none";
     if (myPubkey) {
       loadMyProfile(myPubkey);
     }

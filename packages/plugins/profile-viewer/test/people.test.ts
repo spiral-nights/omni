@@ -405,6 +405,7 @@ describe("People plugin (profile, follows, mutes)", () => {
     expect(btnKeys.style.display).not.toBe("none");
     expect(btnFollow.style.display).toBe("none");
     expect(btnBlock.style.display).toBe("none");
+    btnEdit.click();
     expect(paneProfile.style.display).not.toBe("none");
 
     // Fill form fields
