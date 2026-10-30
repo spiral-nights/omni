@@ -848,10 +848,10 @@ async function mountProfileViewer(root: HTMLElement) {
     <div class="profile-viewer-container" style="display: flex; flex-direction: column; gap: 16px; padding: 12px; max-width: 760px; margin: 0 auto; color: var(--text-primary, #ede8df); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
       
       <!-- Top App Header & Viewport Tabs -->
-      <div class="people-header" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 0; flex-wrap: wrap;">
-        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-          <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-primary, #ede8df);">Profiles</h2>
-          <div class="people-tabs">
+      <div class="people-header" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 2px 0; flex-wrap: wrap; width: 100%; box-sizing: border-box;">
+        <div class="people-header-left" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: 100%; min-width: 0;">
+          <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-primary, #ede8df); flex-shrink: 0;">Profiles</h2>
+          <div class="people-tabs" style="display: inline-flex; align-items: center; gap: 2px; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; box-sizing: border-box;">
             <button class="people-tab-btn btn-tab-profile btn-tab-my-profile active" data-tab="my-profile">My Profile</button>
             <button class="people-tab-btn btn-tab-user-profile btn-tab-user" data-tab="user-profile">User Profile</button>
             <button class="people-tab-btn btn-tab-following" data-tab="following">Following (<span class="count-following">0</span>)</button>
@@ -2206,16 +2206,16 @@ async function mountProfileViewer(root: HTMLElement) {
     const about = meta?.about || "";
 
     const card = html<HTMLDivElement>`
-      <div class="people-user-card" data-pubkey="${escapeHtml(pubkey)}">
+      <div class="people-user-card" data-pubkey="${escapeHtml(pubkey)}" style="display: flex; align-items: center; gap: 12px; cursor: pointer; user-select: none;">
         <div class="people-avatar" style="width: 44px; height: 44px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; padding: 0;">
           ${getAvatarSvg(pubkey, initial)}
         </div>
-        <div class="people-user-info">
+        <div class="people-user-info" style="cursor: pointer; flex: 1; min-width: 0;">
           <div class="people-user-name">${escapeHtml(displayName)}</div>
           <div class="people-user-handle">${escapeHtml(handle)}</div>
           ${about ? `<div class="people-user-about">${escapeHtml(about)}</div>` : ""}
         </div>
-        <div class="people-user-actions">
+        <div class="people-user-actions" style="flex-shrink: 0;">
           ${isBlockList
             ? `<button class="btn-block-toggle is-blocked btn-unblock-row" title="Unblock user">Unblock</button>`
             : `<button class="btn-follow-toggle is-following btn-unfollow-row" title="Unfollow user">Unfollow</button>`
@@ -2224,14 +2224,20 @@ async function mountProfileViewer(root: HTMLElement) {
       </div>
     `;
 
-    // Click on info/avatar navigates to user profile tab
-    const openUser = () => {
+    // Click on any part of the card (empty space, avatar, or info) navigates to user profile
+    const openUser = (e?: MouseEvent) => {
+      if (e) {
+        const target = e.target as HTMLElement | null;
+        if (target && target.closest("button, .btn-follow-toggle, .btn-block-toggle, a")) {
+          return;
+        }
+      }
       previousTab = isBlockList ? "blocked" : "following";
       loadUserProfile(pubkey);
       switchTab("user-profile", true);
     };
-    card.querySelector<HTMLElement>(".people-avatar")?.addEventListener("click", openUser);
-    card.querySelector<HTMLElement>(".people-user-info")?.addEventListener("click", openUser);
+
+    card.addEventListener("click", openUser);
 
     if (isBlockList) {
       card.querySelector<HTMLButtonElement>(".btn-unblock-row")?.addEventListener("click", async (e) => {

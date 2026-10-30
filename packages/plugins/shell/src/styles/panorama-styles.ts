@@ -1207,6 +1207,17 @@ style, script, head, title, meta, link,
   background: #111111;
   padding: 3px 4px;
   border-radius: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+
+.people-tabs::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .people-tab-btn {
@@ -1245,6 +1256,7 @@ style, script, head, title, meta, link,
   background: #111111;
   border: 1px solid #222222;
   border-radius: 0;
+  cursor: pointer;
   transition: border-color 0.15s ease;
 }
 
@@ -1326,6 +1338,33 @@ style, script, head, title, meta, link,
 }
 
 @media (max-width: 600px) {
+  .people-header {
+    gap: 8px !important;
+  }
+  .people-header-left {
+    width: 100% !important;
+    gap: 8px !important;
+  }
+  .people-tabs {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 3px !important;
+    box-sizing: border-box !important;
+  }
+  .people-tab-btn {
+    padding: 5px 8px !important;
+    font-size: 0.72rem !important;
+    flex-shrink: 0 !important;
+  }
+  .btn-toggle-lookup {
+    padding: 5px 10px !important;
+    font-size: 0.72rem !important;
+  }
   .pv-info-section {
     padding: 14px 10px !important;
   }

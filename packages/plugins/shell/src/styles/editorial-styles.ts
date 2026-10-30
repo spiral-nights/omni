@@ -2040,16 +2040,35 @@ style, script, head, title, meta, link,
 }
 
 .people-user-card {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
   background: var(--omni-bg-elevated) !important;
   border: 1px solid var(--omni-border-subtle) !important;
   border-radius: var(--omni-radius-sm) !important;
   padding: 14px 16px !important;
   margin-bottom: 8px !important;
-  transition: border-color 0.15s ease !important;
+  cursor: pointer !important;
+  transition: border-color 0.15s ease, background 0.15s ease !important;
 }
 
 .people-user-card:hover {
   border-color: var(--omni-border-strong) !important;
+  background: var(--omni-bg-surface) !important;
+}
+
+.search-person-row {
+  display: flex !important;
+  gap: 12px !important;
+  align-items: center !important;
+  padding: 10px 16px !important;
+  border-bottom: 1px solid var(--omni-border-subtle) !important;
+  cursor: pointer !important;
+  transition: background 0.15s ease !important;
+}
+
+.search-person-row:hover {
+  background: var(--omni-bg-surface) !important;
 }
 
 .people-user-name {
@@ -2292,6 +2311,17 @@ style, script, head, title, meta, link,
   border: 1px solid var(--omni-border-subtle) !important;
   padding: 2px !important;
   border-radius: var(--omni-radius-sm) !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+  -webkit-overflow-scrolling: touch !important;
+  box-sizing: border-box !important;
+}
+
+.people-tabs::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 .people-tab-btn {
@@ -2497,6 +2527,33 @@ style, script, head, title, meta, link,
 }
 
 @media (max-width: 600px) {
+  .people-header {
+    gap: 8px !important;
+  }
+  .people-header-left {
+    width: 100% !important;
+    gap: 8px !important;
+  }
+  .people-tabs {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 2px !important;
+    box-sizing: border-box !important;
+  }
+  .people-tab-btn {
+    padding: 5px 8px !important;
+    font-size: 0.65rem !important;
+    flex-shrink: 0 !important;
+  }
+  .btn-toggle-lookup {
+    padding: 5px 10px !important;
+    font-size: 0.65rem !important;
+  }
   .pv-info-section {
     padding: 14px 10px !important;
   }

@@ -1802,7 +1802,7 @@ function mountFeed(root: any) {
       const avatarInner = getAvatarSvg(person.pubkey, initial);
 
       const row = html<HTMLDivElement>`
-        <div class="search-person-row" role="button" tabindex="0">
+        <div class="search-person-row" role="button" tabindex="0" style="cursor: pointer;">
           <div class="feed-avatar" style="padding: 0; overflow: hidden; border-radius: 50%;">${avatarInner}</div>
           <div class="search-person-info">
             <strong class="search-person-name">${escapeHtml(name)}</strong>

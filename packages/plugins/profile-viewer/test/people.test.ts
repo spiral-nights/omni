@@ -305,6 +305,12 @@ describe("People plugin (profile, follows, mutes)", () => {
     // Should return to Following tab
     expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-following")!.style.display).not.toBe("none");
     expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-user-profile")!.style.display).toBe("none");
+
+    // Verify card has pointer cursor and clicking the empty space on the card opens profile
+    expect(userCard.style.cursor).toBe("pointer");
+    userCard.click();
+    await flush();
+    expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-user-profile")!.style.display).not.toBe("none");
   });
 
   it("filters followed accounts by query string", async () => {
