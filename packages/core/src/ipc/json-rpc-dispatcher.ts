@@ -645,11 +645,70 @@ export class JsonRpcDispatcher {
         return this.ctx.keystore.getNpub();
       }
 
-      case "auth.getNsec":
-      case "auth.switchKey": {
+      case "auth.getNsec": {
         throw {
           code: JsonRpcErrorCode.PERMISSION_DENIED,
           message: "Access to private key (nsec) is strictly prohibited. Use standard NIP-07 (window.nostr) for cryptographic operations."
+        };
+      }
+
+      case "auth.switchKey": {
+        const hasPermission = await this.ctx.aclEngine.checkPermission(
+          this.ctx.pluginId,
+          "identity:manage_keys",
+          { action: "switchKey" }
+        );
+        if (!hasPermission) {
+          throw {
+            code: JsonRpcErrorCode.PERMISSION_DENIED,
+            message: `Plugin '${this.ctx.pluginId}' does not have the 'identity:manage_keys' permission to switch the active identity.`
+          };
+        }
+
+        const key = String(params?.key || params?.privateKey || "").trim();
+        if (!key) {
+          throw {
+            code: JsonRpcErrorCode.INVALID_PARAMS,
+            message: "Missing private key string (expected nsec1... or 64-char hex string)"
+          };
+        }
+
+        try {
+          this.ctx.keystore.setPrivateKey(key);
+        } catch (err: any) {
+          throw {
+            code: JsonRpcErrorCode.INVALID_PARAMS,
+            message: err?.message || "Invalid private key format"
+          };
+        }
+
+        return {
+          success: true,
+          pubkey: await this.ctx.keystore.getPublicKey(),
+          npub: await this.ctx.keystore.getNpub()
+        };
+      }
+
+      case "auth.generateKey": {
+        const hasPermission = await this.ctx.aclEngine.checkPermission(
+          this.ctx.pluginId,
+          "identity:manage_keys",
+          { action: "generateKey" }
+        );
+        if (!hasPermission) {
+          throw {
+            code: JsonRpcErrorCode.PERMISSION_DENIED,
+            message: `Plugin '${this.ctx.pluginId}' does not have the 'identity:manage_keys' permission.`
+          };
+        }
+
+        const freshHex = WebCryptoKeystore.generatePrivateKey();
+        this.ctx.keystore.setPrivateKey(freshHex);
+
+        return {
+          success: true,
+          pubkey: await this.ctx.keystore.getPublicKey(),
+          npub: await this.ctx.keystore.getNpub()
         };
       }
 

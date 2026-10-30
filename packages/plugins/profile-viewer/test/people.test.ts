@@ -75,7 +75,11 @@ describe("People plugin (profile, follows, mutes)", () => {
       }))
     };
     (window as any).omni = {
-      intents: { handle: vi.fn(), dispatch: vi.fn(async () => ({ handled: true })) }
+      intents: { handle: vi.fn(), dispatch: vi.fn(async () => ({ handled: true })) },
+      auth: {
+        switchKey: vi.fn(async (key: string) => ({ success: true, pubkey: "switched_pubkey_123", npub: "npub1switched" })),
+        generateKey: vi.fn(async () => ({ success: true, pubkey: "generated_pubkey_456", npub: "npub1generated" }))
+      }
     };
     (window as any).location.search = "";
     (window as any).location.hash = "";
@@ -454,6 +458,23 @@ describe("People plugin (profile, follows, mutes)", () => {
     expect(paneKeys.textContent).toContain("Cryptographic Key Custody & Security");
     expect(paneKeys.querySelector("#key-nsec")).toBeNull();
     expect(paneKeys.querySelector("#btn-reveal-nsec")).toBeNull();
+
+    // Verify write-only import & switch controls are present
+    const keyImport = editPanel.querySelector<HTMLInputElement>("#key-import")!;
+    const btnImport = editPanel.querySelector<HTMLButtonElement>("#btn-import-key")!;
+    const btnGenerate = editPanel.querySelector<HTMLButtonElement>("#btn-generate-key")!;
+    expect(keyImport).not.toBeNull();
+    expect(keyImport.type).toBe("password");
+    expect(btnImport).not.toBeNull();
+    expect(btnGenerate).not.toBeNull();
+
+    // Test importing a new private key via permission-governed switchKey
+    keyImport.value = "nsec1testvalidkey";
+    btnImport.click();
+    await flush();
+
+    expect((window as any).omni.auth.switchKey).toHaveBeenCalledWith("nsec1testvalidkey");
+    expect(keyImport.value).toBe("");
   });
 
   it("responds to edit_profile intent by activating the edit profile tab", async () => {

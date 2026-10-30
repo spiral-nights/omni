@@ -434,8 +434,22 @@ describe("Security & Key Custody Isolation (NIP-07 Only)", () => {
       message: expect.stringContaining("Access to private key (nsec) is strictly prohibited")
     });
 
-    // Attempting to switch key must fail
+    // Attempting to switch key without identity:manage_keys permission must fail
     await expect(callRpc("auth.switchKey", { key: "1".repeat(64) })).rejects.toMatchObject({
+      code: -32001,
+      message: expect.stringContaining("does not have the 'identity:manage_keys' permission")
+    });
+
+    // When granted identity:manage_keys permission, switching key succeeds
+    kernel.capabilityStore.setGrant(manifest.id, "identity:manage_keys", "always");
+    const switchRes = await callRpc("auth.switchKey", { key: "1".repeat(64) });
+    expect(switchRes.success).toBe(true);
+    expect(switchRes.pubkey).toBeDefined();
+    expect(switchRes.npub).toContain("npub1");
+    expect(await kernel.getUserPubkey()).toBe(switchRes.pubkey);
+
+    // Even with identity:manage_keys, reading nsec must STILL be strictly prohibited
+    await expect(callRpc("auth.getNsec")).rejects.toMatchObject({
       code: -32001,
       message: expect.stringContaining("Access to private key (nsec) is strictly prohibited")
     });

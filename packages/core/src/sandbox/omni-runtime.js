@@ -320,6 +320,13 @@
         const state = msg.params && msg.params.state;
         const targetUrl = msg.params && msg.params.url;
         applyHistoryNavigate(delta, state, targetUrl);
+      } else if (msg.method === "auth.keyChanged") {
+        if (msg.params && msg.params.pubkey) {
+          if (sessionInfo) sessionInfo.userPubkey = msg.params.pubkey;
+          try {
+            window.dispatchEvent(new CustomEvent("nostr:keychanged", { detail: { pubkey: msg.params.pubkey } }));
+          } catch (_) {}
+        }
       }
     };
   }
@@ -1598,6 +1605,22 @@
           return sessionInfo.userPubkey;
         }
         return callRpc("auth.getNpub");
+      },
+      async switchKey(key) {
+        await initPromise;
+        const res = await callRpc("auth.switchKey", { key });
+        if (res && res.pubkey && sessionInfo) {
+          sessionInfo.userPubkey = res.pubkey;
+        }
+        return res;
+      },
+      async generateKey() {
+        await initPromise;
+        const res = await callRpc("auth.generateKey");
+        if (res && res.pubkey && sessionInfo) {
+          sessionInfo.userPubkey = res.pubkey;
+        }
+        return res;
       }
     }
   };

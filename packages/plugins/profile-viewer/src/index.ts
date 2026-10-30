@@ -1672,6 +1672,26 @@ async function mountProfileViewer(root: HTMLElement) {
                 Your private key (nsec) is strictly isolated and guarded by the host microkernel. Sandboxed plugins and nsites never have access to raw private keys and interact exclusively through standard NIP-07 (<code style="font-family: var(--font-mono, monospace); color: var(--accent-primary, #d4a373);">window.nostr</code>) signing.
               </p>
             </div>
+
+            <!-- Switch Identity / Import Key Section -->
+            <div style="border-top: 1px solid var(--border-subtle, #272522); padding-top: 14px; display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary, #ede8df);">Switch Identity / Import Account:</span>
+                <span style="font-family: var(--font-mono, monospace); font-size: 0.65rem; color: var(--accent-primary, #d4a373); text-transform: uppercase;">Write-Only Custody</span>
+              </div>
+              <p style="margin: 0; font-size: 0.76rem; color: var(--text-muted, #78716c); line-height: 1.4;">
+                Paste an existing Nostr private key (<code style="font-family: var(--font-mono, monospace); color: var(--accent-primary, #d4a373);">nsec1...</code> or 64-char hex) to switch your active signing identity. The key is securely passed write-only to the host keystore.
+              </p>
+              <div style="display: flex; gap: 8px;">
+                <input id="key-import" type="password" placeholder="Paste nsec1... or 64-char hex private key" style="flex: 1; padding: 8px 12px; font-family: var(--font-mono, monospace); font-size: 0.78rem; outline: none; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-sm, 6px); color: var(--text-primary, #ede8df);" />
+                <button id="btn-import-key" class="btn-publish" style="white-space: nowrap;">Import & Switch</button>
+              </div>
+              <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px;">
+                <button id="btn-generate-key" class="btn-secondary" style="font-size: 0.74rem;">
+                  Generate Fresh Keypair
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Pane 3: My Notes Feed Section -->
@@ -1958,6 +1978,9 @@ async function mountProfileViewer(root: HTMLElement) {
   const inpPubkey = editPanel.querySelector<HTMLInputElement>("#key-hex")!;
   const btnCopyNpub = editPanel.querySelector<HTMLButtonElement>("#btn-copy-npub")!;
   const btnCopyHex = editPanel.querySelector<HTMLButtonElement>("#btn-copy-hex")!;
+  const inpImportKey = editPanel.querySelector<HTMLInputElement>("#key-import");
+  const btnImportKey = editPanel.querySelector<HTMLButtonElement>("#btn-import-key");
+  const btnGenerateKey = editPanel.querySelector<HTMLButtonElement>("#btn-generate-key");
 
   root.appendChild(container);
 
@@ -2067,6 +2090,74 @@ async function mountProfileViewer(root: HTMLElement) {
 
   btnCopyNpub.addEventListener("click", () => copyText(inpNpub.value, btnCopyNpub));
   btnCopyHex.addEventListener("click", () => copyText(inpPubkey.value, btnCopyHex));
+
+  btnImportKey?.addEventListener("click", async () => {
+    const keyVal = inpImportKey?.value.trim();
+    if (!keyVal) {
+      showToast("Please enter a private key (nsec1... or 64-char hex)", true);
+      return;
+    }
+
+    const origText = btnImportKey.textContent || "Import & Switch";
+    btnImportKey.textContent = "Switching Identity...";
+    btnImportKey.disabled = true;
+
+    try {
+      const omniObj = typeof window !== "undefined" ? (window as any).omni : null;
+      if (!omniObj?.auth?.switchKey) {
+        throw new Error("Key switching is not supported by the runtime.");
+      }
+
+      const res = await omniObj.auth.switchKey(keyVal);
+      if (res?.pubkey) {
+        myPubkey = res.pubkey;
+        populateEditForm(profileCache.get(res.pubkey) || null);
+        initUserSocialGraph(res.pubkey);
+        loadMyProfile(res.pubkey);
+      }
+      if (inpImportKey) {
+        inpImportKey.value = "";
+      }
+      showToast("Identity switched successfully!");
+    } catch (err: any) {
+      showToast(`Failed to switch identity: ${err?.message || String(err)}`, true);
+    } finally {
+      btnImportKey.textContent = origText;
+      btnImportKey.disabled = false;
+    }
+  });
+
+  btnGenerateKey?.addEventListener("click", async () => {
+    const confirmed = typeof window !== "undefined" && window.confirm
+      ? window.confirm("Generate and switch to a fresh Nostr keypair? This will activate a new anonymous identity.")
+      : true;
+    if (!confirmed) return;
+
+    const origText = btnGenerateKey.textContent || "Generate Fresh Keypair";
+    btnGenerateKey.textContent = "Generating...";
+    btnGenerateKey.disabled = true;
+
+    try {
+      const omniObj = typeof window !== "undefined" ? (window as any).omni : null;
+      if (!omniObj?.auth?.generateKey) {
+        throw new Error("Key generation is not supported by the runtime.");
+      }
+
+      const res = await omniObj.auth.generateKey();
+      if (res?.pubkey) {
+        myPubkey = res.pubkey;
+        populateEditForm(profileCache.get(res.pubkey) || null);
+        initUserSocialGraph(res.pubkey);
+        loadMyProfile(res.pubkey);
+      }
+      showToast("New Nostr keypair generated and activated!");
+    } catch (err: any) {
+      showToast(`Failed to generate key: ${err?.message || String(err)}`, true);
+    } finally {
+      btnGenerateKey.textContent = origText;
+      btnGenerateKey.disabled = false;
+    }
+  });
 
   // Save & Publish Profile (kind 0)
   btnSave.addEventListener("click", async () => {

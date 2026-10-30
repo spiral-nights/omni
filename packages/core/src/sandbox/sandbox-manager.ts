@@ -535,6 +535,17 @@ export class SandboxInstance {
     }
   }
 
+  public setUserPubkey(pubkey: string): void {
+    this.options.userPubkey = pubkey;
+    if (this.channel2 && this.channel2.port1) {
+      this.channel2.port1.postMessage({
+        jsonrpc: "2.0",
+        method: "auth.keyChanged",
+        params: { pubkey }
+      });
+    }
+  }
+
   destroy(): void {
     if (this.dispatcher) {
       this.dispatcher.destroy();

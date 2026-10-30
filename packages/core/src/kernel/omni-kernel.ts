@@ -122,6 +122,9 @@ export class OmniKernel {
       try {
         const pubkey = await this.getUserPubkey();
         this.eventStore.setUserPubkey(pubkey);
+        for (const sandbox of this.sandboxes.values()) {
+          sandbox.setUserPubkey?.(pubkey);
+        }
         this.fetchRemoteRelayList(pubkey).catch(() => {});
       } catch {}
     });
@@ -201,6 +204,14 @@ export class OmniKernel {
               this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
             }
           }
+          if (
+            (manifest.id === "org.omni.plugin.profile-viewer" || manifest.id === "org.omni.plugin.profile" || (manifest.permissions as any)?.identity?.manageKeys) &&
+            isTrusted
+          ) {
+            if (this.capabilityStore.getGrant(manifest.id, "identity:manage_keys") === null) {
+              this.capabilityStore.setGrant(manifest.id, "identity:manage_keys", "always");
+            }
+          }
           if (manifest.permissions?.geolocation) {
             if (this.capabilityStore.getGrant(manifest.id, "system:geolocation") === null) {
               this.capabilityStore.setGrant(manifest.id, "system:geolocation", "always");
@@ -209,6 +220,9 @@ export class OmniKernel {
         } else if ((manifest.id === "org.omni.plugin.relays" && isTrusted) || isTrusted) {
           if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null && manifest.id === "org.omni.plugin.relays") {
             this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
+          }
+          if (this.capabilityStore.getGrant(manifest.id, "identity:manage_keys") === null && (manifest.id === "org.omni.plugin.profile-viewer" || manifest.id === "org.omni.plugin.profile")) {
+            this.capabilityStore.setGrant(manifest.id, "identity:manage_keys", "always");
           }
         }
 
