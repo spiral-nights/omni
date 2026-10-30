@@ -1,5 +1,5 @@
 // Omni Service Worker — Offline-First PWA Cache
-const CACHE_NAME = "omni-shell-v3";
+const CACHE_NAME = "omni-shell-v4";
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
@@ -79,22 +79,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // For static assets (scripts, styles, icons, fonts) from the same origin:
+  // For static assets (scripts, styles, icons, fonts) from the same origin: Network-first with cache fallback
   if (url.origin === self.location.origin) {
     event.respondWith(
-      caches.match(req).then((cached) => {
-        const fetchPromise = fetch(req)
-          .then((networkRes) => {
-            if (networkRes && networkRes.status === 200) {
-              const copy = networkRes.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-            }
-            return networkRes;
-          })
-          .catch(() => cached);
-
-        return cached || fetchPromise;
-      })
+      fetch(req)
+        .then((networkRes) => {
+          if (networkRes && networkRes.status === 200) {
+            const copy = networkRes.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          }
+          return networkRes;
+        })
+        .catch(async () => {
+          const cached = await caches.match(req);
+          if (cached) return cached;
+          return new Response("Offline", { status: 503, statusText: "Service Unavailable" });
+        })
     );
   }
 });
