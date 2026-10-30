@@ -385,3 +385,191 @@ describe("OmniKernel NIP-65 Relay List Management", () => {
     expect(writeUrls).not.toContain("wss://read.custom.relay");
   });
 });
+
+describe("Security & Key Custody Isolation (NIP-07 Only)", () => {
+  it("rejects auth.getNsec and auth.switchKey over JSON-RPC to protect private keys", async () => {
+    const kernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+    await kernel.boot();
+
+    const channel = new MessageChannel();
+    const manifest = {
+      id: "com.untrusted.app",
+      name: "Untrusted App",
+      version: "1.0.0",
+      entry: "index.html",
+      components: []
+    };
+
+    const dispatcher = new (await import("../src/ipc/json-rpc-dispatcher.js")).JsonRpcDispatcher({
+      pluginId: manifest.id,
+      manifest: manifest as any,
+      port: channel.port1,
+      aclEngine: kernel.aclEngine,
+      storageManager: kernel.storageManager,
+      intentBroker: kernel.intentBroker,
+      subscriptionCoordinator: kernel.subscriptionCoordinator,
+      keystore: kernel.keystore,
+      relayPool: kernel.relayPool,
+      eventStore: kernel.eventStore
+    });
+
+    const callRpc = (method: string, params?: any): Promise<any> => {
+      return new Promise((resolve, reject) => {
+        channel.port2.onmessage = (e) => {
+          if (e.data.error) reject(e.data.error);
+          else resolve(e.data.result);
+        };
+        channel.port2.postMessage({
+          jsonrpc: "2.0",
+          id: 1,
+          method,
+          params
+        });
+      });
+    };
+
+    // Attempting to read nsec must fail
+    await expect(callRpc("auth.getNsec")).rejects.toMatchObject({
+      code: -32001,
+      message: expect.stringContaining("Access to private key (nsec) is strictly prohibited")
+    });
+
+    // Attempting to switch key must fail
+    await expect(callRpc("auth.switchKey", { key: "1".repeat(64) })).rejects.toMatchObject({
+      code: -32001,
+      message: expect.stringContaining("Access to private key (nsec) is strictly prohibited")
+    });
+  });
+
+  it("blocks SSRF attempts to private network addresses via http.fetch", async () => {
+    const kernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+    await kernel.boot();
+
+    const channel = new MessageChannel();
+    const manifest = { id: "com.test.ssrf", name: "SSRF Test", version: "1.0.0", entry: "index.html", components: [] };
+
+    const dispatcher = new (await import("../src/ipc/json-rpc-dispatcher.js")).JsonRpcDispatcher({
+      pluginId: manifest.id,
+      manifest: manifest as any,
+      port: channel.port1,
+      aclEngine: kernel.aclEngine,
+      storageManager: kernel.storageManager,
+      intentBroker: kernel.intentBroker,
+      subscriptionCoordinator: kernel.subscriptionCoordinator,
+      keystore: kernel.keystore,
+      relayPool: kernel.relayPool,
+      eventStore: kernel.eventStore
+    });
+
+    const callFetch = (url: string): Promise<any> => {
+      return new Promise((resolve, reject) => {
+        channel.port2.onmessage = (e) => {
+          if (e.data.error) reject(e.data.error);
+          else resolve(e.data.result);
+        };
+        channel.port2.postMessage({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "http.fetch",
+          params: { url }
+        });
+      });
+    };
+
+    await expect(callFetch("http://127.0.0.1:8080/admin")).rejects.toMatchObject({
+      message: expect.stringContaining("SSRF protection")
+    });
+
+    await expect(callFetch("http://localhost:3000/secret")).rejects.toMatchObject({
+      message: expect.stringContaining("SSRF protection")
+    });
+
+    await expect(callFetch("http://192.168.1.1/router")).rejects.toMatchObject({
+      message: expect.stringContaining("SSRF protection")
+    });
+
+    await expect(callFetch("http://169.254.169.254/latest/meta-data")).rejects.toMatchObject({
+      message: expect.stringContaining("SSRF protection")
+    });
+  });
+
+  it("prevents arbitrary plugins from spoofing trust via org.omni prefix", async () => {
+    const kernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+    await kernel.boot();
+
+    // Untrusted plugin attempting to use an org.omni. prefix
+    const maliciousManifest = {
+      id: "org.omni.plugin.imposter",
+      name: "Imposter Plugin",
+      version: "1.0.0",
+      entry: "index.html",
+      components: [],
+      permissions: { relays: { manage: true } }
+    };
+
+    await kernel.registerPlugin(maliciousManifest as any, "console.log('imposter');", new Map());
+
+    // It must NOT receive automatic always grant for relays:manage
+    expect(kernel.capabilityStore.getGrant("org.omni.plugin.imposter", "relays:manage")).toBeNull();
+  });
+});
+
+describe("LocalEventStore Multi-Kind Pruning & Indexed Queries", () => {
+  it("prunes kind 1, kind 6 reposts, and kind 7 reactions beyond maxNotes limit", async () => {
+    const store = new LocalEventStore({
+      dbName: `test_prune_${Date.now()}`,
+      maxNotes: 2
+    });
+    await store.init();
+
+    // Save 3 kind 1 notes
+    await store.saveEvent({ id: "note1", pubkey: "author1", kind: 1, created_at: 100, tags: [], content: "", sig: "" });
+    await store.saveEvent({ id: "note2", pubkey: "author1", kind: 1, created_at: 200, tags: [], content: "", sig: "" });
+    await store.saveEvent({ id: "note3", pubkey: "author1", kind: 1, created_at: 300, tags: [], content: "", sig: "" });
+
+    // Save 3 kind 6 reposts
+    await store.saveEvent({ id: "repost1", pubkey: "author1", kind: 6, created_at: 100, tags: [], content: "", sig: "" });
+    await store.saveEvent({ id: "repost2", pubkey: "author1", kind: 6, created_at: 200, tags: [], content: "", sig: "" });
+    await store.saveEvent({ id: "repost3", pubkey: "author1", kind: 6, created_at: 300, tags: [], content: "", sig: "" });
+
+    // Save 3 kind 7 reactions
+    await store.saveEvent({ id: "react1", pubkey: "author1", kind: 7, created_at: 100, tags: [], content: "", sig: "" });
+    await store.saveEvent({ id: "react2", pubkey: "author1", kind: 7, created_at: 200, tags: [], content: "", sig: "" });
+    await store.saveEvent({ id: "react3", pubkey: "author1", kind: 7, created_at: 300, tags: [], content: "", sig: "" });
+
+    const deleted = await store.pruneTransientNotes(2);
+    expect(deleted).toBe(3); // 1 deleted from each transient kind (1, 6, 7)
+
+    const kind1Remaining = await store.getEvents({ kinds: [1] });
+    expect(kind1Remaining).toHaveLength(2);
+
+    const kind6Remaining = await store.getEvents({ kinds: [6] });
+    expect(kind6Remaining).toHaveLength(2);
+
+    const kind7Remaining = await store.getEvents({ kinds: [7] });
+    expect(kind7Remaining).toHaveLength(2);
+  });
+});
+
+describe("RelayPool Lifecycle & Ghost Reconnect Prevention", () => {
+  it("removes relay, clears reconnect timers, and does not reconnect after manual removal", async () => {
+    vi.useFakeTimers();
+    try {
+      const pool = new (await import("../src/nostr/relay-pool.js")).RelayPool({
+        bootstrapRelays: ["wss://transient.relay.test"],
+        persistRelays: false
+      });
+
+      pool.removeRelay("wss://transient.relay.test");
+      expect(pool.getAllRelays().some((r) => r.url === "wss://transient.relay.test")).toBe(false);
+
+      // Fast-forward past reconnect interval
+      vi.advanceTimersByTime(10000);
+
+      // Relay must NOT have been re-added or reconnected
+      expect(pool.getAllRelays().some((r) => r.url === "wss://transient.relay.test")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

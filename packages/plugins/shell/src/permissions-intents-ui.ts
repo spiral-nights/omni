@@ -1,5 +1,5 @@
 import { OmniKernel } from "@omni/core";
-import { InstalledPluginEntry } from "./shell.js";
+import { InstalledPluginEntry } from "./base-shell.js";
 import { icon } from "./icons.js";
 
 export interface StandardKindDef {

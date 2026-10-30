@@ -44,8 +44,16 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
 
-  // Skip websocket, blob, and cross-origin relay requests
-  if (url.protocol.startsWith("ws") || url.protocol === "blob:" || url.protocol === "data:") {
+  // Skip websocket, blob, cross-origin relay requests, and Vite dev server / timestamped modules
+  if (
+    url.protocol.startsWith("ws") ||
+    url.protocol === "blob:" ||
+    url.protocol === "data:" ||
+    url.searchParams.has("t") ||
+    url.searchParams.has("import") ||
+    url.pathname.startsWith("/@") ||
+    url.pathname.includes("/node_modules/")
+  ) {
     return;
   }
 

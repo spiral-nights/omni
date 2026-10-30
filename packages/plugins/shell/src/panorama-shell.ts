@@ -3063,5 +3063,7 @@ export class PanoramaShell extends BaseShell {
       if (val) this.applyAccentColor(val);
     });
   }
-
 }
+
+// Register panorama shell constructor in the global registry
+shellRegistry.registerClass("panorama", PanoramaShell);

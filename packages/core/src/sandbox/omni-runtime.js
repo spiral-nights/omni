@@ -1594,19 +1594,10 @@
     auth: {
       async getNpub() {
         await initPromise;
-        return callRpc("auth.getNpub");
-      },
-      async getNsec() {
-        await initPromise;
-        return callRpc("auth.getNsec");
-      },
-      async switchKey(key) {
-        await initPromise;
-        const res = await callRpc("auth.switchKey", { key });
-        if (res && res.pubkey && sessionInfo) {
-          sessionInfo.userPubkey = res.pubkey;
+        if (sessionInfo && sessionInfo.userPubkey) {
+          return sessionInfo.userPubkey;
         }
-        return res;
+        return callRpc("auth.getNpub");
       }
     }
   };

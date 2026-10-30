@@ -427,7 +427,7 @@ describe("People plugin (profile, follows, mutes)", () => {
     expect(displayNameEl.textContent).toBe("Alice in Nostrland");
   });
 
-  it("keys & custody tab displays npub/hex and allows revealing private key with warning", async () => {
+  it("keys & custody tab displays npub/hex securely without exposing private keys to plugins", async () => {
     await flush();
     const btnKeys = peopleRoot().querySelector<HTMLButtonElement>(".pv-btn-keys")!;
     const editPanel = peopleRoot().querySelector<HTMLElement>(".pv-edit-panel")!;
@@ -444,28 +444,10 @@ describe("People plugin (profile, follows, mutes)", () => {
     expect(keyHex.value).toBe(myPubkey);
     expect(keyNpub.value).toContain("npub1");
 
-    // Reveal private key flow
-    (window as any).omni.auth = {
-      getNsec: vi.fn(async () => "nsec1testsecretkey123456789"),
-      switchKey: vi.fn(async () => ({ pubkey: "9".repeat(64), npub: "npub1switched" }))
-    };
-
-    const btnReveal = editPanel.querySelector<HTMLButtonElement>("#btn-reveal-nsec")!;
-    const confirmBox = editPanel.querySelector<HTMLElement>("#box-nsec-confirm")!;
-    const btnConfirmReveal = editPanel.querySelector<HTMLButtonElement>("#btn-confirm-reveal")!;
-    const nsecBox = editPanel.querySelector<HTMLElement>("#box-nsec")!;
-    const keyNsec = editPanel.querySelector<HTMLInputElement>("#key-nsec")!;
-
-    expect(confirmBox.style.display).toBe("none");
-    btnReveal.click();
-    expect(confirmBox.style.display).toBe("flex");
-
-    btnConfirmReveal.click();
-    await flush();
-
-    expect(confirmBox.style.display).toBe("none");
-    expect(nsecBox.style.display).toBe("flex");
-    expect(keyNsec.value).toBe("nsec1testsecretkey123456789");
+    // Verify key custody security notice is present and private keys are never exposed in guest DOM
+    expect(paneKeys.textContent).toContain("Cryptographic Key Custody & Security");
+    expect(paneKeys.querySelector("#key-nsec")).toBeNull();
+    expect(paneKeys.querySelector("#btn-reveal-nsec")).toBeNull();
   });
 
   it("responds to edit_profile intent by activating the edit profile tab", async () => {

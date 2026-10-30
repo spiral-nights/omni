@@ -3,7 +3,9 @@ import { describe, it, expect, beforeEach } from "vitest";
 import omniRuntimeScript from "../../../core/src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
 import { OmniKernel } from "@omni/core";
-import { OmniShell, PanoramaShell, InstalledPluginEntry } from "../src/index.js";
+import { OmniShell } from "../src/shell.js";
+import { PanoramaShell } from "../src/panorama-shell.js";
+import { InstalledPluginEntry } from "../src/index.js";
 import {
   renderNostrWritePermissionsSection,
   renderHandledIntentsSection,

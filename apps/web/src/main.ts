@@ -1,6 +1,7 @@
 import { OmniKernel } from "@omni/core";
-import { OmniShell, PanoramaShell, EditorialShell, InstalledPluginEntry, shellRegistry } from "@omni/plugin-shell";
-import { OmniShellHost } from "@omni/types";
+import { shellRegistry } from "@omni/plugin-shell";
+import type { BaseShell, InstalledPluginEntry } from "@omni/plugin-shell";
+import type { OmniShellHost } from "@omni/types";
 
 // Import compiled plugin scripts (using Vite ?raw import)
 import feedScript from "../../../packages/plugins/feed/dist/index.js?raw";
@@ -24,6 +25,7 @@ const initialPlugins: InstalledPluginEntry[] = [
     name: "Feed",
     description: "Decentralized Nostr timeline notes and Schnorr-signed publishing.",
     icon: "feed",
+    viewport: "main",
     pinned: true,
     views: [
       { id: "main", title: "Feed", path: "" },
@@ -102,7 +104,7 @@ const initialPlugins: InstalledPluginEntry[] = [
   }
 ];
 
-let shell: OmniShell | PanoramaShell | EditorialShell;
+let shell: BaseShell;
 
 // 1. Initialize Host Orchestration Kernel
 const kernel = new OmniKernel({
@@ -157,11 +159,11 @@ async function startApp() {
 
   // Mount active Shell UI Plugin into root container via shellRegistry
   console.log(`✦ [Omni Web] Activating Shell: ${activeShellType}...`);
-  shell = shellRegistry.create(activeShellType, {
+  shell = (await shellRegistry.createAsync(activeShellType, {
     root: rootEl,
     kernel,
     installedPlugins: initialPlugins
-  }) as OmniShell | PanoramaShell | EditorialShell;
+  })) as BaseShell;
 
   // Restore local workspace customizations (0ms instant startup)
   shell.loadInitialWorkspace();
@@ -256,24 +258,34 @@ async function startApp() {
 
   console.log("🚀 [Omni Web] App running successfully with modular @omni/plugin-shell!");
 
-  // Register Offline-First PWA Service Worker
-  if (typeof window !== "undefined" && "serviceWorker" in navigator && window.location.protocol.startsWith("http")) {
-    const registerSw = () => {
-      const swUrl = `${import.meta.env.BASE_URL}sw.js`;
-      navigator.serviceWorker
-        .register(swUrl, { updateViaCache: "none" })
-        .then((reg) => {
-          console.log("✦ [Omni PWA] Service worker registered successfully:", reg.scope);
-        })
-        .catch((err) => {
-          console.warn("✦ [Omni PWA] Service worker registration failed:", err);
-        });
-    };
+  // Manage Service Worker (PWA offline cache in production; unregister in dev to avoid stale script versions)
+  if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+    if (import.meta.env.DEV) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const reg of registrations) {
+          reg.unregister().then(() => {
+            console.log("✦ [Omni Dev] Unregistered lingering dev service worker:", reg.scope);
+          });
+        }
+      });
+    } else if (window.location.protocol.startsWith("http")) {
+      const registerSw = () => {
+        const swUrl = `${import.meta.env.BASE_URL}sw.js`;
+        navigator.serviceWorker
+          .register(swUrl, { updateViaCache: "none" })
+          .then((reg) => {
+            console.log("✦ [Omni PWA] Service worker registered successfully:", reg.scope);
+          })
+          .catch((err) => {
+            console.warn("✦ [Omni PWA] Service worker registration failed:", err);
+          });
+      };
 
-    if (document.readyState === "complete") {
-      registerSw();
-    } else {
-      window.addEventListener("load", registerSw);
+      if (document.readyState === "complete") {
+        registerSw();
+      } else {
+        window.addEventListener("load", registerSw);
+      }
     }
   }
 }

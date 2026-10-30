@@ -103,8 +103,6 @@ export interface OmniProfileApi {
 
 export interface OmniAuthApi {
   getNpub(): Promise<string>;
-  getNsec(): Promise<string>;
-  switchKey(key: string): Promise<{ pubkey: string; npub: string }>;
 }
 
 /**

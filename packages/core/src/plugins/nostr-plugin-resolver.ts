@@ -4,6 +4,7 @@ import { NostrEvent, OmniManifest, PluginViewDeclaration } from "@omni/types";
 import { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import { RelayPool } from "../nostr/relay-pool.js";
 import { LocalEventStore } from "../nostr/event-store.js";
+import { isPrivateOrLocalHost } from "../ipc/json-rpc-dispatcher.js";
 
 export const NSITE_MANIFEST_KIND = 35129;
 
@@ -455,6 +456,9 @@ export class NostrPluginResolver {
 
     for (const server of servers) {
       const cleanServer = server.replace(/\/+$/, "");
+      if (isPrivateOrLocalHost(cleanServer)) {
+        continue;
+      }
       const url = `${cleanServer}/${hash}`;
       try {
         const resp = await fetch(url);

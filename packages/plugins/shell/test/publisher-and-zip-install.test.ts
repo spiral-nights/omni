@@ -4,7 +4,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { OmniKernel, createPluginZipArchive } from "@omni/core";
-import { OmniShell, PanoramaShell, EditorialShell, InstalledPluginEntry } from "../src/index.js";
+import { OmniShell } from "../src/shell.js";
+import { PanoramaShell } from "../src/panorama-shell.js";
+import { EditorialShell } from "../src/editorial-shell.js";
+import { InstalledPluginEntry } from "../src/index.js";
 
 const runtimeScript = fs.readFileSync(
   path.resolve(__dirname, "../../../core/src/sandbox/omni-runtime.js"),

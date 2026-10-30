@@ -45,6 +45,9 @@ export interface OmniShellOptions {
   installedPlugins?: InstalledPluginEntry[];
 }
 
+export type AppPage = "feed" | "widgets" | "dashboard" | "apps" | string;
+export type SettingsTab = "profile" | "relays" | "plugins" | "workspace" | string;
+
 function getOptimizedImageUrl(rawUrl: string, width = 96, height = 96): string {
   if (!rawUrl || typeof rawUrl !== "string") return "";
   let trimmed = rawUrl.trim();
@@ -683,6 +686,13 @@ export abstract class BaseShell implements OmniShellHost {
     }
   }
 
+  public getDefaultPageId(): string {
+    const mainPlugin = this.installedPlugins.find(
+      (p) => p.enabled && (p.viewport === "main" || this.getPluginPlacements(p).some((pl) => pl.enabled !== false && pl.viewport === "main"))
+    );
+    return mainPlugin ? mainPlugin.id : "feed";
+  }
+
   public async remountPlugin(plugin: InstalledPluginEntry): Promise<void> {
     this.kernel.disablePlugin(plugin.id);
     const placements = this.getPluginPlacements(plugin);
@@ -692,17 +702,18 @@ export abstract class BaseShell implements OmniShellHost {
       placements.some(
         (pl) => pl.enabled !== false && (pl.viewport === "main" || pl.viewport === "dock")
       );
-    if (!hasMainPlacement && plugin.id !== "org.omni.plugin.feed") {
+    const defaultPage = this.getDefaultPageId();
+    if (!hasMainPlacement && plugin.id !== defaultPage) {
       const safeId = plugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
       const pageEl = document.getElementById(`page-app-${safeId}`) || document.getElementById(`panorama-page-app-${safeId}`);
       if (pageEl) {
         if (pageEl.classList.contains("active")) {
-          this.showPage("feed");
+          this.showPage(defaultPage);
         }
         pageEl.remove();
       }
       if (this.getActivePageId() === plugin.id) {
-        this.showPage("feed");
+        this.showPage(defaultPage);
       }
     }
 
@@ -1032,12 +1043,13 @@ export abstract class BaseShell implements OmniShellHost {
               this.kernel.reparentPluginComponent(plugin.id, primaryComp.id, item.viewport, container);
             }
           }
-          if (item.viewport !== "main" && item.viewport !== "dock" && plugin.id !== "org.omni.plugin.feed") {
+          const defaultPage = this.getDefaultPageId();
+          if (item.viewport !== "main" && item.viewport !== "dock" && plugin.id !== defaultPage) {
             const safeId = plugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
             const pageEl = document.getElementById(`page-app-${safeId}`) || document.getElementById(`panorama-page-app-${safeId}`);
             if (pageEl) {
               if (pageEl.classList.contains("active")) {
-                this.showPage("feed");
+                this.showPage(defaultPage);
               }
               pageEl.remove();
             }
@@ -2250,11 +2262,7 @@ export abstract class BaseShell implements OmniShellHost {
     const chosenHandlerId = await this.promptOpenWith(uri);
     if (!chosenHandlerId) return { handled: false, uri };
 
-    if (chosenHandlerId.includes("feed") || chosenHandlerId === "org.omni.plugin.feed") {
-      this.showPage("feed");
-    } else {
-      this.showPage(chosenHandlerId);
-    }
+    this.showPage(chosenHandlerId);
 
     return { handled: true, uri, handlerId: chosenHandlerId };
   }

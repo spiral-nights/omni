@@ -246,35 +246,51 @@ export class LocalEventStore {
         const tagStore = tx.objectStore("event_tags");
         const index = eventStore.index("kind_created");
 
-        const range = IDBKeyRange.bound([1, 0], [1, Number.MAX_SAFE_INTEGER]);
-        const req = index.openCursor(range, "prev"); // newest first
+        const transientKinds = [1, 6, 7];
+        let totalDeleted = 0;
+        let currentKindIndex = 0;
 
-        let count = 0;
-        let deleted = 0;
-
-        req.onsuccess = (e) => {
-          const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
-          if (!cursor) return;
-
-          const ev = cursor.value as NostrEvent;
-          // Protect user's own authored notes from being pruned
-          if (this.userPubkey && ev.pubkey === this.userPubkey) {
-            cursor.continue();
+        const pruneNextKind = () => {
+          if (currentKindIndex >= transientKinds.length) {
             return;
           }
+          const kind = transientKinds[currentKindIndex++];
+          const range = IDBKeyRange.bound([kind, 0], [kind, Number.MAX_SAFE_INTEGER]);
+          const req = index.openCursor(range, "prev"); // newest first
 
-          count++;
-          if (count > maxNotes) {
-            cursor.delete();
-            this.deleteTagsForEvent(tagStore, ev.id);
-            this.memoryCache.delete(ev.id);
-            deleted++;
-          }
-          cursor.continue();
+          let count = 0;
+
+          req.onsuccess = (e) => {
+            const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+            if (!cursor) {
+              pruneNextKind();
+              return;
+            }
+
+            const ev = cursor.value as NostrEvent;
+            // Protect user's own authored notes from being pruned
+            if (this.userPubkey && ev.pubkey === this.userPubkey) {
+              cursor.continue();
+              return;
+            }
+
+            count++;
+            if (count > maxNotes) {
+              cursor.delete();
+              this.deleteTagsForEvent(tagStore, ev.id);
+              this.memoryCache.delete(ev.id);
+              totalDeleted++;
+            }
+            cursor.continue();
+          };
+
+          req.onerror = () => pruneNextKind();
         };
 
-        tx.oncomplete = () => resolve(deleted);
-        tx.onerror = () => resolve(deleted);
+        pruneNextKind();
+
+        tx.oncomplete = () => resolve(totalDeleted);
+        tx.onerror = () => resolve(totalDeleted);
       } catch {
         resolve(0);
       }
@@ -406,9 +422,31 @@ export class LocalEventStore {
       const store = tx.objectStore("events");
       const events: NostrEvent[] = [];
 
-      // Open cursor on created_at in reverse (newest first)
-      const index = store.index("created_at");
-      const req = index.openCursor(null, "prev");
+      // Determine the most selective index to query based on filter
+      let req: IDBRequest<IDBCursorWithValue | null>;
+
+      if (filter.kinds && filter.kinds.length === 1) {
+        const kind = filter.kinds[0];
+        const kindIndex = store.index("kind_created");
+        const lowerBound = filter.since !== undefined ? filter.since : 0;
+        const upperBound = filter.until !== undefined ? filter.until : Number.MAX_SAFE_INTEGER;
+        const range = IDBKeyRange.bound([kind, lowerBound], [kind, upperBound]);
+        req = kindIndex.openCursor(range, "prev");
+      } else if (filter.authors && filter.authors.length === 1 && (!filter.kinds || filter.kinds.length === 0)) {
+        const pubkeyIndex = store.index("pubkey");
+        req = pubkeyIndex.openCursor(IDBKeyRange.only(filter.authors[0]), "prev");
+      } else {
+        const createdIndex = store.index("created_at");
+        let range: IDBKeyRange | null = null;
+        if (filter.since !== undefined && filter.until !== undefined) {
+          range = IDBKeyRange.bound(filter.since, filter.until);
+        } else if (filter.since !== undefined) {
+          range = IDBKeyRange.lowerBound(filter.since);
+        } else if (filter.until !== undefined) {
+          range = IDBKeyRange.upperBound(filter.until);
+        }
+        req = createdIndex.openCursor(range, "prev");
+      }
 
       req.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;

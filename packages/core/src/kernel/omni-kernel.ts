@@ -34,7 +34,17 @@ export interface OmniKernelOptions {
   theme?: any;
   useShadowDom?: boolean;
   persistRelays?: boolean;
+  trustedPluginIds?: string[];
 }
+
+export const DEFAULT_TRUSTED_PLUGIN_IDS: ReadonlySet<string> = new Set([
+  "org.omni.plugin.feed",
+  "org.omni.plugin.relays",
+  "org.omni.plugin.checklist",
+  "org.omni.plugin.profile-viewer",
+  "org.omni.plugin.publisher",
+  "org.omni.plugin.shell"
+]);
 
 export class OmniKernel {
   readonly keystore: WebCryptoKeystore;
@@ -48,6 +58,7 @@ export class OmniKernel {
   readonly layoutManager: LayoutManager;
   public theme?: any;
   public readonly useShadowDom: boolean;
+  public readonly trustedPluginIds: Set<string>;
 
   private sandboxes: Map<string, SandboxInstance> = new Map();
   private settingsSandboxes: Map<string, SandboxInstance> = new Map();
@@ -68,6 +79,7 @@ export class OmniKernel {
   constructor(options: OmniKernelOptions = {}) {
     this.theme = options.theme;
     this.useShadowDom = Boolean(options.useShadowDom);
+    this.trustedPluginIds = new Set(options.trustedPluginIds || DEFAULT_TRUSTED_PLUGIN_IDS);
     this.keystore = new WebCryptoKeystore(options.privateKeyHex);
     this.eventStore = new LocalEventStore({
       dbName: options.eventStoreName,
@@ -117,15 +129,19 @@ export class OmniKernel {
     this.relayPool.connect().catch(() => {});
   }
 
-  async getUserPubkey(): Promise<string> {
+  getUserPubkey(): Promise<string> {
     return this.keystore.getPublicKey();
+  }
+
+  isPluginTrusted(pluginId: string, manifestTrusted?: boolean): boolean {
+    return manifestTrusted === true || this.trustedPluginIds.has(pluginId);
   }
 
   async registerPlugin(
     manifest: OmniManifest,
     scriptContent: string,
     slotContainers: Map<string, Element>,
-    options?: { route?: string; viewId?: string; instanceId?: string; targetSlot?: string; relays?: string[] }
+    options?: { route?: string; viewId?: string; instanceId?: string; targetSlot?: string; relays?: string[]; trusted?: boolean }
   ): Promise<SandboxInstance> {
     const instanceKey = options?.instanceId || manifest.id;
     if (this.sandboxes.has(instanceKey)) {
@@ -144,12 +160,11 @@ export class OmniKernel {
           this.capabilityStore.setGrant(manifest.id, "storage:kv", "always");
         }
 
-        // Initialize default permissions in capabilityStore if not already explicitly configured
+        const isTrusted = Boolean(options?.trusted) || this.isPluginTrusted(manifest.id, manifest.trusted);
         if (manifest.permissions) {
           if (manifest.permissions.storage && this.capabilityStore.getGrant(manifest.id, "storage:kv") === null) {
             this.capabilityStore.setGrant(manifest.id, "storage:kv", "always");
           }
-          const isTrusted = manifest.trusted === true || manifest.id.startsWith("org.omni.");
           if (manifest.permissions.intents || isTrusted) {
             if (this.capabilityStore.getGrant(manifest.id, "intents:dispatch") === null) {
               this.capabilityStore.setGrant(manifest.id, "intents:dispatch", "always");
@@ -180,7 +195,7 @@ export class OmniKernel {
           }
           if (
             (manifest.id === "org.omni.plugin.relays" || manifest.permissions?.relays?.manage) &&
-            (manifest.trusted || manifest.id.startsWith("org.omni."))
+            isTrusted
           ) {
             if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null) {
               this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
@@ -191,7 +206,7 @@ export class OmniKernel {
               this.capabilityStore.setGrant(manifest.id, "system:geolocation", "always");
             }
           }
-        } else if (manifest.id === "org.omni.plugin.relays" || manifest.trusted || manifest.id.startsWith("org.omni.")) {
+        } else if ((manifest.id === "org.omni.plugin.relays" && isTrusted) || isTrusted) {
           if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null && manifest.id === "org.omni.plugin.relays") {
             this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
           }
@@ -204,7 +219,7 @@ export class OmniKernel {
           manifest,
           scriptContent,
           runtimeScript: this.runtimeScript,
-          trusted: manifest.trusted || manifest.id.startsWith("org.omni."),
+          trusted: isTrusted,
           userPubkey,
           slotContainers,
           theme: this.theme,
@@ -456,7 +471,7 @@ export class OmniKernel {
       manifest,
       scriptContent,
       runtimeScript: this.runtimeScript,
-      trusted: manifest.trusted || manifest.id.startsWith("org.omni."),
+      trusted: this.isPluginTrusted(manifest.id, manifest.trusted),
       userPubkey,
       slotContainers,
       theme: this.theme,

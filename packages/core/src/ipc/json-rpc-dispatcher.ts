@@ -14,6 +14,28 @@ import { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import { RelayPool } from "../nostr/relay-pool.js";
 import { LocalEventStore } from "../nostr/event-store.js";
 
+export function isPrivateOrLocalHost(urlStr: string): boolean {
+  try {
+    const parsed = new URL(urlStr);
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.endsWith(".local")) {
+      return true;
+    }
+    const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4Match) {
+      const b1 = parseInt(ipv4Match[1], 10);
+      const b2 = parseInt(ipv4Match[2], 10);
+      if (b1 === 10) return true;
+      if (b1 === 127) return true;
+      if (b1 === 169 && b2 === 254) return true;
+      if (b1 === 172 && b2 >= 16 && b2 <= 31) return true;
+      if (b1 === 192 && b2 === 168) return true;
+      if (b1 === 0) return true;
+    }
+  } catch {}
+  return false;
+}
+
 let cachedHostVoices: SpeechSynthesisVoice[] = [];
 let voiceListenerAttached = false;
 
@@ -602,6 +624,10 @@ export class JsonRpcDispatcher {
       }
 
       case "profile.publish": {
+        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "nostr:write", { kind: 0 });
+        if (!allowed) {
+          throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for nostr:write (kind 0)" };
+        }
         const pubkey = await this.ctx.keystore.getPublicKey();
         const draft = {
           kind: 0,
@@ -619,16 +645,11 @@ export class JsonRpcDispatcher {
         return this.ctx.keystore.getNpub();
       }
 
-      case "auth.getNsec": {
-        return this.ctx.keystore.getNsec();
-      }
-
+      case "auth.getNsec":
       case "auth.switchKey": {
-        if (!params?.key) throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Missing key" };
-        this.ctx.keystore.setPrivateKey(params.key);
-        return {
-          pubkey: await this.ctx.keystore.getPublicKey(),
-          npub: await this.ctx.keystore.getNpub()
+        throw {
+          code: JsonRpcErrorCode.PERMISSION_DENIED,
+          message: "Access to private key (nsec) is strictly prohibited. Use standard NIP-07 (window.nostr) for cryptographic operations."
         };
       }
 
@@ -646,6 +667,13 @@ export class JsonRpcDispatcher {
 
         if (!url || !/^https?:\/\//i.test(url)) {
           throw { code: JsonRpcErrorCode.INVALID_PARAMS, message: "Invalid HTTP URL" };
+        }
+        // SSRF protection: reject private network and metadata endpoints
+        if (isPrivateOrLocalHost(url)) {
+          throw {
+            code: JsonRpcErrorCode.PERMISSION_DENIED,
+            message: "Access to private or local network resources is restricted (SSRF protection)."
+          };
         }
         const fetchInit: RequestInit = {
           method: reqMethod,

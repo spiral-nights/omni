@@ -2424,3 +2424,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.slotContainers.set("widget", this.widgetsSlot);
   }
 }
+
+// Register editorial shell constructor in the global registry
+shellRegistry.registerClass("editorial", EditorialShell);

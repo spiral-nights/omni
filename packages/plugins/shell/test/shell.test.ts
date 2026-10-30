@@ -3,15 +3,15 @@ import { describe, it, expect, beforeEach } from "vitest";
 import omniRuntimeScript from "../../../core/src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
 import { OmniKernel } from "@omni/core";
+import { OmniShell } from "../src/shell.js";
+import { PanoramaShell } from "../src/panorama-shell.js";
+import { CLASSIC_SHELL_CSS } from "../src/styles/classic-styles.js";
+import { PANORAMA_SHELL_CSS } from "../src/styles/panorama-styles.js";
 import {
-  OmniShell,
-  PanoramaShell,
   InstalledPluginEntry,
   shellRegistry,
   ShellRegistry,
-  OMNI_SHELL_STYLE_ELEMENT_ID,
-  CLASSIC_SHELL_CSS,
-  PANORAMA_SHELL_CSS
+  OMNI_SHELL_STYLE_ELEMENT_ID
 } from "../src/index.js";
 
 describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {

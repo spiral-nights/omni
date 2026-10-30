@@ -5,10 +5,12 @@ import "fake-indexeddb/auto";
 import { OmniKernel } from "@omni/core";
 import {
   EditorialShell,
-  EDITORIAL_SHELL_CSS,
   EDITORIAL_ACCENTS,
   STORAGE_KEY_EDITORIAL_MODE,
-  STORAGE_KEY_EDITORIAL_ACCENT_ID,
+  STORAGE_KEY_EDITORIAL_ACCENT_ID
+} from "../src/editorial-shell.js";
+import { EDITORIAL_SHELL_CSS } from "../src/styles/editorial-styles.js";
+import {
   InstalledPluginEntry,
   shellRegistry,
   OMNI_SHELL_STYLE_ELEMENT_ID,

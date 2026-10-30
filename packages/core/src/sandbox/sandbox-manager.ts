@@ -100,10 +100,7 @@ export class SandboxInstance {
     // System UI plugins and trusted plugins are exempt from strict opaque origin isolation
     const isTrusted =
       this.options.trusted === true ||
-      this.manifest.trusted === true ||
-      this.manifest.id.startsWith("org.omni.plugin.") ||
-      this.manifest.id.startsWith("org.omni.system") ||
-      this.manifest.id.startsWith("org.omni.core");
+      this.manifest.trusted === true;
 
     this.iframe = document.createElement("iframe");
     // Use strict allow-scripts without allow-same-origin to prevent browser sandbox elevation warnings

@@ -77,6 +77,8 @@ export class RelayPool {
   private authorRelays: Map<string, Nip65Relay[]> = new Map();
   private persistRelays: boolean;
   private statusListeners: Set<RelayStatusCallback> = new Set();
+  private reconnectTimers: Map<string, any> = new Map();
+  private manuallyClosedRelays: Set<string> = new Set();
 
   constructor(options: RelayPoolOptions = {}) {
     this.persistRelays = options.persistRelays ?? true;
@@ -162,6 +164,9 @@ export class RelayPool {
 
   private connectRelay(url: string): void {
     const normalized = url.trim().replace(/\/+$/, "");
+    if (this.manuallyClosedRelays.has(normalized)) {
+      return;
+    }
     const existing = this.relays.get(normalized);
     if (existing && (existing.readyState === WS_OPEN || existing.readyState === WS_CONNECTING)) {
       return;
@@ -185,8 +190,23 @@ export class RelayPool {
       ws.onclose = () => {
         this.relays.delete(normalized);
         this.notifyStatusChange();
-        // Attempt reconnect after delay
-        setTimeout(() => this.connectRelay(normalized), 5000);
+        // Only attempt reconnect if not manually removed and still a configured relay
+        if (this.reconnectTimers.has(normalized)) {
+          clearTimeout(this.reconnectTimers.get(normalized));
+          this.reconnectTimers.delete(normalized);
+        }
+        const isStillConfigured =
+          !this.manuallyClosedRelays.has(normalized) &&
+          (this.bootstrapUrls.some((u) => u.trim().replace(/\/+$/, "") === normalized) ||
+            this.userRelays.has(normalized));
+
+        if (isStillConfigured) {
+          const timer = setTimeout(() => {
+            this.reconnectTimers.delete(normalized);
+            this.connectRelay(normalized);
+          }, 5000);
+          this.reconnectTimers.set(normalized, timer);
+        }
       };
 
       ws.onerror = () => {
@@ -318,6 +338,10 @@ export class RelayPool {
   }
 
   disconnect(): void {
+    for (const timer of this.reconnectTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.reconnectTimers.clear();
     for (const ws of this.relays.values()) {
       ws.close();
     }
@@ -392,6 +416,7 @@ export class RelayPool {
     }
     normalized = normalized.replace(/\/+$/, "");
 
+    this.manuallyClosedRelays.delete(normalized);
     if (!this.bootstrapUrls.some((u) => u.trim().replace(/\/+$/, "") === normalized)) {
       this.bootstrapUrls.push(normalized);
       this.savePersistedRelays();
@@ -406,6 +431,12 @@ export class RelayPool {
       normalized = `wss://${normalized}`;
     }
     normalized = normalized.replace(/\/+$/, "");
+
+    this.manuallyClosedRelays.add(normalized);
+    if (this.reconnectTimers.has(normalized)) {
+      clearTimeout(this.reconnectTimers.get(normalized));
+      this.reconnectTimers.delete(normalized);
+    }
 
     const ws = this.relays.get(normalized);
     if (ws) {

@@ -1012,38 +1012,15 @@ async function mountProfileViewer(root: HTMLElement) {
               </div>
             </div>
 
-            <!-- Private Key reveal section -->
+            <!-- Key Custody & Security Policy Notice -->
             <div style="border-top: 1px solid var(--border-subtle, #272522); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary, #a8a29e);">Private Key (nsec):</span>
-                <button id="btn-reveal-nsec" class="btn-secondary">Reveal Private Key</button>
+              <div style="display: flex; align-items: center; gap: 8px; color: var(--accent-primary, #d4a373); font-size: 0.82rem; font-weight: 600;">
+                <span style="display: flex; align-items: center; flex-shrink: 0;">${ICONS.shield}</span>
+                <span>Cryptographic Key Custody & Security</span>
               </div>
-
-              <!-- Inline Warning Confirmation Box -->
-              <div id="box-nsec-confirm" style="display: none; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-sm, 6px); padding: 10px 12px; flex-direction: column; gap: 8px;">
-                <div style="display: flex; align-items: center; gap: 8px; color: #f87171; font-size: 0.78rem; font-weight: 500;">
-                  <span style="display: flex; align-items: center; flex-shrink: 0;">${ICONS.shield}</span>
-                  <span>Never share your private key (nsec). Anyone with this key has full control over your Nostr identity.</span>
-                </div>
-                <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                  <button id="btn-cancel-reveal" class="btn-secondary">Cancel</button>
-                  <button id="btn-confirm-reveal" class="btn-danger">I Understand, Reveal</button>
-                </div>
-              </div>
-
-              <div id="box-nsec" style="display: none; gap: 6px;">
-                <input id="key-nsec" type="text" readonly style="flex: 1; border: 1px solid rgba(239,68,68,0.4); color: #f87171; padding: 6px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; outline: none;" />
-                <button id="btn-copy-nsec" class="btn-secondary">
-                  ${ICONS.copy} <span>Copy</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Switch identity / Import key -->
-            <div style="border-top: 1px solid var(--border-subtle, #272522); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-              <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary, #a8a29e);">Switch Identity / Import Key:</span>
-              <input id="key-import" type="password" placeholder="Paste nsec1... or 64-char hex private key" style="padding: 7px 10px; font-size: 0.82rem; outline: none;" />
-              <button id="btn-import-key" class="btn-publish" style="align-self: flex-end;">Import & Switch</button>
+              <p style="margin: 0; font-size: 0.78rem; line-height: 1.5; color: var(--text-secondary, #9e988f);">
+                Your private key (nsec) is strictly isolated and guarded by the host microkernel. Sandboxed plugins and nsites never have access to raw private keys and interact exclusively through standard NIP-07 (<code style="font-family: var(--font-mono, monospace); color: var(--accent-primary, #d4a373);">window.nostr</code>) signing.
+              </p>
             </div>
           </div>
 
@@ -1331,15 +1308,6 @@ async function mountProfileViewer(root: HTMLElement) {
   const inpPubkey = editPanel.querySelector<HTMLInputElement>("#key-hex")!;
   const btnCopyNpub = editPanel.querySelector<HTMLButtonElement>("#btn-copy-npub")!;
   const btnCopyHex = editPanel.querySelector<HTMLButtonElement>("#btn-copy-hex")!;
-  const btnReveal = editPanel.querySelector<HTMLButtonElement>("#btn-reveal-nsec")!;
-  const nsecConfirmBox = editPanel.querySelector<HTMLElement>("#box-nsec-confirm")!;
-  const btnCancelReveal = editPanel.querySelector<HTMLButtonElement>("#btn-cancel-reveal")!;
-  const btnConfirmReveal = editPanel.querySelector<HTMLButtonElement>("#btn-confirm-reveal")!;
-  const nsecBox = editPanel.querySelector<HTMLElement>("#box-nsec")!;
-  const inpNsec = editPanel.querySelector<HTMLInputElement>("#key-nsec")!;
-  const btnCopyNsec = editPanel.querySelector<HTMLButtonElement>("#btn-copy-nsec")!;
-  const inpImport = editPanel.querySelector<HTMLInputElement>("#key-import")!;
-  const btnImport = editPanel.querySelector<HTMLButtonElement>("#btn-import-key")!;
 
   root.appendChild(container);
 
@@ -1449,85 +1417,6 @@ async function mountProfileViewer(root: HTMLElement) {
 
   btnCopyNpub.addEventListener("click", () => copyText(inpNpub.value, btnCopyNpub));
   btnCopyHex.addEventListener("click", () => copyText(inpPubkey.value, btnCopyHex));
-  btnCopyNsec.addEventListener("click", () => copyText(inpNsec.value, btnCopyNsec));
-
-  // Reveal nsec flow
-  btnReveal.addEventListener("click", () => {
-    if (nsecBox.style.display === "flex") {
-      nsecBox.style.display = "none";
-      inpNsec.value = "";
-      btnReveal.textContent = "Reveal Private Key";
-      return;
-    }
-    if (nsecConfirmBox.style.display === "flex") {
-      nsecConfirmBox.style.display = "none";
-      return;
-    }
-    nsecConfirmBox.style.display = "flex";
-  });
-
-  btnCancelReveal.addEventListener("click", () => {
-    nsecConfirmBox.style.display = "none";
-  });
-
-  btnConfirmReveal.addEventListener("click", async () => {
-    nsecConfirmBox.style.display = "none";
-    try {
-      const omniObj = typeof window !== "undefined" ? (window as any).omni : null;
-      if (omniObj?.auth?.getNsec) {
-        const nsec = await omniObj.auth.getNsec();
-        inpNsec.value = nsec;
-        nsecBox.style.display = "flex";
-        btnReveal.textContent = "Hide Private Key";
-      } else {
-        showToast("Keystore custody provider unavailable", true);
-      }
-    } catch (err: any) {
-      showToast(`Could not retrieve private key: ${err?.message || String(err)}`, true);
-    }
-  });
-
-  // Switch identity / Import key
-  btnImport.addEventListener("click", async () => {
-    const val = inpImport.value?.trim();
-    if (!val) {
-      showToast("Please enter a private key (nsec or hex)", true);
-      return;
-    }
-    btnImport.disabled = true;
-    const origText = btnImport.textContent;
-    btnImport.textContent = "Switching Key...";
-    try {
-      const omniObj = typeof window !== "undefined" ? (window as any).omni : null;
-      if (omniObj?.auth?.switchKey) {
-        const switchRes = await omniObj.auth.switchKey(val);
-        if (switchRes?.pubkey) {
-          myPubkey = switchRes.pubkey;
-          activePubkey = myPubkey;
-          inpPubkey.value = switchRes.pubkey;
-        }
-        if (switchRes?.npub) {
-          inpNpub.value = switchRes.npub;
-          if (myNpubTextEl) myNpubTextEl.textContent = switchRes.npub;
-        }
-        inpImport.value = "";
-        nsecBox.style.display = "none";
-        inpNsec.value = "";
-        btnReveal.textContent = "Reveal Private Key";
-
-        // Sync social graph and profile for switched key
-        initUserSocialGraph(myPubkey);
-        loadProfile(myPubkey);
-        showToast("Switched identity and synced profile!");
-        toggleEditPanel("profile", true);
-      }
-    } catch (err: any) {
-      showToast(`Failed to switch key: ${err?.message || String(err)}`, true);
-    } finally {
-      btnImport.disabled = false;
-      btnImport.textContent = origText || "Import & Switch";
-    }
-  });
 
   // Save & Publish Profile (kind 0)
   btnSave.addEventListener("click", async () => {

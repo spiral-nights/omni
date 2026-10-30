@@ -4,6 +4,32 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./classic": {
+      "types": "./dist/shell.d.ts",
+      "default": "./dist/shell.js"
+    },
+    "./panorama": {
+      "types": "./dist/panorama-shell.d.ts",
+      "default": "./dist/panorama-shell.js"
+    },
+    "./editorial": {
+      "types": "./dist/editorial-shell.d.ts",
+      "default": "./dist/editorial-shell.js"
+    },
+    "./registry": {
+      "types": "./dist/shell-registry.d.ts",
+      "default": "./dist/shell-registry.js"
+    },
+    "./base": {
+      "types": "./dist/base-shell.d.ts",
+      "default": "./dist/base-shell.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit"

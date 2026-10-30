@@ -2654,7 +2654,7 @@ export class OmniShell extends BaseShell {
   private wireRelaysManager(): void {
     // Relays management is handled by the standalone @omni/plugin-relays plugin
   }
-
-
-
 }
+
+// Register classic shell constructor in the global registry
+shellRegistry.registerClass("classic", OmniShell);
