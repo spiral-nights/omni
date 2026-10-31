@@ -67,10 +67,14 @@ export type Author = z.infer<typeof AuthorSchema>;
  * Allows pure nsites to declare supported routes (e.g. settings, widget)
  * without requiring any proprietary SDK.
  */
+export const PluginViewFormatSchema = z.enum(["iframe", "schema", "auto"]);
+export type PluginViewFormat = z.infer<typeof PluginViewFormatSchema>;
+
 export const PluginViewDeclarationSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
-  path: z.string().default("")
+  path: z.string().default(""),
+  format: PluginViewFormatSchema.default("auto").optional()
 });
 export type PluginViewDeclaration = z.infer<typeof PluginViewDeclarationSchema>;
 

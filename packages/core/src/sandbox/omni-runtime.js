@@ -128,10 +128,48 @@
     } catch (_) {}
   }
 
-  // 2. Listen for Handshake from Host
+  // Schema-based UI forwarding using standard Web postMessage
+  let pendingSchema = null;
+  function forwardSchema(schema, componentId) {
+    const compId = componentId || (sessionInfo && sessionInfo.viewId) || "main";
+    if (portRemoteDom) {
+      portRemoteDom.postMessage({
+        type: "schema",
+        componentId: compId,
+        schema: schema
+      });
+    } else {
+      pendingSchema = { schema, componentId: compId };
+    }
+  }
+
+  // Intercept standard window.parent.postMessage when inside an iframe
+  try {
+    if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+      const origParentPost = window.parent.postMessage ? window.parent.postMessage.bind(window.parent) : null;
+      window.parent.postMessage = function(msg, targetOrigin, transfer) {
+        if (msg && typeof msg === "object" && (msg.type === "omni:schema" || msg.type === "schema") && msg.schema) {
+          forwardSchema(msg.schema, msg.componentId);
+          return;
+        }
+        if (origParentPost) {
+          return origParentPost(msg, targetOrigin, transfer);
+        }
+      };
+    }
+  } catch (_) {}
+
+  // 2. Listen for Handshake and Messages from Host/Guest
   function handleInitMessage(event) {
     const data = event.data;
-    if (data && data.type === "omni:init") {
+    if (!data) return;
+
+    if ((data.type === "omni:schema" || data.type === "schema") && data.schema) {
+      forwardSchema(data.schema, data.componentId);
+      return;
+    }
+
+    if (data.type === "omni:init") {
       sessionInfo = data.payload;
       if (sessionInfo) {
         if (sessionInfo.storage && typeof sessionInfo.storage === "object") {
@@ -157,6 +195,10 @@
 
       // Flush any queued mutations that were waiting for portRemoteDom
       if (portRemoteDom) {
+        if (pendingSchema) {
+          forwardSchema(pendingSchema.schema, pendingSchema.componentId);
+          pendingSchema = null;
+        }
         for (const ctx of componentContexts.values()) {
           if (ctx.mutationQueue && ctx.mutationQueue.length > 0) {
             portRemoteDom.postMessage({
@@ -208,6 +250,20 @@
 
       // If no components were explicitly registered via omni.registerComponent, auto-mount DOM
       const runAutoMount = () => {
+        // Standard declarative JSON schema via script tag
+        try {
+          const jsonScript = document.querySelector('script[type="application/json"]#omni-schema, script[type="application/json"][data-omni-schema]');
+          if (jsonScript && jsonScript.textContent) {
+            const parsed = JSON.parse(jsonScript.textContent);
+            if (parsed && typeof parsed === "object") {
+              forwardSchema(parsed);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error("[Omni] Error parsing inline schema script:", err);
+        }
+
         if (registeredComponents.size === 0) {
           setupDomAutoMount();
         }
@@ -994,6 +1050,34 @@
     portRemoteDom.onmessage = (event) => {
       const data = event.data;
       if (!data) return;
+
+      if (data.type === "action") {
+        if (typeof window.dispatchEvent === "function") {
+          try {
+            window.dispatchEvent(
+              new MessageEvent("message", {
+                data: { type: "omni:action", action: data.action, payload: data.payload }
+              })
+            );
+          } catch (_) {
+            try {
+              const evt = document.createEvent ? document.createEvent("MessageEvent") : null;
+              if (evt && evt.initMessageEvent) {
+                evt.initMessageEvent("message", false, false, { type: "omni:action", action: data.action, payload: data.payload }, "*", "", window, null);
+                window.dispatchEvent(evt);
+              }
+            } catch (_) {}
+          }
+          try {
+            window.dispatchEvent(
+              new CustomEvent("omni:action", {
+                detail: { action: data.action, payload: data.payload }
+              })
+            );
+          } catch (_) {}
+        }
+        return;
+      }
 
       if (data.type === "event" && data.id && data.eventName) {
         const compId = data.componentId;

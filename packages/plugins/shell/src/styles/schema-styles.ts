@@ -316,6 +316,29 @@ omni-input {
   border-color: var(--omni-accent-primary, #d4a373);
 }
 
+omni-textarea {
+  display: flex;
+  width: 100%;
+}
+.omni-textarea {
+  width: 100%;
+  min-height: 80px;
+  background: var(--omni-bg-surface, #191816);
+  border: 1px solid var(--omni-border-subtle, #383530);
+  border-radius: var(--omni-radius-sm, 6px);
+  color: var(--omni-text-primary, #ede8df);
+  font-family: inherit;
+  font-size: 0.88rem;
+  padding: 10px 12px;
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+.omni-textarea:focus {
+  border-color: var(--omni-accent-primary, #d4a373);
+}
+
 omni-toggle {
   display: inline-flex;
 }

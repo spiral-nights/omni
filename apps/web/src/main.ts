@@ -45,10 +45,10 @@ const initialPlugins: InstalledPluginEntry[] = [
     icon: "check-circle",
     viewport: "sidebar",
     views: [
-      { id: "main", title: "Full Task List", path: "" },
-      { id: "compact", title: "Live Tile", path: "?view=compact" },
-      { id: "widget", title: "Checklist Card", path: "?view=widget" },
-      { id: "settings", title: "Checklist Settings", path: "?view=settings" }
+      { id: "main", title: "Full Task List", path: "", format: "schema" },
+      { id: "compact", title: "Live Tile", path: "?view=compact", format: "schema" },
+      { id: "widget", title: "Checklist Card", path: "?view=widget", format: "schema" },
+      { id: "settings", title: "Checklist Settings", path: "?view=settings", format: "schema" }
     ],
     handledIntents: ["create_task"],
     scriptContent: checklistScript,
@@ -62,8 +62,8 @@ const initialPlugins: InstalledPluginEntry[] = [
     icon: "relays",
     viewport: "sidebar",
     views: [
-      { id: "main", title: "Relays", path: "" },
-      { id: "compact", title: "Live Tile", path: "?view=compact" }
+      { id: "main", title: "Relays", path: "", format: "iframe" },
+      { id: "compact", title: "Live Tile", path: "?view=compact", format: "schema" }
     ],
     scriptContent: relaysScript,
     sourceUrl: "local:@omni/plugin-relays",

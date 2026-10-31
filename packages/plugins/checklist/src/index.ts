@@ -463,6 +463,35 @@ const mountApp = (root: any) => {
   }
 };
 
+if (typeof window !== "undefined") {
+  const getActiveView = () =>
+    isSettingsRoute() ? "settings" : isCompactRoute() ? "compact" : "widget";
+
+  const dispatchSchema = (schema: OmniComponentNode) => {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "omni:schema", schema }, "*");
+    } else {
+      window.postMessage({ type: "omni:schema", schema }, "*");
+    }
+  };
+
+  // Dispatch initial schema for the active route/view
+  dispatchSchema(getChecklistSchema(getActiveView()));
+
+  // Listen for host actions over standard Web messaging
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+    if (
+      data &&
+      (data.type === "omni:action" || data.type === "action") &&
+      data.action
+    ) {
+      const nextSchema = handleChecklistAction(data.action, data.payload);
+      dispatchSchema(nextSchema);
+    }
+  });
+}
+
 function init() {
   if (typeof document !== "undefined") {
     mountApp(document.body);

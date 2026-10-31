@@ -477,6 +477,35 @@ function mountRelaysCompact(root: any) {
   root.appendChild(container);
 }
 
+if (typeof window !== "undefined") {
+  const getActiveView = () => (isCompactRoute() ? "compact" : "widget");
+
+  const dispatchSchema = (schema: OmniComponentNode | null) => {
+    if (!schema) return;
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "omni:schema", schema }, "*");
+    } else {
+      window.postMessage({ type: "omni:schema", schema }, "*");
+    }
+  };
+
+  // Dispatch initial schema for widget / compact views
+  dispatchSchema(getRelaysSchema(getActiveView()));
+
+  // Listen for actions over standard Web messaging
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+    if (
+      data &&
+      (data.type === "omni:action" || data.type === "action") &&
+      data.action
+    ) {
+      const nextSchema = handleRelaysAction(data.action, data.payload);
+      dispatchSchema(nextSchema);
+    }
+  });
+}
+
 function init() {
   if (typeof document !== "undefined") {
     if (isCompactRoute()) {

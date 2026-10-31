@@ -14,6 +14,7 @@ import {
   OmniButtonElement,
   OmniIconButtonElement,
   OmniInputElement,
+  OmniTextareaElement,
   OmniToggleElement,
   OmniListElement,
   OmniListItemElement,
@@ -60,6 +61,15 @@ export class SchemaRenderer {
     for (const inp of Array.from(inputs)) {
       const name = inp.getAttribute("name") || (inp.querySelector("input") as HTMLInputElement)?.name;
       const val = (inp as OmniInputElement).getValue();
+      if (name) {
+        values[name] = val;
+      }
+    }
+
+    const textareas = this.container.querySelectorAll("omni-textarea");
+    for (const ta of Array.from(textareas)) {
+      const name = ta.getAttribute("name") || (ta.querySelector("textarea") as HTMLTextAreaElement)?.name;
+      const val = (ta as OmniTextareaElement).getValue();
       if (name) {
         values[name] = val;
       }
@@ -193,6 +203,12 @@ export class SchemaRenderer {
 
       case "input": {
         const el = document.createElement("omni-input") as OmniInputElement;
+        el.setProps(node);
+        return el;
+      }
+
+      case "textarea": {
+        const el = document.createElement("omni-textarea") as OmniTextareaElement;
         el.setProps(node);
         return el;
       }

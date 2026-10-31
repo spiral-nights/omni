@@ -1,4 +1,5 @@
 /// <reference types="@omni/types" />
+import type { OmniComponentNode, OmniAction } from "@omni/types";
 
 const FEED_CSS = /* css */ `
 /* Feed Container */
@@ -3293,6 +3294,469 @@ export function isSettingsRoute(): boolean {
   return false;
 }
 
+export function isWidgetRoute(): boolean {
+  try {
+    const route = getAppRoute();
+    if (!route) return false;
+    const qIdx = route.indexOf("?");
+    const query = qIdx !== -1 ? route.slice(qIdx) : route;
+    const params = new URLSearchParams(query);
+    if (params.get("view") === "widget" || params.get("view") === "sidebar") return true;
+    if (route.includes("view=widget") || route.includes("view=sidebar")) return true;
+  } catch (_) {}
+  return false;
+}
+
+export function isCompactRoute(): boolean {
+  try {
+    const route = getAppRoute();
+    if (!route) return false;
+    const qIdx = route.indexOf("?");
+    const query = qIdx !== -1 ? route.slice(qIdx) : route;
+    const params = new URLSearchParams(query);
+    if (params.get("view") === "compact" || params.get("view") === "dock") return true;
+    if (route.includes("view=compact") || route.includes("view=dock")) return true;
+  } catch (_) {}
+  return false;
+}
+
+export function isSchemaRoute(): boolean {
+  try {
+    const route = getAppRoute();
+    if (!route) return false;
+    const qIdx = route.indexOf("?");
+    const query = qIdx !== -1 ? route.slice(qIdx) : route;
+    const params = new URLSearchParams(query);
+    if (params.get("format") === "schema" || params.get("view") === "schema") return true;
+    if (route.includes("format=schema") || route.includes("view=schema")) return true;
+  } catch (_) {}
+  return false;
+}
+
+export interface FeedNoteItem {
+  id: string;
+  pubkey: string;
+  authorName: string;
+  npub: string;
+  avatar?: string;
+  content: string;
+  created_at: number;
+  likes: number;
+  reposts: number;
+  replies: number;
+  zaps: number;
+  liked?: boolean;
+  reposted?: boolean;
+}
+
+export interface FeedSchemaState {
+  activeTab: "following" | "global";
+  notes: FeedNoteItem[];
+  composerText: string;
+}
+
+const defaultFeedState: FeedSchemaState = {
+  activeTab: "global",
+  composerText: "",
+  notes: [
+    {
+      id: "note_1",
+      pubkey: "npub1spiralnights000000000000000000000000000000000000000000000001",
+      authorName: "Satoshi",
+      npub: "npub1satoshi...",
+      content: "Running Bitcoin on local relays with Omni. A decentralized, extensible Nostr runtime.",
+      created_at: Date.now() - 1000 * 60 * 15,
+      likes: 21,
+      reposts: 7,
+      replies: 4,
+      zaps: 42
+    },
+    {
+      id: "note_2",
+      pubkey: "npub1fiatjaf0000000000000000000000000000000000000000000000000002",
+      authorName: "fiatjaf",
+      npub: "npub1fiatjaf...",
+      content: "Declarative Schema UI for micro-frontends: pure JSON server-driven UI rendered with standard Custom Elements natively in the host shell.",
+      created_at: Date.now() - 1000 * 60 * 60 * 2,
+      likes: 84,
+      reposts: 19,
+      replies: 12,
+      zaps: 120
+    }
+  ]
+};
+
+let currentFeedState: FeedSchemaState = { ...defaultFeedState };
+
+export function getFeedSchema(
+  view = "main",
+  state: FeedSchemaState = currentFeedState
+): OmniComponentNode {
+  if (view === "compact") {
+    const latest = state.notes[0];
+    return {
+      type: "metric",
+      label: "Timeline Notes",
+      value: `${state.notes.length} notes`,
+      subtext: latest
+        ? `Latest: ${latest.authorName}: "${latest.content.slice(0, 24)}..."`
+        : "No notes yet"
+    };
+  }
+
+  if (view === "widget") {
+    return {
+      type: "card",
+      title: "Recent Notes",
+      icon: "message",
+      children: [
+        {
+          type: "box",
+          direction: "row",
+          gap: "sm",
+          children: [
+            {
+              type: "input",
+              name: "noteText",
+              placeholder: "Quick note...",
+              actionOnEnter: { name: "publish-note" }
+            },
+            {
+              type: "button",
+              label: "Post",
+              variant: "primary",
+              size: "sm",
+              action: { name: "publish-note" }
+            }
+          ]
+        },
+        {
+          type: "list",
+          items: state.notes.slice(0, 3).map((n) => ({
+            type: "list-item" as const,
+            id: n.id,
+            title: n.authorName,
+            subtitle: n.content,
+            actions: [
+              {
+                type: "icon-button" as const,
+                icon: "heart",
+                variant: n.liked ? ("secondary" as const) : ("ghost" as const),
+                tooltip: "Like note",
+                action: { name: "like-note", payload: { id: n.id } }
+              }
+            ]
+          }))
+        }
+      ]
+    };
+  }
+
+  // Full-page / Main View (100% Declarative Schema Feed)
+  const noteNodes: OmniComponentNode[] = state.notes.map((n) => ({
+    type: "card",
+    children: [
+      {
+        type: "box",
+        direction: "row",
+        justify: "between",
+        align: "center",
+        children: [
+          {
+            type: "box",
+            direction: "row",
+            gap: "sm",
+            align: "center",
+            children: [
+              {
+                type: "avatar",
+                src: n.avatar,
+                name: n.authorName,
+                size: "md"
+              },
+              {
+                type: "box",
+                direction: "column",
+                gap: "xs",
+                children: [
+                  {
+                    type: "text",
+                    content: n.authorName,
+                    variant: "body",
+                    tone: "primary"
+                  },
+                  {
+                    type: "text",
+                    content: `${new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${n.npub.slice(0, 12)}...`,
+                    variant: "caption",
+                    tone: "muted"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        type: "text",
+        content: n.content,
+        variant: "body"
+      },
+      {
+        type: "divider"
+      },
+      {
+        type: "box",
+        direction: "row",
+        justify: "between",
+        align: "center",
+        children: [
+          {
+            type: "button",
+            variant: "ghost",
+            size: "sm",
+            icon: "reply",
+            label: String(n.replies || "0"),
+            action: { name: "reply-note", payload: { id: n.id } }
+          },
+          {
+            type: "button",
+            variant: n.reposted ? "secondary" : "ghost",
+            size: "sm",
+            icon: "repeat",
+            label: String(n.reposts || "0"),
+            action: { name: "repost-note", payload: { id: n.id } }
+          },
+          {
+            type: "button",
+            variant: n.liked ? "secondary" : "ghost",
+            size: "sm",
+            icon: "heart",
+            label: String(n.likes || "0"),
+            action: { name: "like-note", payload: { id: n.id } }
+          },
+          {
+            type: "button",
+            variant: "ghost",
+            size: "sm",
+            icon: "zap",
+            label: String(n.zaps || "0"),
+            action: { name: "zap-note", payload: { id: n.id } }
+          }
+        ]
+      }
+    ]
+  }));
+
+  const streamChildren: OmniComponentNode[] =
+    noteNodes.length > 0
+      ? noteNodes
+      : [
+          {
+            type: "empty-state",
+            icon: "message",
+            title: "No notes on this timeline",
+            description: "Follow creators or broadcast your first note to populate the feed.",
+            action: { name: "refresh" },
+            actionLabel: "Refresh Relays"
+          }
+        ];
+
+  return {
+    type: "box",
+    direction: "column",
+    gap: "md",
+    children: [
+      // Top timeline header
+      {
+        type: "box",
+        direction: "row",
+        justify: "between",
+        align: "center",
+        padding: "sm",
+        children: [
+          {
+            type: "box",
+            direction: "row",
+            gap: "sm",
+            align: "center",
+            children: [
+              {
+                type: "text",
+                content: "Feed",
+                variant: "title"
+              },
+              {
+                type: "button",
+                size: "sm",
+                variant: state.activeTab === "following" ? "primary" : "ghost",
+                label: "Following",
+                action: { name: "set-tab", payload: { tab: "following" } }
+              },
+              {
+                type: "button",
+                size: "sm",
+                variant: state.activeTab === "global" ? "primary" : "ghost",
+                label: "Global",
+                action: { name: "set-tab", payload: { tab: "global" } }
+              }
+            ]
+          },
+          {
+            type: "icon-button",
+            icon: "refresh",
+            tooltip: "Refresh Feed",
+            variant: "ghost",
+            action: { name: "refresh" }
+          }
+        ]
+      },
+      // Composer card
+      {
+        type: "card",
+        children: [
+          {
+            type: "box",
+            direction: "column",
+            gap: "sm",
+            children: [
+              {
+                type: "box",
+                direction: "row",
+                gap: "sm",
+                align: "center",
+                children: [
+                  {
+                    type: "avatar",
+                    name: "You",
+                    size: "sm"
+                  },
+                  {
+                    type: "text",
+                    content: "Publish to Nostr relays",
+                    variant: "caption",
+                    tone: "muted"
+                  }
+                ]
+              },
+              {
+                type: "textarea",
+                name: "noteText",
+                placeholder: "What's happening? Compose note to broadcast...",
+                value: state.composerText || "",
+                rows: 3
+              },
+              {
+                type: "box",
+                direction: "row",
+                justify: "between",
+                align: "center",
+                children: [
+                  {
+                    type: "text",
+                    content: "NIP-07 signer connected",
+                    variant: "caption",
+                    tone: "muted"
+                  },
+                  {
+                    type: "button",
+                    label: "Publish Note",
+                    variant: "primary",
+                    size: "sm",
+                    action: { name: "publish-note" }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      // Stream
+      ...streamChildren
+    ]
+  };
+}
+
+export function handleFeedAction(
+  action: OmniAction,
+  payload?: Record<string, unknown>
+): OmniComponentNode {
+  const actName = action.name;
+  if (actName === "set-tab") {
+    const tab = String(payload?.tab || action.payload?.tab || "global") as "following" | "global";
+    currentFeedState.activeTab = tab;
+  } else if (actName === "publish-note") {
+    const text = String(payload?.noteText || payload?.value || currentFeedState.composerText || "").trim();
+    if (text) {
+      currentFeedState.notes.unshift({
+        id: `note_${Date.now()}`,
+        pubkey: "current_user",
+        authorName: "You",
+        npub: "npub1you...",
+        content: text,
+        created_at: Date.now(),
+        likes: 0,
+        reposts: 0,
+        replies: 0,
+        zaps: 0
+      });
+      currentFeedState.composerText = "";
+    }
+  } else if (actName === "like-note") {
+    const id = String(payload?.id || action.payload?.id || "");
+    const note = currentFeedState.notes.find((n) => n.id === id);
+    if (note) {
+      note.liked = !note.liked;
+      note.likes += note.liked ? 1 : -1;
+    }
+  } else if (actName === "repost-note") {
+    const id = String(payload?.id || action.payload?.id || "");
+    const note = currentFeedState.notes.find((n) => n.id === id);
+    if (note) {
+      note.reposted = !note.reposted;
+      note.reposts += note.reposted ? 1 : -1;
+    }
+  } else if (actName === "zap-note") {
+    const id = String(payload?.id || action.payload?.id || "");
+    const note = currentFeedState.notes.find((n) => n.id === id);
+    if (note) {
+      note.zaps += 21;
+    }
+  }
+  const view = isWidgetRoute() ? "widget" : isCompactRoute() ? "compact" : "main";
+  return getFeedSchema(view);
+}
+
+if (typeof window !== "undefined") {
+  const isWidgetOrCompactOrSchema =
+    isWidgetRoute() || isCompactRoute() || isSchemaRoute();
+
+  const dispatchFeedSchema = (schema: OmniComponentNode) => {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "omni:schema", schema }, "*");
+    } else {
+      window.postMessage({ type: "omni:schema", schema }, "*");
+    }
+  };
+
+  if (isWidgetOrCompactOrSchema) {
+    const view = isWidgetRoute() ? "widget" : isCompactRoute() ? "compact" : "main";
+    dispatchFeedSchema(getFeedSchema(view));
+  }
+
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+    if (
+      data &&
+      (data.type === "omni:action" || data.type === "action") &&
+      data.action
+    ) {
+      const nextSchema = handleFeedAction(data.action, data.payload);
+      dispatchFeedSchema(nextSchema);
+    }
+  });
+}
+
 export function mountFeedSettings(root: any) {
   const container = html<HTMLDivElement>`
     <div class="feed-standalone-settings" style="padding: 16px 20px; font-family: inherit; color: var(--text-primary, #ede8df);">
@@ -3308,6 +3772,10 @@ export function mountFeedSettings(root: any) {
 function init() {
   if (typeof document !== "undefined") {
     const root = document.body;
+    if (isSchemaRoute()) {
+      // In schema mode, UI is rendered natively via standard postMessage schema
+      return;
+    }
     if (isSettingsRoute()) {
       mountFeedSettings(root);
     } else {

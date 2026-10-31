@@ -310,7 +310,8 @@ export class NostrPluginResolver {
     viewsMap.set("main", {
       id: "main",
       title: "Main App",
-      path: ""
+      path: "",
+      format: "iframe"
     });
 
     // --- Tier 1: Nostr-Native Event Tags ---
@@ -325,7 +326,11 @@ export class NostrPluginResolver {
           if (!path) {
             path = id === "main" ? "" : `?view=${encodeURIComponent(id)}`;
           }
-          viewsMap.set(id, { id, title, path });
+          const rawFmt = tag[4]?.trim()?.toLowerCase();
+          const format = rawFmt === "schema" || rawFmt === "iframe"
+            ? rawFmt
+            : (id === "widget" || id === "settings" ? "schema" : "auto");
+          viewsMap.set(id, { id, title, path, format });
         }
       }
 
@@ -337,7 +342,8 @@ export class NostrPluginResolver {
           if (!id || viewsMap.has(id)) continue;
           const title = id.charAt(0).toUpperCase() + id.slice(1);
           const path = id === "main" ? "" : `?view=${encodeURIComponent(id)}`;
-          viewsMap.set(id, { id, title, path });
+          const format = id === "widget" || id === "settings" ? "schema" : "auto";
+          viewsMap.set(id, { id, title, path, format });
         }
       }
     }
@@ -351,6 +357,7 @@ export class NostrPluginResolver {
         const tagHtml = match[0];
         const hrefMatch = /href=["']([^"']+)["']/i.exec(tagHtml);
         const titleMatch = /title=["']([^"']+)["']/i.exec(tagHtml);
+        const isJson = /type=["']application\/json["']/i.test(tagHtml);
         if (hrefMatch) {
           const href = hrefMatch[1].trim();
           let id = "";
@@ -362,8 +369,9 @@ export class NostrPluginResolver {
             id = cleanHref || "view";
           }
           const title = titleMatch ? titleMatch[1].trim() : (id.charAt(0).toUpperCase() + id.slice(1));
+          const format = isJson ? "schema" : (id === "widget" || id === "settings" ? "schema" : "auto");
           if (id && !viewsMap.has(id)) {
-            viewsMap.set(id, { id, title, path: href });
+            viewsMap.set(id, { id, title, path: href, format });
           }
         }
       }

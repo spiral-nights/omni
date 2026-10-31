@@ -491,6 +491,35 @@ export class OmniInputElement extends BaseElement {
   }
 }
 
+export class OmniTextareaElement extends BaseElement {
+  private textareaEl: HTMLTextAreaElement | null = null;
+
+  connectedCallback(): void {
+    this.classList.add("omni-textarea-wrapper");
+    if (!this.textareaEl) {
+      this.textareaEl = document.createElement("textarea");
+      this.textareaEl.className = "omni-textarea";
+      this.appendChild(this.textareaEl);
+    }
+  }
+
+  getValue(): string {
+    return this.textareaEl?.value || "";
+  }
+
+  setValue(val: string): void {
+    if (this.textareaEl) this.textareaEl.value = val;
+  }
+
+  setProps(props: Partial<OmniTextareaPrimitive>): void {
+    if (!this.textareaEl) this.connectedCallback();
+    if (props.name) this.textareaEl!.name = props.name;
+    if (props.placeholder !== undefined) this.textareaEl!.placeholder = props.placeholder;
+    if (props.value !== undefined) this.textareaEl!.value = props.value;
+    if (props.rows !== undefined) this.textareaEl!.rows = props.rows;
+  }
+}
+
 export class OmniToggleElement extends BaseElement {
   private labelEl: HTMLElement | null = null;
   private inputEl: HTMLInputElement | null = null;
@@ -798,6 +827,7 @@ export function registerOmniPrimitives(): void {
     ["omni-button", OmniButtonElement],
     ["omni-icon-button", OmniIconButtonElement],
     ["omni-input", OmniInputElement],
+    ["omni-textarea", OmniTextareaElement],
     ["omni-toggle", OmniToggleElement],
     ["omni-list", OmniListElement],
     ["omni-list-item", OmniListItemElement],
