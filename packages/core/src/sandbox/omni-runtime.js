@@ -160,8 +160,12 @@
               }
             };
           }
-          const val = Reflect.get(target, prop);
-          return typeof val === "function" ? val.bind(target) : val;
+          try {
+            const val = Reflect.get(target, prop);
+            return typeof val === "function" ? val.bind(target) : val;
+          } catch (_) {
+            return undefined;
+          }
         }
       });
       Object.defineProperty(window, "parent", {

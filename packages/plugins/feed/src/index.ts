@@ -3748,7 +3748,7 @@ function initFeedSchemaSocket() {
   if (g?.process?.env?.NODE_ENV === "test" || g?.process?.env?.VITEST) return;
   if (typeof window !== "undefined") {
     const w = window as any;
-    if (w.happyDOM || w.parent?.happyDOM || w.__VITEST_ENVIRONMENT__ || w.parent?.__VITEST_ENVIRONMENT__) return;
+    if (w.happyDOM || w.__VITEST_ENVIRONMENT__) return;
     if (typeof navigator !== "undefined" && navigator.userAgent && (navigator.userAgent.includes("happy-dom") || navigator.userAgent.includes("jsdom"))) return;
   }
   if (schemaWs && schemaWs.readyState === WebSocket.OPEN) return;
