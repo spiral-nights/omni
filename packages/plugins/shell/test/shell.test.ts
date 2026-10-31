@@ -1535,10 +1535,10 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
   });
 
   describe("Decoupled Shell Styling & Dynamic Shell Registry", () => {
-    it("lists default built-in shells (classic and panorama)", () => {
+    it("lists default built-in shells (editorial and panorama)", () => {
       const shells = shellRegistry.list();
       expect(shells.length).toBeGreaterThanOrEqual(2);
-      expect(shells.some((s) => s.id === "classic")).toBe(true);
+      expect(shells.some((s) => s.id === "editorial")).toBe(true);
       expect(shells.some((s) => s.id === "panorama")).toBe(true);
     });
 
@@ -1596,13 +1596,13 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       const uninstalled = shellRegistry.uninstall("test-cyberpunk");
       expect(uninstalled).toBe(true);
       expect(shellRegistry.get("test-cyberpunk")).toBeUndefined();
-      expect(shellRegistry.getActiveShellId()).toBe("classic");
+      expect(shellRegistry.getActiveShellId()).toBe("editorial");
     });
 
     it("prevents uninstalling built-in shells", () => {
-      expect(shellRegistry.isBuiltin("classic")).toBe(true);
+      expect(shellRegistry.isBuiltin("editorial")).toBe(true);
       expect(shellRegistry.isBuiltin("panorama")).toBe(true);
-      expect(() => shellRegistry.uninstall("classic")).toThrow();
+      expect(() => shellRegistry.uninstall("editorial")).toThrow();
       expect(() => shellRegistry.uninstall("panorama")).toThrow();
     });
 
@@ -1761,11 +1761,11 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       });
 
       testShell.mount();
-      const classicBtn = testRoot.querySelector("#btn-shell-classic");
+      const editorialBtn = testRoot.querySelector("#btn-shell-editorial");
       const panoramaBtn = testRoot.querySelector("#btn-shell-panorama");
-      expect(classicBtn).toBeTruthy();
+      expect(editorialBtn).toBeTruthy();
       expect(panoramaBtn).toBeTruthy();
-      expect(classicBtn?.textContent).toBe("Omni Classic");
+      expect(editorialBtn?.textContent).toBe("Editorial");
       expect(panoramaBtn?.textContent).toBe("Panorama");
 
       testShell.destroy();

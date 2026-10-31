@@ -291,8 +291,9 @@ style, script, head, title, meta, link,
   transition: max-width 0.2s ease, padding 0.2s ease;
 }
 
-/* Expansive viewport for full-page apps */
-.editorial-shell-root.has-active-app .editorial-main-content {
+/* Expansive viewport for full-page apps & companion cards dashboard */
+.editorial-shell-root.has-active-app .editorial-main-content,
+.editorial-shell-root.has-widgets-page .editorial-main-content {
   max-width: 1360px;
   padding-left: 20px;
   padding-right: 20px;
@@ -1227,12 +1228,41 @@ style, script, head, title, meta, link,
 
 /* Companion Cards (Widgets) Dashboard */
 #editorial-widgets-slot {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+#editorial-widgets-slot .omni-component-slot {
+  min-height: 380px;
+  height: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  width: 100%;
-  max-width: 720px;
-  margin: 0 auto;
+  background: var(--omni-bg-elevated, #22201d);
+  border: 1px solid var(--omni-border-subtle, #33302a);
+  border-radius: var(--omni-radius-md, 10px);
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+}
+
+#editorial-widgets-slot .omni-component-slot iframe {
+  width: 100% !important;
+  min-height: 380px !important;
+  height: 100% !important;
+  flex: 1;
+  border: none !important;
+}
+
+#editorial-widgets-slot .omni-component-slot omni-card {
+  height: 100%;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 /* Pull to Refresh Indicator */

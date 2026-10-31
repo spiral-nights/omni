@@ -796,6 +796,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       defaultPage.style.display = "none";
     }
 
+    this.root.classList.remove("has-widgets-page");
     this.root.classList.add("has-active-app");
 
     if (targetPage) {
@@ -956,6 +957,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.activePage = "apps";
     this.activePluginId = null;
     this.root.classList.remove("has-active-app");
+    this.root.classList.remove("has-widgets-page");
     if (this.isAppFullscreen) this.toggleAppFullscreen(false);
     const btnFsApps = this.root.querySelector("#btn-editorial-toggle-fullscreen") as HTMLElement | null;
     if (btnFsApps) btnFsApps.style.display = "none";
@@ -1014,6 +1016,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.activePage = "widgets";
     this.activePluginId = null;
     this.root.classList.remove("has-active-app");
+    this.root.classList.add("has-widgets-page");
     if (this.isAppFullscreen) this.toggleAppFullscreen(false);
     const btnFsWidgets = this.root.querySelector("#btn-editorial-toggle-fullscreen") as HTMLElement | null;
     if (btnFsWidgets) btnFsWidgets.style.display = "none";

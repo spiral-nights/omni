@@ -20,6 +20,11 @@ export type OmniPrimitiveType =
   | "textarea"
   | "toggle"
   | "select"
+  | "tabs"
+  | "status-indicator"
+  | "code-block"
+  | "progress"
+  | "banner"
   | "list"
   | "list-item"
   | "empty-state";
@@ -174,6 +179,54 @@ export interface OmniSelectPrimitive extends OmniPrimitiveBase {
   action?: OmniAction;
 }
 
+export interface OmniTabItem {
+  id: string;
+  label: string;
+  icon?: string;
+  badge?: string | number;
+}
+
+export interface OmniTabsPrimitive extends OmniPrimitiveBase {
+  type: "tabs";
+  tabs: OmniTabItem[];
+  activeTab: string;
+  action: OmniAction;
+}
+
+export interface OmniStatusIndicatorPrimitive extends OmniPrimitiveBase {
+  type: "status-indicator";
+  status: "online" | "connecting" | "offline" | "error";
+  label?: string;
+  pulse?: boolean;
+}
+
+export interface OmniCodeBlockPrimitive extends OmniPrimitiveBase {
+  type: "code-block";
+  code: string;
+  language?: string;
+  copyable?: boolean;
+}
+
+export interface OmniProgressPrimitive extends OmniPrimitiveBase {
+  type: "progress";
+  value: number;
+  max?: number;
+  label?: string;
+  variant?: "bar" | "spinner";
+}
+
+export interface OmniBannerPrimitive extends OmniPrimitiveBase {
+  type: "banner";
+  tone?: "info" | "success" | "warning" | "error";
+  title?: string;
+  message: string;
+  icon?: string;
+  action?: OmniAction;
+  actionLabel?: string;
+  dismissible?: boolean;
+  onDismissAction?: OmniAction;
+}
+
 export interface OmniListItemPrimitive extends OmniPrimitiveBase {
   type: "list-item";
   title: string;
@@ -220,6 +273,11 @@ export type OmniComponentNode =
   | OmniTextareaPrimitive
   | OmniTogglePrimitive
   | OmniSelectPrimitive
+  | OmniTabsPrimitive
+  | OmniStatusIndicatorPrimitive
+  | OmniCodeBlockPrimitive
+  | OmniProgressPrimitive
+  | OmniBannerPrimitive
   | OmniListPrimitive
   | OmniListItemPrimitive
   | OmniEmptyStatePrimitive;

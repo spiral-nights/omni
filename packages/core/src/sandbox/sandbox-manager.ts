@@ -121,6 +121,7 @@ export interface SandboxInstanceOptions {
   route?: string;
   viewId?: string;
   instanceId?: string;
+  targetSlot?: string;
   allowedRelays?: string[];
   onSlotAction?: (action: "toggle" | "open" | "close" | "scrollToTop", slot: string) => void;
   onScrollTo?: (params: any) => void;
@@ -459,7 +460,16 @@ export class SandboxInstance {
         const compContainer = document.createElement("div");
         compContainer.className = `omni-component-slot omni-comp-${comp.id}`;
         compContainer.style.width = "100%";
-        compContainer.style.height = "100%";
+        const isCompanionWidget =
+          comp.slot === "sidebar" ||
+          comp.slot === "widget" ||
+          comp.slot === "widgets" ||
+          this.options.targetSlot === "sidebar" ||
+          this.options.targetSlot === "widget";
+        compContainer.style.height = isCompanionWidget ? "auto" : "100%";
+        if (isCompanionWidget) {
+          compContainer.style.minHeight = "380px";
+        }
         compContainer.style.display = "flex";
         compContainer.style.flexDirection = "column";
         slotContainer.appendChild(compContainer);
@@ -507,7 +517,7 @@ export class SandboxInstance {
           this.iframe.style.width = "100%";
           this.iframe.style.height = "100%";
           this.iframe.style.border = "none";
-          this.iframe.style.minHeight = "100%";
+          this.iframe.style.minHeight = isCompanionWidget ? "380px" : "100%";
           this.iframe.style.flex = "1";
           this.iframe.style.position = "static";
           this.iframe.style.visibility = "visible";

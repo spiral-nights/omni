@@ -204,4 +204,122 @@ describe("SchemaRenderer & Custom Web Components", () => {
 
     renderer.destroy();
   });
+
+  it("renders select, tabs, status-indicator, code-block, progress, and banner primitives", () => {
+    const onAction = vi.fn();
+    const renderer = new SchemaRenderer({ container, onAction });
+
+    const schema: OmniComponentNode = {
+      type: "box",
+      direction: "column",
+      children: [
+        {
+          type: "tabs",
+          activeTab: "relays",
+          tabs: [
+            { id: "all", label: "All" },
+            { id: "relays", label: "Active Relays", badge: 3 }
+          ],
+          action: { name: "switch-tab" }
+        },
+        {
+          type: "select",
+          name: "relayPreset",
+          value: "damus",
+          options: [
+            { label: "Damus", value: "damus" },
+            { label: "Ditto", value: "ditto" }
+          ],
+          action: { name: "select-preset" }
+        },
+        {
+          type: "status-indicator",
+          status: "online",
+          label: "Connected to wss://relay.damus.io",
+          pulse: true
+        },
+        {
+          type: "code-block",
+          code: JSON.stringify({ kind: 1, content: "Hello Nostr" }, null, 2),
+          copyable: true
+        },
+        {
+          type: "progress",
+          value: 75,
+          max: 100,
+          label: "Syncing Events"
+        },
+        {
+          type: "banner",
+          tone: "info",
+          title: "Notice",
+          message: "Relay pool connected.",
+          action: { name: "view-logs" },
+          actionLabel: "View Logs",
+          dismissible: true
+        }
+      ]
+    };
+
+    renderer.render(schema);
+
+    // Verify tabs
+    const tabsEl = container.querySelector("omni-tabs");
+    expect(tabsEl).not.toBeNull();
+    const tabButtons = tabsEl?.querySelectorAll(".omni-tab-btn");
+    expect(tabButtons?.length).toBe(2);
+    expect(tabButtons?.[1].classList.contains("active")).toBe(true);
+    expect(tabButtons?.[1].textContent).toContain("Active Relays");
+    expect(tabButtons?.[1].textContent).toContain("3");
+
+    // Click first tab
+    (tabButtons?.[0] as HTMLElement).click();
+    expect(onAction).toHaveBeenCalledWith({ name: "switch-tab" }, { tabId: "all", value: "all" });
+
+    // Verify select
+    const selectEl = container.querySelector("omni-select");
+    expect(selectEl).not.toBeNull();
+    const nativeSelect = selectEl?.querySelector("select");
+    expect(nativeSelect?.options.length).toBe(2);
+    expect(nativeSelect?.value).toBe("damus");
+
+    // Trigger select change
+    nativeSelect!.value = "ditto";
+    nativeSelect!.dispatchEvent(new Event("change"));
+    expect(onAction).toHaveBeenCalledWith({ name: "select-preset" }, { relayPreset: "ditto", value: "ditto" });
+
+    // Verify status indicator
+    const statusEl = container.querySelector("omni-status-indicator");
+    expect(statusEl).not.toBeNull();
+    const dot = statusEl?.querySelector(".omni-status-dot");
+    expect(dot?.classList.contains("omni-status-online")).toBe(true);
+    expect(dot?.classList.contains("omni-pulse")).toBe(true);
+    expect(statusEl?.querySelector(".omni-status-label")?.textContent).toBe("Connected to wss://relay.damus.io");
+
+    // Verify code block
+    const codeEl = container.querySelector("omni-code-block");
+    expect(codeEl).not.toBeNull();
+    expect(codeEl?.textContent).toContain("Hello Nostr");
+    expect(codeEl?.querySelector(".omni-code-copy-btn")).not.toBeNull();
+
+    // Verify progress
+    const progressEl = container.querySelector("omni-progress");
+    expect(progressEl).not.toBeNull();
+    expect(progressEl?.querySelector(".omni-progress-label")?.textContent).toContain("Syncing Events (75%)");
+    expect((progressEl?.querySelector(".omni-progress-bar") as HTMLElement)?.style.width).toBe("75%");
+
+    // Verify banner
+    const bannerEl = container.querySelector("omni-banner");
+    expect(bannerEl).not.toBeNull();
+    expect(bannerEl?.classList.contains("omni-banner-info")).toBe(true);
+    expect(bannerEl?.querySelector(".omni-banner-title")?.textContent).toBe("Notice");
+    expect(bannerEl?.querySelector(".omni-banner-message")?.textContent).toBe("Relay pool connected.");
+    expect(bannerEl?.querySelector(".omni-banner-action-btn")?.textContent).toBe("View Logs");
+
+    // Click banner action
+    (bannerEl?.querySelector(".omni-banner-action-btn") as HTMLElement)?.click();
+    expect(onAction).toHaveBeenCalledWith({ name: "view-logs" }, {});
+
+    renderer.destroy();
+  });
 });

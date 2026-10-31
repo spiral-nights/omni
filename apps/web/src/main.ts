@@ -15,7 +15,7 @@ const STORAGE_KEY_NSEC = "omni_privkey";
 const STORAGE_KEY_SHELL = "omni_active_shell";
 const STORAGE_KEY_PANORAMA_ACCENT = "omni_panorama_accent_color";
 const savedPrivkey = localStorage.getItem(STORAGE_KEY_NSEC) || undefined;
-const activeShellType = localStorage.getItem(STORAGE_KEY_SHELL) || "classic";
+const activeShellType = localStorage.getItem(STORAGE_KEY_SHELL) || "editorial";
 const savedAccent = localStorage.getItem(STORAGE_KEY_PANORAMA_ACCENT) || "#00a4ef";
 
 // Initial First-Class Core System Standalone nsites (Zero Manifests)

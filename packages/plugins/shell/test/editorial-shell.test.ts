@@ -392,7 +392,6 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
 
       const shellsList = root.querySelector("#editorial-installed-shells-list");
       expect(shellsList).toBeTruthy();
-      expect(shellsList?.textContent).toContain("Omni Classic");
       expect(shellsList?.textContent).toContain("Panorama");
       expect(shellsList?.textContent).toContain("Editorial");
     });

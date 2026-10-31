@@ -15,6 +15,11 @@ import {
   OmniTextareaPrimitive,
   OmniTogglePrimitive,
   OmniSelectPrimitive,
+  OmniTabsPrimitive,
+  OmniStatusIndicatorPrimitive,
+  OmniCodeBlockPrimitive,
+  OmniProgressPrimitive,
+  OmniBannerPrimitive,
   OmniListPrimitive,
   OmniListItemPrimitive,
   OmniEmptyStatePrimitive
@@ -642,6 +647,329 @@ export class OmniToggleElement extends BaseElement {
   }
 }
 
+export class OmniSelectElement extends BaseElement {
+  private selectEl: HTMLSelectElement | null = null;
+  private actionData: OmniAction | null = null;
+
+  connectedCallback(): void {
+    this.classList.add("omni-select-wrapper");
+    if (!this.selectEl) {
+      this.selectEl = document.createElement("select");
+      this.selectEl.className = "omni-select";
+      this.selectEl.addEventListener("change", () => {
+        if (this.actionData && !this.selectEl?.disabled) {
+          this.dispatchEvent(
+            new OmniActionEvent(this.actionData, {
+              [this.selectEl!.name || "value"]: this.selectEl!.value,
+              value: this.selectEl!.value
+            })
+          );
+        }
+      });
+      this.appendChild(this.selectEl);
+    }
+  }
+
+  getValue(): string {
+    return this.selectEl?.value || "";
+  }
+
+  setValue(val: string): void {
+    if (this.selectEl) this.selectEl.value = val;
+  }
+
+  setProps(props: Partial<OmniSelectPrimitive>): void {
+    if (!this.selectEl) this.connectedCallback();
+    this.actionData = props.action || null;
+
+    if (props.name) {
+      this.setAttribute("name", props.name);
+      this.selectEl!.name = props.name;
+    }
+
+    if (Array.isArray(props.options)) {
+      this.selectEl!.innerHTML = "";
+      for (const opt of props.options) {
+        const optionEl = document.createElement("option");
+        optionEl.value = opt.value;
+        optionEl.textContent = opt.label;
+        this.selectEl!.appendChild(optionEl);
+      }
+    }
+
+    if (props.value !== undefined) {
+      this.selectEl!.value = props.value;
+    }
+  }
+}
+
+export class OmniTabsElement extends BaseElement {
+  private navEl: HTMLElement | null = null;
+  private activeTabId: string = "";
+  private actionData: OmniAction | null = null;
+
+  connectedCallback(): void {
+    this.classList.add("omni-tabs-wrapper");
+    if (!this.navEl) {
+      this.navEl = document.createElement("div");
+      this.navEl.className = "omni-tabs-nav";
+      this.appendChild(this.navEl);
+    }
+  }
+
+  getActiveTab(): string {
+    return this.activeTabId;
+  }
+
+  setProps(props: Partial<OmniTabsPrimitive>): void {
+    if (!this.navEl) this.connectedCallback();
+    this.actionData = props.action || null;
+    this.activeTabId = props.activeTab || "";
+
+    if (Array.isArray(props.tabs)) {
+      this.navEl!.innerHTML = "";
+      for (const tab of props.tabs) {
+        const tabBtn = document.createElement("button");
+        tabBtn.type = "button";
+        tabBtn.className = `omni-tab-btn${tab.id === this.activeTabId ? " active" : ""}`;
+        tabBtn.dataset.tabId = tab.id;
+
+        if (tab.icon) {
+          const iconSpan = document.createElement("span");
+          iconSpan.className = "omni-tab-icon";
+          iconSpan.innerHTML = renderSvgIcon(tab.icon, 16);
+          tabBtn.appendChild(iconSpan);
+        }
+
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "omni-tab-label";
+        labelSpan.textContent = tab.label;
+        tabBtn.appendChild(labelSpan);
+
+        if (tab.badge !== undefined && tab.badge !== "") {
+          const badgeSpan = document.createElement("span");
+          badgeSpan.className = "omni-tab-badge";
+          badgeSpan.textContent = String(tab.badge);
+          tabBtn.appendChild(badgeSpan);
+        }
+
+        tabBtn.addEventListener("click", () => {
+          this.activeTabId = tab.id;
+          this.navEl!.querySelectorAll(".omni-tab-btn").forEach((b) => b.classList.remove("active"));
+          tabBtn.classList.add("active");
+
+          if (this.actionData) {
+            this.dispatchEvent(
+              new OmniActionEvent(this.actionData, {
+                tabId: tab.id,
+                value: tab.id
+              })
+            );
+          }
+        });
+
+        this.navEl!.appendChild(tabBtn);
+      }
+    }
+  }
+}
+
+export class OmniStatusIndicatorElement extends BaseElement {
+  private dotEl: HTMLElement | null = null;
+  private labelEl: HTMLElement | null = null;
+
+  connectedCallback(): void {
+    this.classList.add("omni-status-indicator");
+    if (!this.dotEl) {
+      this.dotEl = document.createElement("span");
+      this.dotEl.className = "omni-status-dot";
+      this.appendChild(this.dotEl);
+    }
+  }
+
+  setProps(props: Partial<OmniStatusIndicatorPrimitive>): void {
+    if (!this.dotEl) this.connectedCallback();
+    const status = props.status || "offline";
+    this.dotEl!.className = `omni-status-dot omni-status-${status}${props.pulse ? " omni-pulse" : ""}`;
+
+    if (props.label) {
+      if (!this.labelEl) {
+        this.labelEl = document.createElement("span");
+        this.labelEl.className = "omni-status-label";
+        this.appendChild(this.labelEl);
+      }
+      this.labelEl.textContent = props.label;
+    } else if (this.labelEl) {
+      this.labelEl.remove();
+      this.labelEl = null;
+    }
+  }
+}
+
+export class OmniCodeBlockElement extends BaseElement {
+  private preEl: HTMLPreElement | null = null;
+  private codeEl: HTMLElement | null = null;
+  private copyBtn: HTMLButtonElement | null = null;
+  private currentCode: string = "";
+
+  connectedCallback(): void {
+    this.classList.add("omni-code-block-wrapper");
+    if (!this.preEl) {
+      this.preEl = document.createElement("pre");
+      this.preEl.className = "omni-code-pre";
+
+      this.codeEl = document.createElement("code");
+      this.codeEl.className = "omni-code";
+      this.preEl.appendChild(this.codeEl);
+
+      this.appendChild(this.preEl);
+    }
+  }
+
+  setProps(props: Partial<OmniCodeBlockPrimitive>): void {
+    if (!this.preEl) this.connectedCallback();
+    this.currentCode = props.code || "";
+    this.codeEl!.textContent = this.currentCode;
+
+    if (props.copyable !== false) {
+      if (!this.copyBtn) {
+        this.copyBtn = document.createElement("button");
+        this.copyBtn.type = "button";
+        this.copyBtn.className = "omni-code-copy-btn";
+        this.copyBtn.title = "Copy code";
+        this.copyBtn.innerHTML = renderSvgIcon("copy", 14);
+        this.copyBtn.addEventListener("click", async () => {
+          try {
+            if (typeof navigator !== "undefined" && navigator.clipboard) {
+              await navigator.clipboard.writeText(this.currentCode);
+              this.copyBtn!.innerHTML = renderSvgIcon("check", 14);
+              setTimeout(() => {
+                if (this.copyBtn) this.copyBtn.innerHTML = renderSvgIcon("copy", 14);
+              }, 1600);
+            }
+          } catch {}
+        });
+        this.appendChild(this.copyBtn);
+      }
+    } else if (this.copyBtn) {
+      this.copyBtn.remove();
+      this.copyBtn = null;
+    }
+  }
+}
+
+export class OmniProgressElement extends BaseElement {
+  private trackEl: HTMLElement | null = null;
+  private barEl: HTMLElement | null = null;
+  private labelEl: HTMLElement | null = null;
+
+  connectedCallback(): void {
+    this.classList.add("omni-progress-wrapper");
+    if (!this.trackEl) {
+      this.trackEl = document.createElement("div");
+      this.trackEl.className = "omni-progress-track";
+
+      this.barEl = document.createElement("div");
+      this.barEl.className = "omni-progress-bar";
+      this.trackEl.appendChild(this.barEl);
+
+      this.appendChild(this.trackEl);
+    }
+  }
+
+  setProps(props: Partial<OmniProgressPrimitive>): void {
+    if (!this.trackEl) this.connectedCallback();
+    const max = props.max && props.max > 0 ? props.max : 100;
+    const val = Math.max(0, Math.min(max, props.value ?? 0));
+    const pct = Math.round((val / max) * 100);
+
+    this.barEl!.style.width = `${pct}%`;
+
+    if (props.label) {
+      if (!this.labelEl) {
+        this.labelEl = document.createElement("div");
+        this.labelEl.className = "omni-progress-label";
+        this.insertBefore(this.labelEl, this.trackEl);
+      }
+      this.labelEl.textContent = `${props.label} (${pct}%)`;
+    } else if (this.labelEl) {
+      this.labelEl.remove();
+      this.labelEl = null;
+    }
+  }
+}
+
+export class OmniBannerElement extends BaseElement {
+  private iconEl: HTMLElement | null = null;
+  private contentEl: HTMLElement | null = null;
+  private actionBtn: HTMLButtonElement | null = null;
+  private dismissBtn: HTMLButtonElement | null = null;
+  private actionData: OmniAction | null = null;
+  private dismissActionData: OmniAction | null = null;
+
+  connectedCallback(): void {
+    this.classList.add("omni-banner");
+  }
+
+  setProps(props: Partial<OmniBannerPrimitive>): void {
+    const tone = props.tone || "info";
+    this.className = `omni-banner omni-banner-${tone}`;
+
+    this.innerHTML = "";
+
+    const iconName = props.icon || (tone === "error" || tone === "warning" ? "close" : tone === "success" ? "check-circle" : "bell");
+    this.iconEl = document.createElement("div");
+    this.iconEl.className = "omni-banner-icon";
+    this.iconEl.innerHTML = renderSvgIcon(iconName, 18);
+    this.appendChild(this.iconEl);
+
+    this.contentEl = document.createElement("div");
+    this.contentEl.className = "omni-banner-content";
+
+    if (props.title) {
+      const titleEl = document.createElement("div");
+      titleEl.className = "omni-banner-title";
+      titleEl.textContent = props.title;
+      this.contentEl.appendChild(titleEl);
+    }
+
+    const msgEl = document.createElement("div");
+    msgEl.className = "omni-banner-message";
+    msgEl.textContent = props.message || "";
+    this.contentEl.appendChild(msgEl);
+
+    this.appendChild(this.contentEl);
+
+    if (props.action && props.actionLabel) {
+      this.actionData = props.action;
+      this.actionBtn = document.createElement("button");
+      this.actionBtn.type = "button";
+      this.actionBtn.className = "omni-banner-action-btn";
+      this.actionBtn.textContent = props.actionLabel;
+      this.actionBtn.addEventListener("click", () => {
+        this.dispatchEvent(new OmniActionEvent(this.actionData!));
+      });
+      this.appendChild(this.actionBtn);
+    }
+
+    if (props.dismissible) {
+      this.dismissActionData = props.onDismissAction || null;
+      this.dismissBtn = document.createElement("button");
+      this.dismissBtn.type = "button";
+      this.dismissBtn.className = "omni-banner-dismiss-btn";
+      this.dismissBtn.title = "Dismiss";
+      this.dismissBtn.innerHTML = renderSvgIcon("close", 14);
+      this.dismissBtn.addEventListener("click", () => {
+        this.remove();
+        if (this.dismissActionData) {
+          this.dispatchEvent(new OmniActionEvent(this.dismissActionData));
+        }
+      });
+      this.appendChild(this.dismissBtn);
+    }
+  }
+}
+
 // ============================================================================
 // 5. Collections, Lists & Infinite Scroll
 // ============================================================================
@@ -898,6 +1226,12 @@ export function registerOmniPrimitives(): void {
     ["omni-input", OmniInputElement],
     ["omni-textarea", OmniTextareaElement],
     ["omni-toggle", OmniToggleElement],
+    ["omni-select", OmniSelectElement],
+    ["omni-tabs", OmniTabsElement],
+    ["omni-status-indicator", OmniStatusIndicatorElement],
+    ["omni-code-block", OmniCodeBlockElement],
+    ["omni-progress", OmniProgressElement],
+    ["omni-banner", OmniBannerElement],
     ["omni-list", OmniListElement],
     ["omni-list-item", OmniListItemElement],
     ["omni-empty-state", OmniEmptyStateElement]

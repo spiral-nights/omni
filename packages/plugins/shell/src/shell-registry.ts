@@ -23,16 +23,16 @@ export interface ShellDescriptor {
  */
 export const BUILTIN_SHELLS: ShellDescriptor[] = [
   {
-    id: "classic",
-    name: "Omni Classic",
-    description: "Multi-viewport workbench with dock navigation, widgets dashboard, and Warm Paper Dark design system.",
-    icon: "dock",
-    author: "Omni Core Team",
+    id: "editorial",
+    name: "Editorial",
+    description: "Sacred Swiss Editorial & Papyrus sanctuary with Newsreader typography, contemplative layout, and dynamic accent illumination.",
+    icon: "book",
+    author: "Omni Editorial Studio",
     version: "1.0.0",
     isBuiltin: true,
     load: async () => {
-      const { OmniShell } = await import("./shell.js");
-      return OmniShell;
+      const { EditorialShell } = await import("./editorial-shell.js");
+      return EditorialShell;
     }
   },
   {
@@ -46,19 +46,6 @@ export const BUILTIN_SHELLS: ShellDescriptor[] = [
     load: async () => {
       const { PanoramaShell } = await import("./panorama-shell.js");
       return PanoramaShell;
-    }
-  },
-  {
-    id: "editorial",
-    name: "Editorial",
-    description: "Sacred Swiss Editorial & Papyrus sanctuary with Newsreader typography, contemplative layout, and dynamic accent illumination.",
-    icon: "book",
-    author: "Omni Editorial Studio",
-    version: "1.0.0",
-    isBuiltin: true,
-    load: async () => {
-      const { EditorialShell } = await import("./editorial-shell.js");
-      return EditorialShell;
     }
   }
 ];
@@ -170,16 +157,16 @@ export class ShellRegistry {
     this.shells.delete(id);
     this.savePersistedShells();
     if (this.getActiveShellId() === id) {
-      this.setActiveShell("classic");
+      this.setActiveShell("editorial");
     }
     return true;
   }
 
   public getActiveShellId(): string {
     if (typeof localStorage !== "undefined") {
-      return localStorage.getItem(ShellRegistry.STORAGE_KEY_ACTIVE) || "panorama";
+      return localStorage.getItem(ShellRegistry.STORAGE_KEY_ACTIVE) || "editorial";
     }
-    return "panorama";
+    return "editorial";
   }
 
   public setActiveShell(id: string): void {
@@ -275,14 +262,10 @@ export class ShellRegistry {
       const { PanoramaShell } = await import("./panorama-shell.js");
       this.shellClasses.set("panorama", PanoramaShell);
       return new PanoramaShell(options);
-    } else if (descriptor.id === "editorial") {
+    } else {
       const { EditorialShell } = await import("./editorial-shell.js");
       this.shellClasses.set("editorial", EditorialShell);
       return new EditorialShell(options);
-    } else {
-      const { OmniShell } = await import("./shell.js");
-      this.shellClasses.set("classic", OmniShell);
-      return new OmniShell(options);
     }
   }
 
@@ -291,7 +274,7 @@ export class ShellRegistry {
    * falls back to cached constructor or throws with guidance to use createAsync.
    */
   public create(id: string, options: OmniShellOptions): OmniShellHost {
-    const descriptor = this.shells.get(id) || this.shells.get("classic") || BUILTIN_SHELLS[0];
+    const descriptor = this.shells.get(id) || this.shells.get("editorial") || BUILTIN_SHELLS[0];
     if (!descriptor) {
       throw new Error(`Shell '${id}' is not registered.`);
     }
@@ -305,9 +288,8 @@ export class ShellRegistry {
       return descriptor.create(options);
     }
 
-    // If classic is registered and this is a fallback:
-    if (this.shellClasses.has("classic")) {
-      const Cls = this.shellClasses.get("classic")!;
+    if (this.shellClasses.has("editorial")) {
+      const Cls = this.shellClasses.get("editorial")!;
       return new Cls(options);
     }
 

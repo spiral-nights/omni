@@ -457,6 +457,259 @@ omni-toggle {
   color: var(--omni-text-primary, #ede8df);
 }
 
+/* Select Dropdown */
+omni-select {
+  display: flex;
+  width: 100%;
+}
+.omni-select {
+  width: 100%;
+  background: var(--omni-bg-surface, #191816);
+  border: 1px solid var(--omni-border-subtle, #383530);
+  border-radius: var(--omni-radius-sm, 6px);
+  color: var(--omni-text-primary, #ede8df);
+  font-family: inherit;
+  font-size: 0.88rem;
+  padding: 8px 12px;
+  outline: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+.omni-select:focus {
+  border-color: var(--omni-accent-primary, #d4a373);
+}
+
+/* Tabs */
+omni-tabs {
+  display: flex;
+  width: 100%;
+}
+.omni-tabs-nav {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--omni-border-subtle, #272522);
+  width: 100%;
+  padding-bottom: 4px;
+}
+.omni-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--omni-text-secondary, #9e988f);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.omni-tab-btn:hover {
+  color: var(--omni-text-primary, #ede8df);
+}
+.omni-tab-btn.active {
+  color: var(--omni-accent-primary, #d4a373);
+  border-bottom-color: var(--omni-accent-primary, #d4a373);
+}
+.omni-tab-badge {
+  font-size: 0.7rem;
+  font-family: var(--omni-font-mono, monospace);
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background: var(--omni-bg-surface, #191816);
+  color: var(--omni-text-muted, #78716c);
+}
+
+/* Status Indicator */
+omni-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.omni-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.omni-status-online {
+  background: #98c379;
+  box-shadow: 0 0 6px rgba(152, 195, 121, 0.4);
+}
+.omni-status-connecting {
+  background: var(--omni-accent-primary, #d4a373);
+  box-shadow: 0 0 6px rgba(212, 163, 115, 0.4);
+}
+.omni-status-offline {
+  background: var(--omni-text-muted, #78716c);
+}
+.omni-status-error {
+  background: #e06c75;
+  box-shadow: 0 0 6px rgba(224, 108, 117, 0.4);
+}
+.omni-pulse {
+  animation: omni-pulse-glow 1.8s infinite ease-in-out;
+}
+@keyframes omni-pulse-glow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(1.15); }
+}
+.omni-status-label {
+  font-size: 0.8rem;
+  color: var(--omni-text-secondary, #9e988f);
+}
+
+/* Code Block */
+omni-code-block {
+  display: block;
+  position: relative;
+  width: 100%;
+}
+.omni-code-pre {
+  background: var(--omni-bg-canvas, #141312);
+  border: 1px solid var(--omni-border-subtle, #272522);
+  border-radius: var(--omni-radius-sm, 6px);
+  padding: 12px 14px;
+  margin: 0;
+  overflow-x: auto;
+  font-family: var(--omni-font-mono, monospace);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--omni-text-primary, #ede8df);
+}
+.omni-code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--omni-bg-surface, #191816);
+  border: 1px solid var(--omni-border-subtle, #383530);
+  border-radius: 4px;
+  color: var(--omni-text-muted, #78716c);
+  padding: 4px 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.omni-code-copy-btn:hover {
+  color: var(--omni-accent-primary, #d4a373);
+  border-color: var(--omni-accent-primary, #d4a373);
+}
+
+/* Progress */
+omni-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.omni-progress-track {
+  width: 100%;
+  height: 6px;
+  background: var(--omni-bg-surface, #191816);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+.omni-progress-bar {
+  height: 100%;
+  background: var(--omni-accent-primary, #d4a373);
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+.omni-progress-label {
+  font-size: 0.78rem;
+  color: var(--omni-text-muted, #78716c);
+  font-family: var(--omni-font-mono, monospace);
+}
+
+/* Banner / Alert */
+omni-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--omni-radius-sm, 6px);
+  border: 1px solid var(--omni-border-subtle, #272522);
+  background: var(--omni-bg-surface, #191816);
+  color: var(--omni-text-primary, #ede8df);
+  box-sizing: border-box;
+  width: 100%;
+}
+.omni-banner-info {
+  border-left: 3px solid var(--omni-accent-primary, #d4a373);
+}
+.omni-banner-success {
+  border-left: 3px solid #98c379;
+}
+.omni-banner-warning {
+  border-left: 3px solid #e5c07b;
+}
+.omni-banner-error {
+  border-left: 3px solid #e06c75;
+}
+.omni-banner-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+.omni-banner-info .omni-banner-icon { color: var(--omni-accent-primary, #d4a373); }
+.omni-banner-success .omni-banner-icon { color: #98c379; }
+.omni-banner-warning .omni-banner-icon { color: #e5c07b; }
+.omni-banner-error .omni-banner-icon { color: #e06c75; }
+.omni-banner-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.omni-banner-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--omni-text-primary, #ede8df);
+}
+.omni-banner-message {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--omni-text-secondary, #9e988f);
+}
+.omni-banner-action-btn {
+  background: transparent;
+  border: 1px solid var(--omni-border-subtle, #383530);
+  border-radius: 4px;
+  color: var(--omni-text-primary, #ede8df);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  white-space: nowrap;
+}
+.omni-banner-action-btn:hover {
+  border-color: var(--omni-accent-primary, #d4a373);
+}
+.omni-banner-dismiss-btn {
+  background: transparent;
+  border: none;
+  color: var(--omni-text-muted, #78716c);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+.omni-banner-dismiss-btn:hover {
+  color: var(--omni-text-primary, #ede8df);
+}
+
 /* 6. Collections & Lists */
 omni-list {
   display: flex;

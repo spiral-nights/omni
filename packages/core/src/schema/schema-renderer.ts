@@ -16,6 +16,12 @@ import {
   OmniInputElement,
   OmniTextareaElement,
   OmniToggleElement,
+  OmniSelectElement,
+  OmniTabsElement,
+  OmniStatusIndicatorElement,
+  OmniCodeBlockElement,
+  OmniProgressElement,
+  OmniBannerElement,
   OmniListElement,
   OmniListItemElement,
   OmniEmptyStateElement
@@ -244,6 +250,42 @@ export class SchemaRenderer {
 
       case "toggle": {
         const el = document.createElement("omni-toggle") as OmniToggleElement;
+        el.setProps(node);
+        return el;
+      }
+
+      case "select": {
+        const el = document.createElement("omni-select") as OmniSelectElement;
+        el.setProps(node);
+        return el;
+      }
+
+      case "tabs": {
+        const el = document.createElement("omni-tabs") as OmniTabsElement;
+        el.setProps(node);
+        return el;
+      }
+
+      case "status-indicator": {
+        const el = document.createElement("omni-status-indicator") as OmniStatusIndicatorElement;
+        el.setProps(node);
+        return el;
+      }
+
+      case "code-block": {
+        const el = document.createElement("omni-code-block") as OmniCodeBlockElement;
+        el.setProps(node);
+        return el;
+      }
+
+      case "progress": {
+        const el = document.createElement("omni-progress") as OmniProgressElement;
+        el.setProps(node);
+        return el;
+      }
+
+      case "banner": {
+        const el = document.createElement("omni-banner") as OmniBannerElement;
         el.setProps(node);
         return el;
       }
