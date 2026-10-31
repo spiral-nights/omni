@@ -236,6 +236,7 @@ export interface OmniListItemPrimitive extends OmniPrimitiveBase {
   meta?: string;
   icon?: string;
   avatarUrl?: string;
+  avatarPubkey?: string;
   checked?: boolean;
   onCheckAction?: OmniAction;
   onClickAction?: OmniAction;

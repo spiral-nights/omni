@@ -116,4 +116,43 @@ describe("Feed Schema UI (Server-Driven Declarative Feed)", () => {
     ) as any;
     expect(followingBtn.variant).toBe("primary");
   });
+
+  it("handles view-thread, reply, and close-thread navigation", () => {
+    const current = getFeedSchema("main") as OmniBoxPrimitive;
+    const firstNoteCard = current.children[2] as OmniCardPrimitive;
+    const contentNode = firstNoteCard.children.find((c) => c.type === "text") as any;
+    expect(contentNode.action.name).toBe("view-thread");
+    const noteId = contentNode.action.payload.id;
+
+    // Click into thread
+    const threadSchema = handleFeedAction(
+      { name: "view-thread", payload: { id: noteId } },
+      {}
+    ) as OmniBoxPrimitive;
+    expect(threadSchema).toBeDefined();
+
+    // Check Back to Feed button
+    const topRow = threadSchema.children[0] as OmniBoxPrimitive;
+    const backBtn = topRow.children.find((c: any) => c.label?.includes("Back to Feed")) as any;
+    expect(backBtn).toBeDefined();
+    expect(backBtn.action.name).toBe("close-thread");
+
+    // Post a reply
+    const afterReply = handleFeedAction(
+      { name: "publish-reply", payload: { replyToId: noteId } },
+      { replyText: "Great point on Nostr decentralization!" }
+    ) as OmniBoxPrimitive;
+
+    // Check that reply appears in replies section
+    const replyCard = afterReply.children.find(
+      (c) => c.type === "card" && (c as any).children?.some((child: any) => child.content === "Great point on Nostr decentralization!")
+    );
+    expect(replyCard).toBeDefined();
+
+    // Close thread
+    const closedSchema = handleFeedAction({ name: "close-thread" }, {}) as OmniBoxPrimitive;
+    const feedHeader = closedSchema.children[0] as OmniBoxPrimitive;
+    const feedTitle = (feedHeader.children[0] as OmniBoxPrimitive).children[0] as OmniTextPrimitive;
+    expect(feedTitle.content).toBe("Feed");
+  });
 });

@@ -30,6 +30,7 @@ let currentProfileData: Record<string, any> = {
 };
 let schemaFollowsSet: Set<string> = new Set();
 let schemaProfileCache: Map<string, any> = new Map();
+let schemaUserNotes: any[] = [];
 let schemaTargetUser: Record<string, any> | null = null;
 let schemaWs: WebSocket | null = null;
 let schemaUpdateTimer: any = null;
@@ -291,6 +292,53 @@ export function getProfileSchema(
         language: "text"
       });
     }
+
+    children.push({
+      type: "divider"
+    });
+
+    children.push({
+      type: "text",
+      content: "Recent Posts",
+      variant: "title"
+    });
+
+    if (schemaUserNotes.length === 0) {
+      children.push({
+        type: "banner",
+        tone: "info",
+        message: "No posts found for this user."
+      });
+    } else {
+      for (const note of schemaUserNotes) {
+        children.push({
+          type: "card",
+          children: [
+            {
+              type: "box",
+              direction: "row",
+              justify: "between",
+              align: "center",
+              children: [
+                {
+                  type: "text",
+                  content: note.created_at
+                    ? new Date(note.created_at * 1000).toLocaleString([], { dateStyle: "short", timeStyle: "short" })
+                    : "Recent",
+                  variant: "caption",
+                  tone: "muted"
+                }
+              ]
+            },
+            {
+              type: "text",
+              content: note.content || "",
+              variant: "body"
+            }
+          ]
+        });
+      }
+    }
   } else if (activeTab === "edit") {
     children.push({
       type: "banner",
@@ -450,7 +498,7 @@ export function getProfileSchema(
             subtitle: fAbout ? (fAbout.length > 80 ? fAbout.slice(0, 80) + "..." : fAbout) : (fNip05 || `${fPk.slice(0, 16)}...`),
             meta: fNip05 || `${fPk.slice(0, 8)}...`,
             avatarUrl: fPic || undefined,
-            icon: !fPic ? "user" : undefined,
+            avatarPubkey: fPk,
             onClickAction: {
               name: "view_profile",
               payload: { pubkey: fPk }
@@ -554,6 +602,45 @@ export function getProfileSchema(
         }
       ]
     });
+
+    if (schemaUserNotes.length > 0) {
+      children.push({
+        type: "divider"
+      });
+      children.push({
+        type: "text",
+        content: "Recent Posts",
+        variant: "title"
+      });
+      for (const note of schemaUserNotes) {
+        children.push({
+          type: "card",
+          children: [
+            {
+              type: "box",
+              direction: "row",
+              justify: "between",
+              align: "center",
+              children: [
+                {
+                  type: "text",
+                  content: note.created_at
+                    ? new Date(note.created_at * 1000).toLocaleString([], { dateStyle: "short", timeStyle: "short" })
+                    : "Recent",
+                  variant: "caption",
+                  tone: "muted"
+                }
+              ]
+            },
+            {
+              type: "text",
+              content: note.content || "",
+              variant: "body"
+            }
+          ]
+        });
+      }
+    }
   }
 
   return {
@@ -666,6 +753,18 @@ function handleSchemaWsMessage(event: any) {
         fetchMissingSchemaProfiles(Array.from(schemaFollowsSet));
         scheduleSchemaUpdate();
       }
+
+      // Kind 1: User notes
+      else if (k === 1 && ev.id) {
+        const activePk = currentSchemaTab === "user-profile" ? schemaTargetUser?.pubkey : (currentSchemaTab === "my-profile" ? currentProfilePubkey : "");
+        if (activePk && ev.pubkey === activePk) {
+          if (!schemaUserNotes.some((n) => n.id === ev.id)) {
+            schemaUserNotes.push(ev);
+            schemaUserNotes.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+            scheduleSchemaUpdate();
+          }
+        }
+      }
     }
   } catch (_) {}
 }
@@ -680,6 +779,7 @@ function startSchemaSubscriptions(pk: string) {
       try {
         schemaWs?.send(JSON.stringify(["REQ", `pv_schema_prof_${Date.now()}`, { kinds: [0], authors: [pk], limit: 1 }]));
         schemaWs?.send(JSON.stringify(["REQ", `pv_schema_contacts_${Date.now()}`, { kinds: [3], authors: [pk], limit: 1 }]));
+        schemaWs?.send(JSON.stringify(["REQ", `pv_schema_my_notes_${Date.now()}`, { kinds: [1], authors: [pk], limit: 20 }]));
         fetchMissingSchemaProfiles(Array.from(schemaFollowsSet));
       } catch (_) {}
     };
@@ -701,6 +801,10 @@ export async function handleProfileViewerAction(
   const actName = action.name;
   if (actName === "switch-tab") {
     currentSchemaTab = String(payload?.tab || payload?.value || action.payload?.tab || "my-profile");
+    if (currentSchemaTab === "my-profile" && currentProfilePubkey) {
+      schemaUserNotes = [];
+      sendSchemaWs(["REQ", `pv_schema_my_notes_${Date.now()}`, { kinds: [1], authors: [currentProfilePubkey], limit: 20 }]);
+    }
   } else if (actName === "save-profile") {
     const updated = {
       name: String(payload?.name ?? currentProfileData.name ?? ""),
@@ -864,7 +968,9 @@ export async function handleProfileViewerAction(
         } catch (_) {}
       }
       currentSchemaTab = "user-profile";
+      schemaUserNotes = [];
       sendSchemaWs(["REQ", `pv_schema_target_${Date.now()}`, { kinds: [0], authors: [targetPk], limit: 1 }]);
+      sendSchemaWs(["REQ", `pv_schema_target_notes_${Date.now()}`, { kinds: [1], authors: [targetPk], limit: 20 }]);
     }
   }
 

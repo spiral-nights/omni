@@ -877,7 +877,11 @@ function queueProfileFetch(pubkey: string) {
 
 function flushProfileBatch() {
   profileBatchTimer = null;
-  if (queuedProfilePubkeys.size === 0 || !activeWs || activeWs.readyState !== WebSocket.OPEN) return;
+  const ws =
+    (activeWs && activeWs.readyState === WebSocket.OPEN)
+      ? activeWs
+      : (schemaWs && schemaWs.readyState === WebSocket.OPEN ? schemaWs : null);
+  if (queuedProfilePubkeys.size === 0 || !ws) return;
 
   const batch = Array.from(queuedProfilePubkeys).slice(0, 50);
   for (const pk of batch) {
@@ -887,7 +891,7 @@ function flushProfileBatch() {
 
   const subId = `prof_batch_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
   try {
-    activeWs.send(JSON.stringify(["REQ", subId, { kinds: [0], authors: batch, limit: batch.length }]));
+    ws.send(JSON.stringify(["REQ", subId, { kinds: [0], authors: batch, limit: batch.length }]));
   } catch (_) {}
 }
 
@@ -3356,39 +3360,17 @@ export interface FeedSchemaState {
   activeTab: "following" | "global";
   notes: FeedNoteItem[];
   composerText: string;
+  activeThreadNoteId?: string | null;
 }
 
 const defaultFeedState: FeedSchemaState = {
   activeTab: "following",
   composerText: "",
-  notes: [
-    {
-      id: "note_1",
-      pubkey: "npub1spiralnights000000000000000000000000000000000000000000000001",
-      authorName: "Satoshi",
-      npub: "npub1satoshi...",
-      content: "Running Bitcoin on local relays with Omni. A decentralized, extensible Nostr runtime.",
-      created_at: Date.now() - 1000 * 60 * 15,
-      likes: 21,
-      reposts: 7,
-      replies: 4,
-      zaps: 42
-    },
-    {
-      id: "note_2",
-      pubkey: "npub1fiatjaf0000000000000000000000000000000000000000000000000002",
-      authorName: "fiatjaf",
-      npub: "npub1fiatjaf...",
-      content: "Declarative Schema UI for micro-frontends: pure JSON server-driven UI rendered with standard Custom Elements natively in the host shell.",
-      created_at: Date.now() - 1000 * 60 * 60 * 2,
-      likes: 84,
-      reposts: 19,
-      replies: 12,
-      zaps: 120
-    }
-  ]
+  notes: [],
+  activeThreadNoteId: null
 };
 
+let schemaThreadReplies: Map<string, FeedNoteItem[]> = new Map();
 let currentFeedState: FeedSchemaState = { ...defaultFeedState };
 
 export function getFeedSchema(
@@ -3408,6 +3390,32 @@ export function getFeedSchema(
   }
 
   if (view === "widget") {
+    const recentItems: any[] = state.notes.slice(0, 3).map((n) => ({
+      type: "list-item" as const,
+      id: n.id,
+      title: n.authorName,
+      subtitle: n.content,
+      actions: [
+        {
+          type: "icon-button" as const,
+          icon: "heart",
+          variant: n.liked ? ("secondary" as const) : ("ghost" as const),
+          tooltip: "Like note",
+          action: { name: "like-note", payload: { id: n.id } }
+        }
+      ]
+    }));
+
+    if (recentItems.length === 0) {
+      recentItems.push({
+        type: "list-item" as const,
+        id: "empty",
+        title: "No recent notes",
+        subtitle: "Broadcast a note or connect to relays",
+        actions: []
+      });
+    }
+
     return {
       type: "card",
       title: "Recent Notes",
@@ -3435,27 +3443,242 @@ export function getFeedSchema(
         },
         {
           type: "list",
-          items: state.notes.slice(0, 3).map((n) => ({
-            type: "list-item" as const,
-            id: n.id,
-            title: n.authorName,
-            subtitle: n.content,
-            actions: [
-              {
-                type: "icon-button" as const,
-                icon: "heart",
-                variant: n.liked ? ("secondary" as const) : ("ghost" as const),
-                tooltip: "Like note",
-                action: { name: "like-note", payload: { id: n.id } }
-              }
-            ]
-          }))
+          items: recentItems
         }
       ]
     };
   }
 
   // Full-page / Main View (100% Declarative Schema Feed)
+  if (state.activeThreadNoteId) {
+    const focused = state.notes.find((n) => n.id === state.activeThreadNoteId);
+    const replies = (focused ? schemaThreadReplies.get(focused.id) : null) || [];
+
+    const threadChildren: OmniComponentNode[] = [
+      {
+        type: "box",
+        direction: "row",
+        align: "center",
+        justify: "between",
+        padding: "sm",
+        children: [
+          {
+            type: "button",
+            label: "← Back to Feed",
+            variant: "secondary",
+            size: "sm",
+            action: { name: "close-thread" }
+          }
+        ]
+      }
+    ];
+
+    if (focused) {
+      threadChildren.push({
+        type: "card",
+        children: [
+          {
+            type: "box",
+            direction: "row",
+            justify: "between",
+            align: "center",
+            children: [
+              {
+                type: "box",
+                direction: "row",
+                gap: "sm",
+                align: "center",
+                action: { name: "view-profile", payload: { pubkey: focused.pubkey } },
+                children: [
+                  {
+                    type: "avatar",
+                    pubkey: focused.pubkey,
+                    name: focused.authorName,
+                    size: "md",
+                    action: { name: "view-profile", payload: { pubkey: focused.pubkey } }
+                  },
+                  {
+                    type: "box",
+                    direction: "column",
+                    gap: "xs",
+                    children: [
+                      { type: "text", content: focused.authorName, variant: "title" },
+                      { type: "text", content: `${new Date(focused.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })} · ${focused.npub}`, variant: "caption", tone: "muted" }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            type: "text",
+            content: focused.content,
+            variant: "body"
+          },
+          { type: "divider" },
+          {
+            type: "box",
+            direction: "row",
+            justify: "between",
+            align: "center",
+            children: [
+              {
+                type: "button",
+                variant: "ghost",
+                size: "sm",
+                icon: "reply",
+                label: String(focused.replies || replies.length),
+                action: { name: "view-thread", payload: { id: focused.id } }
+              },
+              {
+                type: "button",
+                variant: focused.reposted ? "secondary" : "ghost",
+                size: "sm",
+                icon: "repeat",
+                label: String(focused.reposts || "0"),
+                action: { name: "repost-note", payload: { id: focused.id } }
+              },
+              {
+                type: "button",
+                variant: focused.liked ? "secondary" : "ghost",
+                size: "sm",
+                icon: "heart",
+                label: String(focused.likes || "0"),
+                action: { name: "like-note", payload: { id: focused.id } }
+              },
+              {
+                type: "button",
+                variant: "ghost",
+                size: "sm",
+                icon: "zap",
+                label: String(focused.zaps || "0"),
+                action: { name: "zap-note", payload: { id: focused.id } }
+              }
+            ]
+          }
+        ]
+      });
+
+      // Reply Composer
+      threadChildren.push({
+        type: "card",
+        children: [
+          {
+            type: "box",
+            direction: "column",
+            gap: "sm",
+            children: [
+              {
+                type: "textarea",
+                name: "replyText",
+                placeholder: `Post your reply to ${focused.authorName}...`,
+                rows: 2
+              },
+              {
+                type: "box",
+                direction: "row",
+                justify: "end",
+                children: [
+                  {
+                    type: "button",
+                    label: "Reply",
+                    variant: "primary",
+                    size: "sm",
+                    action: { name: "publish-reply", payload: { replyToId: focused.id } }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      });
+
+      // Replies Section
+      threadChildren.push({
+        type: "box",
+        padding: "sm",
+        children: [
+          {
+            type: "text",
+            content: `Replies (${replies.length})`,
+            variant: "title"
+          }
+        ]
+      });
+
+      if (replies.length === 0) {
+        threadChildren.push({
+          type: "card",
+          children: [
+            {
+              type: "box",
+              direction: "column",
+              align: "center",
+              gap: "xs",
+              children: [
+                { type: "text", content: "No replies to this note yet.", variant: "body", tone: "muted" },
+                { type: "text", content: "Write a reply above to start the conversation.", variant: "caption", tone: "muted" }
+              ]
+            }
+          ]
+        });
+      } else {
+        for (const rep of replies) {
+          threadChildren.push({
+            type: "card",
+            children: [
+              {
+                type: "box",
+                direction: "row",
+                justify: "between",
+                align: "center",
+                children: [
+                  {
+                    type: "box",
+                    direction: "row",
+                    gap: "sm",
+                    align: "center",
+                    action: { name: "view-profile", payload: { pubkey: rep.pubkey } },
+                    children: [
+                      {
+                        type: "avatar",
+                        pubkey: rep.pubkey,
+                        name: rep.authorName,
+                        size: "sm",
+                        action: { name: "view-profile", payload: { pubkey: rep.pubkey } }
+                      },
+                      {
+                        type: "box",
+                        direction: "column",
+                        gap: "xs",
+                        children: [
+                          { type: "text", content: rep.authorName, variant: "body", tone: "primary" },
+                          { type: "text", content: `${new Date(rep.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${rep.npub.slice(0, 12)}...`, variant: "caption", tone: "muted" }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                type: "text",
+                content: rep.content,
+                variant: "body"
+              }
+            ]
+          });
+        }
+      }
+    }
+
+    return {
+      type: "box",
+      direction: "column",
+      gap: "md",
+      children: threadChildren
+    };
+  }
+
   const isFollowing = state.activeTab === "following";
   const displayedNotes = state.notes.filter((note) => {
     if (isFollowing) {
@@ -3523,7 +3746,8 @@ export function getFeedSchema(
       {
         type: "text",
         content: n.content,
-        variant: "body"
+        variant: "body",
+        action: { name: "view-thread", payload: { id: n.id } }
       },
       {
         type: "divider"
@@ -3540,7 +3764,7 @@ export function getFeedSchema(
             size: "sm",
             icon: "reply",
             label: String(n.replies || "0"),
-            action: { name: "reply-note", payload: { id: n.id } }
+            action: { name: "view-thread", payload: { id: n.id } }
           },
           {
             type: "button",
@@ -3576,12 +3800,30 @@ export function getFeedSchema(
       ? noteNodes
       : [
           {
-            type: "empty-state",
-            icon: "message",
-            title: "No notes on this timeline",
-            description: "Follow creators or broadcast your first note to populate the feed.",
-            action: { name: "refresh" },
-            actionLabel: "Refresh Relays"
+            type: "card",
+            children: [
+              {
+                type: "box",
+                direction: "column",
+                align: "center",
+                gap: "sm",
+                padding: "md",
+                children: [
+                  {
+                    type: "text",
+                    content: "No notes on this timeline yet",
+                    variant: "body",
+                    tone: "muted"
+                  },
+                  {
+                    type: "text",
+                    content: "Follow creators in Profiles or broadcast your first note above to populate the feed.",
+                    variant: "caption",
+                    tone: "muted"
+                  }
+                ]
+              }
+            ]
           }
         ];
 
@@ -3811,12 +4053,22 @@ function initFeedSchemaSocket() {
             try {
               const parsed = JSON.parse(ev.content);
               profileCache.set(ev.pubkey, parsed);
+              persistProfileCache(profileCache);
               let updated = false;
               for (const n of currentFeedState.notes) {
                 if (n.pubkey === ev.pubkey) {
                   if (parsed.display_name || parsed.name) n.authorName = parsed.display_name || parsed.name;
                   if (parsed.picture) n.avatar = parsed.picture;
                   updated = true;
+                }
+              }
+              for (const replies of schemaThreadReplies.values()) {
+                for (const r of replies) {
+                  if (r.pubkey === ev.pubkey) {
+                    if (parsed.display_name || parsed.name) r.authorName = parsed.display_name || parsed.name;
+                    if (parsed.picture) r.avatar = parsed.picture;
+                    updated = true;
+                  }
                 }
               }
               if (updated) scheduleSchemaDispatch();
@@ -3848,6 +4100,39 @@ function initFeedSchemaSocket() {
           }
 
           if (ev.kind === 1 && ev.id) {
+            // Handle thread reply arrival
+            if (subId?.startsWith("schema_thread_rep_")) {
+              const eTag = (ev.tags || []).find((t: string[]) => t[0] === "e");
+              const parentId = eTag ? eTag[1] : (currentFeedState.activeThreadNoteId || null);
+              if (parentId) {
+                const existing = schemaThreadReplies.get(parentId) || [];
+                if (!existing.some((r) => r.id === ev.id)) {
+                  const author = profileCache.get(ev.pubkey);
+                  const repItem: FeedNoteItem = {
+                    id: ev.id,
+                    pubkey: ev.pubkey,
+                    authorName: author?.display_name || author?.name || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User"),
+                    npub: ev.pubkey ? `npub1${ev.pubkey.slice(0, 8)}...` : "npub1...",
+                    avatar: author?.picture,
+                    content: ev.content || "",
+                    created_at: (ev.created_at || Math.floor(Date.now() / 1000)) * 1000,
+                    likes: 0,
+                    reposts: 0,
+                    replies: 0,
+                    zaps: 0
+                  };
+                  existing.push(repItem);
+                  existing.sort((a, b) => a.created_at - b.created_at);
+                  schemaThreadReplies.set(parentId, existing);
+                  if (ev.pubkey && !profileCache.has(ev.pubkey)) {
+                    queueProfileFetch(ev.pubkey);
+                  }
+                  scheduleSchemaDispatch();
+                }
+              }
+              return;
+            }
+
             if (currentFeedState.notes.some((n) => n.id === ev.id)) return;
 
             if (ev.created_at && ev.created_at < schemaOldestTimestamp) {
@@ -4024,6 +4309,68 @@ export function handleFeedAction(
         zaps: 0
       });
       currentFeedState.composerText = "";
+    }
+  } else if (actName === "view-thread" || actName === "reply-note") {
+    const id = String(payload?.id || action.payload?.id || "");
+    if (id) {
+      currentFeedState.activeThreadNoteId = id;
+      const ws = (activeWs && activeWs.readyState === WebSocket.OPEN) ? activeWs : (schemaWs && schemaWs.readyState === WebSocket.OPEN ? schemaWs : null);
+      if (ws) {
+        try {
+          ws.send(JSON.stringify(["REQ", `schema_thread_rep_${id.slice(0, 8)}`, { kinds: [1], "#e": [id], limit: 50 }]));
+        } catch (_) {}
+      }
+    }
+  } else if (actName === "close-thread") {
+    currentFeedState.activeThreadNoteId = null;
+  } else if (actName === "publish-reply") {
+    const replyToId = String(payload?.replyToId || action.payload?.replyToId || currentFeedState.activeThreadNoteId || "");
+    const replyText = String(payload?.replyText ?? payload?.composerText ?? "").trim();
+    if (replyText && replyToId) {
+      const parentNote = currentFeedState.notes.find((n) => n.id === replyToId);
+      const parentPubkey = parentNote?.pubkey || "";
+      const tags: string[][] = [["e", replyToId, "", "reply"]];
+      if (parentPubkey) {
+        tags.push(["p", parentPubkey]);
+      }
+      const myMeta = profileCache.get(schemaMyUserPubkey);
+      const newReply: FeedNoteItem = {
+        id: `reply_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        pubkey: schemaMyUserPubkey || "current_user",
+        authorName: myMeta?.display_name || myMeta?.name || "You",
+        npub: schemaMyUserPubkey ? `npub1${schemaMyUserPubkey.slice(0, 8)}...` : "npub1you...",
+        avatar: myMeta?.picture,
+        content: replyText,
+        created_at: Date.now(),
+        likes: 0,
+        reposts: 0,
+        replies: 0,
+        zaps: 0
+      };
+
+      const existing = schemaThreadReplies.get(replyToId) || [];
+      schemaThreadReplies.set(replyToId, [...existing, newReply]);
+      if (parentNote) {
+        parentNote.replies = (parentNote.replies || 0) + 1;
+      }
+
+      (async () => {
+        try {
+          const rootObj = (typeof window !== "undefined" ? (window as any) : null) || (typeof self !== "undefined" ? (self as any) : null);
+          const nostrObj = rootObj?.nostr;
+          if (nostrObj?.signEvent) {
+            const ev = {
+              kind: 1,
+              created_at: Math.floor(Date.now() / 1000),
+              tags,
+              content: replyText
+            };
+            const signed = await nostrObj.signEvent(ev);
+            const ws = (activeWs && activeWs.readyState === WebSocket.OPEN) ? activeWs : (schemaWs && schemaWs.readyState === WebSocket.OPEN ? schemaWs : null);
+            ws?.send(JSON.stringify(["EVENT", signed]));
+          }
+        } catch (_) {}
+      })();
     }
   } else if (actName === "like-note") {
     const id = String(payload?.id || action.payload?.id || "");

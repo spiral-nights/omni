@@ -1118,8 +1118,17 @@ export class OmniListItemElement extends BaseElement {
         }
         this.iconEl.className = "omni-list-item-icon omni-list-item-avatar";
         const initial = (props.title || props.id || "?").slice(0, 1).toUpperCase();
-        const fallbackSvg = getAvatarSvg(props.id || props.title || "", initial);
+        const fallbackSvg = getAvatarSvg(props.avatarPubkey || props.id || props.title || "", initial);
         this.iconEl.innerHTML = `<img src="${props.avatarUrl}" alt="${props.title || ''}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.onerror=null; this.parentElement.innerHTML = decodeURIComponent('${encodeURIComponent(fallbackSvg)}');" />`;
+      } else if (props.avatarPubkey || (props.icon === "user" && props.id && props.id.length >= 32)) {
+        if (!this.iconEl) {
+          this.iconEl = document.createElement("div");
+          this.insertBefore(this.iconEl, this.firstChild);
+        }
+        this.iconEl.className = "omni-list-item-icon omni-list-item-avatar";
+        const initial = (props.title || props.id || "?").slice(0, 1).toUpperCase();
+        const avatarSvg = getAvatarSvg(props.avatarPubkey || props.id || "", initial);
+        this.iconEl.innerHTML = avatarSvg;
       } else if (props.icon) {
         if (!this.iconEl) {
           this.iconEl = document.createElement("div");
