@@ -28,7 +28,7 @@ const initialPlugins: InstalledPluginEntry[] = [
     viewport: "main",
     pinned: true,
     views: [
-      { id: "main", title: "Feed", path: "?format=schema", format: "schema" },
+      { id: "main", title: "Feed", path: "", format: "schema" },
       { id: "search", title: "Search", path: "?view=search" },
       { id: "settings", title: "Feed Settings", path: "?view=settings" },
       { id: "widget", title: "Feed Widget", path: "?view=widget", format: "schema" }

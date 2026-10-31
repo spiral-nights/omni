@@ -3323,14 +3323,17 @@ export function isCompactRoute(): boolean {
 export function isSchemaRoute(): boolean {
   try {
     const route = getAppRoute();
-    if (!route) return false;
-    const qIdx = route.indexOf("?");
-    const query = qIdx !== -1 ? route.slice(qIdx) : route;
-    const params = new URLSearchParams(query);
-    if (params.get("format") === "schema" || params.get("view") === "schema") return true;
-    if (route.includes("format=schema") || route.includes("view=schema")) return true;
+    if (route && (route.includes("format=schema") || route.includes("view=schema"))) return true;
+    if (route && (route.includes("format=iframe") || route.includes("view=iframe"))) return false;
   } catch (_) {}
+  if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+    return true;
+  }
   return false;
+}
+
+export function isIframeRoute(): boolean {
+  return !isSchemaRoute();
 }
 
 export interface FeedNoteItem {
@@ -3728,26 +3731,31 @@ export function handleFeedAction(
 }
 
 if (typeof window !== "undefined") {
-  const isWidgetOrCompactOrSchema =
-    isWidgetRoute() || isCompactRoute() || isSchemaRoute();
+  const getFeedView = () => (isWidgetRoute() ? "widget" : isCompactRoute() ? "compact" : "main");
 
   const dispatchFeedSchema = (schema: OmniComponentNode) => {
+    const view = getFeedView();
+    const compId = view === "widget" ? "widget" : "main";
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: "omni:schema", schema }, "*");
-    } else {
-      window.postMessage({ type: "omni:schema", schema }, "*");
+      window.parent.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
     }
+    window.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
   };
 
-  if (isWidgetOrCompactOrSchema) {
-    const view = isWidgetRoute() ? "widget" : isCompactRoute() ? "compact" : "main";
-    dispatchFeedSchema(getFeedSchema(view));
+  if (isSchemaRoute()) {
+    dispatchFeedSchema(getFeedSchema(getFeedView()));
   }
 
   window.addEventListener("message", (event) => {
     const data = event.data;
+    if (!data) return;
+
+    if (data.type === "omni:init" && isSchemaRoute()) {
+      dispatchFeedSchema(getFeedSchema(getFeedView()));
+      return;
+    }
+
     if (
-      data &&
       (data.type === "omni:action" || data.type === "action") &&
       data.action
     ) {

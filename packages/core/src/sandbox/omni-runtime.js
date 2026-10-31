@@ -114,14 +114,26 @@
     hasDispatchedSchema = true;
     const compId = componentId || (sessionInfo && sessionInfo.viewId) || "main";
     if (portSchemaBus) {
-      portSchemaBus.postMessage({
-        type: "schema",
-        componentId: compId,
-        schema: schema
-      });
+      try {
+        portSchemaBus.postMessage({
+          type: "schema",
+          componentId: compId,
+          schema: schema
+        });
+      } catch (_) {}
     } else {
       pendingSchema = { schema, componentId: compId };
     }
+
+    try {
+      if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          type: "omni:schema",
+          componentId: compId,
+          schema: schema
+        }, "*");
+      }
+    } catch (_) {}
   }
 
   // Intercept standard window.parent.postMessage when inside an iframe

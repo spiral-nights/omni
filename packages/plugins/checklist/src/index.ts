@@ -468,11 +468,12 @@ if (typeof window !== "undefined") {
     isSettingsRoute() ? "settings" : isCompactRoute() ? "compact" : "widget";
 
   const dispatchSchema = (schema: OmniComponentNode) => {
+    const view = getActiveView();
+    const compId = view === "widget" ? "widget" : "main";
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: "omni:schema", schema }, "*");
-    } else {
-      window.postMessage({ type: "omni:schema", schema }, "*");
+      window.parent.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
     }
+    window.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
   };
 
   // Dispatch initial schema for the active route/view
@@ -481,8 +482,14 @@ if (typeof window !== "undefined") {
   // Listen for host actions over standard Web messaging
   window.addEventListener("message", (event) => {
     const data = event.data;
+    if (!data) return;
+
+    if (data.type === "omni:init") {
+      dispatchSchema(getChecklistSchema(getActiveView()));
+      return;
+    }
+
     if (
-      data &&
       (data.type === "omni:action" || data.type === "action") &&
       data.action
     ) {

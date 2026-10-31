@@ -381,6 +381,11 @@ export class OmniButtonElement extends BaseElement {
         }
       });
       this.appendChild(this.btnEl);
+      this.addEventListener("click", (e) => {
+        if (e.target === this && this.actionData && !this.btnEl?.disabled) {
+          this.dispatchEvent(new OmniActionEvent(this.actionData));
+        }
+      });
     }
   }
 
@@ -432,6 +437,11 @@ export class OmniIconButtonElement extends BaseElement {
         }
       });
       this.appendChild(this.btnEl);
+      this.addEventListener("click", (e) => {
+        if (e.target === this && this.actionData && !this.btnEl?.disabled) {
+          this.dispatchEvent(new OmniActionEvent(this.actionData));
+        }
+      });
     }
   }
 

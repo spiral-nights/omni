@@ -144,6 +144,7 @@ export class SandboxInstance {
   private dispatcher: JsonRpcDispatcher | null = null;
   private channel1: MessageChannel | null = null;
   private channel2: MessageChannel | null = null;
+  private cleanupFns: Array<() => void> = [];
 
   constructor(private options: SandboxInstanceOptions) {
     this.manifest = options.manifest;
@@ -208,18 +209,19 @@ export class SandboxInstance {
     this.channel1 = new MessageChannel(); // Port 1: Schema / Action bus
     this.channel2 = new MessageChannel(); // Port 2: Kernel RPC
 
-    // Handle incoming Schema updates from sandbox
-    this.channel1.port1.onmessage = (event) => {
-      const data = event.data;
+    // Handle incoming Schema updates from sandbox (via MessageChannel or standard window.parent.postMessage)
+    const applySchema = (data: any) => {
       if (!data) return;
 
-      if (data.type === "schema" && data.schema) {
+      if ((data.type === "schema" || data.type === "omni:schema") && data.schema) {
         const compId = data.componentId;
         const renderer =
           (compId ? this.schemaRenderers.get(compId) : null) ||
+          (compId ? Array.from(this.schemaRenderers.entries()).find(([k]) => k.includes(compId) || compId.includes(k))?.[1] : null) ||
           (this.schemaRenderers.size === 1
             ? this.schemaRenderers.values().next().value
-            : null);
+            : null) ||
+          this.schemaRenderers.values().next().value;
         if (renderer) {
           if (this.iframe && this.iframe.style.display !== "none") {
             this.iframe.style.display = "none";
@@ -228,6 +230,22 @@ export class SandboxInstance {
         }
       }
     };
+
+    this.channel1.port1.onmessage = (event) => {
+      applySchema(event.data);
+    };
+
+    if (typeof window !== "undefined") {
+      const onHostMessage = (event: MessageEvent) => {
+        if (this.iframe && event.source === this.iframe.contentWindow) {
+          applySchema(event.data);
+        }
+      };
+      window.addEventListener("message", onHostMessage);
+      this.cleanupFns.push(() => {
+        window.removeEventListener("message", onHostMessage);
+      });
+    }
 
     // 3. Mount UI View (Schema Custom Elements or Direct Visual Iframe)
     const isSchema = isSchemaView(
@@ -284,6 +302,17 @@ export class SandboxInstance {
                 action,
                 payload
               });
+            } catch (_) {}
+            try {
+              this.iframe?.contentWindow?.postMessage(
+                {
+                  type: "omni:action",
+                  componentId: comp.id,
+                  action,
+                  payload
+                },
+                "*"
+              );
             } catch (_) {}
           }
         });
@@ -635,6 +664,13 @@ export class SandboxInstance {
   }
 
   destroy(): void {
+    for (const cleanup of this.cleanupFns) {
+      try {
+        cleanup();
+      } catch (_) {}
+    }
+    this.cleanupFns = [];
+
     if (this.dispatcher) {
       this.dispatcher.destroy();
     }

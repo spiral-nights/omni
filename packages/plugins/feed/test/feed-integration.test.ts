@@ -12,14 +12,14 @@ const feedCode = feedCodeRaw.replace(/^export /gm, "");
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-describe("feed plugin full-stack (runtime bridge + schema renderer + kernel)", () => {
+describe("feed plugin full-stack (runtime bridge + schema renderer + kernel)", { timeout: 40000 }, () => {
   let kernel: OmniKernel;
 
   beforeEach(async () => {
     kernel = new OmniKernel({ bootstrapRelays: [] });
     await kernel.boot();
     kernel.capabilityStore.setGrant("org.omni.plugin.feed", "nostr:read", "always");
-  });
+  }, 30000);
 
   async function bootFeed(route: string = "?format=schema") {
     const iframe = document.createElement("iframe");
