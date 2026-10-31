@@ -367,22 +367,16 @@ export class OmniAvatarElement extends BaseElement {
 
 export class OmniButtonElement extends BaseElement {
   private btnEl: HTMLButtonElement | null = null;
-  private actionData: OmniAction | null = null;
+  public actionData: OmniAction | null = null;
 
   connectedCallback(): void {
     this.classList.add("omni-button-wrapper");
     if (!this.btnEl) {
       this.btnEl = document.createElement("button");
       this.btnEl.className = "omni-button";
-      this.btnEl.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (this.actionData && !this.btnEl?.disabled) {
-          this.dispatchEvent(new OmniActionEvent(this.actionData));
-        }
-      });
       this.appendChild(this.btnEl);
-      this.addEventListener("click", (e) => {
-        if (e.target === this && this.actionData && !this.btnEl?.disabled) {
+      this.addEventListener("click", () => {
+        if (this.actionData && !this.btnEl?.disabled) {
           this.dispatchEvent(new OmniActionEvent(this.actionData));
         }
       });
@@ -423,22 +417,16 @@ export class OmniButtonElement extends BaseElement {
 
 export class OmniIconButtonElement extends BaseElement {
   private btnEl: HTMLButtonElement | null = null;
-  private actionData: OmniAction | null = null;
+  public actionData: OmniAction | null = null;
 
   connectedCallback(): void {
     this.classList.add("omni-icon-button-wrapper");
     if (!this.btnEl) {
       this.btnEl = document.createElement("button");
       this.btnEl.className = "omni-icon-button";
-      this.btnEl.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (this.actionData && !this.btnEl?.disabled) {
-          this.dispatchEvent(new OmniActionEvent(this.actionData));
-        }
-      });
       this.appendChild(this.btnEl);
-      this.addEventListener("click", (e) => {
-        if (e.target === this && this.actionData && !this.btnEl?.disabled) {
+      this.addEventListener("click", () => {
+        if (this.actionData && !this.btnEl?.disabled) {
           this.dispatchEvent(new OmniActionEvent(this.actionData));
         }
       });
@@ -506,7 +494,10 @@ export class OmniInputElement extends BaseElement {
     if (!this.inputEl) this.connectedCallback();
     this.actionOnEnter = props.actionOnEnter || null;
 
-    if (props.name) this.inputEl!.name = props.name;
+    if (props.name) {
+      this.setAttribute("name", props.name);
+      this.inputEl!.name = props.name;
+    }
     if (props.placeholder !== undefined) this.inputEl!.placeholder = props.placeholder;
     if (props.value !== undefined) this.inputEl!.value = props.value;
     if (props.inputType) this.inputEl!.type = props.inputType;
@@ -588,7 +579,10 @@ export class OmniToggleElement extends BaseElement {
     if (!this.inputEl) this.connectedCallback();
     this.actionData = props.action || null;
 
-    if (props.name) this.inputEl!.name = props.name;
+    if (props.name) {
+      this.setAttribute("name", props.name);
+      this.inputEl!.name = props.name;
+    }
     if (props.checked !== undefined) this.inputEl!.checked = props.checked;
     if (props.disabled !== undefined) this.inputEl!.disabled = props.disabled;
     if (props.label !== undefined && this.labelEl) this.labelEl.textContent = props.label;

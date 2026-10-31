@@ -192,6 +192,19 @@
       }
 
       // Apply Host Theme Tokens to Guest DOM
+      if (typeof document !== "undefined") {
+        try {
+          const docEl = document.documentElement;
+          if (docEl && docEl.style) {
+            docEl.style.backgroundColor = "transparent";
+            docEl.style.colorScheme = "dark";
+          }
+          if (document.body && document.body.style) {
+            document.body.style.backgroundColor = "transparent";
+          }
+        } catch (_) {}
+      }
+
       if (sessionInfo && sessionInfo.theme && sessionInfo.theme.colors) {
         try {
           const docEl = document.documentElement;

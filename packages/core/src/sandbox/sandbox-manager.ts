@@ -154,6 +154,10 @@ export class SandboxInstance {
     return this.compContainersByCompId.get(componentId);
   }
 
+  getPrimaryComponentContainer(): Element | null {
+    return this.compContainers[0] || null;
+  }
+
   getFirstPopulatedComponentContainer(): Element | null {
     for (const container of this.compContainers.values()) {
       if (container.shadowRoot && container.shadowRoot.childNodes.length > 0) return container;
@@ -202,7 +206,10 @@ export class SandboxInstance {
     // and maintain proper origin isolation (opaque 'null' origin).
     this.iframe.setAttribute("sandbox", "allow-scripts allow-modals");
     this.iframe.setAttribute("allow", "autoplay; geolocation");
+    this.iframe.setAttribute("allowtransparency", "true");
     this.iframe.style.display = "none";
+    this.iframe.style.backgroundColor = "transparent";
+    this.iframe.style.colorScheme = "dark";
     this.iframe.setAttribute("data-plugin-id", this.manifest.id);
 
     // 2. Setup MessageChannels
@@ -531,6 +538,29 @@ export class SandboxInstance {
 <html>
 <head>
   <meta http-equiv="Content-Security-Policy" content="${csp}">
+  <style>
+    :root {
+      color-scheme: dark;
+      --omni-bg-canvas: #141312;
+      --omni-bg-surface: #191816;
+      --omni-bg-elevated: #22201d;
+      --omni-text-primary: #ede8df;
+      --omni-text-secondary: #9e988f;
+      --omni-text-muted: #6b665f;
+      --omni-accent-primary: #d4a373;
+      --omni-border-subtle: #272522;
+      --omni-border-strong: #383530;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: transparent !important;
+      color: var(--omni-text-primary, #ede8df);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100%;
+      box-sizing: border-box;
+    }
+  </style>
   <script>
     window.addEventListener("error", function(e) {
       console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);

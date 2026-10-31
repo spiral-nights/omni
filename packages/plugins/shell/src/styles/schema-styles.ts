@@ -218,6 +218,55 @@ omni-metric {
   color: var(--omni-text-secondary, #9e988f);
 }
 
+/* 4b. Avatar & Icon Primitives */
+omni-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  background: var(--omni-bg-surface, #191816);
+  border: 1px solid var(--omni-border-subtle, #272522);
+}
+omni-avatar[size="xs"] { width: 22px; height: 22px; font-size: 0.65rem; }
+omni-avatar[size="sm"] { width: 28px; height: 28px; font-size: 0.75rem; }
+omni-avatar[size="md"], omni-avatar:not([size]) { width: 38px; height: 38px; font-size: 0.9rem; }
+omni-avatar[size="lg"] { width: 52px; height: 52px; font-size: 1.25rem; }
+omni-avatar[size="xl"] { width: 72px; height: 72px; font-size: 1.6rem; }
+
+.omni-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
+}
+
+.omni-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--omni-bg-elevated, #2a2824);
+  color: var(--omni-accent-primary, #d4a373);
+  font-family: var(--omni-font-mono, monospace);
+  font-weight: 700;
+  text-transform: uppercase;
+  user-select: none;
+  border-radius: 50%;
+}
+
+omni-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  flex-shrink: 0;
+}
+
 /* 5. Controls: Buttons, Inputs, Toggles */
 omni-button {
   display: inline-block;

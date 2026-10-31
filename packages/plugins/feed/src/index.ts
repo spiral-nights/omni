@@ -3359,7 +3359,7 @@ export interface FeedSchemaState {
 }
 
 const defaultFeedState: FeedSchemaState = {
-  activeTab: "global",
+  activeTab: "following",
   composerText: "",
   notes: [
     {
@@ -3675,9 +3675,210 @@ export function getFeedSchema(
         ]
       },
       // Stream
-      ...streamChildren
+      ...streamChildren,
+      // Load More Action
+      {
+        type: "box",
+        direction: "row",
+        justify: "center",
+        padding: "md",
+        children: [
+          {
+            type: "button",
+            label: "Load More Notes",
+            variant: "secondary",
+            size: "sm",
+            action: { name: "load-more" }
+          }
+        ]
+      }
     ]
   };
+}
+
+let schemaWs: WebSocket | null = null;
+let schemaFollowingPubkeys = new Set<string>();
+let schemaMyUserPubkey = "";
+let schemaOldestTimestamp = Infinity;
+let schemaIsLoadingOlder = false;
+let schemaDispatchTimeout: any = null;
+
+function scheduleSchemaDispatch() {
+  if (schemaDispatchTimeout) return;
+  schemaDispatchTimeout = setTimeout(() => {
+    schemaDispatchTimeout = null;
+    if (typeof window !== "undefined") {
+      const getFeedView = () => (isWidgetRoute() ? "widget" : isCompactRoute() ? "compact" : "main");
+      const view = getFeedView();
+      const compId = view === "widget" ? "widget" : "main";
+      const schema = getFeedSchema(view);
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
+      }
+      window.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
+    }
+  }, 100);
+}
+
+function initFeedSchemaSocket() {
+  if (typeof WebSocket === "undefined") return;
+  if (schemaWs && schemaWs.readyState === WebSocket.OPEN) return;
+
+  try {
+    const ws = new WebSocket("wss://relay.damus.io");
+    schemaWs = ws;
+
+    ws.onopen = () => {
+      const nostr = (typeof window !== "undefined" ? (window as any).nostr : null);
+      if (nostr?.getPublicKey) {
+        nostr.getPublicKey().then((pk: string) => {
+          if (pk) {
+            schemaMyUserPubkey = pk;
+            schemaFollowingPubkeys.add(pk);
+            try {
+              ws.send(JSON.stringify(["REQ", "schema-contacts", { kinds: [3], authors: [pk], limit: 1 }]));
+            } catch (_) {}
+          }
+        }).catch(() => {});
+      }
+      try {
+        ws.send(JSON.stringify(["REQ", "schema-feed-init", { kinds: [1], limit: 20 }]));
+      } catch (_) {}
+    };
+
+    ws.onmessage = (msg) => {
+      try {
+        const data = JSON.parse(msg.data);
+        const type = data[0];
+        const subId = data[1];
+
+        if (type === "EVENT" && data[2]) {
+          const ev = data[2];
+          if (ev.kind === 0) {
+            try {
+              const parsed = JSON.parse(ev.content);
+              profileCache.set(ev.pubkey, parsed);
+              let updated = false;
+              for (const n of currentFeedState.notes) {
+                if (n.pubkey === ev.pubkey) {
+                  if (parsed.display_name || parsed.name) n.authorName = parsed.display_name || parsed.name;
+                  if (parsed.picture) n.avatar = parsed.picture;
+                  updated = true;
+                }
+              }
+              if (updated) scheduleSchemaDispatch();
+            } catch (_) {}
+            return;
+          }
+
+          if (ev.kind === 3 && ev.pubkey === schemaMyUserPubkey) {
+            for (const tag of ev.tags || []) {
+              if (tag[0] === "p" && tag[1]) {
+                schemaFollowingPubkeys.add(tag[1]);
+              }
+            }
+            if (currentFeedState.activeTab === "following" && schemaFollowingPubkeys.size > 0) {
+              try {
+                ws.send(JSON.stringify([
+                  "REQ",
+                  "schema-following-notes",
+                  { kinds: [1], authors: Array.from(schemaFollowingPubkeys).slice(0, 100), limit: 20 }
+                ]));
+              } catch (_) {}
+            }
+            return;
+          }
+
+          if (ev.kind === 1 && ev.id) {
+            if (currentFeedState.notes.some((n) => n.id === ev.id)) return;
+
+            if (ev.created_at && ev.created_at < schemaOldestTimestamp) {
+              schemaOldestTimestamp = ev.created_at;
+            }
+
+            const pseudoRand = (ev.id || "").split("").reduce((acc: number, ch: string) => acc + ch.charCodeAt(0), 0);
+            const author = profileCache.get(ev.pubkey);
+            const npubShort = ev.pubkey ? `npub1${ev.pubkey.slice(0, 8)}...` : "npub1...";
+            const authorName = author?.display_name || author?.name || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User");
+            const avatar = author?.picture;
+
+            if (currentFeedState.activeTab === "following" && schemaFollowingPubkeys.size > 1 && !schemaFollowingPubkeys.has(ev.pubkey)) {
+              return;
+            }
+
+            currentFeedState.notes.push({
+              id: ev.id,
+              pubkey: ev.pubkey,
+              authorName,
+              npub: npubShort,
+              avatar,
+              content: ev.content || "",
+              created_at: (ev.created_at || Math.floor(Date.now() / 1000)) * 1000,
+              likes: pseudoRand % 19,
+              reposts: pseudoRand % 7,
+              replies: pseudoRand % 5,
+              zaps: (pseudoRand % 11) * 21
+            });
+
+            currentFeedState.notes.sort((a, b) => b.created_at - a.created_at);
+
+            if (ev.pubkey && !profileCache.has(ev.pubkey)) {
+              queueProfileFetch(ev.pubkey);
+            }
+
+            scheduleSchemaDispatch();
+          }
+        }
+      } catch (_) {}
+    };
+  } catch (_) {}
+}
+
+function loadOlderSchemaNotes() {
+  if (schemaIsLoadingOlder || !schemaWs || schemaWs.readyState !== WebSocket.OPEN) return;
+  schemaIsLoadingOlder = true;
+  const subId = `older-${Date.now()}`;
+  const until = (schemaOldestTimestamp !== Infinity ? schemaOldestTimestamp : Math.floor(Date.now() / 1000)) - 1;
+  try {
+    if (currentFeedState.activeTab === "following" && schemaFollowingPubkeys.size > 0) {
+      schemaWs.send(JSON.stringify([
+        "REQ",
+        subId,
+        { kinds: [1], authors: Array.from(schemaFollowingPubkeys).slice(0, 100), until, limit: 15 }
+      ]));
+    } else {
+      schemaWs.send(JSON.stringify([
+        "REQ",
+        subId,
+        { kinds: [1], until, limit: 15 }
+      ]));
+    }
+  } catch (_) {}
+  setTimeout(() => {
+    schemaIsLoadingOlder = false;
+  }, 1200);
+}
+
+function refreshSchemaFeed() {
+  if (!schemaWs || schemaWs.readyState !== WebSocket.OPEN) {
+    initFeedSchemaSocket();
+    return;
+  }
+  try {
+    if (currentFeedState.activeTab === "following" && schemaFollowingPubkeys.size > 0) {
+      schemaWs.send(JSON.stringify([
+        "REQ",
+        `refresh-${Date.now()}`,
+        { kinds: [1], authors: Array.from(schemaFollowingPubkeys).slice(0, 100), limit: 20 }
+      ]));
+    } else {
+      schemaWs.send(JSON.stringify([
+        "REQ",
+        `refresh-${Date.now()}`,
+        { kinds: [1], limit: 20 }
+      ]));
+    }
+  } catch (_) {}
 }
 
 export function handleFeedAction(
@@ -3686,16 +3887,52 @@ export function handleFeedAction(
 ): OmniComponentNode {
   const actName = action.name;
   if (actName === "set-tab") {
-    const tab = String(payload?.tab || action.payload?.tab || "global") as "following" | "global";
+    const tab = String(payload?.tab || action.payload?.tab || "following") as "following" | "global";
     currentFeedState.activeTab = tab;
+    if (schemaWs && schemaWs.readyState === WebSocket.OPEN) {
+      try {
+        if (tab === "following" && schemaFollowingPubkeys.size > 0) {
+          schemaWs.send(JSON.stringify([
+            "REQ",
+            `following-${Date.now()}`,
+            { kinds: [1], authors: Array.from(schemaFollowingPubkeys).slice(0, 100), limit: 20 }
+          ]));
+        } else if (tab === "global") {
+          schemaWs.send(JSON.stringify([
+            "REQ",
+            `global-${Date.now()}`,
+            { kinds: [1], limit: 20 }
+          ]));
+        }
+      } catch (_) {}
+    }
+  } else if (actName === "load-more") {
+    loadOlderSchemaNotes();
+  } else if (actName === "refresh") {
+    refreshSchemaFeed();
   } else if (actName === "publish-note") {
     const text = String(payload?.noteText || payload?.value || currentFeedState.composerText || "").trim();
     if (text) {
+      const now = Math.floor(Date.now() / 1000);
+      const unsigned = {
+        kind: 1,
+        content: text,
+        tags: [],
+        created_at: now
+      };
+      const nostr = (typeof window !== "undefined" ? (window as any).nostr : null);
+      if (nostr?.signEvent) {
+        nostr.signEvent(unsigned).then((signed: any) => {
+          if (signed && schemaWs && schemaWs.readyState === WebSocket.OPEN) {
+            schemaWs.send(JSON.stringify(["EVENT", signed]));
+          }
+        }).catch(() => {});
+      }
       currentFeedState.notes.unshift({
         id: `note_${Date.now()}`,
-        pubkey: "current_user",
+        pubkey: schemaMyUserPubkey || "current_user",
         authorName: "You",
-        npub: "npub1you...",
+        npub: schemaMyUserPubkey ? `npub1${schemaMyUserPubkey.slice(0, 8)}...` : "npub1you...",
         content: text,
         created_at: Date.now(),
         likes: 0,
@@ -3743,6 +3980,7 @@ if (typeof window !== "undefined") {
   };
 
   if (isSchemaRoute()) {
+    initFeedSchemaSocket();
     dispatchFeedSchema(getFeedSchema(getFeedView()));
   }
 
@@ -3751,6 +3989,7 @@ if (typeof window !== "undefined") {
     if (!data) return;
 
     if (data.type === "omni:init" && isSchemaRoute()) {
+      initFeedSchemaSocket();
       dispatchFeedSchema(getFeedSchema(getFeedView()));
       return;
     }

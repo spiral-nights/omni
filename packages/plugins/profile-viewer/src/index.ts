@@ -119,6 +119,11 @@ export function handleProfileViewerAction(
 }
 
 const PROFILE_VIEWER_CSS = /* css */ `
+html, body {
+  background-color: transparent !important;
+  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+}
+
 /* Profile Editor & Identity Custody Containers */
 .profile-modal-container,
 .profile-editor-container {

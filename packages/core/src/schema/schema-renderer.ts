@@ -30,6 +30,8 @@ export class SchemaRenderer {
   private container: HTMLElement;
   private onAction?: (action: OmniAction, payload?: Record<string, unknown>) => void;
   private actionListener: ((e: Event) => void) | null = null;
+  private infiniteScrollObserver: IntersectionObserver | null = null;
+  private lastAutoLoadTime = 0;
 
   constructor(options: SchemaRendererOptions) {
     this.container = options.container;
@@ -99,6 +101,33 @@ export class SchemaRenderer {
     const element = this.renderNode(rootNode);
     if (element) {
       this.container.appendChild(element);
+    }
+    this.setupInfiniteScroll();
+  }
+
+  private setupInfiniteScroll(): void {
+    if (typeof IntersectionObserver === "undefined") return;
+    this.infiniteScrollObserver?.disconnect();
+    this.infiniteScrollObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const now = Date.now();
+            if (now - this.lastAutoLoadTime > 1200) {
+              this.lastAutoLoadTime = now;
+              this.onAction?.({ name: "load-more" }, {});
+            }
+          }
+        }
+      },
+      { rootMargin: "400px" }
+    );
+
+    const buttons = this.container.querySelectorAll("omni-button, [data-action='load-more']");
+    for (const btn of Array.from(buttons)) {
+      if (btn.textContent?.toLowerCase().includes("load more") || (btn as any).actionData?.name === "load-more") {
+        this.infiniteScrollObserver.observe(btn);
+      }
     }
   }
 
@@ -257,6 +286,10 @@ export class SchemaRenderer {
   }
 
   destroy(): void {
+    if (this.infiniteScrollObserver) {
+      this.infiniteScrollObserver.disconnect();
+      this.infiniteScrollObserver = null;
+    }
     if (this.actionListener) {
       this.container.removeEventListener("omni-action", this.actionListener);
       this.actionListener = null;

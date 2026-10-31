@@ -196,7 +196,7 @@ async function startApp() {
     shell.installedPlugins.find((p) => p.id === activePluginId && p.enabled) ||
     shell.installedPlugins.find((p) => p.id === "org.omni.plugin.feed");
 
-  if (primaryPlugin) {
+  if (primaryPlugin && !kernel.getSandbox(primaryPlugin.id)) {
     console.log(`⚡ [Omni Web] Mounting primary visible nsite ${primaryPlugin.name}...`);
     shell.mountPlugin(primaryPlugin).catch((err) => {
       console.error("Failed to mount primary plugin:", err);

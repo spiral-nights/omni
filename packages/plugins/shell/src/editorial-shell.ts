@@ -851,11 +851,14 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     const appSandbox =
       this.kernel.getSandboxExact?.(appInstanceKey) ||
       this.kernel.getSandboxExact?.(primaryKey) ||
-      this.kernel.getSandboxExact?.(plugin.id);
+      this.kernel.getSandboxExact?.(plugin.id) ||
+      this.kernel.getSandbox(plugin.id);
 
     if (appSandbox) {
       const liveComp =
+        (appSandbox as any).getPrimaryComponentContainer?.() ||
         appSandbox.getFirstPopulatedComponentContainer() ||
+        appSandbox.getComponentContainer(`${plugin.id}-main`) ||
         appSandbox.getComponentContainer(`${plugin.id}-app-main`) ||
         (appSandbox as any).compContainers?.[0];
       if (liveComp) {
@@ -867,11 +870,11 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         if (!targetContainer.contains(liveComp)) {
           targetContainer.appendChild(liveComp);
         }
-        this.renderDock();
-        this.saveLocalWorkspace();
-        this.boundScrollHandler?.();
-        return;
       }
+      this.renderDock();
+      this.saveLocalWorkspace();
+      this.boundScrollHandler?.();
+      return;
     }
 
     if (!this.pendingAppMounts.has(appInstanceKey)) {
