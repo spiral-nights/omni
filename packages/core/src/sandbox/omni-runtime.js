@@ -1,6 +1,6 @@
 // Omni Injected Sandbox Runtime Bridge (omni-runtime.js)
 (function () {
-  let portRemoteDom = null;
+  let portSchemaBus = null;
   let portKernelRpc = null;
   let sessionInfo = null;
   let initResolved = null;
@@ -18,27 +18,6 @@
   // Intent handlers
   const intentHandlers = new Map();
   const pendingIntentInvocations = new Map();
-  // Component registrations and instances
-  const registeredComponents = new Map();
-  const componentContexts = new Map();
-  let activeNativeToRemote = null;
-
-  // Capture all Element.prototype.addEventListener calls from the very beginning
-  // (including synchronous calls during initial script execution prior to omni:init)
-  if (typeof Element !== "undefined" && Element.prototype && typeof Element.prototype.addEventListener === "function") {
-    const origProtoAddEventListener = Element.prototype.addEventListener;
-    Element.prototype.addEventListener = function(type, listener, options) {
-      if (!this.__omniListeners) this.__omniListeners = new Set();
-      this.__omniListeners.add(type);
-      if (activeNativeToRemote) {
-        const remoteEl = activeNativeToRemote.get(this);
-        if (remoteEl) {
-          remoteEl.addEventListener(type, () => {});
-        }
-      }
-      return origProtoAddEventListener.call(this, type, listener, options);
-    };
-  }
 
   // 1. Transparent LocalStorage Shim (handles sandboxed opaque origin restrictions)
   // 1b. Standard Scroll API Shim (forwards scrollTo & scrollIntoView to host container)
@@ -130,10 +109,12 @@
 
   // Schema-based UI forwarding using standard Web postMessage
   let pendingSchema = null;
+  let hasDispatchedSchema = false;
   function forwardSchema(schema, componentId) {
+    hasDispatchedSchema = true;
     const compId = componentId || (sessionInfo && sessionInfo.viewId) || "main";
-    if (portRemoteDom) {
-      portRemoteDom.postMessage({
+    if (portSchemaBus) {
+      portSchemaBus.postMessage({
         type: "schema",
         componentId: compId,
         schema: schema
@@ -187,28 +168,15 @@
       const ports = (event.ports && event.ports.length >= 2)
         ? event.ports
         : (typeof window !== "undefined" && window.__omniTransferPorts ? window.__omniTransferPorts : []);
-      portRemoteDom = ports[0] || null;
+      portSchemaBus = ports[0] || null;
       portKernelRpc = ports[1] || null;
 
       setupKernelRpc();
-      setupRemoteDom();
+      setupSchemaBus();
 
-      // Flush any queued mutations that were waiting for portRemoteDom
-      if (portRemoteDom) {
-        if (pendingSchema) {
-          forwardSchema(pendingSchema.schema, pendingSchema.componentId);
-          pendingSchema = null;
-        }
-        for (const ctx of componentContexts.values()) {
-          if (ctx.mutationQueue && ctx.mutationQueue.length > 0) {
-            portRemoteDom.postMessage({
-              type: "mutate",
-              componentId: ctx.componentId,
-              records: ctx.mutationQueue
-            });
-            ctx.mutationQueue = [];
-          }
-        }
+      if (portSchemaBus && pendingSchema) {
+        forwardSchema(pendingSchema.schema, pendingSchema.componentId);
+        pendingSchema = null;
       }
 
       // Apply Host Theme Tokens to Guest DOM
@@ -245,12 +213,8 @@
 
       initResolved();
 
-      // Schedule component mount resolving best match for placement
-      scheduleComponentMount();
-
-      // If no components were explicitly registered via omni.registerComponent, auto-mount DOM
+      // Check for inline JSON schema script
       const runAutoMount = () => {
-        // Standard declarative JSON schema via script tag
         try {
           const jsonScript = document.querySelector('script[type="application/json"]#omni-schema, script[type="application/json"][data-omni-schema]');
           if (jsonScript && jsonScript.textContent) {
@@ -262,10 +226,6 @@
           }
         } catch (err) {
           console.error("[Omni] Error parsing inline schema script:", err);
-        }
-
-        if (registeredComponents.size === 0) {
-          setupDomAutoMount();
         }
       };
       if (document.readyState === "loading") {
@@ -681,805 +641,50 @@
     }
   }
 
-  // 5. Remote DOM Component Engine
-  class RemoteDomContext {
-    constructor(componentId) {
-      this.componentId = componentId;
-      this.nodes = new Map();
-      this.eventListeners = new Map(); // nodeId -> Map(eventName -> Set(listener))
-      this.nextNodeId = 100;
-      this.mutationQueue = [];
-      this.flushTimeout = null;
-
-      // Root element with id "~"
-      this.root = this.createRootElement();
-    }
-
-    sendMutation(record) {
-      this.mutationQueue.push(record);
-      if (!this.flushTimeout) {
-        this.flushTimeout = true;
-        queueMicrotask(() => {
-          this.flushTimeout = false;
-          if (portRemoteDom && this.mutationQueue.length > 0) {
-            portRemoteDom.postMessage({
-              type: "mutate",
-              componentId: this.componentId,
-              records: this.mutationQueue
-            });
-            this.mutationQueue = [];
-          }
-        });
-      }
-    }
-
-    createRootElement() {
-      const self = this;
-      class RemoteNode {
-        constructor(id, type) {
-          this.id = String(id);
-          this.nodeType = type;
-          this.parentNode = null;
-          this.childNodes = [];
-          self.nodes.set(this.id, this);
-        }
-
-        isConnected() {
-          let cur = this;
-          while (cur) {
-            if (cur.id === "~") return true;
-            cur = cur.parentNode;
-          }
-          return false;
-        }
-
-        get parentElement() {
-          return this.parentNode && this.parentNode.nodeType === 1 ? this.parentNode : null;
-        }
-
-        remove() {
-          if (this.parentNode) {
-            this.parentNode.removeChild(this);
-          }
-        }
-
-        get firstChild() {
-          return this.childNodes.length > 0 ? this.childNodes[0] : null;
-        }
-
-        get lastChild() {
-          return this.childNodes.length > 0 ? this.childNodes[this.childNodes.length - 1] : null;
-        }
-
-        get children() {
-          return this.childNodes.filter((c) => c.nodeType === 1);
-        }
-
-        get firstElementChild() {
-          return this.childNodes.find((c) => c.nodeType === 1) || null;
-        }
-
-        get lastElementChild() {
-          const els = this.children;
-          return els.length > 0 ? els[els.length - 1] : null;
-        }
-      }
-
-      class RemoteText extends RemoteNode {
-        constructor(id, text) {
-          super(id, 3);
-          this._data = String(text ?? "");
-        }
-        get data() { return this._data; }
-        set data(val) {
-          this._data = String(val ?? "");
-          if (this.isConnected()) {
-            self.sendMutation([2, this.id, this._data]);
-          }
-        }
-        get textContent() { return this._data; }
-        set textContent(val) { this.data = val; }
-      }
-
-      class RemoteElement extends RemoteNode {
-        constructor(id, tag) {
-          super(id, 1);
-          this.localName = tag.toLowerCase();
-          this.tagName = tag.toUpperCase();
-          this.attributes = new Map();
-          this._listeners = new Map();
-          self.eventListeners.set(this.id, this._listeners);
-
-          // Auto-sync input & change events for form inputs
-          if (this.localName === "input" || this.localName === "textarea" || this.localName === "select") {
-            this.addEventListener("input", (e) => {
-              if (e.detail) {
-                if (e.detail.value !== undefined) this.attributes.set("value", String(e.detail.value));
-                if (e.detail.checked !== undefined) this.attributes.set("checked", e.detail.checked ? "true" : "false");
-              }
-            });
-            this.addEventListener("change", (e) => {
-              if (e.detail) {
-                if (e.detail.value !== undefined) this.attributes.set("value", String(e.detail.value));
-                if (e.detail.checked !== undefined) this.attributes.set("checked", e.detail.checked ? "true" : "false");
-              }
-            });
-          }
-        }
-
-        setAttribute(name, value) {
-          const strVal = String(value);
-          this.attributes.set(name, strVal);
-          // Only send mutation if not root element '~' and connected to tree
-          if (this.id !== "~" && this.isConnected()) {
-            // Mutation 3 with updateType 2 (UPDATE_PROPERTY_TYPE_ATTRIBUTE = 2)
-            self.sendMutation([3, this.id, name, strVal, 2]);
-          }
-        }
-
-        removeAttribute(name) {
-          this.attributes.delete(name);
-          if (this.id !== "~" && this.isConnected()) {
-            self.sendMutation([3, this.id, name, null, 2]);
-          }
-        }
-
-        getAttribute(name) {
-          return this.attributes.get(name) || null;
-        }
-
-        get className() { return this.getAttribute("class") || ""; }
-        set className(val) { this.setAttribute("class", val); }
-
-        get title() { return this.getAttribute("title") || ""; }
-        set title(val) { this.setAttribute("title", val); }
-
-        get placeholder() { return this.getAttribute("placeholder") || ""; }
-        set placeholder(val) { this.setAttribute("placeholder", val); }
-
-        get type() { return this.getAttribute("type") || ""; }
-        set type(val) { this.setAttribute("type", val); }
-
-        get checked() { return this.getAttribute("checked") === "true"; }
-        set checked(val) {
-          const boolVal = Boolean(val);
-          this.setAttribute("checked", boolVal ? "true" : "false");
-          if (this.id !== "~" && this.isConnected()) {
-            // UPDATE_PROPERTY_TYPE_PROPERTY = 1
-            self.sendMutation([3, this.id, "checked", boolVal, 1]);
-          }
-        }
-
-        get value() { return this.getAttribute("value") || ""; }
-        set value(val) {
-          const strVal = String(val ?? "");
-          this.setAttribute("value", strVal);
-          if (this.id !== "~" && this.isConnected()) {
-            // UPDATE_PROPERTY_TYPE_PROPERTY = 1
-            self.sendMutation([3, this.id, "value", strVal, 1]);
-          }
-        }
-
-        get style() {
-          const elem = this;
-          return new Proxy({}, {
-            set(_, prop, val) {
-              const cssProp = String(prop).replace(/([A-Z])/g, "-$1").toLowerCase();
-              elem.setAttribute("style", `${elem.getAttribute("style") || ""}; ${cssProp}: ${val};`);
-              return true;
-            }
-          });
-        }
-
-        get textContent() {
-          return this.childNodes.map((c) => c.textContent || "").join("");
-        }
-        set textContent(val) {
-          const str = String(val ?? "");
-          if (this.childNodes.length === 1 && this.childNodes[0].nodeType === 3) {
-            this.childNodes[0].data = str;
-            return;
-          }
-          this.replaceChildren();
-          if (str) {
-            this.appendChild(new RemoteText(++self.nextNodeId, str));
-          }
-        }
-
-        get innerHTML() {
-          return this.textContent;
-        }
-        set innerHTML(val) {
-          this.replaceChildren();
-          if (val) {
-            this.textContent = String(val);
-          }
-        }
-
-        appendChild(child) {
-          return this.insertBefore(child, null);
-        }
-
-        insertBefore(child, beforeChild) {
-          if (child.parentNode) {
-            child.parentNode.removeChild(child);
-          }
-          child.parentNode = this;
-          let index = this.childNodes.length;
-          if (beforeChild) {
-            const idx = this.childNodes.indexOf(beforeChild);
-            if (idx !== -1) index = idx;
-          }
-          this.childNodes.splice(index, 0, child);
-
-          if (this.isConnected()) {
-            const serialized = self.serializeNode(child);
-            self.sendMutation([0, this.id, serialized, index]);
-          }
-          return child;
-        }
-
-        removeChild(child) {
-          const idx = this.childNodes.indexOf(child);
-          if (idx !== -1) {
-            this.childNodes.splice(idx, 1);
-            if (this.isConnected()) {
-              self.sendMutation([1, this.id, idx]);
-            }
-            child.parentNode = null;
-          }
-          return child;
-        }
-
-        replaceChildren(...newChildren) {
-          while (this.childNodes.length > 0) {
-            this.removeChild(this.childNodes[this.childNodes.length - 1]);
-          }
-          for (const c of newChildren) {
-            if (typeof c === "string") {
-              this.appendChild(new RemoteText(++self.nextNodeId, c));
-            } else if (c) {
-              this.appendChild(c);
-            }
-          }
-        }
-
-        addEventListener(event, listener) {
-          if (!this._listeners.has(event)) {
-            this._listeners.set(event, new Set());
-            if (this.id !== "~" && this.isConnected()) {
-              // Mutation 3 with updateType 3 (UPDATE_PROPERTY_TYPE_EVENT_LISTENER = 3)
-              self.sendMutation([3, this.id, event, true, 3]);
-            }
-          }
-          this._listeners.get(event).add(listener);
-        }
-
-        removeEventListener(event, listener) {
-          if (this._listeners.has(event)) {
-            const set = this._listeners.get(event);
-            set.delete(listener);
-            if (set.size === 0) {
-              this._listeners.delete(event);
-              if (this.id !== "~" && this.isConnected()) {
-                self.sendMutation([3, this.id, event, null, 3]);
-              }
-            }
-          }
-        }
-
-        dispatchEvent(eventObj) {
-          const set = this._listeners.get(eventObj.type);
-          if (set) {
-            for (const listener of set) {
-              try {
-                listener(eventObj);
-              } catch (err) {
-                console.error("Error in remote event listener:", err);
-              }
-            }
-          }
-        }
-      }
-
-      this.RemoteTextClass = RemoteText;
-      this.RemoteElementClass = RemoteElement;
-
-      // Root element connects to host receiver root using ROOT_ID '~'
-      const root = new RemoteElement("~", "div");
-      root.attributes.set("class", `omni-component-${this.componentId}`);
-      root.createElement = (tag) => new RemoteElement(++this.nextNodeId, tag);
-      root.createTextNode = (text) => new RemoteText(++this.nextNodeId, text);
-      return root;
-    }
-
-    serializeNode(node) {
-      if (node.nodeType === 3) {
-        return { id: node.id, type: 3, data: node.data };
-      }
-      const attrs = {};
-      for (const [k, v] of node.attributes.entries()) {
-        attrs[k] = v;
-      }
-      const listeners = {};
-      if (node._listeners) {
-        for (const k of node._listeners.keys()) {
-          listeners[k] = true;
-        }
-      }
-      return {
-        id: node.id,
-        type: 1,
-        element: node.localName,
-        attributes: attrs,
-        eventListeners: listeners,
-        children: node.childNodes.map((c) => this.serializeNode(c))
-      };
-    }
-
-    handleHostEvent(id, eventName, detail) {
-      const node = this.nodes.get(id);
-      if (node && detail) {
-        if (detail.value !== undefined) {
-          node.attributes.set("value", String(detail.value));
-        }
-        if (detail.checked !== undefined) {
-          node.attributes.set("checked", detail.checked ? "true" : "false");
-        }
-      }
-
-      const nodeListeners = this.eventListeners.get(id);
-      if (nodeListeners) {
-        const listeners = nodeListeners.get(eventName);
-        if (listeners) {
-          const ev = {
-            type: eventName,
-            detail: detail || {},
-            target: node
-          };
-          for (const fn of listeners) {
-            try { fn(ev); } catch (e) { console.error(e); }
-          }
-        }
-      }
-    }
-  }
-
-  function setupRemoteDom() {
-    if (!portRemoteDom) return;
-    portRemoteDom.onmessage = (event) => {
+  // 5. Schema Bus & Action Routing
+  function setupSchemaBus() {
+    if (!portSchemaBus) return;
+    portSchemaBus.onmessage = (event) => {
       const data = event.data;
       if (!data) return;
-
       if (data.type === "action") {
-        if (typeof window.dispatchEvent === "function") {
-          try {
-            window.dispatchEvent(
-              new MessageEvent("message", {
-                data: { type: "omni:action", action: data.action, payload: data.payload }
-              })
-            );
-          } catch (_) {
-            try {
-              const evt = document.createEvent ? document.createEvent("MessageEvent") : null;
-              if (evt && evt.initMessageEvent) {
-                evt.initMessageEvent("message", false, false, { type: "omni:action", action: data.action, payload: data.payload }, "*", "", window, null);
-                window.dispatchEvent(evt);
-              }
-            } catch (_) {}
+        window.dispatchEvent(new MessageEvent("message", {
+          data: {
+            type: "omni:action",
+            action: data.action,
+            payload: data.payload,
+            componentId: data.componentId
           }
-          try {
-            window.dispatchEvent(
-              new CustomEvent("omni:action", {
-                detail: { action: data.action, payload: data.payload }
-              })
-            );
-          } catch (_) {}
-        }
-        return;
-      }
-
-      if (data.type === "event" && data.id && data.eventName) {
-        const compId = data.componentId;
-        if (compId && componentContexts.has(compId)) {
-          componentContexts.get(compId).handleHostEvent(data.id, data.eventName, data.detail);
-        } else {
-          // If no compId specified, dispatch to all contexts
-          for (const ctx of componentContexts.values()) {
-            ctx.handleHostEvent(data.id, data.eventName, data.detail);
+        }));
+        window.dispatchEvent(new CustomEvent("omni:action", {
+          detail: {
+            action: data.action,
+            payload: data.payload,
+            componentId: data.componentId
           }
-        }
+        }));
       }
     };
   }
 
-  let mountScheduled = false;
-  function scheduleComponentMount() {
-    if (!portRemoteDom) return;
-    if (mountScheduled) return;
-    mountScheduled = true;
-    queueMicrotask(() => {
-      mountScheduled = false;
-      resolveAndMountComponents();
-    });
-  }
-
-  function resolveAndMountComponents() {
-    if (!portRemoteDom) return;
-    if (registeredComponents.size === 0) return;
-
-    const targetComponents = (sessionInfo && sessionInfo.components && sessionInfo.components.length > 0)
-      ? sessionInfo.components
-      : ["main"];
-    const currentView = (sessionInfo && sessionInfo.viewId) || "main";
-
-    for (const targetCompId of targetComponents) {
-      if (componentContexts.has(targetCompId)) {
-        continue;
-      }
-
-      let bestMatchFn = null;
-
-      if (registeredComponents.has(targetCompId)) {
-        bestMatchFn = registeredComponents.get(targetCompId);
-      } else if (registeredComponents.has(currentView)) {
-        bestMatchFn = registeredComponents.get(currentView);
-      } else if (sessionInfo && sessionInfo.pluginId && registeredComponents.has(`${sessionInfo.pluginId}-${currentView}`)) {
-        bestMatchFn = registeredComponents.get(`${sessionInfo.pluginId}-${currentView}`);
-      } else {
-        for (const [key, fn] of registeredComponents.entries()) {
-          if (key.endsWith(`-${currentView}`) || key.includes(currentView)) {
-            bestMatchFn = fn;
-            break;
-          }
-        }
-        if (!bestMatchFn && (currentView === "main" || !currentView)) {
-          for (const [key, fn] of registeredComponents.entries()) {
-            if (key.includes("main")) {
-              bestMatchFn = fn;
-              break;
-            }
-          }
-        }
-        if (!bestMatchFn) {
-          const firstEntry = registeredComponents.entries().next().value;
-          if (firstEntry) {
-            bestMatchFn = firstEntry[1];
-          }
-        }
-      }
-
-      if (bestMatchFn) {
-        mountComponent(targetCompId, bestMatchFn);
+  function detectInlineSchema() {
+    if (typeof document === "undefined") return;
+    const script = document.querySelector('script[type="application/json"]#omni-schema, script[type="omni:schema"]');
+    if (script && script.textContent) {
+      try {
+        const schema = JSON.parse(script.textContent);
+        forwardSchema(schema);
+      } catch (e) {
+        console.error("[OmniRuntime] Failed to parse inline schema script:", e);
       }
     }
   }
 
-  function mountComponent(componentId, renderFn) {
-    let ctx = componentContexts.get(componentId);
-    if (!ctx) {
-      ctx = new RemoteDomContext(componentId);
-      componentContexts.set(componentId, ctx);
-    }
-
-    try {
-      renderFn({ root: ctx.root, props: {} });
-    } catch (err) {
-      console.error(`[Omni Sandbox] Failed to render component ${componentId}:`, err);
-    }
-  }
-
-  // 6. Transparent DOM Auto-Mount for Pure nsites
-  let domAutoMountInitialized = false;
-  function setupDomAutoMount() {
-    if (domAutoMountInitialized) return;
-    if (registeredComponents.size > 0) return;
-    domAutoMountInitialized = true;
-
-    const compId = (sessionInfo && sessionInfo.components && sessionInfo.components[0]) ||
-                   (sessionInfo && sessionInfo.slots && sessionInfo.slots[0]) ||
-                   "main";
-
-    let ctx = componentContexts.get(compId);
-    if (!ctx) {
-      ctx = new RemoteDomContext(compId);
-      componentContexts.set(compId, ctx);
-    }
-
-    const nativeToRemote = new WeakMap();
-    activeNativeToRemote = nativeToRemote;
-    const remoteIdToNative = new Map();
-    let isDispatchingHostEvent = false;
-
-    function scopePluginCss(cssText) {
-      if (!cssText) return "";
-      return String(cssText).replace(/(^|[}\s,])(html|body|:root)(?=[\s,{])/gi, "$1.omni-component-slot");
-    }
-
-    // Auto-sync property mutations on form inputs (.value, .checked) from guest scripts to Remote DOM
-    function patchNativeProperty(proto, prop, isBool) {
-      if (!proto) return;
-      const desc = Object.getOwnPropertyDescriptor(proto, prop);
-      if (!desc || !desc.set) return;
-      Object.defineProperty(proto, prop, {
-        get() {
-          return desc.get.call(this);
-        },
-        set(val) {
-          desc.set.call(this, val);
-          if (isDispatchingHostEvent) return;
-          const remoteEl = nativeToRemote.get(this);
-          if (remoteEl) {
-            if (isBool) {
-              remoteEl.checked = Boolean(val);
-            } else {
-              remoteEl.value = String(val ?? "");
-            }
-          }
-        },
-        configurable: true,
-        enumerable: true
-      });
-    }
-
-    if (typeof HTMLInputElement !== "undefined") {
-      patchNativeProperty(HTMLInputElement.prototype, "value", false);
-      patchNativeProperty(HTMLInputElement.prototype, "checked", true);
-      const origInputClick = HTMLInputElement.prototype.click;
-      if (typeof origInputClick === "function") {
-        HTMLInputElement.prototype.click = function() {
-          if (this.type === "file") {
-            // File picker activation is handled synchronously on the host DOM via data-file-input
-            // to preserve transient user activation and avoid sandbox iframe popup warnings.
-            return;
-          }
-          return origInputClick.apply(this, arguments);
-        };
-      }
-    }
-    if (typeof HTMLTextAreaElement !== "undefined") {
-      patchNativeProperty(HTMLTextAreaElement.prototype, "value", false);
-    }
-    if (typeof HTMLSelectElement !== "undefined") {
-      patchNativeProperty(HTMLSelectElement.prototype, "value", false);
-    }
-
-    function mirrorNode(nativeNode) {
-      if (!nativeNode) return null;
-      if (nativeToRemote.has(nativeNode)) return nativeToRemote.get(nativeNode);
-
-      if (nativeNode.nodeType === 3) {
-        const parentTag = (nativeNode.parentNode && nativeNode.parentNode.nodeName || "").toUpperCase();
-        if (parentTag === "SCRIPT" || parentTag === "HEAD" || parentTag === "HTML") {
-          return null;
-        }
-        const isStyleText = parentTag === "STYLE";
-        const textData = isStyleText ? scopePluginCss(nativeNode.data || "") : (nativeNode.data || "");
-        const remoteText = ctx.root.createTextNode(textData);
-        nativeToRemote.set(nativeNode, remoteText);
-        remoteIdToNative.set(remoteText.id, nativeNode);
-        return remoteText;
-      }
-
-      if (nativeNode.nodeType === 1) {
-        const tag = nativeNode.tagName.toLowerCase();
-        if (tag === "script" || tag === "link" || tag === "head" || tag === "title" || tag === "meta") return null;
-
-        const remoteEl = ctx.root.createElement(tag);
-        nativeToRemote.set(nativeNode, remoteEl);
-        remoteIdToNative.set(remoteEl.id, nativeNode);
-
-        if (nativeNode.attributes) {
-          for (let i = 0; i < nativeNode.attributes.length; i++) {
-            const attr = nativeNode.attributes[i];
-            remoteEl.setAttribute(attr.name, attr.value);
-          }
-        }
-
-        if (tag === "input" || tag === "textarea" || tag === "select") {
-          if ("value" in nativeNode && nativeNode.value !== undefined && nativeNode.value !== "") {
-            remoteEl.value = nativeNode.value;
-          }
-          if ("checked" in nativeNode && nativeNode.checked !== undefined && nativeNode.checked) {
-            remoteEl.checked = nativeNode.checked;
-          }
-        }
-
-        // Auto-register common interactive listeners
-        if (["button", "input", "textarea", "select", "a"].includes(tag) || nativeNode.hasAttribute("onclick")) {
-          remoteEl.addEventListener("click", () => {});
-          remoteEl.addEventListener("input", () => {});
-          remoteEl.addEventListener("change", () => {});
-        }
-
-        if (nativeNode.__omniListeners) {
-          for (const evType of nativeNode.__omniListeners) {
-            remoteEl.addEventListener(evType, () => {});
-          }
-        }
-
-        for (const child of nativeNode.childNodes) {
-          const remoteChild = mirrorNode(child);
-          if (remoteChild) {
-            remoteEl.appendChild(remoteChild);
-          }
-        }
-
-        return remoteEl;
-      }
-
-      return null;
-    }
-
-    // Mirror <style> tags from document.head so external/inlined CSS stylesheets apply to projected DOM
-    if (document.head) {
-      const headStyles = document.head.querySelectorAll("style");
-      for (let i = 0; i < headStyles.length; i++) {
-        const remoteStyle = mirrorNode(headStyles[i]);
-        if (remoteStyle) {
-          ctx.root.appendChild(remoteStyle);
-        }
-      }
-    }
-
-    // Mirror current body contents
-    const targetRoot = document.getElementById("root") || document.body;
-    if (targetRoot === document.body) {
-      for (const child of document.body.childNodes) {
-        const remoteChild = mirrorNode(child);
-        if (remoteChild) {
-          ctx.root.appendChild(remoteChild);
-        }
-      }
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", detectInlineSchema);
     } else {
-      const remoteRoot = mirrorNode(targetRoot);
-      if (remoteRoot) {
-        ctx.root.appendChild(remoteRoot);
-      }
-    }
-
-    // Intercept host events and dispatch to native DOM element
-    const origHandleHostEvent = ctx.handleHostEvent.bind(ctx);
-    ctx.handleHostEvent = function(id, eventName, detail) {
-      origHandleHostEvent(id, eventName, detail);
-      const nativeNode = remoteIdToNative.get(String(id));
-      if (nativeNode) {
-        isDispatchingHostEvent = true;
-        try {
-          let wrappedFiles = null;
-          if (detail) {
-            if (detail.value !== undefined && "value" in nativeNode && nativeNode.type !== "file") {
-              try { nativeNode.value = detail.value; } catch (_) {}
-            }
-            if (detail.checked !== undefined && "checked" in nativeNode) {
-              try { nativeNode.checked = detail.checked; } catch (_) {}
-            }
-            if (Array.isArray(detail.files)) {
-              wrappedFiles = detail.files.map((f) => {
-                const u8 = f.bytes instanceof Uint8Array ? f.bytes : new Uint8Array(f.bytes || 0);
-                return {
-                  name: f.name || "file",
-                  size: f.size ?? u8.byteLength,
-                  type: f.type || "application/octet-stream",
-                  bytes: u8,
-                  arrayBuffer: () => Promise.resolve(u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)),
-                  text: () => Promise.resolve(new TextDecoder().decode(u8))
-                };
-              });
-              try {
-                Object.defineProperty(nativeNode, "files", {
-                  value: wrappedFiles,
-                  configurable: true
-                });
-              } catch (_) {}
-            }
-          }
-          let ev;
-          if (eventName === "click") {
-            ev = new MouseEvent("click", { bubbles: true, cancelable: true });
-          } else if (eventName === "input" || eventName === "change") {
-            ev = new Event(eventName, { bubbles: true, cancelable: true });
-            if (wrappedFiles) {
-              try {
-                Object.defineProperty(ev, "detail", { value: { ...detail, files: wrappedFiles }, configurable: true });
-              } catch (_) {}
-            }
-          } else {
-            const customDetail = wrappedFiles ? { ...detail, files: wrappedFiles } : detail;
-            ev = new CustomEvent(eventName, { bubbles: true, cancelable: true, detail: customDetail });
-          }
-
-          if (detail && typeof detail === "object") {
-            for (const prop of ["clientX", "clientY", "pageX", "pageY", "screenX", "screenY", "targetRect", "touches", "changedTouches"]) {
-              if (detail[prop] !== undefined && !(prop in ev)) {
-                try {
-                  Object.defineProperty(ev, prop, { value: detail[prop], configurable: true });
-                } catch (_) {}
-              }
-            }
-            if (eventName.startsWith("drag") || eventName === "drop" || wrappedFiles) {
-              const dragStore = new Map(Object.entries(detail.dragData || {}));
-              const dt = {
-                types: Array.from(dragStore.keys()),
-                files: wrappedFiles || [],
-                getData: (type) => dragStore.get(type) || "",
-                setData: (type, val) => { dragStore.set(type, String(val)); },
-                clearData: () => dragStore.clear()
-              };
-              try {
-                Object.defineProperty(ev, "dataTransfer", {
-                  value: dt,
-                  configurable: true
-                });
-              } catch (_) {}
-            }
-          }
-          nativeNode.dispatchEvent(ev);
-        } finally {
-          isDispatchingHostEvent = false;
-        }
-      }
-    };
-
-    // Observe future native DOM mutations
-    const observer = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        if (m.type === "childList") {
-          const isRootTarget = m.target === document.body || m.target === document.head;
-          const parentRemote = isRootTarget ? ctx.root : nativeToRemote.get(m.target);
-          if (!parentRemote) continue;
-
-          for (const added of m.addedNodes) {
-            if (m.target === document.head && (!added.tagName || added.tagName.toLowerCase() !== "style")) {
-              continue;
-            }
-            const remoteChild = mirrorNode(added);
-            if (remoteChild && !remoteChild.parentNode) {
-              parentRemote.appendChild(remoteChild);
-            }
-          }
-
-          for (const removed of m.removedNodes) {
-            const remoteChild = nativeToRemote.get(removed);
-            if (remoteChild) {
-              remoteChild.remove();
-            }
-          }
-        } else if (m.type === "attributes") {
-          const remoteEl = nativeToRemote.get(m.target);
-          if (remoteEl) {
-            const attrName = m.attributeName;
-            if (attrName) {
-              const val = m.target.getAttribute(attrName);
-              if (val === null || val === false) {
-                remoteEl.removeAttribute(attrName);
-              } else {
-                remoteEl.setAttribute(attrName, val === true ? "" : String(val));
-              }
-            }
-          }
-        } else if (m.type === "characterData") {
-          const remoteText = nativeToRemote.get(m.target);
-          if (remoteText) {
-            const isStyleText = m.target.parentNode && m.target.parentNode.nodeName === "STYLE";
-            remoteText.data = isStyleText ? scopePluginCss(m.target.data || "") : (m.target.data || "");
-          }
-        }
-      }
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      characterData: true
-    });
-    if (document.head) {
-      observer.observe(document.head, {
-        childList: true,
-        subtree: true,
-        characterData: true
-      });
+      detectInlineSchema();
     }
   }
 
@@ -1530,10 +735,7 @@
     async ready() {
       return initPromise;
     },
-    registerComponent(id, renderFn) {
-      registeredComponents.set(id, renderFn);
-      scheduleComponentMount();
-    },
+    registerComponent(id, renderFn) {},
     nostr: {
       async getPublicKey() {
         await initPromise;

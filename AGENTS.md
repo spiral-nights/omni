@@ -25,14 +25,14 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
    - Every app and widget is a 100% standard web app (nsite) mounting to `document.body` or `#root`.
    - **Zero Proprietary SDKs**: Plugins must NEVER reference `omni.*` (`omni.registerComponent`, `omni.storage`, `omni.profile`, etc.).
    - Standard Web & Nostr APIs are used exclusively:
-     - DOM auto-mirroring via `document.body` mounting.
+     - Declarative UI via standard Schema postMessage or direct HTML DOM mounting.
      - View navigation via standard `window.location.search` (`?view=settings`, `?view=widget`).
      - Persistent storage via standard `window.localStorage` (partitioned per plugin).
      - Signing & key queries via standard `window.nostr` (NIP-07).
      - Relay communication via standard `window.WebSocket`.
    - Sub-views and routes are declared via standard Nostr tags (`["view", "<id>", "<title>", "<path>"]`) or HTML `<link rel="alternate">` / Web Manifest shortcuts.
 4. **Strict Shell vs. Kernel Separation**:
-   - **Kernel (`@omni/core`) is Headless**: Manages sandboxes, WebCrypto keystore, relay pooling, 0ms local event caching, capability store (ACL), and Remote DOM transport. It has zero knowledge of UI layouts, slot semantics, or user pages.
+   - **Kernel (`@omni/core`) is Headless**: Manages sandboxes, WebCrypto keystore, relay pooling, 0ms local event caching, capability store (ACL), Schema renderer, and JSON-RPC dispatchers. It has zero knowledge of UI layouts, slot semantics, or user pages.
    - **Shell (`@omni/plugin-shell`) Owns Presentation & Styling**: Manages viewport slots (`main`, `dock`, `sidebar`, `header-actions`), layout mapping (`LayoutManager`), desktop/mobile navigation docks, widgets dashboard grid, settings tabs, and NIP-78 workspace synchronization. Each shell bundles its own stylesheet self-contained in `packages/plugins/shell/src/styles/` (`classic-styles.ts`, `panorama-styles.ts`, `editorial-styles.ts`), injected dynamically into the host DOM upon `mount()`.
    - **User-Swappable Shell Registry (`ShellRegistry`)**: Shells are swappable first-class plugins registered in `shellRegistry`. Users can select between Omni Classic, Panorama Hub, Editorial Shell, or custom installed shells dynamically in Settings.
 5. **User-Defined Companion Viewports & Route Assignment (Zero Hardcoded Slots)**:
@@ -78,10 +78,11 @@ omni/
 │   │   │   ├── kernel/omni-kernel.ts      # OmniKernel: storage, ACL, sandboxes, relays, NIP-78
 │   │   │   ├── acl/                       # CapabilityStore & AclEngine (permission governance)
 │   │   │   ├── crypto/                    # WebCryptoKeystore (secp256k1, Schnorr, bech32)
+│   │   │   ├── css/                       # CSS scoper utility for plugin styling
 │   │   │   ├── layout/                    # LayoutManager (viewport slot mapping & reparenting)
 │   │   │   ├── nostr/                     # LocalEventStore (0ms hits), RelayPool, Coordinator
 │   │   │   ├── plugins/                   # NostrPluginResolver (NIP-5A nsites, Blossom, naddr)
-│   │   │   ├── remote-dom/                # RemoteDomHost (@remote-dom/core host receiver)
+│   │   │   ├── schema/                    # SchemaRenderer & native Light DOM custom elements
 │   │   │   └── sandbox/                   # SandboxInstance & omni-runtime.js (guest runtime bridge)
 │   │   └── test/                          # Unit & integration tests (vitest + happy-dom)
 │   │
@@ -107,52 +108,45 @@ omni/
 Plugins execute inside isolated `<iframe>` sandboxes (`sandbox="allow-scripts"`, `connect-src 'none'`). Omni virtualizes standard web interfaces:
 - **`window.nostr`**: Full standard NIP-07 signer (`getPublicKey`, `signEvent`, `getRelays`, `nip04`, `nip44`), backed by the host keystore and ACL governance.
 - **`window.WebSocket`**: Virtual WebSocket shim that transparently routes `wss://` Nostr relay frames (`REQ`, `EVENT`, `CLOSE`) through the host's `RelayPool` (`wss://relay.damus.io`, `wss://relay.ditto.pub`) and 0ms local event cache.
-- **`document.body` Auto-Mount**: Automatic DOM mirroring into the host's Remote DOM container—developers write standard HTML, React, or Svelte without custom host registration.
 - **Protocol URIs (NIP-21, Lightning, Cashu)**: Standard `<a href="nostr:...">`, `<a href="lightning:...">`, and `<a href="cashu:...">` links are intercepted at the sandbox boundary and routed to the Shell's "Open With..." chooser.
 - **`navigator.share()`**: Web Share API shim routing note drafts directly into the shell composer.
 - **`localStorage` & `indexedDB`**: Transparently partitioned per `pluginId`.
 
 ---
 
-## 4. UI Projection & Remote DOM Rules
+## 4. UI Architecture: Declarative Schema & Direct Iframe
 
-Omni uses Shopify's `@remote-dom/core` to project guest elements from the sandbox directly into the native host DOM without nested iframes.
+Omni uses a clean, zero-proprietary dual-architecture without nested shadow wrappers or Remote DOM:
 
-### Critical Implementation Rules
-1. **Detached Tree Construction**:
-   Always construct elements and attach attributes/children detached, then append to root/container:
-   ```typescript
-   const card = root.createElement("div");
-   card.className = "widget-card";
+### 1. Declarative Schema UI (Light DOM Custom Elements)
+- Used by plugins like `@omni/plugin-feed` and `@omni/plugin-checklist`.
+- The plugin emits declarative JSON schema (`{ type: "box" | "card" | "button" | "input" | ... }`) over standard Web `postMessage` (`{ type: "omni:schema", schema: ... }`) or inline script tags (`<script type="application/json" id="omni-schema">`).
+- `SchemaRenderer` mounts autonomous Light DOM Custom Elements (`<omni-box>`, `<omni-card>`, `<omni-button>`, `<omni-input>`, etc.) natively in the host DOM.
+- User actions (`click`, `input`) dispatch standard `omni:action` events back to the sandbox over Channel 1.
 
-   const btn = root.createElement("button");
-   btn.className = "btn-action";
-   btn.textContent = "Click Me";
+### 2. Direct Sandboxed Iframe UI (IframeAppHost)
+- Used by full standalone HTML applications like `@omni/plugin-profile-viewer`, `@omni/plugin-publisher`, `@omni/plugin-relays`.
+- Renders a clean visible `<iframe>` directly into the designated slot container.
+- Design tokens (`--omni-*`) are injected into the iframe root.
+- Standard NIP-07 (`window.nostr`) and protocol links (`nostr:`, `lightning:`, `cashu:`) are transparently bridged to the kernel.
 
-   card.appendChild(btn);
-   root.appendChild(card);
-   ```
-2. **`isConnected()` Traversal Check**:
-   The sandbox runtime (`RemoteNode`) enforces `this.isConnected()`. Property and attribute mutations (`Mutation 3`) are only dispatched over IPC if the node is actively attached to the root (`~`). This prevents premature property mutations on unattached nodes before `@remote-dom/core` has attached them.
-3. **Root ID (`~`) Handling**:
-   `RemoteDomHost.mutate()` intercepts property mutations on `"~"` and applies them directly to the host container element (e.g. adding classes) without passing them to `DOMRemoteReceiver`, which does not index `"~"`.
-4. **Dock Launcher Hierarchy**:
-   All dock icons follow standard structure:
-   ```html
-   <button class="dock-item" title="...">
-     <div class="dock-icon-wrapper">
-       <svg ...></svg>
-     </div>
-     <span>Label</span>
-   </button>
-   ```
+### Dock Launcher Hierarchy
+All dock icons follow standard structure:
+```html
+<button class="dock-item" title="...">
+  <div class="dock-icon-wrapper">
+    <svg ...></svg>
+  </div>
+  <span>Label</span>
+</button>
+```
 
 ---
 
 ## 5. Security, Isolation & Storage Architecture
 
 1. **Dual-Channel IPC**:
-   - `channel1` (Port 1): High-speed Remote DOM mutation stream (`@remote-dom/core`).
+   - `channel1` (Port 1): High-speed Schema and action bus (`portSchemaBus`).
    - `channel2` (Port 2): JSON-RPC 2.0 kernel bus for capability-governed I/O.
 2. **Subscription Namespacing**:
    - Every subscription is tagged `${pluginId}:${subId}`.

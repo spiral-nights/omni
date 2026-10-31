@@ -13,7 +13,6 @@
     "@noble/curves": "^1.4.0",
     "@noble/hashes": "^1.4.0",
     "@omni/types": "workspace:*",
-    "@remote-dom/core": "^1.12.0",
     "fflate": "^0.8.3",
     "zod": "^3.23.8"
   },

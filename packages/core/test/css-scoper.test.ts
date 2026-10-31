@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { scopeCss } from "../src/remote-dom/css-scoper.js";
+import { scopeCss } from "../src/css/css-scoper.js";
 
 describe("scopeCss Utility", () => {
   const scope = '[data-omni-comp-id="my-plugin"]';

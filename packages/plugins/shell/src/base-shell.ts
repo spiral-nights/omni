@@ -612,8 +612,8 @@ export abstract class BaseShell implements OmniShellHost {
           customSlotContainers,
           {
             instanceId: instanceKey,
-            route: plugin.route || "",
-            viewId: plugin.viewId || "main",
+            route: plugin.route !== undefined ? plugin.route : (plugin.views?.[0]?.path ?? ""),
+            viewId: plugin.viewId || (plugin.views?.[0]?.id ?? "main"),
             targetSlot,
             relays: plugin.relays
           }

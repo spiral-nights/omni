@@ -388,8 +388,14 @@ export class OmniButtonElement extends BaseElement {
     if (!this.btnEl) this.connectedCallback();
     this.actionData = props.action || null;
 
-    if (props.variant) this.btnEl!.setAttribute("variant", props.variant);
-    if (props.size) this.btnEl!.setAttribute("size", props.size);
+    if (props.variant) {
+      this.setAttribute("variant", props.variant);
+      this.btnEl!.setAttribute("variant", props.variant);
+    }
+    if (props.size) {
+      this.setAttribute("size", props.size);
+      this.btnEl!.setAttribute("size", props.size);
+    }
 
     this.btnEl!.disabled = Boolean(props.disabled || props.loading);
 
@@ -433,8 +439,14 @@ export class OmniIconButtonElement extends BaseElement {
     if (!this.btnEl) this.connectedCallback();
     this.actionData = props.action || null;
 
-    if (props.variant) this.btnEl!.setAttribute("variant", props.variant);
-    if (props.size) this.btnEl!.setAttribute("size", props.size);
+    if (props.variant) {
+      this.setAttribute("variant", props.variant);
+      this.btnEl!.setAttribute("variant", props.variant);
+    }
+    if (props.size) {
+      this.setAttribute("size", props.size);
+      this.btnEl!.setAttribute("size", props.size);
+    }
     if (props.tooltip) this.btnEl!.title = props.tooltip;
 
     this.btnEl!.disabled = Boolean(props.disabled);

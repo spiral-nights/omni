@@ -1,5 +1,5 @@
 /**
- * CSS Scoper for Remote DOM Sandboxed Plugins
+ * CSS Scoper for Sandboxed Plugins and Components
  *
  * Ensures that guest <style> stylesheets projected into the host DOM
  * cannot pollute the global host document (e.g. document.body, :root,

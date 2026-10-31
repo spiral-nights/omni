@@ -494,7 +494,12 @@ if (typeof window !== "undefined") {
 
 function init() {
   if (typeof document !== "undefined") {
-    mountApp(document.body);
+    try {
+      const search = window.location ? window.location.search : "";
+      if (search.includes("format=iframe")) {
+        mountApp(document.body);
+      }
+    } catch (_) {}
   }
 }
 

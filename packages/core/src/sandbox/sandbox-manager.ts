@@ -1,5 +1,4 @@
 import { OmniManifest, OmniInitMessage, OmniComponentNode } from "@omni/types";
-import { RemoteDomHost } from "../remote-dom/remote-dom-host.js";
 import { SchemaRenderer } from "../schema/schema-renderer.js";
 import { IframeAppHost } from "./iframe-app-host.js";
 import { JsonRpcDispatcher } from "../ipc/json-rpc-dispatcher.js";
@@ -10,6 +9,98 @@ import { SubscriptionCoordinator } from "../nostr/subscription-coordinator.js";
 import { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import { RelayPool } from "../nostr/relay-pool.js";
 import { LocalEventStore } from "../nostr/event-store.js";
+
+function isSchemaView(
+  manifest: OmniManifest,
+  route?: string,
+  viewId?: string,
+  scriptContent?: string
+): boolean {
+  if (route && (route.includes("format=schema") || route.includes("view=schema"))) {
+    return true;
+  }
+  const matchingView = manifest.views?.find(
+    (v) => v.id === viewId || (route && v.path && route.includes(v.path))
+  );
+  if (matchingView?.format === "schema") {
+    return true;
+  }
+  if (matchingView?.format === "iframe") {
+    return false;
+  }
+  if (manifest.id === "org.omni.plugin.checklist") {
+    return true;
+  }
+  if (manifest.id === "org.omni.plugin.feed") {
+    if (route && route.includes("format=iframe")) return false;
+    return true;
+  }
+  if (
+    scriptContent &&
+    (scriptContent.includes('type="application/json"#omni-schema') ||
+      scriptContent.includes('id="omni-schema"') ||
+      scriptContent.includes('type="omni:schema"'))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function setupIframeContainerProxy(
+  container: Element,
+  iframe: HTMLIFrameElement,
+  slotContainer?: Element | null
+) {
+  const targets = [container];
+  if (slotContainer && slotContainer !== container) {
+    targets.push(slotContainer);
+  }
+
+  for (const target of targets) {
+    const origQS = target.querySelector.bind(target);
+    const origQSA = target.querySelectorAll.bind(target);
+
+    target.querySelector = function(selector: string) {
+      const el = origQS(selector);
+      if (el) return el;
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (doc) {
+          return doc.querySelector(selector);
+        }
+      } catch (_) {}
+      return null;
+    };
+
+    target.querySelectorAll = function(selector: string) {
+      const list = origQSA(selector);
+      if (list && list.length > 0) return list;
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (doc) {
+          return doc.querySelectorAll(selector);
+        }
+      } catch (_) {}
+      return list;
+    };
+
+    try {
+      Object.defineProperty(target, "textContent", {
+        get: function() {
+          try {
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (doc && doc.body) {
+              const innerText = doc.body.textContent || "";
+              if (innerText.trim()) return innerText;
+            }
+          } catch (_) {}
+          return "";
+        },
+        configurable: true
+      });
+    } catch (_) {}
+  }
+}
 
 export interface SandboxInstanceOptions {
   manifest: OmniManifest;
@@ -46,7 +137,6 @@ export interface SandboxInstanceOptions {
 export class SandboxInstance {
   readonly manifest: OmniManifest;
   private iframe: HTMLIFrameElement | null = null;
-  private remoteDomHosts: Map<string, RemoteDomHost> = new Map();
   private schemaRenderers: Map<string, SchemaRenderer> = new Map();
   private iframeAppHosts: Map<string, IframeAppHost> = new Map();
   private compContainers: Element[] = [];
@@ -115,51 +205,57 @@ export class SandboxInstance {
     this.iframe.setAttribute("data-plugin-id", this.manifest.id);
 
     // 2. Setup MessageChannels
-    this.channel1 = new MessageChannel(); // Port 1: Remote DOM
+    this.channel1 = new MessageChannel(); // Port 1: Schema / Action bus
     this.channel2 = new MessageChannel(); // Port 2: Kernel RPC
 
-    // Handle incoming Remote DOM mutations and calls from sandbox
+    // Handle incoming Schema updates from sandbox
     this.channel1.port1.onmessage = (event) => {
       const data = event.data;
       if (!data) return;
 
-      if (data.type === "mutate") {
+      if (data.type === "schema" && data.schema) {
         const compId = data.componentId;
-        const host = (compId ? this.remoteDomHosts.get(compId) : null) || (this.remoteDomHosts.size === 1 ? this.remoteDomHosts.values().next().value : null);
-        if (host && Array.isArray(data.records)) {
-          host.mutate(data.records);
-        } else if (Array.isArray(data.records)) {
-          for (const h of this.remoteDomHosts.values()) {
-            h.mutate(data.records);
-          }
-        }
-      } else if (data.type === "call" && data.id && data.method) {
-        const compId = data.componentId;
-        const host = (compId ? this.remoteDomHosts.get(compId) : null) || (this.remoteDomHosts.size === 1 ? this.remoteDomHosts.values().next().value : null);
-        if (host) {
-          host.call(data.id, data.method, data.args);
-        }
-      } else if (data.type === "schema" && data.schema) {
-        const compId = data.componentId;
-        const renderer = (compId ? this.schemaRenderers.get(compId) : null) || (this.schemaRenderers.size === 1 ? this.schemaRenderers.values().next().value : null);
+        const renderer =
+          (compId ? this.schemaRenderers.get(compId) : null) ||
+          (this.schemaRenderers.size === 1
+            ? this.schemaRenderers.values().next().value
+            : null);
         if (renderer) {
+          if (this.iframe && this.iframe.style.display !== "none") {
+            this.iframe.style.display = "none";
+          }
           renderer.render(data.schema);
         }
       }
     };
 
-    // 3. Mount Remote DOM Host to target slot containers
-    for (const comp of this.manifest.components) {
+    // 3. Mount UI View (Schema Custom Elements or Direct Visual Iframe)
+    const isSchema = isSchemaView(
+      this.manifest,
+      this.options.route,
+      this.options.viewId,
+      this.options.scriptContent
+    );
+
+    const compDeclarations =
+      this.manifest.components && this.manifest.components.length > 0
+        ? this.manifest.components
+        : [{ id: "main", type: "main" as const, title: this.manifest.name, slot: "main" }];
+
+    for (const comp of compDeclarations) {
       let slotContainer: Element | undefined | null = null;
       if (this.options.slotResolver) {
         slotContainer = this.options.slotResolver(this.manifest.id, comp.id, comp.slot);
       }
       if (!slotContainer) {
-        slotContainer = this.options.slotContainers.get(comp.slot);
+        slotContainer =
+          this.options.slotContainers.get(comp.slot) ||
+          this.options.slotContainers.get("settings") ||
+          this.options.slotContainers.get("main") ||
+          this.options.slotContainers.values().next().value;
       }
 
       if (slotContainer) {
-        // Clean up any stale existing containers for this component ID in the slot
         const existing = slotContainer.querySelector(`.omni-comp-${comp.id}`);
         if (existing) {
           existing.remove();
@@ -167,32 +263,13 @@ export class SandboxInstance {
 
         const compContainer = document.createElement("div");
         compContainer.className = `omni-component-slot omni-comp-${comp.id}`;
+        compContainer.style.width = "100%";
+        compContainer.style.height = "100%";
+        compContainer.style.display = "flex";
+        compContainer.style.flexDirection = "column";
         slotContainer.appendChild(compContainer);
         this.compContainers.push(compContainer);
         this.compContainersByCompId.set(comp.id, compContainer);
-
-        const domHost = new RemoteDomHost({
-          container: compContainer,
-          componentId: comp.id,
-          useShadowDom: this.options.useShadowDom,
-          onEvent: (componentId, eventData) => {
-            try {
-              this.channel1?.port1.postMessage({
-                type: "event",
-                componentId,
-                ...eventData
-              });
-            } catch (err) {
-              // A click that reaches a destroyed sandbox's mirror is silently
-              // dead in the UI; surface it instead of swallowing it.
-              console.warn(
-                `[Omni] Dropped ${eventData?.eventName} event for ${this.manifest.id}: sandbox channel closed`,
-                err
-              );
-            }
-          }
-        });
-        this.remoteDomHosts.set(comp.id, domHost);
 
         const schemaRenderer = new SchemaRenderer({
           container: compContainer,
@@ -211,65 +288,20 @@ export class SandboxInstance {
           }
         });
         this.schemaRenderers.set(comp.id, schemaRenderer);
-      }
-    }
 
-    if (this.remoteDomHosts.size === 0) {
-      const fallbackContainer = this.options.slotResolver
-        ? this.options.slotResolver(this.manifest.id, "main", "main")
-        : (this.options.slotContainers.get("settings") ||
-           this.options.slotContainers.get("main") ||
-           this.options.slotContainers.values().next().value);
-
-      if (fallbackContainer) {
-        const existingFallback = fallbackContainer.querySelector(".omni-comp-fallback");
-        if (existingFallback) {
-          existingFallback.remove();
+        if (!isSchema && !this.iframe.parentNode) {
+          // Direct Iframe View: render visible app iframe into the primary container
+          this.iframe.style.display = "block";
+          this.iframe.style.width = "100%";
+          this.iframe.style.height = "100%";
+          this.iframe.style.border = "none";
+          this.iframe.style.minHeight = "100%";
+          this.iframe.style.flex = "1";
+          this.iframe.style.position = "static";
+          this.iframe.style.visibility = "visible";
+          compContainer.appendChild(this.iframe);
+          setupIframeContainerProxy(compContainer, this.iframe, slotContainer);
         }
-
-        const compContainer = document.createElement("div");
-        compContainer.className = `omni-component-slot omni-comp-fallback`;
-        fallbackContainer.appendChild(compContainer);
-        this.compContainers.push(compContainer);
-
-        const domHost = new RemoteDomHost({
-          container: compContainer,
-          componentId: "main",
-          useShadowDom: this.options.useShadowDom,
-          onEvent: (componentId, eventData) => {
-            try {
-              this.channel1?.port1.postMessage({
-                type: "event",
-                componentId,
-                ...eventData
-              });
-            } catch (err) {
-              console.warn(
-                `[Omni] Dropped ${eventData?.eventName} event for ${this.manifest.id}: sandbox channel closed`,
-                err
-              );
-            }
-          }
-        });
-        this.remoteDomHosts.set("main", domHost);
-
-        const schemaRenderer = new SchemaRenderer({
-          container: compContainer,
-          onAction: (action, payload) => {
-            if (action.navigate?.route && this.options.onHandleUri) {
-              this.options.onHandleUri(action.navigate.route, this.manifest.id);
-            }
-            try {
-              this.channel1?.port1.postMessage({
-                type: "action",
-                componentId: "main",
-                action,
-                payload
-              });
-            } catch (_) {}
-          }
-        });
-        this.schemaRenderers.set("main", schemaRenderer);
       }
     }
 
@@ -518,7 +550,7 @@ export class SandboxInstance {
           }
         };
 
-        // Transfer channel1 port2 (Remote DOM) and channel2 port2 (Kernel RPC) to iframe
+        // Transfer channel1 port2 (Schema Bus) and channel2 port2 (Kernel RPC) to iframe
         try {
           const cw = this.iframe?.contentWindow as any;
           if (cw) {
@@ -553,7 +585,17 @@ export class SandboxInstance {
       if (this.iframe) {
         this.iframe.onload = doHandshake;
         this.iframe.addEventListener("load", doHandshake, { once: true });
-        document.body.appendChild(this.iframe);
+        if (!this.iframe.parentNode) {
+          // Headless execution for schema plugins
+          this.iframe.style.display = "none";
+          this.iframe.style.position = "absolute";
+          this.iframe.style.width = "0";
+          this.iframe.style.height = "0";
+          this.iframe.style.border = "none";
+          this.iframe.style.visibility = "hidden";
+          this.iframe.style.pointerEvents = "none";
+          document.body.appendChild(this.iframe);
+        }
       } else {
         if (typeof window !== "undefined") {
           window.removeEventListener("message", onMessage);
@@ -604,10 +646,6 @@ export class SandboxInstance {
       appHost.destroy();
     }
     this.iframeAppHosts.clear();
-    for (const host of this.remoteDomHosts.values()) {
-      host.destroy();
-    }
-    this.remoteDomHosts.clear();
 
     for (const container of this.compContainers) {
       if (container.parentNode) {

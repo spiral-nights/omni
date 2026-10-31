@@ -241,15 +241,27 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
     channelKernelRpc.port2.close();
   });
 
-  it("transparently auto-mounts standard DOM elements to Remote DOM when no omni.registerComponent is called", async () => {
-    const channelRemoteDom = new MessageChannel();
+  it("transparently bridges Schema UI and omni:action over Channel 1 without proprietary SDKs", async () => {
+    const channelSchemaBus = new MessageChannel();
     const channelKernelRpc = new MessageChannel();
 
     const fakeDoc = document.implementation.createHTMLDocument("Sandbox Document");
+    const actionReceived = vi.fn();
     const fakeWindow: any = {
-      addEventListener: vi.fn(),
+      addEventListener: vi.fn((event, handler) => {
+        if (event === "omni:action" || event === "message") {
+          fakeWindow._listeners = fakeWindow._listeners || {};
+          fakeWindow._listeners[event] = fakeWindow._listeners[event] || [];
+          fakeWindow._listeners[event].push(handler);
+        }
+      }),
+      dispatchEvent: vi.fn((event: any) => {
+        const list = fakeWindow._listeners?.[event.type] || [];
+        for (const l of list) l(event);
+      }),
       localStorage: { getItem: vi.fn(), setItem: vi.fn() }
     };
+    fakeWindow.parent = fakeWindow;
 
     const fn = new Function("window", "document", "EventTarget", "Event", "MessageEvent", "CloseEvent", omniRuntimeScript);
     fn(fakeWindow, fakeDoc, EventTarget, Event, MessageEvent, CloseEvent);
@@ -270,48 +282,58 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
           components: ["main"]
         }
       },
-      ports: [channelRemoteDom.port2, channelKernelRpc.port2]
+      ports: [channelSchemaBus.port2, channelKernelRpc.port2]
     });
 
-    const remoteMutations: any[] = [];
-    channelRemoteDom.port1.onmessage = (e) => {
-      if (e.data?.type === "mutate") {
-        remoteMutations.push(...e.data.records);
+    let receivedSchema: any = null;
+    channelSchemaBus.port1.onmessage = (e) => {
+      if (e.data?.type === "schema") {
+        receivedSchema = e.data.schema;
       }
     };
 
-    // Standard nsite creates elements using standard document.createElement
-    const btn = fakeDoc.createElement("button");
-    btn.className = "nsite-button";
-    btn.textContent = "Click Me Native";
-    const onClick = vi.fn();
-    btn.addEventListener("click", onClick);
-    fakeDoc.body.appendChild(btn);
-
-    // Wait for auto-mount setTimeout(..., 0) and microtask flush
-    await new Promise((r) => setTimeout(r, 50));
-
-    expect(remoteMutations.length).toBeGreaterThan(0);
-    // Find mutation inserting button
-    const insertBtnMutation = remoteMutations.find(
-      (m) => m[0] === 0 && m[2]?.element === "button"
-    );
-    expect(insertBtnMutation).toBeDefined();
-    const remoteBtnId = insertBtnMutation[2].id;
-
-    // Simulate host click event arriving on this button
-    channelRemoteDom.port1.postMessage({
-      type: "event",
-      componentId: "main",
-      id: remoteBtnId,
-      eventName: "click"
+    // Standard nsite dispatches schema via standard window.parent.postMessage or window.postMessage
+    messageListener({
+      data: {
+        type: "omni:schema",
+        schema: {
+          type: "box",
+          children: [
+            { type: "button", text: "Click Me Native", action: { type: "test_click" } }
+          ]
+        }
+      }
     });
 
     await new Promise((r) => setTimeout(r, 20));
-    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(receivedSchema).toBeDefined();
+    expect(receivedSchema.type).toBe("box");
+    expect(receivedSchema.children[0].text).toBe("Click Me Native");
 
-    channelRemoteDom.port1.close();
-    channelRemoteDom.port2.close();
+    // Listen for omni:action in sandbox window
+    fakeWindow.addEventListener("omni:action", (e: any) => {
+      actionReceived(e.detail || e.data);
+    });
+
+    // Simulate host action arriving from SchemaRenderer over Channel 1
+    channelSchemaBus.port1.postMessage({
+      type: "action",
+      componentId: "main",
+      action: { type: "test_click" },
+      payload: { count: 1 }
+    });
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(actionReceived).toHaveBeenCalledTimes(1);
+    expect(actionReceived).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: { type: "test_click" },
+        payload: { count: 1 }
+      })
+    );
+
+    channelSchemaBus.port1.close();
+    channelSchemaBus.port2.close();
     channelKernelRpc.port1.close();
     channelKernelRpc.port2.close();
   });

@@ -1677,8 +1677,8 @@ function mountPublisherStudio(root: HTMLElement) {
         const file = fileList[0];
         const name = file.name || "plugin.zip";
         let bytes: Uint8Array;
-        if (file.bytes instanceof Uint8Array) {
-          bytes = file.bytes;
+        if (file.bytes instanceof Uint8Array || (file.bytes && typeof file.bytes.byteLength === "number" && typeof file.bytes.subarray === "function")) {
+          bytes = new Uint8Array(file.bytes.buffer || file.bytes, file.bytes.byteOffset || 0, file.bytes.byteLength);
         } else if (typeof file.arrayBuffer === "function") {
           const ab = await file.arrayBuffer();
           bytes = new Uint8Array(ab);
@@ -2158,8 +2158,11 @@ function mountPublisherWidget(root: HTMLElement) {
   root.appendChild(card);
 }
 
+let initialized = false;
 function init() {
   if (typeof document === "undefined") return;
+  if (initialized) return;
+  initialized = true;
   const view = getCurrentRouteView();
   if (view === "widget" || view === "compact") {
     mountPublisherWidget(document.body);

@@ -475,10 +475,11 @@ export class OmniShell extends BaseShell {
 
           // If no sandbox instance has been mounted to slot-main-${safeId}, mount the standalone app
           const appInstanceKey = `${plugin.id}::app`;
-          const placements = this.getPluginPlacements(plugin);
-          const hasMainRunning = placements.some(
-            (pl) => pl.enabled !== false && pl.viewport === "main" && this.kernel.getSandbox(`${plugin.id}::${pl.id}`)
-          );
+          const primaryInstanceKey = `${plugin.id}::main-primary`;
+          const hasMainRunning =
+            Boolean(this.kernel.getSandbox(primaryInstanceKey)) ||
+            Boolean(this.kernel.getSandbox(appInstanceKey)) ||
+            Boolean(this.kernel.getSandbox(plugin.id));
 
           if (!hasMainRunning && !this.kernel.getSandbox(appInstanceKey) && !this.pendingAppMounts.has(appInstanceKey)) {
             this.pendingAppMounts.add(appInstanceKey);
