@@ -62,7 +62,8 @@ const initialPlugins: InstalledPluginEntry[] = [
     icon: "relays",
     viewport: "sidebar",
     views: [
-      { id: "main", title: "Relays", path: "", format: "iframe" },
+      { id: "main", title: "Relays", path: "", format: "schema" },
+      { id: "widget", title: "Relays Widget", path: "?view=widget", format: "schema" },
       { id: "compact", title: "Live Tile", path: "?view=compact", format: "schema" }
     ],
     scriptContent: relaysScript,
