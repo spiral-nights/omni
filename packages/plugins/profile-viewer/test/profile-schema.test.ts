@@ -123,7 +123,8 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     expect(listNode.items.length).toBe(1);
     expect(listNode.items[0].title).toBe("Bob");
     expect(listNode.items[0].subtitle).toBe("Bitcoin dev");
-    expect(listNode.items[0].avatarUrl).toBe("https://example.com/bob.png");
+    expect(listNode.items[0].avatarPubkey).toBe("b".repeat(64));
+    expect(listNode.items[0].avatarUrl).toBeUndefined();
     expect(listNode.items[0].onClickAction).toEqual({
       name: "view_profile",
       payload: { pubkey: "b".repeat(64) }
@@ -294,7 +295,8 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     expect(friendItem).toBeDefined();
     expect(friendItem.title).toBe("Hal Finney");
     expect(friendItem.subtitle).toBe("Running bitcoin on day 1");
-    expect(friendItem.avatarUrl).toBe("https://example.com/hal.png");
+    expect(friendItem.avatarPubkey).toBe(friendPubkey);
+    expect(friendItem.avatarUrl).toBeUndefined();
     expect(friendItem.onClickAction).toEqual({
       name: "view_profile",
       payload: { pubkey: friendPubkey }

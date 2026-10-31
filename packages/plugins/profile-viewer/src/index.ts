@@ -497,7 +497,6 @@ export function getProfileSchema(
             title: fName,
             subtitle: fAbout ? (fAbout.length > 80 ? fAbout.slice(0, 80) + "..." : fAbout) : (fNip05 || `${fPk.slice(0, 16)}...`),
             meta: fNip05 || `${fPk.slice(0, 8)}...`,
-            avatarUrl: fPic || undefined,
             avatarPubkey: fPk,
             onClickAction: {
               name: "view_profile",
