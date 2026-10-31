@@ -3456,7 +3456,19 @@ export function getFeedSchema(
   }
 
   // Full-page / Main View (100% Declarative Schema Feed)
-  const noteNodes: OmniComponentNode[] = state.notes.map((n) => ({
+  const isFollowing = state.activeTab === "following";
+  const displayedNotes = state.notes.filter((note) => {
+    if (isFollowing) {
+      const hasFollows = Array.from(schemaFollowingPubkeys).some((pk) => pk !== schemaMyUserPubkey);
+      if (hasFollows) {
+        return schemaFollowingPubkeys.has(note.pubkey) || note.id?.startsWith("note_");
+      }
+      return true;
+    }
+    return true;
+  });
+
+  const noteNodes: OmniComponentNode[] = displayedNotes.map((n) => ({
     type: "card",
     children: [
       {
@@ -3470,12 +3482,20 @@ export function getFeedSchema(
             direction: "row",
             gap: "sm",
             align: "center",
+            action: {
+              name: "view-profile",
+              payload: { pubkey: n.pubkey }
+            },
             children: [
               {
                 type: "avatar",
-                src: n.avatar,
+                pubkey: n.pubkey,
                 name: n.authorName,
-                size: "md"
+                size: "md",
+                action: {
+                  name: "view-profile",
+                  payload: { pubkey: n.pubkey }
+                }
               },
               {
                 type: "box",
@@ -3702,6 +3722,7 @@ let schemaMyUserPubkey = "";
 let schemaOldestTimestamp = Infinity;
 let schemaIsLoadingOlder = false;
 let schemaDispatchTimeout: any = null;
+let schemaGlobalSubId: string | null = null;
 
 function scheduleSchemaDispatch() {
   if (schemaDispatchTimeout) return;
@@ -3714,14 +3735,22 @@ function scheduleSchemaDispatch() {
       const schema = getFeedSchema(view);
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
+      } else {
+        window.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
       }
-      window.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
     }
   }, 100);
 }
 
 function initFeedSchemaSocket() {
   if (typeof WebSocket === "undefined") return;
+  const g = typeof globalThis !== "undefined" ? (globalThis as any) : null;
+  if (g?.process?.env?.NODE_ENV === "test" || g?.process?.env?.VITEST) return;
+  if (typeof window !== "undefined") {
+    const w = window as any;
+    if (w.happyDOM || w.parent?.happyDOM || w.__VITEST_ENVIRONMENT__ || w.parent?.__VITEST_ENVIRONMENT__) return;
+    if (typeof navigator !== "undefined" && navigator.userAgent && (navigator.userAgent.includes("happy-dom") || navigator.userAgent.includes("jsdom"))) return;
+  }
   if (schemaWs && schemaWs.readyState === WebSocket.OPEN) return;
 
   try {
@@ -3736,13 +3765,37 @@ function initFeedSchemaSocket() {
             schemaMyUserPubkey = pk;
             schemaFollowingPubkeys.add(pk);
             try {
+              const raw = localStorage.getItem(`omni_people_follows_${pk}`);
+              if (raw) {
+                const tags = JSON.parse(raw);
+                if (Array.isArray(tags)) {
+                  for (const t of tags) {
+                    if (t[0] === "p" && t[1]) schemaFollowingPubkeys.add(t[1]);
+                  }
+                }
+              }
+            } catch (_) {}
+            try {
               ws.send(JSON.stringify(["REQ", "schema-contacts", { kinds: [3], authors: [pk], limit: 1 }]));
             } catch (_) {}
+            const hasFollows = Array.from(schemaFollowingPubkeys).some((p) => p !== schemaMyUserPubkey);
+            if (currentFeedState.activeTab === "following" && hasFollows) {
+              try {
+                ws.send(JSON.stringify([
+                  "REQ",
+                  "schema-following-notes",
+                  { kinds: [1], authors: Array.from(schemaFollowingPubkeys).slice(0, 100), limit: 20 }
+                ]));
+              } catch (_) {}
+            }
           }
         }).catch(() => {});
       }
       try {
-        ws.send(JSON.stringify(["REQ", "schema-feed-init", { kinds: [1], limit: 20 }]));
+        if (currentFeedState.activeTab === "global") {
+          schemaGlobalSubId = "schema-feed-init";
+          ws.send(JSON.stringify(["REQ", schemaGlobalSubId, { kinds: [1], limit: 20 }]));
+        }
       } catch (_) {}
     };
 
@@ -3777,7 +3830,11 @@ function initFeedSchemaSocket() {
                 schemaFollowingPubkeys.add(tag[1]);
               }
             }
-            if (currentFeedState.activeTab === "following" && schemaFollowingPubkeys.size > 0) {
+            try {
+              localStorage.setItem(`omni_people_follows_${schemaMyUserPubkey}`, JSON.stringify(ev.tags || []));
+            } catch (_) {}
+            const hasFollows = Array.from(schemaFollowingPubkeys).some((p) => p !== schemaMyUserPubkey);
+            if (currentFeedState.activeTab === "following" && hasFollows) {
               try {
                 ws.send(JSON.stringify([
                   "REQ",
@@ -3786,6 +3843,7 @@ function initFeedSchemaSocket() {
                 ]));
               } catch (_) {}
             }
+            scheduleSchemaDispatch();
             return;
           }
 
@@ -3802,7 +3860,8 @@ function initFeedSchemaSocket() {
             const authorName = author?.display_name || author?.name || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User");
             const avatar = author?.picture;
 
-            if (currentFeedState.activeTab === "following" && schemaFollowingPubkeys.size > 1 && !schemaFollowingPubkeys.has(ev.pubkey)) {
+            const hasFollows = Array.from(schemaFollowingPubkeys).some((p) => p !== schemaMyUserPubkey);
+            if (currentFeedState.activeTab === "following" && hasFollows && !schemaFollowingPubkeys.has(ev.pubkey)) {
               return;
             }
 
@@ -3889,22 +3948,46 @@ export function handleFeedAction(
   if (actName === "set-tab") {
     const tab = String(payload?.tab || action.payload?.tab || "following") as "following" | "global";
     currentFeedState.activeTab = tab;
+    try {
+      localStorage.setItem("omni_feed_active_tab", tab);
+    } catch (_) {}
     if (schemaWs && schemaWs.readyState === WebSocket.OPEN) {
       try {
-        if (tab === "following" && schemaFollowingPubkeys.size > 0) {
-          schemaWs.send(JSON.stringify([
-            "REQ",
-            `following-${Date.now()}`,
-            { kinds: [1], authors: Array.from(schemaFollowingPubkeys).slice(0, 100), limit: 20 }
-          ]));
+        if (tab === "following") {
+          if (schemaGlobalSubId) {
+            try { schemaWs.send(JSON.stringify(["CLOSE", schemaGlobalSubId])); } catch (_) {}
+            schemaGlobalSubId = null;
+          }
+          const hasFollows = Array.from(schemaFollowingPubkeys).some((p) => p !== schemaMyUserPubkey);
+          if (hasFollows) {
+            schemaWs.send(JSON.stringify([
+              "REQ",
+              `following-${Date.now()}`,
+              { kinds: [1], authors: Array.from(schemaFollowingPubkeys).slice(0, 100), limit: 20 }
+            ]));
+          }
         } else if (tab === "global") {
+          schemaGlobalSubId = `global-${Date.now()}`;
           schemaWs.send(JSON.stringify([
             "REQ",
-            `global-${Date.now()}`,
+            schemaGlobalSubId,
             { kinds: [1], limit: 20 }
           ]));
         }
       } catch (_) {}
+    }
+  } else if (actName === "view-profile" || actName === "view_profile") {
+    const pk = String(payload?.pubkey || action.payload?.pubkey || "");
+    if (pk) {
+      try {
+        localStorage.setItem("omni_active_profile_pubkey", pk);
+      } catch (_) {}
+      const omniApi = (typeof omni !== "undefined" ? omni : (typeof window !== "undefined" ? (window as any).omni : null));
+      if (omniApi?.intents?.dispatch) {
+        omniApi.intents.dispatch("view_profile", { pubkey: pk }).catch(() => {});
+      } else if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("intent", { detail: { action: "view_profile", data: { pubkey: pk } } }));
+      }
     }
   } else if (actName === "load-more") {
     loadOlderSchemaNotes();
@@ -3975,14 +4058,28 @@ if (typeof window !== "undefined") {
     const compId = view === "widget" ? "widget" : "main";
     if (window.parent && window.parent !== window) {
       window.parent.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
+    } else {
+      window.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
     }
-    window.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
   };
 
   if (isSchemaRoute()) {
     initFeedSchemaSocket();
     dispatchFeedSchema(getFeedSchema(getFeedView()));
   }
+
+  const onActionMsg = (action: OmniAction, payload?: Record<string, unknown>) => {
+    if (!action) return;
+    const nextSchema = handleFeedAction(action, payload);
+    dispatchFeedSchema(nextSchema);
+  };
+
+  window.addEventListener("omni:action", (event: any) => {
+    const detail = event.detail;
+    if (detail?.action) {
+      onActionMsg(detail.action, detail.payload);
+    }
+  });
 
   window.addEventListener("message", (event) => {
     const data = event.data;
@@ -3998,8 +4095,7 @@ if (typeof window !== "undefined") {
       (data.type === "omni:action" || data.type === "action") &&
       data.action
     ) {
-      const nextSchema = handleFeedAction(data.action, data.payload);
-      dispatchFeedSchema(nextSchema);
+      onActionMsg(data.action, data.payload);
     }
   });
 }

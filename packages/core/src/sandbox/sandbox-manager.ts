@@ -302,6 +302,12 @@ export class SandboxInstance {
             if (action.navigate?.route && this.options.onHandleUri) {
               this.options.onHandleUri(action.navigate.route, this.manifest.id);
             }
+            if ((action.name === "view-profile" || action.name === "view_profile") && this.options.intentBroker) {
+              const pubkey = (payload?.pubkey || action.payload?.pubkey) as string;
+              if (pubkey) {
+                this.options.intentBroker.dispatch(this.manifest.id, "view_profile", { pubkey }).catch(() => {});
+              }
+            }
             try {
               this.channel1?.port1.postMessage({
                 type: "action",

@@ -51,11 +51,31 @@ export class OmniActionEvent extends BaseCustomEvent<{
 // ============================================================================
 
 export class OmniBoxElement extends BaseElement {
+  public actionData: OmniAction | null = null;
+
   connectedCallback(): void {
     this.classList.add("omni-box");
+    this.addEventListener("click", (e) => {
+      if (this.actionData) {
+        if (
+          (e.target as HTMLElement).closest("button") ||
+          (e.target as HTMLElement).closest("input") ||
+          (e.target as HTMLElement).closest("textarea")
+        ) {
+          return;
+        }
+        this.dispatchEvent(new OmniActionEvent(this.actionData));
+      }
+    });
   }
 
   setProps(props: Partial<OmniBoxPrimitive>): void {
+    this.actionData = props.action || null;
+    if (props.action) {
+      this.style.cursor = "pointer";
+    } else {
+      this.style.cursor = "";
+    }
     if (props.direction) this.setAttribute("direction", props.direction);
     if (props.gap) this.setAttribute("gap", props.gap);
     if (props.align) this.setAttribute("align", props.align);
@@ -313,51 +333,84 @@ export class OmniIconElement extends BaseElement {
   }
 }
 
+export function getAvatarSvg(pubkey: string, letter: string): string {
+  let hash = 0;
+  for (let i = 0; i < (pubkey || "").length; i++) {
+    hash = (hash << 5) - hash + pubkey.charCodeAt(i);
+    hash |= 0;
+  }
+  const seed = Math.abs(hash);
+
+  const palettes = [
+    ["#c85d3e", "#3d190e", "#ffd2c2"], // Terracotta / Rust
+    ["#288755", "#0b2e1b", "#bcf5d4"], // Emerald / Forest
+    ["#356ec4", "#102347", "#cce0ff"], // Cobalt / Royal Blue
+    ["#85419c", "#2b1036", "#f3cbff"], // Plum / Violet
+    ["#aa3148", "#3b0d17", "#ffd0d9"], // Crimson / Wine
+    ["#23858a", "#0a2d2f", "#bdf4f7"], // Deep Teal / Marine
+    ["#b88320", "#3d2905", "#ffe6b0"], // Ochre / Amber Gold
+    ["#4d5ec2", "#161b42", "#d4dcff"], // Indigo / Dusk
+    ["#c24965", "#3b0f1b", "#ffd2dc"], // Coral / Rose
+    ["#6b8028", "#222c09", "#e4f7a8"], // Olive / Moss
+    ["#8e4a7d", "#2e1227", "#f9d0ee"], // Berry / Heather
+    ["#1c83a8", "#072b38", "#bceeff"], // Azure / Vibrant Cyan
+    ["#bd5726", "#381506", "#ffd3bb"], // Burnt Sienna
+    ["#6a47b8", "#1e113d", "#e0d4ff"], // Violet / Lavender
+    ["#25846f", "#092d24", "#bcf5e6"], // Jade / Spruce
+    ["#a16328", "#331c07", "#fedec0"]  // Warm Copper / Cinnamon
+  ];
+  const [stop1, stop2, accent] = palettes[seed % palettes.length];
+
+  const c1_x = 20 + (seed % 60);
+  const c1_y = 20 + ((seed >> 4) % 60);
+  const c1_r = 24 + ((seed >> 8) % 16);
+  const c1_color = seed % 2 === 0 ? accent : "#ede8df";
+  const c1_opacity = (0.24 + (seed % 8) * 0.015).toFixed(2);
+
+  const c2_x = 100 - c1_x;
+  const c2_y = 100 - c1_y;
+  const c2_r = 20 + ((seed >> 12) % 20);
+
+  const waveY = 64 + (seed % 10);
+  const waveControlY = 40 + ((seed >> 3) % 14);
+  const waveEndY = 68 + ((seed >> 6) % 12);
+
+  const cleanLetter = (letter || "?").slice(0, 1).toUpperCase();
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%" style="display: block; border-radius: 50%;">
+  <rect width="100" height="100" rx="50" fill="${stop1}" />
+  <circle cx="${c1_x}" cy="${c1_y}" r="${c1_r}" fill="${c1_color}" fill-opacity="${c1_opacity}" />
+  <circle cx="${c2_x}" cy="${c2_y}" r="${c2_r}" fill="${stop2}" fill-opacity="0.4" />
+  <path d="M 0 ${waveY} Q 50 ${waveControlY} 100 ${waveEndY} L 100 100 L 0 100 Z" fill="#141312" fill-opacity="0.3" />
+  <circle cx="50" cy="50" r="47.5" fill="none" stroke="#ede8df" stroke-opacity="0.25" stroke-width="1.5" />
+  <text x="50" y="52" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="46" font-weight="900" fill="#ffffff" stroke="#141312" stroke-width="2" stroke-opacity="0.5" text-anchor="middle" dominant-baseline="central" paint-order="stroke fill">${cleanLetter}</text>
+</svg>`;
+}
+
 export class OmniAvatarElement extends BaseElement {
-  private imgEl: HTMLImageElement | null = null;
-  private fallbackEl: HTMLElement | null = null;
+  public actionData: OmniAction | null = null;
 
   connectedCallback(): void {
     this.classList.add("omni-avatar");
+    this.addEventListener("click", () => {
+      if (this.actionData) {
+        this.dispatchEvent(new OmniActionEvent(this.actionData));
+      }
+    });
   }
 
   setProps(props: Partial<OmniAvatarPrimitive>): void {
     if (props.size) this.setAttribute("size", props.size);
-
-    if (props.src) {
-      if (!this.imgEl) {
-        this.imgEl = document.createElement("img");
-        this.imgEl.className = "omni-avatar-img";
-        this.imgEl.alt = props.name || "Avatar";
-        this.imgEl.onerror = () => {
-          this.imgEl?.remove();
-          this.imgEl = null;
-          this.renderFallback(props);
-        };
-        this.appendChild(this.imgEl);
-      }
-      this.imgEl.src = props.src;
-      if (this.fallbackEl) {
-        this.fallbackEl.remove();
-        this.fallbackEl = null;
-      }
+    this.actionData = props.action || null;
+    if (props.action) {
+      this.style.cursor = "pointer";
     } else {
-      if (this.imgEl) {
-        this.imgEl.remove();
-        this.imgEl = null;
-      }
-      this.renderFallback(props);
+      this.style.cursor = "";
     }
-  }
 
-  private renderFallback(props: Partial<OmniAvatarPrimitive>): void {
-    if (!this.fallbackEl) {
-      this.fallbackEl = document.createElement("div");
-      this.fallbackEl.className = "omni-avatar-fallback";
-      this.appendChild(this.fallbackEl);
-    }
+    const key = props.pubkey || props.name || "";
     const initial = (props.name || props.pubkey || "?").slice(0, 1).toUpperCase();
-    this.fallbackEl.textContent = initial;
+    this.innerHTML = getAvatarSvg(key, initial);
   }
 }
 

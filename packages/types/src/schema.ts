@@ -48,6 +48,7 @@ export interface OmniBoxPrimitive extends OmniPrimitiveBase {
   justify?: "start" | "center" | "between" | "end";
   wrap?: boolean;
   padding?: "none" | "xs" | "sm" | "md" | "lg";
+  action?: OmniAction;
   children: OmniComponentNode[];
 }
 
@@ -107,6 +108,7 @@ export interface OmniAvatarPrimitive extends OmniPrimitiveBase {
   pubkey?: string;
   name?: string;
   size?: "sm" | "md" | "lg";
+  action?: OmniAction;
 }
 
 export interface OmniButtonPrimitive extends OmniPrimitiveBase {

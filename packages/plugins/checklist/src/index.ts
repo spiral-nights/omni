@@ -472,8 +472,9 @@ if (typeof window !== "undefined") {
     const compId = view === "widget" ? "widget" : "main";
     if (window.parent && window.parent !== window) {
       window.parent.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
+    } else {
+      window.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
     }
-    window.postMessage({ type: "omni:schema", componentId: compId, schema }, "*");
   };
 
   // Dispatch initial schema for the active route/view

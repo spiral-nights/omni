@@ -623,6 +623,10 @@ export class OmniKernel {
       limit: 1
     };
 
+    if (this.relayPool.getAllRelays().length === 0) {
+      return null;
+    }
+
     return new Promise((resolve) => {
       let resolved = false;
       let latestEvent: NostrEvent | null = null;
@@ -738,6 +742,10 @@ export class OmniKernel {
       authors: [targetPubkey],
       limit: 1
     };
+
+    if (this.relayPool.getAllRelays().length === 0) {
+      return null;
+    }
 
     return new Promise((resolve) => {
       let resolved = false;
@@ -873,6 +881,10 @@ export class OmniKernel {
       "#d": [identifier],
       limit: 1
     };
+
+    if (this.relayPool.getAllRelays().length === 0) {
+      return null;
+    }
 
     return new Promise((resolve) => {
       let resolved = false;

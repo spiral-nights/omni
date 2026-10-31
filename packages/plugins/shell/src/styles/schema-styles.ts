@@ -4,6 +4,20 @@
  */
 
 export const SCHEMA_COMPONENT_STYLES = /* css */ `
+/* Viewport Slot Container Layout */
+.omni-comp-main {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.omni-comp-main > omni-box {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
 /* 1. Box Primitive */
 omni-box {
   display: flex;
@@ -229,6 +243,12 @@ omni-avatar {
   box-sizing: border-box;
   background: var(--omni-bg-surface, #191816);
   border: 1px solid var(--omni-border-subtle, #272522);
+}
+omni-avatar svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 50%;
 }
 omni-avatar[size="xs"] { width: 22px; height: 22px; font-size: 0.65rem; }
 omni-avatar[size="sm"] { width: 28px; height: 28px; font-size: 0.75rem; }

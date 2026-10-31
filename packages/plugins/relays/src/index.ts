@@ -139,6 +139,17 @@ export function handleRelaysAction(
 }
 
 const RELAYS_CSS = /* css */ `
+html, body {
+  background: transparent !important;
+  margin: 0;
+  padding: 16px 20px;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100%;
+}
+
 @keyframes omni-relay-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.35; transform: scale(0.8); }
@@ -319,11 +330,18 @@ function mountRelays(root: any) {
 
   let currentRelayUrls: Set<string> = new Set();
 
+  function getOmniRelays() {
+    if (typeof omni !== "undefined" && (omni as any)?.relays) return (omni as any).relays;
+    if (typeof window !== "undefined" && (window as any).omni?.relays) return (window as any).omni.relays;
+    return null;
+  }
+
   async function addRelayUrl(rawUrl: string) {
     const url = normalizeRelayUrl(rawUrl);
     if (!url) return;
-    if (typeof omni !== "undefined" && omni.relays) {
-      await omni.relays.add(url);
+    const relaysApi = getOmniRelays();
+    if (relaysApi) {
+      await relaysApi.add(url);
     }
     renderRelays();
     setTimeout(renderRelays, 600);
@@ -342,8 +360,9 @@ function mountRelays(root: any) {
   async function renderRelays() {
     try {
       let relays: any[] = [];
-      if (typeof omni !== "undefined" && omni.relays) {
-        relays = await omni.relays.list();
+      const relaysApi = getOmniRelays();
+      if (relaysApi) {
+        relays = await relaysApi.list();
       } else if (typeof window !== "undefined" && (window as any).nostr?.getRelays) {
         const relayMap = await (window as any).nostr.getRelays();
         relays = Object.keys(relayMap || {}).map((url) => ({ url, connected: true }));
@@ -396,8 +415,9 @@ function mountRelays(root: any) {
 
         const btnDel = row.querySelector<HTMLButtonElement>(".btn-remove-relay")!;
         btnDel.addEventListener("click", async () => {
-          if (typeof omni !== "undefined" && omni.relays) {
-            await omni.relays.remove(r.url);
+          const relaysApi = getOmniRelays();
+          if (relaysApi) {
+            await relaysApi.remove(r.url);
           }
           renderRelays();
         });
@@ -477,33 +497,46 @@ function mountRelaysCompact(root: any) {
   root.appendChild(container);
 }
 
+function isSchemaRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const search = window.location.search || "";
+    if (search.includes("format=schema") || search.includes("view=schema")) return true;
+    if ((window as any).__OMNI_ROUTE__?.includes("format=schema")) return true;
+    if ((window as any).__OMNI_FORMAT__ === "schema") return true;
+  } catch (_) {}
+  return false;
+}
+
 if (typeof window !== "undefined") {
-  const getActiveView = () => (isCompactRoute() ? "compact" : "widget");
+  if (isSchemaRoute()) {
+    const getActiveView = () => (isCompactRoute() ? "compact" : "widget");
 
-  const dispatchSchema = (schema: OmniComponentNode | null) => {
-    if (!schema) return;
-    if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: "omni:schema", schema }, "*");
-    } else {
-      window.postMessage({ type: "omni:schema", schema }, "*");
-    }
-  };
+    const dispatchSchema = (schema: OmniComponentNode | null) => {
+      if (!schema) return;
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "omni:schema", schema }, "*");
+      } else {
+        window.postMessage({ type: "omni:schema", schema }, "*");
+      }
+    };
 
-  // Dispatch initial schema for widget / compact views
-  dispatchSchema(getRelaysSchema(getActiveView()));
+    // Dispatch initial schema for widget / compact views
+    dispatchSchema(getRelaysSchema(getActiveView()));
 
-  // Listen for actions over standard Web messaging
-  window.addEventListener("message", (event) => {
-    const data = event.data;
-    if (
-      data &&
-      (data.type === "omni:action" || data.type === "action") &&
-      data.action
-    ) {
-      const nextSchema = handleRelaysAction(data.action, data.payload);
-      dispatchSchema(nextSchema);
-    }
-  });
+    // Listen for actions over standard Web messaging
+    window.addEventListener("message", (event) => {
+      const data = event.data;
+      if (
+        data &&
+        (data.type === "omni:action" || data.type === "action") &&
+        data.action
+      ) {
+        const nextSchema = handleRelaysAction(data.action, data.payload);
+        dispatchSchema(nextSchema);
+      }
+    });
+  }
 }
 
 function init() {

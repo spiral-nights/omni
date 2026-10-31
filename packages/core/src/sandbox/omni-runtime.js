@@ -110,6 +110,15 @@
   // Schema-based UI forwarding using standard Web postMessage
   let pendingSchema = null;
   let hasDispatchedSchema = false;
+  let origParent = null;
+  let origParentPost = null;
+  try {
+    if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+      origParent = window.parent;
+      origParentPost = origParent.postMessage ? origParent.postMessage.bind(origParent) : null;
+    }
+  } catch (_) {}
+
   function forwardSchema(schema, componentId) {
     hasDispatchedSchema = true;
     const compId = componentId || (sessionInfo && sessionInfo.viewId) || "main";
@@ -123,32 +132,42 @@
       } catch (_) {}
     } else {
       pendingSchema = { schema, componentId: compId };
+      try {
+        if (origParentPost) {
+          origParentPost({
+            type: "omni:schema",
+            componentId: compId,
+            schema: schema
+          }, "*");
+        }
+      } catch (_) {}
     }
-
-    try {
-      if (typeof window !== "undefined" && window.parent && window.parent !== window) {
-        window.parent.postMessage({
-          type: "omni:schema",
-          componentId: compId,
-          schema: schema
-        }, "*");
-      }
-    } catch (_) {}
   }
 
-  // Intercept standard window.parent.postMessage when inside an iframe
+  // Intercept standard window.parent.postMessage when inside an iframe without mutating host window
   try {
-    if (typeof window !== "undefined" && window.parent && window.parent !== window) {
-      const origParentPost = window.parent.postMessage ? window.parent.postMessage.bind(window.parent) : null;
-      window.parent.postMessage = function(msg, targetOrigin, transfer) {
-        if (msg && typeof msg === "object" && (msg.type === "omni:schema" || msg.type === "schema") && msg.schema) {
-          forwardSchema(msg.schema, msg.componentId);
-          return;
+    if (origParent && typeof Proxy !== "undefined") {
+      const parentProxy = new Proxy(origParent, {
+        get(target, prop) {
+          if (prop === "postMessage") {
+            return function(msg, targetOrigin, transfer) {
+              if (msg && typeof msg === "object" && (msg.type === "omni:schema" || msg.type === "schema") && msg.schema) {
+                forwardSchema(msg.schema, msg.componentId);
+                return;
+              }
+              if (origParentPost) {
+                return origParentPost(msg, targetOrigin, transfer);
+              }
+            };
+          }
+          const val = Reflect.get(target, prop);
+          return typeof val === "function" ? val.bind(target) : val;
         }
-        if (origParentPost) {
-          return origParentPost(msg, targetOrigin, transfer);
-        }
-      };
+      });
+      Object.defineProperty(window, "parent", {
+        value: parentProxy,
+        configurable: true
+      });
     }
   } catch (_) {}
 
