@@ -4386,8 +4386,8 @@ export function handleFeedAction(
       });
       currentFeedState.composerText = "";
     }
-  } else if (actName === "view-thread" || actName === "reply-note") {
-    const id = String(payload?.id || action.payload?.id || "");
+  } else if (actName === "view-thread" || actName === "view_note" || actName === "view-note" || actName === "reply-note") {
+    const id = String(payload?.id || payload?.eventId || action.payload?.id || action.payload?.eventId || "");
     if (id) {
       currentFeedState.activeThreadNoteId = id;
 
@@ -4532,8 +4532,34 @@ if (typeof window !== "undefined") {
     }
   };
 
+  const checkPendingActiveNote = () => {
+    try {
+      const savedNoteId = localStorage.getItem("omni_active_note_id");
+      if (savedNoteId) {
+        localStorage.removeItem("omni_active_note_id");
+        onActionMsg({ name: "view-thread", payload: { id: savedNoteId } });
+      }
+    } catch (_) {}
+  };
+
+  const handleIntent = (detail: any) => {
+    if (!detail) return;
+    const action = detail.action || detail.effectiveAction;
+    const data = detail.data;
+    if (action === "view_note" || action === "view-note") {
+      const noteId = data?.eventId || data?.id;
+      if (noteId) {
+        onActionMsg({ name: "view-thread", payload: { id: noteId } });
+      }
+    }
+  };
+
+  window.addEventListener("omni:intent", (e: any) => handleIntent(e.detail));
+  window.addEventListener("intent", (e: any) => handleIntent(e.detail));
+
   if (isSchemaRoute()) {
     initFeedSchemaSocket();
+    checkPendingActiveNote();
     dispatchFeedSchema(getFeedSchema(getFeedView()));
   }
 
@@ -4556,6 +4582,7 @@ if (typeof window !== "undefined") {
 
     if (data.type === "omni:init" && isSchemaRoute()) {
       initFeedSchemaSocket();
+      checkPendingActiveNote();
       dispatchFeedSchema(getFeedSchema(getFeedView()));
       return;
     }

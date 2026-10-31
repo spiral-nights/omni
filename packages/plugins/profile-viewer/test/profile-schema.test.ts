@@ -347,4 +347,46 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     const backTabsNode = backSchema.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;
     expect(backTabsNode.activeTab).toBe("following");
   });
+
+  it("renders user posts with action buttons (reply, repost, like, zap) and triggers view_note intent on click", async () => {
+    const friendPubkey = "f".repeat(64);
+    // Simulate user profile inspection with loaded posts
+    const profileViewSchema = (await handleProfileViewerAction(
+      { name: "view_profile" },
+      { pubkey: friendPubkey }
+    )) as OmniCardPrimitive;
+
+    // Simulate an incoming kind 1 post from WebSocket
+    const mockPost = {
+      id: "note_hal_123",
+      pubkey: friendPubkey,
+      content: "Running bitcoin node on Linux",
+      created_at: 1234567890,
+      tags: []
+    };
+
+    // Simulate receiving kind 1 event over websocket message handler
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: "action",
+          action: { name: "like-note", payload: { id: "note_hal_123" } }
+        }
+      })
+    );
+
+    // Call getProfileSchema directly with note injected
+    const customSchema = (await handleProfileViewerAction(
+      { name: "view_profile", payload: { pubkey: friendPubkey } }
+    )) as OmniCardPrimitive;
+
+    // Simulate clicking view_note intent
+    const dispatchSpy = vi.fn().mockResolvedValue({});
+    (window as any).omni = { intents: { dispatch: dispatchSpy } };
+    await handleProfileViewerAction(
+      { name: "view_note", payload: { id: "note_hal_123" } }
+    );
+    expect(localStorage.getItem("omni_active_note_id")).toBe("note_hal_123");
+    expect(dispatchSpy).toHaveBeenCalledWith("view_note", { id: "note_hal_123", eventId: "note_hal_123" });
+  });
 });

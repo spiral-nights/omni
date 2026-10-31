@@ -204,6 +204,109 @@ export function getProfileSchema(
     tabs.unshift({ id: "user-profile", label: targetUser.name || "User Profile", icon: "user" });
   }
 
+  const renderSchemaNoteCard = (note: any, authorName: string, authorPubkey: string): OmniComponentNode => {
+    const timeStr = note.created_at
+      ? new Date(note.created_at * 1000).toLocaleString([], { dateStyle: "short", timeStyle: "short" })
+      : "Recent";
+    const npubShort = authorPubkey ? `npub1${authorPubkey.slice(0, 8)}...` : "";
+
+    return {
+      type: "card",
+      children: [
+        {
+          type: "box",
+          direction: "row",
+          justify: "between",
+          align: "center",
+          children: [
+            {
+              type: "box",
+              direction: "row",
+              gap: "sm",
+              align: "center",
+              children: [
+                {
+                  type: "avatar",
+                  pubkey: authorPubkey,
+                  name: authorName,
+                  size: "sm"
+                },
+                {
+                  type: "box",
+                  direction: "column",
+                  gap: "xs",
+                  children: [
+                    {
+                      type: "text",
+                      content: authorName,
+                      variant: "body",
+                      tone: "primary"
+                    },
+                    {
+                      type: "text",
+                      content: npubShort ? `${timeStr} · ${npubShort}` : timeStr,
+                      variant: "caption",
+                      tone: "muted"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          type: "text",
+          content: note.content || "",
+          variant: "body",
+          action: { name: "view_note", payload: { id: note.id, eventId: note.id } }
+        },
+        {
+          type: "divider"
+        },
+        {
+          type: "box",
+          direction: "row",
+          justify: "between",
+          align: "center",
+          children: [
+            {
+              type: "button",
+              variant: "ghost",
+              size: "sm",
+              icon: "reply",
+              label: String(note.replies || "0"),
+              action: { name: "view_note", payload: { id: note.id, eventId: note.id } }
+            },
+            {
+              type: "button",
+              variant: note.reposted ? "secondary" : "ghost",
+              size: "sm",
+              icon: "repeat",
+              label: String(note.reposts || "0"),
+              action: { name: "repost-note", payload: { id: note.id } }
+            },
+            {
+              type: "button",
+              variant: note.liked ? "secondary" : "ghost",
+              size: "sm",
+              icon: "heart",
+              label: String(note.likes || "0"),
+              action: { name: "like-note", payload: { id: note.id } }
+            },
+            {
+              type: "button",
+              variant: "ghost",
+              size: "sm",
+              icon: "zap",
+              label: String(note.zaps || "0"),
+              action: { name: "zap-note", payload: { id: note.id } }
+            }
+          ]
+        }
+      ]
+    };
+  };
+
   const tabsNode: OmniTabsPrimitive = {
     type: "tabs",
     activeTab,
@@ -311,32 +414,7 @@ export function getProfileSchema(
       });
     } else {
       for (const note of schemaUserNotes) {
-        children.push({
-          type: "card",
-          children: [
-            {
-              type: "box",
-              direction: "row",
-              justify: "between",
-              align: "center",
-              children: [
-                {
-                  type: "text",
-                  content: note.created_at
-                    ? new Date(note.created_at * 1000).toLocaleString([], { dateStyle: "short", timeStyle: "short" })
-                    : "Recent",
-                  variant: "caption",
-                  tone: "muted"
-                }
-              ]
-            },
-            {
-              type: "text",
-              content: note.content || "",
-              variant: "body"
-            }
-          ]
-        });
+        children.push(renderSchemaNoteCard(note, targetUser.name || "User", targetUser.pubkey || note.pubkey));
       }
     }
   } else if (activeTab === "edit") {
@@ -612,32 +690,7 @@ export function getProfileSchema(
         variant: "title"
       });
       for (const note of schemaUserNotes) {
-        children.push({
-          type: "card",
-          children: [
-            {
-              type: "box",
-              direction: "row",
-              justify: "between",
-              align: "center",
-              children: [
-                {
-                  type: "text",
-                  content: note.created_at
-                    ? new Date(note.created_at * 1000).toLocaleString([], { dateStyle: "short", timeStyle: "short" })
-                    : "Recent",
-                  variant: "caption",
-                  tone: "muted"
-                }
-              ]
-            },
-            {
-              type: "text",
-              content: note.content || "",
-              variant: "body"
-            }
-          ]
-        });
+        children.push(renderSchemaNoteCard(note, name || "You", pubkey || note.pubkey));
       }
     }
   }
@@ -970,6 +1023,76 @@ export async function handleProfileViewerAction(
       schemaUserNotes = [];
       sendSchemaWs(["REQ", `pv_schema_target_${Date.now()}`, { kinds: [0], authors: [targetPk], limit: 1 }]);
       sendSchemaWs(["REQ", `pv_schema_target_notes_${Date.now()}`, { kinds: [1], authors: [targetPk], limit: 20 }]);
+    }
+  } else if (actName === "view_note" || actName === "view-note" || actName === "view-thread") {
+    const noteId = String(payload?.id || payload?.eventId || action.payload?.id || action.payload?.eventId || "");
+    if (noteId) {
+      try {
+        localStorage.setItem("omni_active_note_id", noteId);
+      } catch (_) {}
+      const rootObj = (typeof window !== "undefined" ? (window as any) : null) || (typeof self !== "undefined" ? (self as any) : null);
+      if (rootObj?.omni?.intents?.dispatch) {
+        try {
+          const res = rootObj.omni.intents.dispatch("view_note", { id: noteId, eventId: noteId });
+          if (res && typeof res.catch === "function") {
+            res.catch(() => {});
+          }
+        } catch (_) {}
+      }
+      if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+        window.dispatchEvent(new CustomEvent("omni:intent", { detail: { action: "view_note", data: { id: noteId, eventId: noteId } } }));
+        window.dispatchEvent(new CustomEvent("intent", { detail: { action: "view_note", data: { id: noteId, eventId: noteId } } }));
+      }
+    }
+  } else if (actName === "like-note") {
+    const id = String(payload?.id || action.payload?.id || "");
+    const note = schemaUserNotes.find((n) => n.id === id);
+    if (note) {
+      note.liked = !note.liked;
+      note.likes = (note.likes || 0) + (note.liked ? 1 : -1);
+      try {
+        const rootObj = (typeof window !== "undefined" ? (window as any) : null) || (typeof self !== "undefined" ? (self as any) : null);
+        const nostrObj = rootObj?.nostr;
+        if (nostrObj && typeof nostrObj.signEvent === "function" && note.liked) {
+          const ev = {
+            kind: 7,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [["e", id], ["p", note.pubkey || ""]],
+            content: "+"
+          };
+          nostrObj.signEvent(ev).then((signed: any) => {
+            if (signed) sendSchemaWs(["EVENT", signed]);
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    }
+  } else if (actName === "repost-note") {
+    const id = String(payload?.id || action.payload?.id || "");
+    const note = schemaUserNotes.find((n) => n.id === id);
+    if (note) {
+      note.reposted = !note.reposted;
+      note.reposts = (note.reposts || 0) + (note.reposted ? 1 : -1);
+      try {
+        const rootObj = (typeof window !== "undefined" ? (window as any) : null) || (typeof self !== "undefined" ? (self as any) : null);
+        const nostrObj = rootObj?.nostr;
+        if (nostrObj && typeof nostrObj.signEvent === "function" && note.reposted) {
+          const ev = {
+            kind: 6,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [["e", id], ["p", note.pubkey || ""]],
+            content: JSON.stringify(note)
+          };
+          nostrObj.signEvent(ev).then((signed: any) => {
+            if (signed) sendSchemaWs(["EVENT", signed]);
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    }
+  } else if (actName === "zap-note") {
+    const id = String(payload?.id || action.payload?.id || "");
+    const note = schemaUserNotes.find((n) => n.id === id);
+    if (note) {
+      note.zaps = (note.zaps || 0) + 21;
     }
   }
 
@@ -1860,6 +1983,28 @@ const ICONS = {
     <line x1="16" y1="13" x2="8" y2="13"/>
     <line x1="16" y1="17" x2="8" y2="17"/>
     <polyline points="10 9 9 9 8 9"/>
+  </svg>`,
+  reply: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>`,
+  repost: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="17 1 21 5 17 9"/>
+    <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+    <polyline points="7 23 3 19 7 15"/>
+    <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+  </svg>`,
+  heartOutline: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+  </svg>`,
+  heartFilled: `<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+  </svg>`,
+  share: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="18" cy="5" r="3"/>
+    <circle cx="6" cy="12" r="3"/>
+    <circle cx="18" cy="19" r="3"/>
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
   </svg>`
 };
 
@@ -3708,16 +3853,95 @@ async function mountProfileViewer(root: HTMLElement) {
 
   function renderNoteCard(event: any): HTMLElement {
     const timeStr = event.created_at ? formatTime(event.created_at) : "just now";
+    const initialReplies = Number(event.replies || 0);
+    const initialReposts = Number(event.reposts || 0);
+    const initialLikes = Number(event.likes || 0);
+
     const card = html<HTMLDivElement>`
-      <div class="pv-note-card" data-note-id="${escapeHtml(event.id || "")}" data-timestamp="${event.created_at || 0}" style="background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); border-radius: var(--omni-radius-sm, 8px); padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease;" title="View thread in Feed">
+      <div class="pv-note-card note-card" data-note-id="${escapeHtml(event.id || "")}" data-timestamp="${event.created_at || 0}" style="background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); border-radius: var(--omni-radius-sm, 8px); padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease;" title="View thread in Feed">
         <div style="display: flex; justify-content: flex-end; align-items: center; font-size: 0.75rem; color: var(--omni-text-muted, var(--text-muted, #8c909f));">
           <span>${escapeHtml(timeStr)}</span>
         </div>
         <div style="font-size: 0.88rem; line-height: 1.45; color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); white-space: pre-wrap; word-break: break-word;">
           ${formatContent(event.content || "")}
         </div>
+        <div class="feed-post-actions note-actions" style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); padding-top: 8px; margin-top: 4px;">
+          <button class="feed-action-btn note-action-btn action-reply btn-reply" style="background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.8rem;" title="View conversation thread in Feed">
+            ${ICONS.reply}
+            <span class="action-count">${initialReplies > 0 ? initialReplies : ""}</span>
+          </button>
+          <button class="feed-action-btn note-action-btn action-repost btn-repost" style="background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.8rem;" title="Repost note">
+            ${ICONS.repost}
+            <span class="action-count">${initialReposts > 0 ? initialReposts : ""}</span>
+          </button>
+          <button class="feed-action-btn note-action-btn action-like btn-like" style="background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.8rem;" title="Like note">
+            <span class="icon-heart-wrap">${ICONS.heartOutline}</span>
+            <span class="action-count">${initialLikes > 0 ? initialLikes : ""}</span>
+          </button>
+          <button class="feed-action-btn note-action-btn action-share btn-share" style="background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.8rem;" title="Share & Copy Note ID">
+            ${ICONS.share}
+          </button>
+        </div>
       </div>
     `;
+
+    // Action button wiring
+    const btnReply = card.querySelector<HTMLButtonElement>(".action-reply")!;
+    btnReply.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openNoteInFeed(event.id);
+    });
+
+    const btnRepost = card.querySelector<HTMLButtonElement>(".action-repost")!;
+    const repostCountSpan = card.querySelector<HTMLElement>(".action-repost .action-count")!;
+    let isReposted = false;
+    let currentReposts = initialReposts;
+    btnRepost.addEventListener("click", (e) => {
+      e.stopPropagation();
+      isReposted = !isReposted;
+      currentReposts = isReposted ? currentReposts + 1 : Math.max(0, currentReposts - 1);
+      btnRepost.classList.toggle("active-reposted", isReposted);
+      btnRepost.style.color = isReposted ? "var(--omni-accent-primary, #d4a373)" : "";
+      repostCountSpan.textContent = currentReposts > 0 ? String(currentReposts) : "";
+    });
+
+    const btnLike = card.querySelector<HTMLButtonElement>(".action-like")!;
+    const heartWrap = card.querySelector<HTMLElement>(".icon-heart-wrap")!;
+    const likeCountSpan = card.querySelector<HTMLElement>(".action-like .action-count")!;
+    let isLiked = false;
+    let currentLikes = initialLikes;
+    btnLike.addEventListener("click", (e) => {
+      e.stopPropagation();
+      isLiked = !isLiked;
+      if (isLiked) {
+        currentLikes++;
+        heartWrap.innerHTML = ICONS.heartFilled;
+        btnLike.classList.add("active-liked");
+        btnLike.style.color = "#ef4444";
+      } else {
+        currentLikes = Math.max(0, currentLikes - 1);
+        heartWrap.innerHTML = ICONS.heartOutline;
+        btnLike.classList.remove("active-liked");
+        btnLike.style.color = "";
+      }
+      likeCountSpan.textContent = currentLikes > 0 ? String(currentLikes) : "";
+    });
+
+    const btnShare = card.querySelector<HTMLButtonElement>(".action-share")!;
+    btnShare.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try {
+        const textToCopy = event.id ? `nostr:${event.id}` : window.location.href;
+        await navigator.clipboard.writeText(textToCopy);
+        const originalTitle = btnShare.title;
+        btnShare.title = "Copied to clipboard!";
+        btnShare.style.color = "var(--omni-accent-primary, #d4a373)";
+        setTimeout(() => {
+          btnShare.title = originalTitle;
+          btnShare.style.color = "";
+        }, 1500);
+      } catch {}
+    });
 
     card.addEventListener("mouseenter", () => {
       card.style.borderColor = "var(--omni-border-strong, var(--border-strong, #42404b))";

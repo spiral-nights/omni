@@ -230,11 +230,24 @@ export class OmniSpacerElement extends BaseElement {
 // ============================================================================
 
 export class OmniTextElement extends BaseElement {
+  public actionData: OmniAction | null = null;
+
   connectedCallback(): void {
     this.classList.add("omni-text");
+    this.addEventListener("click", () => {
+      if (this.actionData) {
+        this.dispatchEvent(new OmniActionEvent(this.actionData));
+      }
+    });
   }
 
   setProps(props: Partial<OmniTextPrimitive>): void {
+    this.actionData = props.action || null;
+    if (props.action) {
+      this.style.cursor = "pointer";
+    } else {
+      this.style.cursor = "";
+    }
     if (props.variant) this.setAttribute("variant", props.variant);
     if (props.tone) this.setAttribute("tone", props.tone);
     if (props.truncate !== undefined) {

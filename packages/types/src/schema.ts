@@ -83,6 +83,7 @@ export interface OmniTextPrimitive extends OmniPrimitiveBase {
   variant?: "title" | "subtitle" | "body" | "caption" | "mono";
   tone?: "primary" | "secondary" | "muted" | "accent" | "error" | "success";
   truncate?: boolean;
+  action?: OmniAction;
 }
 
 export interface OmniBadgePrimitive extends OmniPrimitiveBase {
