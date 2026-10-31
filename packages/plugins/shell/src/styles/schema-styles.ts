@@ -758,6 +758,26 @@ omni-list-item[clickable]:hover {
   background: rgba(255, 255, 255, 0.03);
   border-color: var(--omni-border-strong, #383530);
 }
+.omni-list-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  color: var(--omni-text-secondary, #9e988f);
+  background: var(--omni-bg-card, #22201d);
+  overflow: hidden;
+  border: 1px solid var(--omni-border-subtle, #272522);
+}
+.omni-list-item-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
 .omni-list-item-checkbox {
   cursor: pointer;
   accent-color: var(--omni-accent-primary, #d4a373);

@@ -110,9 +110,9 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     expect(codeBlock.code).toBe("npub1alicesatoshi123");
   });
 
-  it("renders Following tab with contact list", () => {
+  it("renders Following tab with contact list and clickable profiles", () => {
     const schema = getProfileSchema("following", mockProfile, {
-      follows: [{ pubkey: "b".repeat(64), name: "Bob" }]
+      follows: [{ pubkey: "b".repeat(64), name: "Bob", about: "Bitcoin dev", picture: "https://example.com/bob.png" }]
     }) as OmniCardPrimitive;
 
     const tabsNode = schema.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;
@@ -122,6 +122,12 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     expect(listNode).toBeDefined();
     expect(listNode.items.length).toBe(1);
     expect(listNode.items[0].title).toBe("Bob");
+    expect(listNode.items[0].subtitle).toBe("Bitcoin dev");
+    expect(listNode.items[0].avatarUrl).toBe("https://example.com/bob.png");
+    expect(listNode.items[0].onClickAction).toEqual({
+      name: "view_profile",
+      payload: { pubkey: "b".repeat(64) }
+    });
     expect(listNode.items[0].actions[0].action.name).toBe("unfollow");
   });
 
@@ -256,5 +262,87 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     expect(metricsBox).toBeDefined();
     const followingMetric = metricsBox.children.find((child: any) => child.label === "Following");
     expect(followingMetric.value).toBe(3);
+  });
+
+  it("renders Following list with cached profile metadata and navigates into user profile with Back navigation", async () => {
+    const friendPubkey = "f".repeat(64);
+    const mockProfileCache: Record<string, any> = {};
+    mockProfileCache[friendPubkey] = {
+      meta: {
+        name: "Finney",
+        display_name: "Hal Finney",
+        about: "Running bitcoin on day 1",
+        picture: "https://example.com/hal.png",
+        nip05: "hal@finney.org"
+      },
+      timestamp: Date.now()
+    };
+    localStorage.setItem("omni_profile_viewer_cache_v2", JSON.stringify(mockProfileCache));
+
+    // Follow the friend
+    await handleProfileViewerAction({ name: "follow" }, { pubkey: friendPubkey });
+
+    // Open following tab
+    const followingSchema = (await handleProfileViewerAction(
+      { name: "switch-tab" },
+      { tab: "following" }
+    )) as OmniCardPrimitive;
+
+    const listNode = followingSchema.children?.find((c) => c.type === "list") as any;
+    expect(listNode).toBeDefined();
+    const friendItem = listNode.items.find((i: any) => i.id === friendPubkey);
+    expect(friendItem).toBeDefined();
+    expect(friendItem.title).toBe("Hal Finney");
+    expect(friendItem.subtitle).toBe("Running bitcoin on day 1");
+    expect(friendItem.avatarUrl).toBe("https://example.com/hal.png");
+    expect(friendItem.onClickAction).toEqual({
+      name: "view_profile",
+      payload: { pubkey: friendPubkey }
+    });
+
+    // Click into user profile
+    const profileViewSchema = (await handleProfileViewerAction(
+      friendItem.onClickAction,
+      friendItem.onClickAction.payload
+    )) as OmniCardPrimitive;
+
+    const tabsNode = profileViewSchema.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;
+    expect(tabsNode.activeTab).toBe("user-profile");
+
+    // Check Back button
+    const backBtnBox = profileViewSchema.children?.find(
+      (c) => c.type === "box" && (c as any).children?.some((child: any) => child.label?.includes("Back to Following"))
+    ) as any;
+    expect(backBtnBox).toBeDefined();
+    const backBtn = backBtnBox.children.find((c: any) => c.label?.includes("Back to Following"));
+    expect(backBtn.action).toEqual({
+      name: "switch-tab",
+      payload: { tab: "following" }
+    });
+
+    // Check target user's details
+    const targetUserBox = profileViewSchema.children?.find(
+      (c) =>
+        c.type === "box" &&
+        (c as any).children?.some(
+          (child: any) =>
+            child.type === "avatar" ||
+            (child.type === "box" && child.children?.some((sub: any) => sub.type === "avatar"))
+        )
+    ) as any;
+    expect(targetUserBox).toBeDefined();
+    const avatar =
+      targetUserBox.children?.find((child: any) => child.type === "avatar") ||
+      targetUserBox.children?.find((child: any) => child.type === "box")?.children?.find((child: any) => child.type === "avatar");
+    expect(avatar.name).toBe("Hal Finney");
+    expect(avatar.src).toBe("https://example.com/hal.png");
+
+    // Click Back to Following
+    const backSchema = (await handleProfileViewerAction(
+      backBtn.action,
+      backBtn.action.payload
+    )) as OmniCardPrimitive;
+    const backTabsNode = backSchema.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;
+    expect(backTabsNode.activeTab).toBe("following");
   });
 });

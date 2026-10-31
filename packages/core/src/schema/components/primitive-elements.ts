@@ -1109,14 +1109,28 @@ export class OmniListItemElement extends BaseElement {
       this.checkEl = null;
     }
 
-    // Leading icon
-    if (props.icon && !this.checkEl) {
-      if (!this.iconEl) {
-        this.iconEl = document.createElement("div");
+    // Leading avatar image or icon
+    if (!this.checkEl) {
+      if (props.avatarUrl) {
+        if (!this.iconEl) {
+          this.iconEl = document.createElement("div");
+          this.insertBefore(this.iconEl, this.firstChild);
+        }
+        this.iconEl.className = "omni-list-item-icon omni-list-item-avatar";
+        const initial = (props.title || props.id || "?").slice(0, 1).toUpperCase();
+        const fallbackSvg = getAvatarSvg(props.id || props.title || "", initial);
+        this.iconEl.innerHTML = `<img src="${props.avatarUrl}" alt="${props.title || ''}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.onerror=null; this.parentElement.innerHTML = decodeURIComponent('${encodeURIComponent(fallbackSvg)}');" />`;
+      } else if (props.icon) {
+        if (!this.iconEl) {
+          this.iconEl = document.createElement("div");
+          this.insertBefore(this.iconEl, this.firstChild);
+        }
         this.iconEl.className = "omni-list-item-icon";
-        this.insertBefore(this.iconEl, this.firstChild);
+        this.iconEl.innerHTML = renderSvgIcon(props.icon, 16);
+      } else if (this.iconEl) {
+        this.iconEl.remove();
+        this.iconEl = null;
       }
-      this.iconEl.innerHTML = renderSvgIcon(props.icon, 16);
     }
 
     // Content container
