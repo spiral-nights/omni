@@ -94,10 +94,10 @@ const initialPlugins: InstalledPluginEntry[] = [
     description: "Package .zip archives into NIP-5A nsites, upload to Blossom servers, and manage published plugins.",
     icon: "globe",
     views: [
-      { id: "main", title: "Plugin Studio", path: "" },
-      { id: "published", title: "My Published Plugins", path: "?view=published" },
-      { id: "servers", title: "Blossom Servers", path: "?view=servers" },
-      { id: "widget", title: "Publisher Status", path: "?view=widget" }
+      { id: "main", title: "Plugin Studio", path: "", format: "schema" },
+      { id: "published", title: "My Published Plugins", path: "?view=published", format: "schema" },
+      { id: "servers", title: "Blossom Servers", path: "?view=servers", format: "schema" },
+      { id: "widget", title: "Publisher Status", path: "?view=widget", format: "schema" }
     ],
     scriptContent: publisherScript,
     sourceUrl: "local:@omni/plugin-publisher",

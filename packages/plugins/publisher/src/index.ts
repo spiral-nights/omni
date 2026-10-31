@@ -1,7 +1,10 @@
 /**
  * @omni/plugin-publisher — Plugin Studio & Nsite Blossom Uploader
  * 100% Standard Web & Nostr Application (Zero Proprietary SDKs).
+ * Supports pure declarative Schema for Web Worker execution & DOM fallback.
  */
+
+import type { OmniComponentNode, OmniAction } from "@omni/types";
 
 function escapeHtml(str: string): string {
   return String(str ?? "")
@@ -224,9 +227,6 @@ function crc32(bytes: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-/**
- * Creates a standard ZIP archive (method 0 Store) from a map of filenames to contents.
- */
 function createZipArchiveBytes(files: Record<string, string | Uint8Array>): Uint8Array {
   const entries = Object.entries(files).map(([name, content]) => {
     const nameBytes = new TextEncoder().encode(name);
@@ -251,23 +251,21 @@ function createZipArchiveBytes(files: Record<string, string | Uint8Array>): Uint
 
   for (const e of entries) {
     const fileOffset = localOffset;
-    // Local file header
     view.setUint32(localOffset, 0x04034b50, true);
-    view.setUint16(localOffset + 4, 20, true); // version needed
-    view.setUint16(localOffset + 6, 0, true); // flags
-    view.setUint16(localOffset + 8, 0, true); // compression: 0 (store)
-    view.setUint16(localOffset + 10, 0, true); // mod time
-    view.setUint16(localOffset + 12, 0, true); // mod date
+    view.setUint16(localOffset + 4, 20, true);
+    view.setUint16(localOffset + 6, 0, true);
+    view.setUint16(localOffset + 8, 0, true);
+    view.setUint16(localOffset + 10, 0, true);
+    view.setUint16(localOffset + 12, 0, true);
     view.setUint32(localOffset + 14, e.crc, true);
     view.setUint32(localOffset + 18, e.dataBytes.length, true);
     view.setUint32(localOffset + 22, e.dataBytes.length, true);
     view.setUint16(localOffset + 26, e.nameBytes.length, true);
-    view.setUint16(localOffset + 28, 0, true); // extra len
+    view.setUint16(localOffset + 28, 0, true);
     out.set(e.nameBytes, localOffset + 30);
     out.set(e.dataBytes, localOffset + 30 + e.nameBytes.length);
     localOffset += 30 + e.nameBytes.length + e.dataBytes.length;
 
-    // Central directory header
     view.setUint32(centralOffset, 0x02014b50, true);
     view.setUint16(centralOffset + 4, 20, true);
     view.setUint16(centralOffset + 6, 20, true);
@@ -289,7 +287,6 @@ function createZipArchiveBytes(files: Record<string, string | Uint8Array>): Uint
     centralOffset += 46 + e.nameBytes.length;
   }
 
-  // End of central directory record
   view.setUint32(centralOffset, 0x06054b50, true);
   view.setUint16(centralOffset + 4, 0, true);
   view.setUint16(centralOffset + 6, 0, true);
@@ -302,8 +299,7 @@ function createZipArchiveBytes(files: Record<string, string | Uint8Array>): Uint
   return out;
 }
 
-// RFC 1951 Pure-JS Inflate (for Deflate method 8 in ZIP archives)
-function inflateRawSync(src: Uint8Array, uncompressedSize?: number): Uint8Array {
+function inflateRawSync(src: Uint8Array, _uncompressedSize?: number): Uint8Array {
   const FIXED_LIT = new Uint8Array(288);
   for (let i = 0; i < 144; i++) FIXED_LIT[i] = 8;
   for (let i = 144; i < 256; i++) FIXED_LIT[i] = 9;
@@ -374,7 +370,7 @@ function inflateRawSync(src: Uint8Array, uncompressedSize?: number): Uint8Array 
     if (btype === 0) {
       bitPos = (bitPos + 7) & ~7;
       const len = readBits(16);
-      readBits(16); // nlen
+      readBits(16);
       const byteIdx = bitPos >> 3;
       for (let i = 0; i < len; i++) {
         out.push(src[byteIdx + i]);
@@ -492,7 +488,7 @@ function unzipArchiveSync(zipBytes: Uint8Array): Record<string, Uint8Array> {
 // ============================================================================
 // 4. Asset Extraction, MIME Detection & Bundling Engine
 // ============================================================================
-interface StudioFileEntry {
+export interface StudioFileEntry {
   path: string;
   bytes: Uint8Array;
   size: number;
@@ -502,7 +498,7 @@ interface StudioFileEntry {
   textContent?: string;
 }
 
-interface PublishedAppRecord {
+export interface PublishedAppRecord {
   id: string;
   name: string;
   version: string;
@@ -516,8 +512,28 @@ interface PublishedAppRecord {
   fileCount: number;
   files: Array<{ path: string; sha256: string; mimeType: string }>;
   servers: string[];
-  rawEvent: any;
-  htmlContent: string;
+  rawEvent?: any;
+  htmlContent?: string;
+}
+
+export interface PublisherState {
+  activeTab: "create" | "published" | "servers";
+  servers: Array<{ url: string; enabled: boolean; status?: string }>;
+  publishedApps: PublishedAppRecord[];
+  extractedFiles: StudioFileEntry[];
+  entryFilePath: string;
+  appName: string;
+  appId: string;
+  appVersion: string;
+  appDescription: string;
+  appIcon: string;
+  packagingMode: "inlined" | "multifile";
+  remoteUrlInputVal: string;
+  newServerUrlVal: string;
+  statusLogs: string[];
+  lastPublishedResult: PublishedAppRecord | null;
+  uploadProgress: { current: number; total: number; label: string } | null;
+  isUploading: boolean;
 }
 
 const DEFAULT_SERVERS = [
@@ -529,7 +545,6 @@ const DEFAULT_SERVERS = [
 const STORAGE_KEY_SERVERS = "omni_publisher_blossom_servers";
 const STORAGE_KEY_PUBLISHED = "omni_publisher_published_apps";
 const STORAGE_KEY_DELETED = "omni_publisher_deleted_apps_v1";
-const STORAGE_KEY_PREFS = "omni_publisher_preferences";
 
 function getMimeInfo(filePath: string): { mime: string; isText: boolean } {
   const lower = filePath.toLowerCase();
@@ -749,10 +764,12 @@ if (btnReset) {
 // ============================================================================
 function loadConfiguredServers(): Array<{ url: string; enabled: boolean; status?: string }> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_SERVERS);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    if (typeof localStorage !== "undefined") {
+      const raw = localStorage.getItem(STORAGE_KEY_SERVERS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     }
   } catch {}
   return DEFAULT_SERVERS.map((url) => ({ url, enabled: true, status: "Ready" }));
@@ -760,7 +777,9 @@ function loadConfiguredServers(): Array<{ url: string; enabled: boolean; status?
 
 function saveConfiguredServers(servers: Array<{ url: string; enabled: boolean; status?: string }>): void {
   try {
-    localStorage.setItem(STORAGE_KEY_SERVERS, JSON.stringify(servers));
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(STORAGE_KEY_SERVERS, JSON.stringify(servers));
+    }
   } catch {}
 }
 
@@ -774,22 +793,24 @@ function cleanPublishedRecord(app: any): PublishedAppRecord {
 
 function loadPublishedApps(): PublishedAppRecord[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_PUBLISHED);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        let needsResave = false;
-        const cleaned = parsed.map((app) => {
-          if (app && (app.htmlContent || (app.rawEvent && app.rawEvent.content))) {
-            needsResave = true;
-            return cleanPublishedRecord(app);
+    if (typeof localStorage !== "undefined") {
+      const raw = localStorage.getItem(STORAGE_KEY_PUBLISHED);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          let needsResave = false;
+          const cleaned = parsed.map((app) => {
+            if (app && (app.htmlContent || (app.rawEvent && app.rawEvent.content))) {
+              needsResave = true;
+              return cleanPublishedRecord(app);
+            }
+            return app;
+          });
+          if (needsResave) {
+            savePublishedApps(cleaned);
           }
-          return app;
-        });
-        if (needsResave) {
-          savePublishedApps(cleaned);
+          return cleaned;
         }
-        return cleaned;
       }
     }
   } catch {}
@@ -798,354 +819,336 @@ function loadPublishedApps(): PublishedAppRecord[] {
 
 function savePublishedApps(apps: PublishedAppRecord[]): void {
   try {
-    const cleaned = apps.map(cleanPublishedRecord);
-    localStorage.setItem(STORAGE_KEY_PUBLISHED, JSON.stringify(cleaned));
+    if (typeof localStorage !== "undefined") {
+      const cleaned = apps.map(cleanPublishedRecord);
+      localStorage.setItem(STORAGE_KEY_PUBLISHED, JSON.stringify(cleaned));
+    }
   } catch {}
 }
 
 function loadDeletedAppIds(): Set<string> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_DELETED);
-    return new Set(raw ? JSON.parse(raw) : []);
-  } catch {
-    return new Set();
-  }
+    if (typeof localStorage !== "undefined") {
+      const raw = localStorage.getItem(STORAGE_KEY_DELETED);
+      return new Set(raw ? JSON.parse(raw) : []);
+    }
+  } catch {}
+  return new Set();
 }
 
 function saveDeletedAppIds(set: Set<string>): void {
   try {
-    localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify(Array.from(set)));
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify(Array.from(set)));
+    }
   } catch {}
 }
 
 function getCurrentRouteView(): string {
   try {
-    const search = window.location.search || (window as any).__OMNI_SEARCH__ || "";
-    const params = new URLSearchParams(search);
-    const v = params.get("view") || (window as any).__OMNI_VIEW__ || "main";
-    return v;
-  } catch {
-    return "main";
-  }
+    if (typeof window !== "undefined") {
+      const search = window.location.search || (window as any).__OMNI_SEARCH__ || "";
+      const params = new URLSearchParams(search);
+      const v = params.get("view") || (window as any).__OMNI_VIEW__ || "main";
+      return v;
+    }
+  } catch {}
+  return "main";
 }
 
 // ============================================================================
-// 7. Main Full-Page Application UI (Plugin Studio)
+// 7. Shared Publisher Core & State Engine (Dual Mode: Schema & DOM)
 // ============================================================================
-function mountPublisherStudio(root: HTMLElement) {
-  let activeTab: "create" | "published" | "servers" = "create";
-  if (getCurrentRouteView() === "servers") activeTab = "servers";
-  else if (getCurrentRouteView() === "published") activeTab = "published";
+let activeTab: "create" | "published" | "servers" = "create";
+let servers = loadConfiguredServers();
+let deletedAppIds = loadDeletedAppIds();
+let publishedApps = loadPublishedApps().filter((p) => !deletedAppIds.has(p.id) && !deletedAppIds.has(p.eventId || ""));
 
-  let servers = loadConfiguredServers();
-  const deletedAppIds = loadDeletedAppIds();
-  let publishedApps = loadPublishedApps().filter((p) => !deletedAppIds.has(p.id) && !deletedAppIds.has(p.eventId || ""));
+let extractedFiles: StudioFileEntry[] = [];
+let entryFilePath = "index.html";
+let bundledHtmlOutput = "";
+let rawEntryHtmlOutput = "";
 
-  // Extracted zip state
-  let extractedFiles: StudioFileEntry[] = [];
-  let entryFilePath = "index.html";
-  let bundledHtmlOutput = "";
-  let rawEntryHtmlOutput = "";
+let appName = "";
+let appId = "";
+let appVersion = "1.0.0";
+let appDescription = "";
+let appIcon = "globe";
+let appViews: Array<{ id: string; title: string; path: string }> = [];
+let packagingMode: "inlined" | "multifile" = "inlined";
+let remoteUrlInputVal = "";
+let newServerUrlVal = "";
+let statusLogs: string[] = [];
+let lastPublishedResult: PublishedAppRecord | null = null;
+let uploadProgress: { current: number; total: number; label: string } | null = null;
+let isUploading = false;
 
-  // Metadata form state
-  let appName = "";
-  let appId = "";
-  let appVersion = "1.0.0";
-  let appDescription = "";
-  let appIcon = "globe";
-  let appViews: Array<{ id: string; title: string; path: string }> = [];
-  let packagingMode: "inlined" | "multifile" = "inlined";
-  let remoteUrlInputVal = "";
-  let statusLogs: string[] = [];
-  let lastPublishedResult: PublishedAppRecord | null = null;
+let onStateChangedCallback: (() => void) | null = null;
 
-  const container = document.createElement("div");
-  container.className = "publisher-studio-container";
-  container.style.cssText =
-    "display: flex; flex-direction: column; gap: 18px; padding: 16px; color: var(--omni-text-primary, #ede8df); font-family: var(--omni-font-sans, system-ui, sans-serif); max-width: 960px; margin: 0 auto; box-sizing: border-box; width: 100%;";
+function notifyStateChanged(): void {
+  if (isSchemaMode()) {
+    dispatchPublisherSchema(getPublisherSchema());
+  }
+  if (onStateChangedCallback) {
+    onStateChangedCallback();
+  }
+}
 
-  const styleEl = document.createElement("style");
-  styleEl.textContent = `
-    .publisher-studio-container {
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .published-top-bar {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    @media (min-width: 640px) {
-      .published-top-bar {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-      }
-    }
-    .published-app-header {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    @media (min-width: 680px) {
-      .published-app-header {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: flex-start;
-      }
-    }
-    .published-app-actions {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-    }
-    .published-app-title-row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 6px 10px;
-      margin-bottom: 4px;
-    }
-    .studio-tab-bar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      width: 100%;
-    }
-    @media (min-width: 640px) {
-      .studio-tab-bar {
-        width: auto;
-      }
-    }
-    @media (max-width: 640px) {
-      .studio-tab-btn {
-        flex: 1 1 auto;
-        text-align: center;
-      }
-    }
-  `;
-  container.appendChild(styleEl);
+function getPublisherState(): PublisherState {
+  return {
+    activeTab,
+    servers: [...servers],
+    publishedApps: [...publishedApps],
+    extractedFiles: [...extractedFiles],
+    entryFilePath,
+    appName,
+    appId,
+    appVersion,
+    appDescription,
+    appIcon,
+    packagingMode,
+    remoteUrlInputVal,
+    newServerUrlVal,
+    statusLogs: [...statusLogs],
+    lastPublishedResult,
+    uploadProgress,
+    isUploading
+  };
+}
 
-  function appendLog(msg: string) {
-    statusLogs.push(msg);
-    renderStudio();
+function resetPublisherState(initial?: Partial<PublisherState>): void {
+  activeTab = initial?.activeTab || "create";
+  servers = initial?.servers ? [...initial.servers] : loadConfiguredServers();
+  deletedAppIds = loadDeletedAppIds();
+  publishedApps = initial?.publishedApps ? [...initial.publishedApps] : loadPublishedApps().filter((p) => !deletedAppIds.has(p.id));
+  extractedFiles = initial?.extractedFiles ? [...initial.extractedFiles] : [];
+  entryFilePath = initial?.entryFilePath || "index.html";
+  bundledHtmlOutput = "";
+  rawEntryHtmlOutput = "";
+  appName = initial?.appName || "";
+  appId = initial?.appId || "";
+  appVersion = initial?.appVersion || "1.0.0";
+  appDescription = initial?.appDescription || "";
+  appIcon = initial?.appIcon || "globe";
+  packagingMode = initial?.packagingMode || "inlined";
+  remoteUrlInputVal = initial?.remoteUrlInputVal || "";
+  newServerUrlVal = initial?.newServerUrlVal || "";
+  statusLogs = initial?.statusLogs ? [...initial.statusLogs] : [];
+  lastPublishedResult = initial?.lastPublishedResult || null;
+  uploadProgress = initial?.uploadProgress || null;
+  isUploading = initial?.isUploading || false;
+}
+
+function appendLog(msg: string): void {
+  statusLogs.push(msg);
+  notifyStateChanged();
+}
+
+function processZipBytes(zipBytes: Uint8Array, sourceFileName = "plugin.zip"): void {
+  statusLogs = [];
+  lastPublishedResult = null;
+  const rawMap = unzipArchiveSync(zipBytes);
+  const rawKeys = Object.keys(rawMap).filter(
+    (k) => !k.endsWith("/") && !k.startsWith("__MACOSX/") && !k.endsWith(".DS_Store")
+  );
+
+  if (rawKeys.length === 0) {
+    appendLog("Error: Archive contains no extractable files.");
+    return;
   }
 
-  function processZipBytes(zipBytes: Uint8Array, sourceFileName = "plugin.zip") {
-    statusLogs = [];
-    lastPublishedResult = null;
-    const rawMap = unzipArchiveSync(zipBytes);
-    const rawKeys = Object.keys(rawMap).filter(
-      (k) => !k.endsWith("/") && !k.startsWith("__MACOSX/") && !k.endsWith(".DS_Store")
-    );
-
-    if (rawKeys.length === 0) {
-      appendLog("Error: Archive contains no extractable files.");
-      return;
+  let prefix = "";
+  const slashIdx = rawKeys[0].indexOf("/");
+  if (slashIdx !== -1) {
+    const candidate = rawKeys[0].slice(0, slashIdx + 1);
+    if (rawKeys.every((k) => k.startsWith(candidate))) {
+      prefix = candidate;
     }
-
-    let prefix = "";
-    const slashIdx = rawKeys[0].indexOf("/");
-    if (slashIdx !== -1) {
-      const candidate = rawKeys[0].slice(0, slashIdx + 1);
-      if (rawKeys.every((k) => k.startsWith(candidate))) {
-        prefix = candidate;
-      }
-    }
-
-    const fileEntries: StudioFileEntry[] = [];
-    const fileMap = new Map<string, StudioFileEntry>();
-
-    for (const origKey of rawKeys) {
-      const normPath = (prefix ? origKey.slice(prefix.length) : origKey).replace(/^\/+/, "");
-      if (!normPath) continue;
-      const bytes = rawMap[origKey];
-      const sha = sha256Hex(bytes);
-      const { mime, isText } = getMimeInfo(normPath);
-      const textContent = isText ? new TextDecoder().decode(bytes) : undefined;
-      const entry: StudioFileEntry = {
-        path: normPath,
-        bytes,
-        size: bytes.byteLength,
-        sha256: sha,
-        mimeType: mime,
-        isText,
-        textContent
-      };
-      fileEntries.push(entry);
-      fileMap.set(normPath, entry);
-    }
-
-    extractedFiles = fileEntries;
-
-    const candidates = ["index.html", "dist/index.html", "index.htm", "index.js", "dist/index.js"];
-    entryFilePath =
-      candidates.find((c) => fileMap.has(c)) ||
-      fileEntries.find((f) => f.path.endsWith(".html"))?.path ||
-      fileEntries[0].path;
-
-    const entryObj = fileMap.get(entryFilePath)!;
-    let baseHtml = entryObj.textContent || "";
-    if (entryFilePath.endsWith(".js")) {
-      baseHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset="UTF-8"><title>${escapeHtml(sourceFileName)}</title></head>\n<body><div id="root"></div><script type="module">\n${baseHtml}\n<` + `/script></body>\n</html>`;
-    }
-
-    // Infer metadata from manifest.json / manifest.webmanifest / package.json or HTML
-    const manFile =
-      fileMap.get("manifest.json") ||
-      fileMap.get("manifest.webmanifest") ||
-      fileMap.get("omni.manifest.json") ||
-      fileMap.get("package.json");
-
-    let detectedName = sourceFileName.replace(/\.(zip|html?|js)$/i, "");
-    let detectedId = "";
-    let detectedVer = "1.0.0";
-    let detectedDesc = "";
-    let detectedIcon = "globe";
-    let detectedViews: Array<{ id: string; title: string; path: string }> = [];
-
-    if (manFile && manFile.textContent) {
-      try {
-        const parsed = JSON.parse(manFile.textContent);
-        if (parsed.name) detectedName = parsed.name;
-        if (parsed.id) detectedId = parsed.id;
-        if (parsed.version) detectedVer = parsed.version;
-        if (parsed.description) detectedDesc = parsed.description;
-        if (parsed.icon) detectedIcon = parsed.icon;
-        if (Array.isArray(parsed.views)) {
-          detectedViews = parsed.views
-            .filter((v: any) => v && typeof v.id === "string")
-            .map((v: any) => ({
-              id: v.id,
-              title: v.title || v.id,
-              path: v.path || ""
-            }));
-        }
-      } catch {}
-    }
-
-    const titleMatch = baseHtml.match(/<title[^>]*>([^<]+)<\/title>/i);
-    if (titleMatch && (!manFile || !detectedName || detectedName === "starter-template")) {
-      detectedName = titleMatch[1].trim();
-    }
-
-    const descMatch = baseHtml.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i);
-    if (descMatch && !detectedDesc) {
-      detectedDesc = descMatch[1].trim().slice(0, 300);
-    }
-
-    const iconMetaMatch =
-      baseHtml.match(/<meta\s+name=["'](?:icon|app-icon)["']\s+content=["']([^"']+)["']/i) ||
-      baseHtml.match(/<meta\s+content=["']([^"']+)["']\s+name=["'](?:icon|app-icon)["']/i);
-    if (iconMetaMatch && (!detectedIcon || detectedIcon === "globe" || detectedIcon === "widgets")) {
-      detectedIcon = iconMetaMatch[1].trim();
-    }
-    const iconLinkMatch =
-      baseHtml.match(/<link\s+[^>]*?rel=["'](?:shortcut\s+)?icon["'][^>]*?href=["']([^"']+)["']/i) ||
-      baseHtml.match(/<link\s+[^>]*?href=["']([^"']+)["'][^>]*?rel=["'](?:shortcut\s+)?icon["']/i);
-    if (iconLinkMatch && (!detectedIcon || detectedIcon === "globe" || detectedIcon === "widgets")) {
-      const href = iconLinkMatch[1].trim();
-      if (!href.startsWith("http") && !href.startsWith("/") && !href.startsWith(".")) {
-        detectedIcon = href;
-      }
-    }
-
-    appName = detectedName || "Custom Nsite";
-    appId =
-      detectedId ||
-      "org.omni.plugin." +
-        appName
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, "");
-    appVersion = detectedVer;
-    appDescription = (detectedDesc || `Packaged nsite (${fileEntries.length} files).`).slice(0, 300);
-
-    appIcon = detectedIcon || "widgets";
-    appViews = detectedViews;
-
-    rawEntryHtmlOutput = baseHtml;
-    bundledHtmlOutput = inlineHtmlBundle(baseHtml, entryFilePath, fileMap);
-
-    appendLog(`Extracted ${fileEntries.length} file(s) from '${sourceFileName}'. Entry: ${entryFilePath}`);
   }
 
-  function processSingleHtmlOrJsFile(bytes: Uint8Array, fileName: string) {
-    const zipBytes = createZipArchiveBytes({
-      [fileName.endsWith(".js") ? "index.js" : "index.html"]: bytes
-    });
-    processZipBytes(zipBytes, fileName);
+  const fileEntries: StudioFileEntry[] = [];
+  const fileMap = new Map<string, StudioFileEntry>();
+
+  for (const origKey of rawKeys) {
+    const normPath = (prefix ? origKey.slice(prefix.length) : origKey).replace(/^\/+/, "");
+    if (!normPath) continue;
+    const bytes = rawMap[origKey];
+    const sha = sha256Hex(bytes);
+    const { mime, isText } = getMimeInfo(normPath);
+    const textContent = isText ? new TextDecoder().decode(bytes) : undefined;
+    const entry: StudioFileEntry = {
+      path: normPath,
+      bytes,
+      size: bytes.byteLength,
+      sha256: sha,
+      mimeType: mime,
+      isText,
+      textContent
+    };
+    fileEntries.push(entry);
+    fileMap.set(normPath, entry);
   }
 
-  async function handleRemoteUrlInput(rawTarget: string, autoInstall = true) {
-    const trimmed = (rawTarget || "").trim();
-    if (!trimmed) {
-      appendLog("Please enter an arbitrary .zip URL, web app URL, or NIP-5A naddr1 address.");
-      return;
-    }
+  extractedFiles = fileEntries;
 
-    if (trimmed.startsWith("naddr1") || trimmed.startsWith("nostr:naddr1")) {
-      const cleanNaddr = trimmed.replace(/^nostr:/i, "");
-      appendLog(`Opening NIP-5A address in Omni: nostr:${cleanNaddr}`);
-      try {
-        window.open(`nostr:${cleanNaddr}`);
-      } catch {}
-      return;
-    }
+  const candidates = ["index.html", "dist/index.html", "index.htm", "index.js", "dist/index.js"];
+  entryFilePath =
+    candidates.find((c) => fileMap.has(c)) ||
+    fileEntries.find((f) => f.path.endsWith(".html"))?.path ||
+    fileEntries[0].path;
 
-    if (!/^https?:\/\//i.test(trimmed)) {
-      appendLog("Error: URL must start with https://, http://, or naddr1...");
-      return;
-    }
+  const entryObj = fileMap.get(entryFilePath)!;
+  let baseHtml = entryObj.textContent || "";
+  if (entryFilePath.endsWith(".js")) {
+    baseHtml = `<!DOCTYPE html>\n<html>\n<head><meta charset="UTF-8"><title>${escapeHtml(sourceFileName)}</title></head>\n<body><div id="root"></div><script type="module">\n${baseHtml}\n<` + `/script></body>\n</html>`;
+  }
 
-    const cleanUrlPath = trimmed.split("?")[0].split("#")[0];
-    const urlFileName = cleanUrlPath.split("/").pop() || "remote-plugin.html";
+  const manFile =
+    fileMap.get("manifest.json") ||
+    fileMap.get("manifest.webmanifest") ||
+    fileMap.get("omni.manifest.json") ||
+    fileMap.get("package.json");
 
+  let detectedName = sourceFileName.replace(/\.(zip|html?|js)$/i, "");
+  let detectedId = "";
+  let detectedVer = "1.0.0";
+  let detectedDesc = "";
+  let detectedIcon = "globe";
+  let detectedViews: Array<{ id: string; title: string; path: string }> = [];
+
+  if (manFile && manFile.textContent) {
     try {
-      appendLog(`Fetching remote plugin from ${trimmed}...`);
-      const fetchFn = (typeof window !== "undefined" && typeof window.fetch === "function") ? window.fetch.bind(window) : fetch;
-      const res = await fetchFn(trimmed);
-      const contentType = res.headers?.get?.("content-type") || "";
-      const ab = await res.arrayBuffer();
-      const bytes = new Uint8Array(ab);
+      const parsed = JSON.parse(manFile.textContent);
+      if (parsed.name) detectedName = parsed.name;
+      if (parsed.id) detectedId = parsed.id;
+      if (parsed.version) detectedVer = parsed.version;
+      if (parsed.description) detectedDesc = parsed.description;
+      if (parsed.icon) detectedIcon = parsed.icon;
+      if (Array.isArray(parsed.views)) {
+        detectedViews = parsed.views
+          .filter((v: any) => v && typeof v.id === "string")
+          .map((v: any) => ({
+            id: v.id,
+            title: v.title || v.id,
+            path: v.path || ""
+          }));
+      }
+    } catch {}
+  }
 
-      const isZip =
-        cleanUrlPath.toLowerCase().endsWith(".zip") ||
-        contentType.toLowerCase().includes("application/zip") ||
-        (bytes.byteLength >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b);
+  const titleMatch = baseHtml.match(/<title[^>]*>([^<]+)<\/title>/i);
+  if (titleMatch && (!manFile || !detectedName || detectedName === "starter-template")) {
+    detectedName = titleMatch[1].trim();
+  }
 
-      if (isZip) {
-        processZipBytes(bytes, urlFileName.endsWith(".zip") ? urlFileName : `${urlFileName}.zip`);
-      } else {
-        const text = new TextDecoder().decode(bytes);
-        const baseHref = trimmed.endsWith("/") ? trimmed : trimmed.replace(/\/[^/]*$/, "/");
-        let htmlWithBase = text;
-        if (text.trim().startsWith("<") || /<html[\s>]/i.test(text)) {
-          if (!/<base\s/i.test(htmlWithBase)) {
-            if (/<head[^>]*>/i.test(htmlWithBase)) {
-              htmlWithBase = htmlWithBase.replace(/<head[^>]*>/i, (m) => `${m}\n  <base href="${baseHref}">`);
-            } else {
-              htmlWithBase = `<head><base href="${baseHref}"></head>\n${htmlWithBase}`;
-            }
+  const descMatch = baseHtml.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i);
+  if (descMatch && !detectedDesc) {
+    detectedDesc = descMatch[1].trim().slice(0, 300);
+  }
+
+  const iconMetaMatch =
+    baseHtml.match(/<meta\s+name=["'](?:icon|app-icon)["']\s+content=["']([^"']+)["']/i) ||
+    baseHtml.match(/<meta\s+content=["']([^"']+)["']\s+name=["'](?:icon|app-icon)["']/i);
+  if (iconMetaMatch && (!detectedIcon || detectedIcon === "globe" || detectedIcon === "widgets")) {
+    detectedIcon = iconMetaMatch[1].trim();
+  }
+
+  appName = detectedName || "Custom Nsite";
+  appId =
+    detectedId ||
+    "org.omni.plugin." +
+      appName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+  appVersion = detectedVer;
+  appDescription = (detectedDesc || `Packaged nsite (${fileEntries.length} files).`).slice(0, 300);
+  appIcon = detectedIcon || "widgets";
+  appViews = detectedViews;
+
+  rawEntryHtmlOutput = baseHtml;
+  bundledHtmlOutput = inlineHtmlBundle(baseHtml, entryFilePath, fileMap);
+
+  appendLog(`Extracted ${fileEntries.length} file(s) from '${sourceFileName}'. Entry: ${entryFilePath}`);
+}
+
+function processSingleHtmlOrJsFile(bytes: Uint8Array, fileName: string): void {
+  const zipBytes = createZipArchiveBytes({
+    [fileName.endsWith(".js") ? "index.js" : "index.html"]: bytes
+  });
+  processZipBytes(zipBytes, fileName);
+}
+
+async function handleRemoteUrlInput(rawTarget: string, autoInstall = true): Promise<void> {
+  const trimmed = (rawTarget || "").trim();
+  if (!trimmed) {
+    appendLog("Please enter an arbitrary .zip URL, web app URL, or NIP-5A naddr1 address.");
+    return;
+  }
+
+  if (trimmed.startsWith("naddr1") || trimmed.startsWith("nostr:naddr1")) {
+    const cleanNaddr = trimmed.replace(/^nostr:/i, "");
+    appendLog(`Opening NIP-5A address in Omni: nostr:${cleanNaddr}`);
+    try {
+      if (typeof window !== "undefined") {
+        window.open(`nostr:${cleanNaddr}`);
+      }
+    } catch {}
+    return;
+  }
+
+  if (!/^https?:\/\//i.test(trimmed)) {
+    appendLog("Error: URL must start with https://, http://, or naddr1...");
+    return;
+  }
+
+  const cleanUrlPath = trimmed.split("?")[0].split("#")[0];
+  const urlFileName = cleanUrlPath.split("/").pop() || "remote-plugin.html";
+
+  try {
+    appendLog(`Fetching remote plugin from ${trimmed}...`);
+    const fetchFn = (typeof window !== "undefined" && typeof window.fetch === "function") ? window.fetch.bind(window) : fetch;
+    const res = await fetchFn(trimmed);
+    const contentType = res.headers?.get?.("content-type") || "";
+    const ab = await res.arrayBuffer();
+    const bytes = new Uint8Array(ab);
+
+    const isZip =
+      cleanUrlPath.toLowerCase().endsWith(".zip") ||
+      contentType.toLowerCase().includes("application/zip") ||
+      (bytes.byteLength >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b);
+
+    if (isZip) {
+      processZipBytes(bytes, urlFileName.endsWith(".zip") ? urlFileName : `${urlFileName}.zip`);
+    } else {
+      const text = new TextDecoder().decode(bytes);
+      const baseHref = trimmed.endsWith("/") ? trimmed : trimmed.replace(/\/[^/]*$/, "/");
+      let htmlWithBase = text;
+      if (text.trim().startsWith("<") || /<html[\s>]/i.test(text)) {
+        if (!/<base\s/i.test(htmlWithBase)) {
+          if (/<head[^>]*>/i.test(htmlWithBase)) {
+            htmlWithBase = htmlWithBase.replace(/<head[^>]*>/i, (m) => `${m}\n  <base href="${baseHref}">`);
+          } else {
+            htmlWithBase = `<head><base href="${baseHref}"></head>\n${htmlWithBase}`;
           }
         }
-        processSingleHtmlOrJsFile(
-          new TextEncoder().encode(htmlWithBase),
-          urlFileName.endsWith(".js") ? urlFileName : "index.html"
-        );
       }
+      processSingleHtmlOrJsFile(
+        new TextEncoder().encode(htmlWithBase),
+        urlFileName.endsWith(".js") ? urlFileName : "index.html"
+      );
+    }
 
-      if (autoInstall) {
-        await executePublishWorkflow(true);
-      }
-    } catch (err: any) {
-      let hostTitle = "Remote Web App";
-      try {
-        const parsedUrl = new URL(trimmed);
-        hostTitle = parsedUrl.hostname.replace(/^www\./, "");
-      } catch {}
-      const fallbackHtml = `<!DOCTYPE html>
+    if (autoInstall) {
+      await executePublishWorkflow(true);
+    }
+  } catch (err: any) {
+    let hostTitle = "Remote Web App";
+    try {
+      const parsedUrl = new URL(trimmed);
+      hostTitle = parsedUrl.hostname.replace(/^www\./, "");
+    } catch {}
+    const fallbackHtml = `<!DOCTYPE html>
 <html>
 <head>
   <base href="${escapeHtml(trimmed)}">
@@ -1159,384 +1162,159 @@ function mountPublisherStudio(root: HTMLElement) {
   </div>
 </body>
 </html>`;
-      processSingleHtmlOrJsFile(new TextEncoder().encode(fallbackHtml), `${hostTitle}.html`);
-      if (autoInstall) {
-        await executePublishWorkflow(true);
-      }
+    processSingleHtmlOrJsFile(new TextEncoder().encode(fallbackHtml), `${hostTitle}.html`);
+    if (autoInstall) {
+      await executePublishWorkflow(true);
     }
   }
+}
 
-  async function syncPublishedFromRelays() {
-    try {
-      const nostr = (window as any).nostr;
-      if (!nostr || typeof nostr.getPublicKey !== "function") return;
-      const myPubkey = await nostr.getPublicKey();
-      if (!myPubkey) return;
+async function syncPublishedFromRelays(): Promise<void> {
+  try {
+    const nostr = typeof window !== "undefined" ? (window as any).nostr : (typeof globalThis !== "undefined" ? (globalThis as any).nostr : undefined);
+    if (!nostr || typeof nostr.getPublicKey !== "function") return;
+    const myPubkey = await nostr.getPublicKey();
+    if (!myPubkey) return;
 
-      const ws = new WebSocket("wss://relay.damus.io");
-      const subId = `pub-studio-${Date.now()}`;
-      ws.onopen = () => {
-        ws.send(JSON.stringify(["REQ", subId, { kinds: [5, 35129, 10063], authors: [myPubkey], limit: 50 }]));
-      };
-      ws.onmessage = (ev) => {
-        try {
-          const frame = JSON.parse(ev.data);
-          if (frame[0] === "EVENT" && frame[2]) {
-            const event = frame[2];
-            // Process NIP-09 deletion requests (kind: 5)
-            if (event.kind === 5 && Array.isArray(event.tags)) {
-              let updated = false;
-              for (const t of event.tags) {
-                if (t[0] === "a" && t[1]?.startsWith("35129:")) {
-                  const parts = t[1].split(":");
-                  if (parts.length >= 3) {
-                    const deletedId = parts.slice(2).join(":");
-                    if (!deletedAppIds.has(deletedId)) {
-                      deletedAppIds.add(deletedId);
-                      updated = true;
-                    }
-                  }
-                }
-                if (t[0] === "e" && t[1]) {
-                  if (!deletedAppIds.has(t[1])) {
-                    deletedAppIds.add(t[1]);
+    const ws = new WebSocket("wss://relay.damus.io");
+    const subId = `pub-studio-${Date.now()}`;
+    ws.onopen = () => {
+      ws.send(JSON.stringify(["REQ", subId, { kinds: [5, 35129, 10063], authors: [myPubkey], limit: 50 }]));
+    };
+    ws.onmessage = (ev) => {
+      try {
+        const frame = JSON.parse(ev.data);
+        if (frame[0] === "EVENT" && frame[2]) {
+          const event = frame[2];
+          if (event.kind === 5 && Array.isArray(event.tags)) {
+            let updated = false;
+            for (const t of event.tags) {
+              if (t[0] === "a" && t[1]?.startsWith("35129:")) {
+                const parts = t[1].split(":");
+                if (parts.length >= 3) {
+                  const deletedId = parts.slice(2).join(":");
+                  if (!deletedAppIds.has(deletedId)) {
+                    deletedAppIds.add(deletedId);
                     updated = true;
                   }
                 }
               }
-              if (updated) {
-                saveDeletedAppIds(deletedAppIds);
-                publishedApps = publishedApps.filter((p) => !deletedAppIds.has(p.id) && !deletedAppIds.has(p.eventId || ""));
-                savePublishedApps(publishedApps);
-                if (activeTab === "published") renderStudio();
-              }
-            } else if (event.kind === 10063 && Array.isArray(event.tags)) {
-              const relayServers = event.tags
-                .filter((t: string[]) => t[0] === "server" && t[1])
-                .map((t: string[]) => t[1]);
-              if (relayServers.length > 0) {
-                for (const sUrl of relayServers) {
-                  if (!servers.some((s) => s.url === sUrl)) {
-                    servers.push({ url: sUrl, enabled: true, status: "Synced (kind: 10063)" });
-                  }
+              if (t[0] === "e" && t[1]) {
+                if (!deletedAppIds.has(t[1])) {
+                  deletedAppIds.add(t[1]);
+                  updated = true;
                 }
-                saveConfiguredServers(servers);
-              }
-            } else if (event.kind === 35129 && Array.isArray(event.tags)) {
-              const dTag = event.tags.find((t: string[]) => t[0] === "d")?.[1] || event.id;
-              if (deletedAppIds.has(dTag) || deletedAppIds.has(event.id)) {
-                return;
-              }
-              const nameTag = event.tags.find((t: string[]) => t[0] === "name" || t[0] === "title")?.[1] || dTag;
-              const verTag = event.tags.find((t: string[]) => t[0] === "version")?.[1] || "1.0.0";
-              const descTag = event.tags.find((t: string[]) => t[0] === "description")?.[1] || "";
-              const iconTag = event.tags.find((t: string[]) => t[0] === "icon" || t[0] === "image")?.[1] || "widgets";
-              const fTags = event.tags
-                .filter((t: string[]) => t[0] === "f" && t.length >= 3)
-                .map((t: string[]) => ({ path: t[1], sha256: t[2], mimeType: t[3] || "text/html" }));
-              const serverTags = event.tags.filter((t: string[]) => t[0] === "server" && t[1]).map((t: string[]) => t[1]);
-              const naddr = encodeNaddr({
-                identifier: dTag,
-                pubkey: event.pubkey,
-                kind: 35129,
-                relays: ["wss://relay.damus.io"]
-              });
-
-              const existingIdx = publishedApps.findIndex((a) => a.id === dTag);
-              const record: PublishedAppRecord = {
-                id: dTag,
-                name: nameTag,
-                version: verTag,
-                description: descTag,
-                icon: iconTag,
-                naddr,
-                eventId: event.id,
-                pubkey: event.pubkey,
-                createdAt: event.created_at * 1000,
-                packagingMode: fTags.length > 1 ? "multifile" : "inlined",
-                fileCount: fTags.length || 1,
-                files: fTags,
-                servers: serverTags,
-                rawEvent: { ...event, content: "" },
-                htmlContent: ""
-              };
-
-              if (existingIdx === -1) {
-                publishedApps.unshift(record);
-                savePublishedApps(publishedApps);
-                if (activeTab === "published") renderStudio();
-              } else if (event.created_at * 1000 >= publishedApps[existingIdx].createdAt) {
-                publishedApps[existingIdx] = record;
-                savePublishedApps(publishedApps);
-                if (activeTab === "published") renderStudio();
               }
             }
-          } else if (frame[0] === "EOSE") {
-            ws.send(JSON.stringify(["CLOSE", subId]));
-            ws.close();
+            if (updated) {
+              saveDeletedAppIds(deletedAppIds);
+              publishedApps = publishedApps.filter((p) => !deletedAppIds.has(p.id) && !deletedAppIds.has(p.eventId || ""));
+              savePublishedApps(publishedApps);
+              notifyStateChanged();
+            }
+          } else if (event.kind === 10063 && Array.isArray(event.tags)) {
+            const relayServers = event.tags
+              .filter((t: string[]) => t[0] === "server" && t[1])
+              .map((t: string[]) => t[1]);
+            if (relayServers.length > 0) {
+              for (const sUrl of relayServers) {
+                if (!servers.some((s) => s.url === sUrl)) {
+                  servers.push({ url: sUrl, enabled: true, status: "Synced (kind: 10063)" });
+                }
+              }
+              saveConfiguredServers(servers);
+              notifyStateChanged();
+            }
+          } else if (event.kind === 35129 && Array.isArray(event.tags)) {
+            const dTag = event.tags.find((t: string[]) => t[0] === "d")?.[1] || event.id;
+            if (deletedAppIds.has(dTag) || deletedAppIds.has(event.id)) {
+              return;
+            }
+            const nameTag = event.tags.find((t: string[]) => t[0] === "name" || t[0] === "title")?.[1] || dTag;
+            const verTag = event.tags.find((t: string[]) => t[0] === "version")?.[1] || "1.0.0";
+            const descTag = event.tags.find((t: string[]) => t[0] === "description")?.[1] || "";
+            const iconTag = event.tags.find((t: string[]) => t[0] === "icon" || t[0] === "image")?.[1] || "widgets";
+            const fTags = event.tags
+              .filter((t: string[]) => t[0] === "f" && t.length >= 3)
+              .map((t: string[]) => ({ path: t[1], sha256: t[2], mimeType: t[3] || "text/html" }));
+            const serverTags = event.tags.filter((t: string[]) => t[0] === "server" && t[1]).map((t: string[]) => t[1]);
+            const naddr = encodeNaddr({
+              identifier: dTag,
+              pubkey: event.pubkey,
+              kind: 35129,
+              relays: ["wss://relay.damus.io"]
+            });
+
+            const existingIdx = publishedApps.findIndex((a) => a.id === dTag);
+            const record: PublishedAppRecord = {
+              id: dTag,
+              name: nameTag,
+              version: verTag,
+              description: descTag,
+              icon: iconTag,
+              naddr,
+              eventId: event.id,
+              pubkey: event.pubkey,
+              createdAt: event.created_at * 1000,
+              packagingMode: fTags.length > 1 ? "multifile" : "inlined",
+              fileCount: fTags.length || 1,
+              files: fTags,
+              servers: serverTags,
+              rawEvent: { ...event, content: "" },
+              htmlContent: ""
+            };
+
+            if (existingIdx === -1) {
+              publishedApps.unshift(record);
+              savePublishedApps(publishedApps);
+              notifyStateChanged();
+            } else if (event.created_at * 1000 >= publishedApps[existingIdx].createdAt) {
+              publishedApps[existingIdx] = record;
+              savePublishedApps(publishedApps);
+              notifyStateChanged();
+            }
           }
-        } catch {}
-      };
-    } catch {}
-  }
-
-  async function deletePublishedApp(app: PublishedAppRecord) {
-    deletedAppIds.add(app.id);
-    if (app.eventId) deletedAppIds.add(app.eventId);
-    saveDeletedAppIds(deletedAppIds);
-
-    // 1. Instantly remove from local UI list
-    publishedApps = publishedApps.filter((p) => p.id !== app.id);
-    savePublishedApps(publishedApps);
-    renderStudio();
-
-    const nostr = (window as any).nostr;
-
-    // 2. Publish NIP-09 event deletion (kind: 5) to Nostr relays and local event store
-    if (nostr && typeof nostr.signEvent === "function") {
-      try {
-        const myPubkey = await nostr.getPublicKey();
-        const deleteDraft = {
-          kind: 5,
-          created_at: Math.floor(Date.now() / 1000),
-          tags: [
-            ["a", `35129:${app.pubkey || myPubkey}:${app.id}`],
-            ["k", "35129"],
-            ...(app.eventId ? [["e", app.eventId]] : [])
-          ],
-          content: `Deleted app ${app.name || app.id}`
-        };
-        const signedDelete = await nostr.signEvent(deleteDraft);
-
-        await new Promise<void>((resolve) => {
-          try {
-            const ws = new WebSocket("wss://relay.damus.io");
-            const timer = setTimeout(() => resolve(), 800);
-            ws.onopen = () => {
-              ws.send(JSON.stringify(["EVENT", signedDelete]));
-            };
-            ws.onmessage = () => {
-              clearTimeout(timer);
-              ws.close();
-              resolve();
-            };
-            ws.onerror = () => {
-              clearTimeout(timer);
-              resolve();
-            };
-          } catch {
-            resolve();
-          }
-        });
-        appendLog(`Published NIP-09 deletion request (kind: 5) for ${app.id} to Nostr relays.`);
-      } catch (err: any) {
-        appendLog(`Warning: Failed to publish kind: 5 deletion event: ${err?.message || err}`);
-      }
-    }
-
-    // 3. Attempt Blossom server blob deletion (BUD-02 / BUD-06)
-    if (nostr && Array.isArray(app.servers) && app.servers.length > 0 && Array.isArray(app.files) && app.files.length > 0) {
-      for (const srv of app.servers) {
-        const cleanSrv = srv.replace(/\/+$/, "");
-        for (const file of app.files) {
-          try {
-            const now = Math.floor(Date.now() / 1000);
-            const authDraft = {
-              kind: 24242,
-              content: `delete ${file.sha256}`,
-              tags: [
-                ["t", "delete"],
-                ["x", file.sha256],
-                ["expiration", String(now + 3600)]
-              ],
-              created_at: now
-            };
-            const signedAuth = await nostr.signEvent(authDraft);
-            const authHeader = `Nostr ${uint8ToBase64(new TextEncoder().encode(JSON.stringify(signedAuth)))}`;
-            if (typeof fetch === "function") {
-              const resp = await fetch(`${cleanSrv}/${file.sha256}`, {
-                method: "DELETE",
-                headers: { Authorization: authHeader }
-              });
-              if (resp.ok) {
-                appendLog(`Deleted blob ${file.sha256.slice(0, 10)}... from Blossom ${cleanSrv}`);
-              }
-            }
-          } catch (_) {}
+        } else if (frame[0] === "EOSE") {
+          ws.send(JSON.stringify(["CLOSE", subId]));
+          ws.close();
         }
-      }
-    }
-  }
-
-  async function executePublishWorkflow(skipBlossom = false) {
-    if (extractedFiles.length === 0) {
-      appendLog("Please select or drop a .zip or .html file first.");
-      return;
-    }
-
-    statusLogs = [];
-    const nostr = (window as any).nostr;
-    if (!nostr || typeof nostr.signEvent !== "function") {
-      appendLog("Error: NIP-07 window.nostr signer is not available.");
-      return;
-    }
-
-    const activeServers = skipBlossom ? [] : servers.filter((s) => s.enabled).map((s) => s.url);
-    const cleanId = (appId || "custom-nsite").trim();
-    const cleanName = (appName || "Custom Nsite").trim();
-    const cleanVer = (appVersion || "1.0.0").trim();
-    const cleanDesc = (appDescription || "").trim();
-
-    const filesToUpload: StudioFileEntry[] =
-      packagingMode === "inlined"
-        ? [
-            {
-              path: "index.html",
-              bytes: new TextEncoder().encode(bundledHtmlOutput),
-              size: new TextEncoder().encode(bundledHtmlOutput).byteLength,
-              sha256: sha256Hex(new TextEncoder().encode(bundledHtmlOutput)),
-              mimeType: "text/html",
-              isText: true,
-              textContent: bundledHtmlOutput
-            }
-          ]
-        : extractedFiles;
-
-    // 1. Upload files to selected Blossom servers (BUD-01 / BUD-06)
-    if (!skipBlossom && activeServers.length > 0) {
-      appendLog(
-        `Uploading ${filesToUpload.length} file(s) in '${packagingMode === "inlined" ? "Single-File Inlined" : "Multi-File Blossom"}' mode to ${activeServers.length} Blossom server(s)...`
-      );
-
-      for (const file of filesToUpload) {
-        const now = Math.floor(Date.now() / 1000);
-        const authDraft = {
-          kind: 24242,
-          content: `upload ${file.path}`,
-          tags: [
-            ["t", "upload"],
-            ["x", file.sha256],
-            ["expiration", String(now + 3600)]
-          ],
-          created_at: now
-        };
-
-        let authHeader = "";
-        try {
-          const signedAuth = await nostr.signEvent(authDraft);
-          authHeader = `Nostr ${uint8ToBase64(new TextEncoder().encode(JSON.stringify(signedAuth)))}`;
-        } catch (err: any) {
-          appendLog(`Warning: Could not sign BUD-06 auth event for ${file.path}: ${err?.message || err}`);
-        }
-
-        for (const srv of activeServers) {
-          const cleanSrv = srv.replace(/\/+$/, "");
-          try {
-            if (typeof fetch === "function") {
-              const resp = await fetch(`${cleanSrv}/upload`, {
-                method: "PUT",
-                headers: {
-                  "Content-Type": file.mimeType,
-                  ...(authHeader ? { Authorization: authHeader } : {}),
-                  "X-SHA-256": file.sha256
-                },
-                body: file.bytes as any
-              });
-              if (resp.ok) {
-                appendLog(`Uploaded ${file.path} (${file.sha256.slice(0, 10)}...) -> ${cleanSrv}`);
-              } else {
-                appendLog(`Blossom server ${cleanSrv} returned HTTP ${resp.status} for ${file.path} (recorded hash in NIP-5A tags).`);
-              }
-            }
-          } catch {
-            appendLog(`Blossom server ${cleanSrv} unreachable from sandbox (hash ${file.sha256.slice(0, 10)}... recorded in NIP-5A event).`);
-          }
-        }
-      }
-    } else {
-      appendLog("Packaging for direct Nostr & local 0ms store installation (Blossom upload skipped)...");
-    }
-
-    // 2. Construct & Sign NIP-5A Event (kind: 35129)
-    const viewTags: string[][] =
-      appViews.length > 0
-        ? appViews.map((v) => ["view", v.id, v.title, v.path])
-        : [
-            ["view", "main", cleanName, ""],
-            ["view", "widget", `${cleanName} Widget`, "?view=widget"],
-            ["view", "settings", `${cleanName} Settings`, "?view=settings"]
-          ];
-
-    const tags: string[][] = [
-      ["d", cleanId],
-      ["name", cleanName],
-      ["version", cleanVer],
-      ["description", cleanDesc],
-      ["icon", appIcon || "globe"],
-      ...viewTags
-    ];
-
-    for (const f of filesToUpload) {
-      tags.push(["f", f.path, f.sha256, f.mimeType]);
-    }
-    for (const s of activeServers) {
-      tags.push(["server", s.replace(/\/+$/, "")]);
-    }
-
-    const nsiteDraft = {
-      kind: 35129,
-      content: bundledHtmlOutput,
-      tags,
-      created_at: Math.floor(Date.now() / 1000)
+      } catch {}
     };
+  } catch {}
+}
 
+async function deletePublishedApp(app: PublishedAppRecord): Promise<void> {
+  deletedAppIds.add(app.id);
+  if (app.eventId) deletedAppIds.add(app.eventId);
+  saveDeletedAppIds(deletedAppIds);
+
+  publishedApps = publishedApps.filter((p) => p.id !== app.id);
+  savePublishedApps(publishedApps);
+  notifyStateChanged();
+
+  const nostr = typeof window !== "undefined" ? (window as any).nostr : (typeof globalThis !== "undefined" ? (globalThis as any).nostr : undefined);
+
+  if (nostr && typeof nostr.signEvent === "function") {
     try {
-      const signedEvent = await nostr.signEvent(nsiteDraft);
-
-      const naddr = encodeNaddr({
-        identifier: cleanId,
-        pubkey: signedEvent.pubkey,
-        kind: 35129,
-        relays: skipBlossom ? [] : ["wss://relay.damus.io"]
-      });
-
-      const record: PublishedAppRecord = {
-        id: cleanId,
-        name: cleanName,
-        version: cleanVer,
-        description: cleanDesc,
-        icon: appIcon || "widgets",
-        naddr,
-        eventId: signedEvent.id,
-        pubkey: signedEvent.pubkey,
-        createdAt: signedEvent.created_at * 1000,
-        packagingMode: skipBlossom ? "local" : packagingMode,
-        fileCount: filesToUpload.length,
-        files: filesToUpload.map((f) => ({ path: f.path, sha256: f.sha256, mimeType: f.mimeType })),
-        servers: activeServers,
-        rawEvent: { ...signedEvent, content: "" },
-        htmlContent: ""
+      const myPubkey = await nostr.getPublicKey();
+      const deleteDraft = {
+        kind: 5,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ["a", `35129:${app.pubkey || myPubkey}:${app.id}`],
+          ["k", "35129"],
+          ...(app.eventId ? [["e", app.eventId]] : [])
+        ],
+        content: `Deleted app ${app.name || app.id}`
       };
+      const signedDelete = await nostr.signEvent(deleteDraft);
 
-      const existingIdx = publishedApps.findIndex((p) => p.id === cleanId);
-      if (existingIdx !== -1) {
-        publishedApps[existingIdx] = record;
-      } else {
-        publishedApps.unshift(record);
-      }
-      savePublishedApps(publishedApps);
-      lastPublishedResult = record;
-
-      appendLog(`Signed & published NIP-5A event (kind: 35129, id: ${signedEvent.id.slice(0, 12)}...).`);
-      appendLog(`Ready! Address: ${naddr}`);
-
-      // Broadcast over Virtual WebSocket (local only writes to 0ms LocalEventStore; Blossom/Nostr publishes to relays)
       await new Promise<void>((resolve) => {
         try {
-          const ws = new WebSocket(skipBlossom ? "ws://local" : "wss://relay.damus.io");
-          const timer = setTimeout(() => resolve(), 350);
+          const ws = new WebSocket("wss://relay.damus.io");
+          const timer = setTimeout(() => resolve(), 800);
           ws.onopen = () => {
-            ws.send(JSON.stringify(["EVENT", signedEvent]));
+            ws.send(JSON.stringify(["EVENT", signedDelete]));
           };
           ws.onmessage = () => {
             clearTimeout(timer);
@@ -1551,48 +1329,971 @@ function mountPublisherStudio(root: HTMLElement) {
           resolve();
         }
       });
-
-      if (skipBlossom) {
-        appendLog(`Saved to local 0ms store only (not broadcasted to remote relays).`);
-        // Trigger immediate installation in Omni via protocol handler
-        try {
-          window.open(`nostr:${naddr}`);
-        } catch {}
-      } else {
-        appendLog(`Broadcasted to connected Nostr relays.`);
-      }
+      appendLog(`Published NIP-09 deletion request (kind: 5) for ${app.id} to Nostr relays.`);
     } catch (err: any) {
-      appendLog(`Failed to sign/publish NIP-5A event: ${err?.message || String(err)}`);
+      appendLog(`Warning: Failed to publish kind: 5 deletion event: ${err?.message || err}`);
     }
   }
 
-  async function publishBlossomServerList() {
-    try {
-      const nostr = (window as any).nostr;
-      if (!nostr || typeof nostr.signEvent !== "function") return;
-      const activeUrls = servers.filter((s) => s.enabled).map((s) => s.url.replace(/\/+$/, ""));
-      const draft = {
-        kind: 10063,
-        content: "",
-        tags: activeUrls.map((u) => ["server", u]),
-        created_at: Math.floor(Date.now() / 1000)
-      };
-      const signed = await nostr.signEvent(draft);
-      const ws = new WebSocket("wss://relay.damus.io");
-      ws.onopen = () => {
-        ws.send(JSON.stringify(["EVENT", signed]));
-        setTimeout(() => ws.close(), 300);
-      };
-      servers = servers.map((s) => ({ ...s, status: s.enabled ? "Published (kind: 10063)" : "Disabled" }));
-      saveConfiguredServers(servers);
-      renderStudio();
-    } catch {}
+  if (nostr && Array.isArray(app.servers) && app.servers.length > 0 && Array.isArray(app.files) && app.files.length > 0) {
+    for (const srv of app.servers) {
+      const cleanSrv = srv.replace(/\/+$/, "");
+      for (const file of app.files) {
+        try {
+          const now = Math.floor(Date.now() / 1000);
+          const authDraft = {
+            kind: 24242,
+            content: `delete ${file.sha256}`,
+            tags: [
+              ["t", "delete"],
+              ["x", file.sha256],
+              ["expiration", String(now + 3600)]
+            ],
+            created_at: now
+          };
+          const signedAuth = await nostr.signEvent(authDraft);
+          const authHeader = `Nostr ${uint8ToBase64(new TextEncoder().encode(JSON.stringify(signedAuth)))}`;
+          if (typeof fetch === "function") {
+            const resp = await fetch(`${cleanSrv}/${file.sha256}`, {
+              method: "DELETE",
+              headers: { Authorization: authHeader }
+            });
+            if (resp.ok) {
+              appendLog(`Deleted blob ${file.sha256.slice(0, 10)}... from Blossom ${cleanSrv}`);
+            }
+          }
+        } catch (_) {}
+      }
+    }
+  }
+}
+
+async function executePublishWorkflow(skipBlossom = false): Promise<void> {
+  if (extractedFiles.length === 0) {
+    appendLog("Please select or drop a .zip or .html file first.");
+    return;
   }
 
-  function renderStudio() {
+  statusLogs = [];
+  isUploading = true;
+  uploadProgress = { current: 0, total: 100, label: "Preparing package..." };
+  notifyStateChanged();
+
+  const nostr = typeof window !== "undefined" ? (window as any).nostr : (typeof globalThis !== "undefined" ? (globalThis as any).nostr : undefined);
+  if (!nostr || typeof nostr.signEvent !== "function") {
+    appendLog("Error: NIP-07 window.nostr signer is not available.");
+    isUploading = false;
+    uploadProgress = null;
+    notifyStateChanged();
+    return;
+  }
+
+  const activeServers = skipBlossom ? [] : servers.filter((s) => s.enabled).map((s) => s.url);
+  const cleanId = (appId || "custom-nsite").trim();
+  const cleanName = (appName || "Custom Nsite").trim();
+  const cleanVer = (appVersion || "1.0.0").trim();
+  const cleanDesc = (appDescription || "").trim();
+
+  const filesToUpload: StudioFileEntry[] =
+    packagingMode === "inlined"
+      ? [
+          {
+            path: "index.html",
+            bytes: new TextEncoder().encode(bundledHtmlOutput),
+            size: new TextEncoder().encode(bundledHtmlOutput).byteLength,
+            sha256: sha256Hex(new TextEncoder().encode(bundledHtmlOutput)),
+            mimeType: "text/html",
+            isText: true,
+            textContent: bundledHtmlOutput
+          }
+        ]
+      : extractedFiles;
+
+  if (!skipBlossom && activeServers.length > 0) {
+    appendLog(
+      `Uploading ${filesToUpload.length} file(s) in '${packagingMode === "inlined" ? "Single-File Inlined" : "Multi-File Blossom"}' mode to ${activeServers.length} Blossom server(s)...`
+    );
+
+    let uploadedCount = 0;
+    for (const file of filesToUpload) {
+      uploadProgress = {
+        current: Math.round((uploadedCount / filesToUpload.length) * 80),
+        total: 100,
+        label: `Uploading ${file.path} (${uploadedCount + 1}/${filesToUpload.length})...`
+      };
+      notifyStateChanged();
+
+      const now = Math.floor(Date.now() / 1000);
+      const authDraft = {
+        kind: 24242,
+        content: `upload ${file.path}`,
+        tags: [
+          ["t", "upload"],
+          ["x", file.sha256],
+          ["expiration", String(now + 3600)]
+        ],
+        created_at: now
+      };
+
+      let authHeader = "";
+      try {
+        const signedAuth = await nostr.signEvent(authDraft);
+        authHeader = `Nostr ${uint8ToBase64(new TextEncoder().encode(JSON.stringify(signedAuth)))}`;
+      } catch (err: any) {
+        appendLog(`Warning: Could not sign BUD-06 auth event for ${file.path}: ${err?.message || err}`);
+      }
+
+      for (const srv of activeServers) {
+        const cleanSrv = srv.replace(/\/+$/, "");
+        try {
+          if (typeof fetch === "function") {
+            const resp = await fetch(`${cleanSrv}/upload`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": file.mimeType,
+                ...(authHeader ? { Authorization: authHeader } : {}),
+                "X-SHA-256": file.sha256
+              },
+              body: file.bytes as any
+            });
+            if (resp.ok) {
+              appendLog(`Uploaded ${file.path} (${file.sha256.slice(0, 10)}...) -> ${cleanSrv}`);
+            } else {
+              appendLog(`Blossom server ${cleanSrv} returned HTTP ${resp.status} for ${file.path} (recorded hash in NIP-5A tags).`);
+            }
+          }
+        } catch {
+          appendLog(`Blossom server ${cleanSrv} unreachable from sandbox (hash ${file.sha256.slice(0, 10)}... recorded in NIP-5A event).`);
+        }
+      }
+      uploadedCount++;
+    }
+  } else {
+    appendLog("Packaging for direct Nostr & local 0ms store installation (Blossom upload skipped)...");
+  }
+
+  uploadProgress = { current: 85, total: 100, label: "Signing NIP-5A event..." };
+  notifyStateChanged();
+
+  const viewTags: string[][] =
+    appViews.length > 0
+      ? appViews.map((v) => ["view", v.id, v.title, v.path])
+      : [
+          ["view", "main", cleanName, ""],
+          ["view", "widget", `${cleanName} Widget`, "?view=widget"],
+          ["view", "settings", `${cleanName} Settings`, "?view=settings"]
+        ];
+
+  const tags: string[][] = [
+    ["d", cleanId],
+    ["name", cleanName],
+    ["version", cleanVer],
+    ["description", cleanDesc],
+    ["icon", appIcon || "globe"],
+    ...viewTags
+  ];
+
+  for (const f of filesToUpload) {
+    tags.push(["f", f.path, f.sha256, f.mimeType]);
+  }
+  for (const s of activeServers) {
+    tags.push(["server", s.replace(/\/+$/, "")]);
+  }
+
+  const nsiteDraft = {
+    kind: 35129,
+    content: bundledHtmlOutput,
+    tags,
+    created_at: Math.floor(Date.now() / 1000)
+  };
+
+  try {
+    const signedEvent = await nostr.signEvent(nsiteDraft);
+
+    const naddr = encodeNaddr({
+      identifier: cleanId,
+      pubkey: signedEvent.pubkey,
+      kind: 35129,
+      relays: skipBlossom ? [] : ["wss://relay.damus.io"]
+    });
+
+    const record: PublishedAppRecord = {
+      id: cleanId,
+      name: cleanName,
+      version: cleanVer,
+      description: cleanDesc,
+      icon: appIcon || "widgets",
+      naddr,
+      eventId: signedEvent.id,
+      pubkey: signedEvent.pubkey,
+      createdAt: signedEvent.created_at * 1000,
+      packagingMode: skipBlossom ? "local" : packagingMode,
+      fileCount: filesToUpload.length,
+      files: filesToUpload.map((f) => ({ path: f.path, sha256: f.sha256, mimeType: f.mimeType })),
+      servers: activeServers,
+      rawEvent: { ...signedEvent, content: "" },
+      htmlContent: ""
+    };
+
+    const existingIdx = publishedApps.findIndex((p) => p.id === cleanId);
+    if (existingIdx !== -1) {
+      publishedApps[existingIdx] = record;
+    } else {
+      publishedApps.unshift(record);
+    }
+    savePublishedApps(publishedApps);
+    lastPublishedResult = record;
+
+    appendLog(`Signed & published NIP-5A event (kind: 35129, id: ${signedEvent.id.slice(0, 12)}...).`);
+    appendLog(`Ready! Address: ${naddr}`);
+
+    await new Promise<void>((resolve) => {
+      try {
+        const ws = new WebSocket(skipBlossom ? "ws://local" : "wss://relay.damus.io");
+        const timer = setTimeout(() => resolve(), 350);
+        ws.onopen = () => {
+          ws.send(JSON.stringify(["EVENT", signedEvent]));
+        };
+        ws.onmessage = () => {
+          clearTimeout(timer);
+          ws.close();
+          resolve();
+        };
+        ws.onerror = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      } catch {
+        resolve();
+      }
+    });
+
+    if (skipBlossom) {
+      appendLog(`Saved to local 0ms store only (not broadcasted to remote relays).`);
+      try {
+        if (typeof window !== "undefined") {
+          window.open(`nostr:${naddr}`);
+        }
+      } catch {}
+    } else {
+      appendLog(`Broadcasted to connected Nostr relays.`);
+    }
+  } catch (err: any) {
+    appendLog(`Failed to sign/publish NIP-5A event: ${err?.message || String(err)}`);
+  } finally {
+    isUploading = false;
+    uploadProgress = null;
+    notifyStateChanged();
+  }
+}
+
+async function publishBlossomServerList(): Promise<void> {
+  try {
+    const nostr = typeof window !== "undefined" ? (window as any).nostr : (typeof globalThis !== "undefined" ? (globalThis as any).nostr : undefined);
+    if (!nostr || typeof nostr.signEvent !== "function") return;
+    const activeUrls = servers.filter((s) => s.enabled).map((s) => s.url.replace(/\/+$/, ""));
+    const draft = {
+      kind: 10063,
+      content: "",
+      tags: activeUrls.map((u) => ["server", u]),
+      created_at: Math.floor(Date.now() / 1000)
+    };
+    const signed = await nostr.signEvent(draft);
+    const ws = new WebSocket("wss://relay.damus.io");
+    ws.onopen = () => {
+      ws.send(JSON.stringify(["EVENT", signed]));
+      setTimeout(() => ws.close(), 300);
+    };
+    servers = servers.map((s) => ({ ...s, status: s.enabled ? "Published (kind: 10063)" : "Disabled" }));
+    saveConfiguredServers(servers);
+    notifyStateChanged();
+  } catch {}
+}
+
+// ============================================================================
+// 8. Declarative Schema UI Generator & Action Handler (Web Worker & Light DOM)
+// ============================================================================
+function getPublisherSchema(
+  tab = activeTab,
+  customState?: Partial<PublisherState>
+): OmniComponentNode {
+  const currentTab = customState?.activeTab || tab;
+  const currServers = customState?.servers || servers;
+  const currPublished = customState?.publishedApps || publishedApps;
+  const currExtracted = customState?.extractedFiles || extractedFiles;
+  const currEntry = customState?.entryFilePath || entryFilePath;
+  const currName = customState?.appName !== undefined ? customState.appName : appName;
+  const currId = customState?.appId !== undefined ? customState.appId : appId;
+  const currVer = customState?.appVersion !== undefined ? customState.appVersion : appVersion;
+  const currDesc = customState?.appDescription !== undefined ? customState.appDescription : appDescription;
+  const currPackMode = customState?.packagingMode || packagingMode;
+  const currUrlVal = customState?.remoteUrlInputVal !== undefined ? customState.remoteUrlInputVal : remoteUrlInputVal;
+  const currNewSrv = customState?.newServerUrlVal !== undefined ? customState.newServerUrlVal : newServerUrlVal;
+  const currLogs = customState?.statusLogs || statusLogs;
+  const currResult = customState?.lastPublishedResult !== undefined ? customState.lastPublishedResult : lastPublishedResult;
+  const currProgress = customState?.uploadProgress !== undefined ? customState.uploadProgress : uploadProgress;
+
+  const headerCard: OmniComponentNode = {
+    type: "card",
+    title: "Plugin Studio & Blossom Publisher",
+    subtitle: "Package .zip archives into NIP-5A nsites, upload to Blossom servers, or install directly.",
+    icon: "package",
+    children: [
+      {
+        type: "tabs",
+        activeTab: currentTab,
+        action: { name: "switch-tab" },
+        tabs: [
+          { id: "create", label: "Create & Upload", icon: "upload" },
+          { id: "published", label: `My Published Plugins (${currPublished.length})`, icon: "globe" },
+          { id: "servers", label: `Blossom Servers (${currServers.filter((s) => s.enabled).length})`, icon: "server" }
+        ]
+      }
+    ]
+  };
+
+  const contentChildren: OmniComponentNode[] = [];
+
+  // --------------------------------------------------------------------------
+  // TAB 1: CREATE & UPLOAD
+  // --------------------------------------------------------------------------
+  if (currentTab === "create") {
+    // 1. Dropzone / File selection Card
+    contentChildren.push({
+      type: "card",
+      title: "Drop or Select a Plugin Archive (.zip) or HTML/JS Bundle",
+      subtitle: "Extracts all files in-browser, computes SHA-256 hashes, and packages your app for either Multi-File Blossom upload or Single-File Inlined execution.",
+      icon: "upload",
+      children: [
+        {
+          type: "input",
+          name: "pluginFile",
+          inputType: "file",
+          accept: ".zip,.html,.htm,.js",
+          actionOnChange: { name: "file-selected" }
+        },
+        {
+          type: "box",
+          direction: "row",
+          gap: "sm",
+          children: [
+            {
+              type: "button",
+              label: "Load Multi-File Starter Template (.zip)",
+              variant: "secondary",
+              icon: "package",
+              action: { name: "load-starter" }
+            }
+          ]
+        }
+      ]
+    });
+
+    // 2. Arbitrary URL / NIP-5A Installer Card
+    contentChildren.push({
+      type: "card",
+      title: "Install or Package from Arbitrary URL / NIP-5A naddr",
+      subtitle: "Supports remote .zip, .html, or naddr1...",
+      icon: "globe",
+      children: [
+        {
+          type: "box",
+          direction: "row",
+          gap: "sm",
+          align: "center",
+          children: [
+            {
+              type: "input",
+              name: "arbitraryUrl",
+              inputType: "url",
+              placeholder: "https://example.com/plugin.zip, https://.../index.html, or naddr1...",
+              value: currUrlVal
+            },
+            {
+              type: "button",
+              label: "Fetch & Inspect",
+              variant: "secondary",
+              action: { name: "fetch-url" }
+            },
+            {
+              type: "button",
+              label: "Install from URL",
+              variant: "primary",
+              action: { name: "install-url" }
+            }
+          ]
+        }
+      ]
+    });
+
+    // 3. Extracted Archive Files (when files are loaded)
+    if (currExtracted.length > 0) {
+      contentChildren.push({
+        type: "card",
+        title: `Extracted Archive Files (${currExtracted.length})`,
+        subtitle: `Entry point: ${currEntry}`,
+        icon: "file",
+        children: [
+          {
+            type: "list",
+            items: currExtracted.map((f) => ({
+              type: "list-item" as const,
+              id: f.path,
+              title: f.path,
+              subtitle: `${f.mimeType} • ${f.size} B • sha256:${f.sha256.slice(0, 16)}...`,
+              icon: "file"
+            }))
+          }
+        ]
+      });
+
+      // 4. Metadata & Packaging Options
+      contentChildren.push({
+        type: "card",
+        title: "Plugin Metadata & Packaging Mode",
+        children: [
+          {
+            type: "box",
+            direction: "column",
+            gap: "sm",
+            children: [
+              {
+                type: "box",
+                direction: "row",
+                gap: "sm",
+                children: [
+                  { type: "input", name: "appName", placeholder: "Plugin Name", value: currName },
+                  { type: "input", name: "appId", placeholder: "App Slug (NIP-5A 'd' tag)", value: currId },
+                  { type: "input", name: "appVersion", placeholder: "Version", value: currVer }
+                ]
+              },
+              { type: "input", name: "appDescription", placeholder: "Description", value: currDesc },
+              {
+                type: "box",
+                direction: "row",
+                gap: "sm",
+                children: [
+                  {
+                    type: "button",
+                    label: "Option A: Single-File Inlined Bundle",
+                    variant: currPackMode === "inlined" ? "primary" : "secondary",
+                    action: { name: "set-packaging-mode", payload: { mode: "inlined" } }
+                  },
+                  {
+                    type: "button",
+                    label: "Option B: Multi-File Blossom Upload",
+                    variant: currPackMode === "multifile" ? "primary" : "secondary",
+                    action: { name: "set-packaging-mode", payload: { mode: "multifile" } }
+                  }
+                ]
+              },
+              {
+                type: "box",
+                direction: "row",
+                gap: "sm",
+                justify: "end",
+                children: [
+                  {
+                    type: "button",
+                    label: "Install Locally in Omni (Local Only)",
+                    variant: "secondary",
+                    action: { name: "install-local" }
+                  },
+                  {
+                    type: "button",
+                    label: "Upload to Blossom & Publish (NIP-5A)",
+                    variant: "primary",
+                    action: { name: "publish-blossom" }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      });
+    }
+
+    // 5. Published Result Card
+    if (currResult) {
+      contentChildren.push({
+        type: "card",
+        title: `Published Nsite Ready: ${currResult.name} (v${currResult.version})`,
+        subtitle: `Kind 35129 • ${currResult.fileCount} file(s)`,
+        icon: "check",
+        children: [
+          {
+            type: "code-block",
+            code: currResult.naddr,
+            language: "text",
+            copyable: true
+          },
+          {
+            type: "box",
+            direction: "row",
+            gap: "sm",
+            justify: "end",
+            children: [
+              {
+                type: "button",
+                label: "Copy naddr",
+                variant: "secondary",
+                action: { name: "copy-naddr", payload: { naddr: currResult.naddr } }
+              },
+              {
+                type: "button",
+                label: "Install / Update in Omni",
+                variant: "primary",
+                action: { name: "open-naddr", payload: { naddr: currResult.naddr } }
+              }
+            ]
+          }
+        ]
+      });
+    }
+
+    // 6. Upload / Publish Progress Bar
+    if (currProgress) {
+      contentChildren.push({
+        type: "card",
+        title: "Uploading & Publishing",
+        children: [
+          {
+            type: "progress",
+            value: currProgress.current,
+            label: currProgress.label
+          }
+        ]
+      });
+    }
+
+    // 7. Activity Logs
+    if (currLogs.length > 0) {
+      contentChildren.push({
+        type: "card",
+        title: "Activity Logs",
+        icon: "code",
+        children: [
+          {
+            type: "code-block",
+            code: currLogs.slice(-15).join("\n"),
+            language: "text"
+          }
+        ]
+      });
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // TAB 2: MY PUBLISHED PLUGINS
+  // --------------------------------------------------------------------------
+  else if (currentTab === "published") {
+    contentChildren.push({
+      type: "box",
+      direction: "row",
+      justify: "between",
+      align: "center",
+      children: [
+        {
+          type: "text",
+          content: "Plugins signed by your Nostr identity (stored in Omni's 0ms local cache and connected Nostr relays as kind: 35129 events).",
+          variant: "body",
+          tone: "secondary"
+        },
+        {
+          type: "button",
+          label: "Query Relays",
+          icon: "refresh",
+          variant: "secondary",
+          action: { name: "refresh-published" }
+        }
+      ]
+    });
+
+    if (currPublished.length === 0) {
+      contentChildren.push({
+        type: "empty-state",
+        title: "No published plugins yet",
+        description: "Use the 'Create & Upload' tab to package a .zip archive and publish it."
+      });
+    } else {
+      contentChildren.push({
+        type: "box",
+        direction: "column",
+        gap: "sm",
+        children: currPublished.map((app) => ({
+          type: "card",
+          title: `${app.name} v${app.version}`,
+          subtitle: `d:${app.id} • ${app.packagingMode === "multifile" ? `${app.fileCount} files on Blossom` : "Single-File Inlined / Local Store"}`,
+          icon: app.icon || "widgets",
+          children: [
+            {
+              type: "text",
+              content: app.description || "No description provided.",
+              variant: "body"
+            },
+            {
+              type: "code-block",
+              code: app.naddr,
+              language: "text",
+              copyable: true
+            },
+            {
+              type: "box",
+              direction: "row",
+              gap: "xs",
+              justify: "end",
+              children: [
+                {
+                  type: "button",
+                  label: "Install / Update",
+                  variant: "primary",
+                  action: { name: "open-naddr", payload: { naddr: app.naddr } }
+                },
+                {
+                  type: "button",
+                  label: "Update .zip",
+                  variant: "secondary",
+                  action: {
+                    name: "prepare-update",
+                    payload: { appId: app.id, appName: app.name, appVersion: app.version, appDescription: app.description }
+                  }
+                },
+                {
+                  type: "button",
+                  label: "Copy naddr",
+                  variant: "secondary",
+                  action: { name: "copy-naddr", payload: { naddr: app.naddr } }
+                },
+                {
+                  type: "button",
+                  label: "Delete",
+                  variant: "danger",
+                  action: { name: "delete-app", payload: { appId: app.id } }
+                }
+              ]
+            }
+          ]
+        }))
+      });
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // TAB 3: BLOSSOM SERVERS
+  // --------------------------------------------------------------------------
+  else if (currentTab === "servers") {
+    contentChildren.push({
+      type: "card",
+      title: "Blossom Server Endpoints (BUD-01 / Kind 10063)",
+      subtitle: "Public Blossom servers store content-addressed blobs by SHA-256 hash using your Nostr signature (kind 24242) for authentication.",
+      icon: "server",
+      children: [
+        {
+          type: "box",
+          direction: "row",
+          justify: "end",
+          children: [
+            {
+              type: "button",
+              label: "Publish Server List (Kind 10063)",
+              variant: "primary",
+              action: { name: "publish-servers-list" }
+            }
+          ]
+        },
+        {
+          type: "box",
+          direction: "row",
+          gap: "sm",
+          align: "center",
+          children: [
+            {
+              type: "input",
+              name: "newServerUrl",
+              inputType: "url",
+              placeholder: "https://blossom.example.com",
+              value: currNewSrv
+            },
+            {
+              type: "button",
+              label: "+ Add Server",
+              variant: "secondary",
+              action: { name: "add-server" }
+            }
+          ]
+        },
+        {
+          type: "list",
+          items: currServers.map((s) => ({
+            type: "list-item" as const,
+            id: s.url,
+            title: s.url,
+            subtitle: `${s.status || "Ready"} • ${s.enabled ? "Active" : "Disabled"}`,
+            icon: "server",
+            actions: [
+              {
+                type: "button" as const,
+                label: s.enabled ? "Disable" : "Enable",
+                variant: "secondary" as const,
+                action: { name: "toggle-server", payload: { url: s.url } }
+              },
+              {
+                type: "button" as const,
+                label: "Remove",
+                variant: "danger" as const,
+                action: { name: "remove-server", payload: { url: s.url } }
+              }
+            ]
+          }))
+        }
+      ]
+    });
+  }
+
+  return {
+    type: "box",
+    direction: "column",
+    gap: "md",
+    children: [headerCard, ...contentChildren]
+  };
+}
+
+function getPublisherWidgetSchema(state = getPublisherState()): OmniComponentNode {
+  return {
+    type: "card",
+    title: "Plugin Studio",
+    subtitle: "Packaging & Blossom distribution",
+    icon: "package",
+    children: [
+      {
+        type: "metric",
+        label: "Published Plugins",
+        value: String(state.publishedApps.length),
+        trend: "up"
+      },
+      {
+        type: "text",
+        content: `${state.servers.filter((s) => s.enabled).length} active Blossom server(s) configured.`,
+        variant: "body",
+        tone: "secondary"
+      },
+      {
+        type: "button",
+        label: "Open Plugin Studio",
+        variant: "primary",
+        action: { name: "open-studio" }
+      }
+    ]
+  };
+}
+
+async function handlePublisherAction(
+  action: OmniAction,
+  payload?: any
+): Promise<OmniComponentNode> {
+  const name = action.name;
+
+  // Capture input fields from payload
+  if (payload?.appName !== undefined) appName = String(payload.appName);
+  if (payload?.appId !== undefined) appId = String(payload.appId);
+  if (payload?.appVersion !== undefined) appVersion = String(payload.appVersion);
+  if (payload?.appDescription !== undefined) appDescription = String(payload.appDescription);
+  if (payload?.arbitraryUrl !== undefined) remoteUrlInputVal = String(payload.arbitraryUrl);
+  if (payload?.newServerUrl !== undefined) newServerUrlVal = String(payload.newServerUrl);
+
+  switch (name) {
+    case "switch-tab":
+      activeTab = payload?.tab || payload?.id || "create";
+      if (activeTab === "published") {
+        syncPublishedFromRelays().catch(() => {});
+      }
+      break;
+
+    case "file-selected": {
+      const bytes = payload?.fileBytes;
+      const fileName = payload?.fileName || payload?.value || "plugin.zip";
+      if (bytes instanceof Uint8Array || (bytes && typeof bytes.byteLength === "number")) {
+        const u8 = new Uint8Array(bytes.buffer || bytes, bytes.byteOffset || 0, bytes.byteLength);
+        if (fileName.toLowerCase().endsWith(".zip") || (u8.length > 4 && u8[0] === 0x50 && u8[1] === 0x4b)) {
+          processZipBytes(u8, fileName);
+        } else {
+          processSingleHtmlOrJsFile(u8, fileName);
+        }
+      }
+      break;
+    }
+
+    case "load-starter": {
+      const starterZip = buildStarterPluginZip();
+      processZipBytes(starterZip, "pomodoro-focus-studio.zip");
+      break;
+    }
+
+    case "fetch-url":
+      await handleRemoteUrlInput(remoteUrlInputVal, false);
+      break;
+
+    case "install-url":
+      await handleRemoteUrlInput(remoteUrlInputVal, true);
+      break;
+
+    case "set-packaging-mode":
+      packagingMode = payload?.mode === "multifile" ? "multifile" : "inlined";
+      break;
+
+    case "install-local":
+      await executePublishWorkflow(true);
+      break;
+
+    case "publish-blossom":
+      await executePublishWorkflow(false);
+      break;
+
+    case "copy-naddr": {
+      const targetNaddr = payload?.naddr || (lastPublishedResult ? lastPublishedResult.naddr : "");
+      if (targetNaddr) {
+        if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+          try {
+            await navigator.clipboard.writeText(targetNaddr);
+            appendLog(`Copied naddr to clipboard: ${targetNaddr.slice(0, 16)}...`);
+          } catch {}
+        }
+      }
+      break;
+    }
+
+    case "open-naddr": {
+      const targetNaddr = payload?.naddr || (lastPublishedResult ? lastPublishedResult.naddr : "");
+      if (targetNaddr && typeof window !== "undefined") {
+        try {
+          window.open(`nostr:${targetNaddr}`);
+        } catch {}
+      }
+      break;
+    }
+
+    case "open-studio": {
+      if (typeof window !== "undefined") {
+        try {
+          window.open("?view=main");
+        } catch {}
+      }
+      break;
+    }
+
+    case "refresh-published":
+      await syncPublishedFromRelays();
+      break;
+
+    case "prepare-update": {
+      activeTab = "create";
+      if (payload?.appId) appId = payload.appId;
+      if (payload?.appName) appName = payload.appName;
+      if (payload?.appDescription) appDescription = payload.appDescription;
+      const verParts = (payload?.appVersion || appVersion || "1.0.0").split(".");
+      if (verParts.length === 3) {
+        appVersion = `${verParts[0]}.${verParts[1]}.${parseInt(verParts[2], 10) + 1}`;
+      }
+      break;
+    }
+
+    case "delete-app": {
+      const targetId = payload?.appId || payload?.id;
+      const target = publishedApps.find((a) => a.id === targetId);
+      if (target) {
+        await deletePublishedApp(target);
+      }
+      break;
+    }
+
+    case "publish-servers-list":
+      await publishBlossomServerList();
+      break;
+
+    case "add-server": {
+      let raw = (newServerUrlVal || payload?.newServerUrl || "").trim();
+      if (raw) {
+        if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
+          raw = `https://${raw}`;
+        }
+        raw = raw.replace(/\/+$/, "");
+        if (!servers.some((s) => s.url === raw)) {
+          servers.push({ url: raw, enabled: true, status: "Added" });
+          saveConfiguredServers(servers);
+          newServerUrlVal = "";
+        }
+      }
+      break;
+    }
+
+    case "toggle-server": {
+      const srvUrl = payload?.url;
+      const srv = servers.find((s) => s.url === srvUrl);
+      if (srv) {
+        srv.enabled = !srv.enabled;
+        saveConfiguredServers(servers);
+      }
+      break;
+    }
+
+    case "remove-server": {
+      const srvUrl = payload?.url;
+      servers = servers.filter((s) => s.url !== srvUrl);
+      saveConfiguredServers(servers);
+      break;
+    }
+  }
+
+  return getPublisherSchema();
+}
+
+function isSchemaMode(): boolean {
+  if (typeof document === "undefined") return true;
+  try {
+    const search = window.location.search || window.location.hash || "";
+    if (search.includes("format=schema") || search.includes("view=schema")) return true;
+    if ((window as any).__OMNI_ROUTE__?.includes("format=schema")) return true;
+    if ((window as any).__OMNI_FORMAT__ === "schema") return true;
+  } catch (_) {}
+  return false;
+}
+
+function dispatchPublisherSchema(schema: OmniComponentNode | null): void {
+  if (!schema || typeof window === "undefined") return;
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: "omni:schema", componentId: "main", schema }, "*");
+  } else {
+    window.postMessage({ type: "omni:schema", componentId: "main", schema }, "*");
+  }
+}
+
+// ============================================================================
+// 9. Legacy / Visual DOM UI Renderer (for direct iframe execution when !schema)
+// ============================================================================
+function mountPublisherStudio(root: HTMLElement): void {
+  const container = document.createElement("div");
+  container.className = "publisher-studio-container";
+  container.style.cssText =
+    "display: flex; flex-direction: column; gap: 18px; padding: 16px; color: var(--omni-text-primary, #ede8df); font-family: var(--omni-font-sans, system-ui, sans-serif); max-width: 960px; margin: 0 auto; box-sizing: border-box; width: 100%;";
+
+  const styleEl = document.createElement("style");
+  styleEl.textContent = `
+    .publisher-studio-container { width: 100%; box-sizing: border-box; }
+    .published-top-bar { display: flex; flex-direction: column; gap: 12px; }
+    @media (min-width: 640px) { .published-top-bar { flex-direction: row; justify-content: space-between; align-items: center; } }
+    .published-app-header { display: flex; flex-direction: column; gap: 12px; }
+    @media (min-width: 680px) { .published-app-header { flex-direction: row; justify-content: space-between; align-items: flex-start; } }
+    .published-app-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .published-app-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 4px; }
+    .studio-tab-bar { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+    @media (min-width: 640px) { .studio-tab-bar { width: auto; } }
+    @media (max-width: 640px) { .studio-tab-btn { flex: 1 1 auto; text-align: center; } }
+  `;
+  container.appendChild(styleEl);
+
+  function renderStudio(): void {
     container.replaceChildren();
 
-    // Header & Tab Navigation
     const headerCard = document.createElement("div");
     headerCard.style.cssText =
       "display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--omni-border-subtle, #2e2b26);";
@@ -1635,17 +2336,12 @@ function mountPublisherStudio(root: HTMLElement) {
 
     container.appendChild(headerCard);
 
-    // ========================================================================
-    // TAB 1: CREATE & UPLOAD (.zip / Blossom / Direct Install)
-    // ========================================================================
     if (activeTab === "create") {
       const createPane = document.createElement("div");
       createPane.style.cssText = "display: flex; flex-direction: column; gap: 16px;";
 
-      // 1. Dropzone Card
       const dropzoneCard = document.createElement("div");
       dropzoneCard.id = "studio-zip-dropzone";
-      dropzoneCard.setAttribute("data-dropzone", "true");
       dropzoneCard.style.cssText =
         "background: var(--omni-bg-surface, #191816); border: 2px dashed var(--omni-border-strong, #3d3933); border-radius: var(--omni-radius-md, 10px); padding: 24px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; transition: border-color 0.15s;";
       dropzoneCard.innerHTML = `
@@ -1658,7 +2354,7 @@ function mountPublisherStudio(root: HTMLElement) {
         </div>
         <input id="studio-file-input" type="file" accept=".zip,.html,.htm,.js" style="display: none;" />
         <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px;">
-          <button id="btn-browse-zip" data-file-input="studio-file-input" style="background: var(--omni-accent-primary, #d4a373); color: #141312; border: none; padding: 8px 16px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.82rem; font-weight: 600; cursor: pointer;">
+          <button id="btn-browse-zip" style="background: var(--omni-accent-primary, #d4a373); color: #141312; border: none; padding: 8px 16px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.82rem; font-weight: 600; cursor: pointer;">
             Select .zip or .html File
           </button>
           <button id="btn-load-starter-zip" style="background: var(--omni-bg-card, #22201d); color: var(--omni-text-primary, #ede8df); border: 1px solid var(--omni-border-strong, #3d3933); padding: 8px 16px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.82rem; cursor: pointer;">
@@ -1677,7 +2373,7 @@ function mountPublisherStudio(root: HTMLElement) {
         const file = fileList[0];
         const name = file.name || "plugin.zip";
         let bytes: Uint8Array;
-        if (file.bytes instanceof Uint8Array || (file.bytes && typeof file.bytes.byteLength === "number" && typeof file.bytes.subarray === "function")) {
+        if (file.bytes instanceof Uint8Array || (file.bytes && typeof file.bytes.byteLength === "number")) {
           bytes = new Uint8Array(file.bytes.buffer || file.bytes, file.bytes.byteOffset || 0, file.bytes.byteLength);
         } else if (typeof file.arrayBuffer === "function") {
           const ab = await file.arrayBuffer();
@@ -1761,7 +2457,6 @@ function mountPublisherStudio(root: HTMLElement) {
 
       createPane.appendChild(urlCard);
 
-      // 2. Extracted Files Table & Metadata Form (shown when files are loaded)
       if (extractedFiles.length > 0) {
         const filesCard = document.createElement("div");
         filesCard.style.cssText =
@@ -1789,7 +2484,6 @@ function mountPublisherStudio(root: HTMLElement) {
         `;
         createPane.appendChild(filesCard);
 
-        // Metadata & Packaging Options Card
         const configCard = document.createElement("div");
         configCard.style.cssText =
           "background: var(--omni-bg-surface, #191816); border: 1px solid var(--omni-border-subtle, #2e2b26); border-radius: var(--omni-radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 14px;";
@@ -1913,9 +2607,6 @@ function mountPublisherStudio(root: HTMLElement) {
       container.appendChild(createPane);
     }
 
-    // ========================================================================
-    // TAB 2: MY PUBLISHED PLUGINS (Tracks published apps & Blossom servers)
-    // ========================================================================
     else if (activeTab === "published") {
       const pubPane = document.createElement("div");
       pubPane.style.cssText = "display: flex; flex-direction: column; gap: 14px;";
@@ -2045,9 +2736,6 @@ function mountPublisherStudio(root: HTMLElement) {
       container.appendChild(pubPane);
     }
 
-    // ========================================================================
-    // TAB 3: BLOSSOM SERVERS MANAGER (BUD-03 kind: 10063)
-    // ========================================================================
     else if (activeTab === "servers") {
       const srvPane = document.createElement("div");
       srvPane.style.cssText = "display: flex; flex-direction: column; gap: 14px;";
@@ -2133,14 +2821,18 @@ function mountPublisherStudio(root: HTMLElement) {
     }
   }
 
+  onStateChangedCallback = () => {
+    renderStudio();
+  };
+
   renderStudio();
   root.appendChild(container);
-  syncPublishedFromRelays();
+  syncPublishedFromRelays().catch(() => {});
 }
 
-function mountPublisherWidget(root: HTMLElement) {
+function mountPublisherWidget(root: HTMLElement): void {
   const published = loadPublishedApps();
-  const servers = loadConfiguredServers();
+  const srvs = loadConfiguredServers();
 
   const card = document.createElement("div");
   card.className = "publisher-widget-card";
@@ -2152,26 +2844,60 @@ function mountPublisherWidget(root: HTMLElement) {
       <span style="font-size: 0.72rem; color: var(--omni-accent-primary, #d4a373);">${published.length} published</span>
     </div>
     <div style="font-size: 0.76rem; color: var(--omni-text-secondary, #9e988f);">
-      ${servers.filter((s) => s.enabled).length} active Blossom server(s) configured.
+      ${srvs.filter((s) => s.enabled).length} active Blossom server(s) configured.
     </div>
   `;
   root.appendChild(card);
 }
 
-let initialized = false;
-function init() {
-  if (typeof document === "undefined") return;
-  if (initialized) return;
-  initialized = true;
-  const view = getCurrentRouteView();
-  if (view === "widget" || view === "compact") {
-    mountPublisherWidget(document.body);
-  } else {
-    mountPublisherStudio(document.body);
+// ============================================================================
+// 10. Auto-Init & Event Listeners (Web Worker & DOM modes)
+// ============================================================================
+if (typeof window !== "undefined") {
+  window.addEventListener("omni:action", async (event: any) => {
+    const detail = event.detail || event;
+    const action = detail.action;
+    const payload = detail.payload;
+    if (action) {
+      const next = await handlePublisherAction(action, payload);
+      dispatchPublisherSchema(next);
+    }
+  });
+
+  window.addEventListener("message", async (event: MessageEvent) => {
+    const data = event.data;
+    if (data && (data.type === "omni:action" || data.type === "action") && data.action) {
+      const next = await handlePublisherAction(data.action, data.payload);
+      dispatchPublisherSchema(next);
+    }
+  });
+
+  if (isSchemaMode()) {
+    (async () => {
+      await syncPublishedFromRelays().catch(() => {});
+      const view = getCurrentRouteView();
+      if (view === "widget" || view === "compact") {
+        dispatchPublisherSchema(getPublisherWidgetSchema());
+      } else {
+        dispatchPublisherSchema(getPublisherSchema());
+      }
+    })();
   }
 }
 
-if (typeof document !== "undefined") {
+if (typeof document !== "undefined" && !isSchemaMode()) {
+  let initialized = false;
+  const init = () => {
+    if (initialized) return;
+    initialized = true;
+    const view = getCurrentRouteView();
+    if (view === "widget" || view === "compact") {
+      mountPublisherWidget(document.body);
+    } else {
+      mountPublisherStudio(document.body);
+    }
+  };
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {
@@ -2184,5 +2910,10 @@ export {
   mountPublisherWidget,
   buildStarterPluginZip,
   unzipArchiveSync,
-  createZipArchiveBytes
+  createZipArchiveBytes,
+  getPublisherSchema,
+  getPublisherWidgetSchema,
+  handlePublisherAction,
+  getPublisherState,
+  resetPublisherState
 };

@@ -802,7 +802,8 @@ ${themeVarsCss}
     } else {
       const safeModuleCode = pluginCode
         .replace(/<\/script/gi, "<\\/script")
-        .replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, "");
+        .replace(/export\s*\{[\s\S]*?\}\s*;?/g, "")
+        .replace(/^\s*export\s+(async\s+function|function|class|const|let|var)\s+/gm, "$1 ");
       const hasEsModuleSyntax = /^\s*(import|export)\s+/m.test(safeModuleCode);
       const scriptBlock = hasEsModuleSyntax
         ? `<script type="module">\n${safeModuleCode}\n</script>`

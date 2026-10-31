@@ -519,6 +519,7 @@ export class OmniIconButtonElement extends BaseElement {
 export class OmniInputElement extends BaseElement {
   private inputEl: HTMLInputElement | null = null;
   private actionOnEnter: OmniAction | null = null;
+  private actionOnChange: OmniAction | null = null;
 
   connectedCallback(): void {
     this.classList.add("omni-input-wrapper");
@@ -536,7 +537,73 @@ export class OmniInputElement extends BaseElement {
           );
         }
       });
+      this.inputEl.addEventListener("change", () => {
+        if (this.inputEl!.type === "file") {
+          const files = this.inputEl!.files;
+          if (files && files.length > 0) {
+            const file = files[0];
+            if (typeof FileReader !== "undefined") {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const buffer = reader.result as ArrayBuffer;
+                const bytes = new Uint8Array(buffer);
+                if (this.actionOnChange) {
+                  this.dispatchEvent(
+                    new OmniActionEvent(this.actionOnChange, {
+                      fileName: file.name,
+                      fileSize: file.size,
+                      fileType: file.type,
+                      fileBytes: bytes,
+                      value: file.name
+                    })
+                  );
+                }
+              };
+              reader.readAsArrayBuffer(file);
+            }
+          }
+        } else if (this.actionOnChange) {
+          this.dispatchEvent(
+            new OmniActionEvent(this.actionOnChange, {
+              [this.inputEl!.name || "value"]: this.inputEl!.value,
+              value: this.inputEl!.value
+            })
+          );
+        }
+      });
       this.appendChild(this.inputEl);
+
+      this.addEventListener("dragover", (e) => {
+        if (this.inputEl?.type === "file") {
+          e.preventDefault();
+        }
+      });
+      this.addEventListener("drop", (e: any) => {
+        if (this.inputEl?.type === "file") {
+          e.preventDefault();
+          const files = e.dataTransfer?.files;
+          if (files && files.length > 0 && typeof FileReader !== "undefined") {
+            const file = files[0];
+            const reader = new FileReader();
+            reader.onload = () => {
+              const buffer = reader.result as ArrayBuffer;
+              const bytes = new Uint8Array(buffer);
+              if (this.actionOnChange) {
+                this.dispatchEvent(
+                  new OmniActionEvent(this.actionOnChange, {
+                    fileName: file.name,
+                    fileSize: file.size,
+                    fileType: file.type,
+                    fileBytes: bytes,
+                    value: file.name
+                  })
+                );
+              }
+            };
+            reader.readAsArrayBuffer(file);
+          }
+        }
+      });
     }
   }
 
@@ -545,20 +612,22 @@ export class OmniInputElement extends BaseElement {
   }
 
   setValue(val: string): void {
-    if (this.inputEl) this.inputEl.value = val;
+    if (this.inputEl && this.inputEl.type !== "file") this.inputEl.value = val;
   }
 
   setProps(props: Partial<OmniInputPrimitive>): void {
     if (!this.inputEl) this.connectedCallback();
     this.actionOnEnter = props.actionOnEnter || null;
+    this.actionOnChange = props.actionOnChange || null;
 
     if (props.name) {
       this.setAttribute("name", props.name);
       this.inputEl!.name = props.name;
     }
     if (props.placeholder !== undefined) this.inputEl!.placeholder = props.placeholder;
-    if (props.value !== undefined) this.inputEl!.value = props.value;
+    if (props.value !== undefined && props.inputType !== "file") this.inputEl!.value = props.value;
     if (props.inputType) this.inputEl!.type = props.inputType;
+    if (props.accept) this.inputEl!.accept = props.accept;
   }
 }
 

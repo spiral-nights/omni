@@ -143,10 +143,12 @@ export interface OmniInputPrimitive extends OmniPrimitiveBase {
   name: string;
   placeholder?: string;
   value?: string;
-  inputType?: "text" | "number" | "search" | "url" | "password";
+  inputType?: "text" | "number" | "search" | "url" | "password" | "file";
+  accept?: string;
   clearable?: boolean;
   prefixIcon?: string;
   actionOnEnter?: OmniAction;
+  actionOnChange?: OmniAction;
 }
 
 export interface OmniTextareaPrimitive extends OmniPrimitiveBase {

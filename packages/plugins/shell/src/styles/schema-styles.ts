@@ -384,6 +384,25 @@ omni-input {
 .omni-input:focus {
   border-color: var(--omni-accent-primary, #d4a373);
 }
+.omni-input[type="file"] {
+  cursor: pointer;
+  padding: 6px 10px;
+}
+.omni-input[type="file"]::file-selector-button {
+  background: var(--omni-bg-card, #22201d);
+  color: var(--omni-text-primary, #ede8df);
+  border: 1px solid var(--omni-border-strong, #3d3933);
+  padding: 4px 10px;
+  border-radius: var(--omni-radius-sm, 4px);
+  margin-right: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
+  transition: border-color 0.15s ease;
+}
+.omni-input[type="file"]::file-selector-button:hover {
+  border-color: var(--omni-accent-primary, #d4a373);
+}
 
 omni-textarea {
   display: flex;
