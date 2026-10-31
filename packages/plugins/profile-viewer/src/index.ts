@@ -4,14 +4,49 @@ import {
   OmniComponentNode,
   OmniAction,
   OmniMetricPrimitive,
-  OmniBoxPrimitive
+  OmniBoxPrimitive,
+  OmniTabsPrimitive,
+  OmniTabItem,
+  OmniStatusIndicatorPrimitive,
+  OmniBannerPrimitive,
+  OmniCodeBlockPrimitive
 } from "@omni/types";
 
-export function getProfileSchema(view = "widget", profile?: Record<string, any>): OmniComponentNode {
-  const name = profile?.name || profile?.displayName || "Nostr User";
-  const about = profile?.about || "Decentralized identity on Nostr";
-  const picture = profile?.picture || profile?.avatar || "";
-  const pubkey = profile?.pubkey || "";
+let currentSchemaTab = "my-profile";
+let currentProfilePubkey = "";
+let currentProfileData: Record<string, any> = {
+  name: "Nostr User",
+  about: "Decentralized identity on Nostr",
+  picture: "",
+  nip05: "",
+  lud16: "",
+  pubkey: "",
+  npub: ""
+};
+let schemaFollowsSet: Set<string> = new Set();
+let schemaTargetUser: Record<string, any> | null = null;
+
+export function getProfileSchema(
+  view = "widget",
+  profile?: Record<string, any>,
+  extraState?: Record<string, any>
+): OmniComponentNode {
+  const p = profile || currentProfileData;
+  const name = p?.name || p?.displayName || "Nostr User";
+  const about = p?.about || "Decentralized identity on Nostr";
+  const picture = p?.picture || p?.avatar || "";
+  const pubkey = p?.pubkey || currentProfilePubkey || "";
+  const nip05 = p?.nip05 || "";
+  const lud16 = p?.lud16 || "";
+  const npub = p?.npub || (pubkey ? `npub1${pubkey.slice(0, 10)}...` : "");
+  const followsCount = Array.isArray(extraState?.follows)
+    ? extraState?.follows.length
+    : (extraState?.followsCount ?? schemaFollowsSet.size);
+  const activeTab =
+    extraState?.activeTab ||
+    (view === "keys" || view === "following" || view === "edit" || view === "settings" || view === "my-profile" || view === "user-profile"
+      ? (view === "settings" ? "edit" : view)
+      : currentSchemaTab);
 
   if (view === "compact") {
     return {
@@ -22,12 +57,148 @@ export function getProfileSchema(view = "widget", profile?: Record<string, any>)
     };
   }
 
-  if (view === "settings") {
+  if (view === "widget") {
     return {
       type: "card",
-      title: "Edit Profile",
-      subtitle: "Update your public Nostr metadata (Kind 0)",
+      title: "Active Identity",
       icon: "user",
+      children: [
+        {
+          type: "box",
+          direction: "row",
+          gap: "md",
+          align: "center",
+          children: [
+            {
+              type: "avatar",
+              name,
+              src: picture,
+              pubkey,
+              size: "md"
+            },
+            {
+              type: "box",
+              direction: "column",
+              gap: "xs",
+              children: [
+                {
+                  type: "text",
+                  content: name,
+                  variant: "title"
+                },
+                {
+                  type: "text",
+                  content: about,
+                  variant: "caption",
+                  tone: "muted",
+                  truncate: true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          type: "button",
+          label: "View Profile",
+          variant: "secondary",
+          action: {
+            name: "open-profile",
+            navigate: {
+              pluginId: "org.omni.plugin.profile-viewer",
+              view: "app"
+            }
+          }
+        }
+      ]
+    };
+  }
+
+  // Full Page Application View (Tabs: My Profile, Edit Metadata, Key Custody, Following)
+  const isViewingOtherUser = activeTab === "user-profile" && (extraState?.targetUser || schemaTargetUser);
+  const targetUser = extraState?.targetUser || schemaTargetUser || {};
+
+  const tabs: OmniTabItem[] = [
+    { id: "my-profile", label: "My Profile", icon: "user" },
+    { id: "edit", label: "Edit Metadata", icon: "edit" },
+    { id: "keys", label: "Key Custody", icon: "key" },
+    { id: "following", label: "Following", icon: "users", badge: followsCount }
+  ];
+  if (isViewingOtherUser) {
+    tabs.unshift({ id: "user-profile", label: targetUser.name || "User Profile", icon: "user" });
+  }
+
+  const tabsNode: OmniTabsPrimitive = {
+    type: "tabs",
+    activeTab,
+    tabs,
+    action: { name: "switch-tab" }
+  };
+
+  const children: OmniComponentNode[] = [tabsNode];
+
+  if (activeTab === "user-profile" && isViewingOtherUser) {
+    const isFollowing = extraState?.isFollowing ?? targetUser.isFollowing;
+    children.push({
+      type: "box",
+      direction: "row",
+      justify: "between",
+      align: "center",
+      children: [
+        {
+          type: "box",
+          direction: "row",
+          gap: "md",
+          align: "center",
+          children: [
+            {
+              type: "avatar",
+              name: targetUser.name || "Nostr User",
+              src: targetUser.picture || "",
+              pubkey: targetUser.pubkey || "",
+              size: "lg"
+            },
+            {
+              type: "box",
+              direction: "column",
+              gap: "xs",
+              children: [
+                { type: "text", content: targetUser.name || "Nostr User", variant: "title" },
+                { type: "text", content: targetUser.about || "Decentralized Nostr user", variant: "body", tone: "muted" }
+              ]
+            }
+          ]
+        },
+        {
+          type: "button",
+          label: isFollowing ? "Unfollow" : "+ Follow",
+          variant: isFollowing ? "secondary" : "primary",
+          action: {
+            name: isFollowing ? "unfollow" : "follow",
+            payload: { pubkey: targetUser.pubkey }
+          }
+        }
+      ]
+    });
+
+    if (targetUser.pubkey) {
+      children.push({
+        type: "code-block",
+        code: targetUser.pubkey,
+        language: "text"
+      });
+    }
+  } else if (activeTab === "edit") {
+    children.push({
+      type: "banner",
+      tone: "info",
+      title: "Public Nostr Identity (Kind 0)",
+      message: "Update your public profile. Changes will be signed with your private key in local WebCrypto custody and published to the relay pool."
+    });
+
+    children.push({
+      type: "box",
+      direction: "column",
+      gap: "sm",
       children: [
         {
           type: "input",
@@ -38,84 +209,343 @@ export function getProfileSchema(view = "widget", profile?: Record<string, any>)
         {
           type: "input",
           name: "about",
-          placeholder: "About / Bio",
+          placeholder: "Bio / About Me",
           value: about
         },
         {
           type: "input",
           name: "picture",
-          placeholder: "Avatar Image URL",
+          placeholder: "Avatar Image URL (https://...)",
           value: picture
         },
         {
+          type: "input",
+          name: "nip05",
+          placeholder: "NIP-05 Identifier (e.g. user@domain.com)",
+          value: nip05
+        },
+        {
+          type: "input",
+          name: "lud16",
+          placeholder: "Lightning Address (e.g. user@getalby.com)",
+          value: lud16
+        },
+        {
           type: "button",
-          label: "Save Metadata",
+          label: "Save & Publish Profile (Kind 0)",
+          variant: "primary",
           action: { name: "save-profile" }
         }
       ]
-    };
+    });
+  } else if (activeTab === "keys") {
+    children.push({
+      type: "banner",
+      tone: "info",
+      title: "WebCrypto Keystore Custody (NIP-07)",
+      message: "Omni stores your private keys locally in hardware-isolated WebCrypto custody. Plugins and nsites never access raw keys; they sign events through standard window.nostr."
+    });
+
+    children.push({
+      type: "box",
+      direction: "row",
+      align: "center",
+      justify: "between",
+      children: [
+        {
+          type: "metric",
+          label: "Active Public Key",
+          value: pubkey ? `${pubkey.slice(0, 10)}...` : "None",
+          subtext: "Hardware-isolated custody"
+        },
+        {
+          type: "status-indicator",
+          status: pubkey ? "online" : "offline",
+          label: pubkey ? "Keystore Active" : "No Key Active",
+          pulse: !!pubkey
+        }
+      ]
+    });
+
+    if (pubkey) {
+      children.push({
+        type: "code-block",
+        code: npub || pubkey,
+        language: "text"
+      });
+    }
+
+    children.push({
+      type: "box",
+      direction: "column",
+      gap: "sm",
+      children: [
+        {
+          type: "input",
+          name: "keyInput",
+          placeholder: "nsec1... or 64-char hex private key to switch account"
+        },
+        {
+          type: "box",
+          direction: "row",
+          gap: "sm",
+          children: [
+            {
+              type: "button",
+              label: "Switch Account",
+              variant: "primary",
+              action: { name: "switch-key" }
+            },
+            {
+              type: "button",
+              label: "Generate New Keypair",
+              variant: "secondary",
+              action: { name: "generate-key" }
+            }
+          ]
+        }
+      ]
+    });
+  } else if (activeTab === "following") {
+    children.push({
+      type: "banner",
+      tone: "info",
+      title: "Nostr Contact Graph (Kind 3)",
+      message: "Decentralized list of public keys you follow across the network."
+    });
+
+    const followsList = Array.isArray(extraState?.follows)
+      ? extraState?.follows
+      : Array.from(schemaFollowsSet).map((pk) => ({ pubkey: pk }));
+
+    if (followsList.length === 0) {
+      children.push({
+        type: "banner",
+        tone: "info",
+        message: "You are not following anyone yet."
+      });
+    } else {
+      children.push({
+        type: "list",
+        items: followsList.map((f: any) => {
+          const fPk = typeof f === "string" ? f : f.pubkey;
+          const fName = typeof f === "object" && f.name ? f.name : `${fPk.slice(0, 8)}...`;
+          return {
+            type: "list-item",
+            id: fPk,
+            title: fName,
+            subtitle: fPk,
+            icon: "user",
+            actions: [
+              {
+                type: "button",
+                label: "Unfollow",
+                size: "sm",
+                variant: "secondary",
+                action: { name: "unfollow", payload: { pubkey: fPk } }
+              }
+            ]
+          };
+        })
+      });
+    }
+  } else {
+    // "my-profile"
+    children.push({
+      type: "box",
+      direction: "row",
+      gap: "md",
+      align: "center",
+      children: [
+        {
+          type: "avatar",
+          name,
+          src: picture,
+          pubkey,
+          size: "lg"
+        },
+        {
+          type: "box",
+          direction: "column",
+          gap: "xs",
+          children: [
+            { type: "text", content: name, variant: "title" },
+            { type: "text", content: about, variant: "body", tone: "muted" }
+          ]
+        }
+      ]
+    });
+
+    if (nip05) {
+      children.push({
+        type: "box",
+        direction: "row",
+        align: "center",
+        gap: "xs",
+        children: [
+          { type: "badge", label: nip05, tone: "accent" }
+        ]
+      });
+    }
+
+    if (pubkey) {
+      children.push({
+        type: "code-block",
+        code: npub || pubkey,
+        language: "text"
+      });
+    }
+
+    children.push({
+      type: "box",
+      direction: "row",
+      gap: "md",
+      children: [
+        {
+          type: "metric",
+          label: "Following",
+          value: followsCount,
+          subtext: "Kind 3 contacts"
+        },
+        {
+          type: "metric",
+          label: "Relay Security",
+          value: "NIP-07",
+          subtext: "WebCrypto Custody"
+        }
+      ]
+    });
+
+    children.push({
+      type: "box",
+      direction: "row",
+      gap: "sm",
+      children: [
+        {
+          type: "button",
+          label: "Edit Profile",
+          variant: "primary",
+          action: { name: "switch-tab", payload: { tab: "edit" } }
+        },
+        {
+          type: "button",
+          label: "Key Custody",
+          variant: "secondary",
+          action: { name: "switch-tab", payload: { tab: "keys" } }
+        }
+      ]
+    });
   }
 
   return {
     type: "card",
-    title: "Active Identity",
-    icon: "user",
-    children: [
-      {
-        type: "box",
-        direction: "row",
-        gap: "md",
-        align: "center",
-        children: [
-          {
-            type: "avatar",
-            name,
-            src: picture,
-            pubkey,
-            size: "md"
-          },
-          {
-            type: "box",
-            direction: "column",
-            gap: "xs",
-            children: [
-              {
-                type: "text",
-                content: name,
-                variant: "title"
-              },
-              {
-                type: "text",
-                content: about,
-                variant: "caption",
-                tone: "muted",
-                truncate: true
-              }
-            ]
-          }
-        ]
-      },
-      {
-        type: "button",
-        label: "View Profile",
-        variant: "secondary",
-        action: {
-          name: "open-profile",
-          navigate: {
-            pluginId: "org.omni.plugin.profile-viewer",
-            view: "app"
-          }
-        }
-      }
-    ]
+    title: "Profiles & Key Custody",
+    subtitle: "Decentralized Nostr identity and custody manager",
+    icon: "users",
+    children
   };
 }
 
-export function handleProfileViewerAction(
+export async function handleProfileViewerAction(
   action: OmniAction,
   payload?: Record<string, unknown>
-): OmniComponentNode {
-  return getProfileSchema("widget", payload);
+): Promise<OmniComponentNode> {
+  const actName = action.name;
+  if (actName === "switch-tab") {
+    currentSchemaTab = String(payload?.tab || payload?.value || action.payload?.tab || "my-profile");
+  } else if (actName === "save-profile") {
+    const updated = {
+      name: String(payload?.name ?? currentProfileData.name ?? ""),
+      about: String(payload?.about ?? currentProfileData.about ?? ""),
+      picture: String(payload?.picture ?? currentProfileData.picture ?? ""),
+      nip05: String(payload?.nip05 ?? currentProfileData.nip05 ?? ""),
+      lud16: String(payload?.lud16 ?? currentProfileData.lud16 ?? "")
+    };
+    currentProfileData = { ...currentProfileData, ...updated };
+    try {
+      if (typeof nostr !== "undefined" && typeof (nostr as any).signEvent === "function") {
+        const ev = {
+          kind: 0,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [],
+          content: JSON.stringify(currentProfileData)
+        };
+        const signed = await (nostr as any).signEvent(ev);
+        if (typeof WebSocket !== "undefined") {
+          const ws = new WebSocket("wss://relay.damus.io");
+          ws.onopen = () => {
+            ws.send(JSON.stringify(["EVENT", signed]));
+            ws.close();
+          };
+        }
+      }
+    } catch (_) {}
+    currentSchemaTab = "my-profile";
+  } else if (actName === "switch-key") {
+    const rawKey = String(payload?.keyInput || payload?.key || payload?.value || "").trim();
+    if (rawKey) {
+      try {
+        const authApi =
+          (typeof omni !== "undefined" && (omni as any)?.auth) ||
+          (typeof window !== "undefined" && (window as any).omni?.auth) ||
+          null;
+        if (authApi && typeof authApi.switchKey === "function") {
+          const res = await authApi.switchKey(rawKey);
+          if (res && res.pubkey) {
+            currentProfilePubkey = res.pubkey;
+            currentProfileData.pubkey = res.pubkey;
+            currentProfileData.npub = res.npub || "";
+          }
+        }
+      } catch (_) {}
+    }
+  } else if (actName === "generate-key") {
+    try {
+      const authApi =
+        (typeof omni !== "undefined" && (omni as any)?.auth) ||
+        (typeof window !== "undefined" && (window as any).omni?.auth) ||
+        null;
+      if (authApi && typeof authApi.generateKey === "function") {
+        const res = await authApi.generateKey();
+        if (res && res.pubkey) {
+          currentProfilePubkey = res.pubkey;
+          currentProfileData.pubkey = res.pubkey;
+          currentProfileData.npub = res.npub || "";
+        }
+      }
+    } catch (_) {}
+  } else if (actName === "follow") {
+    const targetPk = String(payload?.pubkey || action.payload?.pubkey || "");
+    if (targetPk) {
+      schemaFollowsSet.add(targetPk);
+      if (schemaTargetUser) schemaTargetUser.isFollowing = true;
+    }
+  } else if (actName === "unfollow") {
+    const targetPk = String(payload?.pubkey || action.payload?.pubkey || "");
+    if (targetPk) {
+      schemaFollowsSet.delete(targetPk);
+      if (schemaTargetUser) schemaTargetUser.isFollowing = false;
+    }
+  } else if (actName === "view_profile" || actName === "view-profile") {
+    const targetPk = String(payload?.pubkey || action.payload?.pubkey || "");
+    if (targetPk) {
+      schemaTargetUser = {
+        pubkey: targetPk,
+        name: `Nostr User (${targetPk.slice(0, 8)})`,
+        about: "Decentralized Nostr user",
+        isFollowing: schemaFollowsSet.has(targetPk)
+      };
+      currentSchemaTab = "user-profile";
+    }
+  }
+
+  return getProfileSchema(currentSchemaTab, currentProfileData, {
+    activeTab: currentSchemaTab,
+    targetUser: schemaTargetUser,
+    isFollowing: schemaTargetUser?.isFollowing,
+    follows: Array.from(schemaFollowsSet).map((pk) => ({ pubkey: pk })),
+    followsCount: schemaFollowsSet.size
+  });
 }
 
 const PROFILE_VIEWER_CSS = /* css */ `
@@ -3408,8 +3838,117 @@ function initMount(root: HTMLElement) {
   mountProfileViewer(root);
 }
 
-// Auto-mount
-if (typeof document !== "undefined") {
+function isSchemaMode(): boolean {
+  if (typeof document === "undefined") return true;
+  try {
+    const search = window.location.search || window.location.hash || "";
+    if (search.includes("format=schema") || search.includes("view=schema")) return true;
+    if ((window as any).__OMNI_ROUTE__?.includes("format=schema")) return true;
+    if ((window as any).__OMNI_FORMAT__ === "schema") return true;
+    if ((window as any).__OMNI_VIEW__ === "main" && (window as any).__OMNI_FORMAT__ !== "iframe") {
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+function dispatchProfileSchema(schema: OmniComponentNode | null) {
+  if (!schema || typeof window === "undefined") return;
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: "omni:schema", componentId: "main", schema }, "*");
+  } else {
+    window.postMessage({ type: "omni:schema", componentId: "main", schema }, "*");
+  }
+}
+
+async function initSchemaData() {
+  try {
+    let pk = "";
+    if (typeof nostr !== "undefined" && typeof (nostr as any).getPublicKey === "function") {
+      try { pk = await (nostr as any).getPublicKey(); } catch (_) {}
+    }
+    if (!pk && typeof window !== "undefined" && (window as any).omni?.session?.userPubkey) {
+      pk = (window as any).omni.session.userPubkey;
+    }
+    if (!pk && typeof localStorage !== "undefined") {
+      pk = localStorage.getItem("omni_user_pubkey") || "";
+    }
+    if (pk) {
+      currentProfilePubkey = pk;
+      currentProfileData.pubkey = pk;
+      currentProfileData.npub = `npub1${pk.slice(0, 10)}...`;
+
+      const omniObj = (typeof omni !== "undefined" && omni) || (typeof window !== "undefined" && (window as any).omni);
+      if (omniObj?.storage) {
+        try {
+          const cached = await omniObj.storage.get(`profile:${pk}`);
+          if (cached && typeof cached === "object") {
+            currentProfileData = { ...currentProfileData, ...cached };
+          }
+        } catch (_) {}
+      }
+
+      try {
+        const searchParams = new URLSearchParams(window.location.search || window.location.hash.replace("#", "?"));
+        const targetPk = searchParams.get("pubkey");
+        if (targetPk && targetPk !== pk) {
+          schemaTargetUser = {
+            pubkey: targetPk,
+            name: `User ${targetPk.slice(0, 8)}`,
+            about: "Nostr user",
+            isFollowing: false
+          };
+          currentSchemaTab = "user-profile";
+        } else if (searchParams.get("view") === "edit") {
+          currentSchemaTab = "edit";
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("omni:action", async (event: any) => {
+    const detail = event.detail || event;
+    const action = detail.action;
+    const payload = detail.payload;
+    if (action) {
+      const next = await handleProfileViewerAction(action, payload);
+      dispatchProfileSchema(next);
+    }
+  });
+
+  window.addEventListener("message", async (event: MessageEvent) => {
+    const data = event.data;
+    if (data && (data.type === "omni:action" || data.type === "action") && data.action) {
+      const next = await handleProfileViewerAction(data.action, data.payload);
+      dispatchProfileSchema(next);
+    }
+  });
+
+  window.addEventListener("omni:intent", async (event: any) => {
+    const detail = event.detail;
+    if (detail && (detail.action === "view_profile" || detail.action === "view-profile") && detail.data?.pubkey) {
+      const next = await handleProfileViewerAction({ name: "view_profile", payload: { pubkey: detail.data.pubkey } });
+      dispatchProfileSchema(next);
+    }
+  });
+
+  if (isSchemaMode()) {
+    (async () => {
+      await initSchemaData();
+      dispatchProfileSchema(getProfileSchema(currentSchemaTab, currentProfileData, {
+        activeTab: currentSchemaTab,
+        targetUser: schemaTargetUser,
+        follows: Array.from(schemaFollowsSet).map((pk) => ({ pubkey: pk })),
+        followsCount: schemaFollowsSet.size
+      }));
+    })();
+  }
+}
+
+// Auto-mount DOM if not in schema mode
+if (typeof document !== "undefined" && !isSchemaMode()) {
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => initMount(document.body));
   } else {

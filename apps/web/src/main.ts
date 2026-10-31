@@ -77,10 +77,10 @@ const initialPlugins: InstalledPluginEntry[] = [
     description: "Nostr user profiles, identity metadata, following, and key custody.",
     icon: "users",
     views: [
-      { id: "main", title: "Profiles", path: "" },
-      { id: "edit", title: "Edit My Profile", path: "?view=edit" },
-      { id: "compact", title: "Live Tile", path: "?view=compact" },
-      { id: "widget", title: "Profile Card", path: "?view=widget" }
+      { id: "main", title: "Profiles", path: "", format: "schema" },
+      { id: "edit", title: "Edit My Profile", path: "?view=edit", format: "schema" },
+      { id: "compact", title: "Live Tile", path: "?view=compact", format: "schema" },
+      { id: "widget", title: "Profile Card", path: "?view=widget", format: "schema" }
     ],
     handledIntents: ["view_profile", "edit_profile"],
     scriptContent: profileViewerScript,
