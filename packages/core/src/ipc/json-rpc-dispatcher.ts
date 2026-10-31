@@ -188,30 +188,33 @@ export class JsonRpcDispatcher {
       const req: JsonRpcRequest = event.data;
       if (!req || req.jsonrpc !== "2.0") return;
 
-      try {
-        const result = await this.handleRequest(req.method, req.params);
-        const res: JsonRpcResponse = {
-          jsonrpc: "2.0",
-          id: req.id,
-          result
-        };
-        this.ctx.port.postMessage(res);
-      } catch (err: any) {
-        const res: JsonRpcResponse = {
-          jsonrpc: "2.0",
-          id: req.id,
-          error: {
-            code: err.code || JsonRpcErrorCode.INTERNAL_ERROR,
-            message: err.message || "Internal error",
-            data: err.data
-          }
-        };
-        this.ctx.port.postMessage(res);
-      }
+      const res = await this.dispatchRaw(req);
+      this.ctx.port.postMessage(res);
     };
   }
 
-  private async handleRequest(method: string, params: any): Promise<any> {
+  public async dispatchRaw(req: JsonRpcRequest): Promise<JsonRpcResponse> {
+    try {
+      const result = await this.handleRequest(req.method, req.params);
+      return {
+        jsonrpc: "2.0",
+        id: req.id,
+        result
+      };
+    } catch (err: any) {
+      return {
+        jsonrpc: "2.0",
+        id: req.id,
+        error: {
+          code: err.code || JsonRpcErrorCode.INTERNAL_ERROR,
+          message: err.message || "Internal error",
+          data: err.data
+        }
+      };
+    }
+  }
+
+  public async handleRequest(method: string, params: any): Promise<any> {
     switch (method) {
       // 1. Nostr Public Key
       case "nostr.getPublicKey": {

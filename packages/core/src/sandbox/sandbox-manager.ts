@@ -1,5 +1,7 @@
-import { OmniManifest, OmniInitMessage } from "@omni/types";
+import { OmniManifest, OmniInitMessage, OmniComponentNode } from "@omni/types";
 import { RemoteDomHost } from "../remote-dom/remote-dom-host.js";
+import { SchemaRenderer } from "../schema/schema-renderer.js";
+import { IframeAppHost } from "./iframe-app-host.js";
 import { JsonRpcDispatcher } from "../ipc/json-rpc-dispatcher.js";
 import { AclEngine } from "../acl/acl-engine.js";
 import { PluginStorageManager } from "../storage/plugin-storage-manager.js";
@@ -45,6 +47,8 @@ export class SandboxInstance {
   readonly manifest: OmniManifest;
   private iframe: HTMLIFrameElement | null = null;
   private remoteDomHosts: Map<string, RemoteDomHost> = new Map();
+  private schemaRenderers: Map<string, SchemaRenderer> = new Map();
+  private iframeAppHosts: Map<string, IframeAppHost> = new Map();
   private compContainers: Element[] = [];
   private compContainersByCompId: Map<string, Element> = new Map();
   private dispatcher: JsonRpcDispatcher | null = null;
@@ -135,6 +139,12 @@ export class SandboxInstance {
         if (host) {
           host.call(data.id, data.method, data.args);
         }
+      } else if (data.type === "schema" && data.schema) {
+        const compId = data.componentId;
+        const renderer = (compId ? this.schemaRenderers.get(compId) : null) || (this.schemaRenderers.size === 1 ? this.schemaRenderers.values().next().value : null);
+        if (renderer) {
+          renderer.render(data.schema);
+        }
       }
     };
 
@@ -183,6 +193,24 @@ export class SandboxInstance {
           }
         });
         this.remoteDomHosts.set(comp.id, domHost);
+
+        const schemaRenderer = new SchemaRenderer({
+          container: compContainer,
+          onAction: (action, payload) => {
+            if (action.navigate?.route && this.options.onHandleUri) {
+              this.options.onHandleUri(action.navigate.route, this.manifest.id);
+            }
+            try {
+              this.channel1?.port1.postMessage({
+                type: "action",
+                componentId: comp.id,
+                action,
+                payload
+              });
+            } catch (_) {}
+          }
+        });
+        this.schemaRenderers.set(comp.id, schemaRenderer);
       }
     }
 
@@ -224,6 +252,24 @@ export class SandboxInstance {
           }
         });
         this.remoteDomHosts.set("main", domHost);
+
+        const schemaRenderer = new SchemaRenderer({
+          container: compContainer,
+          onAction: (action, payload) => {
+            if (action.navigate?.route && this.options.onHandleUri) {
+              this.options.onHandleUri(action.navigate.route, this.manifest.id);
+            }
+            try {
+              this.channel1?.port1.postMessage({
+                type: "action",
+                componentId: "main",
+                action,
+                payload
+              });
+            } catch (_) {}
+          }
+        });
+        this.schemaRenderers.set("main", schemaRenderer);
       }
     }
 
@@ -550,6 +596,14 @@ export class SandboxInstance {
     if (this.dispatcher) {
       this.dispatcher.destroy();
     }
+    for (const renderer of this.schemaRenderers.values()) {
+      renderer.destroy();
+    }
+    this.schemaRenderers.clear();
+    for (const appHost of this.iframeAppHosts.values()) {
+      appHost.destroy();
+    }
+    this.iframeAppHosts.clear();
     for (const host of this.remoteDomHosts.values()) {
       host.destroy();
     }

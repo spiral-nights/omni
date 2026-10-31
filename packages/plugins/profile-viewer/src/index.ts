@@ -1,4 +1,122 @@
 /// <reference types="@omni/types" />
+import {
+  OmniCardPrimitive,
+  OmniComponentNode,
+  OmniAction,
+  OmniMetricPrimitive,
+  OmniBoxPrimitive
+} from "@omni/types";
+
+export function getProfileSchema(view = "widget", profile?: Record<string, any>): OmniComponentNode {
+  const name = profile?.name || profile?.displayName || "Nostr User";
+  const about = profile?.about || "Decentralized identity on Nostr";
+  const picture = profile?.picture || profile?.avatar || "";
+  const pubkey = profile?.pubkey || "";
+
+  if (view === "compact") {
+    return {
+      type: "metric",
+      label: "Identity",
+      value: name,
+      subtext: pubkey ? `${pubkey.slice(0, 8)}...` : "Active"
+    };
+  }
+
+  if (view === "settings") {
+    return {
+      type: "card",
+      title: "Edit Profile",
+      subtitle: "Update your public Nostr metadata (Kind 0)",
+      icon: "user",
+      children: [
+        {
+          type: "input",
+          name: "name",
+          placeholder: "Display Name",
+          value: name
+        },
+        {
+          type: "input",
+          name: "about",
+          placeholder: "About / Bio",
+          value: about
+        },
+        {
+          type: "input",
+          name: "picture",
+          placeholder: "Avatar Image URL",
+          value: picture
+        },
+        {
+          type: "button",
+          label: "Save Metadata",
+          action: { name: "save-profile" }
+        }
+      ]
+    };
+  }
+
+  return {
+    type: "card",
+    title: "Active Identity",
+    icon: "user",
+    children: [
+      {
+        type: "box",
+        direction: "row",
+        gap: "md",
+        align: "center",
+        children: [
+          {
+            type: "avatar",
+            name,
+            src: picture,
+            pubkey,
+            size: "md"
+          },
+          {
+            type: "box",
+            direction: "column",
+            gap: "xs",
+            children: [
+              {
+                type: "text",
+                content: name,
+                variant: "title"
+              },
+              {
+                type: "text",
+                content: about,
+                variant: "caption",
+                tone: "muted",
+                truncate: true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        type: "button",
+        label: "View Profile",
+        variant: "secondary",
+        action: {
+          name: "open-profile",
+          navigate: {
+            pluginId: "org.omni.plugin.profile-viewer",
+            view: "app"
+          }
+        }
+      }
+    ]
+  };
+}
+
+export function handleProfileViewerAction(
+  action: OmniAction,
+  payload?: Record<string, unknown>
+): OmniComponentNode {
+  return getProfileSchema("widget", payload);
+}
 
 const PROFILE_VIEWER_CSS = /* css */ `
 /* Profile Editor & Identity Custody Containers */

@@ -1,4 +1,163 @@
 /// <reference types="@omni/types" />
+import {
+  OmniCardPrimitive,
+  OmniComponentNode,
+  OmniAction,
+  OmniMetricPrimitive,
+  OmniBoxPrimitive
+} from "@omni/types";
+
+export interface TaskItem {
+  id: number;
+  text: string;
+  done: boolean;
+}
+
+let tasks: TaskItem[] = [
+  { id: 1, text: "Send Nostr note", done: true },
+  { id: 2, text: "Review Omni PR", done: false },
+  { id: 3, text: "Test Focus Timer", done: false }
+];
+
+function loadTasks(): TaskItem[] {
+  try {
+    if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem("tasks");
+      if (stored) tasks = JSON.parse(stored);
+    }
+  } catch {}
+  return tasks;
+}
+
+function persistTasks(): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("tasks", JSON.stringify(tasks));
+    }
+  } catch {}
+}
+
+export function getChecklistSchema(view = "widget"): OmniComponentNode {
+  loadTasks();
+  if (view === "settings") {
+    const completed = tasks.filter((t) => t.done).length;
+    return {
+      type: "card",
+      title: "Daily Checklist Settings",
+      subtitle: "Manage persistent tasks storage and cleanup completed items.",
+      children: [
+        {
+          type: "box",
+          direction: "row",
+          gap: "md",
+          children: [
+            { type: "metric", label: "Total Tasks", value: tasks.length },
+            { type: "metric", label: "Completed", value: completed }
+          ]
+        },
+        {
+          type: "button",
+          label: "Clear Completed Tasks",
+          action: { name: "clear-completed" },
+          variant: "secondary"
+        }
+      ]
+    };
+  }
+
+  if (view === "compact") {
+    const completed = tasks.filter((t) => t.done).length;
+    const total = tasks.length;
+    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const nextPending = tasks.find((t) => !t.done);
+    return {
+      type: "metric",
+      label: "Tasks Done",
+      value: `${percent}%`,
+      subtext: nextPending ? `Next: ${nextPending.text}` : "All tasks complete!"
+    };
+  }
+
+  // Default: widget view
+  return {
+    type: "card",
+    title: "Daily Tasks",
+    icon: "check",
+    children: [
+      {
+        type: "box",
+        direction: "row",
+        gap: "sm",
+        children: [
+          {
+            type: "input",
+            name: "taskText",
+            placeholder: "Add task...",
+            actionOnEnter: { name: "add-task" }
+          },
+          {
+            type: "button",
+            label: "+",
+            action: { name: "add-task" },
+            size: "sm"
+          }
+        ]
+      },
+      {
+        type: "list",
+        items: tasks.map((t) => ({
+          type: "list-item",
+          id: String(t.id),
+          title: t.text,
+          checked: t.done,
+          onCheckAction: { name: "toggle-task", payload: { id: t.id } },
+          actions: [
+            {
+              type: "icon-button",
+              icon: "trash",
+              tooltip: "Delete task",
+              variant: "danger",
+              action: { name: "delete-task", payload: { id: t.id } }
+            }
+          ]
+        }))
+      }
+    ]
+  };
+}
+
+export function handleChecklistAction(
+  action: OmniAction,
+  payload?: Record<string, unknown>
+): OmniComponentNode {
+  loadTasks();
+  const actName = action.name;
+  if (actName === "add-task") {
+    const text = String(payload?.taskText || payload?.value || "").trim();
+    if (text) {
+      tasks.push({ id: Date.now(), text, done: false });
+      persistTasks();
+    }
+  } else if (actName === "toggle-task") {
+    const id = Number(payload?.id || action.payload?.id);
+    const item = tasks.find((t) => t.id === id);
+    if (item) {
+      item.done = payload?.checked !== undefined ? Boolean(payload.checked) : !item.done;
+      persistTasks();
+    }
+  } else if (actName === "delete-task") {
+    const id = Number(payload?.id || action.payload?.id);
+    const idx = tasks.findIndex((t) => t.id === id);
+    if (idx !== -1) {
+      tasks.splice(idx, 1);
+      persistTasks();
+    }
+  } else if (actName === "clear-completed") {
+    tasks = tasks.filter((t) => !t.done);
+    persistTasks();
+  }
+  return getChecklistSchema(action.name === "clear-completed" ? "settings" : "widget");
+}
 
 const CHECKLIST_CSS = /* css */ `
 .checklist-widget-card {
@@ -133,33 +292,8 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
-interface TaskItem {
-  id: number;
-  text: string;
-  done: boolean;
-}
-
 async function mountChecklist(root: any) {
-  let tasks: TaskItem[] = [
-    { id: 1, text: "Send Nostr note", done: true },
-    { id: 2, text: "Review Omni PR", done: false },
-    { id: 3, text: "Test Focus Timer", done: false }
-  ];
-
-  try {
-    if (typeof localStorage !== "undefined") {
-      const stored = localStorage.getItem("tasks");
-      if (stored) tasks = JSON.parse(stored);
-    }
-  } catch {}
-
-  function persistTasks() {
-    try {
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem("tasks", JSON.stringify(tasks));
-      }
-    } catch {}
-  }
+  loadTasks();
 
   const card = html<HTMLDivElement>`
     <div class="checklist-widget-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 12px; color: var(--text-primary, #ede8df);">
@@ -231,13 +365,7 @@ async function mountChecklist(root: any) {
 }
 
 async function mountChecklistSettings(root: any) {
-  let tasks: TaskItem[] = [];
-  try {
-    if (typeof localStorage !== "undefined") {
-      const stored = localStorage.getItem("tasks");
-      if (stored) tasks = JSON.parse(stored);
-    }
-  } catch {}
+  loadTasks();
 
   const container = html<HTMLDivElement>`
     <div class="checklist-settings-container" style="display: flex; flex-direction: column; gap: 12px; font-family: inherit; color: var(--text-primary, #ede8df);">
@@ -300,18 +428,7 @@ function isCompactRoute(): boolean {
 }
 
 function mountChecklistCompact(root: any) {
-  let tasks: TaskItem[] = [
-    { id: 1, text: "Send Nostr note", done: true },
-    { id: 2, text: "Review Omni PR", done: false },
-    { id: 3, text: "Test Focus Timer", done: false }
-  ];
-
-  try {
-    if (typeof localStorage !== "undefined") {
-      const stored = localStorage.getItem("tasks");
-      if (stored) tasks = JSON.parse(stored);
-    }
-  } catch {}
+  loadTasks();
 
   const completed = tasks.filter((t) => t.done).length;
   const total = tasks.length;

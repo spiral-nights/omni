@@ -1,4 +1,142 @@
 /// <reference types="@omni/types" />
+import {
+  OmniCardPrimitive,
+  OmniComponentNode,
+  OmniAction,
+  OmniMetricPrimitive,
+  OmniBoxPrimitive
+} from "@omni/types";
+
+let currentRelayList: string[] = [
+  "wss://relay.damus.io",
+  "wss://relay.ditto.pub",
+  "wss://nos.lol"
+];
+
+function loadStoredRelays(): string[] {
+  try {
+    if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem("omni_configured_relays");
+      if (stored) currentRelayList = JSON.parse(stored);
+    }
+  } catch {}
+  return currentRelayList;
+}
+
+function persistStoredRelays(): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("omni_configured_relays", JSON.stringify(currentRelayList));
+    }
+  } catch {}
+}
+
+export function getRelaysSchema(view = "widget", customRelays?: string[]): OmniComponentNode {
+  const relays = customRelays && customRelays.length > 0 ? customRelays : loadStoredRelays();
+
+  if (view === "compact") {
+    return {
+      type: "metric",
+      label: "Relays",
+      value: relays.length,
+      subtext: "Connected"
+    };
+  }
+
+  return {
+    type: "card",
+    title: "Relay Pool",
+    subtitle: "Active WebSocket connections to decentralized relays",
+    icon: "server",
+    children: [
+      {
+        type: "box",
+        direction: "row",
+        align: "center",
+        justify: "between",
+        children: [
+          {
+            type: "metric",
+            label: "Connected Relays",
+            value: relays.length
+          },
+          {
+            type: "badge",
+            label: "Connected",
+            tone: "success",
+            dot: true
+          }
+        ]
+      },
+      {
+        type: "box",
+        direction: "row",
+        gap: "sm",
+        children: [
+          {
+            type: "input",
+            name: "relayUrl",
+            placeholder: "wss://relay.example.com",
+            actionOnEnter: { name: "add-relay" }
+          },
+          {
+            type: "button",
+            label: "+ Add",
+            action: { name: "add-relay" },
+            size: "sm"
+          }
+        ]
+      },
+      {
+        type: "list",
+        items: relays.map((url) => ({
+          type: "list-item",
+          id: url,
+          title: url,
+          icon: "relay",
+          actions: [
+            {
+              type: "icon-button",
+              icon: "trash",
+              tooltip: "Remove relay",
+              variant: "danger",
+              action: { name: "remove-relay", payload: { url } }
+            }
+          ]
+        }))
+      }
+    ]
+  };
+}
+
+export function handleRelaysAction(
+  action: OmniAction,
+  payload?: Record<string, unknown>
+): OmniComponentNode {
+  loadStoredRelays();
+  const actName = action.name;
+  if (actName === "add-relay") {
+    const raw = String(payload?.relayUrl || payload?.value || "").trim();
+    if (raw) {
+      let url = raw;
+      if (!url.startsWith("ws://") && !url.startsWith("wss://")) {
+        url = `wss://${url}`;
+      }
+      url = url.replace(/\/+$/, "");
+      if (!currentRelayList.includes(url)) {
+        currentRelayList.push(url);
+        persistStoredRelays();
+      }
+    }
+  } else if (actName === "remove-relay") {
+    const url = String(payload?.url || action.payload?.url || "");
+    if (url) {
+      currentRelayList = currentRelayList.filter((r) => r !== url);
+      persistStoredRelays();
+    }
+  }
+  return getRelaysSchema("widget");
+}
 
 const RELAYS_CSS = /* css */ `
 @keyframes omni-relay-pulse {
