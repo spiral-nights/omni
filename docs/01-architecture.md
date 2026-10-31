@@ -109,11 +109,12 @@ Omni enforces a strict architectural boundary between the **headless execution m
 ┌───────────────────────────────────────────────────────────────────────────┐
 │                  OmniKernel Sandbox Engine (Headless Layer)               │
 │                                                                           │
-│   Projects sandboxed nsites via Remote DOM into shell container slots:    │
+│   Projects sandboxed plugins via Schema UI or Direct Iframe into slots:   │
 │   • Timeline Feed     ──> getContainerForPluginSlot(id, "main")           │
-│   • Profile Viewer    ──> getContainerForPluginSlot(id, "sidebar")        │
+│   • Profile Viewer    ──> getContainerForPluginSlot(id, "main")           │
 │   • Daily Checklist   ──> getContainerForPluginSlot(id, "sidebar")        │
-│   • Relay Manager     ──> getContainerForPluginSlot(id, "sidebar")        │
+│   • Relay Manager     ──> getContainerForPluginSlot(id, "main")           │
+│   • Plugin Studio     ──> getContainerForPluginSlot(id, "main")           │
 │   • Third-Party nsite ──> getContainerForPluginSlot(id, userSelectedSlot) │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -124,7 +125,7 @@ In Omni, there is a fundamental distinction between the Shell and regular plugin
 
 | Dimension | Sandboxed Plugin (nsite) | Presentation Shell (`@omni/plugin-shell`) |
 | :--- | :--- | :--- |
-| **Execution Environment** | Sandboxed `<iframe>` (`sandbox="allow-scripts"`, `null` origin) | Host browser thread (`http://localhost:5173` or host domain) |
+| **Execution Environment** | Web Worker (`WorkerGuestHost`) or Sandboxed `<iframe>` (`sandbox="allow-scripts"`, `null` origin) | Host browser thread (`http://localhost:5173` or host domain) |
 | **DOM Access** | No access to host DOM; mounts to sandbox `document.body` | Direct access to `#omni-root` and window layout |
 | **UI Presentation** | Declarative Schema UI (Light DOM custom elements) or Direct Iframe | Native host containers and Light DOM custom element stylesheets |
 | **Storage Access** | Partitioned per `pluginId` by `PluginStorageManager` | Host origin `localStorage` (`omni_workspace_state`) |
@@ -295,7 +296,7 @@ All existing plugins (`@omni/plugin-feed`, `@omni/plugin-relays`, `@omni/plugin-
 
 #### 4. Pluggable Plugin Settings Panels (`mountPluginSettings`)
 - Shells provide full control over plugin viewports, route assignments, and individual plugin configuration.
-- If a plugin declares a `settings` route (`?view=settings`), the shell dynamically mounts that plugin's remote DOM container directly inside the plugin's dedicated configuration card or drawer within Shell Preferences.
+- If a plugin declares a `settings` route (`?view=settings`), the shell dynamically renders that plugin's settings schema or iframe container directly inside the plugin's dedicated configuration card or drawer within Shell Preferences.
 
 #### 5. Smooth App Switching & Auto-Scroll (Editorial Shell)
 - When navigating between apps in the Editorial shell, outgoing views execute a smooth fade-out (`editorialAppFadeOut`), followed by the incoming view fading in with tactile easing (`editorialAppFadeIn`).
@@ -303,38 +304,41 @@ All existing plugins (`@omni/plugin-feed`, `@omni/plugin-relays`, `@omni/plugin-
 
 ---
 
-## 4. Sandboxing & Dual-Channel Remote DOM Execution
+## 4. Sandboxing & Dual-Channel Execution (Workers & Iframes)
 
-Untrusted third-party nsites run inside isolated `<iframe>` sandboxes (`sandbox="allow-scripts"`, `connect-src 'none'`), fully air-gapped from direct network access, origin storage, or raw cryptographic keys.
+Untrusted third-party nsites and background schema plugins run inside isolated environments:
+- **Declarative Schema Plugins**: Run off the main UI thread in dedicated Web Workers (`WorkerGuestHost`), completely air-gapped from direct DOM manipulation, host origin storage, or arbitrary network access.
+- **Standalone Complex nsites**: Run inside isolated `<iframe>` sandboxes (`sandbox="allow-scripts"`, `connect-src 'none'`), fully isolated from the host origin.
 
 ### 4.1 Dual-Channel IPC Model
-Communication between host and sandbox occurs over an HTML5 `MessageChannel`:
+Communication between host and guest occurs over an HTML5 `MessageChannel`:
 
 ```
 ┌──────────────────────────────────────┐          ┌──────────────────────────────────────┐
-│           Sandbox Guest              │          │              Host Kernel             │
-│                                      │          │                                      │
-│  UI Element Mutations                │  Port 1  │  RemoteDomHost                       │
-│  (@remote-dom/core RemoteRoot)       ├─────────►│  (Projects to host native DOM)       │
-│                                      │          │                                      │
-│  Capability RPC Bus                  │  Port 2  │  Kernel Dispatcher                   │
-│  (JSON-RPC 2.0: nostr, storage, uri) ◄─────────►│  (ACL Engine, RelayPool, Keystore)   │
+│           Guest Runtime              │          │              Host Kernel             │
+│   (Web Worker or Sandboxed Iframe)   │          │                                      │
+│                                      │  Port 1  │  SchemaRenderer / IframeAppHost      │
+│  Schema & User Actions               ├─────────►│  (Renders Light DOM custom elements) │
+│  (omni:schema / omni:action)         │          │                                      │
+│                                      │  Port 2  │  Kernel Dispatcher                   │
+│  Capability RPC Bus                  ◄─────────►│  (ACL Engine, RelayPool, Keystore)   │
+│  (JSON-RPC 2.0: nostr, storage, uri) │          │                                      │
 └──────────────────────────────────────┘          └──────────────────────────────────────┘
 ```
 
-1. **Port 1 (Remote DOM Mutation Stream)**:
-   - Uses Shopify's `@remote-dom/core`.
-   - Serializes DOM mutation operations (create, append, text update, remove) across the boundary.
-   - The host projects these mutations into native DOM elements within the user's selected container.
-   - **Zero iframe styling boundaries**: Guest elements inherit host design tokens and CSS variables seamlessly.
+1. **Port 1 (Declarative Schema & Action Bus)**:
+   - Plugins emit declarative UI schemas (`OmniComponentNode`) representing layout trees (`card`, `box`, `button`, `input`, `list`, `tabs`, `metric`).
+   - The host's `SchemaRenderer` projects these nodes into native Light DOM custom elements (`<omni-card>`, `<omni-box>`, `<omni-button>`, `<omni-input>`, etc.).
+   - User interactions (`click`, `input`, `drop`, `change`) dispatch `omni:action` events back to the guest over Port 1.
+   - **Zero styling leakage**: All custom elements inherit host CSS variables (`--omni-bg-canvas`, `--omni-accent-primary`, etc.) natively with Warm Paper Dark aesthetics.
 2. **Port 2 (Capability JSON-RPC Bus)**:
    - Routes typed JSON-RPC 2.0 method invocations (`kernel.handleUri`, `kernel.handleShare`, `nostr.subscribe`, `nostr.publish`, `storage.get/set`).
    - Governed by `CapabilityStore` and `AclEngine`.
 
-### 4.2 Critical Remote DOM Runtime Invariants
-- **Detached Tree Construction**: Always create elements detached, configure attributes and children, and append to the container at the end.
-- **`isConnected()` Traversal Check**: The sandbox `RemoteNode` enforces `this.isConnected()`. Property and attribute mutations (`Mutation 3`) are only dispatched over IPC if the node is actively connected to the root (`~`). This prevents out-of-order mutations on detached nodes.
-- **Root ID (`~`) Interception**: `RemoteDomHost.mutate()` intercepts property mutations targeting `"~"` and applies them directly to the host container element, bypassing `DOMRemoteReceiver` which does not index `"~"`.
+### 4.2 Declarative Schema Runtime Invariants
+- **Stateless UI Projections**: The schema is a pure declarative description of the desired UI state. Guest plugins maintain their internal state machines and emit updated schemas on action events.
+- **Port-Based Off-Thread Execution**: Web Workers have zero access to the DOM or unmetered network APIs. All I/O occurs via the governed ports.
+- **Standard DOM Mounting Fallback**: In standalone environments (such as running directly in browser tabs or legacy test harnesses), plugins seamlessly mount to standard DOM elements.
 
 ---
 
@@ -365,8 +369,9 @@ Developers build regular web applications without custom SDKs. The sandbox runti
 - The host transparently isolates local storage per `pluginId`.
 - Standard `localStorage.getItem()` / `setItem()` and IndexedDB instances are scoped, preventing cross-plugin inspection or tampering.
 
-### 5.4 Automatic DOM Mirroring (`document.body`)
-- The sandbox runtime observes mutations to `document.body` and automatically mirrors them into the Remote DOM tree. Developers write standard HTML or React/Svelte mounting to `#root` without custom registration.
+### 5.4 Dual Execution Modes (Schema vs. Direct Iframe)
+- Built-in system plugins execute as lightweight off-thread Web Workers emitting declarative schema rendered by `SchemaRenderer` into Light DOM custom elements.
+- Third-party standalone web applications and nsites mount directly into an isolated sandboxed `<iframe>` (`IframeAppHost`) with design token inheritance.
 
 ---
 

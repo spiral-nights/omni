@@ -74,8 +74,8 @@ Comprehensive architecture guides and specifications are consolidated in the [`d
 1. **[01. System Architecture & Core Runtime](docs/01-architecture.md)**
    * System philosophy, package structure, and microkernel bootloader.
    * Decoupled shell plugin (`@omni/plugin-shell`) and page-centric navigation.
-   * Dual-channel sandboxing & Remote DOM execution invariants.
-   * Transparent API virtualization (Virtual `window.WebSocket`, `window.nostr`, DOM auto-mount).
+   * Dual-channel sandboxing & Web Worker / Schema execution.
+   * Transparent API virtualization (Virtual `window.WebSocket`, `window.nostr`, Declarative Schema).
    * Subscription namespacing and ACL-governed cache isolation.
 
 2. **[02. Nostr Protocols, Storage & Decentralized Distribution](docs/02-protocols-and-storage.md)**
@@ -107,7 +107,7 @@ pnpm -r run build
 ```
 
 ### 3. Run Test Suite
-Omni includes 264 automated unit and integration tests across 19 test suites covering crypto, 0ms IndexedDB storage, ACL engine, NIP-78 workspace sync, NIP-5A resolver, shells, and Remote DOM:
+Omni includes 365 automated unit and integration tests across 29 test suites covering crypto, 0ms IndexedDB storage, ACL engine, NIP-78 workspace sync, NIP-5A resolver, shells, Web Worker execution, and Schema UI:
 ```bash
 pnpm test
 ```
