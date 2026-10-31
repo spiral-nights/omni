@@ -862,6 +862,7 @@ function persistProfileCache(cache: Map<string, any>) {
 }
 
 const profileCache = loadPersistedProfileCache();
+const allKnownNotes = new Map<string, any>();
 const pendingProfileFetches = new Set<string>();
 const queuedProfilePubkeys = new Set<string>();
 let profileBatchTimer: any = null;
@@ -1636,7 +1637,6 @@ function mountFeed(root: any) {
 
   const renderedIds = new Set<string>();
   const timelineNotes = new Map<string, any>();
-  const allKnownNotes = new Map<string, any>();
   let filterPatterns = loadFilterPatterns();
   let oldestTimestamp = Infinity;
   let latestTimestamp = 0;
@@ -1762,11 +1762,10 @@ function mountFeed(root: any) {
 
     const avatarInner = getAvatarSvg(event.pubkey || "", initial);
 
-    // Deterministic counts based on note id to give authentic social feed feel
-    const pseudoRand = (event.id || "").split("").reduce((acc: number, ch: string) => acc + ch.charCodeAt(0), 0);
-    const initLikes = pseudoRand % 19;
-    const initReposts = pseudoRand % 7;
-    const initReplies = pseudoRand % 5;
+    // Real counts based on authentic interactions and loaded replies
+    const initLikes = 0;
+    const initReposts = 0;
+    const initReplies = (event.id && schemaThreadReplies.get(event.id)?.length) || 0;
 
     const quotedNoteId = extractQuotedNoteId(event.content || "");
     let quoteCardMarkup = "";
@@ -3451,8 +3450,36 @@ export function getFeedSchema(
 
   // Full-page / Main View (100% Declarative Schema Feed)
   if (state.activeThreadNoteId) {
-    const focused = state.notes.find((n) => n.id === state.activeThreadNoteId);
-    const replies = (focused ? schemaThreadReplies.get(focused.id) : null) || [];
+    let focused = state.notes.find((n) => n.id === state.activeThreadNoteId);
+    if (!focused) {
+      for (const repList of schemaThreadReplies.values()) {
+        const found = repList.find((r) => r.id === state.activeThreadNoteId);
+        if (found) {
+          focused = found;
+          break;
+        }
+      }
+    }
+    if (!focused) {
+      const ev = allKnownNotes.get(state.activeThreadNoteId);
+      if (ev) {
+        const author = profileCache.get(ev.pubkey);
+        focused = {
+          id: ev.id,
+          pubkey: ev.pubkey,
+          authorName: author?.display_name || author?.name || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User"),
+          npub: ev.pubkey ? `npub1${ev.pubkey.slice(0, 8)}...` : "npub1...",
+          avatar: author?.picture,
+          content: ev.content || "",
+          created_at: (ev.created_at || Math.floor(Date.now() / 1000)) * 1000,
+          likes: 0,
+          reposts: 0,
+          replies: schemaThreadReplies.get(ev.id)?.length || 0,
+          zaps: 0
+        };
+      }
+    }
+    const replies = (focused ? schemaThreadReplies.get(focused.id) : schemaThreadReplies.get(state.activeThreadNoteId)) || [];
 
     const threadChildren: OmniComponentNode[] = [
       {
@@ -4038,6 +4065,10 @@ function initFeedSchemaSocket() {
           schemaGlobalSubId = "schema-feed-init";
           ws.send(JSON.stringify(["REQ", schemaGlobalSubId, { kinds: [1], limit: 20 }]));
         }
+        if (currentFeedState.activeThreadNoteId) {
+          const tid = currentFeedState.activeThreadNoteId;
+          ws.send(JSON.stringify(["REQ", `schema_thread_rep_${tid.slice(0, 8)}`, { kinds: [1], "#e": [tid], limit: 50 }]));
+        }
       } catch (_) {}
     };
 
@@ -4100,11 +4131,52 @@ function initFeedSchemaSocket() {
           }
 
           if (ev.kind === 1 && ev.id) {
-            // Handle thread reply arrival
-            if (subId?.startsWith("schema_thread_rep_")) {
-              const eTag = (ev.tags || []).find((t: string[]) => t[0] === "e");
-              const parentId = eTag ? eTag[1] : (currentFeedState.activeThreadNoteId || null);
-              if (parentId) {
+            allKnownNotes.set(ev.id, ev);
+
+            // Handle replies indexing
+            const eTags = (ev.tags || []).filter((t: string[]) => t[0] === "e" && t[1]);
+            const activeTid = currentFeedState.activeThreadNoteId;
+            const isForActiveThread = Boolean(
+              activeTid && (
+                subId?.startsWith(`schema_thread_rep_${activeTid.slice(0, 8)}`) ||
+                eTags.some((t: string[]) => t[1] === activeTid)
+              )
+            );
+
+            if (isForActiveThread && activeTid) {
+              const existing = schemaThreadReplies.get(activeTid) || [];
+              if (!existing.some((r) => r.id === ev.id)) {
+                const author = profileCache.get(ev.pubkey);
+                const repItem: FeedNoteItem = {
+                  id: ev.id,
+                  pubkey: ev.pubkey,
+                  authorName: author?.display_name || author?.name || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User"),
+                  npub: ev.pubkey ? `npub1${ev.pubkey.slice(0, 8)}...` : "npub1...",
+                  avatar: author?.picture,
+                  content: ev.content || "",
+                  created_at: (ev.created_at || Math.floor(Date.now() / 1000)) * 1000,
+                  likes: 0,
+                  reposts: 0,
+                  replies: 0,
+                  zaps: 0
+                };
+                existing.push(repItem);
+                existing.sort((a, b) => a.created_at - b.created_at);
+                schemaThreadReplies.set(activeTid, existing);
+                const parentNote = currentFeedState.notes.find((n) => n.id === activeTid);
+                if (parentNote) {
+                  parentNote.replies = existing.length;
+                }
+                if (ev.pubkey && !profileCache.has(ev.pubkey)) {
+                  queueProfileFetch(ev.pubkey);
+                }
+                scheduleSchemaDispatch();
+              }
+            }
+
+            for (const t of eTags) {
+              const parentId = t[1];
+              if (parentId && parentId !== activeTid) {
                 const existing = schemaThreadReplies.get(parentId) || [];
                 if (!existing.some((r) => r.id === ev.id)) {
                   const author = profileCache.get(ev.pubkey);
@@ -4124,12 +4196,15 @@ function initFeedSchemaSocket() {
                   existing.push(repItem);
                   existing.sort((a, b) => a.created_at - b.created_at);
                   schemaThreadReplies.set(parentId, existing);
-                  if (ev.pubkey && !profileCache.has(ev.pubkey)) {
-                    queueProfileFetch(ev.pubkey);
+                  const parentNote = currentFeedState.notes.find((n) => n.id === parentId);
+                  if (parentNote) {
+                    parentNote.replies = existing.length;
                   }
-                  scheduleSchemaDispatch();
                 }
               }
+            }
+
+            if (subId?.startsWith("schema_thread_rep_")) {
               return;
             }
 
@@ -4139,7 +4214,6 @@ function initFeedSchemaSocket() {
               schemaOldestTimestamp = ev.created_at;
             }
 
-            const pseudoRand = (ev.id || "").split("").reduce((acc: number, ch: string) => acc + ch.charCodeAt(0), 0);
             const author = profileCache.get(ev.pubkey);
             const npubShort = ev.pubkey ? `npub1${ev.pubkey.slice(0, 8)}...` : "npub1...";
             const authorName = author?.display_name || author?.name || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User");
@@ -4150,6 +4224,8 @@ function initFeedSchemaSocket() {
               return;
             }
 
+            const existingReplies = schemaThreadReplies.get(ev.id);
+
             currentFeedState.notes.push({
               id: ev.id,
               pubkey: ev.pubkey,
@@ -4158,10 +4234,10 @@ function initFeedSchemaSocket() {
               avatar,
               content: ev.content || "",
               created_at: (ev.created_at || Math.floor(Date.now() / 1000)) * 1000,
-              likes: pseudoRand % 19,
-              reposts: pseudoRand % 7,
-              replies: pseudoRand % 5,
-              zaps: (pseudoRand % 11) * 21
+              likes: 0,
+              reposts: 0,
+              replies: existingReplies?.length || 0,
+              zaps: 0
             });
 
             currentFeedState.notes.sort((a, b) => b.created_at - a.created_at);
@@ -4314,7 +4390,53 @@ export function handleFeedAction(
     const id = String(payload?.id || action.payload?.id || "");
     if (id) {
       currentFeedState.activeThreadNoteId = id;
-      const ws = (activeWs && activeWs.readyState === WebSocket.OPEN) ? activeWs : (schemaWs && schemaWs.readyState === WebSocket.OPEN ? schemaWs : null);
+
+      // Pre-seed any known replies to this note from currentFeedState.notes and allKnownNotes
+      const existingReplies = schemaThreadReplies.get(id) || [];
+      const replyIds = new Set(existingReplies.map((r) => r.id));
+
+      const checkAndSeed = (ev: any) => {
+        if (!ev || !ev.id || ev.id === id || replyIds.has(ev.id)) return;
+        if ((ev.tags || []).some((t: any[]) => t[0] === "e" && t[1] === id)) {
+          const author = profileCache.get(ev.pubkey);
+          const repItem: FeedNoteItem = {
+            id: ev.id,
+            pubkey: ev.pubkey,
+            authorName: author?.display_name || author?.name || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User"),
+            npub: ev.pubkey ? `npub1${ev.pubkey.slice(0, 8)}...` : "npub1...",
+            avatar: author?.picture,
+            content: ev.content || "",
+            created_at: (ev.created_at || Math.floor(Date.now() / 1000)) * 1000,
+            likes: 0,
+            reposts: 0,
+            replies: 0,
+            zaps: 0
+          };
+          existingReplies.push(repItem);
+          replyIds.add(ev.id);
+        }
+      };
+
+      for (const n of currentFeedState.notes) {
+        checkAndSeed(n);
+      }
+      for (const ev of allKnownNotes.values()) {
+        checkAndSeed(ev);
+      }
+      existingReplies.sort((a, b) => a.created_at - b.created_at);
+      schemaThreadReplies.set(id, existingReplies);
+
+      const targetNote = currentFeedState.notes.find((n) => n.id === id);
+      if (targetNote) {
+        targetNote.replies = existingReplies.length;
+      }
+
+      if (!schemaWs || schemaWs.readyState === WebSocket.CLOSED || schemaWs.readyState === WebSocket.CLOSING) {
+        initFeedSchemaSocket();
+      }
+      const ws = (schemaWs && schemaWs.readyState === WebSocket.OPEN)
+        ? schemaWs
+        : (activeWs && activeWs.readyState === WebSocket.OPEN ? activeWs : null);
       if (ws) {
         try {
           ws.send(JSON.stringify(["REQ", `schema_thread_rep_${id.slice(0, 8)}`, { kinds: [1], "#e": [id], limit: 50 }]));

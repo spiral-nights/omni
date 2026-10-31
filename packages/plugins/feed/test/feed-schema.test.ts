@@ -155,4 +155,40 @@ describe("Feed Schema UI (Server-Driven Declarative Feed)", () => {
     const feedTitle = (feedHeader.children[0] as OmniBoxPrimitive).children[0] as OmniTextPrimitive;
     expect(feedTitle.content).toBe("Feed");
   });
+
+  it("accurately displays non-zero reply counts and lists replies when re-entering a thread", () => {
+    // Current feed schema
+    const feed = getFeedSchema("main") as OmniBoxPrimitive;
+    const noteCard = feed.children[2] as OmniCardPrimitive;
+    const contentNode = noteCard.children.find((c) => c.type === "text") as any;
+    const noteId = contentNode.action.payload.id;
+
+    // The note we previously replied to should now display a reply count of at least 1
+    const actionsBox = noteCard.children.find(
+      (c) =>
+        c.type === "box" &&
+        (c as OmniBoxPrimitive).children.some((btn: any) => btn.icon === "reply")
+    ) as OmniBoxPrimitive;
+    const replyBtn = actionsBox.children.find(
+      (c) => c.type === "button" && (c as any).icon === "reply"
+    ) as any;
+    expect(Number(replyBtn.label)).toBeGreaterThanOrEqual(1);
+
+    // Opening the thread again should show the replies count header and card
+    const threadSchema = handleFeedAction(
+      { name: "view-thread", payload: { id: noteId } },
+      {}
+    ) as OmniBoxPrimitive;
+
+    const repliesTitle = threadSchema.children.find(
+      (c) => c.type === "box" && (c as any).children?.some((child: any) => child.content?.startsWith("Replies ("))
+    );
+    expect(repliesTitle).toBeDefined();
+
+    // The reply card posted earlier is displayed
+    const replyCard = threadSchema.children.find(
+      (c) => c.type === "card" && (c as any).children?.some((child: any) => child.content === "Great point on Nostr decentralization!")
+    );
+    expect(replyCard).toBeDefined();
+  });
 });
