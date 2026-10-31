@@ -7,6 +7,32 @@ import {
 import { OmniCardPrimitive, OmniTabsPrimitive } from "@omni/types";
 
 describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () => {
+  let store: Map<string, string>;
+
+  beforeEach(() => {
+    store = new Map<string, string>();
+    const mockStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => store.set(k, String(v)),
+      removeItem: (k: string) => store.delete(k),
+      clear: () => store.clear(),
+      get length() { return store.size; },
+      key: (i: number) => Array.from(store.keys())[i] || null
+    };
+    try {
+      Object.defineProperty(window, "localStorage", {
+        value: mockStorage,
+        writable: true,
+        configurable: true
+      });
+      Object.defineProperty(globalThis, "localStorage", {
+        value: mockStorage,
+        writable: true,
+        configurable: true
+      });
+    } catch (_) {}
+  });
+
   const mockProfile = {
     name: "Alice Satoshi",
     about: "Building decentralized protocols on Nostr.",
@@ -156,5 +182,79 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
       (c) => c.type === "banner" && (c as any).message?.includes("not following anyone")
     );
     expect(banner).toBeDefined();
+  });
+
+  it("populates My Profile tab with user info and follows from omni:init and local cache", async () => {
+    const userPubkey = "9".repeat(64);
+    const mockFollowsTags = [
+      ["p", "1".repeat(64)],
+      ["p", "2".repeat(64)],
+      ["p", "3".repeat(64)]
+    ];
+    const mockProfileCache: Record<string, any> = {};
+    mockProfileCache[userPubkey] = {
+      meta: {
+        name: "Satoshi Nakamoto",
+        display_name: "Satoshi Nakamoto",
+        about: "Cypherpunk visionary",
+        nip05: "satoshi@bitcoin.org",
+        picture: "https://example.com/satoshi.png"
+      },
+      timestamp: Date.now()
+    };
+
+    localStorage.setItem(`omni_people_follows_${userPubkey}`, JSON.stringify(mockFollowsTags));
+    localStorage.setItem("omni_profile_viewer_cache_v2", JSON.stringify(mockProfileCache));
+
+    (window as any).nostr = {
+      getPublicKey: vi.fn().mockResolvedValue(userPubkey),
+      signEvent: vi.fn().mockImplementation(async (ev) => ({ ...ev, id: "sig_123" }))
+    };
+
+    // Simulate receiving omni:init with userPubkey
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: "omni:init",
+          payload: { userPubkey }
+        }
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const schema = (await handleProfileViewerAction({ name: "switch-tab" }, { tab: "my-profile" })) as OmniCardPrimitive;
+    expect(schema).toBeDefined();
+
+    // Check tabs
+    const tabsNode = schema.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;
+    expect(tabsNode).toBeDefined();
+    expect(tabsNode.activeTab).toBe("my-profile");
+    // Badge on following tab should be 3
+    const followingTab = tabsNode.tabs.find((t) => t.id === "following");
+    expect(followingTab?.badge).toBe(3);
+
+    // Check user info rendered
+    const avatarBox = schema.children?.find(
+      (c) => c.type === "box" && (c as any).children?.some((child: any) => child.type === "avatar")
+    ) as any;
+    expect(avatarBox).toBeDefined();
+    const avatar = avatarBox.children.find((child: any) => child.type === "avatar");
+    expect(avatar.name).toBe("Satoshi Nakamoto");
+
+    const textBox = avatarBox.children.find((child: any) => child.type === "box");
+    expect(textBox).toBeDefined();
+    const titleText = textBox.children.find((child: any) => child.variant === "title");
+    expect(titleText.content).toBe("Satoshi Nakamoto");
+    const aboutText = textBox.children.find((child: any) => child.tone === "muted");
+    expect(aboutText.content).toBe("Cypherpunk visionary");
+
+    // Check Following metric
+    const metricsBox = schema.children?.find(
+      (c) => c.type === "box" && (c as any).children?.some((child: any) => child.type === "metric" && child.label === "Following")
+    ) as any;
+    expect(metricsBox).toBeDefined();
+    const followingMetric = metricsBox.children.find((child: any) => child.label === "Following");
+    expect(followingMetric.value).toBe(3);
   });
 });

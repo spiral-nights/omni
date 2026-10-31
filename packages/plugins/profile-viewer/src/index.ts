@@ -12,11 +12,16 @@ import {
   OmniCodeBlockPrimitive
 } from "@omni/types";
 
+
+const PROFILE_CACHE_KEY = "omni_profile_viewer_cache_v2";
+const PROFILE_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days expiration (2 weeks)
+
 let currentSchemaTab = "my-profile";
 let currentProfilePubkey = "";
 let currentProfileData: Record<string, any> = {
-  name: "Nostr User",
-  about: "Decentralized identity on Nostr",
+  name: "",
+  displayName: "",
+  about: "",
   picture: "",
   nip05: "",
   lud16: "",
@@ -25,6 +30,7 @@ let currentProfileData: Record<string, any> = {
 };
 let schemaFollowsSet: Set<string> = new Set();
 let schemaTargetUser: Record<string, any> | null = null;
+let schemaWs: WebSocket | null = null;
 
 export function getProfileSchema(
   view = "widget",
@@ -32,10 +38,16 @@ export function getProfileSchema(
   extraState?: Record<string, any>
 ): OmniComponentNode {
   const p = profile || currentProfileData;
-  const name = p?.name || p?.displayName || "Nostr User";
-  const about = p?.about || "Decentralized identity on Nostr";
-  const picture = p?.picture || p?.avatar || "";
   const pubkey = p?.pubkey || currentProfilePubkey || "";
+  const name =
+    p?.display_name ||
+    p?.displayName ||
+    p?.name ||
+    (pubkey ? `User ${pubkey.slice(0, 8)}` : "Nostr User");
+  const about =
+    p?.about ||
+    (pubkey ? "Decentralized Nostr identity." : "Decentralized identity on Nostr");
+  const picture = p?.picture || p?.avatar || "";
   const nip05 = p?.nip05 || "";
   const lud16 = p?.lud16 || "";
   const npub = p?.npub || (pubkey ? `npub1${pubkey.slice(0, 10)}...` : "");
@@ -446,6 +458,133 @@ export function getProfileSchema(
   };
 }
 
+function getInitialRouteParams(): URLSearchParams {
+  let search = "";
+  try {
+    if (typeof window !== "undefined" && window.location && window.location.search) {
+      search = window.location.search;
+    }
+  } catch (_) {}
+  const omniRoute =
+    (typeof self !== "undefined" ? (self as any).__OMNI_ROUTE__ : "") ||
+    (typeof window !== "undefined" ? (window as any).__OMNI_ROUTE__ : "");
+  if (!search && omniRoute) {
+    search = omniRoute.includes("?") ? omniRoute.slice(omniRoute.indexOf("?")) : omniRoute;
+  }
+  return new URLSearchParams(search || "");
+}
+
+function sendSchemaWs(frame: any[]) {
+  if (typeof WebSocket === "undefined") return;
+  if (typeof navigator !== "undefined" && navigator.userAgent && (navigator.userAgent.includes("happy-dom") || navigator.userAgent.includes("jsdom"))) {
+    return;
+  }
+  if (!schemaWs || schemaWs.readyState !== WebSocket.OPEN) {
+    try {
+      schemaWs = new WebSocket("wss://relay.damus.io");
+      schemaWs.onopen = () => {
+        try { schemaWs?.send(JSON.stringify(frame)); } catch (_) {}
+      };
+      schemaWs.onmessage = handleSchemaWsMessage;
+    } catch (_) {}
+    return;
+  }
+  try {
+    schemaWs.send(JSON.stringify(frame));
+  } catch (_) {}
+}
+
+function handleSchemaWsMessage(event: any) {
+  try {
+    const raw = event.data !== undefined ? event.data : event;
+    const frame = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!Array.isArray(frame)) return;
+    const type = frame[0];
+    if (type === "EVENT" && frame[2]) {
+      const ev = frame[2];
+      const k = Number(ev.kind);
+
+      // Kind 0: Profile Metadata
+      if (k === 0) {
+        try {
+          const meta = typeof ev.content === "string" ? JSON.parse(ev.content) : ev.content;
+          if (currentProfilePubkey && ev.pubkey === currentProfilePubkey) {
+            currentProfileData = {
+              ...currentProfileData,
+              ...meta,
+              name: meta.display_name || meta.name || currentProfileData.name,
+              displayName: meta.display_name || meta.name || currentProfileData.displayName,
+              about: meta.about ?? currentProfileData.about,
+              picture: meta.picture ?? currentProfileData.picture,
+              banner: meta.banner ?? currentProfileData.banner,
+              nip05: meta.nip05 ?? currentProfileData.nip05,
+              lud16: meta.lud16 ?? currentProfileData.lud16,
+              website: meta.website ?? currentProfileData.website
+            };
+            if (typeof localStorage !== "undefined") {
+              try {
+                const rawCache = localStorage.getItem(PROFILE_CACHE_KEY);
+                const records = rawCache ? JSON.parse(rawCache) : {};
+                records[currentProfilePubkey] = { meta, timestamp: Date.now() };
+                localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(records));
+              } catch (_) {}
+            }
+            dispatchCurrentSchema();
+          } else if (schemaTargetUser && ev.pubkey === schemaTargetUser.pubkey) {
+            schemaTargetUser = {
+              ...schemaTargetUser,
+              name: meta.display_name || meta.name || schemaTargetUser.name,
+              about: meta.about ?? schemaTargetUser.about,
+              picture: meta.picture ?? schemaTargetUser.picture
+            };
+            dispatchCurrentSchema();
+          }
+        } catch (_) {}
+      }
+
+      // Kind 3: Contact List / Following
+      else if (k === 3 && currentProfilePubkey && ev.pubkey === currentProfilePubkey) {
+        schemaFollowsSet.clear();
+        const tags = ev.tags || [];
+        for (const tag of tags) {
+          if (tag[0] === "p" && tag[1]) {
+            schemaFollowsSet.add(tag[1]);
+          }
+        }
+        if (typeof localStorage !== "undefined") {
+          try {
+            localStorage.setItem(`omni_people_follows_${currentProfilePubkey}`, JSON.stringify(tags));
+          } catch (_) {}
+        }
+        dispatchCurrentSchema();
+      }
+    }
+  } catch (_) {}
+}
+
+function startSchemaSubscriptions(pk: string) {
+  if (typeof WebSocket === "undefined") return;
+  if (typeof navigator !== "undefined" && navigator.userAgent && (navigator.userAgent.includes("happy-dom") || navigator.userAgent.includes("jsdom"))) {
+    return;
+  }
+  try {
+    const reqAll = () => {
+      try {
+        schemaWs?.send(JSON.stringify(["REQ", `pv_schema_prof_${Date.now()}`, { kinds: [0], authors: [pk], limit: 1 }]));
+        schemaWs?.send(JSON.stringify(["REQ", `pv_schema_contacts_${Date.now()}`, { kinds: [3], authors: [pk], limit: 1 }]));
+      } catch (_) {}
+    };
+
+    if (!schemaWs || schemaWs.readyState === WebSocket.CLOSED) {
+      schemaWs = new WebSocket("wss://relay.damus.io");
+      schemaWs.onopen = () => reqAll();
+      schemaWs.onmessage = handleSchemaWsMessage;
+    } else if (schemaWs.readyState === WebSocket.OPEN) {
+      reqAll();
+    }
+  } catch (_) {}
+}
+
 export async function handleProfileViewerAction(
   action: OmniAction,
   payload?: Record<string, unknown>
@@ -456,28 +595,35 @@ export async function handleProfileViewerAction(
   } else if (actName === "save-profile") {
     const updated = {
       name: String(payload?.name ?? currentProfileData.name ?? ""),
+      displayName: String(payload?.name ?? currentProfileData.name ?? ""),
       about: String(payload?.about ?? currentProfileData.about ?? ""),
       picture: String(payload?.picture ?? currentProfileData.picture ?? ""),
       nip05: String(payload?.nip05 ?? currentProfileData.nip05 ?? ""),
       lud16: String(payload?.lud16 ?? currentProfileData.lud16 ?? "")
     };
     currentProfileData = { ...currentProfileData, ...updated };
+    if (currentProfilePubkey && typeof localStorage !== "undefined") {
+      try {
+        const rawCache = localStorage.getItem(PROFILE_CACHE_KEY);
+        const records = rawCache ? JSON.parse(rawCache) : {};
+        records[currentProfilePubkey] = { meta: currentProfileData, timestamp: Date.now() };
+        localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(records));
+      } catch (_) {}
+    }
     try {
-      if (typeof nostr !== "undefined" && typeof (nostr as any).signEvent === "function") {
+      const rootObj =
+        (typeof window !== "undefined" ? (window as any) : null) ||
+        (typeof self !== "undefined" ? (self as any) : null);
+      const nostrObj = rootObj?.nostr;
+      if (nostrObj && typeof nostrObj.signEvent === "function") {
         const ev = {
           kind: 0,
           created_at: Math.floor(Date.now() / 1000),
           tags: [],
           content: JSON.stringify(currentProfileData)
         };
-        const signed = await (nostr as any).signEvent(ev);
-        if (typeof WebSocket !== "undefined") {
-          const ws = new WebSocket("wss://relay.damus.io");
-          ws.onopen = () => {
-            ws.send(JSON.stringify(["EVENT", signed]));
-            ws.close();
-          };
-        }
+        const signed = await nostrObj.signEvent(ev);
+        sendSchemaWs(["EVENT", signed]);
       }
     } catch (_) {}
     currentSchemaTab = "my-profile";
@@ -485,57 +631,125 @@ export async function handleProfileViewerAction(
     const rawKey = String(payload?.keyInput || payload?.key || payload?.value || "").trim();
     if (rawKey) {
       try {
-        const authApi =
-          (typeof omni !== "undefined" && (omni as any)?.auth) ||
-          (typeof window !== "undefined" && (window as any).omni?.auth) ||
-          null;
+        const rootObj =
+          (typeof window !== "undefined" ? (window as any) : null) ||
+          (typeof self !== "undefined" ? (self as any) : null);
+        const authApi = rootObj?.omni?.auth;
         if (authApi && typeof authApi.switchKey === "function") {
           const res = await authApi.switchKey(rawKey);
           if (res && res.pubkey) {
             currentProfilePubkey = res.pubkey;
             currentProfileData.pubkey = res.pubkey;
-            currentProfileData.npub = res.npub || "";
+            currentProfileData.npub = res.npub || `npub1${res.pubkey.slice(0, 10)}...`;
+            await initSchemaData(res.pubkey);
           }
         }
       } catch (_) {}
     }
+    currentSchemaTab = "my-profile";
   } else if (actName === "generate-key") {
     try {
-      const authApi =
-        (typeof omni !== "undefined" && (omni as any)?.auth) ||
-        (typeof window !== "undefined" && (window as any).omni?.auth) ||
-        null;
+      const rootObj =
+        (typeof window !== "undefined" ? (window as any) : null) ||
+        (typeof self !== "undefined" ? (self as any) : null);
+      const authApi = rootObj?.omni?.auth;
       if (authApi && typeof authApi.generateKey === "function") {
         const res = await authApi.generateKey();
         if (res && res.pubkey) {
           currentProfilePubkey = res.pubkey;
           currentProfileData.pubkey = res.pubkey;
-          currentProfileData.npub = res.npub || "";
+          currentProfileData.npub = res.npub || `npub1${res.pubkey.slice(0, 10)}...`;
+          await initSchemaData(res.pubkey);
         }
       }
     } catch (_) {}
+    currentSchemaTab = "my-profile";
   } else if (actName === "follow") {
     const targetPk = String(payload?.pubkey || action.payload?.pubkey || "");
     if (targetPk) {
       schemaFollowsSet.add(targetPk);
       if (schemaTargetUser) schemaTargetUser.isFollowing = true;
+      if (currentProfilePubkey && typeof localStorage !== "undefined") {
+        try {
+          const tags = Array.from(schemaFollowsSet).map((pk) => ["p", pk]);
+          localStorage.setItem(`omni_people_follows_${currentProfilePubkey}`, JSON.stringify(tags));
+        } catch (_) {}
+      }
+      try {
+        const rootObj =
+          (typeof window !== "undefined" ? (window as any) : null) ||
+          (typeof self !== "undefined" ? (self as any) : null);
+        const nostrObj = rootObj?.nostr;
+        if (nostrObj && typeof nostrObj.signEvent === "function") {
+          const tags = Array.from(schemaFollowsSet).map((pk) => ["p", pk]);
+          const ev = {
+            kind: 3,
+            created_at: Math.floor(Date.now() / 1000),
+            tags,
+            content: ""
+          };
+          const signed = await nostrObj.signEvent(ev);
+          sendSchemaWs(["EVENT", signed]);
+        }
+      } catch (_) {}
     }
   } else if (actName === "unfollow") {
     const targetPk = String(payload?.pubkey || action.payload?.pubkey || "");
     if (targetPk) {
       schemaFollowsSet.delete(targetPk);
       if (schemaTargetUser) schemaTargetUser.isFollowing = false;
+      if (currentProfilePubkey && typeof localStorage !== "undefined") {
+        try {
+          const tags = Array.from(schemaFollowsSet).map((pk) => ["p", pk]);
+          localStorage.setItem(`omni_people_follows_${currentProfilePubkey}`, JSON.stringify(tags));
+        } catch (_) {}
+      }
+      try {
+        const rootObj =
+          (typeof window !== "undefined" ? (window as any) : null) ||
+          (typeof self !== "undefined" ? (self as any) : null);
+        const nostrObj = rootObj?.nostr;
+        if (nostrObj && typeof nostrObj.signEvent === "function") {
+          const tags = Array.from(schemaFollowsSet).map((pk) => ["p", pk]);
+          const ev = {
+            kind: 3,
+            created_at: Math.floor(Date.now() / 1000),
+            tags,
+            content: ""
+          };
+          const signed = await nostrObj.signEvent(ev);
+          sendSchemaWs(["EVENT", signed]);
+        }
+      } catch (_) {}
     }
   } else if (actName === "view_profile" || actName === "view-profile") {
     const targetPk = String(payload?.pubkey || action.payload?.pubkey || "");
     if (targetPk) {
       schemaTargetUser = {
         pubkey: targetPk,
-        name: `Nostr User (${targetPk.slice(0, 8)})`,
-        about: "Decentralized Nostr user",
+        name: `User ${targetPk.slice(0, 8)}`,
+        about: "Nostr user",
         isFollowing: schemaFollowsSet.has(targetPk)
       };
+      if (typeof localStorage !== "undefined") {
+        try {
+          const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+          if (raw) {
+            const records = JSON.parse(raw);
+            const entry = records[targetPk]?.meta || records[targetPk];
+            if (entry) {
+              schemaTargetUser = {
+                ...schemaTargetUser,
+                name: entry.display_name || entry.name || schemaTargetUser.name,
+                about: entry.about ?? schemaTargetUser.about,
+                picture: entry.picture || ""
+              };
+            }
+          }
+        } catch (_) {}
+      }
       currentSchemaTab = "user-profile";
+      sendSchemaWs(["REQ", `pv_schema_target_${Date.now()}`, { kinds: [0], authors: [targetPk], limit: 1 }]);
     }
   }
 
@@ -1512,8 +1726,6 @@ function getAvatarSvg(pubkey: string, letter: string): string {
 </svg>`;
 }
 
-const PROFILE_CACHE_KEY = "omni_profile_viewer_cache_v2";
-const PROFILE_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days expiration (2 weeks)
 
 interface CachedProfileViewerEntry {
   meta: ProfileMetadata;
@@ -3853,56 +4065,137 @@ function isSchemaMode(): boolean {
 }
 
 function dispatchProfileSchema(schema: OmniComponentNode | null) {
-  if (!schema || typeof window === "undefined") return;
-  if (window.parent && window.parent !== window) {
-    window.parent.postMessage({ type: "omni:schema", componentId: "main", schema }, "*");
-  } else {
-    window.postMessage({ type: "omni:schema", componentId: "main", schema }, "*");
+  if (!schema) return;
+  const rootObj: any =
+    (typeof window !== "undefined" ? window : null) ||
+    (typeof self !== "undefined" ? self : null) ||
+    (typeof globalThis !== "undefined" ? globalThis : null);
+  if (!rootObj) return;
+
+  if (rootObj.parent && rootObj.parent !== rootObj) {
+    rootObj.parent.postMessage({ type: "omni:schema", componentId: "main", schema }, "*");
+  } else if (typeof rootObj.postMessage === "function") {
+    rootObj.postMessage({ type: "omni:schema", componentId: "main", schema }, "*");
   }
 }
 
-async function initSchemaData() {
+function dispatchCurrentSchema() {
+  if (!isSchemaMode()) return;
+  dispatchProfileSchema(
+    getProfileSchema(currentSchemaTab, currentProfileData, {
+      activeTab: currentSchemaTab,
+      targetUser: schemaTargetUser,
+      isFollowing: schemaTargetUser?.isFollowing,
+      follows: Array.from(schemaFollowsSet).map((pk) => ({ pubkey: pk })),
+      followsCount: schemaFollowsSet.size
+    })
+  );
+}
+
+async function resolveUserPubkey(): Promise<string> {
+  const rootObj =
+    (typeof window !== "undefined" ? (window as any) : null) ||
+    (typeof self !== "undefined" ? (self as any) : null) ||
+    (typeof globalThis !== "undefined" ? (globalThis as any) : null);
+
+  // 1. Standard window.nostr (NIP-07)
+  const nostrObj = rootObj?.nostr;
+  if (nostrObj && typeof nostrObj.getPublicKey === "function") {
+    try {
+      const pkPromise = nostrObj.getPublicKey();
+      const timeout = new Promise<string>((resolve) => setTimeout(() => resolve(""), 2000));
+      const pk = await Promise.race([pkPromise, timeout]);
+      if (pk) return pk;
+    } catch (_) {}
+  }
+
+  // 2. Host session info via omni runtime
+  const omniObj = rootObj?.omni;
+  if (omniObj?.session?.userPubkey) {
+    return omniObj.session.userPubkey;
+  }
+  if (omniObj?.nostr && typeof omniObj.nostr.getPublicKey === "function") {
+    try {
+      const pk = await omniObj.nostr.getPublicKey();
+      if (pk) return pk;
+    } catch (_) {}
+  }
+
+  // 3. Partitioned LocalStorage fallback
+  if (typeof localStorage !== "undefined") {
+    try {
+      const stored = localStorage.getItem("omni_user_pubkey");
+      if (stored) return stored;
+    } catch (_) {}
+  }
+
+  return "";
+}
+
+async function initSchemaData(explicitPk?: string) {
   try {
-    let pk = "";
-    if (typeof nostr !== "undefined" && typeof (nostr as any).getPublicKey === "function") {
-      try { pk = await (nostr as any).getPublicKey(); } catch (_) {}
-    }
-    if (!pk && typeof window !== "undefined" && (window as any).omni?.session?.userPubkey) {
-      pk = (window as any).omni.session.userPubkey;
-    }
-    if (!pk && typeof localStorage !== "undefined") {
-      pk = localStorage.getItem("omni_user_pubkey") || "";
-    }
+    const pk = explicitPk || (await resolveUserPubkey());
     if (pk) {
       currentProfilePubkey = pk;
       currentProfileData.pubkey = pk;
       currentProfileData.npub = `npub1${pk.slice(0, 10)}...`;
 
-      const omniObj = (typeof omni !== "undefined" && omni) || (typeof window !== "undefined" && (window as any).omni);
-      if (omniObj?.storage) {
+      // 1. Instant 0ms cache restore: follows
+      if (typeof localStorage !== "undefined") {
         try {
-          const cached = await omniObj.storage.get(`profile:${pk}`);
-          if (cached && typeof cached === "object") {
-            currentProfileData = { ...currentProfileData, ...cached };
+          const rawFollows = localStorage.getItem(`omni_people_follows_${pk}`);
+          if (rawFollows) {
+            const tags = JSON.parse(rawFollows);
+            if (Array.isArray(tags)) {
+              schemaFollowsSet.clear();
+              for (const t of tags) {
+                if (t[0] === "p" && t[1]) schemaFollowsSet.add(t[1]);
+              }
+            }
+          }
+        } catch (_) {}
+
+        // 2. Instant 0ms cache restore: profile metadata
+        try {
+          const rawCache = localStorage.getItem(PROFILE_CACHE_KEY);
+          if (rawCache) {
+            const records = JSON.parse(rawCache);
+            const entry = records[pk]?.meta || records[pk];
+            if (entry && typeof entry === "object") {
+              currentProfileData = {
+                ...currentProfileData,
+                ...entry,
+                name: entry.display_name || entry.name || currentProfileData.name,
+                displayName: entry.display_name || entry.name || currentProfileData.displayName
+              };
+            }
           }
         } catch (_) {}
       }
 
+      // 3. Parse route view/pubkey
       try {
-        const searchParams = new URLSearchParams(window.location.search || window.location.hash.replace("#", "?"));
+        const searchParams = getInitialRouteParams();
         const targetPk = searchParams.get("pubkey");
         if (targetPk && targetPk !== pk) {
           schemaTargetUser = {
             pubkey: targetPk,
             name: `User ${targetPk.slice(0, 8)}`,
             about: "Nostr user",
-            isFollowing: false
+            isFollowing: schemaFollowsSet.has(targetPk)
           };
           currentSchemaTab = "user-profile";
         } else if (searchParams.get("view") === "edit") {
           currentSchemaTab = "edit";
+        } else if (searchParams.get("view") === "following") {
+          currentSchemaTab = "following";
+        } else if (searchParams.get("view") === "keys") {
+          currentSchemaTab = "keys";
         }
       } catch (_) {}
+
+      // 4. Start live relay subscriptions
+      startSchemaSubscriptions(pk);
     }
   } catch (_) {}
 }
@@ -3920,7 +4213,16 @@ if (typeof window !== "undefined") {
 
   window.addEventListener("message", async (event: MessageEvent) => {
     const data = event.data;
-    if (data && (data.type === "omni:action" || data.type === "action") && data.action) {
+    if (!data) return;
+
+    if (data.type === "omni:init") {
+      const pubkey = data.payload?.userPubkey;
+      await initSchemaData(pubkey);
+      dispatchCurrentSchema();
+      return;
+    }
+
+    if ((data.type === "omni:action" || data.type === "action") && data.action) {
       const next = await handleProfileViewerAction(data.action, data.payload);
       dispatchProfileSchema(next);
     }
@@ -3934,15 +4236,20 @@ if (typeof window !== "undefined") {
     }
   });
 
+  window.addEventListener("nostr:keychanged", async (e: any) => {
+    if (e.detail?.pubkey) {
+      currentProfilePubkey = e.detail.pubkey;
+      currentProfileData.pubkey = e.detail.pubkey;
+      currentProfileData.npub = `npub1${e.detail.pubkey.slice(0, 10)}...`;
+      await initSchemaData(e.detail.pubkey);
+      dispatchCurrentSchema();
+    }
+  });
+
   if (isSchemaMode()) {
     (async () => {
       await initSchemaData();
-      dispatchProfileSchema(getProfileSchema(currentSchemaTab, currentProfileData, {
-        activeTab: currentSchemaTab,
-        targetUser: schemaTargetUser,
-        follows: Array.from(schemaFollowsSet).map((pk) => ({ pubkey: pk })),
-        followsCount: schemaFollowsSet.size
-      }));
+      dispatchCurrentSchema();
     })();
   }
 }
