@@ -192,6 +192,170 @@ export class SandboxInstance {
     }
   }
 
+  public updateTheme(themeOverride?: any): void {
+    if (themeOverride) {
+      this.options.theme = themeOverride;
+    }
+    const resolvedTheme = this.resolveHostThemeTokens();
+    if (this.iframe) {
+      this.iframe.style.colorScheme = resolvedTheme.mode;
+      try {
+        this.iframe.contentWindow?.postMessage(
+          {
+            type: "omni:theme-update",
+            payload: resolvedTheme
+          },
+          "*"
+        );
+      } catch (_) {}
+    }
+  }
+
+  private resolveHostThemeTokens(): {
+    mode: "light" | "dark";
+    colors: Record<string, string>;
+    tokens: Record<string, string>;
+  } {
+    const optTheme = this.options.theme || {};
+    let mode: "light" | "dark" = optTheme.mode === "light" ? "light" : "dark";
+    const tokens: Record<string, string> = {};
+
+    if (typeof document !== "undefined" && typeof window !== "undefined") {
+      try {
+        const candidates = [
+          document.querySelector(".editorial-shell-root"),
+          document.querySelector(".panorama-shell-root"),
+          document.querySelector(".omni-shell-root"),
+          document.documentElement,
+          document.body
+        ].filter(Boolean) as Element[];
+
+        for (const el of candidates) {
+          const attrMode = el.getAttribute("data-theme-mode");
+          if (attrMode === "light" || attrMode === "dark") {
+            mode = attrMode;
+            break;
+          }
+          if (el.classList?.contains("light-mode") || el.classList?.contains("theme-light")) {
+            mode = "light";
+            break;
+          }
+        }
+
+        const varNames = [
+          "--omni-bg-canvas",
+          "--omni-bg-surface",
+          "--omni-bg-elevated",
+          "--omni-bg-subtle",
+          "--omni-text-primary",
+          "--omni-text-secondary",
+          "--omni-text-muted",
+          "--omni-border-subtle",
+          "--omni-border-strong",
+          "--omni-border-focus",
+          "--omni-accent-primary",
+          "--omni-accent-hover",
+          "--omni-accent-contrast",
+          "--omni-status-online",
+          "--omni-status-badge",
+          "--omni-font-sans",
+          "--omni-font-serif",
+          "--omni-font-mono",
+          "--omni-radius-sm",
+          "--omni-radius-md",
+          "--omni-radius-lg",
+          "--omni-radius-pill"
+        ];
+
+        for (const el of candidates) {
+          const style = window.getComputedStyle(el);
+          if (!style) continue;
+          for (const v of varNames) {
+            if (!tokens[v]) {
+              const val = style.getPropertyValue(v)?.trim();
+              if (val) {
+                tokens[v] = val;
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    const isLight = mode === "light";
+    const defaults: Record<string, string> = isLight
+      ? {
+          "--omni-bg-canvas": optTheme.colors?.canvas || "#fbfbf9",
+          "--omni-bg-surface": optTheme.colors?.surface || "#f4f4f2",
+          "--omni-bg-elevated": "#ffffff",
+          "--omni-bg-subtle": "#eeeeec",
+          "--omni-text-primary": "#0f172a",
+          "--omni-text-secondary": "#565e74",
+          "--omni-text-muted": "#94a3b8",
+          "--omni-border-subtle": "#e2e8f0",
+          "--omni-border-strong": "#cbd5e1",
+          "--omni-border-focus": optTheme.colors?.accent || "#1e40af",
+          "--omni-accent-primary": optTheme.colors?.accent || "#1e40af",
+          "--omni-accent-hover": "#1d4ed8",
+          "--omni-accent-contrast": optTheme.colors?.contrast || "#ffffff",
+          "--omni-status-online": optTheme.colors?.accent || "#1e40af",
+          "--omni-status-badge": optTheme.colors?.accent || "#1e40af",
+          "--omni-radius-sm": optTheme.colors?.radius ?? "4px",
+          "--omni-radius-md": optTheme.colors?.radius ?? "6px",
+          "--omni-radius-lg": optTheme.colors?.radius ?? "8px",
+          "--omni-radius-pill": "9999px"
+        }
+      : {
+          "--omni-bg-canvas": optTheme.colors?.canvas || "#1c1b20",
+          "--omni-bg-surface": optTheme.colors?.surface || "#232227",
+          "--omni-bg-elevated": "#2a2930",
+          "--omni-bg-subtle": "#33323b",
+          "--omni-text-primary": "#e5e1e4",
+          "--omni-text-secondary": "#c2c6d6",
+          "--omni-text-muted": "#8c909f",
+          "--omni-border-subtle": "#313038",
+          "--omni-border-strong": "#42404b",
+          "--omni-border-focus": optTheme.colors?.accent || "#4d8eff",
+          "--omni-accent-primary": optTheme.colors?.accent || "#4d8eff",
+          "--omni-accent-hover": "#60a5fa",
+          "--omni-accent-contrast": optTheme.colors?.contrast || "#ffffff",
+          "--omni-status-online": optTheme.colors?.accent || "#4d8eff",
+          "--omni-status-badge": optTheme.colors?.accent || "#4d8eff",
+          "--omni-radius-sm": optTheme.colors?.radius ?? "4px",
+          "--omni-radius-md": optTheme.colors?.radius ?? "6px",
+          "--omni-radius-lg": optTheme.colors?.radius ?? "8px",
+          "--omni-radius-pill": "9999px"
+        };
+
+    for (const [k, v] of Object.entries(defaults)) {
+      if (!tokens[k]) {
+        tokens[k] = v;
+      }
+    }
+
+    // Populate short aliases (--bg-surface, --text-primary, etc.)
+    for (const [k, v] of Object.entries({ ...tokens })) {
+      if (k.startsWith("--omni-")) {
+        const shortKey = `--${k.slice("--omni-".length)}`;
+        tokens[shortKey] = v;
+      }
+    }
+
+    return {
+      mode,
+      colors: {
+        canvas: tokens["--omni-bg-canvas"],
+        surface: tokens["--omni-bg-surface"],
+        elevated: tokens["--omni-bg-elevated"],
+        subtle: tokens["--omni-bg-subtle"],
+        accent: tokens["--omni-accent-primary"],
+        contrast: tokens["--omni-accent-contrast"],
+        radius: optTheme.colors?.radius ?? tokens["--omni-radius-sm"]
+      },
+      tokens
+    };
+  }
+
   async mount(): Promise<void> {
     if (typeof document === "undefined") return;
 
@@ -267,6 +431,8 @@ export class SandboxInstance {
         ? this.manifest.components
         : [{ id: "main", type: "main" as const, title: this.manifest.name, slot: "main" }];
 
+    let primaryIframeContainer: HTMLElement | null = null;
+
     for (const comp of compDeclarations) {
       let slotContainer: Element | undefined | null = null;
       if (this.options.slotResolver) {
@@ -281,9 +447,13 @@ export class SandboxInstance {
       }
 
       if (slotContainer) {
-        const existing = slotContainer.querySelector(`.omni-comp-${comp.id}`);
-        if (existing) {
-          existing.remove();
+        if (comp.type === "main" || comp.slot === "main") {
+          slotContainer.querySelectorAll(".omni-component-slot").forEach((el) => el.remove());
+        } else {
+          const existing = slotContainer.querySelector(`.omni-comp-${comp.id}`);
+          if (existing) {
+            existing.remove();
+          }
         }
 
         const compContainer = document.createElement("div");
@@ -331,8 +501,8 @@ export class SandboxInstance {
         });
         this.schemaRenderers.set(comp.id, schemaRenderer);
 
-        if (!isSchema && !this.iframe.parentNode) {
-          // Direct Iframe View: render visible app iframe into the primary container
+        if (!isSchema && !primaryIframeContainer) {
+          // Direct Iframe View: configure visible app iframe and defer DOM append until srcdoc is ready
           this.iframe.style.display = "block";
           this.iframe.style.width = "100%";
           this.iframe.style.height = "100%";
@@ -341,7 +511,7 @@ export class SandboxInstance {
           this.iframe.style.flex = "1";
           this.iframe.style.position = "static";
           this.iframe.style.visibility = "visible";
-          compContainer.appendChild(this.iframe);
+          primaryIframeContainer = compContainer;
           setupIframeContainerProxy(compContainer, this.iframe, slotContainer);
         }
       }
@@ -522,8 +692,29 @@ export class SandboxInstance {
     const safeRouteInjectionScript = routeInjectionScript.replace(/<\/script/gi, "<\\/script");
     const safeRuntimeCode = runtimeCode.replace(/<\/script/gi, "<\\/script");
 
+    const resolvedTheme = this.resolveHostThemeTokens();
+    this.iframe.style.colorScheme = resolvedTheme.mode;
+    const themeVarsCss = Object.entries(resolvedTheme.tokens)
+      .map(([k, v]) => `      ${k}: ${v};`)
+      .join("\n");
+    const themeStyleBlock = `<style id="omni-theme-tokens">
+    :root {
+      color-scheme: ${resolvedTheme.mode};
+${themeVarsCss}
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: transparent !important;
+      color: var(--omni-text-primary, #e5e1e4);
+      font-family: var(--omni-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+      min-height: 100%;
+      box-sizing: border-box;
+    }
+  </style>`;
+
     if (isHtmlDoc) {
-      const injectedHead = `\n  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  <script>\n    window.addEventListener("error", function(e) {\n      console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);\n    });\n    ${safeRouteInjectionScript}\n  </script>\n  <script>\n    ${safeRuntimeCode}\n  </script>\n`;
+      const injectedHead = `\n  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  ${themeStyleBlock}\n  <script>\n    window.addEventListener("error", function(e) {\n      console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);\n    });\n    ${safeRouteInjectionScript}\n  </script>\n  <script>\n    ${safeRuntimeCode}\n  </script>\n`;
 
       if (/<head\b[^>]*>/i.test(pluginCode)) {
         this.iframe.srcdoc = pluginCode.replace(/<head\b[^>]*>/i, (match) => `${match}${injectedHead}`);
@@ -541,32 +732,10 @@ export class SandboxInstance {
         ? `<script type="module">\n${safeModuleCode}\n</script>`
         : `<script>\n(async () => {\n${safeModuleCode}\n})();\n</script>`;
       this.iframe.srcdoc = `<!DOCTYPE html>
-<html>
+<html data-theme-mode="${resolvedTheme.mode}">
 <head>
   <meta http-equiv="Content-Security-Policy" content="${csp}">
-  <style>
-    :root {
-      color-scheme: dark;
-      --omni-bg-canvas: #141312;
-      --omni-bg-surface: #191816;
-      --omni-bg-elevated: #22201d;
-      --omni-text-primary: #ede8df;
-      --omni-text-secondary: #9e988f;
-      --omni-text-muted: #6b665f;
-      --omni-accent-primary: #d4a373;
-      --omni-border-subtle: #272522;
-      --omni-border-strong: #383530;
-    }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background-color: transparent !important;
-      color: var(--omni-text-primary, #ede8df);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      min-height: 100%;
-      box-sizing: border-box;
-    }
-  </style>
+  ${themeStyleBlock}
   <script>
     window.addEventListener("error", function(e) {
       console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);
@@ -586,27 +755,37 @@ export class SandboxInstance {
     // 6. Append to document and perform handshake on load
     await new Promise<void>((resolve) => {
       let resolved = false;
-      const doHandshake = () => {
-        if (resolved) return;
-        resolved = true;
-        if (typeof window !== "undefined" && onMessage) {
-          window.removeEventListener("message", onMessage);
-        }
+      let handshakeCount = 0;
 
+      const sendInitHandshake = () => {
+        if (!this.iframe) return;
+        if (handshakeCount > 0) {
+          // If the iframe was reparented in the DOM and reloaded srcdoc, allocate fresh MessageChannels
+          try {
+            this.channel1?.port1.close();
+            this.channel1?.port2.close();
+          } catch (_) {}
+          try {
+            this.channel2?.port1.close();
+            this.channel2?.port2.close();
+          } catch (_) {}
+          this.channel1 = new MessageChannel();
+          this.channel2 = new MessageChannel();
+          this.channel1.port1.onmessage = (event) => {
+            applySchema(event.data);
+          };
+          this.dispatcher?.setPort(this.channel2.port1);
+        }
+        handshakeCount++;
+
+        const currentTheme = this.resolveHostThemeTokens();
         const initMsg: OmniInitMessage = {
           type: "omni:init",
           payload: {
             pluginId: this.manifest.id,
             instanceId: this.options.instanceId || `inst_${Math.random().toString(36).slice(2, 9)}`,
             userPubkey: this.options.userPubkey,
-            theme: this.options.theme || {
-              mode: "dark",
-              colors: {
-                canvas: "#141312",
-                surface: "#191816",
-                accent: "#d4a373"
-              }
-            },
+            theme: currentTheme as any,
             slots: Array.from(this.options.slotContainers.keys()),
             components: this.manifest.components?.map(c => c.id) || ["main"],
             route: routeVal,
@@ -631,26 +810,43 @@ export class SandboxInstance {
           console.error(`[SandboxInstance] Failed to postMessage handshake:`, e);
         }
 
-        resolve();
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+
+      const doHandshake = () => {
+        if (resolved) return;
+        sendInitHandshake();
       };
 
       const onMessage = (event: MessageEvent) => {
         if (
           event.data?.type === "omni:guest-ready" &&
-          (event.source === this.iframe?.contentWindow || event.data?.pluginId === this.manifest.id)
+          (event.source === this.iframe?.contentWindow ||
+            (!resolved && event.data?.pluginId === this.manifest.id))
         ) {
-          doHandshake();
+          sendInitHandshake();
         }
       };
 
       if (typeof window !== "undefined") {
         window.addEventListener("message", onMessage);
+        this.cleanupFns.push(() => {
+          window.removeEventListener("message", onMessage);
+        });
       }
 
       if (this.iframe) {
-        this.iframe.onload = doHandshake;
-        this.iframe.addEventListener("load", doHandshake, { once: true });
-        if (!this.iframe.parentNode) {
+        this.iframe.onload = () => {
+          if (!resolved) {
+            sendInitHandshake();
+          }
+        };
+        if (primaryIframeContainer && !this.iframe.parentNode) {
+          primaryIframeContainer.appendChild(this.iframe);
+        } else if (!this.iframe.parentNode) {
           // Headless execution for schema plugins
           this.iframe.style.display = "none";
           this.iframe.style.position = "absolute";
@@ -662,9 +858,6 @@ export class SandboxInstance {
           document.body.appendChild(this.iframe);
         }
       } else {
-        if (typeof window !== "undefined") {
-          window.removeEventListener("message", onMessage);
-        }
         resolve();
         return;
       }

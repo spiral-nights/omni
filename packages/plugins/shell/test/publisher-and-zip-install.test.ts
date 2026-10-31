@@ -531,7 +531,8 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     await wait(200);
     const radarContainer = shell2.getContainerForPluginSlot("org.omni.plugin.relay-ping-radar", "main");
     expect(radarContainer?.innerHTML).toContain("Relay Ping Radar Ready");
-    expect(radarContainer?.querySelector("style")?.textContent).toContain(".radar-shell");
+    const radarStyles = Array.from(radarContainer?.querySelectorAll("style") || []).map((s) => s.textContent).join("\n");
+    expect(radarStyles).toContain(".radar-shell");
 
     shell2.destroy();
   });

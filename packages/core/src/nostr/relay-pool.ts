@@ -79,6 +79,7 @@ export class RelayPool {
   private statusListeners: Set<RelayStatusCallback> = new Set();
   private reconnectTimers: Map<string, any> = new Map();
   private manuallyClosedRelays: Set<string> = new Set();
+  private hasUserCustomizedRelays: boolean = false;
 
   constructor(options: RelayPoolOptions = {}) {
     this.persistRelays = options.persistRelays ?? true;
@@ -93,6 +94,7 @@ export class RelayPool {
       const persisted = this.loadPersistedRelays();
       if (persisted !== null) {
         this.bootstrapUrls = persisted;
+        this.hasUserCustomizedRelays = true;
       } else if (options.bootstrapRelays !== undefined) {
         this.bootstrapUrls = [...options.bootstrapRelays];
         if (this.bootstrapUrls.length > 0) this.savePersistedRelays();
@@ -103,6 +105,10 @@ export class RelayPool {
     } else {
       this.bootstrapUrls = options.bootstrapRelays !== undefined ? [...options.bootstrapRelays] : defaultBootstrap;
     }
+  }
+
+  public hasPersistedRelays(): boolean {
+    return this.hasUserCustomizedRelays;
   }
 
   private loadPersistedRelays(): string[] | null {
@@ -416,6 +422,7 @@ export class RelayPool {
     }
     normalized = normalized.replace(/\/+$/, "");
 
+    this.hasUserCustomizedRelays = true;
     this.manuallyClosedRelays.delete(normalized);
     if (!this.bootstrapUrls.some((u) => u.trim().replace(/\/+$/, "") === normalized)) {
       this.bootstrapUrls.push(normalized);
@@ -432,7 +439,9 @@ export class RelayPool {
     }
     normalized = normalized.replace(/\/+$/, "");
 
+    this.hasUserCustomizedRelays = true;
     this.manuallyClosedRelays.add(normalized);
+    this.userRelays.delete(normalized);
     if (this.reconnectTimers.has(normalized)) {
       clearTimeout(this.reconnectTimers.get(normalized));
       this.reconnectTimers.delete(normalized);

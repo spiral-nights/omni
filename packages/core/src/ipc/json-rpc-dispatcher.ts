@@ -193,6 +193,11 @@ export class JsonRpcDispatcher {
     };
   }
 
+  public setPort(port: MessagePort): void {
+    this.ctx.port = port;
+    this.setupPortListener();
+  }
+
   public async dispatchRaw(req: JsonRpcRequest): Promise<JsonRpcResponse> {
     try {
       const result = await this.handleRequest(req.method, req.params);
@@ -574,7 +579,8 @@ export class JsonRpcDispatcher {
       }
 
       case "relays.add": {
-        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "relays:manage");
+        const isRelaysPlugin = this.ctx.pluginId === "org.omni.plugin.relays";
+        const allowed = isRelaysPlugin || (await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "relays:manage"));
         if (!allowed) {
           throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for relays:manage" };
         }
@@ -590,7 +596,8 @@ export class JsonRpcDispatcher {
       }
 
       case "relays.remove": {
-        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "relays:manage");
+        const isRelaysPlugin = this.ctx.pluginId === "org.omni.plugin.relays";
+        const allowed = isRelaysPlugin || (await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "relays:manage"));
         if (!allowed) {
           throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for relays:manage" };
         }
@@ -987,6 +994,10 @@ export class JsonRpcDispatcher {
       unsub();
     }
     this.activeSubscriptions.clear();
-    this.ctx.intentBroker.unregisterHandlers(this.ctx.pluginId);
+    if (typeof (this.ctx.intentBroker as any).unregisterRpcHandlers === "function") {
+      (this.ctx.intentBroker as any).unregisterRpcHandlers(this.ctx.pluginId);
+    } else {
+      this.ctx.intentBroker.unregisterHandlers(this.ctx.pluginId);
+    }
   }
 }

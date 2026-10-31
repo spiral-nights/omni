@@ -175,6 +175,64 @@
     }
   } catch (_) {}
 
+  function applyThemePayload(theme) {
+    if (typeof document === "undefined" || !theme) return;
+    try {
+      const docEl = document.documentElement;
+      const mode = theme.mode === "light" ? "light" : "dark";
+      if (docEl) {
+        docEl.setAttribute("data-theme-mode", mode);
+        if (docEl.style) {
+          docEl.style.backgroundColor = "transparent";
+          docEl.style.colorScheme = mode;
+        }
+      }
+      if (document.body && document.body.style) {
+        document.body.style.backgroundColor = "transparent";
+      }
+      if (docEl && docEl.style) {
+        if (theme.tokens && typeof theme.tokens === "object") {
+          for (const [k, v] of Object.entries(theme.tokens)) {
+            if (v) docEl.style.setProperty(k, String(v));
+          }
+        }
+        const colors = theme.colors;
+        if (colors && typeof colors === "object") {
+          if (colors.canvas) {
+            docEl.style.setProperty("--bg-canvas", colors.canvas);
+            docEl.style.setProperty("--omni-bg-canvas", colors.canvas);
+          }
+          if (colors.surface) {
+            docEl.style.setProperty("--bg-surface", colors.surface);
+            docEl.style.setProperty("--omni-bg-surface", colors.surface);
+          }
+          if (colors.elevated) {
+            docEl.style.setProperty("--bg-elevated", colors.elevated);
+            docEl.style.setProperty("--omni-bg-elevated", colors.elevated);
+          }
+          if (colors.subtle) {
+            docEl.style.setProperty("--bg-subtle", colors.subtle);
+            docEl.style.setProperty("--omni-bg-subtle", colors.subtle);
+          }
+          if (colors.accent) {
+            docEl.style.setProperty("--accent-primary", colors.accent);
+            docEl.style.setProperty("--omni-accent-primary", colors.accent);
+          }
+          if (colors.contrast) {
+            docEl.style.setProperty("--accent-contrast", colors.contrast);
+            docEl.style.setProperty("--omni-accent-contrast", colors.contrast);
+          }
+          if (colors.radius !== undefined) {
+            docEl.style.setProperty("--radius-sm", colors.radius);
+            docEl.style.setProperty("--radius-md", colors.radius);
+            docEl.style.setProperty("--omni-radius-sm", colors.radius);
+            docEl.style.setProperty("--omni-radius-md", colors.radius);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   // 2. Listen for Handshake and Messages from Host/Guest
   function handleInitMessage(event) {
     const data = event.data;
@@ -182,6 +240,14 @@
 
     if ((data.type === "omni:schema" || data.type === "schema") && data.schema) {
       forwardSchema(data.schema, data.componentId);
+      return;
+    }
+
+    if (data.type === "omni:theme-update" && data.payload) {
+      if (sessionInfo) {
+        sessionInfo.theme = data.payload;
+      }
+      applyThemePayload(data.payload);
       return;
     }
 
@@ -215,7 +281,9 @@
       }
 
       // Apply Host Theme Tokens to Guest DOM
-      if (typeof document !== "undefined") {
+      if (sessionInfo && sessionInfo.theme) {
+        applyThemePayload(sessionInfo.theme);
+      } else if (typeof document !== "undefined") {
         try {
           const docEl = document.documentElement;
           if (docEl && docEl.style) {
@@ -224,37 +292,6 @@
           }
           if (document.body && document.body.style) {
             document.body.style.backgroundColor = "transparent";
-          }
-        } catch (_) {}
-      }
-
-      if (sessionInfo && sessionInfo.theme && sessionInfo.theme.colors) {
-        try {
-          const docEl = document.documentElement;
-          if (docEl && docEl.style) {
-            const colors = sessionInfo.theme.colors;
-            if (colors.canvas) {
-              docEl.style.setProperty("--bg-canvas", colors.canvas);
-              docEl.style.setProperty("--omni-bg-canvas", colors.canvas);
-            }
-            if (colors.surface) {
-              docEl.style.setProperty("--bg-surface", colors.surface);
-              docEl.style.setProperty("--omni-bg-surface", colors.surface);
-            }
-            if (colors.accent) {
-              docEl.style.setProperty("--accent-primary", colors.accent);
-              docEl.style.setProperty("--omni-accent-primary", colors.accent);
-            }
-            if (colors.contrast) {
-              docEl.style.setProperty("--accent-contrast", colors.contrast);
-              docEl.style.setProperty("--omni-accent-contrast", colors.contrast);
-            }
-            if (colors.radius !== undefined) {
-              docEl.style.setProperty("--radius-sm", colors.radius);
-              docEl.style.setProperty("--radius-md", colors.radius);
-              docEl.style.setProperty("--omni-radius-sm", colors.radius);
-              docEl.style.setProperty("--omni-radius-md", colors.radius);
-            }
           }
         } catch (_) {}
       }

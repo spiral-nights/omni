@@ -121,7 +121,7 @@ export function handleProfileViewerAction(
 const PROFILE_VIEWER_CSS = /* css */ `
 html, body {
   background-color: transparent !important;
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
 }
 
 /* Profile Editor & Identity Custody Containers */
@@ -130,8 +130,8 @@ html, body {
   max-width: 640px;
   width: 100%;
   margin: 0 auto;
-  background: var(--omni-bg-elevated, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-elevated, var(--bg-elevated, #2a2930));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 8px);
   padding: 24px 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
@@ -139,8 +139,8 @@ html, body {
 }
 
 .preview-box {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 6px);
 }
 
@@ -148,13 +148,13 @@ html, body {
   font-family: var(--omni-font-serif, inherit);
   font-size: 1.05rem;
   font-weight: 500;
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
 }
 
 .preview-npub {
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.7rem;
-  color: var(--omni-text-muted, var(--text-muted, #78716c));
+  color: var(--omni-text-muted, var(--text-muted, #8c909f));
 }
 
 /* People / Profile Viewer Application Container */
@@ -167,12 +167,12 @@ html, body {
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
 }
 
 .pv-profile-card {
-  background: var(--omni-bg-elevated, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-elevated, var(--bg-elevated, #2a2930));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 8px);
   padding: 20px;
   margin-bottom: 16px;
@@ -182,8 +182,8 @@ html, body {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--omni-bg-elevated, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-elevated, var(--bg-elevated, #2a2930));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 8px);
   padding: 14px 16px;
   margin-bottom: 8px;
@@ -192,8 +192,8 @@ html, body {
 }
 
 .people-user-card:hover {
-  border-color: var(--omni-border-strong, var(--border-strong, #383530));
-  background: var(--omni-bg-surface, var(--bg-subtle, #2a2824));
+  border-color: var(--omni-border-strong, var(--border-strong, #42404b));
+  background: var(--omni-bg-surface, var(--bg-subtle, #33323b));
 }
 
 .search-person-row {
@@ -201,26 +201,26 @@ html, body {
   gap: 12px;
   align-items: center;
   padding: 10px 16px;
-  border-bottom: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  border-bottom: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   cursor: pointer;
   transition: background 0.15s ease;
 }
 
 .search-person-row:hover {
-  background: var(--omni-bg-surface, var(--bg-subtle, #2a2824));
+  background: var(--omni-bg-surface, var(--bg-subtle, #33323b));
 }
 
 .people-user-name {
   font-family: var(--omni-font-serif, inherit);
   font-size: 1.05rem;
   font-weight: 500;
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
 }
 
 .people-user-handle {
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.72rem;
-  color: var(--omni-text-muted, var(--text-muted, #78716c));
+  color: var(--omni-text-muted, var(--text-muted, #8c909f));
 }
 
 .profile-full-container {
@@ -239,7 +239,7 @@ html, body {
 .profile-full-container .modal-tabs {
   display: flex;
   gap: 6px;
-  border-bottom: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  border-bottom: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   padding-bottom: 10px;
   margin-bottom: 6px;
 }
@@ -248,9 +248,9 @@ html, body {
 #btn-tab-profile,
 #btn-tab-keys,
 .profile-full-container .modal-tab-btn {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
-  color: var(--omni-text-muted, var(--text-muted, #78716c));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
+  color: var(--omni-text-muted, var(--text-muted, #8c909f));
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.72rem;
   letter-spacing: 0.1em;
@@ -269,18 +269,18 @@ html, body {
 #btn-tab-profile:hover,
 #btn-tab-keys:hover,
 .profile-full-container .modal-tab-btn:hover {
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
-  border-color: var(--omni-border-strong, var(--border-strong, #383530));
-  background: var(--omni-bg-elevated, var(--bg-subtle, #2a2824));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
+  border-color: var(--omni-border-strong, var(--border-strong, #42404b));
+  background: var(--omni-bg-elevated, var(--bg-subtle, #33323b));
 }
 
 .modal-tab-btn.active,
 #btn-tab-profile.active,
 #btn-tab-keys.active,
 .profile-full-container .modal-tab-btn.active {
-  background: var(--omni-bg-elevated, var(--bg-subtle, #2a2824));
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
-  border-color: var(--omni-border-strong, var(--border-strong, #383530));
+  background: var(--omni-bg-elevated, var(--bg-subtle, #33323b));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
+  border-color: var(--omni-border-strong, var(--border-strong, #42404b));
   font-weight: 700;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
@@ -299,17 +299,17 @@ html, body {
   font-size: 0.72rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--omni-text-secondary, var(--text-secondary, #9e988f));
+  color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));
   font-weight: 600;
 }
 
 .profile-full-container input[type="text"],
 .profile-full-container input[type="password"],
 .profile-full-container textarea {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 6px);
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
   font-family: var(--omni-font-sans, inherit);
   font-size: 0.88rem;
   padding: 9px 12px;
@@ -321,12 +321,12 @@ html, body {
 .profile-full-container input[type="text"]:focus,
 .profile-full-container input[type="password"]:focus,
 .profile-full-container textarea:focus {
-  border-color: var(--omni-accent-primary, #d4a373);
+  border-color: var(--omni-accent-primary, var(--accent-primary, #4d8eff));
   outline: none;
 }
 
 .profile-full-container input[readonly] {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.78rem;
 }
@@ -339,10 +339,10 @@ html, body {
 #btn-reveal-nsec,
 #btn-cancel-reveal,
 .profile-full-container .btn-secondary {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 6px);
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.72rem;
   letter-spacing: 0.08em;
@@ -364,19 +364,19 @@ html, body {
 #btn-reveal-nsec:hover,
 #btn-cancel-reveal:hover,
 .profile-full-container .btn-secondary:hover {
-  background: var(--omni-bg-elevated, var(--bg-subtle, #2a2824));
-  border-color: var(--omni-border-strong, var(--border-strong, #383530));
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  background: var(--omni-bg-elevated, var(--bg-subtle, #33323b));
+  border-color: var(--omni-border-strong, var(--border-strong, #42404b));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
 }
 
 /* Primary Action Buttons */
 #btn-save-profile,
 #btn-import-key,
 .profile-full-container .btn-publish {
-  background: var(--omni-accent-primary, #d4a373);
-  border: 1px solid var(--omni-accent-primary, #d4a373);
+  background: var(--omni-accent-primary, var(--accent-primary, #4d8eff));
+  border: 1px solid var(--omni-accent-primary, var(--accent-primary, #4d8eff));
   border-radius: var(--omni-radius-sm, 6px);
-  color: var(--omni-accent-contrast, #141312);
+  color: var(--omni-accent-contrast, var(--accent-contrast, #ffffff));
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.74rem;
   letter-spacing: 0.1em;
@@ -420,8 +420,8 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   padding: 2px;
   border-radius: var(--omni-radius-sm, 6px);
   max-width: 100%;
@@ -439,7 +439,7 @@ html, body {
 
 .people-tab-btn {
   background: transparent;
-  color: var(--omni-text-muted, var(--text-muted, #78716c));
+  color: var(--omni-text-muted, var(--text-muted, #8c909f));
   border: none;
   border-radius: var(--omni-radius-sm, 4px);
   padding: 5px 12px;
@@ -453,22 +453,22 @@ html, body {
 }
 
 .people-tab-btn:hover {
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
-  background: var(--omni-bg-elevated, var(--bg-subtle, #2a2824));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
+  background: var(--omni-bg-elevated, var(--bg-subtle, #33323b));
 }
 
 .people-tab-btn.active {
-  background: var(--omni-bg-elevated, var(--bg-subtle, #2a2824));
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  background: var(--omni-bg-elevated, var(--bg-subtle, #33323b));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
   font-weight: 700;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .btn-toggle-lookup {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 6px);
-  color: var(--omni-text-secondary, var(--text-secondary, #9e988f));
+  color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.68rem;
   letter-spacing: 0.08em;
@@ -482,9 +482,9 @@ html, body {
 }
 
 .btn-toggle-lookup:hover {
-  background: var(--omni-bg-elevated, var(--bg-subtle, #2a2824));
-  border-color: var(--omni-border-strong, var(--border-strong, #383530));
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  background: var(--omni-bg-elevated, var(--bg-subtle, #33323b));
+  border-color: var(--omni-border-strong, var(--border-strong, #42404b));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
 }
 
 .btn-toggle-lookup svg {
@@ -493,10 +493,10 @@ html, body {
 }
 
 .btn-profile-back {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 6px);
-  color: var(--omni-text-secondary, var(--text-secondary, #9e988f));
+  color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.68rem;
   letter-spacing: 0.1em;
@@ -510,9 +510,9 @@ html, body {
 }
 
 .btn-profile-back:hover {
-  background: var(--omni-bg-elevated, var(--bg-subtle, #2a2824));
-  border-color: var(--omni-border-strong, var(--border-strong, #383530));
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  background: var(--omni-bg-elevated, var(--bg-subtle, #33323b));
+  border-color: var(--omni-border-strong, var(--border-strong, #42404b));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
 }
 
 .btn-profile-back svg {
@@ -521,10 +521,10 @@ html, body {
 }
 
 .pv-search-btn {
-  background: var(--omni-bg-elevated, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-elevated, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 6px);
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.68rem;
   letter-spacing: 0.08em;
@@ -536,16 +536,16 @@ html, body {
 }
 
 .pv-search-btn:hover {
-  border-color: var(--omni-border-strong, var(--border-strong, #383530));
-  background: var(--omni-bg-surface, var(--bg-subtle, #2a2824));
+  border-color: var(--omni-border-strong, var(--border-strong, #42404b));
+  background: var(--omni-bg-surface, var(--bg-subtle, #33323b));
 }
 
 .btn-follow-toggle,
 .pv-btn-follow {
-  background: var(--omni-accent-primary, #d4a373);
-  border: 1px solid var(--omni-accent-primary, #d4a373);
+  background: var(--omni-accent-primary, var(--accent-primary, #4d8eff));
+  border: 1px solid var(--omni-accent-primary, var(--accent-primary, #4d8eff));
   border-radius: var(--omni-radius-sm, 6px);
-  color: var(--omni-accent-contrast, #141312);
+  color: var(--omni-accent-contrast, var(--accent-contrast, #ffffff));
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.72rem;
   letter-spacing: 0.08em;
@@ -566,9 +566,9 @@ html, body {
 
 .btn-follow-toggle.is-following,
 .btn-unfollow-row {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
-  color: var(--omni-text-secondary, var(--text-secondary, #9e988f));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
+  color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));
   font-weight: 600;
 }
 
@@ -576,15 +576,15 @@ html, body {
 .btn-unfollow-row:hover {
   border-color: #ef4444;
   color: #ef4444;
-  background: var(--omni-bg-elevated, var(--bg-subtle, #2a2824));
+  background: var(--omni-bg-elevated, var(--bg-subtle, #33323b));
 }
 
 .btn-block-toggle,
 .pv-btn-block {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 6px);
-  color: var(--omni-text-secondary, var(--text-secondary, #9e988f));
+  color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.72rem;
   letter-spacing: 0.08em;
@@ -600,9 +600,9 @@ html, body {
 
 .btn-block-toggle:hover,
 .pv-btn-block:hover {
-  background: var(--omni-bg-elevated, var(--bg-subtle, #2a2824));
-  border-color: var(--omni-border-strong, var(--border-strong, #383530));
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  background: var(--omni-bg-elevated, var(--bg-subtle, #33323b));
+  border-color: var(--omni-border-strong, var(--border-strong, #42404b));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
 }
 
 .btn-block-toggle.is-blocked,
@@ -612,10 +612,10 @@ html, body {
 }
 
 .pv-btn-refresh {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 6px);
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.72rem;
   letter-spacing: 0.08em;
@@ -630,8 +630,8 @@ html, body {
 }
 
 .pv-btn-refresh:hover {
-  background: var(--omni-bg-elevated, var(--bg-subtle, #2a2824));
-  border-color: var(--omni-border-strong, var(--border-strong, #383530));
+  background: var(--omni-bg-elevated, var(--bg-subtle, #33323b));
+  border-color: var(--omni-border-strong, var(--border-strong, #42404b));
 }
 
 .pv-btn-refresh svg {
@@ -640,10 +640,10 @@ html, body {
 }
 
 .pv-btn-copy-npub {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 6px);
-  color: var(--omni-text-secondary, var(--text-secondary, #9e988f));
+  color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.68rem;
   letter-spacing: 0.08em;
@@ -658,9 +658,9 @@ html, body {
 }
 
 .pv-btn-copy-npub:hover {
-  background: var(--omni-bg-elevated, var(--bg-subtle, #2a2824));
-  border-color: var(--omni-border-strong, var(--border-strong, #383530));
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  background: var(--omni-bg-elevated, var(--bg-subtle, #33323b));
+  border-color: var(--omni-border-strong, var(--border-strong, #42404b));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
 }
 
 .pv-btn-copy-npub svg {
@@ -669,46 +669,46 @@ html, body {
 }
 
 .pv-card {
-  background: var(--omni-bg-elevated, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-elevated, var(--bg-elevated, #2a2930));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 8px);
 }
 
 .pv-search-bar {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 6px);
 }
 
 .pv-npub-pill {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 6px);
   font-family: var(--omni-font-mono, monospace);
 }
 
 .pv-display-name {
   font-family: var(--omni-font-serif, inherit);
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
 }
 
 .pv-handle {
   font-family: var(--omni-font-mono, monospace);
-  color: var(--omni-text-muted, var(--text-muted, #78716c));
+  color: var(--omni-text-muted, var(--text-muted, #8c909f));
 }
 
 .pv-about {
   font-family: var(--omni-font-sans, inherit);
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
 }
 
 .people-search-input,
 .pv-search-input,
 .people-filter-input {
-  background: var(--omni-bg-surface, var(--bg-surface, #191816));
-  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #272522));
+  background: var(--omni-bg-surface, var(--bg-surface, #232227));
+  border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));
   border-radius: var(--omni-radius-sm, 6px);
-  color: var(--omni-text-primary, var(--text-primary, #ede8df));
+  color: var(--omni-text-primary, var(--text-primary, #e5e1e4));
   font-family: var(--omni-font-sans, inherit);
   font-size: 0.88rem;
   padding: 7px 12px;
@@ -797,13 +797,13 @@ function formatContent(text: string): string {
   const urlRegex = /(https?:\/\/[^\s<]+)/g;
   let formatted = escaped.replace(urlRegex, (rawUrl) => {
     const url = rawUrl.replace(/^http:\/\//i, "https://");
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary, #d4a373); text-decoration: underline;">${url}</a>`;
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--omni-accent-primary, var(--accent-primary, #4d8eff)); text-decoration: underline;">${url}</a>`;
   });
 
   const nostrRegex = /(?:nostr:)?((?:npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{20,})/gi;
   formatted = formatted.replace(nostrRegex, (_match, entity) => {
     const short = `${entity.slice(0, 9)}…${entity.slice(-4)}`;
-    return `<span class="pv-nostr-entity" style="color: var(--accent-primary, #d4a373); font-family: var(--font-mono, monospace); font-size: 0.8rem; background: var(--bg-canvas, #141312); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border-subtle, #272522);">${escapeHtml(short)}</span>`;
+    return `<span class="pv-nostr-entity" style="color: var(--omni-accent-primary, var(--accent-primary, #4d8eff)); font-family: var(--omni-font-mono, monospace); font-size: 0.8rem; background: var(--omni-bg-canvas, var(--bg-canvas, #1c1b20)); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038));">${escapeHtml(short)}</span>`;
   });
 
   return formatted;
@@ -1201,20 +1201,20 @@ async function mountProfileCompact(root: HTMLElement) {
  */
 async function mountProfileWidget(root: HTMLElement) {
   const card = html<HTMLDivElement>`
-    <div class="profile-widget-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 10px; color: var(--text-primary, #ede8df);">
+    <div class="profile-widget-card" style="background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); border-radius: var(--omni-radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 10px; color: var(--omni-text-primary, var(--text-primary, #e5e1e4));">
       <style class="omni-profile-viewer-styles">${PROFILE_VIEWER_CSS}</style>
       <div class="widget-header" style="display: flex; align-items: center; justify-content: space-between;">
-        <h3 style="margin: 0; font-size: 0.92rem; font-weight: 600; color: var(--text-primary, #ede8df); display: flex; align-items: center; gap: 7px;">
-          <span style="color: var(--accent-primary, #d4a373); display: flex; align-items: center;">${ICONS.user}</span> Active Identity
+        <h3 style="margin: 0; font-size: 0.92rem; font-weight: 600; color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); display: flex; align-items: center; gap: 7px;">
+          <span style="color: var(--omni-accent-primary, var(--accent-primary, #4d8eff)); display: flex; align-items: center;">${ICONS.user}</span> Active Identity
         </h3>
       </div>
       <div style="display: flex; align-items: center; gap: 12px; margin-top: 2px;">
-        <div class="profile-widget-avatar" style="width: 36px; height: 36px; border-radius: 50%; overflow: hidden; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); display: flex; align-items: center; justify-content: center; color: var(--accent-primary, #d4a373); flex-shrink: 0;">
+        <div class="profile-widget-avatar" style="width: 36px; height: 36px; border-radius: 50%; overflow: hidden; background: var(--omni-bg-subtle, var(--bg-subtle, #33323b)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary, var(--accent-primary, #4d8eff)); flex-shrink: 0;">
           ${ICONS.user}
         </div>
         <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; min-width: 0;">
           <strong class="profile-widget-name" style="font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Loading identity...</strong>
-          <span class="profile-widget-npub" style="font-family: var(--font-mono, monospace); font-size: 0.72rem; color: var(--text-muted, #78716c); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">...</span>
+          <span class="profile-widget-npub" style="font-family: var(--omni-font-mono, monospace); font-size: 0.72rem; color: var(--omni-text-muted, var(--text-muted, #8c909f)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">...</span>
         </div>
       </div>
     </div>
@@ -1563,7 +1563,7 @@ async function mountProfileViewer(root: HTMLElement) {
           }
           isLoading = false;
           if (noteCount === 0 && notesListEl) {
-            notesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">No public notes published by this user yet.</div>`;
+            notesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.85rem;">No public notes published by this user yet.</div>`;
             if (notesCountEl) notesCountEl.textContent = "0 notes";
             if (userSentinelEl) userSentinelEl.style.display = "none";
           } else if (noteCount > 0 && userSentinelEl) {
@@ -1594,7 +1594,7 @@ async function mountProfileViewer(root: HTMLElement) {
         }
         if (subId === activeMyNotesSubId) {
           if (myNoteCount === 0 && myNotesListEl) {
-            myNotesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">You haven't published any public notes yet.</div>`;
+            myNotesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.85rem;">You haven't published any public notes yet.</div>`;
             if (myNotesCountEl) myNotesCountEl.textContent = "0 notes";
             if (myNotesCountPill) myNotesCountPill.textContent = "0";
             if (mySentinelEl) mySentinelEl.style.display = "none";
@@ -1617,13 +1617,13 @@ async function mountProfileViewer(root: HTMLElement) {
   }
 
   const container = html<HTMLDivElement>`
-    <div class="profile-viewer-container" style="display: flex; flex-direction: column; gap: 16px; padding: 12px; max-width: 760px; margin: 0 auto; color: var(--text-primary, #ede8df); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <div class="profile-viewer-container" style="display: flex; flex-direction: column; gap: 16px; padding: 12px; max-width: 760px; margin: 0 auto; color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
       <style class="omni-profile-viewer-styles">${PROFILE_VIEWER_CSS}</style>
       
       <!-- Top App Header & Viewport Tabs -->
       <div class="people-header" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 2px 0; flex-wrap: wrap; width: 100%; box-sizing: border-box;">
         <div class="people-header-left" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: 100%; min-width: 0;">
-          <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-primary, #ede8df); flex-shrink: 0;">Profiles</h2>
+          <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); flex-shrink: 0;">Profiles</h2>
           <div class="people-tabs" style="display: inline-flex; align-items: center; gap: 2px; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; box-sizing: border-box;">
             <button class="people-tab-btn btn-tab-profile btn-tab-my-profile active" data-tab="my-profile">Profile</button>
             <button class="people-tab-btn btn-tab-user-profile btn-tab-user" data-tab="user-profile" style="display: none;">User Profile</button>
@@ -1640,7 +1640,7 @@ async function mountProfileViewer(root: HTMLElement) {
       <!-- 1. MY PROFILE TAB VIEW -->
       <div class="pv-tab-content pv-tab-my-profile pv-tab-profile">
         <!-- My Profile Card -->
-        <div class="pv-card pv-my-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); overflow: hidden; display: flex; flex-direction: column; width: 100%; box-sizing: border-box;">
+        <div class="pv-card pv-my-card" style="background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); border-radius: var(--omni-radius-md, 10px); overflow: hidden; display: flex; flex-direction: column; width: 100%; box-sizing: border-box;">
           
           <!-- Identity & Metadata Section -->
           <div class="pv-info-section" style="padding: 20px; display: flex; flex-direction: column; gap: 14px; position: relative; width: 100%; box-sizing: border-box;">
@@ -1667,17 +1667,17 @@ async function mountProfileViewer(root: HTMLElement) {
             <div style="display: flex; flex-direction: column; gap: 3px;">
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <h2 class="pv-display-name pv-my-display-name" style="margin: 0; font-size: 1.25rem; font-weight: 700;">Loading Profile...</h2>
-                <span class="pv-nip05-badge pv-my-nip05-badge" style="display: none; align-items: center; gap: 4px; font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(212, 163, 115, 0.15); color: var(--accent-primary, #d4a373); border: 1px solid rgba(212, 163, 115, 0.3);">
+                <span class="pv-nip05-badge pv-my-nip05-badge" style="display: none; align-items: center; gap: 4px; font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: color-mix(in srgb, var(--omni-accent-primary, var(--accent-primary, #4d8eff)) 15%, transparent); color: var(--omni-accent-primary, var(--accent-primary, #4d8eff)); border: 1px solid color-mix(in srgb, var(--omni-accent-primary, var(--accent-primary, #4d8eff)) 30%, transparent);">
                   ${ICONS.checkCircle}
                   <span class="pv-nip05-text pv-my-nip05-text"></span>
                 </span>
               </div>
-              <div class="pv-handle pv-my-handle" style="font-size: 0.84rem; color: var(--text-secondary, #9e988f);">@...</div>
+              <div class="pv-handle pv-my-handle" style="font-size: 0.84rem; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));">@...</div>
             </div>
 
             <!-- Npub Copy Pill -->
             <div class="pv-npub-row" style="display: flex; align-items: center; gap: 8px;">
-              <div class="pv-npub-pill pv-my-npub-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; color: var(--text-muted, #78716c); max-width: 100%; overflow: hidden;">
+              <div class="pv-npub-pill pv-my-npub-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-family: var(--omni-font-mono, monospace); font-size: 0.74rem; color: var(--omni-text-muted, var(--text-muted, #8c909f)); max-width: 100%; overflow: hidden;">
                 <span class="pv-npub-text pv-my-npub-text" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">npub...</span>
               </div>
               <button class="pv-btn-copy-npub pv-btn-copy-my-npub btn-secondary" title="Copy npub to clipboard">
@@ -1687,15 +1687,15 @@ async function mountProfileViewer(root: HTMLElement) {
             </div>
 
             <!-- Bio / About -->
-            <div class="pv-about pv-my-about" style="font-size: 0.88rem; line-height: 1.5; color: var(--text-primary, #ede8df); white-space: pre-wrap; word-break: break-word; display: none;"></div>
+            <div class="pv-about pv-my-about" style="font-size: 0.88rem; line-height: 1.5; color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); white-space: pre-wrap; word-break: break-word; display: none;"></div>
 
             <!-- Extra Metadata Row (Website / Lightning) -->
-            <div class="pv-meta-links pv-my-meta-links" style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 0.78rem; border-top: 1px solid var(--border-subtle, #272522); padding-top: 10px; margin-top: 2px;">
-              <div class="pv-lud16-wrap pv-my-lud16-wrap" style="display: none; align-items: center; gap: 4px; color: var(--accent-primary, #d4a373);">
+            <div class="pv-meta-links pv-my-meta-links" style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 0.78rem; border-top: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); padding-top: 10px; margin-top: 2px;">
+              <div class="pv-lud16-wrap pv-my-lud16-wrap" style="display: none; align-items: center; gap: 4px; color: var(--omni-accent-primary, var(--accent-primary, #4d8eff));">
                 ${ICONS.bolt}
                 <span class="pv-lud16-text pv-my-lud16-text"></span>
               </div>
-              <div class="pv-website-wrap pv-my-website-wrap" style="display: none; align-items: center; gap: 4px; color: var(--text-secondary, #9e988f);">
+              <div class="pv-website-wrap pv-my-website-wrap" style="display: none; align-items: center; gap: 4px; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));">
                 ${ICONS.link}
                 <a class="pv-website-link pv-my-website-link" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: none;"></a>
               </div>
@@ -1704,58 +1704,58 @@ async function mountProfileViewer(root: HTMLElement) {
         </div>
 
         <!-- My Profile Subtabs Navigation -->
-        <div class="pv-my-subtabs modal-tabs" style="display: flex; gap: 8px; border-bottom: 1px solid var(--border-subtle, #272522); padding: 4px 0 8px 0; margin-top: 14px; width: 100%;">
-          <button class="modal-tab-btn pv-btn-my-notes active" id="btn-tab-my-notes" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 600; cursor: pointer; color: var(--accent-primary, #d4a373); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-sm, 6px);">
+        <div class="pv-my-subtabs modal-tabs" style="display: flex; gap: 8px; border-bottom: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); padding: 4px 0 8px 0; margin-top: 14px; width: 100%;">
+          <button class="modal-tab-btn pv-btn-my-notes active" id="btn-tab-my-notes" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 600; cursor: pointer; color: var(--omni-accent-primary, var(--accent-primary, #4d8eff)); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--omni-radius-sm, 6px);">
             ${ICONS.notes} <span>Notes (<span class="pv-my-notes-count-pill">0</span>)</span>
           </button>
-          <button class="modal-tab-btn pv-btn-edit-profile" id="btn-tab-profile" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 500; cursor: pointer; color: var(--text-muted, #78716c); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-sm, 6px);">
+          <button class="modal-tab-btn pv-btn-edit-profile" id="btn-tab-profile" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 500; cursor: pointer; color: var(--omni-text-muted, var(--text-muted, #8c909f)); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--omni-radius-sm, 6px);">
             ${ICONS.edit} <span>Edit Profile</span>
           </button>
-          <button class="modal-tab-btn pv-btn-keys" id="btn-tab-keys" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 500; cursor: pointer; color: var(--text-muted, #78716c); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-sm, 6px);">
+          <button class="modal-tab-btn pv-btn-keys" id="btn-tab-keys" style="background: transparent; border: none; font-size: 0.86rem; font-weight: 500; cursor: pointer; color: var(--omni-text-muted, var(--text-muted, #8c909f)); padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-radius: var(--omni-radius-sm, 6px);">
             ${ICONS.key} <span>Keys & Custody</span>
           </button>
         </div>
 
         <!-- Integrated Profile Panels (Full Width) -->
-        <div class="pv-edit-panel profile-full-container" style="display: flex; width: 100%; box-sizing: border-box; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 10px); padding: 18px 20px; margin-top: 10px; flex-direction: column; gap: 14px;">
+        <div class="pv-edit-panel profile-full-container" style="display: flex; width: 100%; box-sizing: border-box; background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); border-radius: var(--omni-radius-md, 10px); padding: 18px 20px; margin-top: 10px; flex-direction: column; gap: 14px;">
           
           <!-- Non-blocking inline Toast notification banner -->
-          <div id="prof-toast" style="display: none; padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.8rem; font-weight: 500; align-items: center; gap: 8px; transition: all 0.2s ease;"></div>
+          <div id="prof-toast" style="display: none; padding: 8px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.8rem; font-weight: 500; align-items: center; gap: 8px; transition: all 0.2s ease;"></div>
 
           <!-- Pane 1: Profile Info -->
           <div class="pane-profile" style="display: none; flex-direction: column; gap: 12px; width: 100%; box-sizing: border-box;">
             <div style="display: flex; flex-direction: column; gap: 10px;">
-              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+              <label style="font-size: 0.78rem; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6)); display: flex; flex-direction: column; gap: 3px;">
                 Display Name:
-                <input id="prof-display-name" type="text" placeholder="e.g. Alice Smith" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
+                <input id="prof-display-name" type="text" placeholder="e.g. Alice Smith" style="background: var(--omni-bg-subtle, var(--bg-subtle, #33323b)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); padding: 8px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
-              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+              <label style="font-size: 0.78rem; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6)); display: flex; flex-direction: column; gap: 3px;">
                 Username / Handle:
-                <input id="prof-name" type="text" placeholder="e.g. alice" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
+                <input id="prof-name" type="text" placeholder="e.g. alice" style="background: var(--omni-bg-subtle, var(--bg-subtle, #33323b)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); padding: 8px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
-              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+              <label style="font-size: 0.78rem; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6)); display: flex; flex-direction: column; gap: 3px;">
                 About / Bio:
-                <textarea id="prof-about" rows="3" placeholder="Tell the Nostr network about yourself..." style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; resize: vertical; width: 100%; box-sizing: border-box;"></textarea>
+                <textarea id="prof-about" rows="3" placeholder="Tell the Nostr network about yourself..." style="background: var(--omni-bg-subtle, var(--bg-subtle, #33323b)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); padding: 8px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.84rem; outline: none; resize: vertical; width: 100%; box-sizing: border-box;"></textarea>
               </label>
-              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+              <label style="font-size: 0.78rem; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6)); display: flex; flex-direction: column; gap: 3px;">
                 Avatar URL:
-                <input id="prof-picture" type="text" placeholder="https://example.com/avatar.jpg" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
+                <input id="prof-picture" type="text" placeholder="https://example.com/avatar.jpg" style="background: var(--omni-bg-subtle, var(--bg-subtle, #33323b)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); padding: 8px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
-              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+              <label style="font-size: 0.78rem; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6)); display: flex; flex-direction: column; gap: 3px;">
                 Banner URL:
-                <input id="prof-banner" type="text" placeholder="https://example.com/banner.jpg" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
+                <input id="prof-banner" type="text" placeholder="https://example.com/banner.jpg" style="background: var(--omni-bg-subtle, var(--bg-subtle, #33323b)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); padding: 8px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
-              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+              <label style="font-size: 0.78rem; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6)); display: flex; flex-direction: column; gap: 3px;">
                 NIP-05 Identifier:
-                <input id="prof-nip05" type="text" placeholder="alice@domain.com" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
+                <input id="prof-nip05" type="text" placeholder="alice@domain.com" style="background: var(--omni-bg-subtle, var(--bg-subtle, #33323b)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); padding: 8px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
-              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+              <label style="font-size: 0.78rem; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6)); display: flex; flex-direction: column; gap: 3px;">
                 Lightning Address (lud16):
-                <input id="prof-lud16" type="text" placeholder="alice@getalby.com" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
+                <input id="prof-lud16" type="text" placeholder="alice@getalby.com" style="background: var(--omni-bg-subtle, var(--bg-subtle, #33323b)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); padding: 8px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
-              <label style="font-size: 0.78rem; color: var(--text-secondary, #a8a29e); display: flex; flex-direction: column; gap: 3px;">
+              <label style="font-size: 0.78rem; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6)); display: flex; flex-direction: column; gap: 3px;">
                 Website:
-                <input id="prof-website" type="text" placeholder="https://alice.example.com" style="background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
+                <input id="prof-website" type="text" placeholder="https://alice.example.com" style="background: var(--omni-bg-subtle, var(--bg-subtle, #33323b)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); padding: 8px 12px; border-radius: var(--omni-radius-sm, 6px); font-size: 0.84rem; outline: none; width: 100%; box-sizing: border-box;" />
               </label>
             </div>
 
@@ -1790,27 +1790,27 @@ async function mountProfileViewer(root: HTMLElement) {
             </div>
 
             <!-- Key Custody & Security Policy Notice -->
-            <div style="border-top: 1px solid var(--border-subtle, #272522); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-              <div style="display: flex; align-items: center; gap: 8px; color: var(--accent-primary, #d4a373); font-size: 0.82rem; font-weight: 600;">
+            <div style="border-top: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; color: var(--omni-accent-primary, var(--accent-primary, #4d8eff)); font-size: 0.82rem; font-weight: 600;">
                 <span style="display: flex; align-items: center; flex-shrink: 0;">${ICONS.shield}</span>
                 <span>Cryptographic Key Custody & Security</span>
               </div>
-              <p style="margin: 0; font-size: 0.78rem; line-height: 1.5; color: var(--text-secondary, #9e988f);">
-                Your private key (nsec) is strictly isolated and guarded by the host microkernel. Sandboxed plugins and nsites never have access to raw private keys and interact exclusively through standard NIP-07 (<code style="font-family: var(--font-mono, monospace); color: var(--accent-primary, #d4a373);">window.nostr</code>) signing.
+              <p style="margin: 0; font-size: 0.78rem; line-height: 1.5; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));">
+                Your private key (nsec) is strictly isolated and guarded by the host microkernel. Sandboxed plugins and nsites never have access to raw private keys and interact exclusively through standard NIP-07 (<code style="font-family: var(--omni-font-mono, monospace); color: var(--omni-accent-primary, var(--accent-primary, #4d8eff));">window.nostr</code>) signing.
               </p>
             </div>
 
             <!-- Switch Identity / Import Key Section -->
-            <div style="border-top: 1px solid var(--border-subtle, #272522); padding-top: 14px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="border-top: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); padding-top: 14px; display: flex; flex-direction: column; gap: 10px;">
               <div style="display: flex; align-items: center; justify-content: space-between;">
-                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary, #ede8df);">Switch Identity / Import Account:</span>
-                <span style="font-family: var(--font-mono, monospace); font-size: 0.65rem; color: var(--accent-primary, #d4a373); text-transform: uppercase;">Write-Only Custody</span>
+                <span style="font-size: 0.82rem; font-weight: 600; color: var(--omni-text-primary, var(--text-primary, #e5e1e4));">Switch Identity / Import Account:</span>
+                <span style="font-family: var(--omni-font-mono, monospace); font-size: 0.65rem; color: var(--omni-accent-primary, var(--accent-primary, #4d8eff)); text-transform: uppercase;">Write-Only Custody</span>
               </div>
-              <p style="margin: 0; font-size: 0.76rem; color: var(--text-muted, #78716c); line-height: 1.4;">
-                Paste an existing Nostr private key (<code style="font-family: var(--font-mono, monospace); color: var(--accent-primary, #d4a373);">nsec1...</code> or 64-char hex) to switch your active signing identity. The key is securely passed write-only to the host keystore.
+              <p style="margin: 0; font-size: 0.76rem; color: var(--omni-text-muted, var(--text-muted, #8c909f)); line-height: 1.4;">
+                Paste an existing Nostr private key (<code style="font-family: var(--omni-font-mono, monospace); color: var(--omni-accent-primary, var(--accent-primary, #4d8eff));">nsec1...</code> or 64-char hex) to switch your active signing identity. The key is securely passed write-only to the host keystore.
               </p>
               <div style="display: flex; gap: 8px;">
-                <input id="key-import" type="password" placeholder="Paste nsec1... or 64-char hex private key" style="flex: 1; padding: 8px 12px; font-family: var(--font-mono, monospace); font-size: 0.78rem; outline: none; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-sm, 6px); color: var(--text-primary, #ede8df);" />
+                <input id="key-import" type="password" placeholder="Paste nsec1... or 64-char hex private key" style="flex: 1; padding: 8px 12px; font-family: var(--omni-font-mono, monospace); font-size: 0.78rem; outline: none; background: var(--omni-bg-subtle, var(--bg-subtle, #33323b)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); border-radius: var(--omni-radius-sm, 6px); color: var(--omni-text-primary, var(--text-primary, #e5e1e4));" />
                 <button id="btn-import-key" class="btn-publish" style="white-space: nowrap;">Import & Switch</button>
               </div>
               <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px;">
@@ -1823,16 +1823,16 @@ async function mountProfileViewer(root: HTMLElement) {
 
           <!-- Pane 3: My Notes Feed Section -->
           <div class="pane-notes pv-notes-section pv-my-notes-section" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
-            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle, #272522); padding-bottom: 8px;">
-              <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary, #ede8df);">
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); padding-bottom: 8px;">
+              <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; color: var(--omni-text-primary, var(--text-primary, #e5e1e4));">
                 ${ICONS.notes}
                 <span>My Published Notes</span>
               </h3>
-              <span class="pv-notes-count pv-my-notes-count" style="font-size: 0.75rem; color: var(--text-muted, #78716c);">0 notes</span>
+              <span class="pv-notes-count pv-my-notes-count" style="font-size: 0.75rem; color: var(--omni-text-muted, var(--text-muted, #8c909f));">0 notes</span>
             </div>
 
             <div class="pv-notes-list pv-my-notes-list" style="display: flex; flex-direction: column; gap: 10px;">
-              <div class="pv-notes-loading" style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">
+              <div class="pv-notes-loading" style="padding: 24px; text-align: center; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.85rem;">
                 Loading timeline notes...
               </div>
             </div>
@@ -1860,18 +1860,18 @@ async function mountProfileViewer(root: HTMLElement) {
 
         <!-- Top Search Bar -->
         <div class="pv-search-bar" style="display: none; align-items: center; gap: 8px; padding: 6px 10px; margin-bottom: 16px;">
-          <span style="color: var(--text-muted, #78716c); display: flex; align-items: center;">${ICONS.search}</span>
-          <input class="pv-search-input" type="text" placeholder="Lookup pubkey (hex) or npub1..." style="flex: 1; background: transparent; border: none; outline: none; color: inherit; font-family: var(--font-mono, monospace); font-size: 0.8rem;" />
+          <span style="color: var(--omni-text-muted, var(--text-muted, #8c909f)); display: flex; align-items: center;">${ICONS.search}</span>
+          <input class="pv-search-input" type="text" placeholder="Lookup pubkey (hex) or npub1..." style="flex: 1; background: transparent; border: none; outline: none; color: inherit; font-family: var(--omni-font-mono, monospace); font-size: 0.8rem;" />
           <button class="pv-search-btn btn-secondary">Lookup</button>
         </div>
 
         <!-- Empty state when no external user is selected -->
-        <div class="pv-user-empty-state" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 10px); padding: 36px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--bg-subtle, #2a2824); display: flex; align-items: center; justify-content: center; color: var(--accent-primary, #d4a373);">
+        <div class="pv-user-empty-state" style="background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); border-radius: var(--radius-md, 10px); padding: 36px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--omni-bg-subtle, var(--bg-subtle, #33323b)); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary, var(--accent-primary, #4d8eff));">
             ${ICONS.user}
           </div>
-          <h3 style="margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--text-primary, #ede8df);">Inspect a Profile</h3>
-          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary, #9e988f); max-width: 420px; line-height: 1.5;">
+          <h3 style="margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--omni-text-primary, var(--text-primary, #e5e1e4));">Inspect a Profile</h3>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6)); max-width: 420px; line-height: 1.5;">
             Enter an npub or hex public key above, or select an account from your Following list to inspect their profile and notes.
           </p>
           <div style="display: flex; gap: 8px; margin-top: 6px;">
@@ -1882,7 +1882,7 @@ async function mountProfileViewer(root: HTMLElement) {
         </div>
 
         <!-- Target User Card -->
-        <div class="pv-card pv-user-card" style="display: none; background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); overflow: hidden; flex-direction: column; width: 100%; max-width: 100%; box-sizing: border-box;">
+        <div class="pv-card pv-user-card" style="display: none; background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); border-radius: var(--omni-radius-md, 10px); overflow: hidden; flex-direction: column; width: 100%; max-width: 100%; box-sizing: border-box;">
           
           <!-- Identity & Metadata Section -->
           <div class="pv-info-section" style="padding: 16px; display: flex; flex-direction: column; gap: 14px; position: relative; width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden;">
@@ -1907,17 +1907,17 @@ async function mountProfileViewer(root: HTMLElement) {
             <div style="display: flex; flex-direction: column; gap: 3px;">
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <h2 class="pv-display-name pv-user-display-name" style="margin: 0; font-size: 1.25rem; font-weight: 700;">Loading Profile...</h2>
-                <span class="pv-nip05-badge pv-user-nip05-badge" style="display: none; align-items: center; gap: 4px; font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(212, 163, 115, 0.15); color: var(--accent-primary, #d4a373); border: 1px solid rgba(212, 163, 115, 0.3);">
+                <span class="pv-nip05-badge pv-user-nip05-badge" style="display: none; align-items: center; gap: 4px; font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: color-mix(in srgb, var(--omni-accent-primary, var(--accent-primary, #4d8eff)) 15%, transparent); color: var(--omni-accent-primary, var(--accent-primary, #4d8eff)); border: 1px solid color-mix(in srgb, var(--omni-accent-primary, var(--accent-primary, #4d8eff)) 30%, transparent);">
                   ${ICONS.checkCircle}
                   <span class="pv-nip05-text pv-user-nip05-text"></span>
                 </span>
               </div>
-              <div class="pv-handle pv-user-handle" style="font-size: 0.84rem; color: var(--text-secondary, #9e988f);">@...</div>
+              <div class="pv-handle pv-user-handle" style="font-size: 0.84rem; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));">@...</div>
             </div>
 
             <!-- Npub Copy Pill -->
             <div class="pv-npub-row" style="display: flex; align-items: center; gap: 8px;">
-              <div class="pv-npub-pill pv-user-npub-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-family: var(--font-mono, monospace); font-size: 0.74rem; color: var(--text-muted, #78716c); max-width: 100%; overflow: hidden;">
+              <div class="pv-npub-pill pv-user-npub-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-family: var(--omni-font-mono, monospace); font-size: 0.74rem; color: var(--omni-text-muted, var(--text-muted, #8c909f)); max-width: 100%; overflow: hidden;">
                 <span class="pv-npub-text pv-user-npub-text" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">npub...</span>
               </div>
               <button class="pv-btn-copy-npub pv-btn-copy-user-npub btn-secondary" title="Copy npub to clipboard">
@@ -1927,15 +1927,15 @@ async function mountProfileViewer(root: HTMLElement) {
             </div>
 
             <!-- Bio / About -->
-            <div class="pv-about pv-user-about" style="font-size: 0.88rem; line-height: 1.5; color: var(--text-primary, #ede8df); white-space: pre-wrap; word-break: break-word; display: none;"></div>
+            <div class="pv-about pv-user-about" style="font-size: 0.88rem; line-height: 1.5; color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); white-space: pre-wrap; word-break: break-word; display: none;"></div>
 
             <!-- Extra Metadata Row (Website / Lightning) -->
-            <div class="pv-meta-links pv-user-meta-links" style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 0.78rem; border-top: 1px solid var(--border-subtle, #272522); padding-top: 10px; margin-top: 2px;">
-              <div class="pv-lud16-wrap pv-user-lud16-wrap" style="display: none; align-items: center; gap: 4px; color: var(--accent-primary, #d4a373);">
+            <div class="pv-meta-links pv-user-meta-links" style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 0.78rem; border-top: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); padding-top: 10px; margin-top: 2px;">
+              <div class="pv-lud16-wrap pv-user-lud16-wrap" style="display: none; align-items: center; gap: 4px; color: var(--omni-accent-primary, var(--accent-primary, #4d8eff));">
                 ${ICONS.bolt}
                 <span class="pv-lud16-text pv-user-lud16-text"></span>
               </div>
-              <div class="pv-website-wrap pv-user-website-wrap" style="display: none; align-items: center; gap: 4px; color: var(--text-secondary, #9e988f);">
+              <div class="pv-website-wrap pv-user-website-wrap" style="display: none; align-items: center; gap: 4px; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));">
                 ${ICONS.link}
                 <a class="pv-website-link pv-user-website-link" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: none;"></a>
               </div>
@@ -1945,16 +1945,16 @@ async function mountProfileViewer(root: HTMLElement) {
 
         <!-- Target User Notes Feed Section -->
         <div class="pv-notes-section pv-user-notes-section" style="display: none; flex-direction: column; gap: 10px; margin-top: 16px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle, #272522); padding-bottom: 8px;">
-            <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary, #ede8df);">
+          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); padding-bottom: 8px;">
+            <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; color: var(--omni-text-primary, var(--text-primary, #e5e1e4));">
               ${ICONS.notes}
               <span>Recent Notes</span>
             </h3>
-            <span class="pv-notes-count pv-user-notes-count" style="font-size: 0.75rem; color: var(--text-muted, #78716c);">0 notes</span>
+            <span class="pv-notes-count pv-user-notes-count" style="font-size: 0.75rem; color: var(--omni-text-muted, var(--text-muted, #8c909f));">0 notes</span>
           </div>
 
           <div class="pv-notes-list pv-user-notes-list" style="display: flex; flex-direction: column; gap: 10px;">
-            <div class="pv-notes-loading" style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">
+            <div class="pv-notes-loading" style="padding: 24px; text-align: center; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.85rem;">
               Loading timeline notes...
             </div>
           </div>
@@ -1971,10 +1971,10 @@ async function mountProfileViewer(root: HTMLElement) {
       <!-- 3. FOLLOWING TAB VIEW -->
       <div class="pv-tab-content pv-tab-following" style="display: none;">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
-          <input class="following-filter-input" type="text" placeholder="Filter followed accounts..." style="flex: 1; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 8px); padding: 8px 12px; color: var(--text-primary, #ede8df); outline: none; font-size: 0.82rem;" />
+          <input class="following-filter-input" type="text" placeholder="Filter followed accounts..." style="flex: 1; background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); border-radius: var(--omni-radius-md, 8px); padding: 8px 12px; color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); outline: none; font-size: 0.82rem;" />
         </div>
         <div class="following-list-container people-list-container">
-          <div class="following-loading" style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">
+          <div class="following-loading" style="padding: 24px; text-align: center; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.85rem;">
             Loading following accounts...
           </div>
         </div>
@@ -1983,10 +1983,10 @@ async function mountProfileViewer(root: HTMLElement) {
       <!-- 4. BLOCKED TAB VIEW -->
       <div class="pv-tab-content pv-tab-blocked" style="display: none;">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
-          <input class="blocked-filter-input" type="text" placeholder="Filter blocked accounts..." style="flex: 1; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-md, 8px); padding: 8px 12px; color: var(--text-primary, #ede8df); outline: none; font-size: 0.82rem;" />
+          <input class="blocked-filter-input" type="text" placeholder="Filter blocked accounts..." style="flex: 1; background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); border-radius: var(--omni-radius-md, 8px); padding: 8px 12px; color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); outline: none; font-size: 0.82rem;" />
         </div>
         <div class="blocked-list-container people-list-container">
-          <div class="blocked-loading" style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">
+          <div class="blocked-loading" style="padding: 24px; text-align: center; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.85rem;">
             Loading blocked accounts...
           </div>
         </div>
@@ -2174,14 +2174,14 @@ async function mountProfileViewer(root: HTMLElement) {
     editPanel.style.display = "flex";
 
     btnInnerTabProfile.classList.toggle("active", targetPane === "profile");
-    btnInnerTabProfile.style.color = targetPane === "profile" ? "var(--accent-primary, #d4a373)" : "var(--text-muted, #78716c)";
+    btnInnerTabProfile.style.color = targetPane === "profile" ? "var(--omni-accent-primary, var(--accent-primary, #4d8eff))" : "var(--omni-text-muted, var(--text-muted, #8c909f))";
 
     btnInnerTabKeys.classList.toggle("active", targetPane === "keys");
-    btnInnerTabKeys.style.color = targetPane === "keys" ? "var(--accent-primary, #d4a373)" : "var(--text-muted, #78716c)";
+    btnInnerTabKeys.style.color = targetPane === "keys" ? "var(--omni-accent-primary, var(--accent-primary, #4d8eff))" : "var(--omni-text-muted, var(--text-muted, #8c909f))";
 
     if (btnInnerTabMyNotes) {
       btnInnerTabMyNotes.classList.toggle("active", targetPane === "notes");
-      btnInnerTabMyNotes.style.color = targetPane === "notes" ? "var(--accent-primary, #d4a373)" : "var(--text-muted, #78716c)";
+      btnInnerTabMyNotes.style.color = targetPane === "notes" ? "var(--omni-accent-primary, var(--accent-primary, #4d8eff))" : "var(--omni-text-muted, var(--text-muted, #8c909f))";
     }
 
     paneProfile.style.display = targetPane === "profile" ? "flex" : "none";
@@ -2847,23 +2847,23 @@ async function mountProfileViewer(root: HTMLElement) {
   function renderNoteCard(event: any): HTMLElement {
     const timeStr = event.created_at ? formatTime(event.created_at) : "just now";
     const card = html<HTMLDivElement>`
-      <div class="pv-note-card" data-note-id="${escapeHtml(event.id || "")}" data-timestamp="${event.created_at || 0}" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #272522); border-radius: var(--radius-sm, 8px); padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease;" title="View thread in Feed">
-        <div style="display: flex; justify-content: flex-end; align-items: center; font-size: 0.75rem; color: var(--text-muted, #78716c);">
+      <div class="pv-note-card" data-note-id="${escapeHtml(event.id || "")}" data-timestamp="${event.created_at || 0}" style="background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); border-radius: var(--omni-radius-sm, 8px); padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease;" title="View thread in Feed">
+        <div style="display: flex; justify-content: flex-end; align-items: center; font-size: 0.75rem; color: var(--omni-text-muted, var(--text-muted, #8c909f));">
           <span>${escapeHtml(timeStr)}</span>
         </div>
-        <div style="font-size: 0.88rem; line-height: 1.45; color: var(--text-primary, #ede8df); white-space: pre-wrap; word-break: break-word;">
+        <div style="font-size: 0.88rem; line-height: 1.45; color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); white-space: pre-wrap; word-break: break-word;">
           ${formatContent(event.content || "")}
         </div>
       </div>
     `;
 
     card.addEventListener("mouseenter", () => {
-      card.style.borderColor = "var(--border-strong, #44413c)";
-      card.style.background = "var(--bg-elevated, #22201d)";
+      card.style.borderColor = "var(--omni-border-strong, var(--border-strong, #42404b))";
+      card.style.background = "var(--omni-bg-elevated, var(--bg-elevated, #2a2930))";
     });
     card.addEventListener("mouseleave", () => {
-      card.style.borderColor = "var(--border-subtle, #272522)";
-      card.style.background = "var(--bg-surface, #191816)";
+      card.style.borderColor = "var(--omni-border-subtle, var(--border-subtle, #313038))";
+      card.style.background = "var(--omni-bg-surface, var(--bg-surface, #232227))";
     });
 
     card.addEventListener("click", (e) => {
@@ -2992,7 +2992,7 @@ async function mountProfileViewer(root: HTMLElement) {
       eoseTimeout = null;
     }
 
-    notesListEl.innerHTML = `<div class="pv-notes-loading" style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">Loading timeline notes...</div>`;
+    notesListEl.innerHTML = `<div class="pv-notes-loading" style="padding: 24px; text-align: center; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.85rem;">Loading timeline notes...</div>`;
     notesCountEl.textContent = "Loading...";
 
     const cached = profileCache.get(pubkey);
@@ -3024,7 +3024,7 @@ async function mountProfileViewer(root: HTMLElement) {
     eoseTimeout = setTimeout(() => {
       isLoading = false;
       if (noteCount === 0) {
-        notesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">No public notes published by this user yet.</div>`;
+        notesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.85rem;">No public notes published by this user yet.</div>`;
         notesCountEl.textContent = "0 notes";
       }
     }, 3000);
@@ -3074,7 +3074,7 @@ async function mountProfileViewer(root: HTMLElement) {
 
     setTimeout(() => {
       if (myNoteCount === 0) {
-        myNotesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted, #78716c); font-size: 0.85rem;">No public notes published yet.</div>`;
+        myNotesListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.85rem;">No public notes published yet.</div>`;
         myNotesCountEl.textContent = "0 notes";
         if (myNotesCountPill) myNotesCountPill.textContent = "0";
       }
@@ -3162,9 +3162,9 @@ async function mountProfileViewer(root: HTMLElement) {
 
     if (pubkeys.length === 0) {
       followingListEl.innerHTML = `
-        <div style="padding: 32px 16px; text-align: center; color: var(--text-muted, #78716c);">
+        <div style="padding: 32px 16px; text-align: center; color: var(--omni-text-muted, var(--text-muted, #8c909f));">
           <div style="margin-bottom: 8px; display: inline-flex;">${ICONS.users}</div>
-          <div style="font-weight: 600; color: var(--text-primary, #ede8df); margin-bottom: 4px;">No followed accounts</div>
+          <div style="font-weight: 600; color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); margin-bottom: 4px;">No followed accounts</div>
           <div style="font-size: 0.82rem;">Explore notes in Feed or lookup pubkeys above to follow accounts.</div>
         </div>
       `;
@@ -3192,9 +3192,9 @@ async function mountProfileViewer(root: HTMLElement) {
 
     if (pubkeys.length === 0) {
       blockedListEl.innerHTML = `
-        <div style="padding: 32px 16px; text-align: center; color: var(--text-muted, #78716c);">
+        <div style="padding: 32px 16px; text-align: center; color: var(--omni-text-muted, var(--text-muted, #8c909f));">
           <div style="margin-bottom: 8px; display: inline-flex;">${ICONS.shieldOff}</div>
-          <div style="font-weight: 600; color: var(--text-primary, #ede8df); margin-bottom: 4px;">No blocked accounts</div>
+          <div style="font-weight: 600; color: var(--omni-text-primary, var(--text-primary, #e5e1e4)); margin-bottom: 4px;">No blocked accounts</div>
           <div style="font-size: 0.82rem;">Your block / mute list is currently empty.</div>
         </div>
       `;

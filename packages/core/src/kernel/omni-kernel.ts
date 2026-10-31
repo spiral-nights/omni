@@ -147,11 +147,28 @@ export class OmniKernel {
     options?: { route?: string; viewId?: string; instanceId?: string; targetSlot?: string; relays?: string[]; trusted?: boolean }
   ): Promise<SandboxInstance> {
     const instanceKey = options?.instanceId || manifest.id;
-    if (this.sandboxes.has(instanceKey)) {
-      return this.sandboxes.get(instanceKey)!;
-    }
-    if (this.pendingRegistrations.has(instanceKey)) {
-      return this.pendingRegistrations.get(instanceKey)!;
+    const isMainAppInstance =
+      instanceKey === manifest.id ||
+      instanceKey === `${manifest.id}::app` ||
+      instanceKey === `${manifest.id}::main-primary`;
+
+    if (isMainAppInstance) {
+      const candidateKeys = [manifest.id, `${manifest.id}::app`, `${manifest.id}::main-primary`];
+      for (const ck of candidateKeys) {
+        if (this.sandboxes.has(ck)) {
+          return this.sandboxes.get(ck)!;
+        }
+        if (this.pendingRegistrations.has(ck)) {
+          return this.pendingRegistrations.get(ck)!;
+        }
+      }
+    } else {
+      if (this.sandboxes.has(instanceKey)) {
+        return this.sandboxes.get(instanceKey)!;
+      }
+      if (this.pendingRegistrations.has(instanceKey)) {
+        return this.pendingRegistrations.get(instanceKey)!;
+      }
     }
 
     const registrationPromise = (async () => {
@@ -200,7 +217,7 @@ export class OmniKernel {
             (manifest.id === "org.omni.plugin.relays" || manifest.permissions?.relays?.manage) &&
             isTrusted
           ) {
-            if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null) {
+            if (manifest.id === "org.omni.plugin.relays" || this.capabilityStore.getGrant(manifest.id, "relays:manage") === null) {
               this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
             }
           }
@@ -527,6 +544,18 @@ export class OmniKernel {
     return this.settingsSandboxes.get(pluginId);
   }
 
+  public syncThemeToSandboxes(theme?: any): void {
+    if (theme) {
+      this.theme = theme;
+    }
+    for (const sandbox of this.sandboxes.values()) {
+      sandbox.updateTheme?.(theme);
+    }
+    for (const sandbox of this.settingsSandboxes.values()) {
+      sandbox.updateTheme?.(theme);
+    }
+  }
+
   dispatchHistoryPopstate(pluginId: string, payload: { delta: number; state: any; url?: string }): void {
     for (const [key, sandbox] of this.sandboxes.entries()) {
       if (sandbox.manifest.id === pluginId || key === pluginId) {
@@ -764,7 +793,9 @@ export class OmniKernel {
           const parsed = parseNip65Relays(latestEvent);
           const isUser = (await this.getUserPubkey()) === targetPubkey;
           if (isUser) {
-            this.relayPool.setUserRelays(parsed);
+            if (!this.relayPool.hasPersistedRelays()) {
+              this.relayPool.setUserRelays(parsed);
+            }
           } else {
             this.relayPool.setAuthorRelays(targetPubkey, parsed);
           }

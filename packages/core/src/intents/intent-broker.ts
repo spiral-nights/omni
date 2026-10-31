@@ -9,6 +9,7 @@ export interface RegisteredIntentHandler {
   description?: string;
   isRpc?: boolean;
   handler: IntentHandler;
+  fallbackHandler?: RegisteredIntentHandler;
 }
 
 export type DisambiguateHandlerCallback = (
@@ -107,19 +108,41 @@ export class IntentBroker {
     }
     // Remove existing for same plugin and action if present
     const existingIdx = list.findIndex((h) => h.pluginId === pluginId);
+    const prev = existingIdx !== -1 ? list[existingIdx] : undefined;
     const entry: RegisteredIntentHandler = {
       pluginId,
       action,
-      name: meta?.name,
-      icon: meta?.icon,
-      description: meta?.description,
+      name: meta?.name ?? prev?.name,
+      icon: meta?.icon ?? prev?.icon,
+      description: meta?.description ?? prev?.description,
       isRpc: meta?.isRpc,
-      handler
+      handler,
+      fallbackHandler: meta?.isRpc && prev && !prev.isRpc ? prev : prev?.fallbackHandler
     };
     if (existingIdx !== -1) {
       list[existingIdx] = entry;
     } else {
       list.push(entry);
+    }
+  }
+
+  unregisterRpcHandlers(pluginId: string): void {
+    for (const [action, list] of this.handlers.entries()) {
+      const nextList: RegisteredIntentHandler[] = [];
+      for (const h of list) {
+        if (h.pluginId === pluginId && h.isRpc) {
+          if (h.fallbackHandler) {
+            nextList.push(h.fallbackHandler);
+          }
+        } else {
+          nextList.push(h);
+        }
+      }
+      if (nextList.length === 0) {
+        this.handlers.delete(action);
+      } else {
+        this.handlers.set(action, nextList);
+      }
     }
   }
 

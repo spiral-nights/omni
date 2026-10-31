@@ -424,6 +424,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     // Re-apply accent color for current mode
     this.applyAccentVariables();
+    this.kernel?.syncThemeToSandboxes?.();
   }
 
   public toggleAppFullscreen(fullscreen?: boolean): void {
@@ -564,6 +565,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       document.documentElement.style.setProperty("--omni-accent-primary", colorToApply);
       document.documentElement.style.setProperty("--accent-primary", colorToApply);
     }
+    this.kernel?.syncThemeToSandboxes?.();
   }
 
   private updateAccentUi(): void {
@@ -722,6 +724,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     if (container) {
       container.innerHTML = "";
     }
+    this.registerHandledIntents();
   }
 
   public async openApp(pluginId: string, pushState = true): Promise<void> {
@@ -851,8 +854,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     const appSandbox =
       this.kernel.getSandboxExact?.(appInstanceKey) ||
       this.kernel.getSandboxExact?.(primaryKey) ||
-      this.kernel.getSandboxExact?.(plugin.id) ||
-      this.kernel.getSandbox(plugin.id);
+      this.kernel.getSandboxExact?.(plugin.id);
 
     if (appSandbox) {
       const liveComp =
@@ -871,6 +873,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           targetContainer.appendChild(liveComp);
         }
       }
+      (appSandbox as any).updateTheme?.();
       this.renderDock();
       this.saveLocalWorkspace();
       this.boundScrollHandler?.();
@@ -903,7 +906,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
             if (comp.slot) customSlotContainers.set(comp.slot, targetContainer);
           }
         }
-        await this.kernel.registerPlugin(
+        const mountedSandbox = await this.kernel.registerPlugin(
           appManifest,
           plugin.htmlContent || plugin.scriptContent,
           customSlotContainers,
@@ -915,6 +918,18 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
             relays: plugin.relays
           }
         );
+        const liveComp =
+          (mountedSandbox as any)?.getPrimaryComponentContainer?.() ||
+          mountedSandbox?.getFirstPopulatedComponentContainer?.();
+        if (liveComp) {
+          const compSlots = targetContainer.querySelectorAll(".omni-component-slot");
+          compSlots.forEach((slot) => {
+            if (slot !== liveComp) slot.remove();
+          });
+          if (!targetContainer.contains(liveComp)) {
+            targetContainer.appendChild(liveComp);
+          }
+        }
       } catch (err) {
         console.warn(`Failed to register app instance for ${plugin.id}:`, err);
       } finally {
@@ -1048,6 +1063,9 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     const pinned = this.getPinnedPlugins();
     for (const plugin of pinned) {
       if (!plugin.enabled) continue;
+      if (plugin.id === this.activePluginId || this.pendingAppMounts.has(`${plugin.id}::app`)) {
+        continue;
+      }
       const placements = this.getPluginPlacements(plugin);
       const hasRunning = placements.some((pl) => Boolean(this.kernel.getSandbox(`${plugin.id}::${pl.id}`))) ||
         Boolean(this.kernel.getSandbox(plugin.id)) ||
