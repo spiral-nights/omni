@@ -1,6 +1,7 @@
 import { OmniManifest, OmniInitMessage, OmniComponentNode } from "@omni/types";
 import { SchemaRenderer } from "../schema/schema-renderer.js";
 import { IframeAppHost } from "./iframe-app-host.js";
+import { WorkerGuestHost } from "./worker-guest-host.js";
 import { JsonRpcDispatcher } from "../ipc/json-rpc-dispatcher.js";
 import { AclEngine } from "../acl/acl-engine.js";
 import { PluginStorageManager } from "../storage/plugin-storage-manager.js";
@@ -122,6 +123,7 @@ export interface SandboxInstanceOptions {
   viewId?: string;
   instanceId?: string;
   targetSlot?: string;
+  workerEnabled?: boolean;
   allowedRelays?: string[];
   onSlotAction?: (action: "toggle" | "open" | "close" | "scrollToTop", slot: string) => void;
   onScrollTo?: (params: any) => void;
@@ -138,6 +140,7 @@ export interface SandboxInstanceOptions {
 export class SandboxInstance {
   readonly manifest: OmniManifest;
   private iframe: HTMLIFrameElement | null = null;
+  private workerHost: WorkerGuestHost | null = null;
   private schemaRenderers: Map<string, SchemaRenderer> = new Map();
   private iframeAppHosts: Map<string, IframeAppHost> = new Map();
   private compContainers: Element[] = [];
@@ -198,6 +201,14 @@ export class SandboxInstance {
       this.options.theme = themeOverride;
     }
     const resolvedTheme = this.resolveHostThemeTokens();
+    if (this.workerHost) {
+      try {
+        this.workerHost.postMessage({
+          type: "omni:theme-update",
+          payload: resolvedTheme
+        });
+      } catch (_) {}
+    }
     if (this.iframe) {
       this.iframe.style.colorScheme = resolvedTheme.mode;
       try {
@@ -210,6 +221,10 @@ export class SandboxInstance {
         );
       } catch (_) {}
     }
+  }
+
+  public getWorkerHost(): WorkerGuestHost | null {
+    return this.workerHost;
   }
 
   private resolveHostThemeTokens(): {
@@ -496,6 +511,9 @@ export class SandboxInstance {
                 payload
               });
             } catch (_) {}
+            if (this.workerHost) {
+              this.workerHost.dispatchAction(comp.id, action, payload);
+            }
             try {
               this.iframe?.contentWindow?.postMessage(
                 {
@@ -595,6 +613,46 @@ export class SandboxInstance {
       }
     } catch (err) {
       console.warn(`[SandboxInstance] Failed to read initial storage for [${this.manifest.id}]:`, err);
+    }
+
+    const canUseWorker =
+      isSchema &&
+      this.options.workerEnabled !== false &&
+      typeof Worker !== "undefined";
+
+    if (canUseWorker) {
+      if (this.iframe && this.iframe.parentNode) {
+        this.iframe.parentNode.removeChild(this.iframe);
+      }
+      this.iframe = null;
+
+      this.workerHost = new WorkerGuestHost({
+        pluginId: this.manifest.id,
+        runtimeScript: this.options.runtimeScript,
+        pluginScript: this.options.scriptContent,
+        channel1: this.channel1,
+        channel2: this.channel2,
+        initPayload: {
+          pluginId: this.manifest.id,
+          instanceId: this.options.instanceId || `inst_${Math.random().toString(36).slice(2, 9)}`,
+          userPubkey: this.options.userPubkey,
+          theme: this.resolveHostThemeTokens() as any,
+          slots: Array.from(this.options.slotContainers.keys()),
+          components: this.manifest.components?.map((c) => c.id) || ["main"],
+          route: routeVal,
+          viewId: viewIdVal,
+          storage: initialStorageMap
+        },
+        onSchemaUpdate: (schema, componentId) => {
+          applySchema({
+            type: "schema",
+            schema,
+            componentId
+          });
+        }
+      });
+
+      return;
     }
 
     function serializeForInlineScript(value: any): string {
@@ -912,6 +970,10 @@ ${themeVarsCss}
 
     if (this.dispatcher) {
       this.dispatcher.destroy();
+    }
+    if (this.workerHost) {
+      this.workerHost.destroy();
+      this.workerHost = null;
     }
     for (const renderer of this.schemaRenderers.values()) {
       renderer.destroy();

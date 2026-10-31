@@ -1,5 +1,13 @@
 // Omni Injected Sandbox Runtime Bridge (omni-runtime.js)
 (function () {
+  var rootScope = (typeof window !== "undefined" && window) || (typeof self !== "undefined" && self) || (typeof globalThis !== "undefined" && globalThis) || {};
+  if (!rootScope.window) {
+    try { rootScope.window = rootScope; } catch (_) {}
+  }
+  if (!rootScope.parent) {
+    try { rootScope.parent = rootScope; } catch (_) {}
+  }
+
   let portSchemaBus = null;
   let portKernelRpc = null;
   let sessionInfo = null;
@@ -21,7 +29,7 @@
 
   // 1. Transparent LocalStorage Shim (handles sandboxed opaque origin restrictions)
   // 1b. Standard Scroll API Shim (forwards scrollTo & scrollIntoView to host container)
-  if (typeof window !== "undefined") {
+  if (typeof window !== "undefined" && typeof window.scrollTo === "function" && typeof window.document !== "undefined") {
     const origScrollTo = window.scrollTo;
     window.scrollTo = function (optionsOrX, y) {
       let top = 0;
@@ -96,10 +104,27 @@
   };
 
   try {
-    window.localStorage.getItem("__omni_probe__");
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.getItem("__omni_probe__");
+    } else if (typeof window !== "undefined") {
+      Object.defineProperty(window, "localStorage", {
+        value: storageShim,
+        configurable: true,
+        enumerable: true
+      });
+    }
   } catch (_) {
     try {
       Object.defineProperty(window, "localStorage", {
+        value: storageShim,
+        configurable: true,
+        enumerable: true
+      });
+    } catch (_) {}
+  }
+  if (typeof self !== "undefined" && !self.localStorage) {
+    try {
+      Object.defineProperty(self, "localStorage", {
         value: storageShim,
         configurable: true,
         enumerable: true
@@ -139,6 +164,12 @@
             componentId: compId,
             schema: schema
           }, "*");
+        } else if (typeof rootScope.postMessage === "function") {
+          rootScope.postMessage({
+            type: "omni:schema",
+            componentId: compId,
+            schema: schema
+          });
         }
       } catch (_) {}
     }
@@ -172,8 +203,50 @@
         value: parentProxy,
         configurable: true
       });
+    } else if (!origParent || origParent === rootScope) {
+      // WorkerGlobalScope or top-level guest context
+      rootScope.parent = {
+        postMessage: function(msg, targetOrigin, transfer) {
+          if (msg && typeof msg === "object" && (msg.type === "omni:schema" || msg.type === "schema") && msg.schema) {
+            forwardSchema(msg.schema, msg.componentId);
+            return;
+          }
+          if (typeof rootScope.postMessage === "function") {
+            try {
+              rootScope.postMessage(msg, transfer);
+            } catch (_) {
+              rootScope.postMessage(msg);
+            }
+          }
+        }
+      };
     }
   } catch (_) {}
+
+  // If in dedicated worker, intercept postMessage calls on rootScope to catch direct self.postMessage({ type: "omni:schema" })
+  if (typeof window !== "undefined" && typeof window.document === "undefined") {
+    const origSelfPost = typeof rootScope.postMessage === "function" ? rootScope.postMessage.bind(rootScope) : null;
+    if (origSelfPost) {
+      rootScope.postMessage = function(msg, targetOriginOrTransfer, transfer) {
+        if (msg && typeof msg === "object" && (msg.type === "omni:schema" || msg.type === "schema") && msg.schema) {
+          forwardSchema(msg.schema, msg.componentId);
+          return;
+        }
+        try {
+          if (typeof rootScope.dispatchEvent === "function") {
+            rootScope.dispatchEvent(new MessageEvent("message", { data: msg }));
+          }
+        } catch (_) {}
+        const trans = Array.isArray(targetOriginOrTransfer) ? targetOriginOrTransfer : (Array.isArray(transfer) ? transfer : undefined);
+        try {
+          if (trans) origSelfPost(msg, trans);
+          else origSelfPost(msg);
+        } catch (_) {
+          try { origSelfPost(msg); } catch (_) {}
+        }
+      };
+    }
+  }
 
   function applyThemePayload(theme) {
     if (typeof document === "undefined" || !theme) return;
@@ -299,29 +372,31 @@
       initResolved();
 
       // Check for inline JSON schema script
-      const runAutoMount = () => {
-        try {
-          const jsonScript = document.querySelector('script[type="application/json"]#omni-schema, script[type="application/json"][data-omni-schema]');
-          if (jsonScript && jsonScript.textContent) {
-            const parsed = JSON.parse(jsonScript.textContent);
-            if (parsed && typeof parsed === "object") {
-              forwardSchema(parsed);
-              return;
+      if (typeof document !== "undefined") {
+        const runAutoMount = () => {
+          try {
+            const jsonScript = document.querySelector('script[type="application/json"]#omni-schema, script[type="application/json"][data-omni-schema]');
+            if (jsonScript && jsonScript.textContent) {
+              const parsed = JSON.parse(jsonScript.textContent);
+              if (parsed && typeof parsed === "object") {
+                forwardSchema(parsed);
+                return;
+              }
             }
+          } catch (err) {
+            console.error("[Omni] Error parsing inline schema script:", err);
           }
-        } catch (err) {
-          console.error("[Omni] Error parsing inline schema script:", err);
+        };
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", runAutoMount, { once: true });
+        } else {
+          runAutoMount();
         }
-      };
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", runAutoMount, { once: true });
-      } else {
-        runAutoMount();
       }
     }
   }
 
-  window.addEventListener("message", handleInitMessage);
+  rootScope.addEventListener("message", handleInitMessage);
   if (typeof window !== "undefined" && window.__omniPendingInit) {
     handleInitMessage(window.__omniPendingInit);
     window.__omniPendingInit = null;
@@ -549,21 +624,36 @@
       this._subscriptions.clear();
 
       this.readyState = VirtualWebSocket.CLOSED;
-      const closeEv = new CloseEvent("close", {
-        code: code || 1000,
-        reason: reason || "Normal Closure",
-        wasClean: true
-      });
-      if (typeof this.onclose === "function") {
-        try { this.onclose(closeEv); } catch (e) { console.error(e); }
+      let closeEv;
+      try {
+        closeEv = new CloseEvent("close", {
+          code: code || 1000,
+          reason: reason || "Normal Closure",
+          wasClean: true
+        });
+      } catch (_) {
+        try {
+          closeEv = new Event("close");
+          closeEv.code = code || 1000;
+          closeEv.reason = reason || "Normal Closure";
+          closeEv.wasClean = true;
+        } catch (_) {}
       }
-      this.dispatchEvent(closeEv);
+      if (closeEv) {
+        if (typeof this.onclose === "function") {
+          try { this.onclose(closeEv); } catch (e) { console.error(e); }
+        }
+        this.dispatchEvent(closeEv);
+      }
     }
   }
 
   window.WebSocket = VirtualWebSocket;
   if (typeof globalThis !== "undefined") {
     globalThis.WebSocket = VirtualWebSocket;
+  }
+  if (typeof self !== "undefined") {
+    self.WebSocket = VirtualWebSocket;
   }
 
   // 4b. Transparent HTTP / Blossom Fetch Bridge (bypasses sandbox connect-src 'none' via host RPC)
@@ -733,21 +823,27 @@
       const data = event.data;
       if (!data) return;
       if (data.type === "action") {
-        window.dispatchEvent(new MessageEvent("message", {
-          data: {
-            type: "omni:action",
-            action: data.action,
-            payload: data.payload,
-            componentId: data.componentId
+        try {
+          rootScope.dispatchEvent(new MessageEvent("message", {
+            data: {
+              type: "omni:action",
+              action: data.action,
+              payload: data.payload,
+              componentId: data.componentId
+            }
+          }));
+        } catch (_) {}
+        try {
+          if (typeof CustomEvent !== "undefined") {
+            rootScope.dispatchEvent(new CustomEvent("omni:action", {
+              detail: {
+                action: data.action,
+                payload: data.payload,
+                componentId: data.componentId
+              }
+            }));
           }
-        }));
-        window.dispatchEvent(new CustomEvent("omni:action", {
-          detail: {
-            action: data.action,
-            payload: data.payload,
-            componentId: data.componentId
-          }
-        }));
+        } catch (_) {}
       }
     };
   }
@@ -996,6 +1092,15 @@
     }
   };
 
+  if (typeof globalThis !== "undefined") {
+    globalThis.nostr = window.nostr;
+    globalThis.omni = window.omni;
+  }
+  if (typeof self !== "undefined") {
+    self.nostr = window.nostr;
+    self.omni = window.omni;
+  }
+
   // 9. NIP-21, Lightning & Cashu URI Protocol Interception
   function isProtocolUri(url) {
     if (typeof url !== "string") return false;
@@ -1219,16 +1324,17 @@
     }
 
     // Intercept Location search and hash getters
-    if (window.Location) {
+    const LocClass = window.Location || (typeof WorkerLocation !== "undefined" ? WorkerLocation : null);
+    if (LocClass && LocClass.prototype) {
       try {
-        Object.defineProperty(window.Location.prototype, "search", {
+        Object.defineProperty(LocClass.prototype, "search", {
           get() { return virtualSearch; },
           set(val) {
             virtualSearch = val ? (String(val).startsWith("?") ? String(val) : `?${val}`) : "";
           },
           configurable: true
         });
-        Object.defineProperty(window.Location.prototype, "hash", {
+        Object.defineProperty(LocClass.prototype, "hash", {
           get() { return virtualHash; },
           set(val) {
             virtualHash = val ? (String(val).startsWith("#") ? String(val) : `#${val}`) : "";
