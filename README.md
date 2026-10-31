@@ -2,7 +2,7 @@
 
 > **An extensible, local-first Nostr web client and sandboxed micro-frontend runtime for 100% standard Nostr sites (nsites).**
 
-Omni combines a **high-performance, local-first Nostr web client** with a **sandboxed micro-frontend runtime**. Every client domain (feed, relays, profile, tasks, and the shell itself) is a standalone plugin. Third-party applications and companion widgets execute as **100% standard web apps (nsites)** inside isolated sandboxes, projecting directly into the native host DOM via Remote DOM without nested iframes, custom SDKs, or proprietary manifests.
+Omni combines a **high-performance, local-first Nostr web client** with a **sandboxed micro-frontend runtime**. Every client domain (feed, relays, profile, tasks, and the shell itself) is a standalone plugin. Third-party applications and companion widgets execute as **100% standard web apps (nsites)** inside isolated sandboxes, mounting directly via a dual-runtime architecture: native **Declarative Schema UI** (Light DOM custom elements) for responsive, zero-overhead companion views and off-thread Web Workers, alongside **Direct Sandboxed Iframes** for standalone HTML/JS applications, with zero proprietary SDKs or manifests.
 
 ---
 
@@ -10,10 +10,10 @@ Omni combines a **high-performance, local-first Nostr web client** with a **sand
 
 | Subsystem | Architectural Approach | Key Technologies |
 | :--- | :--- | :--- |
-| **Shell UI & Navigation** | Swappable Shell Registry | `@omni/plugin-shell` with swappable shells (Omni Classic, Panorama Hub, Editorial) |
+| **Shell UI & Navigation** | Swappable Shell Registry | `@omni/plugin-shell` with Editorial Shell as default + Panorama Hub |
 | **Host Bootloader** | Minimal Microkernel (~30 lines) | `apps/web` boots `OmniKernel` and passes container root to shell |
 | **App Model** | Pure Standalone nsites (Zero Manifests) | Standard HTML/JS apps mounting to `document.body` or `#root` |
-| **UI Projection** | Remote DOM (Zero Iframe Traps) | Shopify `@remote-dom/core` on dedicated mutation channel (Port 1) |
+| **UI Presentation** | Dual-Runtime: Schema UI & Direct Iframe | Native Light DOM Custom Elements (`<omni-*>`) + Sandboxed `<iframe sandbox>` |
 | **User Viewports** | User-Configured Layout Containers | Dock Shortcut (`dock`), Widget Card (`sidebar`), Header Action (`header-actions`) |
 | **Workspace Sync** | Decentralized NIP-78 Sync | `kind: 30078`, `omni/workspace/v1` with 0ms local fallback & relay sync |
 | **Nostr Networking** | Transparent Virtual WebSocket | Virtual `window.WebSocket` multiplexed to `RelayPool` with subscription namespacing |
@@ -35,29 +35,32 @@ Omni combines a **high-performance, local-first Nostr web client** with a **sand
 │  └── Mounts @omni/plugin-shell into <div id="omni-root">                               │
 │                                                                                        │
 │  @omni/plugin-shell (Swappable Shell Experiences via ShellRegistry)                   │
-│  ├── Omni Classic (Warm Paper Dark workbench, dock navigation, widgets dashboard)      │
+│  ├── Editorial (Default: Sacred Swiss typography, Papyrus/Obsidian modes, accents)     │
 │  ├── Panorama Hub (Windows Phone Metro panoramic canvas, live tiles, fluid swipe)      │
-│  └── Editorial (Sacred Swiss typography, Papyrus/Obsidian modes, accent illumination)  │
-│  ├── Pluggable Settings (Profile & keys custody, relay manager, plugins & viewports)   │
+│  └── Pluggable Settings (Profile & keys custody, relay manager, plugins & viewports)   │
 └───────────────────────────────────────────┬────────────────────────────────────────────┘
                                             │ Container Elements
                                             ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                             Shopify Remote DOM Host Layer                              │
-│  • Projects guest element trees directly into native host container slots              │
-│  • Full inheritance of host CSS variables and Warm Paper Dark design tokens            │
-│  • Zero nested iframe scrolling traps, clipped popovers, or theme mismatches           │
+│                        DUAL-RUNTIME UI PRESENTATION LAYER                              │
+│  1. Declarative Schema UI (Light DOM Custom Elements: <omni-*>)                       │
+│     • Emits declarative JSON component trees over Channel 1                             │
+│     • Renders native Light DOM custom elements: <omni-card>, <omni-tabs>, etc.          │
+│     • Automatic host theme tokens & zero styling mismatches                             │
+│  2. Direct Sandboxed Iframe (IframeAppHost)                                           │
+│     • For standalone HTML/JS nsites (React, Svelte, Vue, or Vanilla)                    │
+│     • Dynamic theme tokens injected into iframe document                               │
+│     • Automatic min-height containment & zero trapped scrollbars                        │
 └───────────────────────────────────────────▲────────────────────────────────────────────┘
-                                            │ MessageChannel (Port 1: Remote DOM mutations)
+                                            │ MessageChannel (Port 1: Schema Bus)
                                             │ MessageChannel (Port 2: Kernel JSON-RPC 2.0)
-┌───────────────────────────────────────────┴────────────────────────────────────────────┘
-│                          SANDBOXED NSITE GUEST RUNTIME (iframe)                        │
+┌───────────────────────────────────────────┴────────────────────────────────────────────┐
+│                    SANDBOXED GUEST RUNTIME (Worker / Iframe)                           │
 │                                                                                        │
-│  - Standard Web & Nostr Application: React, Svelte, or Vanilla JS                      │
+│  - Standard Web & Nostr Application: Schema compute or standard nsite                  │
 │  - Strict Sandbox Isolation: sandbox="allow-scripts", CSP: connect-src 'none'          │
 │  - Virtual window.WebSocket: Standard relay frames (REQ, EVENT) routed via host        │
 │  - Standard window.nostr: NIP-07 signer backed by host keystore & ACL checks           │
-│  - Auto DOM Mirroring: document.body mutations stream automatically to host container  │
 │  - Scoped Storage: localStorage and IndexedDB isolated per pluginId                    │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```

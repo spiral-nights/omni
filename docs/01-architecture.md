@@ -22,11 +22,11 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
    - Apps are standard web applications mounting to standard DOM (`document.body`).
    - If an author creates a companion widget (e.g. countdown timer or mini-card), it is published as its **own independent companion nsite** with its own `naddr`.
 3. **Strict Shell vs. Kernel Separation**:
-   - **Kernel (`@omni/core`) is Headless**: It owns sandboxing, WebCrypto keys, relay pooling, 0ms local event caching, capability security (ACL), and Remote DOM transport. It has zero awareness of UI layouts, slot semantics (`main`, `sidebar`, `dock`, `header-actions`), or user pages.
-   - **Shell (`@omni/plugin-shell`) Owns All Presentation**: It owns viewports, layout management (`LayoutManager`), the desktop navigation dock, widgets dashboard grid, settings tabs, and NIP-78 workspace serialization.
+   - **Kernel (`@omni/core`) is Headless**: It owns sandboxing (Web Workers & sandboxed iframes), WebCrypto keys, relay pooling, 0ms local event caching, capability security (ACL), and Schema renderers. It has zero awareness of UI layouts, slot semantics (`main`, `sidebar`, `dock`, `header-actions`), or user pages.
+   - **Shell (`@omni/plugin-shell`) Owns All Presentation**: It owns viewports, layout management (`LayoutManager`), the desktop navigation dock, widgets dashboard grid, settings tabs, and NIP-78 workspace serialization. Editorial Shell is the default experience, alongside Panorama Hub.
 4. **Zero Proprietary SDKs (`window.omni` Eliminated from Plugins)**:
    - Plugins are 100% unaware of Omni. No `omni.registerComponent`, no `omni.storage`, no `omni.profile`, and no `omni.relays`.
-   - Plugins mount standard DOM directly to `document.body` or `#root`. The sandbox runtime automatically mirrors `document.body` across the Remote DOM bridge.
+   - Plugins interact via standard Web & Nostr standards or declarative Schema JSON.
    - Sub-views and routes (`?view=settings`, `?view=widget`) are read via standard `window.location.search`.
    - Storage uses standard `window.localStorage` (transparently partitioned per plugin ID by the sandbox).
    - Identity & signing use standard `window.nostr` (NIP-07).
@@ -65,7 +65,7 @@ omni/
 │   │   │   ├── layout/                    # LayoutManager (viewport slot mapping & reparenting)
 │   │   │   ├── nostr/                     # LocalEventStore (0ms hits), RelayPool, Coordinator
 │   │   │   ├── plugins/                   # NostrPluginResolver (NIP-5A nsites, Blossom, naddr)
-│   │   │   ├── remote-dom/                # RemoteDomHost (@remote-dom/core host receiver)
+│   │   │   ├── schema/                    # SchemaRenderer & Light DOM custom elements (<omni-*>)
 │   │   │   └── sandbox/                   # SandboxInstance & omni-runtime.js (guest runtime bridge)
 │   │   └── test/                          # Unit & integration tests (vitest + happy-dom)
 │   │
@@ -126,7 +126,7 @@ In Omni, there is a fundamental distinction between the Shell and regular plugin
 | :--- | :--- | :--- |
 | **Execution Environment** | Sandboxed `<iframe>` (`sandbox="allow-scripts"`, `null` origin) | Host browser thread (`http://localhost:5173` or host domain) |
 | **DOM Access** | No access to host DOM; mounts to sandbox `document.body` | Direct access to `#omni-root` and window layout |
-| **UI Projection** | Elements serialized across Remote DOM (Channel 1) | Renders native HTML/CSS containers that receive Remote DOM |
+| **UI Presentation** | Declarative Schema UI (Light DOM custom elements) or Direct Iframe | Native host containers and Light DOM custom element stylesheets |
 | **Storage Access** | Partitioned per `pluginId` by `PluginStorageManager` | Host origin `localStorage` (`omni_workspace_state`) |
 | **Keystore Access** | NIP-07 `window.nostr` governed by `AclEngine` checks | Access to `kernel.keystore` for workspace backup & restore |
 | **Role in App** | Independent domain app/widget (feed, timer, notes) | System container, layout manager, and user frame |

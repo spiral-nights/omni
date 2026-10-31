@@ -24,7 +24,7 @@ Inside Omni, standard web interfaces are transparently virtualized by the host r
 | **Identity & Signing** | `window.nostr` (NIP-07) | Host keystore signs events following ACL checks. |
 | **Relay Networking** | `new WebSocket("wss://...")` | Multiplexed through host's RelayPool and 0ms local cache. |
 | **Local Storage** | `localStorage` / `indexedDB` | Transparently scoped and isolated per plugin ID. |
-| **UI Mounting** | `document.body` or `#root` | Remote DOM automatically projects elements into the host container. |
+| **UI Mounting** | `document.body` or Schema JSON | Direct visual iframe or native Light DOM Custom Elements (`<omni-*>`). |
 | **Cross-App Links** | `<a href="nostr:...">` | Host intercepts and presents the "Open With..." chooser. |
 | **Sharing** | `navigator.share(...)` | Host opens the timeline composer with pre-populated content. |
 
