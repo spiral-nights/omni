@@ -3748,6 +3748,33 @@ export function getFeedSchema(
           });
         }
       }
+    } else {
+      threadChildren.push({
+        type: "card",
+        children: [
+          {
+            type: "box",
+            direction: "column",
+            align: "center",
+            gap: "sm",
+            padding: "md",
+            children: [
+              {
+                type: "text",
+                content: "Loading conversation thread...",
+                variant: "body",
+                tone: "muted"
+              },
+              {
+                type: "text",
+                content: `Fetching note ${state.activeThreadNoteId.slice(0, 16)}...`,
+                variant: "caption",
+                tone: "muted"
+              }
+            ]
+          }
+        ]
+      });
     }
 
     return {
@@ -4196,6 +4223,40 @@ function initFeedSchemaSocket() {
           if (ev.kind === 1 && ev.id) {
             allKnownNotes.set(ev.id, ev);
 
+            if (
+              subId?.startsWith("schema_thread_note_") ||
+              ev.id === currentFeedState.activeThreadNoteId
+            ) {
+              const author = profileCache.get(ev.pubkey);
+              const authorName = extractDisplayName(author) || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User");
+              const existingNote = currentFeedState.notes.find((n) => n.id === ev.id);
+              if (existingNote) {
+                existingNote.content = ev.content || "";
+                if (authorName && (!existingNote.authorName || existingNote.authorName.startsWith("nostr:"))) {
+                  existingNote.authorName = authorName;
+                }
+                if (author?.picture) existingNote.avatar = author.picture;
+              } else {
+                currentFeedState.notes.push({
+                  id: ev.id,
+                  pubkey: ev.pubkey,
+                  authorName,
+                  npub: ev.pubkey ? `npub1${ev.pubkey.slice(0, 8)}...` : "npub1...",
+                  avatar: author?.picture,
+                  content: ev.content || "",
+                  created_at: (ev.created_at || Math.floor(Date.now() / 1000)) * 1000,
+                  likes: 0,
+                  reposts: 0,
+                  replies: schemaThreadReplies.get(ev.id)?.length || 0,
+                  zaps: 0
+                });
+              }
+              if (ev.pubkey && !profileCache.has(ev.pubkey)) {
+                queueProfileFetch(ev.pubkey);
+              }
+              scheduleSchemaDispatch();
+            }
+
             // Handle replies indexing
             const eTags = (ev.tags || []).filter((t: string[]) => t[0] === "e" && t[1]);
             const activeTid = currentFeedState.activeThreadNoteId;
@@ -4453,8 +4514,79 @@ export function handleFeedAction(
     }
   } else if (actName === "view-thread" || actName === "view_note" || actName === "view-note" || actName === "reply-note") {
     const id = String(payload?.id || payload?.eventId || action.payload?.id || action.payload?.eventId || "");
+    const noteData: any = (payload as any)?.note || (action.payload as any)?.note;
     if (id) {
       currentFeedState.activeThreadNoteId = id;
+
+      if (noteData && (noteData.id || noteData.content)) {
+        const seededId = noteData.id || id;
+        allKnownNotes.set(seededId, noteData);
+        const author = profileCache.get(noteData.pubkey);
+        const resolvedName = extractDisplayName(author);
+        const authorName = (noteData.authorName && !noteData.authorName.startsWith("nostr:"))
+          ? noteData.authorName
+          : (resolvedName || noteData.authorName || (noteData.pubkey ? `nostr:${noteData.pubkey.slice(0, 8)}` : "Nostr User"));
+
+        const existingNote = currentFeedState.notes.find((n) => n.id === seededId);
+        if (existingNote) {
+          existingNote.content = noteData.content || existingNote.content;
+          if (authorName && (!existingNote.authorName || existingNote.authorName.startsWith("nostr:"))) {
+            existingNote.authorName = authorName;
+          }
+          if (noteData.avatar || author?.picture) {
+            existingNote.avatar = noteData.avatar || author?.picture;
+          }
+        } else {
+          currentFeedState.notes.push({
+            id: seededId,
+            pubkey: noteData.pubkey || "",
+            authorName,
+            npub: noteData.npub || (noteData.pubkey ? `npub1${noteData.pubkey.slice(0, 8)}...` : "npub1..."),
+            avatar: noteData.avatar || author?.picture,
+            content: noteData.content || "",
+            created_at: typeof noteData.created_at === "number"
+              ? (noteData.created_at > 1e11 ? noteData.created_at : noteData.created_at * 1000)
+              : Date.now(),
+            likes: noteData.likes || 0,
+            reposts: noteData.reposts || 0,
+            replies: noteData.replies || 0,
+            zaps: noteData.zaps || 0
+          });
+        }
+      } else if (!allKnownNotes.has(id)) {
+        try {
+          const rawNoteData = localStorage.getItem("omni_active_note_data");
+          if (rawNoteData) {
+            const parsed = JSON.parse(rawNoteData);
+            if (parsed && (parsed.id === id || parsed.eventId === id)) {
+              allKnownNotes.set(id, parsed);
+              const author = profileCache.get(parsed.pubkey);
+              const resolvedName = extractDisplayName(author);
+              const authorName = (parsed.authorName && !parsed.authorName.startsWith("nostr:"))
+                ? parsed.authorName
+                : (resolvedName || parsed.authorName || (parsed.pubkey ? `nostr:${parsed.pubkey.slice(0, 8)}` : "Nostr User"));
+
+              if (!currentFeedState.notes.some((n) => n.id === id)) {
+                currentFeedState.notes.push({
+                  id: parsed.id || id,
+                  pubkey: parsed.pubkey || "",
+                  authorName,
+                  npub: parsed.npub || (parsed.pubkey ? `npub1${parsed.pubkey.slice(0, 8)}...` : "npub1..."),
+                  avatar: parsed.avatar || author?.picture,
+                  content: parsed.content || "",
+                  created_at: typeof parsed.created_at === "number"
+                    ? (parsed.created_at > 1e11 ? parsed.created_at : parsed.created_at * 1000)
+                    : Date.now(),
+                  likes: parsed.likes || 0,
+                  reposts: parsed.reposts || 0,
+                  replies: parsed.replies || 0,
+                  zaps: parsed.zaps || 0
+                });
+              }
+            }
+          }
+        } catch (_) {}
+      }
 
       // Pre-seed any known replies to this note from currentFeedState.notes and allKnownNotes
       const existingReplies = schemaThreadReplies.get(id) || [];
@@ -4505,6 +4637,7 @@ export function handleFeedAction(
         : (activeWs && activeWs.readyState === WebSocket.OPEN ? activeWs : null);
       if (ws) {
         try {
+          ws.send(JSON.stringify(["REQ", `schema_thread_note_${id.slice(0, 8)}`, { ids: [id], limit: 1 }]));
           ws.send(JSON.stringify(["REQ", `schema_thread_rep_${id.slice(0, 8)}`, { kinds: [1], "#e": [id], limit: 50 }]));
         } catch (_) {}
       }
@@ -4604,7 +4737,15 @@ if (typeof window !== "undefined") {
       const savedNoteId = localStorage.getItem("omni_active_note_id");
       if (savedNoteId) {
         localStorage.removeItem("omni_active_note_id");
-        onActionMsg({ name: "view-thread", payload: { id: savedNoteId } });
+        let noteData: any = null;
+        try {
+          const raw = localStorage.getItem("omni_active_note_data");
+          if (raw) {
+            noteData = JSON.parse(raw);
+            localStorage.removeItem("omni_active_note_data");
+          }
+        } catch (_) {}
+        onActionMsg({ name: "view-thread", payload: { id: savedNoteId, note: noteData } });
       }
     } catch (_) {}
   };
@@ -4616,13 +4757,27 @@ if (typeof window !== "undefined") {
     if (action === "view_note" || action === "view-note") {
       const noteId = data?.eventId || data?.id;
       if (noteId) {
-        onActionMsg({ name: "view-thread", payload: { id: noteId } });
+        onActionMsg({ name: "view-thread", payload: { id: noteId, note: data?.note } });
       }
     }
   };
 
   window.addEventListener("omni:intent", (e: any) => handleIntent(e.detail));
   window.addEventListener("intent", (e: any) => handleIntent(e.detail));
+
+  window.addEventListener("storage", (e) => {
+    if (e.key === "omni_active_note_id") {
+      checkPendingActiveNote();
+    }
+  });
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        checkPendingActiveNote();
+      }
+    });
+  }
 
   if (isSchemaRoute()) {
     initFeedSchemaSocket();

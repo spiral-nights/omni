@@ -210,9 +210,27 @@ export function getProfileSchema(
       : "Recent";
     const npubShort = authorPubkey ? `npub1${authorPubkey.slice(0, 8)}...` : "";
 
+    const notePayload = {
+      id: note.id,
+      eventId: note.id,
+      note: {
+        id: note.id,
+        pubkey: authorPubkey,
+        authorName,
+        npub: npubShort,
+        avatar: note.avatar,
+        content: note.content || "",
+        created_at: note.created_at,
+        likes: note.likes || 0,
+        reposts: note.reposts || 0,
+        replies: note.replies || 0,
+        zaps: note.zaps || 0
+      }
+    };
+
     return {
       type: "card",
-      action: { name: "view_note", payload: { id: note.id, eventId: note.id } },
+      action: { name: "view_note", payload: notePayload },
       children: [
         {
           type: "box",
@@ -259,7 +277,7 @@ export function getProfileSchema(
           type: "text",
           content: note.content || "",
           variant: "body",
-          action: { name: "view_note", payload: { id: note.id, eventId: note.id } }
+          action: { name: "view_note", payload: notePayload }
         },
         {
           type: "divider"
@@ -276,7 +294,7 @@ export function getProfileSchema(
               size: "sm",
               icon: "reply",
               label: String(note.replies || "0"),
-              action: { name: "view_note", payload: { id: note.id, eventId: note.id } }
+              action: { name: "view_note", payload: notePayload }
             },
             {
               type: "button",
@@ -1027,22 +1045,26 @@ export async function handleProfileViewerAction(
     }
   } else if (actName === "view_note" || actName === "view-note" || actName === "view-thread") {
     const noteId = String(payload?.id || payload?.eventId || action.payload?.id || action.payload?.eventId || "");
+    const noteData = payload?.note || action.payload?.note || schemaUserNotes.find((n) => n.id === noteId);
     if (noteId) {
       try {
         localStorage.setItem("omni_active_note_id", noteId);
+        if (noteData) {
+          localStorage.setItem("omni_active_note_data", JSON.stringify(noteData));
+        }
       } catch (_) {}
       const rootObj = (typeof window !== "undefined" ? (window as any) : null) || (typeof self !== "undefined" ? (self as any) : null);
       if (rootObj?.omni?.intents?.dispatch) {
         try {
-          const res = rootObj.omni.intents.dispatch("view_note", { id: noteId, eventId: noteId });
+          const res = rootObj.omni.intents.dispatch("view_note", { id: noteId, eventId: noteId, note: noteData });
           if (res && typeof res.catch === "function") {
             res.catch(() => {});
           }
         } catch (_) {}
       }
       if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-        window.dispatchEvent(new CustomEvent("omni:intent", { detail: { action: "view_note", data: { id: noteId, eventId: noteId } } }));
-        window.dispatchEvent(new CustomEvent("intent", { detail: { action: "view_note", data: { id: noteId, eventId: noteId } } }));
+        window.dispatchEvent(new CustomEvent("omni:intent", { detail: { action: "view_note", data: { id: noteId, eventId: noteId, note: noteData } } }));
+        window.dispatchEvent(new CustomEvent("intent", { detail: { action: "view_note", data: { id: noteId, eventId: noteId, note: noteData } } }));
       }
     }
   } else if (actName === "like-note") {
@@ -3827,27 +3849,30 @@ async function mountProfileViewer(root: HTMLElement) {
     }
   }
 
-  function openNoteInFeed(eventId: string) {
+  function openNoteInFeed(eventId: string, noteData?: any) {
     if (!eventId) return;
     try {
       localStorage.setItem("omni_active_note_id", eventId);
+      if (noteData) {
+        localStorage.setItem("omni_active_note_data", JSON.stringify(noteData));
+      }
     } catch (err) {
-      console.error("WS message error:", err);
+      console.error("Storage error:", err);
     }
 
     const omniRef = (window as any).omni;
     if (omniRef?.intents?.dispatch) {
-      omniRef.intents.dispatch("view_note", { eventId, id: eventId }).catch(() => {});
+      omniRef.intents.dispatch("view_note", { eventId, id: eventId, note: noteData }).catch(() => {});
     }
 
     window.dispatchEvent(
       new CustomEvent("intent", {
-        detail: { action: "view_note", data: { eventId, id: eventId } }
+        detail: { action: "view_note", data: { eventId, id: eventId, note: noteData } }
       })
     );
     window.dispatchEvent(
       new CustomEvent("omni:intent", {
-        detail: { action: "view_note", data: { eventId, id: eventId } }
+        detail: { action: "view_note", data: { eventId, id: eventId, note: noteData } }
       })
     );
   }
@@ -3890,7 +3915,7 @@ async function mountProfileViewer(root: HTMLElement) {
     const btnReply = card.querySelector<HTMLButtonElement>(".action-reply")!;
     btnReply.addEventListener("click", (e) => {
       e.stopPropagation();
-      openNoteInFeed(event.id);
+      openNoteInFeed(event.id, event);
     });
 
     const btnRepost = card.querySelector<HTMLButtonElement>(".action-repost")!;
@@ -3958,7 +3983,7 @@ async function mountProfileViewer(root: HTMLElement) {
       if (sel && sel.length > 0) return;
       const target = e.target as HTMLElement;
       if (target.closest("a, button")) return;
-      openNoteInFeed(event.id);
+      openNoteInFeed(event.id, event);
     });
 
     return card;

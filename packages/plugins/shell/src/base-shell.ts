@@ -399,7 +399,7 @@ export abstract class BaseShell implements OmniShellHost {
     });
 
     this.kernel.intentBroker.on("intent:dispatched", async (event: any) => {
-      const targetPluginId = event?.targetPluginId;
+      const targetPluginId = event?.targetPluginId || event?.pluginId;
       if (!targetPluginId) return;
 
       if (event?.action === "view_profile" && event?.data?.pubkey) {
@@ -409,17 +409,18 @@ export abstract class BaseShell implements OmniShellHost {
       } else if (event?.action === "view_note" && (event?.data?.eventId || event?.data?.id)) {
         try {
           localStorage.setItem("omni_active_note_id", event.data.eventId || event.data.id);
+          if (event.data?.note || event.data?.event) {
+            localStorage.setItem("omni_active_note_data", JSON.stringify(event.data.note || event.data.event));
+          }
         } catch (_) {}
       }
 
       await this.showPage(targetPluginId);
-      if (!event?.isRpc) {
-        this.kernel.notifyPlugin(targetPluginId, "intent.invoke", {
-          action: event.action,
-          effectiveAction: event.effectiveAction,
-          data: event.data
-        });
-      }
+      this.kernel.notifyPlugin(targetPluginId, "intent.invoke", {
+        action: event.action,
+        effectiveAction: event.effectiveAction,
+        data: event.data
+      });
     });
   }
 

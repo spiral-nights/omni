@@ -379,10 +379,10 @@ describe("People plugin (profile, follows, mutes)", () => {
     await flush();
 
     // Verify view_note intent was dispatched
-    expect((window as any).omni.intents.dispatch).toHaveBeenCalledWith("view_note", {
+    expect((window as any).omni.intents.dispatch).toHaveBeenCalledWith("view_note", expect.objectContaining({
       eventId: "note-123456",
       id: "note-123456"
-    });
+    }));
     expect(localStorage.getItem("omni_active_note_id")).toBe("note-123456");
   });
 

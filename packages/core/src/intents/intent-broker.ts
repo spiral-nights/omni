@@ -259,6 +259,7 @@ export class IntentBroker {
       action,
       effectiveAction: chosen.action,
       callerPluginId,
+      pluginId: chosen.pluginId,
       targetPluginId: chosen.pluginId,
       isRpc: Boolean(chosen.isRpc),
       data
