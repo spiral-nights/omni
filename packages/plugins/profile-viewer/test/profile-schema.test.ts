@@ -348,6 +348,30 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     expect(backTabsNode.activeTab).toBe("following");
   });
 
+  it("returns to following list when browser back / popstate event is triggered while viewing user profile", async () => {
+    const friendPubkey = "f".repeat(64);
+    // Switch to following tab first
+    await handleProfileViewerAction({ name: "switch-tab", payload: { tab: "following" } });
+
+    // Inspect user profile
+    await handleProfileViewerAction({ name: "view_profile", payload: { pubkey: friendPubkey } });
+    const profileSchema = getProfileSchema("main") as OmniCardPrimitive;
+    const tabsNode = profileSchema.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;
+    expect(tabsNode.activeTab).toBe("user-profile");
+
+    // Simulate browser Back button dispatching popstate
+    window.dispatchEvent(
+      new PopStateEvent("popstate", {
+        state: { type: "omni-editorial-view", page: "app", pluginId: "org.omni.plugin.profile-viewer", from: "following" }
+      })
+    );
+
+    // Should return to Following list rather than previous plugin
+    const afterPopSchema = getProfileSchema("main") as OmniCardPrimitive;
+    const afterPopTabs = afterPopSchema.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;
+    expect(afterPopTabs.activeTab).toBe("following");
+  });
+
   it("renders user posts with action buttons (reply, repost, like, zap) and triggers view_note intent on click", async () => {
     const friendPubkey = "f".repeat(64);
     // Simulate user profile inspection with loaded posts

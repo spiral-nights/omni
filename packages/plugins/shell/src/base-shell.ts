@@ -2334,19 +2334,20 @@ export abstract class BaseShell implements OmniShellHost {
 
   public handlePopState(e: PopStateEvent): boolean {
     const state = e.state;
-    if (state && state.type === "omni-plugin-history" && state.pluginId) {
+    if (state && (state.type === "omni-plugin-history" || state.type === "omni-people-view")) {
+      const pluginId = state.pluginId || "org.omni.plugin.profile-viewer";
       const activeAppId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
-      if (activeAppId !== state.pluginId) {
+      if (activeAppId !== pluginId) {
         if ((this as any).openApp) {
-          (this as any).openApp(state.pluginId, false);
+          (this as any).openApp(pluginId, false);
         } else {
-          this.showPage(state.pluginId);
+          this.showPage(pluginId);
         }
       }
-      this.kernel.dispatchHistoryPopstate(state.pluginId, {
+      this.kernel.dispatchHistoryPopstate(pluginId, {
         delta: 0,
-        state: state.pluginState,
-        url: state.url
+        state: state.pluginState || state,
+        url: state.url || ""
       });
       return true;
     }

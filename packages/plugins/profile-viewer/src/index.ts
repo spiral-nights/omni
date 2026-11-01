@@ -17,6 +17,8 @@ const PROFILE_CACHE_KEY = "omni_profile_viewer_cache_v2";
 const PROFILE_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days expiration (2 weeks)
 
 let currentSchemaTab = "my-profile";
+let schemaPreviousTab: string | null = null;
+let schemaPushedHistory = false;
 let currentProfilePubkey = "";
 let currentProfileData: Record<string, any> = {
   name: "",
@@ -337,6 +339,8 @@ export function getProfileSchema(
 
   if (activeTab === "user-profile" && isViewingOtherUser) {
     const isFollowing = extraState?.isFollowing ?? targetUser.isFollowing;
+    const backTarget = schemaPreviousTab === "blocked" ? "blocked" : "following";
+    const backLabel = schemaPreviousTab === "blocked" ? "← Back to Blocked" : "← Back to Following";
     children.push({
       type: "box",
       direction: "row",
@@ -345,10 +349,10 @@ export function getProfileSchema(
       children: [
         {
           type: "button",
-          label: "← Back to Following",
+          label: backLabel,
           variant: "secondary",
           size: "sm",
-          action: { name: "switch-tab", payload: { tab: "following" } }
+          action: { name: "switch-tab", payload: { tab: backTarget } }
         }
       ]
     });
@@ -870,10 +874,24 @@ export async function handleProfileViewerAction(
   payload?: Record<string, unknown>
 ): Promise<OmniComponentNode> {
   const actName = action.name;
-  if (actName === "switch-tab") {
-    currentSchemaTab = String(payload?.tab || payload?.value || action.payload?.tab || "my-profile");
+  if (actName === "switch-tab" || actName === "back") {
+    const requestedTab = String(
+      payload?.tab || payload?.value || action.payload?.tab || (actName === "back" ? (schemaPreviousTab || "following") : "my-profile")
+    );
+    const isBack = Boolean(payload?.isBack || action.payload?.isBack || actName === "back");
+    currentSchemaTab = requestedTab === "back" ? (schemaPreviousTab || "following") : requestedTab;
     if (currentSchemaTab !== "user-profile") {
       schemaTargetUser = null;
+      const hadHistory = schemaPushedHistory;
+      schemaPushedHistory = false;
+      schemaPreviousTab = null;
+      if (isBack && hadHistory) {
+        try {
+          if (typeof window !== "undefined" && window.history && typeof window.history.back === "function") {
+            window.history.back();
+          }
+        } catch (_) {}
+      }
     }
     if (currentSchemaTab === "my-profile" && currentProfilePubkey) {
       schemaUserNotes = [];
@@ -1012,6 +1030,9 @@ export async function handleProfileViewerAction(
   } else if (actName === "view_profile" || actName === "view-profile") {
     const targetPk = String(payload?.pubkey || action.payload?.pubkey || "");
     if (targetPk) {
+      if (currentSchemaTab !== "user-profile") {
+        schemaPreviousTab = currentSchemaTab || "following";
+      }
       loadSchemaProfileCache();
       const cached = schemaProfileCache.get(targetPk);
       schemaTargetUser = {
@@ -1043,6 +1064,18 @@ export async function handleProfileViewerAction(
       }
       currentSchemaTab = "user-profile";
       schemaUserNotes = [];
+
+      try {
+        if (typeof window !== "undefined" && window.history && typeof window.history.pushState === "function") {
+          schemaPushedHistory = true;
+          window.history.pushState(
+            { type: "omni-people-view", tab: "user-profile", pubkey: targetPk, from: schemaPreviousTab || "following" },
+            "",
+            `?view=user-profile&pubkey=${targetPk}`
+          );
+        }
+      } catch (_) {}
+
       sendSchemaWs(["REQ", `pv_schema_target_${Date.now()}`, { kinds: [0], authors: [targetPk], limit: 1 }]);
       sendSchemaWs(["REQ", `pv_schema_target_notes_${Date.now()}`, { kinds: [1], authors: [targetPk], limit: 20 }]);
     }
@@ -4735,6 +4768,30 @@ if (rootContext && typeof rootContext.addEventListener === "function") {
       currentProfileData.npub = `npub1${e.detail.pubkey.slice(0, 10)}...`;
       await initSchemaData(e.detail.pubkey);
       dispatchCurrentSchema();
+    }
+  });
+
+  rootContext.addEventListener("popstate", (event: PopStateEvent) => {
+    const state = event?.state;
+    if (currentSchemaTab === "user-profile") {
+      const targetTab = (state?.from as string) || schemaPreviousTab || "following";
+      schemaPreviousTab = null;
+      schemaPushedHistory = false;
+      schemaTargetUser = null;
+      currentSchemaTab = targetTab;
+      dispatchCurrentSchema();
+      return;
+    }
+    if (state && (state.type === "omni-people-view" || state.type === "omni-plugin-history")) {
+      const targetTab = state.tab || (state.pluginState && state.pluginState.tab);
+      const targetPk = state.pubkey || (state.pluginState && state.pluginState.pubkey);
+      if (targetTab === "user-profile" && targetPk) {
+        handleProfileViewerAction({ name: "view_profile", payload: { pubkey: targetPk } }).then(dispatchProfileSchema);
+      } else if (targetTab) {
+        currentSchemaTab = targetTab;
+        schemaTargetUser = null;
+        dispatchCurrentSchema();
+      }
     }
   });
 
