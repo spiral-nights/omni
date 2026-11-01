@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r run build",
+    "build:stale": "node scripts/autobuild.js",
     "dev": "pnpm --filter @omni/web dev",
     "test": "vitest run",
     "typecheck": "pnpm -r run typecheck"

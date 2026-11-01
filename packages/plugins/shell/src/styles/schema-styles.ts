@@ -141,6 +141,36 @@ omni-text {
   color: var(--omni-text-primary, #ede8df);
   font-size: 0.88rem;
   line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+omni-text a,
+.omni-text a,
+.feed-link {
+  color: var(--omni-accent-primary, #d4a373);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  word-break: break-all;
+  cursor: pointer;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+omni-text a:hover,
+.omni-text a:hover,
+.feed-link:hover {
+  filter: brightness(1.2);
+  text-decoration-thickness: 1.5px;
+}
+
+omni-text video,
+omni-text img,
+.feed-media-wrap video,
+.feed-media-wrap img {
+  max-width: 100%;
+  border-radius: var(--omni-radius-sm, 6px);
+  margin-top: 8px;
+  display: block;
 }
 omni-text[variant="title"] {
   font-size: 1.15rem;

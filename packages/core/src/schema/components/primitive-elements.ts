@@ -112,11 +112,11 @@ export class OmniCardElement extends BaseElement {
       if (sel && sel.length > 0) {
         return;
       }
-      // If click originated on an interactive control (button, link, input, avatar), do not trigger card action
+      // If click originated on an interactive control (button, link, input, avatar, media), do not trigger card action
       const target = e.target as HTMLElement;
       if (
         target.closest(
-          "button, input, textarea, a, omni-button, omni-icon-button, omni-avatar, [role='button']"
+          "button, input, textarea, a, video, audio, img, omni-button, omni-icon-button, omni-avatar, [role='button']"
         )
       ) {
         return;
@@ -256,16 +256,74 @@ export class OmniSpacerElement extends BaseElement {
 // ============================================================================
 
 function formatTextWithLinks(raw: string): string {
-  const escaped = (raw || "")
+  if (!raw) return "";
+
+  // 1. Placeholder-replace markdown links [text](url) to preserve anchor texts
+  const placeholders: string[] = [];
+  let text = raw.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, label, url) => {
+    const idx = placeholders.length;
+    placeholders.push(
+      `<a href="${url}" target="_blank" rel="noopener noreferrer" class="feed-link" style="color: var(--omni-accent-primary, #d4a373); text-decoration: underline; text-underline-offset: 3px; word-break: break-all;">${label}</a>`
+    );
+    return `___OMNI_LINK_PLACEHOLDER_${idx}___`;
+  });
+
+  // 2. Escape HTML entities
+  text = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
-  const urlRegex = /(https?:\/\/[^\s<]+)/g;
-  return escaped.replace(urlRegex, (url) => {
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--omni-accent-primary, #d4a373); text-decoration: underline; word-break: break-all;">${url}</a>`;
+
+  // 3. Match raw URLs and extract media previews (Blossom videos, images)
+  const mediaUrls: Array<{ type: "video" | "image"; url: string }> = [];
+  const urlRegex = /(https?:\/\/[^\s<]+)/gi;
+  text = text.replace(urlRegex, (matched) => {
+    let url = matched;
+    let trailing = "";
+
+    // Strip trailing HTML entities (&gt;, &quot;, &#39;, &amp;)
+    const entityMatch = url.match(/(&(?:gt|lt|quot|amp|#39);)+$/);
+    if (entityMatch) {
+      trailing = entityMatch[0] + trailing;
+      url = url.slice(0, -entityMatch[0].length);
+    }
+
+    // Strip trailing punctuation
+    const punctMatch = url.match(/[.,!?:;)\]"'']+$/);
+    if (punctMatch) {
+      trailing = punctMatch[0] + trailing;
+      url = url.slice(0, -punctMatch[0].length);
+    }
+
+    const cleanUrl = url.replace(/^http:\/\//i, "https://");
+    if (/\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(cleanUrl)) {
+      mediaUrls.push({ type: "video", url: cleanUrl });
+    } else if (/\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i.test(cleanUrl)) {
+      mediaUrls.push({ type: "image", url: cleanUrl });
+    }
+
+    return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="feed-link" style="color: var(--omni-accent-primary, #d4a373); text-decoration: underline; text-underline-offset: 3px; word-break: break-all;">${cleanUrl}</a>${trailing}`;
   });
+
+  // 4. Restore placeholders
+  for (let i = 0; i < placeholders.length; i++) {
+    text = text.replace(`___OMNI_LINK_PLACEHOLDER_${i}___`, placeholders[i]);
+  }
+
+  // 5. Append media preview elements if video/image URLs were found
+  if (mediaUrls.length > 0) {
+    for (const m of mediaUrls) {
+      if (m.type === "video") {
+        text += `<div class="feed-media-wrap" style="margin-top: 8px;"><video controls playsinline preload="metadata" style="max-width: 100%; border-radius: 6px; display: block; max-height: 480px; background: #000;" src="${m.url}"></video></div>`;
+      } else if (m.type === "image") {
+        text += `<div class="feed-media-wrap" style="margin-top: 8px;"><img src="${m.url}" loading="lazy" style="max-width: 100%; border-radius: 6px; display: block; max-height: 480px; object-fit: contain;" /></div>`;
+      }
+    }
+  }
+
+  return text;
 }
 
 export class OmniTextElement extends BaseElement {
@@ -279,8 +337,8 @@ export class OmniTextElement extends BaseElement {
       if (sel && sel.length > 0) {
         return;
       }
-      // 2. If clicking a link, let browser handle the link instead of triggering action
-      if ((e.target as HTMLElement).closest("a, button, input, textarea")) {
+      // 2. If clicking a link or interactive media control, let browser handle it instead of triggering action
+      if ((e.target as HTMLElement).closest("a, button, input, textarea, video, audio")) {
         return;
       }
       if (this.actionData) {
@@ -303,7 +361,7 @@ export class OmniTextElement extends BaseElement {
       else this.removeAttribute("truncate");
     }
     if (props.content !== undefined) {
-      if (/(https?:\/\/[^\s<]+)/i.test(props.content)) {
+      if (/(https?:\/\/[^\s<]+|\[.*?\]\(https?:\/\/)/i.test(props.content)) {
         this.innerHTML = formatTextWithLinks(props.content);
       } else {
         this.textContent = props.content;
