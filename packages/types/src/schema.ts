@@ -65,6 +65,7 @@ export interface OmniCardPrimitive extends OmniPrimitiveBase {
   headerAction?: OmniComponentNode;
   children: OmniComponentNode[];
   footer?: OmniComponentNode[];
+  action?: OmniAction;
 }
 
 export interface OmniDividerPrimitive extends OmniPrimitiveBase {

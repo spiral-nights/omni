@@ -511,7 +511,11 @@ export class SandboxInstance {
                 this.options.intentBroker.dispatch(this.manifest.id, "view_profile", { pubkey }).catch(() => {});
               }
             }
-            if ((action.name === "view_note" || action.name === "view-note" || action.name === "view-thread") && this.options.intentBroker) {
+            if (
+              (action.name === "view_note" || action.name === "view-note" || action.name === "view-thread") &&
+              this.options.intentBroker &&
+              this.manifest.id !== "org.omni.plugin.feed"
+            ) {
               const noteId = (payload?.id || payload?.eventId || action.payload?.id || action.payload?.eventId) as string;
               if (noteId) {
                 this.options.intentBroker.dispatch(this.manifest.id, "view_note", { id: noteId, eventId: noteId }).catch(() => {});

@@ -818,28 +818,46 @@ const PROFILE_CACHE_KEY = "omni_profile_cache_v2";
 const PROFILE_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days expiration (2 weeks)
 
 interface CachedProfileEntry {
-  meta: { name?: string; display_name?: string; picture?: string; nip05?: string };
+  meta: { name?: string; display_name?: string; displayName?: string; username?: string; picture?: string; nip05?: string };
   timestamp: number;
 }
 
-function loadPersistedProfileCache(): Map<string, { name?: string; display_name?: string; picture?: string; nip05?: string }> {
-  const map = new Map<string, { name?: string; display_name?: string; picture?: string; nip05?: string }>();
+export function extractDisplayName(meta: any): string {
+  if (!meta || typeof meta !== "object") return "";
+  const name =
+    meta.display_name ||
+    meta.displayName ||
+    meta.name ||
+    meta.username ||
+    (meta.nip05 && typeof meta.nip05 === "string" ? meta.nip05.split("@")[0] : "");
+  if (name && typeof name === "string" && name.trim()) {
+    return name.trim();
+  }
+  return "";
+}
+
+function loadPersistedProfileCache(): Map<string, any> {
+  const map = new Map<string, any>();
   try {
     if (typeof localStorage === "undefined") return map;
-    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
-    if (!raw) return map;
-    const records: Record<string, CachedProfileEntry> = JSON.parse(raw);
     const now = Date.now();
-    let hasExpired = false;
-    for (const [pubkey, entry] of Object.entries(records)) {
-      if (entry && entry.timestamp && (now - entry.timestamp) < PROFILE_CACHE_TTL) {
-        map.set(pubkey, entry.meta);
-      } else {
-        hasExpired = true;
-      }
-    }
-    if (hasExpired) {
-      persistProfileCache(map);
+    const cacheKeys = [PROFILE_CACHE_KEY, "omni_profile_viewer_cache_v2", "omni_profile_cache_v1"];
+    for (const key of cacheKeys) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const records = JSON.parse(raw);
+        for (const [pubkey, entry] of Object.entries(records)) {
+          if (!entry) continue;
+          const meta = (entry as any).meta || entry;
+          if (meta && typeof meta === "object") {
+            const existing = map.get(pubkey);
+            if (!existing || (!extractDisplayName(existing) && extractDisplayName(meta))) {
+              map.set(pubkey, meta);
+            }
+          }
+        }
+      } catch (_) {}
     }
   } catch (_) {}
   return map;
@@ -856,7 +874,11 @@ function persistProfileCache(cache: Map<string, any>) {
       for (const [pubkey, meta] of cache.entries()) {
         records[pubkey] = { meta, timestamp: now };
       }
-      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(records));
+      const serialized = JSON.stringify(records);
+      localStorage.setItem(PROFILE_CACHE_KEY, serialized);
+      try {
+        localStorage.setItem("omni_profile_viewer_cache_v2", serialized);
+      } catch (_) {}
     } catch (_) {}
   }, 1000);
 }
@@ -869,7 +891,10 @@ let profileBatchTimer: any = null;
 let activeWs: any = null;
 
 function queueProfileFetch(pubkey: string) {
-  if (!pubkey || profileCache.has(pubkey) || pendingProfileFetches.has(pubkey)) return;
+  if (!pubkey) return;
+  const cached = profileCache.get(pubkey);
+  if (cached && extractDisplayName(cached)) return;
+  if (pendingProfileFetches.has(pubkey)) return;
   queuedProfilePubkeys.add(pubkey);
   if (!profileBatchTimer) {
     profileBatchTimer = setTimeout(flushProfileBatch, 80);
@@ -882,12 +907,20 @@ function flushProfileBatch() {
     (activeWs && activeWs.readyState === WebSocket.OPEN)
       ? activeWs
       : (schemaWs && schemaWs.readyState === WebSocket.OPEN ? schemaWs : null);
-  if (queuedProfilePubkeys.size === 0 || !ws) return;
+  if (queuedProfilePubkeys.size === 0) return;
+  if (!ws) {
+    profileBatchTimer = setTimeout(flushProfileBatch, 250);
+    return;
+  }
 
   const batch = Array.from(queuedProfilePubkeys).slice(0, 50);
   for (const pk of batch) {
     queuedProfilePubkeys.delete(pk);
     pendingProfileFetches.add(pk);
+  }
+
+  if (queuedProfilePubkeys.size > 0) {
+    profileBatchTimer = setTimeout(flushProfileBatch, 100);
   }
 
   const subId = `prof_batch_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -899,9 +932,10 @@ function flushProfileBatch() {
 function getAuthorMeta(pubkey: string) {
   if (!pubkey) return { name: "anonymous", handle: "@anon", initial: "?", picture: "" };
   const cached = profileCache.get(pubkey);
-  const initial = ((cached?.display_name || cached?.name || pubkey)[0] || "?").toUpperCase();
-  const name = cached?.display_name || cached?.name || `nostr:${pubkey.slice(0, 6)}`;
-  const handle = cached?.nip05 ? `@${cached.nip05}` : `@npub1${pubkey.slice(0, 6)}`;
+  const resolvedName = extractDisplayName(cached);
+  const name = resolvedName || (pubkey ? `nostr:${pubkey.slice(0, 8)}` : "anonymous");
+  const handle = cached?.nip05 ? `@${cached.nip05}` : `@npub1${pubkey.slice(0, 8)}`;
+  const initial = ((resolvedName || pubkey)[0] || "?").toUpperCase();
   return {
     name,
     handle,
@@ -1906,6 +1940,10 @@ function mountFeed(root: any) {
 
     // Clicking note card (excluding links, action buttons, quote card, and author details) opens the full thread
     card.addEventListener("click", (e) => {
+      const sel = window.getSelection()?.toString()?.trim();
+      if (sel && sel.length > 0) {
+        return;
+      }
       const target = e.target as HTMLElement;
       if (target.closest(".feed-avatar, .feed-author-name, .feed-author-handle, .note-action-btn, .feed-quote-card, a, button")) {
         return;
@@ -2985,6 +3023,7 @@ function mountFeed(root: any) {
         activeWs = ws;
 
         ws.onopen = () => {
+          flushProfileBatch();
           if (myUserPubkey) {
             fetchFollowingList(myUserPubkey);
           }
@@ -3008,19 +3047,20 @@ function mountFeed(root: any) {
                   const parsed = JSON.parse(ev.content);
                   profileCache.set(ev.pubkey, parsed);
                   persistProfileCache(profileCache);
+                  const resolvedName = extractDisplayName(parsed);
                   const cards = container.querySelectorAll(`[data-author-pubkey="${ev.pubkey}"]`);
                   for (const c of Array.from(cards)) {
                     const nEl = c.querySelector<HTMLElement>(".feed-author-name");
                     const hEl = c.querySelector<HTMLElement>(".feed-author-handle");
                     const aEl = c.querySelector<HTMLElement>(".feed-avatar");
-                    if (nEl && (parsed.display_name || parsed.name)) {
-                      nEl.textContent = parsed.display_name || parsed.name;
+                    if (nEl && resolvedName) {
+                      nEl.textContent = resolvedName;
                     }
                     if (hEl && parsed.nip05) {
                       hEl.textContent = `@${parsed.nip05}`;
                     }
                     if (aEl) {
-                      const initial = (parsed.display_name || parsed.name || "?").slice(0, 1).toUpperCase();
+                      const initial = (resolvedName || "?").slice(0, 1).toUpperCase();
                       aEl.innerHTML = getAvatarSvg(ev.pubkey, initial);
                     }
                   }
@@ -3501,6 +3541,12 @@ export function getFeedSchema(
     ];
 
     if (focused) {
+      const focusedAuthor = profileCache.get(focused.pubkey);
+      const focusedResolvedName = extractDisplayName(focusedAuthor);
+      const focusedDisplayName = (focused.authorName && !focused.authorName.startsWith("nostr:"))
+        ? focused.authorName
+        : (focusedResolvedName || focused.authorName);
+
       threadChildren.push({
         type: "card",
         children: [
@@ -3520,7 +3566,7 @@ export function getFeedSchema(
                   {
                     type: "avatar",
                     pubkey: focused.pubkey,
-                    name: focused.authorName,
+                    name: focusedDisplayName,
                     size: "md",
                     action: { name: "view-profile", payload: { pubkey: focused.pubkey } }
                   },
@@ -3529,7 +3575,7 @@ export function getFeedSchema(
                     direction: "column",
                     gap: "xs",
                     children: [
-                      { type: "text", content: focused.authorName, variant: "title" },
+                      { type: "text", content: focusedDisplayName, variant: "title" },
                       { type: "text", content: `${new Date(focused.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })} · ${focused.npub}`, variant: "caption", tone: "muted" }
                     ]
                   }
@@ -3651,6 +3697,12 @@ export function getFeedSchema(
         });
       } else {
         for (const rep of replies) {
+          const repAuthor = profileCache.get(rep.pubkey);
+          const repResolvedName = extractDisplayName(repAuthor);
+          const repDisplayName = (rep.authorName && !rep.authorName.startsWith("nostr:"))
+            ? rep.authorName
+            : (repResolvedName || rep.authorName);
+
           threadChildren.push({
             type: "card",
             children: [
@@ -3670,7 +3722,7 @@ export function getFeedSchema(
                       {
                         type: "avatar",
                         pubkey: rep.pubkey,
-                        name: rep.authorName,
+                        name: repDisplayName,
                         size: "sm",
                         action: { name: "view-profile", payload: { pubkey: rep.pubkey } }
                       },
@@ -3679,7 +3731,7 @@ export function getFeedSchema(
                         direction: "column",
                         gap: "xs",
                         children: [
-                          { type: "text", content: rep.authorName, variant: "body", tone: "primary" },
+                          { type: "text", content: repDisplayName, variant: "body", tone: "primary" },
                           { type: "text", content: `${new Date(rep.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${rep.npub.slice(0, 12)}...`, variant: "caption", tone: "muted" }
                         ]
                       }
@@ -3718,58 +3770,66 @@ export function getFeedSchema(
     return true;
   });
 
-  const noteNodes: OmniComponentNode[] = displayedNotes.map((n) => ({
-    type: "card",
-    children: [
-      {
-        type: "box",
-        direction: "row",
-        justify: "between",
-        align: "center",
-        children: [
-          {
-            type: "box",
-            direction: "row",
-            gap: "sm",
-            align: "center",
-            action: {
-              name: "view-profile",
-              payload: { pubkey: n.pubkey }
-            },
-            children: [
-              {
-                type: "avatar",
-                pubkey: n.pubkey,
-                name: n.authorName,
-                size: "md",
-                action: {
-                  name: "view-profile",
-                  payload: { pubkey: n.pubkey }
-                }
+  const noteNodes: OmniComponentNode[] = displayedNotes.map((n) => {
+    const cachedAuthor = profileCache.get(n.pubkey);
+    const resolvedName = extractDisplayName(cachedAuthor);
+    const authorDisplayName = (n.authorName && !n.authorName.startsWith("nostr:"))
+      ? n.authorName
+      : (resolvedName || n.authorName);
+
+    return {
+      type: "card",
+      action: { name: "view-thread", payload: { id: n.id } },
+      children: [
+        {
+          type: "box",
+          direction: "row",
+          justify: "between",
+          align: "center",
+          children: [
+            {
+              type: "box",
+              direction: "row",
+              gap: "sm",
+              align: "center",
+              action: {
+                name: "view-profile",
+                payload: { pubkey: n.pubkey }
               },
-              {
-                type: "box",
-                direction: "column",
-                gap: "xs",
-                children: [
-                  {
-                    type: "text",
-                    content: n.authorName,
-                    variant: "body",
-                    tone: "primary"
-                  },
-                  {
-                    type: "text",
-                    content: `${new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${n.npub.slice(0, 12)}...`,
-                    variant: "caption",
-                    tone: "muted"
+              children: [
+                {
+                  type: "avatar",
+                  pubkey: n.pubkey,
+                  name: authorDisplayName,
+                  size: "md",
+                  action: {
+                    name: "view-profile",
+                    payload: { pubkey: n.pubkey }
                   }
-                ]
-              }
-            ]
-          }
-        ]
-      },
+                },
+                {
+                  type: "box",
+                  direction: "column",
+                  gap: "xs",
+                  children: [
+                    {
+                      type: "text",
+                      content: authorDisplayName,
+                      variant: "body",
+                      tone: "primary"
+                    },
+                    {
+                      type: "text",
+                      content: `${new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${n.npub.slice(0, 12)}...`,
+                      variant: "caption",
+                      tone: "muted"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
       {
         type: "text",
         content: n.content,
@@ -3820,7 +3880,8 @@ export function getFeedSchema(
         ]
       }
     ]
-  }));
+  };
+});
 
   const streamChildren: OmniComponentNode[] =
     noteNodes.length > 0
@@ -4069,6 +4130,7 @@ function initFeedSchemaSocket() {
           const tid = currentFeedState.activeThreadNoteId;
           ws.send(JSON.stringify(["REQ", `schema_thread_rep_${tid.slice(0, 8)}`, { kinds: [1], "#e": [tid], limit: 50 }]));
         }
+        flushProfileBatch();
       } catch (_) {}
     };
 
@@ -4085,10 +4147,11 @@ function initFeedSchemaSocket() {
               const parsed = JSON.parse(ev.content);
               profileCache.set(ev.pubkey, parsed);
               persistProfileCache(profileCache);
+              const resolvedName = extractDisplayName(parsed);
               let updated = false;
               for (const n of currentFeedState.notes) {
                 if (n.pubkey === ev.pubkey) {
-                  if (parsed.display_name || parsed.name) n.authorName = parsed.display_name || parsed.name;
+                  if (resolvedName) n.authorName = resolvedName;
                   if (parsed.picture) n.avatar = parsed.picture;
                   updated = true;
                 }
@@ -4096,7 +4159,7 @@ function initFeedSchemaSocket() {
               for (const replies of schemaThreadReplies.values()) {
                 for (const r of replies) {
                   if (r.pubkey === ev.pubkey) {
-                    if (parsed.display_name || parsed.name) r.authorName = parsed.display_name || parsed.name;
+                    if (resolvedName) r.authorName = resolvedName;
                     if (parsed.picture) r.avatar = parsed.picture;
                     updated = true;
                   }
@@ -4147,10 +4210,11 @@ function initFeedSchemaSocket() {
               const existing = schemaThreadReplies.get(activeTid) || [];
               if (!existing.some((r) => r.id === ev.id)) {
                 const author = profileCache.get(ev.pubkey);
+                const repAuthorName = extractDisplayName(author) || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User");
                 const repItem: FeedNoteItem = {
                   id: ev.id,
                   pubkey: ev.pubkey,
-                  authorName: author?.display_name || author?.name || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User"),
+                  authorName: repAuthorName,
                   npub: ev.pubkey ? `npub1${ev.pubkey.slice(0, 8)}...` : "npub1...",
                   avatar: author?.picture,
                   content: ev.content || "",
@@ -4180,10 +4244,11 @@ function initFeedSchemaSocket() {
                 const existing = schemaThreadReplies.get(parentId) || [];
                 if (!existing.some((r) => r.id === ev.id)) {
                   const author = profileCache.get(ev.pubkey);
+                  const repAuthorName = extractDisplayName(author) || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User");
                   const repItem: FeedNoteItem = {
                     id: ev.id,
                     pubkey: ev.pubkey,
-                    authorName: author?.display_name || author?.name || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User"),
+                    authorName: repAuthorName,
                     npub: ev.pubkey ? `npub1${ev.pubkey.slice(0, 8)}...` : "npub1...",
                     avatar: author?.picture,
                     content: ev.content || "",
@@ -4216,7 +4281,7 @@ function initFeedSchemaSocket() {
 
             const author = profileCache.get(ev.pubkey);
             const npubShort = ev.pubkey ? `npub1${ev.pubkey.slice(0, 8)}...` : "npub1...";
-            const authorName = author?.display_name || author?.name || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User");
+            const authorName = extractDisplayName(author) || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User");
             const avatar = author?.picture;
 
             const hasFollows = Array.from(schemaFollowingPubkeys).some((p) => p !== schemaMyUserPubkey);
@@ -4399,10 +4464,11 @@ export function handleFeedAction(
         if (!ev || !ev.id || ev.id === id || replyIds.has(ev.id)) return;
         if ((ev.tags || []).some((t: any[]) => t[0] === "e" && t[1] === id)) {
           const author = profileCache.get(ev.pubkey);
+          const repAuthorName = extractDisplayName(author) || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User");
           const repItem: FeedNoteItem = {
             id: ev.id,
             pubkey: ev.pubkey,
-            authorName: author?.display_name || author?.name || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User"),
+            authorName: repAuthorName,
             npub: ev.pubkey ? `npub1${ev.pubkey.slice(0, 8)}...` : "npub1...",
             avatar: author?.picture,
             content: ev.content || "",
@@ -4456,10 +4522,11 @@ export function handleFeedAction(
         tags.push(["p", parentPubkey]);
       }
       const myMeta = profileCache.get(schemaMyUserPubkey);
+      const myDisplayName = extractDisplayName(myMeta) || "You";
       const newReply: FeedNoteItem = {
         id: `reply_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         pubkey: schemaMyUserPubkey || "current_user",
-        authorName: myMeta?.display_name || myMeta?.name || "You",
+        authorName: myDisplayName,
         npub: schemaMyUserPubkey ? `npub1${schemaMyUserPubkey.slice(0, 8)}...` : "npub1you...",
         avatar: myMeta?.picture,
         content: replyText,

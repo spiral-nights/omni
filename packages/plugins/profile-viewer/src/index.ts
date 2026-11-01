@@ -212,6 +212,7 @@ export function getProfileSchema(
 
     return {
       type: "card",
+      action: { name: "view_note", payload: { id: note.id, eventId: note.id } },
       children: [
         {
           type: "box",
@@ -3953,6 +3954,8 @@ async function mountProfileViewer(root: HTMLElement) {
     });
 
     card.addEventListener("click", (e) => {
+      const sel = window.getSelection()?.toString()?.trim();
+      if (sel && sel.length > 0) return;
       const target = e.target as HTMLElement;
       if (target.closest("a, button")) return;
       openNoteInFeed(event.id);

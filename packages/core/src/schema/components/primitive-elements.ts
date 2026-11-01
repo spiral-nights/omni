@@ -101,10 +101,30 @@ export class OmniCardElement extends BaseElement {
   private headerActionContainer: HTMLElement | null = null;
   private bodyEl: HTMLElement | null = null;
   private footerEl: HTMLElement | null = null;
+  public actionData: OmniAction | null = null;
 
   connectedCallback(): void {
     this.classList.add("omni-card");
     this.ensureStructure();
+    this.addEventListener("click", (e) => {
+      // If user selected text to copy, do not navigate
+      const sel = typeof window !== "undefined" ? window.getSelection()?.toString()?.trim() : "";
+      if (sel && sel.length > 0) {
+        return;
+      }
+      // If click originated on an interactive control (button, link, input, avatar), do not trigger card action
+      const target = e.target as HTMLElement;
+      if (
+        target.closest(
+          "button, input, textarea, a, omni-button, omni-icon-button, omni-avatar, [role='button']"
+        )
+      ) {
+        return;
+      }
+      if (this.actionData) {
+        this.dispatchEvent(new OmniActionEvent(this.actionData));
+      }
+    });
   }
 
   private ensureStructure(): void {
@@ -149,6 +169,12 @@ export class OmniCardElement extends BaseElement {
 
   setProps(props: Partial<OmniCardPrimitive>): void {
     this.ensureStructure();
+    this.actionData = props.action || null;
+    if (props.action) {
+      this.style.cursor = "pointer";
+    } else {
+      this.style.cursor = "";
+    }
     if (props.title || props.subtitle || props.icon) {
       this.ensureHeader();
       
@@ -229,12 +255,34 @@ export class OmniSpacerElement extends BaseElement {
 // 2. Typography & Status Display
 // ============================================================================
 
+function formatTextWithLinks(raw: string): string {
+  const escaped = (raw || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+  const urlRegex = /(https?:\/\/[^\s<]+)/g;
+  return escaped.replace(urlRegex, (url) => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--omni-accent-primary, #d4a373); text-decoration: underline; word-break: break-all;">${url}</a>`;
+  });
+}
+
 export class OmniTextElement extends BaseElement {
   public actionData: OmniAction | null = null;
 
   connectedCallback(): void {
     this.classList.add("omni-text");
-    this.addEventListener("click", () => {
+    this.addEventListener("click", (e) => {
+      // 1. If user is selecting text to copy, do not trigger action
+      const sel = typeof window !== "undefined" ? window.getSelection()?.toString()?.trim() : "";
+      if (sel && sel.length > 0) {
+        return;
+      }
+      // 2. If clicking a link, let browser handle the link instead of triggering action
+      if ((e.target as HTMLElement).closest("a, button, input, textarea")) {
+        return;
+      }
       if (this.actionData) {
         this.dispatchEvent(new OmniActionEvent(this.actionData));
       }
@@ -255,7 +303,11 @@ export class OmniTextElement extends BaseElement {
       else this.removeAttribute("truncate");
     }
     if (props.content !== undefined) {
-      this.textContent = props.content;
+      if (/(https?:\/\/[^\s<]+)/i.test(props.content)) {
+        this.innerHTML = formatTextWithLinks(props.content);
+      } else {
+        this.textContent = props.content;
+      }
     }
   }
 }
