@@ -11,12 +11,14 @@ import { SandboxInstance } from "../sandbox/sandbox-manager.js";
 import { NostrPluginResolver, ResolvedNostrPlugin, PublishNsiteOptions } from "../plugins/nostr-plugin-resolver.js";
 import { LayoutManager } from "../layout/layout-manager.js";
 import { AppHandler, detectUriScheme } from "../intents/app-handler.js";
+import { NavigationManager } from "../navigation/navigation-manager.js";
 
 export interface OmniKernelOptions {
   privateKeyHex?: string;
   bootstrapRelays?: string[];
   promptHandler?: PermissionPromptHandler;
   layoutManager?: LayoutManager;
+  navigation?: NavigationManager;
   runtimeScript?: string;
   onSlotAction?: (action: "toggle" | "open" | "close" | "scrollToTop", slot: string) => void;
   onScrollTo?: (params: any) => void;
@@ -56,6 +58,7 @@ export class OmniKernel {
   readonly storageManager: PluginStorageManager;
   readonly intentBroker: IntentBroker;
   readonly layoutManager: LayoutManager;
+  readonly navigation: NavigationManager;
   public theme?: any;
   public readonly useShadowDom: boolean;
   public readonly trustedPluginIds: Set<string>;
@@ -95,6 +98,7 @@ export class OmniKernel {
     this.storageManager = new PluginStorageManager(options.storageName);
     this.intentBroker = new IntentBroker();
     this.layoutManager = options.layoutManager || new LayoutManager();
+    this.navigation = options.navigation || new NavigationManager();
     this.runtimeScript = options.runtimeScript;
     this.slotResolver = options.slotResolver;
     this.onSlotAction = options.onSlotAction;
@@ -277,10 +281,35 @@ export class OmniKernel {
           onScrollTo: this.onScrollTo,
           onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
           onHandleShare: (payload, srcId) => this.handleShare(payload, srcId),
-          onHistoryPush: (params) => this.onHistoryPush?.(manifest.id, params),
-          onHistoryReplace: (params) => this.onHistoryReplace?.(manifest.id, params),
-          onHistoryBack: () => this.onHistoryBack?.(manifest.id),
-          onHistoryGo: (delta) => this.onHistoryGo?.(manifest.id, delta),
+          onHistoryPush: (params) => {
+            this.navigation.push({
+              type: "subroute",
+              appId: manifest.id,
+              url: params.url,
+              state: params.state,
+              title: params.title
+            }, false);
+            return this.onHistoryPush?.(manifest.id, params);
+          },
+          onHistoryReplace: (params) => {
+            this.navigation.replace({
+              type: "subroute",
+              appId: manifest.id,
+              url: params.url,
+              state: params.state,
+              title: params.title
+            }, false);
+            return this.onHistoryReplace?.(manifest.id, params);
+          },
+          onHistoryBack: () => {
+            if (this.onHistoryBack) return this.onHistoryBack(manifest.id);
+            return this.navigation.back();
+          },
+          onHistoryGo: (delta) => {
+            if (this.onHistoryGo) return this.onHistoryGo(manifest.id, delta);
+            if (delta === -1) return this.navigation.back();
+            if (delta === 1) return this.navigation.forward();
+          },
           useShadowDom: this.useShadowDom
         });
 
@@ -520,10 +549,35 @@ export class OmniKernel {
       onSlotAction: this.onSlotAction,
       onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
       onHandleShare: (payload, srcId) => this.handleShare(payload, srcId),
-      onHistoryPush: (params) => this.onHistoryPush?.(manifest.id, params),
-      onHistoryReplace: (params) => this.onHistoryReplace?.(manifest.id, params),
-      onHistoryBack: () => this.onHistoryBack?.(manifest.id),
-      onHistoryGo: (delta) => this.onHistoryGo?.(manifest.id, delta),
+      onHistoryPush: (params) => {
+        this.navigation.push({
+          type: "subroute",
+          appId: manifest.id,
+          url: params.url,
+          state: params.state,
+          title: params.title
+        }, false);
+        return this.onHistoryPush?.(manifest.id, params);
+      },
+      onHistoryReplace: (params) => {
+        this.navigation.replace({
+          type: "subroute",
+          appId: manifest.id,
+          url: params.url,
+          state: params.state,
+          title: params.title
+        }, false);
+        return this.onHistoryReplace?.(manifest.id, params);
+      },
+      onHistoryBack: () => {
+        if (this.onHistoryBack) return this.onHistoryBack(manifest.id);
+        return this.navigation.back();
+      },
+      onHistoryGo: (delta) => {
+        if (this.onHistoryGo) return this.onHistoryGo(manifest.id, delta);
+        if (delta === -1) return this.navigation.back();
+        if (delta === 1) return this.navigation.forward();
+      },
       useShadowDom: this.useShadowDom
     });
 

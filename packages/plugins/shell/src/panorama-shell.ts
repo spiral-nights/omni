@@ -1981,8 +1981,18 @@ export class PanoramaShell extends BaseShell {
 
     if (pushHistory && typeof window !== "undefined" && this.currentOpenedAppId !== pluginId) {
       try {
-        window.history.pushState({ type: "omni-panorama-app", pluginId }, "");
+        if (this.kernel?.navigation) {
+          this.kernel.navigation.push({
+            type: "app",
+            appId: pluginId,
+            title: plugin.name,
+            url: `?app=${pluginId}`
+          });
+        } else {
+          window.history.pushState({ type: "omni-panorama-app", pluginId }, "");
+        }
       } catch (_) {}
+      this.updateHeaderBackVisibility();
     }
 
     this.currentOpenedAppId = pluginId;

@@ -327,6 +327,11 @@ export async function handleRelaysAction(
   if (actName === "switch-tab") {
     const tab = String(payload?.tab || payload?.value || action.payload?.tab || "relays");
     currentTab = tab;
+    try {
+      if (typeof window !== "undefined" && window.history && typeof window.history.pushState === "function") {
+        window.history.pushState({ tab }, "", `?tab=${tab}`);
+      }
+    } catch (_) {}
   } else if (actName === "add-relay" || actName === "add-preset") {
     const raw = String(payload?.relayUrl || payload?.url || payload?.value || action.payload?.url || "").trim();
     const url = normalizeRelayUrl(raw);
@@ -401,6 +406,14 @@ if (typeof window !== "undefined") {
     if (data && (data.type === "omni:action" || data.type === "action") && data.action) {
       const next = await handleRelaysAction(data.action, data.payload);
       dispatchSchema(next);
+    }
+  });
+
+  window.addEventListener("popstate", (event: PopStateEvent) => {
+    const tab = event?.state?.tab;
+    if (tab) {
+      currentTab = tab;
+      dispatchSchema(getRelaysSchema(currentTab));
     }
   });
 

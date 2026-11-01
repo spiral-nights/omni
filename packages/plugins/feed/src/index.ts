@@ -72,6 +72,7 @@ import { handleFeedAction } from "./schema/actions.js";
 import { mountFeed } from "./legacy/dom-feed.js";
 import { mountFeedSettings } from "./filter/filter-settings.js";
 import { initFeedSchemaSocket } from "./net/relay-client.js";
+import { currentFeedState } from "./state.js";
 
 // ── Window Schema Runtime Event Bus ──────────────────────────────────────────
 
@@ -126,6 +127,16 @@ if (typeof window !== "undefined") {
 
   window.addEventListener("omni:intent", (e: any) => handleIntent(e.detail));
   window.addEventListener("intent", (e: any) => handleIntent(e.detail));
+
+  window.addEventListener("popstate", (event: PopStateEvent) => {
+    const state = event?.state;
+    if (state?.view === "thread" && state.id) {
+      currentFeedState.activeThreadNoteId = state.id;
+    } else {
+      currentFeedState.activeThreadNoteId = null;
+    }
+    dispatchFeedSchema(getFeedSchema(getFeedView()));
+  });
 
   window.addEventListener("omni:action", (event: any) => {
     const detail = event.detail;

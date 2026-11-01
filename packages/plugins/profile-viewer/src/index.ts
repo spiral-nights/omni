@@ -875,23 +875,27 @@ export async function handleProfileViewerAction(
 ): Promise<OmniComponentNode> {
   const actName = action.name;
   if (actName === "switch-tab" || actName === "back") {
-    const requestedTab = String(
-      payload?.tab || payload?.value || action.payload?.tab || (actName === "back" ? (schemaPreviousTab || "following") : "my-profile")
-    );
     const isBack = Boolean(payload?.isBack || action.payload?.isBack || actName === "back");
-    currentSchemaTab = requestedTab === "back" ? (schemaPreviousTab || "following") : requestedTab;
+    const requestedTab = String(
+      payload?.tab || payload?.value || action.payload?.tab || (isBack ? (schemaPreviousTab || "following") : "my-profile")
+    );
+    currentSchemaTab = requestedTab;
     if (currentSchemaTab !== "user-profile") {
       schemaTargetUser = null;
-      const hadHistory = schemaPushedHistory;
-      schemaPushedHistory = false;
+    }
+    if (isBack) {
       schemaPreviousTab = null;
-      if (isBack && hadHistory) {
-        try {
-          if (typeof window !== "undefined" && window.history && typeof window.history.back === "function") {
-            window.history.back();
-          }
-        } catch (_) {}
-      }
+      try {
+        if (typeof window !== "undefined" && window.history && typeof window.history.back === "function") {
+          window.history.back();
+        }
+      } catch (_) {}
+    } else if (currentSchemaTab !== "user-profile") {
+      try {
+        if (typeof window !== "undefined" && window.history && typeof window.history.pushState === "function") {
+          window.history.pushState({ tab: requestedTab }, "", `?tab=${requestedTab}`);
+        }
+      } catch (_) {}
     }
     if (currentSchemaTab === "my-profile" && currentProfilePubkey) {
       schemaUserNotes = [];
@@ -4773,25 +4777,16 @@ if (rootContext && typeof rootContext.addEventListener === "function") {
 
   rootContext.addEventListener("popstate", (event: PopStateEvent) => {
     const state = event?.state;
-    if (currentSchemaTab === "user-profile") {
-      const targetTab = (state?.from as string) || schemaPreviousTab || "following";
-      schemaPreviousTab = null;
-      schemaPushedHistory = false;
-      schemaTargetUser = null;
+    const targetTab = state?.tab || (state?.pluginState && state.pluginState.tab) || (state?.from as string) || schemaPreviousTab || "following";
+    const targetPk = state?.pubkey || (state?.pluginState && state.pluginState.pubkey);
+    schemaPreviousTab = null;
+    schemaPushedHistory = false;
+    if (targetTab === "user-profile" && targetPk) {
+      handleProfileViewerAction({ name: "view_profile", payload: { pubkey: targetPk } }).then(dispatchProfileSchema);
+    } else {
       currentSchemaTab = targetTab;
+      schemaTargetUser = null;
       dispatchCurrentSchema();
-      return;
-    }
-    if (state && (state.type === "omni-people-view" || state.type === "omni-plugin-history")) {
-      const targetTab = state.tab || (state.pluginState && state.pluginState.tab);
-      const targetPk = state.pubkey || (state.pluginState && state.pluginState.pubkey);
-      if (targetTab === "user-profile" && targetPk) {
-        handleProfileViewerAction({ name: "view_profile", payload: { pubkey: targetPk } }).then(dispatchProfileSchema);
-      } else if (targetTab) {
-        currentSchemaTab = targetTab;
-        schemaTargetUser = null;
-        dispatchCurrentSchema();
-      }
     }
   });
 

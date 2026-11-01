@@ -434,8 +434,18 @@ export class OmniShell extends BaseShell {
     const currentPage = this.getActivePageId();
     if (pushState && typeof window !== "undefined" && currentPage !== page) {
       try {
-        window.history.pushState({ type: "omni-classic-page", page }, "");
+        if (this.kernel?.navigation) {
+          this.kernel.navigation.push({
+            type: page === "widgets" || page === "apps" ? "section" : "app",
+            appId: page !== "widgets" && page !== "apps" ? page : undefined,
+            section: page === "widgets" || page === "apps" ? page : undefined,
+            url: `?page=${page}`
+          });
+        } else {
+          window.history.pushState({ type: "omni-classic-page", page }, "");
+        }
       } catch (_) {}
+      this.updateHeaderBackVisibility();
     }
     const mainVp = this.mainViewport || this.root.querySelector(".main-viewport");
     const allPages = mainVp?.querySelectorAll<HTMLElement>(".app-page") || [];
@@ -1831,7 +1841,12 @@ export class OmniShell extends BaseShell {
     this.root.innerHTML = `
       <!-- 1. Header -->
       <header class="app-header">
-        <div class="brand-row">
+        <div class="brand-row" style="display: flex; align-items: center; gap: 8px;">
+          <button id="btn-classic-back" class="omni-header-back-btn" title="Go Back" aria-label="Go Back" style="display: none; background: transparent; border: none; color: var(--omni-text-primary); cursor: pointer; padding: 4px; border-radius: var(--omni-radius-sm); align-items: center; justify-content: center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+          </button>
           <span class="brand-logo">✦ Omni</span>
           <span style="font-size: 0.72rem; color: var(--omni-text-muted); background: var(--omni-bg-subtle); padding: 2px 6px; border-radius: var(--omni-radius-pill);">Universal nsite Runtime</span>
         </div>
@@ -2641,6 +2656,11 @@ export class OmniShell extends BaseShell {
   }
 
   private wireProfileControls(): void {
+    const btnClassicBack = this.root.querySelector("#btn-classic-back");
+    btnClassicBack?.addEventListener("click", () => {
+      this.triggerBack();
+    });
+
     const userBadge = document.getElementById("user-badge");
     userBadge?.addEventListener("click", () => {
       const profilePlugin = this.installedPlugins.find((p) => p.id === "org.omni.plugin.profile-viewer" || p.id === "org.omni.plugin.profile" || p.id.includes("profile"));

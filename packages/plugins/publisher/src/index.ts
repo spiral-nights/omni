@@ -2104,6 +2104,11 @@ async function handlePublisherAction(
   switch (name) {
     case "switch-tab":
       activeTab = payload?.tab || payload?.id || "create";
+      try {
+        if (typeof window !== "undefined" && window.history && typeof window.history.pushState === "function") {
+          window.history.pushState({ tab: activeTab }, "", `?tab=${activeTab}`);
+        }
+      } catch (_) {}
       if (activeTab === "published") {
         syncPublishedFromRelays().catch(() => {});
       }
@@ -2869,6 +2874,14 @@ if (typeof window !== "undefined") {
     if (data && (data.type === "omni:action" || data.type === "action") && data.action) {
       const next = await handlePublisherAction(data.action, data.payload);
       dispatchPublisherSchema(next);
+    }
+  });
+
+  window.addEventListener("popstate", (event: PopStateEvent) => {
+    const tab = event?.state?.tab;
+    if (tab) {
+      activeTab = tab;
+      dispatchPublisherSchema(getPublisherSchema(activeTab));
     }
   });
 

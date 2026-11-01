@@ -123,6 +123,11 @@ export function handleFeedAction(
     const noteData: any = (payload as any)?.note || (action.payload as any)?.note;
     if (id) {
       currentFeedState.activeThreadNoteId = id;
+      try {
+        if (typeof window !== "undefined" && window.history && typeof window.history.pushState === "function") {
+          window.history.pushState({ view: "thread", id }, "", `?note=${id}`);
+        }
+      } catch (_) {}
 
       if (noteData && (noteData.id || noteData.content)) {
         const seededId = noteData.id || id;
@@ -250,6 +255,11 @@ export function handleFeedAction(
     }
   } else if (actName === "close-thread") {
     currentFeedState.activeThreadNoteId = null;
+    try {
+      if (typeof window !== "undefined" && window.history && typeof window.history.back === "function") {
+        window.history.back();
+      }
+    } catch (_) {}
   } else if (actName === "publish-reply") {
     const replyToId = String(payload?.replyToId || action.payload?.replyToId || currentFeedState.activeThreadNoteId || "");
     const replyText = String(payload?.replyText ?? payload?.composerText ?? "").trim();

@@ -19,3 +19,4 @@ export * from "./intents/app-handler.js";
 export * from "./schema/components/primitive-elements.js";
 export * from "./schema/schema-renderer.js";
 export * from "./schema/icons.js";
+export * from "./navigation/navigation-manager.js";

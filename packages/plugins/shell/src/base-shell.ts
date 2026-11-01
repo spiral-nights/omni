@@ -415,7 +415,16 @@ export abstract class BaseShell implements OmniShellHost {
         } catch (_) {}
       }
 
-      await this.showPage(targetPluginId);
+      const currentActive = this.getActivePageId();
+      if (currentActive !== targetPluginId) {
+        if ((this as any).openApp) {
+          await (this as any).openApp(targetPluginId, true);
+        } else {
+          await this.showPage(targetPluginId);
+        }
+        this.updateHeaderBackVisibility();
+      }
+
       this.kernel.notifyPlugin(targetPluginId, "intent.invoke", {
         action: event.action,
         effectiveAction: event.effectiveAction,
@@ -2291,6 +2300,17 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public handleHistoryPush(pluginId: string, params: { state: any; title: string; url: string }): void {
+    if (this.kernel?.navigation) {
+      this.kernel.navigation.push({
+        type: "subroute",
+        appId: pluginId,
+        url: params.url,
+        state: params.state,
+        title: params.title
+      });
+      this.updateHeaderBackVisibility();
+      return;
+    }
     if (typeof window === "undefined") return;
     try {
       window.history.pushState(
@@ -2307,6 +2327,16 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public handleHistoryReplace(pluginId: string, params: { state: any; title: string; url: string }): void {
+    if (this.kernel?.navigation) {
+      this.kernel.navigation.replace({
+        type: "subroute",
+        appId: pluginId,
+        url: params.url,
+        state: params.state,
+        title: params.title
+      });
+      return;
+    }
     if (typeof window === "undefined") return;
     try {
       window.history.replaceState(
@@ -2323,17 +2353,141 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public handleHistoryBack(pluginId: string): void {
+    if (this.kernel?.navigation && this.kernel.navigation.canGoBack()) {
+      this.kernel.navigation.back();
+      return;
+    }
     if (typeof window === "undefined") return;
     window.history.back();
   }
 
   public handleHistoryGo(pluginId: string, delta?: number): void {
+    if (this.kernel?.navigation) {
+      if (delta === -1) {
+        this.kernel.navigation.back();
+        return;
+      } else if (delta === 1) {
+        this.kernel.navigation.forward();
+        return;
+      }
+    }
     if (typeof window === "undefined") return;
     window.history.go(delta ?? 0);
   }
 
+  public triggerBack(): void {
+    if (this.kernel?.navigation && this.kernel.navigation.canGoBack()) {
+      const res = this.kernel.navigation.back();
+      if (res.handled && res.currentFrame) {
+        const frame = res.currentFrame;
+        if (frame.type === "app" && frame.appId) {
+          const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
+          if (currentId !== frame.appId) {
+            if ((this as any).openApp) {
+              (this as any).openApp(frame.appId, false);
+            } else {
+              this.showPage(frame.appId);
+            }
+          }
+          if (res.isInternalSubroute) {
+            this.kernel.dispatchHistoryPopstate(frame.appId, {
+              delta: 0,
+              state: frame.state,
+              url: frame.url
+            });
+          }
+        } else if (frame.type === "subroute" && frame.appId) {
+          const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
+          if (currentId !== frame.appId) {
+            if ((this as any).openApp) {
+              (this as any).openApp(frame.appId, false);
+            } else {
+              this.showPage(frame.appId);
+            }
+          }
+          this.kernel.dispatchHistoryPopstate(frame.appId, {
+            delta: 0,
+            state: frame.state,
+            url: frame.url
+          });
+        } else if (frame.type === "section" && frame.section) {
+          if (frame.section === "apps") {
+            (this as any).showAppsIndex?.(false);
+          } else if (frame.section === "widgets") {
+            (this as any).showWidgetsView?.(false);
+          } else if (frame.section === "settings") {
+            (this as any).openSettings?.(false);
+          }
+        }
+        this.updateHeaderBackVisibility();
+      }
+    } else if (typeof window !== "undefined") {
+      window.history.back();
+    }
+  }
+
+  public updateHeaderBackVisibility(): void {
+    if (typeof document === "undefined") return;
+    const canBack = this.kernel?.navigation ? this.kernel.navigation.canGoBack() : false;
+    const backBtns = document.querySelectorAll(".omni-header-back-btn, #btn-editorial-back, #btn-classic-back, #btn-panorama-back");
+    backBtns.forEach((btn) => {
+      (btn as HTMLElement).style.display = canBack ? "inline-flex" : "none";
+    });
+  }
+
   public handlePopState(e: PopStateEvent): boolean {
     const state = e.state;
+
+    // 1. Primary: handle through unified NavigationManager
+    if (this.kernel?.navigation) {
+      const popRes = this.kernel.navigation.handlePopState(state);
+      if (popRes.handled && popRes.currentFrame) {
+        const frame = popRes.currentFrame;
+        if (frame.type === "app" && frame.appId) {
+          const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
+          if (currentId !== frame.appId) {
+            if ((this as any).openApp) {
+              (this as any).openApp(frame.appId, false);
+            } else {
+              this.showPage(frame.appId);
+            }
+          }
+          if (popRes.isInternalSubroute) {
+            this.kernel.dispatchHistoryPopstate(frame.appId, {
+              delta: 0,
+              state: frame.state,
+              url: frame.url
+            });
+          }
+        } else if (frame.type === "subroute" && frame.appId) {
+          const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
+          if (currentId !== frame.appId) {
+            if ((this as any).openApp) {
+              (this as any).openApp(frame.appId, false);
+            } else {
+              this.showPage(frame.appId);
+            }
+          }
+          this.kernel.dispatchHistoryPopstate(frame.appId, {
+            delta: 0,
+            state: frame.state,
+            url: frame.url
+          });
+        } else if (frame.type === "section" && frame.section) {
+          if (frame.section === "apps") {
+            (this as any).showAppsIndex?.(false);
+          } else if (frame.section === "widgets") {
+            (this as any).showWidgetsView?.(false);
+          } else if (frame.section === "settings") {
+            (this as any).openSettings?.(false);
+          }
+        }
+        this.updateHeaderBackVisibility();
+        return true;
+      }
+    }
+
+    // 2. Fallback for legacy state
     if (state && (state.type === "omni-plugin-history" || state.type === "omni-people-view")) {
       const pluginId = state.pluginId || "org.omni.plugin.profile-viewer";
       const activeAppId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
@@ -2349,6 +2503,7 @@ export abstract class BaseShell implements OmniShellHost {
         state: state.pluginState || state,
         url: state.url || ""
       });
+      this.updateHeaderBackVisibility();
       return true;
     }
     return false;

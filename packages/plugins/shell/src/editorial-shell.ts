@@ -738,8 +738,18 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     if (pushState && typeof window !== "undefined" && (this.activePluginId !== pluginId || this.activePage !== "app")) {
       try {
-        window.history.pushState({ type: "omni-editorial-view", page: "app", pluginId }, "");
+        if (this.kernel?.navigation) {
+          this.kernel.navigation.push({
+            type: "app",
+            appId: pluginId,
+            title: plugin.displayName || plugin.name,
+            url: `?app=${pluginId}`
+          });
+        } else {
+          window.history.pushState({ type: "omni-editorial-view", page: "app", pluginId }, "");
+        }
       } catch (_) {}
+      this.updateHeaderBackVisibility();
     }
 
     this.activePage = "app";
@@ -946,8 +956,18 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   public showAppsIndex(pushState = true): void {
     if (pushState && typeof window !== "undefined" && this.activePage !== "apps") {
       try {
-        window.history.pushState({ type: "omni-editorial-view", page: "apps" }, "");
+        if (this.kernel?.navigation) {
+          this.kernel.navigation.push({
+            type: "section",
+            section: "apps",
+            title: "Apps",
+            url: "?view=apps"
+          });
+        } else {
+          window.history.pushState({ type: "omni-editorial-view", page: "apps" }, "");
+        }
       } catch (_) {}
+      this.updateHeaderBackVisibility();
     }
 
     if (this.activePluginId) {
@@ -1005,8 +1025,18 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   public showWidgetsView(pushState = true): void {
     if (pushState && typeof window !== "undefined" && this.activePage !== "widgets") {
       try {
-        window.history.pushState({ type: "omni-editorial-view", page: "widgets" }, "");
+        if (this.kernel?.navigation) {
+          this.kernel.navigation.push({
+            type: "section",
+            section: "widgets",
+            title: "Widgets",
+            url: "?view=widgets"
+          });
+        } else {
+          window.history.pushState({ type: "omni-editorial-view", page: "widgets" }, "");
+        }
       } catch (_) {}
+      this.updateHeaderBackVisibility();
     }
 
     if (this.activePluginId) {
@@ -1227,6 +1257,11 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   // --- Wire Interactive Controls ---
 
   private wireHeaderControls(): void {
+    const btnBack = this.root.querySelector("#btn-editorial-back");
+    btnBack?.addEventListener("click", () => {
+      this.triggerBack();
+    });
+
     const btnSearch = this.root.querySelector("#btn-editorial-search");
     btnSearch?.addEventListener("click", () => {
       this.dispatchIntent("search", {}).catch(() => {});
@@ -1281,8 +1316,18 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   public openSettings(pushState = true): void {
     if (pushState && typeof window !== "undefined") {
       try {
-        window.history.pushState({ type: "omni-editorial-view", page: "settings" }, "");
+        if (this.kernel?.navigation) {
+          this.kernel.navigation.push({
+            type: "section",
+            section: "settings",
+            title: "Settings",
+            url: "?view=settings"
+          });
+        } else {
+          window.history.pushState({ type: "omni-editorial-view", page: "settings" }, "");
+        }
       } catch (_) {}
+      this.updateHeaderBackVisibility();
     }
     const modal = this.root.querySelector("#editorial-settings-modal");
     modal?.classList.add("open");
@@ -1293,10 +1338,15 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   public closeSettings(pushState = true): void {
     const modal = this.root.querySelector("#editorial-settings-modal");
     modal?.classList.remove("open");
-    if (pushState && typeof window !== "undefined" && window.history.state?.page === "settings") {
+    if (pushState && typeof window !== "undefined") {
       try {
-        window.history.back();
+        if (this.kernel?.navigation?.getCurrentFrame()?.section === "settings") {
+          this.kernel.navigation.back();
+        } else if (window.history.state?.page === "settings") {
+          window.history.back();
+        }
       } catch (_) {}
+      this.updateHeaderBackVisibility();
     }
   }
 
@@ -2140,7 +2190,13 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       <!-- 1. Fixed Editorial Header -->
       <header class="editorial-header">
         <div class="editorial-header-inner">
-          <div class="editorial-header-left"></div>
+          <div class="editorial-header-left">
+            <button id="btn-editorial-back" class="editorial-header-btn omni-header-back-btn" title="Go Back" aria-label="Go Back" style="display: none; align-items: center; justify-content: center;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+              </svg>
+            </button>
+          </div>
 
           <div id="editorial-brand-container" class="editorial-header-center" title="Omni">
             <h1 class="editorial-brand-title">OMNI</h1>
