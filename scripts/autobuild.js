@@ -144,6 +144,13 @@ export function buildPackage(pkg) {
     cwd: rootDir
   });
 
+  if (pkg.name === "@omni/plugin-feed") {
+    execSync(`pnpm --filter @omni/plugin-feed exec esbuild src/index.ts --bundle --format=esm --target=es2022 --outfile=dist/index.js`, {
+      stdio: "inherit",
+      cwd: rootDir
+    });
+  }
+
   // Ensure dist target exists and touch its mtime so downstream watchers register the change
   if (fs.existsSync(pkg.distTarget)) {
     const now = new Date();
