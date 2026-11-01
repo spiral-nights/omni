@@ -322,4 +322,50 @@ describe("SchemaRenderer & Custom Web Components", () => {
 
     renderer.destroy();
   });
+
+  it("renders image URLs as clickable callout links by default, and as inline images when enabled", () => {
+    const onAction = vi.fn();
+    const renderer = new SchemaRenderer({ container, onAction });
+
+    // 1. Default (links only): renders a .feed-media-callout anchor and NO img tag
+    renderer.render({
+      type: "card",
+      children: [
+        {
+          type: "text",
+          content: "Check this screenshot: https://blossom.ditto.pub/test-screenshot.png",
+          variant: "body",
+          showInlineImages: false
+        }
+      ]
+    });
+
+    const textEl = container.querySelector("omni-text");
+    expect(textEl).not.toBeNull();
+    const callout = textEl?.querySelector(".feed-media-callout.feed-image-link");
+    expect(callout).not.toBeNull();
+    expect(callout?.getAttribute("href")).toBe("https://blossom.ditto.pub/test-screenshot.png");
+    expect(callout?.textContent).toContain("Image");
+    expect(textEl?.querySelector("img")).toBeNull();
+
+    // 2. When showInlineImages is true: renders an inline <img> element preview
+    renderer.render({
+      type: "card",
+      children: [
+        {
+          type: "text",
+          content: "Check this screenshot: https://blossom.ditto.pub/test-screenshot.png",
+          variant: "body",
+          showInlineImages: true
+        }
+      ]
+    });
+
+    const updatedTextEl = container.querySelector("omni-text");
+    const imgEl = updatedTextEl?.querySelector("img");
+    expect(imgEl).not.toBeNull();
+    expect(imgEl?.getAttribute("src")).toBe("https://blossom.ditto.pub/test-screenshot.png");
+
+    renderer.destroy();
+  });
 });

@@ -302,13 +302,18 @@ describe("People plugin (profile, follows, mutes)", () => {
     expect(btnBack.style.display).not.toBe("none");
     expect(btnBack.textContent).toContain("Back to Following");
 
+    // Simulate browser history with prior navigation entries (e.g. from feed or previous app)
+    Object.defineProperty(window.history, "length", { value: 5, configurable: true });
+    const backSpy = vi.spyOn(window.history, "back");
+
     // Click Back
     btnBack.click();
     await flush();
 
-    // Should return to Following tab
+    // Should return to Following tab directly without popping shell app history
     expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-following")!.style.display).not.toBe("none");
     expect(peopleRoot().querySelector<HTMLElement>(".pv-tab-user-profile")!.style.display).toBe("none");
+    expect(backSpy).not.toHaveBeenCalled();
 
     // Verify card has pointer cursor and clicking the empty space on the card opens profile
     expect(userCard.style.cursor).toBe("pointer");

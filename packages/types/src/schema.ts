@@ -85,6 +85,7 @@ export interface OmniTextPrimitive extends OmniPrimitiveBase {
   tone?: "primary" | "secondary" | "muted" | "accent" | "error" | "success";
   truncate?: boolean;
   action?: OmniAction;
+  showInlineImages?: boolean;
 }
 
 export interface OmniBadgePrimitive extends OmniPrimitiveBase {

@@ -255,8 +255,12 @@ export class OmniSpacerElement extends BaseElement {
 // 2. Typography & Status Display
 // ============================================================================
 
-function formatTextWithLinks(raw: string): string {
+function formatTextWithLinks(raw: string, showInlineImages?: boolean): string {
   if (!raw) return "";
+
+  const inlineImages = showInlineImages !== undefined
+    ? showInlineImages
+    : (typeof localStorage !== "undefined" && localStorage.getItem("omni_feed_inline_images") === "true");
 
   // 1. Placeholder-replace markdown links [text](url) to preserve anchor texts
   const placeholders: string[] = [];
@@ -298,10 +302,29 @@ function formatTextWithLinks(raw: string): string {
     }
 
     const cleanUrl = url.replace(/^http:\/\//i, "https://");
-    if (/\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(cleanUrl)) {
+    const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(cleanUrl);
+    const isImage = /\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i.test(cleanUrl);
+
+    if (isVideo) {
       mediaUrls.push({ type: "video", url: cleanUrl });
-    } else if (/\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i.test(cleanUrl)) {
-      mediaUrls.push({ type: "image", url: cleanUrl });
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="feed-link" style="color: var(--omni-accent-primary, #d4a373); text-decoration: underline; text-underline-offset: 3px; word-break: break-all;">${cleanUrl}</a>${trailing}`;
+    }
+
+    if (isImage) {
+      if (inlineImages) {
+        mediaUrls.push({ type: "image", url: cleanUrl });
+        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="feed-link" style="color: var(--omni-accent-primary, #d4a373); text-decoration: underline; text-underline-offset: 3px; word-break: break-all;">${cleanUrl}</a>${trailing}`;
+      } else {
+        // Render as special clickable media callout link
+        let displayLabel = cleanUrl;
+        try {
+          const parsed = new URL(cleanUrl);
+          const name = parsed.pathname.split("/").filter(Boolean).pop() || parsed.hostname;
+          displayLabel = name.length > 28 ? `${name.slice(0, 12)}…${name.slice(-10)}` : name;
+        } catch (_) {}
+
+        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="feed-media-callout feed-image-link" style="display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; margin: 3px 0; background: var(--omni-bg-surface, #191816); border: 1px solid var(--omni-border-subtle, #33312c); border-radius: var(--omni-radius-sm, 6px); color: var(--omni-accent-primary, #d4a373); text-decoration: none; font-size: 0.85em; font-weight: 500; transition: all 0.15s ease; max-width: 100%; word-break: break-all;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px;">${displayLabel}</span><span class="media-callout-badge" style="font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; background: rgba(212, 163, 115, 0.15); padding: 1px 5px; border-radius: 3px; margin-left: 2px;">Image</span></a>${trailing}`;
+      }
     }
 
     return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="feed-link" style="color: var(--omni-accent-primary, #d4a373); text-decoration: underline; text-underline-offset: 3px; word-break: break-all;">${cleanUrl}</a>${trailing}`;
@@ -317,7 +340,7 @@ function formatTextWithLinks(raw: string): string {
     for (const m of mediaUrls) {
       if (m.type === "video") {
         text += `<div class="feed-media-wrap" style="margin-top: 8px;"><video controls playsinline preload="metadata" style="max-width: 100%; border-radius: 6px; display: block; max-height: 480px; background: #000;" src="${m.url}"></video></div>`;
-      } else if (m.type === "image") {
+      } else if (m.type === "image" && inlineImages) {
         text += `<div class="feed-media-wrap" style="margin-top: 8px;"><img src="${m.url}" loading="lazy" style="max-width: 100%; border-radius: 6px; display: block; max-height: 480px; object-fit: contain;" /></div>`;
       }
     }
@@ -362,7 +385,7 @@ export class OmniTextElement extends BaseElement {
     }
     if (props.content !== undefined) {
       if (/(https?:\/\/[^\s<]+|\[.*?\]\(https?:\/\/)/i.test(props.content)) {
-        this.innerHTML = formatTextWithLinks(props.content);
+        this.innerHTML = formatTextWithLinks(props.content, props.showInlineImages);
       } else {
         this.textContent = props.content;
       }

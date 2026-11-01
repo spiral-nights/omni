@@ -1109,11 +1109,21 @@ export function isNostrIdentifier(raw: string): boolean {
   return decodeNostrEntity(s) !== null;
 }
 
-export function formatContent(text: string): string {
+export function formatContent(text: string, inlineImages = loadInlineImagesPreference()): string {
   const escaped = escapeHtml(text || "");
   const urlRegex = /(https?:\/\/[^\s<]+)/g;
   let formatted = escaped.replace(urlRegex, (rawUrl) => {
     const url = rawUrl.replace(/^http:\/\//i, "https://");
+    const isImage = /\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i.test(url);
+    if (isImage && !inlineImages) {
+      let displayLabel = url;
+      try {
+        const parsed = new URL(url);
+        const name = parsed.pathname.split("/").filter(Boolean).pop() || parsed.hostname;
+        displayLabel = name.length > 28 ? `${name.slice(0, 12)}…${name.slice(-10)}` : name;
+      } catch (_) {}
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="feed-media-callout feed-image-link" style="display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; margin: 3px 0; background: var(--bg-surface, #191816); border: 1px solid var(--border-subtle, #33312c); border-radius: var(--radius-sm, 6px); color: var(--omni-accent-primary, var(--accent-primary, #d4a373)); text-decoration: none; font-size: 0.85em; font-weight: 500; transition: all 0.15s ease; max-width: 100%; word-break: break-all;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px;">${displayLabel}</span><span class="media-callout-badge" style="font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; background: rgba(212, 163, 115, 0.15); padding: 1px 5px; border-radius: 3px; margin-left: 2px;">Image</span></a>`;
+    }
     return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="feed-link">${url}</a>`;
   });
 
@@ -1233,6 +1243,24 @@ export function saveFilterPatterns(patterns: string[]): void {
   } catch (_) {}
 }
 
+export const STORAGE_KEY_FEED_INLINE_IMAGES = "omni_feed_inline_images";
+
+export function loadInlineImagesPreference(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  try {
+    return localStorage.getItem(STORAGE_KEY_FEED_INLINE_IMAGES) === "true";
+  } catch (_) {
+    return false;
+  }
+}
+
+export function saveInlineImagesPreference(enabled: boolean): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY_FEED_INLINE_IMAGES, String(enabled));
+  } catch (_) {}
+}
+
 export function compileFilterRegex(pattern: string): RegExp | null {
   try {
     const trimmed = pattern.trim();
@@ -1260,10 +1288,28 @@ export function isContentFiltered(content: string, patterns: string[]): boolean 
 
 export function renderFilterSettings(container: HTMLElement, onFiltersChanged?: (patterns: string[]) => void) {
   let patterns = loadFilterPatterns();
+  let inlineImages = loadInlineImagesPreference();
 
   const wrapper = html<HTMLDivElement>`
-    <div class="feed-filter-settings" style="display: flex; flex-direction: column; gap: 14px; font-family: inherit; color: var(--text-primary, #ede8df);">
+    <div class="feed-filter-settings" style="display: flex; flex-direction: column; gap: 18px; font-family: inherit; color: var(--text-primary, #ede8df);">
       <style class="omni-feed-styles">${FEED_CSS}</style>
+
+      <!-- Display Preferences -->
+      <div class="feed-display-preferences" style="display: flex; flex-direction: column; gap: 8px;">
+        <h3 style="margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary, #ede8df);">Display Preferences</h3>
+        <div class="feed-media-settings-box" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-subtle, #22201d); padding: 12px; border-radius: var(--radius-sm, 6px); border: 1px solid var(--border-subtle, #33312c);">
+          <div style="flex: 1; padding-right: 12px;">
+            <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary, #ede8df);">Inline Image Previews</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted, #78716c); margin-top: 2px;">
+              Display image previews directly in feed posts. When turned off (default), image URLs appear as prominent clickable callout links.
+            </div>
+          </div>
+          <label style="display: inline-flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="feed-toggle-inline-images" class="feed-toggle-inline-images" ${inlineImages ? "checked" : ""} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--omni-accent-primary, #d4a373);" />
+          </label>
+        </div>
+      </div>
+
       <div class="filter-header-row">
         <h3 style="margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary, #ede8df);">Content Filters</h3>
         <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: var(--text-muted, #78716c);">
@@ -1304,6 +1350,13 @@ export function renderFilterSettings(container: HTMLElement, onFiltersChanged?: 
   const statusMsg = wrapper.querySelector<HTMLDivElement>(".filter-status-message")!;
   const patternCount = wrapper.querySelector<HTMLElement>(".pattern-count")!;
   const listEl = wrapper.querySelector<HTMLDivElement>(".filter-patterns-list")!;
+  const toggleInlineImages = wrapper.querySelector<HTMLInputElement>(".feed-toggle-inline-images");
+
+  toggleInlineImages?.addEventListener("change", () => {
+    saveInlineImagesPreference(toggleInlineImages.checked);
+    setStatus(toggleInlineImages.checked ? "Inline images enabled." : "Inline images disabled (links only).");
+    onFiltersChanged?.(patterns);
+  });
 
   function setStatus(text: string, isError = false) {
     if (!statusMsg) return;
@@ -3586,7 +3639,8 @@ export function getFeedSchema(
           {
             type: "text",
             content: focused.content,
-            variant: "body"
+            variant: "body",
+            showInlineImages: loadInlineImagesPreference()
           },
           { type: "divider" },
           {
@@ -3742,7 +3796,8 @@ export function getFeedSchema(
               {
                 type: "text",
                 content: rep.content,
-                variant: "body"
+                variant: "body",
+                showInlineImages: loadInlineImagesPreference()
               }
             ]
           });
@@ -3861,6 +3916,7 @@ export function getFeedSchema(
         type: "text",
         content: n.content,
         variant: "body",
+        showInlineImages: loadInlineImagesPreference(),
         action: { name: "view-thread", payload: { id: n.id } }
       },
       {
@@ -4714,6 +4770,9 @@ export function handleFeedAction(
     if (note) {
       note.zaps += 21;
     }
+  } else if (actName === "toggle-inline-images") {
+    const enabled = typeof payload?.enabled === "boolean" ? payload.enabled : !loadInlineImagesPreference();
+    saveInlineImagesPreference(enabled);
   }
   const view = isWidgetRoute() ? "widget" : isCompactRoute() ? "compact" : "main";
   return getFeedSchema(view);
@@ -4768,6 +4827,8 @@ if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
     if (e.key === "omni_active_note_id") {
       checkPendingActiveNote();
+    } else if (e.key === "omni_feed_inline_images") {
+      dispatchFeedSchema(getFeedSchema(getFeedView()));
     }
   });
 

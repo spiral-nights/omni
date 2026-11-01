@@ -872,6 +872,9 @@ export async function handleProfileViewerAction(
   const actName = action.name;
   if (actName === "switch-tab") {
     currentSchemaTab = String(payload?.tab || payload?.value || action.payload?.tab || "my-profile");
+    if (currentSchemaTab !== "user-profile") {
+      schemaTargetUser = null;
+    }
     if (currentSchemaTab === "my-profile" && currentProfilePubkey) {
       schemaUserNotes = [];
       sendSchemaWs(["REQ", `pv_schema_my_notes_${Date.now()}`, { kinds: [1], authors: [currentProfilePubkey], limit: 20 }]);
@@ -3507,16 +3510,13 @@ async function mountProfileViewer(root: HTMLElement) {
     switchTab("following", true);
   });
 
-  // Profile back button handler
+  // Profile back button handler: returns directly to following (or blocked) list without popping shell app history
   btnProfileBack.addEventListener("click", () => {
     activeUserPubkey = "";
     btnTabUserProfile.style.display = "none";
-    if (typeof window !== "undefined" && (window.history.state?.type === "omni-people-view" || window.history.length > 1)) {
-      window.history.back();
-    } else {
-      const target = previousTab || "following";
-      previousTab = null;
-      updateProfileBackButton();
+    const target = previousTab || "following";
+    previousTab = null;
+    updateProfileBackButton();
 
     // Ensure viewport resets to top when navigating across tabs or profiles
     try {
@@ -3529,8 +3529,18 @@ async function mountProfileViewer(root: HTMLElement) {
       }
       container.scrollIntoView({ behavior: "instant", block: "start" });
     } catch (_) {}
-      switchTab(target, false);
-    }
+
+    try {
+      if (typeof window !== "undefined" && window.history.replaceState) {
+        window.history.replaceState(
+          { type: "omni-people-view", tab: target },
+          "",
+          `?view=${target}`
+        );
+      }
+    } catch (_) {}
+
+    switchTab(target as any, false);
   });
 
   // Toggle npub lookup bar

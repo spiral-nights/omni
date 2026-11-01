@@ -163,6 +163,47 @@ omni-text a:hover,
   text-decoration-thickness: 1.5px;
 }
 
+.feed-media-callout {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  margin: 4px 0;
+  background: var(--omni-bg-surface, #191816);
+  border: 1px solid var(--omni-border-subtle, #33312c);
+  border-radius: var(--omni-radius-sm, 6px);
+  color: var(--omni-accent-primary, #d4a373);
+  text-decoration: none;
+  font-size: 0.85em;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  max-width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.feed-media-callout:hover {
+  background: var(--omni-bg-elevated, #22201d);
+  border-color: var(--omni-accent-primary, #d4a373);
+  filter: brightness(1.1);
+  text-decoration: none;
+}
+
+.feed-media-callout svg {
+  flex-shrink: 0;
+}
+
+.feed-media-callout .media-callout-badge {
+  font-size: 0.72em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.85;
+  background: rgba(212, 163, 115, 0.15);
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 2px;
+}
+
 omni-text video,
 omni-text img,
 .feed-media-wrap video,

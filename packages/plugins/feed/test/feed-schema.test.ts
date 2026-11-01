@@ -3,11 +3,33 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   getFeedSchema,
   handleFeedAction,
-  FeedSchemaState
+  FeedSchemaState,
+  loadInlineImagesPreference,
+  saveInlineImagesPreference,
+  renderFilterSettings
 } from "../src/index.js";
 import { OmniBoxPrimitive, OmniCardPrimitive, OmniTextPrimitive } from "@omni/types";
 
+function createMemoryStorage() {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, val: string) => store.set(key, String(val)),
+    removeItem: (key: string) => store.delete(key),
+    clear: () => store.clear(),
+    get length() { return store.size; },
+    key: (i: number) => Array.from(store.keys())[i] ?? null
+  };
+}
+
 describe("Feed Schema UI (Server-Driven Declarative Feed)", () => {
+  beforeEach(() => {
+    const memStorage = createMemoryStorage();
+    (globalThis as any).localStorage = memStorage;
+    if (typeof window !== "undefined") {
+      (window as any).localStorage = memStorage;
+    }
+  });
   it("renders full-page feed schema with header, composer, and timeline stream", () => {
     const schema = getFeedSchema("main") as OmniBoxPrimitive;
     expect(schema).toBeDefined();
@@ -190,5 +212,54 @@ describe("Feed Schema UI (Server-Driven Declarative Feed)", () => {
       (c) => c.type === "card" && (c as any).children?.some((child: any) => child.content === "Great point on Nostr decentralization!")
     );
     expect(replyCard).toBeDefined();
+  });
+
+  it("controls inline image previews vs clickable callout links via settings", () => {
+    const testState: FeedSchemaState = {
+      activeTab: "global",
+      composerText: "",
+      notes: [
+        {
+          id: "test_img_note",
+          pubkey: "pk123",
+          authorName: "Alice",
+          npub: "npub123",
+          content: "Here is an image: https://blossom.ditto.pub/img1.png",
+          created_at: Date.now(),
+          likes: 0,
+          reposts: 0,
+          replies: 0,
+          zaps: 0
+        }
+      ]
+    };
+
+    // 1. Defaults to false (links only)
+    localStorage.removeItem("omni_feed_inline_images");
+    expect(loadInlineImagesPreference()).toBe(false);
+
+    const schemaDefault = getFeedSchema("main", testState) as OmniBoxPrimitive;
+    const noteCard = schemaDefault.children[2] as OmniCardPrimitive;
+    const textNode = noteCard.children.find((c) => c.type === "text") as any;
+    expect(textNode.showInlineImages).toBe(false);
+
+    // 2. Can toggle preference to true
+    saveInlineImagesPreference(true);
+    expect(loadInlineImagesPreference()).toBe(true);
+    const schemaEnabled = getFeedSchema("main", testState) as OmniBoxPrimitive;
+    const noteCardEnabled = schemaEnabled.children[2] as OmniCardPrimitive;
+    const textNodeEnabled = noteCardEnabled.children.find((c) => c.type === "text") as any;
+    expect(textNodeEnabled.showInlineImages).toBe(true);
+
+    // 3. Reset back to false
+    saveInlineImagesPreference(false);
+    expect(loadInlineImagesPreference()).toBe(false);
+
+    // 4. Verify settings UI renders the toggle
+    const container = document.createElement("div");
+    renderFilterSettings(container);
+    const toggle = container.querySelector<HTMLInputElement>(".feed-toggle-inline-images");
+    expect(toggle).toBeDefined();
+    expect(toggle?.checked).toBe(false);
   });
 });
