@@ -505,7 +505,12 @@ export class SandboxInstance {
             if (action.navigate?.route && this.options.onHandleUri) {
               this.options.onHandleUri(action.navigate.route, this.manifest.id);
             }
-            if ((action.name === "view-profile" || action.name === "view_profile") && this.options.intentBroker) {
+            if (
+              (action.name === "view-profile" || action.name === "view_profile") &&
+              this.options.intentBroker &&
+              this.manifest.id !== "org.omni.plugin.profile-viewer" &&
+              this.manifest.id !== "org.omni.plugin.feed"
+            ) {
               const pubkey = (payload?.pubkey || action.payload?.pubkey) as string;
               if (pubkey) {
                 this.options.intentBroker.dispatch(this.manifest.id, "view_profile", { pubkey }).catch(() => {});
@@ -514,35 +519,38 @@ export class SandboxInstance {
             if (
               (action.name === "view_note" || action.name === "view-note" || action.name === "view-thread") &&
               this.options.intentBroker &&
-              this.manifest.id !== "org.omni.plugin.feed"
+              this.manifest.id !== "org.omni.plugin.feed" &&
+              this.manifest.id !== "org.omni.plugin.profile-viewer"
             ) {
               const noteId = (payload?.id || payload?.eventId || action.payload?.id || action.payload?.eventId) as string;
               if (noteId) {
                 this.options.intentBroker.dispatch(this.manifest.id, "view_note", { id: noteId, eventId: noteId }).catch(() => {});
               }
             }
-            try {
-              this.channel1?.port1.postMessage({
-                type: "action",
-                componentId: comp.id,
-                action,
-                payload
-              });
-            } catch (_) {}
             if (this.workerHost) {
               this.workerHost.dispatchAction(comp.id, action, payload);
-            }
-            try {
-              this.iframe?.contentWindow?.postMessage(
-                {
-                  type: "omni:action",
+            } else if (this.channel1) {
+              try {
+                this.channel1.port1.postMessage({
+                  type: "action",
                   componentId: comp.id,
                   action,
                   payload
-                },
-                "*"
-              );
-            } catch (_) {}
+                });
+              } catch (_) {}
+            } else {
+              try {
+                this.iframe?.contentWindow?.postMessage(
+                  {
+                    type: "omni:action",
+                    componentId: comp.id,
+                    action,
+                    payload
+                  },
+                  "*"
+                );
+              } catch (_) {}
+            }
           }
         });
         this.schemaRenderers.set(comp.id, schemaRenderer);

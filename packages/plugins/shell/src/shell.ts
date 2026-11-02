@@ -19,6 +19,7 @@ export type SettingsTab = "profile" | "relays" | "plugins" | "workspace" | strin
 
 export class OmniShell extends BaseShell {
   private pendingAppMounts: Set<string> = new Set();
+  private boundPopstateHandler: ((e: PopStateEvent) => void) | null = null;
 
   // Internal element references
   private mainViewport!: HTMLElement;
@@ -434,6 +435,10 @@ export class OmniShell extends BaseShell {
 
   public destroy(): void {
     super.destroy();
+    if (typeof window !== "undefined" && this.boundPopstateHandler) {
+      window.removeEventListener("popstate", this.boundPopstateHandler);
+      this.boundPopstateHandler = null;
+    }
     if (this.root) {
       this.root.innerHTML = "";
     }
@@ -447,18 +452,19 @@ export class OmniShell extends BaseShell {
    * Switch center viewport between full-page apps and Widgets Dashboard
    */
   public showPage(page: AppPage, pushState = true): void {
+    const normalizedPage = page === "feed" ? "org.omni.plugin.feed" : page;
     const currentPage = this.getActivePageId();
-    if (pushState && typeof window !== "undefined" && currentPage !== page) {
+    if (pushState && typeof window !== "undefined" && currentPage !== normalizedPage) {
       try {
         if (this.kernel?.navigation) {
           this.kernel.navigation.push({
-            type: page === "widgets" || page === "apps" ? "section" : "app",
-            appId: page !== "widgets" && page !== "apps" ? page : undefined,
-            section: page === "widgets" || page === "apps" ? page : undefined,
-            url: `?page=${page}`
+            type: normalizedPage === "widgets" || normalizedPage === "apps" ? "section" : "app",
+            appId: normalizedPage !== "widgets" && normalizedPage !== "apps" ? normalizedPage : undefined,
+            section: normalizedPage === "widgets" || normalizedPage === "apps" ? normalizedPage : undefined,
+            url: `?page=${normalizedPage}`
           });
         } else {
-          window.history.pushState({ type: "omni-classic-page", page }, "");
+          window.history.pushState({ type: "omni-classic-page", page: normalizedPage }, "");
         }
       } catch (_) {}
       this.updateHeaderBackVisibility();
@@ -2357,14 +2363,18 @@ export class OmniShell extends BaseShell {
     this.dockBtnSettings?.addEventListener("click", () => this.openSettings("plugins"));
 
     if (typeof window !== "undefined") {
-      window.addEventListener("popstate", (e) => {
+      if (this.boundPopstateHandler) {
+        window.removeEventListener("popstate", this.boundPopstateHandler);
+      }
+      this.boundPopstateHandler = (e: PopStateEvent) => {
         if (this.handlePopState(e)) return;
         if (e.state?.type === "omni-classic-page" && e.state.page) {
           this.showPage(e.state.page, false);
         } else if (!e.state || !e.state.type) {
           this.showPage("feed", false);
         }
-      });
+      };
+      window.addEventListener("popstate", this.boundPopstateHandler);
     }
 
     const btnToggleGuide = document.getElementById("btn-toggle-viewport-guide");

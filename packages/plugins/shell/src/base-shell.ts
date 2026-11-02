@@ -360,7 +360,7 @@ export abstract class BaseShell implements OmniShellHost {
   /**
    * Switches the active center viewport or slides into a full page app.
    */
-  public abstract showPage(pageId: string): void | Promise<void>;
+  public abstract showPage(pageId: string, pushState?: boolean): void | Promise<void>;
 
   /**
    * Returns the current active page identifier.
@@ -2300,6 +2300,7 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public handleHistoryPush(pluginId: string, params: { state: any; title: string; url: string }): void {
+    console.debug("[Omni Nav] handleHistoryPush", { pluginId, url: params.url, state: params.state });
     if (this.kernel?.navigation) {
       this.kernel.navigation.push({
         type: "subroute",
@@ -2327,6 +2328,7 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public handleHistoryReplace(pluginId: string, params: { state: any; title: string; url: string }): void {
+    console.debug("[Omni Nav] handleHistoryReplace", { pluginId, url: params.url, state: params.state });
     if (this.kernel?.navigation) {
       this.kernel.navigation.replace({
         type: "subroute",
@@ -2353,6 +2355,7 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public handleHistoryBack(pluginId: string): void {
+    console.debug("[Omni Nav] handleHistoryBack", { pluginId });
     if (typeof window !== "undefined" && window.history && typeof window.history.back === "function") {
       window.history.back();
       return;
@@ -2363,6 +2366,7 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public handleHistoryGo(pluginId: string, delta?: number): void {
+    console.debug("[Omni Nav] handleHistoryGo", { pluginId, delta });
     if (typeof window !== "undefined" && window.history && typeof window.history.go === "function") {
       window.history.go(delta ?? 0);
       return;
@@ -2379,6 +2383,7 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public triggerBack(): void {
+    console.debug("[Omni Nav] triggerBack");
     if (typeof window !== "undefined" && window.history && typeof window.history.back === "function") {
       window.history.back();
       return;
@@ -2388,36 +2393,27 @@ export abstract class BaseShell implements OmniShellHost {
       if (res.handled && res.currentFrame) {
         const frame = res.currentFrame;
         const activePage = (this as any).activePage;
-        if (frame.type === "app" && frame.appId) {
+        if ((frame.type === "app" || frame.type === "subroute") && frame.appId) {
           const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
-          if (currentId !== frame.appId || (activePage && activePage !== "app")) {
-            if ((this as any).openApp) {
-              (this as any).openApp(frame.appId, false);
-            } else {
-              this.showPage(frame.appId);
-            }
-          }
-          if (res.isInternalSubroute) {
-            this.kernel.dispatchHistoryPopstate(frame.appId, {
-              delta: -1,
-              state: frame.state ?? null,
-              url: frame.url || ""
-            });
-          }
-        } else if (frame.type === "subroute" && frame.appId) {
-          const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
-          if (currentId !== frame.appId || (activePage && activePage !== "app")) {
-            if ((this as any).openApp) {
-              (this as any).openApp(frame.appId, false);
-            } else {
-              this.showPage(frame.appId);
-            }
-          }
-          this.kernel.dispatchHistoryPopstate(frame.appId, {
+          const targetAppId = frame.appId;
+          const popPayload = {
             delta: -1,
             state: frame.state ?? null,
             url: frame.url || ""
-          });
+          };
+          if (currentId !== targetAppId || (activePage && activePage !== "app")) {
+            if ((this as any).openApp) {
+              const maybePromise = (this as any).openApp(targetAppId, false);
+              if (maybePromise && typeof maybePromise.then === "function") {
+                maybePromise.then(() => {
+                  this.kernel.dispatchHistoryPopstate(targetAppId, popPayload);
+                }).catch(() => {});
+              }
+            } else {
+              this.showPage(targetAppId, false);
+            }
+          }
+          this.kernel.dispatchHistoryPopstate(targetAppId, popPayload);
         } else if (frame.type === "section" && frame.section) {
           if (frame.section === "apps") {
             (this as any).showAppsIndex?.(false);
@@ -2443,49 +2439,50 @@ export abstract class BaseShell implements OmniShellHost {
 
   public handlePopState(e: PopStateEvent): boolean {
     const state = e.state;
+    console.debug("[Omni Nav] handlePopState event received", state);
 
     // 1. Primary: handle through unified NavigationManager
     if (this.kernel?.navigation) {
       const popRes = this.kernel.navigation.handlePopState(state);
+      console.debug("[Omni Nav] NavigationManager.handlePopState result", popRes);
       if (popRes.handled && popRes.currentFrame) {
         const frame = popRes.currentFrame;
         const activePage = (this as any).activePage;
         const delta = popRes.direction === "forward" ? 1 : -1;
-        if (frame.type === "app" && frame.appId) {
+        if ((frame.type === "app" || frame.type === "subroute") && frame.appId) {
           const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
-          if (currentId !== frame.appId || (activePage && activePage !== "app")) {
-            if ((this as any).openApp) {
-              (this as any).openApp(frame.appId, false);
-            } else {
-              this.showPage(frame.appId);
-            }
-          }
-          if (popRes.isInternalSubroute) {
-            this.kernel.dispatchHistoryPopstate(frame.appId, {
-              delta,
-              state: frame.state ?? null,
-              url: frame.url || ""
-            });
-          }
-        } else if (frame.type === "subroute" && frame.appId) {
-          const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
-          if (currentId !== frame.appId || (activePage && activePage !== "app")) {
-            if ((this as any).openApp) {
-              (this as any).openApp(frame.appId, false);
-            } else {
-              this.showPage(frame.appId);
-            }
-          }
-          this.kernel.dispatchHistoryPopstate(frame.appId, {
+          const targetAppId = frame.appId;
+          const popPayload = {
             delta,
             state: frame.state ?? null,
             url: frame.url || ""
-          });
+          };
+          if (currentId !== targetAppId || (activePage && activePage !== "app")) {
+            if ((this as any).openApp) {
+              const maybePromise = (this as any).openApp(targetAppId, false);
+              if (maybePromise && typeof maybePromise.then === "function") {
+                maybePromise.then(() => {
+                  this.kernel.dispatchHistoryPopstate(targetAppId, popPayload);
+                }).catch(() => {});
+              }
+            } else {
+              this.showPage(targetAppId, false);
+            }
+          }
+          this.kernel.dispatchHistoryPopstate(targetAppId, popPayload);
         } else if (frame.type === "section" && frame.section) {
           if (frame.section === "apps") {
-            (this as any).showAppsIndex?.(false);
+            if ((this as any).showAppsIndex) {
+              (this as any).showAppsIndex(false);
+            } else {
+              this.showPage("apps", false);
+            }
           } else if (frame.section === "widgets") {
-            (this as any).showWidgetsView?.(false);
+            if ((this as any).showWidgetsView) {
+              (this as any).showWidgetsView(false);
+            } else {
+              this.showPage("widgets", false);
+            }
           } else if (frame.section === "settings") {
             (this as any).openSettings?.(false);
           }

@@ -74,6 +74,7 @@ export class NavigationManager {
 
     this.stack.push(newFrame);
     this.pointer = this.stack.length - 1;
+    console.debug("[Omni Nav] stack.push -> pointer:", this.pointer, "length:", this.stack.length, "frame:", newFrame);
 
     if (syncBrowser && typeof window !== "undefined" && window.history && !this.isProcessingPopState) {
       try {
@@ -122,6 +123,7 @@ export class NavigationManager {
       this.stack = [newFrame];
       this.pointer = 0;
     }
+    console.debug("[Omni Nav] stack.replace -> pointer:", this.pointer, "length:", this.stack.length, "frame:", newFrame);
 
     if (syncBrowser && typeof window !== "undefined" && window.history && !this.isProcessingPopState) {
       try {

@@ -123,6 +123,7 @@ export function handleFeedAction(
     const noteData: any = (payload as any)?.note || (action.payload as any)?.note;
     const isFromIntent = Boolean((payload as any)?.isFromIntent || (action.payload as any)?.isFromIntent);
     if (id) {
+      const wasAlreadyViewingSameNote = currentFeedState.activeThreadNoteId === id;
       currentFeedState.activeThreadNoteId = id;
       try {
         const rootHist =
@@ -132,7 +133,7 @@ export function handleFeedAction(
         if (rootHist) {
           if (isFromIntent && typeof rootHist.replaceState === "function") {
             rootHist.replaceState({ view: "thread", id }, "", `?note=${id}`);
-          } else if (typeof rootHist.pushState === "function") {
+          } else if (!wasAlreadyViewingSameNote && typeof rootHist.pushState === "function") {
             rootHist.pushState({ view: "thread", id }, "", `?note=${id}`);
           }
         }

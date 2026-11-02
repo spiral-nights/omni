@@ -144,7 +144,8 @@ if (typeof window !== "undefined") {
   });
 
   window.addEventListener("omni:action", (event: any) => {
-    const detail = event.detail;
+    const detail = event?.detail;
+    if (detail?.__fromSchemaBus) return;
     if (detail?.action) {
       onActionMsg(detail.action, detail.payload);
     }

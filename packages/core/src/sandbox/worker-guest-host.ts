@@ -151,14 +151,6 @@ try {
 
   public dispatchAction(componentId: string, action: any, payload: any): void {
     try {
-      this.options.channel1.port1.postMessage({
-        type: "action",
-        componentId,
-        action,
-        payload
-      });
-    } catch (_) {}
-    try {
       if (this.worker) {
         this.worker.postMessage({
           type: "omni:action",

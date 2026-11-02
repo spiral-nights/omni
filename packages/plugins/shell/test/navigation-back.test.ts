@@ -256,4 +256,55 @@ describe("Unified Navigation & Back Button Integration", () => {
     expect(restoredState.pluginId).toBe("org.omni.plugin.profile-viewer");
     expect(restoredState.payload.state).toEqual({ tab: "user-profile", pubkey: "alice_pubkey" });
   });
+
+  it("preserves active app sandboxes across openApp switches and steps back from User Profile to Following without jumping to Feed", async () => {
+    // 1. Start in Feed
+    await shell.openApp("org.omni.plugin.feed");
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    const stackAfterFeed = kernel.navigation.getStack().length;
+
+    // 2. Navigate to Profiles
+    await shell.openApp("org.omni.plugin.profile-viewer");
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
+    expect(kernel.navigation.getStack().length).toBe(stackAfterFeed + 1);
+
+    // 3. Switch to Following tab in Profiles
+    shell.handleHistoryPush("org.omni.plugin.profile-viewer", {
+      state: { tab: "following" },
+      title: "Following",
+      url: "?tab=following"
+    });
+    expect(kernel.navigation.getStack().length).toBe(stackAfterFeed + 2);
+
+    // 4. Click into a User Profile in Profiles
+    shell.handleHistoryPush("org.omni.plugin.profile-viewer", {
+      state: { type: "omni-people-view", tab: "user-profile", pubkey: "bob_pk", from: "following" },
+      title: "Bob",
+      url: "?view=user-profile&pubkey=bob_pk"
+    });
+    expect(kernel.navigation.getStack().length).toBe(stackAfterFeed + 3);
+
+    const poppedStates: any[] = [];
+    (kernel as any).dispatchHistoryPopstate = (pluginId: string, payload: any) => {
+      poppedStates.push({ pluginId, payload });
+    };
+
+    // 5. First Back: from User Profile -> Following (still inside Profiles!)
+    shell.triggerBack();
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
+    expect(poppedStates.length).toBe(1);
+    expect(poppedStates[0].pluginId).toBe("org.omni.plugin.profile-viewer");
+    expect(poppedStates[0].payload.state).toEqual({ tab: "following" });
+
+    // 6. Second Back: from Following -> Profiles root ("my-profile", state: null)
+    shell.triggerBack();
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
+    expect(poppedStates.length).toBe(2);
+    expect(poppedStates[1].pluginId).toBe("org.omni.plugin.profile-viewer");
+    expect(poppedStates[1].payload.state).toBeNull();
+
+    // 7. Third Back: from Profiles root -> Feed
+    shell.triggerBack();
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+  });
 });

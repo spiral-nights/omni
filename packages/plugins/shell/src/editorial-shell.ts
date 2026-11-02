@@ -65,6 +65,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   private dockContainer!: HTMLElement;
   private pendingAppMounts = new Set<string>();
   private boundKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  private boundPopstateHandler: ((e: PopStateEvent) => void) | null = null;
   private boundScrollHandler: (() => void) | null = null;
   private fullscreenFadeTimeout: any = null;
   private boundFullscreenMouseHandler: ((e: MouseEvent) => void) | null = null;
@@ -265,7 +266,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     // 11. Listen for browser back / forward navigation & Escape key
     if (typeof window !== "undefined") {
-      window.addEventListener("popstate", (e: PopStateEvent) => {
+      if (this.boundPopstateHandler) {
+        window.removeEventListener("popstate", this.boundPopstateHandler);
+      }
+      this.boundPopstateHandler = (e: PopStateEvent) => {
         if (this.handlePopState(e)) return;
         const state = e.state;
         if (!state || state.type !== "omni-editorial-view") return;
@@ -282,7 +286,8 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         } else if (state.page === "settings") {
           this.openSettings(false);
         }
-      });
+      };
+      window.addEventListener("popstate", this.boundPopstateHandler);
 
       this.boundKeydownHandler = (e: KeyboardEvent) => {
         if (e.key === "Escape" || e.key === "Esc") {
@@ -330,6 +335,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     if (typeof window !== "undefined" && this.boundKeydownHandler) {
       window.removeEventListener("keydown", this.boundKeydownHandler);
       this.boundKeydownHandler = null;
+    }
+    if (typeof window !== "undefined" && this.boundPopstateHandler) {
+      window.removeEventListener("popstate", this.boundPopstateHandler);
+      this.boundPopstateHandler = null;
     }
     if (this.mediaQueryDark && this.mediaQueryListener) {
       this.mediaQueryDark.removeEventListener("change", this.mediaQueryListener);
@@ -733,11 +742,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     const plugin = this.installedPlugins.find((p) => p.id === pluginId);
     if (!plugin) return;
 
-    const prevPluginId = this.activePluginId;
-    if (prevPluginId && prevPluginId !== pluginId) {
-      this.unloadAppIfStandalone(prevPluginId);
-    }
-
     if (pushState && typeof window !== "undefined" && (this.activePluginId !== pluginId || this.activePage !== "app")) {
       try {
         if (this.kernel?.navigation) {
@@ -972,10 +976,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       this.updateHeaderBackVisibility();
     }
 
-    if (this.activePluginId) {
-      this.unloadAppIfStandalone(this.activePluginId);
-    }
-
     this.activePage = "apps";
     this.activePluginId = null;
     this.root.classList.remove("has-active-app");
@@ -1039,10 +1039,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         }
       } catch (_) {}
       this.updateHeaderBackVisibility();
-    }
-
-    if (this.activePluginId) {
-      this.unloadAppIfStandalone(this.activePluginId);
     }
 
     this.activePage = "widgets";

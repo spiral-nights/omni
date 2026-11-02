@@ -842,7 +842,8 @@
               detail: {
                 action: data.action,
                 payload: data.payload,
-                componentId: data.componentId
+                componentId: data.componentId,
+                __fromSchemaBus: true
               }
             }));
           }

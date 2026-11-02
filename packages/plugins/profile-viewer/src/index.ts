@@ -352,7 +352,7 @@ export function getProfileSchema(
           label: backLabel,
           variant: "secondary",
           size: "sm",
-          action: { name: "switch-tab", payload: { tab: backTarget } }
+          action: { name: "switch-tab", payload: { tab: backTarget, isBack: true } }
         }
       ]
     });
@@ -876,6 +876,8 @@ export async function handleProfileViewerAction(
   const actName = action.name;
   if (actName === "switch-tab" || actName === "back") {
     const isBack = Boolean(payload?.isBack || action.payload?.isBack || actName === "back");
+    const fromPopState = Boolean(payload?.fromPopState || action.payload?.fromPopState);
+    const previousTabBeforeSwitch = currentSchemaTab;
     const requestedTab = String(
       payload?.tab || payload?.value || action.payload?.tab || (isBack ? (schemaPreviousTab || "following") : "my-profile")
     );
@@ -894,7 +896,7 @@ export async function handleProfileViewerAction(
           rootHist.back();
         }
       } catch (_) {}
-    } else if (currentSchemaTab !== "user-profile") {
+    } else if (!fromPopState && currentSchemaTab !== "user-profile" && requestedTab !== previousTabBeforeSwitch) {
       try {
         const rootHist =
           (typeof window !== "undefined" ? window.history : null) ||
@@ -1041,7 +1043,11 @@ export async function handleProfileViewerAction(
     }
   } else if (actName === "view_profile" || actName === "view-profile") {
     const targetPk = String(payload?.pubkey || action.payload?.pubkey || "");
+    const fromPopState = Boolean(payload?.fromPopState || action.payload?.fromPopState);
+    const isFromIntent = Boolean(payload?.isFromIntent || action.payload?.isFromIntent);
     if (targetPk) {
+      const wasAlreadyViewingSameProfile =
+        currentSchemaTab === "user-profile" && schemaTargetUser?.pubkey === targetPk;
       if (currentSchemaTab !== "user-profile") {
         schemaPreviousTab = currentSchemaTab || "following";
       }
@@ -1077,20 +1083,28 @@ export async function handleProfileViewerAction(
       currentSchemaTab = "user-profile";
       schemaUserNotes = [];
 
-      try {
-        const rootHist =
-          (typeof window !== "undefined" ? window.history : null) ||
-          (typeof self !== "undefined" ? (self as any).history : null) ||
-          (typeof globalThis !== "undefined" ? (globalThis as any).history : null);
-        if (rootHist && typeof rootHist.pushState === "function") {
-          schemaPushedHistory = true;
-          rootHist.pushState(
-            { type: "omni-people-view", tab: "user-profile", pubkey: targetPk, from: schemaPreviousTab || "following" },
-            "",
-            `?view=user-profile&pubkey=${targetPk}`
-          );
-        }
-      } catch (_) {}
+      if (!fromPopState) {
+        try {
+          const rootHist =
+            (typeof window !== "undefined" ? window.history : null) ||
+            (typeof self !== "undefined" ? (self as any).history : null) ||
+            (typeof globalThis !== "undefined" ? (globalThis as any).history : null);
+          const nextState = {
+            type: "omni-people-view",
+            tab: "user-profile",
+            pubkey: targetPk,
+            from: schemaPreviousTab || "following"
+          };
+          if (rootHist) {
+            if (isFromIntent && typeof rootHist.replaceState === "function") {
+              rootHist.replaceState(nextState, "", `?view=user-profile&pubkey=${targetPk}`);
+            } else if (!wasAlreadyViewingSameProfile && typeof rootHist.pushState === "function") {
+              schemaPushedHistory = true;
+              rootHist.pushState(nextState, "", `?view=user-profile&pubkey=${targetPk}`);
+            }
+          }
+        } catch (_) {}
+      }
 
       sendSchemaWs(["REQ", `pv_schema_target_${Date.now()}`, { kinds: [0], authors: [targetPk], limit: 1 }]);
       sendSchemaWs(["REQ", `pv_schema_target_notes_${Date.now()}`, { kinds: [1], authors: [targetPk], limit: 20 }]);
@@ -1113,8 +1127,7 @@ export async function handleProfileViewerAction(
             res.catch(() => {});
           }
         } catch (_) {}
-      }
-      if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      } else if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
         window.dispatchEvent(new CustomEvent("omni:intent", { detail: { action: "view_note", data: { id: noteId, eventId: noteId, note: noteData } } }));
         window.dispatchEvent(new CustomEvent("intent", { detail: { action: "view_note", data: { id: noteId, eventId: noteId, note: noteData } } }));
       }
@@ -4744,6 +4757,7 @@ const rootContext: any =
 if (rootContext && typeof rootContext.addEventListener === "function") {
   rootContext.addEventListener("omni:action", async (event: any) => {
     const detail = event.detail || event;
+    if (detail?.__fromSchemaBus) return;
     const action = detail.action;
     const payload = detail.payload;
     if (action) {
@@ -4772,7 +4786,10 @@ if (rootContext && typeof rootContext.addEventListener === "function") {
   rootContext.addEventListener("omni:intent", async (event: any) => {
     const detail = event.detail;
     if (detail && (detail.action === "view_profile" || detail.action === "view-profile") && detail.data?.pubkey) {
-      const next = await handleProfileViewerAction({ name: "view_profile", payload: { pubkey: detail.data.pubkey } });
+      const next = await handleProfileViewerAction({
+        name: "view_profile",
+        payload: { pubkey: detail.data.pubkey, isFromIntent: true }
+      });
       dispatchProfileSchema(next);
     }
   });
@@ -4787,14 +4804,21 @@ if (rootContext && typeof rootContext.addEventListener === "function") {
     }
   });
 
-  rootContext.addEventListener("popstate", (event: PopStateEvent) => {
-    const state = event?.state;
-    const targetTab = state?.tab || (state?.pluginState && state.pluginState.tab) || (state?.from as string) || schemaPreviousTab || "following";
+  rootContext.addEventListener("popstate", (event: any) => {
+    const state = event?.state ?? event?.detail?.state;
+    const targetTab =
+      state?.tab ||
+      (state?.pluginState && state.pluginState.tab) ||
+      (state?.from as string) ||
+      schemaPreviousTab ||
+      "my-profile";
     const targetPk = state?.pubkey || (state?.pluginState && state.pluginState.pubkey);
-    schemaPreviousTab = null;
+    schemaPreviousTab = (state?.from as string) || null;
     schemaPushedHistory = false;
     if (targetTab === "user-profile" && targetPk) {
-      handleProfileViewerAction({ name: "view_profile", payload: { pubkey: targetPk } }).then(dispatchProfileSchema);
+      handleProfileViewerAction({ name: "view_profile", payload: { pubkey: targetPk, fromPopState: true } }).then(
+        dispatchProfileSchema
+      );
     } else {
       currentSchemaTab = targetTab;
       schemaTargetUser = null;

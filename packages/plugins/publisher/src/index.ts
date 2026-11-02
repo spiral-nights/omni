@@ -2861,6 +2861,7 @@ function mountPublisherWidget(root: HTMLElement): void {
 if (typeof window !== "undefined") {
   window.addEventListener("omni:action", async (event: any) => {
     const detail = event.detail || event;
+    if (detail?.__fromSchemaBus) return;
     const action = detail.action;
     const payload = detail.payload;
     if (action) {
