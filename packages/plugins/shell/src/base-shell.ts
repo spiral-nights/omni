@@ -2353,31 +2353,38 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public handleHistoryBack(pluginId: string): void {
-    if (this.kernel?.navigation && this.kernel.navigation.canGoBack()) {
-      this.kernel.navigation.back();
+    if (typeof window !== "undefined" && window.history && typeof window.history.back === "function") {
+      window.history.back();
       return;
     }
-    if (typeof window === "undefined") return;
-    window.history.back();
+    if (this.kernel?.navigation && this.kernel.navigation.canGoBack()) {
+      this.kernel.navigation.back(false);
+    }
   }
 
   public handleHistoryGo(pluginId: string, delta?: number): void {
+    if (typeof window !== "undefined" && window.history && typeof window.history.go === "function") {
+      window.history.go(delta ?? 0);
+      return;
+    }
     if (this.kernel?.navigation) {
       if (delta === -1) {
-        this.kernel.navigation.back();
+        this.kernel.navigation.back(false);
         return;
       } else if (delta === 1) {
-        this.kernel.navigation.forward();
+        this.kernel.navigation.forward(false);
         return;
       }
     }
-    if (typeof window === "undefined") return;
-    window.history.go(delta ?? 0);
   }
 
   public triggerBack(): void {
+    if (typeof window !== "undefined" && window.history && typeof window.history.back === "function") {
+      window.history.back();
+      return;
+    }
     if (this.kernel?.navigation && this.kernel.navigation.canGoBack()) {
-      const res = this.kernel.navigation.back();
+      const res = this.kernel.navigation.back(false);
       if (res.handled && res.currentFrame) {
         const frame = res.currentFrame;
         const activePage = (this as any).activePage;
@@ -2422,8 +2429,6 @@ export abstract class BaseShell implements OmniShellHost {
         }
         this.updateHeaderBackVisibility();
       }
-    } else if (typeof window !== "undefined") {
-      window.history.back();
     }
   }
 

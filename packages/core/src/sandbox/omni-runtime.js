@@ -1,11 +1,14 @@
 // Omni Injected Sandbox Runtime Bridge (omni-runtime.js)
 (function () {
-  var rootScope = (typeof window !== "undefined" && window) || (typeof self !== "undefined" && self) || (typeof globalThis !== "undefined" && globalThis) || {};
+  const rootScope = (typeof window !== "undefined" && window) || (typeof self !== "undefined" && self) || (typeof globalThis !== "undefined" && globalThis) || {};
   if (!rootScope.window) {
     try { rootScope.window = rootScope; } catch (_) {}
   }
   if (!rootScope.parent) {
     try { rootScope.parent = rootScope; } catch (_) {}
+  }
+  if (typeof window === "undefined" && typeof globalThis !== "undefined") {
+    try { globalThis.window = rootScope; } catch (_) {}
   }
 
   let portSchemaBus = null;
@@ -1249,84 +1252,138 @@
       updateVirtualLocation(search, hash);
     }
     const popState = state !== undefined ? state : (virtualHistory.entries[virtualHistory.index]?.state ?? null);
+    let popEv;
     try {
-      const popEv = new PopStateEvent("popstate", { state: popState });
-      window.dispatchEvent(popEv);
-      if (typeof window.onpopstate === "function") {
-        window.onpopstate(popEv);
+      if (typeof PopStateEvent !== "undefined") {
+        popEv = new PopStateEvent("popstate", { state: popState });
+      } else if (typeof CustomEvent !== "undefined") {
+        popEv = new CustomEvent("popstate", { detail: { state: popState } });
+        Object.defineProperty(popEv, "state", { value: popState, configurable: true });
+      } else {
+        popEv = new Event("popstate");
+        Object.defineProperty(popEv, "state", { value: popState, configurable: true });
+      }
+    } catch (_) {
+      try {
+        popEv = new Event("popstate");
+        Object.defineProperty(popEv, "state", { value: popState, configurable: true });
+      } catch (_) {}
+    }
+    try {
+      rootScope.dispatchEvent(popEv);
+      if (typeof rootScope.onpopstate === "function") {
+        rootScope.onpopstate(popEv);
+      }
+      if (rootScope.window && rootScope.window !== rootScope) {
+        try {
+          rootScope.window.dispatchEvent(popEv);
+          if (typeof rootScope.window.onpopstate === "function") {
+            rootScope.window.onpopstate(popEv);
+          }
+        } catch (_) {}
       }
     } catch (e) {
       console.error("Error dispatching virtual popstate:", e);
     }
   }
 
-  if (typeof window !== "undefined") {
-    // Intercept History API
-    if (window.History) {
-      try {
-        Object.defineProperty(window.History.prototype, "state", {
-          get() {
-            return virtualHistory.entries[virtualHistory.index]?.state ?? null;
-          },
-          configurable: true
-        });
-        Object.defineProperty(window.History.prototype, "length", {
-          get() {
-            return virtualHistory.entries.length;
-          },
-          configurable: true
-        });
-        window.History.prototype.pushState = function(state, title, url) {
-          const { search, hash } = parseUrlParts(url);
-          if (virtualHistory.index < virtualHistory.entries.length - 1) {
-            virtualHistory.entries = virtualHistory.entries.slice(0, virtualHistory.index + 1);
-          }
-          virtualHistory.entries.push({
-            state,
-            title: title || "",
-            url: String(url || ""),
-            search,
-            hash
-          });
-          virtualHistory.index = virtualHistory.entries.length - 1;
-          updateVirtualLocation(search, hash);
-          initPromise.then(() => callRpc("kernel.historyPush", {
-            state,
-            title: title || "",
-            url: String(url || "")
-          })).catch(() => {});
-        };
-        window.History.prototype.replaceState = function(state, title, url) {
-          const { search, hash } = parseUrlParts(url);
-          if (virtualHistory.entries[virtualHistory.index]) {
-            virtualHistory.entries[virtualHistory.index] = {
-              state,
-              title: title || "",
-              url: String(url || ""),
-              search,
-              hash
-            };
-          }
-          updateVirtualLocation(search, hash);
-          initPromise.then(() => callRpc("kernel.historyReplace", {
-            state,
-            title: title || "",
-            url: String(url || "")
-          })).catch(() => {});
-        };
-        window.History.prototype.back = function() {
-          initPromise.then(() => callRpc("kernel.historyBack", {})).catch(() => {});
-        };
-        window.History.prototype.forward = function() {
-          initPromise.then(() => callRpc("kernel.historyGo", { delta: 1 })).catch(() => {});
-        };
-        window.History.prototype.go = function(delta) {
-          initPromise.then(() => callRpc("kernel.historyGo", { delta: Number(delta) || 0 })).catch(() => {});
-        };
-      } catch (e) {
-        console.warn("Could not shim History.prototype:", e);
+  // Virtual History API shim compatible with Window and WorkerGlobalScope
+  const virtualHistoryApi = {
+    get state() {
+      return virtualHistory.entries[virtualHistory.index]?.state ?? null;
+    },
+    get length() {
+      return virtualHistory.entries.length;
+    },
+    pushState(state, title, url) {
+      const { search, hash } = parseUrlParts(url);
+      if (virtualHistory.index < virtualHistory.entries.length - 1) {
+        virtualHistory.entries = virtualHistory.entries.slice(0, virtualHistory.index + 1);
       }
+      virtualHistory.entries.push({
+        state,
+        title: title || "",
+        url: String(url || ""),
+        search,
+        hash
+      });
+      virtualHistory.index = virtualHistory.entries.length - 1;
+      updateVirtualLocation(search, hash);
+      initPromise.then(() => callRpc("kernel.historyPush", {
+        state,
+        title: title || "",
+        url: String(url || "")
+      })).catch(() => {});
+    },
+    replaceState(state, title, url) {
+      const { search, hash } = parseUrlParts(url);
+      if (virtualHistory.entries[virtualHistory.index]) {
+        virtualHistory.entries[virtualHistory.index] = {
+          state,
+          title: title || "",
+          url: String(url || ""),
+          search,
+          hash
+        };
+      }
+      updateVirtualLocation(search, hash);
+      initPromise.then(() => callRpc("kernel.historyReplace", {
+        state,
+        title: title || "",
+        url: String(url || "")
+      })).catch(() => {});
+    },
+    back() {
+      initPromise.then(() => callRpc("kernel.historyBack", {})).catch(() => {});
+    },
+    forward() {
+      initPromise.then(() => callRpc("kernel.historyGo", { delta: 1 })).catch(() => {});
+    },
+    go(delta) {
+      initPromise.then(() => callRpc("kernel.historyGo", { delta: Number(delta) || 0 })).catch(() => {});
     }
+  };
+
+  try {
+    Object.defineProperty(rootScope, "history", {
+      value: virtualHistoryApi,
+      configurable: true,
+      writable: true
+    });
+    if (rootScope.window) {
+      Object.defineProperty(rootScope.window, "history", {
+        value: virtualHistoryApi,
+        configurable: true,
+        writable: true
+      });
+    }
+  } catch (_) {
+    try { rootScope.history = virtualHistoryApi; } catch (_) {}
+    try { if (rootScope.window) rootScope.window.history = virtualHistoryApi; } catch (_) {}
+  }
+
+  // Also patch native History.prototype if available in Window
+  if (typeof History !== "undefined" && History.prototype) {
+    try {
+      Object.defineProperty(History.prototype, "state", {
+        get() {
+          return virtualHistory.entries[virtualHistory.index]?.state ?? null;
+        },
+        configurable: true
+      });
+      Object.defineProperty(History.prototype, "length", {
+        get() {
+          return virtualHistory.entries.length;
+        },
+        configurable: true
+      });
+      History.prototype.pushState = virtualHistoryApi.pushState;
+      History.prototype.replaceState = virtualHistoryApi.replaceState;
+      History.prototype.back = virtualHistoryApi.back;
+      History.prototype.forward = virtualHistoryApi.forward;
+      History.prototype.go = virtualHistoryApi.go;
+    } catch (_) {}
+  }
 
     // Intercept Location search and hash getters
     const LocClass = window.Location || (typeof WorkerLocation !== "undefined" ? WorkerLocation : null);
@@ -1350,7 +1407,6 @@
         console.warn("Could not shim Location.prototype:", e);
       }
     }
-  }
 
   console.log("⚡ [Omni Sandbox] Injected runtime loaded.");
 })();

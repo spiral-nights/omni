@@ -584,7 +584,7 @@ export class OmniKernel {
 
   dispatchHistoryPopstate(pluginId: string, payload: { delta: number; state: any; url?: string }): void {
     for (const [key, sandbox] of this.sandboxes.entries()) {
-      if (sandbox.manifest.id === pluginId || key === pluginId) {
+      if (sandbox.manifest.id === pluginId || key === pluginId || key.startsWith(`${pluginId}::`)) {
         sandbox.dispatchHistoryPopstate(payload.delta, payload.state, payload.url);
       }
     }

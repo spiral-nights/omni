@@ -125,11 +125,15 @@ export function handleFeedAction(
     if (id) {
       currentFeedState.activeThreadNoteId = id;
       try {
-        if (typeof window !== "undefined" && window.history) {
-          if (isFromIntent && typeof window.history.replaceState === "function") {
-            window.history.replaceState({ view: "thread", id }, "", `?note=${id}`);
-          } else if (typeof window.history.pushState === "function") {
-            window.history.pushState({ view: "thread", id }, "", `?note=${id}`);
+        const rootHist =
+          (typeof window !== "undefined" ? window.history : null) ||
+          (typeof self !== "undefined" ? (self as any).history : null) ||
+          (typeof globalThis !== "undefined" ? (globalThis as any).history : null);
+        if (rootHist) {
+          if (isFromIntent && typeof rootHist.replaceState === "function") {
+            rootHist.replaceState({ view: "thread", id }, "", `?note=${id}`);
+          } else if (typeof rootHist.pushState === "function") {
+            rootHist.pushState({ view: "thread", id }, "", `?note=${id}`);
           }
         }
       } catch (_) {}
@@ -261,8 +265,12 @@ export function handleFeedAction(
   } else if (actName === "close-thread") {
     currentFeedState.activeThreadNoteId = null;
     try {
-      if (typeof window !== "undefined" && window.history && typeof window.history.back === "function") {
-        window.history.back();
+      const rootHist =
+        (typeof window !== "undefined" ? window.history : null) ||
+        (typeof self !== "undefined" ? (self as any).history : null) ||
+        (typeof globalThis !== "undefined" ? (globalThis as any).history : null);
+      if (rootHist && typeof rootHist.back === "function") {
+        rootHist.back();
       }
     } catch (_) {}
   } else if (actName === "publish-reply") {

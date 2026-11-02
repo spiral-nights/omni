@@ -886,14 +886,22 @@ export async function handleProfileViewerAction(
     if (isBack) {
       schemaPreviousTab = null;
       try {
-        if (typeof window !== "undefined" && window.history && typeof window.history.back === "function") {
-          window.history.back();
+        const rootHist =
+          (typeof window !== "undefined" ? window.history : null) ||
+          (typeof self !== "undefined" ? (self as any).history : null) ||
+          (typeof globalThis !== "undefined" ? (globalThis as any).history : null);
+        if (rootHist && typeof rootHist.back === "function") {
+          rootHist.back();
         }
       } catch (_) {}
     } else if (currentSchemaTab !== "user-profile") {
       try {
-        if (typeof window !== "undefined" && window.history && typeof window.history.pushState === "function") {
-          window.history.pushState({ tab: requestedTab }, "", `?tab=${requestedTab}`);
+        const rootHist =
+          (typeof window !== "undefined" ? window.history : null) ||
+          (typeof self !== "undefined" ? (self as any).history : null) ||
+          (typeof globalThis !== "undefined" ? (globalThis as any).history : null);
+        if (rootHist && typeof rootHist.pushState === "function") {
+          rootHist.pushState({ tab: requestedTab }, "", `?tab=${requestedTab}`);
         }
       } catch (_) {}
     }
@@ -1070,9 +1078,13 @@ export async function handleProfileViewerAction(
       schemaUserNotes = [];
 
       try {
-        if (typeof window !== "undefined" && window.history && typeof window.history.pushState === "function") {
+        const rootHist =
+          (typeof window !== "undefined" ? window.history : null) ||
+          (typeof self !== "undefined" ? (self as any).history : null) ||
+          (typeof globalThis !== "undefined" ? (globalThis as any).history : null);
+        if (rootHist && typeof rootHist.pushState === "function") {
           schemaPushedHistory = true;
-          window.history.pushState(
+          rootHist.pushState(
             { type: "omni-people-view", tab: "user-profile", pubkey: targetPk, from: schemaPreviousTab || "following" },
             "",
             `?view=user-profile&pubkey=${targetPk}`

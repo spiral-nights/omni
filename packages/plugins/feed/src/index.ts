@@ -128,8 +128,13 @@ if (typeof window !== "undefined") {
   window.addEventListener("omni:intent", (e: any) => handleIntent(e.detail));
   window.addEventListener("intent", (e: any) => handleIntent(e.detail));
 
-  window.addEventListener("popstate", (event: PopStateEvent) => {
-    const state = event?.state;
+  const rootContext: any =
+    (typeof window !== "undefined" ? window : null) ||
+    (typeof self !== "undefined" ? self : null) ||
+    (typeof globalThis !== "undefined" ? globalThis : null);
+
+  rootContext.addEventListener("popstate", (event: any) => {
+    const state = event?.state || event?.detail?.state;
     if (state?.view === "thread" && state.id) {
       currentFeedState.activeThreadNoteId = state.id;
     } else {
