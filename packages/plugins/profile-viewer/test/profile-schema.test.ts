@@ -413,4 +413,43 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     expect(localStorage.getItem("omni_active_note_id")).toBe("note_hal_123");
     expect(dispatchSpy).toHaveBeenCalledWith("view_note", { id: "note_hal_123", eventId: "note_hal_123" });
   });
+
+  it("enriches schema note cards with interaction counts when like and repost actions are triggered", async () => {
+    const friendPubkey = "f".repeat(64);
+    await handleProfileViewerAction(
+      { name: "view_profile", payload: { pubkey: friendPubkey } }
+    );
+
+    // Trigger like-note action
+    await handleProfileViewerAction(
+      { name: "like-note", payload: { id: "note_interact_1" } }
+    );
+    // Trigger repost-note action
+    await handleProfileViewerAction(
+      { name: "repost-note", payload: { id: "note_interact_1" } }
+    );
+
+    // Dispatch view_note intent to verify enriched stats are passed
+    const dispatchSpy = vi.fn().mockResolvedValue({});
+    (window as any).omni = { intents: { dispatch: dispatchSpy } };
+
+    await handleProfileViewerAction(
+      {
+        name: "view_note",
+        payload: {
+          id: "note_interact_1",
+          note: { id: "note_interact_1", content: "Test content", pubkey: friendPubkey }
+        }
+      }
+    );
+
+    expect(dispatchSpy).toHaveBeenCalledWith("view_note", expect.objectContaining({
+      id: "note_interact_1",
+      note: expect.objectContaining({
+        id: "note_interact_1",
+        likes: 1,
+        reposts: 1
+      })
+    }));
+  });
 });

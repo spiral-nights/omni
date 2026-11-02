@@ -39,6 +39,180 @@ let schemaUpdateTimer: any = null;
 let persistCacheTimer: any = null;
 const queriedAuthorsSet = new Set<string>();
 
+interface NoteInteractionStats {
+  likes: number;
+  replies: number;
+  reposts: number;
+  zaps: number;
+  liked?: boolean;
+  reposted?: boolean;
+}
+
+const noteStatsMap = new Map<string, NoteInteractionStats>();
+const likePubkeysByNote = new Map<string, Set<string>>();
+const replyIdsByNote = new Map<string, Set<string>>();
+const repostPubkeysByNote = new Map<string, Set<string>>();
+const queriedInteractionNoteIds = new Set<string>();
+let domMyPubkey = "";
+
+function getOrCreateNoteStats(noteId: string): NoteInteractionStats {
+  let stats = noteStatsMap.get(noteId);
+  if (!stats) {
+    stats = { likes: 0, replies: 0, reposts: 0, zaps: 0 };
+    noteStatsMap.set(noteId, stats);
+  }
+  return stats;
+}
+
+function updateDomNoteCardStats(noteId: string, stats: NoteInteractionStats) {
+  if (typeof document === "undefined") return;
+  const cards = document.querySelectorAll<HTMLElement>(`.pv-note-card[data-note-id="${noteId}"]`);
+  cards.forEach((card) => {
+    const replyCountSpan = card.querySelector<HTMLElement>(".action-reply .action-count");
+    if (replyCountSpan) {
+      replyCountSpan.textContent = stats.replies > 0 ? String(stats.replies) : "";
+    }
+    const likeCountSpan = card.querySelector<HTMLElement>(".action-like .action-count");
+    if (likeCountSpan) {
+      likeCountSpan.textContent = stats.likes > 0 ? String(stats.likes) : "";
+    }
+    const repostCountSpan = card.querySelector<HTMLElement>(".action-repost .action-count");
+    if (repostCountSpan) {
+      repostCountSpan.textContent = stats.reposts > 0 ? String(stats.reposts) : "";
+    }
+    if (stats.liked) {
+      const btnLike = card.querySelector<HTMLButtonElement>(".action-like");
+      const heartWrap = card.querySelector<HTMLElement>(".icon-heart-wrap");
+      if (btnLike) {
+        btnLike.classList.add("active-liked");
+        btnLike.style.color = "#ef4444";
+      }
+      if (heartWrap) {
+        heartWrap.innerHTML = ICONS.heartFilled;
+      }
+    }
+    if (stats.reposted) {
+      const btnRepost = card.querySelector<HTMLButtonElement>(".action-repost");
+      if (btnRepost) {
+        btnRepost.classList.add("active-reposted");
+        btnRepost.style.color = "var(--omni-accent-primary, #d4a373)";
+      }
+    }
+  });
+}
+
+function processIncomingInteraction(ev: any, isSchema: boolean) {
+  if (!ev || !ev.tags) return;
+  const k = Number(ev.kind);
+  const eTags = (ev.tags || []).filter((t: string[]) => t[0] === "e" && t[1]);
+  if (eTags.length === 0) return;
+
+  for (const tag of eTags) {
+    const targetNoteId = tag[1];
+    if (!targetNoteId) continue;
+
+    const stats = getOrCreateNoteStats(targetNoteId);
+    let changed = false;
+
+    if (k === 7) {
+      const content = (ev.content || "").trim();
+      if (content !== "-") {
+        let likeSet = likePubkeysByNote.get(targetNoteId);
+        if (!likeSet) {
+          likeSet = new Set<string>();
+          likePubkeysByNote.set(targetNoteId, likeSet);
+        }
+        if (!likeSet.has(ev.pubkey)) {
+          likeSet.add(ev.pubkey);
+          stats.likes = likeSet.size;
+          changed = true;
+        }
+        const userPubkey = isSchema ? currentProfilePubkey : domMyPubkey;
+        if (userPubkey && ev.pubkey === userPubkey) {
+          stats.liked = true;
+          changed = true;
+        }
+      }
+    } else if (k === 1 && ev.id !== targetNoteId) {
+      let replySet = replyIdsByNote.get(targetNoteId);
+      if (!replySet) {
+        replySet = new Set<string>();
+        replyIdsByNote.set(targetNoteId, replySet);
+      }
+      if (!replySet.has(ev.id)) {
+        replySet.add(ev.id);
+        stats.replies = replySet.size;
+        changed = true;
+      }
+    } else if (k === 6 && ev.id !== targetNoteId) {
+      let repostSet = repostPubkeysByNote.get(targetNoteId);
+      if (!repostSet) {
+        repostSet = new Set<string>();
+        repostPubkeysByNote.set(targetNoteId, repostSet);
+      }
+      if (!repostSet.has(ev.pubkey)) {
+        repostSet.add(ev.pubkey);
+        stats.reposts = repostSet.size;
+        changed = true;
+      }
+      const userPubkey = isSchema ? currentProfilePubkey : domMyPubkey;
+      if (userPubkey && ev.pubkey === userPubkey) {
+        stats.reposted = true;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      if (isSchema) {
+        const note = schemaUserNotes.find((n) => n.id === targetNoteId);
+        if (note) {
+          note.likes = stats.likes;
+          note.replies = stats.replies;
+          note.reposts = stats.reposts;
+          if (stats.liked) note.liked = true;
+          if (stats.reposted) note.reposted = true;
+        }
+        scheduleSchemaUpdate();
+      } else {
+        updateDomNoteCardStats(targetNoteId, stats);
+      }
+    }
+  }
+}
+
+function fetchInteractionsBatch(noteIds: string[], sendFn: (frame: any[]) => void, prefix: string) {
+  const unqueried = noteIds.filter((id) => id && !queriedInteractionNoteIds.has(id));
+  if (unqueried.length === 0) return;
+  unqueried.forEach((id) => queriedInteractionNoteIds.add(id));
+
+  const CHUNK_SIZE = 50;
+  for (let i = 0; i < unqueried.length; i += CHUNK_SIZE) {
+    const chunk = unqueried.slice(i, i + CHUNK_SIZE);
+    const subId = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const req = [
+      "REQ",
+      subId,
+      {
+        kinds: [1, 6, 7],
+        "#e": chunk,
+        limit: chunk.length * 50
+      }
+    ];
+    sendFn(req);
+  }
+}
+
+let schemaInteractionsTimer: any = null;
+function scheduleSchemaInteractionsFetch() {
+  if (schemaInteractionsTimer) clearTimeout(schemaInteractionsTimer);
+  schemaInteractionsTimer = setTimeout(() => {
+    const ids = schemaUserNotes.map((n) => n.id).filter(Boolean);
+    if (ids.length > 0) {
+      fetchInteractionsBatch(ids, sendSchemaWs, "pv_s_react");
+    }
+  }, 100);
+}
+
 function loadSchemaProfileCache() {
   if (typeof localStorage === "undefined") return;
   try {
@@ -212,6 +386,14 @@ export function getProfileSchema(
       : "Recent";
     const npubShort = authorPubkey ? `npub1${authorPubkey.slice(0, 8)}...` : "";
 
+    const stats = getOrCreateNoteStats(note.id);
+    const likesCount = note.likes !== undefined ? note.likes : stats.likes;
+    const repliesCount = note.replies !== undefined ? note.replies : stats.replies;
+    const repostsCount = note.reposts !== undefined ? note.reposts : stats.reposts;
+    const zapsCount = note.zaps !== undefined ? note.zaps : stats.zaps;
+    const isLiked = Boolean(note.liked || stats.liked);
+    const isReposted = Boolean(note.reposted || stats.reposted);
+
     const notePayload = {
       id: note.id,
       eventId: note.id,
@@ -223,10 +405,10 @@ export function getProfileSchema(
         avatar: note.avatar,
         content: note.content || "",
         created_at: note.created_at,
-        likes: note.likes || 0,
-        reposts: note.reposts || 0,
-        replies: note.replies || 0,
-        zaps: note.zaps || 0
+        likes: likesCount || 0,
+        reposts: repostsCount || 0,
+        replies: repliesCount || 0,
+        zaps: zapsCount || 0
       }
     };
 
@@ -295,23 +477,23 @@ export function getProfileSchema(
               variant: "ghost",
               size: "sm",
               icon: "reply",
-              label: String(note.replies || "0"),
+              label: String(repliesCount || "0"),
               action: { name: "view_note", payload: notePayload }
             },
             {
               type: "button",
-              variant: note.reposted ? "secondary" : "ghost",
+              variant: isReposted ? "secondary" : "ghost",
               size: "sm",
               icon: "repeat",
-              label: String(note.reposts || "0"),
+              label: String(repostsCount || "0"),
               action: { name: "repost-note", payload: { id: note.id } }
             },
             {
               type: "button",
-              variant: note.liked ? "secondary" : "ghost",
+              variant: isLiked ? "secondary" : "ghost",
               size: "sm",
               icon: "heart",
-              label: String(note.likes || "0"),
+              label: String(likesCount || "0"),
               action: { name: "like-note", payload: { id: note.id } }
             },
             {
@@ -319,7 +501,7 @@ export function getProfileSchema(
               variant: "ghost",
               size: "sm",
               icon: "zap",
-              label: String(note.zaps || "0"),
+              label: String(zapsCount || "0"),
               action: { name: "zap-note", payload: { id: note.id } }
             }
           ]
@@ -773,6 +955,10 @@ function handleSchemaWsMessage(event: any) {
       const ev = frame[2];
       const k = Number(ev.kind);
 
+      if (k === 7 || k === 6 || (k === 1 && (ev.tags || []).some((t: any) => t[0] === "e"))) {
+        processIncomingInteraction(ev, true);
+      }
+
       // Kind 0: Profile Metadata
       if (k === 0) {
         try {
@@ -834,11 +1020,27 @@ function handleSchemaWsMessage(event: any) {
         const activePk = currentSchemaTab === "user-profile" ? schemaTargetUser?.pubkey : (currentSchemaTab === "my-profile" ? currentProfilePubkey : "");
         if (activePk && ev.pubkey === activePk) {
           if (!schemaUserNotes.some((n) => n.id === ev.id)) {
-            schemaUserNotes.push(ev);
+            const stats = getOrCreateNoteStats(ev.id);
+            schemaUserNotes.push({
+              ...ev,
+              likes: stats.likes,
+              replies: stats.replies,
+              reposts: stats.reposts,
+              liked: stats.liked,
+              reposted: stats.reposted
+            });
             schemaUserNotes.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
             scheduleSchemaUpdate();
+            scheduleSchemaInteractionsFetch();
           }
         }
+      }
+    } else if (type === "EOSE") {
+      const subId = frame[1];
+      if (typeof subId === "string" && subId.startsWith("pv_s_react_")) {
+        try {
+          sendSchemaWs(["CLOSE", subId]);
+        } catch (_) {}
       }
     }
   } catch (_) {}
@@ -1111,8 +1313,20 @@ export async function handleProfileViewerAction(
     }
   } else if (actName === "view_note" || actName === "view-note" || actName === "view-thread") {
     const noteId = String(payload?.id || payload?.eventId || action.payload?.id || action.payload?.eventId || "");
-    const noteData = payload?.note || action.payload?.note || schemaUserNotes.find((n) => n.id === noteId);
+    let noteData: any = payload?.note || action.payload?.note || schemaUserNotes.find((n) => n.id === noteId);
     if (noteId) {
+      const stats = getOrCreateNoteStats(noteId);
+      if (noteData) {
+        noteData = {
+          ...noteData,
+          likes: noteData.likes !== undefined ? noteData.likes : stats.likes,
+          replies: noteData.replies !== undefined ? noteData.replies : stats.replies,
+          reposts: noteData.reposts !== undefined ? noteData.reposts : stats.reposts,
+          zaps: noteData.zaps !== undefined ? noteData.zaps : stats.zaps,
+          liked: noteData.liked !== undefined ? noteData.liked : stats.liked,
+          reposted: noteData.reposted !== undefined ? noteData.reposted : stats.reposted
+        };
+      }
       try {
         localStorage.setItem("omni_active_note_id", noteId);
         if (noteData) {
@@ -1135,47 +1349,59 @@ export async function handleProfileViewerAction(
   } else if (actName === "like-note") {
     const id = String(payload?.id || action.payload?.id || "");
     const note = schemaUserNotes.find((n) => n.id === id);
+    const stats = getOrCreateNoteStats(id);
     if (note) {
       note.liked = !note.liked;
       note.likes = (note.likes || 0) + (note.liked ? 1 : -1);
-      try {
-        const rootObj = (typeof window !== "undefined" ? (window as any) : null) || (typeof self !== "undefined" ? (self as any) : null);
-        const nostrObj = rootObj?.nostr;
-        if (nostrObj && typeof nostrObj.signEvent === "function" && note.liked) {
-          const ev = {
-            kind: 7,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [["e", id], ["p", note.pubkey || ""]],
-            content: "+"
-          };
-          nostrObj.signEvent(ev).then((signed: any) => {
-            if (signed) sendSchemaWs(["EVENT", signed]);
-          }).catch(() => {});
-        }
-      } catch (_) {}
+      stats.liked = note.liked;
+      stats.likes = note.likes;
+    } else {
+      stats.liked = !stats.liked;
+      stats.likes = (stats.likes || 0) + (stats.liked ? 1 : -1);
     }
+    try {
+      const rootObj = (typeof window !== "undefined" ? (window as any) : null) || (typeof self !== "undefined" ? (self as any) : null);
+      const nostrObj = rootObj?.nostr;
+      if (nostrObj && typeof nostrObj.signEvent === "function" && stats.liked) {
+        const ev = {
+          kind: 7,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [["e", id], ["p", note?.pubkey || ""]],
+          content: "+"
+        };
+        nostrObj.signEvent(ev).then((signed: any) => {
+          if (signed) sendSchemaWs(["EVENT", signed]);
+        }).catch(() => {});
+      }
+    } catch (_) {}
   } else if (actName === "repost-note") {
     const id = String(payload?.id || action.payload?.id || "");
     const note = schemaUserNotes.find((n) => n.id === id);
+    const stats = getOrCreateNoteStats(id);
     if (note) {
       note.reposted = !note.reposted;
       note.reposts = (note.reposts || 0) + (note.reposted ? 1 : -1);
-      try {
-        const rootObj = (typeof window !== "undefined" ? (window as any) : null) || (typeof self !== "undefined" ? (self as any) : null);
-        const nostrObj = rootObj?.nostr;
-        if (nostrObj && typeof nostrObj.signEvent === "function" && note.reposted) {
-          const ev = {
-            kind: 6,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [["e", id], ["p", note.pubkey || ""]],
-            content: JSON.stringify(note)
-          };
-          nostrObj.signEvent(ev).then((signed: any) => {
-            if (signed) sendSchemaWs(["EVENT", signed]);
-          }).catch(() => {});
-        }
-      } catch (_) {}
+      stats.reposted = note.reposted;
+      stats.reposts = note.reposts;
+    } else {
+      stats.reposted = !stats.reposted;
+      stats.reposts = (stats.reposts || 0) + (stats.reposted ? 1 : -1);
     }
+    try {
+      const rootObj = (typeof window !== "undefined" ? (window as any) : null) || (typeof self !== "undefined" ? (self as any) : null);
+      const nostrObj = rootObj?.nostr;
+      if (nostrObj && typeof nostrObj.signEvent === "function" && stats.reposted) {
+        const ev = {
+          kind: 6,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [["e", id], ["p", note?.pubkey || ""]],
+          content: note ? JSON.stringify(note) : ""
+        };
+        nostrObj.signEvent(ev).then((signed: any) => {
+          if (signed) sendSchemaWs(["EVENT", signed]);
+        }).catch(() => {});
+      }
+    } catch (_) {}
   } else if (actName === "zap-note") {
     const id = String(payload?.id || action.payload?.id || "");
     const note = schemaUserNotes.find((n) => n.id === id);
@@ -2486,6 +2712,20 @@ async function mountProfileViewer(root: HTMLElement) {
     }
   }
 
+  let domInteractionsTimer: any = null;
+  const domPendingInteractionNoteIds: string[] = [];
+  function scheduleDomInteractionsFetch(noteId?: string) {
+    if (noteId) domPendingInteractionNoteIds.push(noteId);
+    if (domInteractionsTimer) clearTimeout(domInteractionsTimer);
+    domInteractionsTimer = setTimeout(() => {
+      const ids = Array.from(new Set(domPendingInteractionNoteIds));
+      domPendingInteractionNoteIds.length = 0;
+      if (ids.length > 0) {
+        fetchInteractionsBatch(ids, sendWs, "pv_d_react");
+      }
+    }, 100);
+  }
+
   function updateUserCards(pubkey: string, meta: ProfileMetadata) {
     if (!container) return;
     const cards = container.querySelectorAll<HTMLElement>(`.people-user-card[data-pubkey="${pubkey}"]`);
@@ -2516,9 +2756,16 @@ async function mountProfileViewer(root: HTMLElement) {
         const ev = frame[2];
         const k = Number(ev.kind);
 
+        if (k === 7 || k === 6 || (k === 1 && (ev.tags || []).some((t: any) => t[0] === "e"))) {
+          processIncomingInteraction(ev, false);
+        }
+
         // Kind 3: Contact List for current user
         if (k === 3 && (subId === "pv_my_contacts" || (myPubkey && ev.pubkey === myPubkey))) {
-          if (!myPubkey && ev.pubkey) myPubkey = ev.pubkey;
+          if (!myPubkey && ev.pubkey) {
+            myPubkey = ev.pubkey;
+            domMyPubkey = ev.pubkey;
+          }
           myFollows.clear();
           myFollowTags = ev.tags || [];
           for (const tag of myFollowTags) {
@@ -2542,7 +2789,10 @@ async function mountProfileViewer(root: HTMLElement) {
 
         // Kind 10000: Mute List for current user
         else if (k === 10000 && (subId === "pv_my_mutes" || (myPubkey && ev.pubkey === myPubkey))) {
-          if (!myPubkey && ev.pubkey) myPubkey = ev.pubkey;
+          if (!myPubkey && ev.pubkey) {
+            myPubkey = ev.pubkey;
+            domMyPubkey = ev.pubkey;
+          }
           myMutes.clear();
           myMuteTags = ev.tags || [];
           for (const tag of myMuteTags) {
@@ -2634,7 +2884,7 @@ async function mountProfileViewer(root: HTMLElement) {
           }
         }
       } else if (type === "EOSE") {
-        if (subId?.startsWith("pv_batch_") || subId?.startsWith("pv_sync_")) {
+        if (subId?.startsWith("pv_d_react_") || subId?.startsWith("pv_batch_") || subId?.startsWith("pv_sync_")) {
           sendWs(["CLOSE", subId]);
         }
         if (subId === activeOlderUserSubId) {
@@ -3923,10 +4173,23 @@ async function mountProfileViewer(root: HTMLElement) {
 
   function openNoteInFeed(eventId: string, noteData?: any) {
     if (!eventId) return;
+    const stats = getOrCreateNoteStats(eventId);
+    const enrichedNote = noteData
+      ? {
+          ...noteData,
+          likes: noteData.likes !== undefined ? noteData.likes : stats.likes,
+          replies: noteData.replies !== undefined ? noteData.replies : stats.replies,
+          reposts: noteData.reposts !== undefined ? noteData.reposts : stats.reposts,
+          zaps: noteData.zaps !== undefined ? noteData.zaps : stats.zaps,
+          liked: noteData.liked !== undefined ? noteData.liked : stats.liked,
+          reposted: noteData.reposted !== undefined ? noteData.reposted : stats.reposted
+        }
+      : noteData;
+
     try {
       localStorage.setItem("omni_active_note_id", eventId);
-      if (noteData) {
-        localStorage.setItem("omni_active_note_data", JSON.stringify(noteData));
+      if (enrichedNote) {
+        localStorage.setItem("omni_active_note_data", JSON.stringify(enrichedNote));
       }
     } catch (err) {
       console.error("Storage error:", err);
@@ -3934,26 +4197,29 @@ async function mountProfileViewer(root: HTMLElement) {
 
     const omniRef = (window as any).omni;
     if (omniRef?.intents?.dispatch) {
-      omniRef.intents.dispatch("view_note", { eventId, id: eventId, note: noteData }).catch(() => {});
+      omniRef.intents.dispatch("view_note", { eventId, id: eventId, note: enrichedNote }).catch(() => {});
     }
 
     window.dispatchEvent(
       new CustomEvent("intent", {
-        detail: { action: "view_note", data: { eventId, id: eventId, note: noteData } }
+        detail: { action: "view_note", data: { eventId, id: eventId, note: enrichedNote } }
       })
     );
     window.dispatchEvent(
       new CustomEvent("omni:intent", {
-        detail: { action: "view_note", data: { eventId, id: eventId, note: noteData } }
+        detail: { action: "view_note", data: { eventId, id: eventId, note: enrichedNote } }
       })
     );
   }
 
   function renderNoteCard(event: any): HTMLElement {
     const timeStr = event.created_at ? formatTime(event.created_at) : "just now";
-    const initialReplies = Number(event.replies || 0);
-    const initialReposts = Number(event.reposts || 0);
-    const initialLikes = Number(event.likes || 0);
+    const stats = getOrCreateNoteStats(event.id);
+    const initialReplies = Number(event.replies !== undefined ? event.replies : stats.replies);
+    const initialReposts = Number(event.reposts !== undefined ? event.reposts : stats.reposts);
+    const initialLikes = Number(event.likes !== undefined ? event.likes : stats.likes);
+    const initialLiked = Boolean(event.liked || stats.liked);
+    const initialReposted = Boolean(event.reposted || stats.reposted);
 
     const card = html<HTMLDivElement>`
       <div class="pv-note-card note-card" data-note-id="${escapeHtml(event.id || "")}" data-timestamp="${event.created_at || 0}" style="background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); border-radius: var(--omni-radius-sm, 8px); padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease;" title="View thread in Feed">
@@ -3968,12 +4234,12 @@ async function mountProfileViewer(root: HTMLElement) {
             ${ICONS.reply}
             <span class="action-count">${initialReplies > 0 ? initialReplies : ""}</span>
           </button>
-          <button class="feed-action-btn note-action-btn action-repost btn-repost" style="background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.8rem;" title="Repost note">
+          <button class="feed-action-btn note-action-btn action-repost btn-repost ${initialReposted ? "active-reposted" : ""}" style="background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; color: ${initialReposted ? "var(--omni-accent-primary, #d4a373)" : "var(--omni-text-muted, var(--text-muted, #8c909f))"}; font-size: 0.8rem;" title="Repost note">
             ${ICONS.repost}
             <span class="action-count">${initialReposts > 0 ? initialReposts : ""}</span>
           </button>
-          <button class="feed-action-btn note-action-btn action-like btn-like" style="background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.8rem;" title="Like note">
-            <span class="icon-heart-wrap">${ICONS.heartOutline}</span>
+          <button class="feed-action-btn note-action-btn action-like btn-like ${initialLiked ? "active-liked" : ""}" style="background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; color: ${initialLiked ? "#ef4444" : "var(--omni-text-muted, var(--text-muted, #8c909f))"}; font-size: 0.8rem;" title="Like note">
+            <span class="icon-heart-wrap">${initialLiked ? ICONS.heartFilled : ICONS.heartOutline}</span>
             <span class="action-count">${initialLikes > 0 ? initialLikes : ""}</span>
           </button>
           <button class="feed-action-btn note-action-btn action-share btn-share" style="background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; color: var(--omni-text-muted, var(--text-muted, #8c909f)); font-size: 0.8rem;" title="Share & Copy Note ID">
@@ -3992,23 +4258,40 @@ async function mountProfileViewer(root: HTMLElement) {
 
     const btnRepost = card.querySelector<HTMLButtonElement>(".action-repost")!;
     const repostCountSpan = card.querySelector<HTMLElement>(".action-repost .action-count")!;
-    let isReposted = false;
+    let isReposted = initialReposted;
     let currentReposts = initialReposts;
-    btnRepost.addEventListener("click", (e) => {
+    btnRepost.addEventListener("click", async (e) => {
       e.stopPropagation();
       isReposted = !isReposted;
       currentReposts = isReposted ? currentReposts + 1 : Math.max(0, currentReposts - 1);
+      stats.reposted = isReposted;
+      stats.reposts = currentReposts;
       btnRepost.classList.toggle("active-reposted", isReposted);
       btnRepost.style.color = isReposted ? "var(--omni-accent-primary, #d4a373)" : "";
       repostCountSpan.textContent = currentReposts > 0 ? String(currentReposts) : "";
+      if (isReposted) {
+        try {
+          const nostr = (window as any).nostr;
+          if (nostr?.signEvent) {
+            const draft = {
+              kind: 6,
+              content: JSON.stringify(event),
+              tags: [["e", event.id], ["p", event.pubkey || ""]],
+              created_at: Math.floor(Date.now() / 1000)
+            };
+            const signed = await nostr.signEvent(draft);
+            sendWs(["EVENT", signed]);
+          }
+        } catch (_) {}
+      }
     });
 
     const btnLike = card.querySelector<HTMLButtonElement>(".action-like")!;
     const heartWrap = card.querySelector<HTMLElement>(".icon-heart-wrap")!;
     const likeCountSpan = card.querySelector<HTMLElement>(".action-like .action-count")!;
-    let isLiked = false;
+    let isLiked = initialLiked;
     let currentLikes = initialLikes;
-    btnLike.addEventListener("click", (e) => {
+    btnLike.addEventListener("click", async (e) => {
       e.stopPropagation();
       isLiked = !isLiked;
       if (isLiked) {
@@ -4022,7 +4305,24 @@ async function mountProfileViewer(root: HTMLElement) {
         btnLike.classList.remove("active-liked");
         btnLike.style.color = "";
       }
+      stats.liked = isLiked;
+      stats.likes = currentLikes;
       likeCountSpan.textContent = currentLikes > 0 ? String(currentLikes) : "";
+      if (isLiked) {
+        try {
+          const nostr = (window as any).nostr;
+          if (nostr?.signEvent) {
+            const draft = {
+              kind: 7,
+              content: "+",
+              tags: [["e", event.id], ["p", event.pubkey || ""]],
+              created_at: Math.floor(Date.now() / 1000)
+            };
+            const signed = await nostr.signEvent(draft);
+            sendWs(["EVENT", signed]);
+          }
+        } catch (_) {}
+      }
     });
 
     const btnShare = card.querySelector<HTMLButtonElement>(".action-share")!;
@@ -4062,6 +4362,9 @@ async function mountProfileViewer(root: HTMLElement) {
   }
 
   function insertNoteCard(listEl: HTMLElement, event: any) {
+    if (event?.id) {
+      scheduleDomInteractionsFetch(event.id);
+    }
     const card = renderNoteCard(event);
     card.setAttribute("data-timestamp", String(event.created_at || 0));
     const ts = event.created_at || 0;
@@ -4219,6 +4522,7 @@ async function mountProfileViewer(root: HTMLElement) {
   function loadMyProfile(pubkey: string) {
     if (!pubkey) return;
     myPubkey = pubkey;
+    domMyPubkey = pubkey;
     if (!activeUserPubkey) {
       activePubkey = pubkey;
     }
@@ -4407,6 +4711,7 @@ async function mountProfileViewer(root: HTMLElement) {
   function initUserSocialGraph(pk: string) {
     if (!pk) return;
     myPubkey = pk;
+    domMyPubkey = pk;
 
     // 1. Immediately populate from local cache (0ms hit)
     loadCachedSocialGraph(pk);

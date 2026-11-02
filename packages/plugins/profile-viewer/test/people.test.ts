@@ -624,4 +624,66 @@ describe("People plugin (profile, follows, mutes)", () => {
     expect(actionsWrap.style.flexWrap).toBe("wrap");
     expect(actionsWrap.style.justifyContent).toBe("flex-end");
   });
+
+  it("fetches and renders reply, like, and repost counts for user notes in DOM mode", async () => {
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+    const notesReq = ws.sent.find((m: any[]) => m[0] === "REQ" && String(m[1]).startsWith("pv_my_notes_"));
+    const subId = notesReq ? notesReq[1] : undefined;
+    const noteId = "note-abc-123";
+
+    // Deliver note for my profile
+    ws.deliver(["EVENT", subId, {
+      id: noteId,
+      pubkey: myPubkey,
+      kind: 1,
+      created_at: 1700000000,
+      tags: [],
+      content: "Hello world from profile!"
+    }]);
+    await new Promise((r) => setTimeout(r, 150));
+
+    // Verify interaction request was dispatched
+    const reactReq = ws.sent.find((f: any[]) => f[0] === "REQ" && f[2]?.["#e"]?.includes(noteId));
+    expect(reactReq).toBeDefined();
+    expect(reactReq[2].kinds).toEqual([1, 6, 7]);
+
+    // Deliver reaction (kind 7), reply (kind 1), and repost (kind 6)
+    ws.deliver(["EVENT", reactReq[1], {
+      id: "like-1",
+      pubkey: friendPubkey,
+      kind: 7,
+      created_at: 1700000010,
+      tags: [["e", noteId]],
+      content: "+"
+    }]);
+    ws.deliver(["EVENT", reactReq[1], {
+      id: "reply-1",
+      pubkey: friendPubkey,
+      kind: 1,
+      created_at: 1700000020,
+      tags: [["e", noteId]],
+      content: "Great post!"
+    }]);
+    ws.deliver(["EVENT", reactReq[1], {
+      id: "repost-1",
+      pubkey: friendPubkey,
+      kind: 6,
+      created_at: 1700000030,
+      tags: [["e", noteId]],
+      content: ""
+    }]);
+    await flush();
+
+    const noteCard = peopleRoot().querySelector(`.pv-note-card[data-note-id="${noteId}"]`)!;
+    expect(noteCard).toBeDefined();
+
+    const likeCount = noteCard.querySelector(".action-like .action-count")!.textContent;
+    const replyCount = noteCard.querySelector(".action-reply .action-count")!.textContent;
+    const repostCount = noteCard.querySelector(".action-repost .action-count")!.textContent;
+
+    expect(likeCount).toBe("1");
+    expect(replyCount).toBe("1");
+    expect(repostCount).toBe("1");
+  });
 });
