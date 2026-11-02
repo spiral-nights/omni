@@ -484,7 +484,7 @@ body {
 .btn-do-search {
   background: var(--omni-accent, #d4a373);
   border: none;
-  color: #141312;
+  color: var(--omni-accent-contrast, #141312);
   font-size: 0.78rem;
   font-weight: 600;
   padding: 8px 16px;

@@ -362,13 +362,14 @@ omni-icon {
 omni-button {
   display: inline-block;
 }
-.omni-button {
+.omni-button,
+.omni-button[variant="primary"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   background: var(--omni-accent-primary, #d4a373);
-  color: #141312;
+  color: var(--omni-accent-contrast, var(--accent-contrast, #ffffff));
   border: none;
   border-radius: var(--omni-radius-sm, 6px);
   padding: 7px 14px;
@@ -377,6 +378,18 @@ omni-button {
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s ease, transform 0.1s ease;
+}
+.omni-button svg {
+  color: inherit;
+  fill: currentColor;
+}
+.omni-button[size="sm"] {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+}
+.omni-button[size="lg"] {
+  padding: 10px 18px;
+  font-size: 0.95rem;
 }
 .omni-button:hover:not(:disabled) {
   opacity: 0.9;

@@ -6,6 +6,7 @@ import { OmniKernel } from "@omni/core";
 import {
   EditorialShell,
   EDITORIAL_ACCENTS,
+  getContrastColor,
   STORAGE_KEY_EDITORIAL_MODE,
   STORAGE_KEY_EDITORIAL_ACCENT_ID
 } from "../src/editorial-shell.js";
@@ -252,6 +253,37 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(localStorage.getItem(STORAGE_KEY_EDITORIAL_ACCENT_ID)).toBe("custom");
       expect(root.style.getPropertyValue("--omni-accent-primary")).toBe("#e11d48");
       expect(root.querySelector("#editorial-active-accent-name")?.textContent).toBe("Custom");
+    });
+
+    it("dynamically computes high-contrast text color (white for dark accents, dark for light accents)", () => {
+      shell.mount();
+
+      // 1. Dark colors should produce white contrast text (#ffffff)
+      shell.setAccent("custom", "#1e40af"); // Dark cobalt
+      expect(root.style.getPropertyValue("--omni-accent-contrast")).toBe("#ffffff");
+      expect(root.style.getPropertyValue("--accent-contrast")).toBe("#ffffff");
+      expect(document.documentElement.style.getPropertyValue("--omni-accent-contrast")).toBe("#ffffff");
+
+      shell.setAccent("custom", "#000000"); // Pure black
+      expect(root.style.getPropertyValue("--omni-accent-contrast")).toBe("#ffffff");
+
+      shell.setAccent("custom", "#15803d"); // Forest pine
+      expect(root.style.getPropertyValue("--omni-accent-contrast")).toBe("#ffffff");
+
+      // 2. Light colors should produce dark contrast text (#141312)
+      shell.setAccent("custom", "#ffff00"); // Bright yellow
+      expect(root.style.getPropertyValue("--omni-accent-contrast")).toBe("#141312");
+      expect(root.style.getPropertyValue("--accent-contrast")).toBe("#141312");
+      expect(document.documentElement.style.getPropertyValue("--omni-accent-contrast")).toBe("#141312");
+
+      shell.setAccent("custom", "#ffffff"); // Pure white
+      expect(root.style.getPropertyValue("--omni-accent-contrast")).toBe("#141312");
+
+      // 3. getContrastColor unit tests
+      expect(getContrastColor("#1e40af")).toBe("#ffffff");
+      expect(getContrastColor("#112233")).toBe("#ffffff");
+      expect(getContrastColor("#ffffff")).toBe("#141312");
+      expect(getContrastColor("#fef08a")).toBe("#141312");
     });
   });
 

@@ -11,6 +11,7 @@ import { mountShellStyles, unmountShellStyles } from "./styles/loader.js";
 import { PANORAMA_SHELL_CSS } from "./styles/panorama-styles.js";
 import { shellRegistry } from "./shell-registry.js";
 import { CURATED_APPS } from "./app-store-catalog.js";
+import { getContrastColor } from "./editorial-shell.js";
 
 export type PanoramaPivot = "feed" | "apps" | "widgets" | "system" | string;
 
@@ -3001,16 +3002,19 @@ export class PanoramaShell extends BaseShell {
     }
 
     const hoverColor = adjustColorBrightness(this.currentAccentColor, -15);
+    const contrastColor = getContrastColor(this.currentAccentColor);
     const properties: Array<[string, string]> = [
       ["--omni-accent-primary", this.currentAccentColor],
       ["--omni-accent-hover", hoverColor],
       ["--omni-accent", this.currentAccentColor],
+      ["--omni-accent-contrast", contrastColor],
       ["--omni-border-focus", this.currentAccentColor],
       ["--omni-status-online", this.currentAccentColor],
       ["--omni-status-badge", this.currentAccentColor],
       ["--accent-primary", this.currentAccentColor],
       ["--accent-hover", hoverColor],
       ["--accent", this.currentAccentColor],
+      ["--accent-contrast", contrastColor],
       ["--status-online", this.currentAccentColor],
       ["--status-badge", this.currentAccentColor],
       ["--border-focus", this.currentAccentColor]

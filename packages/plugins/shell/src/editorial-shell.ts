@@ -32,6 +32,47 @@ export const EDITORIAL_ACCENTS: EditorialAccentPreset[] = [
   { id: "bone", name: "Monochrome Bone", lightColor: "#475569", darkColor: "#e5e1e4" }
 ];
 
+/**
+ * Calculates accessible contrast color (#ffffff or #141312) based on background perceived luminance (YIQ).
+ * If background is dark (YIQ < 150), returns white (#ffffff).
+ * If background is light (YIQ >= 150), returns dark (#141312).
+ */
+export function getContrastColor(color: string): string {
+  if (!color) return "#ffffff";
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  const hexMatch = color.trim().match(/^#?([0-9a-f]{3,8})$/i);
+  if (hexMatch) {
+    let hex = hexMatch[1];
+    if (hex.length === 3 || hex.length === 4) {
+      hex = hex.split("").slice(0, 3).map((c) => c + c).join("");
+    } else if (hex.length >= 6) {
+      hex = hex.slice(0, 6);
+    }
+    r = parseInt(hex.slice(0, 2), 16);
+    g = parseInt(hex.slice(2, 4), 16);
+    b = parseInt(hex.slice(4, 6), 16);
+  } else {
+    const rgbMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+    if (rgbMatch) {
+      r = parseInt(rgbMatch[1], 10);
+      g = parseInt(rgbMatch[2], 10);
+      b = parseInt(rgbMatch[3], 10);
+    } else {
+      return "#ffffff";
+    }
+  }
+
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+    return "#ffffff";
+  }
+
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 150 ? "#141312" : "#ffffff";
+}
+
 export const STORAGE_KEY_EDITORIAL_MODE = "omni_editorial_theme_mode";
 export const STORAGE_KEY_EDITORIAL_ACCENT_ID = "omni_editorial_accent_id";
 export const STORAGE_KEY_EDITORIAL_ACCENT_COLOR = "omni_editorial_accent_color";
@@ -562,12 +603,12 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       colorToApply = isDark ? preset.darkColor : preset.lightColor;
     }
 
-    const isLightText = isDark && (accentId === "saffron" || accentId === "bone" || colorToApply.toLowerCase() === "#e5e1e4" || colorToApply.toLowerCase() === "#f59e0b" || colorToApply.toLowerCase() === "#e8a838");
-    const contrastColor = isLightText ? "#141312" : "#ffffff";
+    const contrastColor = getContrastColor(colorToApply);
 
     this.root.style.setProperty("--omni-accent-primary", colorToApply);
     this.root.style.setProperty("--accent-primary", colorToApply);
     this.root.style.setProperty("--omni-accent-contrast", contrastColor);
+    this.root.style.setProperty("--accent-contrast", contrastColor);
     this.root.style.setProperty("--omni-border-focus", colorToApply);
     this.root.style.setProperty("--omni-status-online", colorToApply);
     this.root.style.setProperty("--omni-status-badge", colorToApply);
@@ -575,6 +616,12 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     if (typeof document !== "undefined") {
       document.documentElement.style.setProperty("--omni-accent-primary", colorToApply);
       document.documentElement.style.setProperty("--accent-primary", colorToApply);
+      document.documentElement.style.setProperty("--omni-accent-contrast", contrastColor);
+      document.documentElement.style.setProperty("--accent-contrast", contrastColor);
+      if (document.body) {
+        document.body.style.setProperty("--omni-accent-contrast", contrastColor);
+        document.body.style.setProperty("--accent-contrast", contrastColor);
+      }
     }
     this.kernel?.syncThemeToSandboxes?.();
   }
@@ -601,7 +648,9 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       if (preset) {
         const circle = item.querySelector(".editorial-swatch-circle") as HTMLElement | null;
         if (circle) {
-          circle.style.backgroundColor = isDark ? preset.darkColor : preset.lightColor;
+          const swatchBg = isDark ? preset.darkColor : preset.lightColor;
+          circle.style.backgroundColor = swatchBg;
+          circle.style.color = getContrastColor(swatchBg);
         }
       }
       if (sid === currentId) {
