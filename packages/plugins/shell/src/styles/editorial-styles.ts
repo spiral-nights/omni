@@ -628,6 +628,9 @@ style, script, head, title, meta, link,
 }
 
 @media (max-width: 600px) {
+  .editorial-app-container {
+    padding: 10px 8px 24px !important;
+  }
   .editorial-back-to-top {
     bottom: calc(68px + env(safe-area-inset-bottom, 0px));
     right: 16px;

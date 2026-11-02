@@ -371,9 +371,9 @@ export function getProfileSchema(
   const targetUser = extraState?.targetUser || schemaTargetUser || {};
 
   const tabs: OmniTabItem[] = [
-    { id: "my-profile", label: "My Profile", icon: "user" },
-    { id: "edit", label: "Edit Metadata", icon: "edit" },
-    { id: "keys", label: "Key Custody", icon: "key" },
+    { id: "my-profile", label: "Profile", icon: "user" },
+    { id: "edit", label: "Edit", icon: "edit" },
+    { id: "keys", label: "Keys", icon: "key" },
     { id: "following", label: "Following", icon: "users", badge: followsCount }
   ];
   if (isViewingOtherUser) {
@@ -2016,16 +2016,24 @@ html, body {
 }
 
 @media (max-width: 600px) {
+  .profile-viewer-container {
+    padding: 8px 6px 40px !important;
+  }
   .people-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
     gap: 8px !important;
   }
   .people-header-left {
     width: 100% !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
     gap: 8px !important;
   }
   .people-tabs {
     width: 100% !important;
     max-width: 100% !important;
+    min-width: 0 !important;
     display: flex !important;
     overflow-x: auto !important;
     white-space: nowrap !important;
@@ -2035,39 +2043,47 @@ html, body {
     box-sizing: border-box !important;
   }
   .people-tab-btn {
-    padding: 5px 8px !important;
-    font-size: 0.65rem !important;
+    padding: 6px 10px !important;
+    font-size: 0.7rem !important;
     flex-shrink: 0 !important;
   }
   .btn-toggle-lookup {
-    padding: 5px 10px !important;
-    font-size: 0.65rem !important;
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 6px 12px !important;
+    font-size: 0.7rem !important;
   }
   .pv-info-section {
-    padding: 14px 10px !important;
+    padding: 12px 10px !important;
   }
   .pv-avatar-actions-header {
     gap: 8px !important;
+    flex-wrap: wrap !important;
+    width: 100% !important;
   }
   .pv-action-buttons {
     gap: 6px !important;
     justify-content: flex-end !important;
     max-width: 100% !important;
+    flex-wrap: wrap !important;
   }
   .btn-follow-toggle,
   .pv-btn-follow {
-    padding: 6px 10px !important;
-    font-size: 0.68rem !important;
+    padding: 6px 12px !important;
+    font-size: 0.72rem !important;
+    white-space: nowrap !important;
   }
   .btn-block-toggle,
   .pv-btn-block {
-    padding: 6px 10px !important;
-    font-size: 0.68rem !important;
+    padding: 6px 12px !important;
+    font-size: 0.72rem !important;
+    white-space: nowrap !important;
   }
   .pv-btn-refresh,
   .pv-btn-my-sync {
-    padding: 6px 8px !important;
-    font-size: 0.68rem !important;
+    padding: 6px 10px !important;
+    font-size: 0.72rem !important;
+    white-space: nowrap !important;
   }
 }
 `;

@@ -584,16 +584,33 @@ omni-select {
 }
 
 /* Tabs */
-omni-tabs {
+omni-tabs,
+.omni-tabs-wrapper {
   display: flex;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .omni-tabs-nav {
   display: flex;
+  align-items: center;
   gap: 8px;
   border-bottom: 1px solid var(--omni-border-subtle, #272522);
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding-bottom: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  box-sizing: border-box;
+}
+.omni-tabs-nav::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 .omni-tab-btn {
   display: inline-flex;
@@ -609,6 +626,8 @@ omni-tabs {
   color: var(--omni-text-secondary, #9e988f);
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .omni-tab-btn:hover {
   color: var(--omni-text-primary, #ede8df);
@@ -624,6 +643,27 @@ omni-tabs {
   border-radius: 9999px;
   background: var(--omni-bg-surface, #191816);
   color: var(--omni-text-muted, #78716c);
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .omni-tabs-nav {
+    gap: 4px;
+    padding-bottom: 2px;
+  }
+  .omni-tab-btn {
+    padding: 6px 8px;
+    font-size: 0.78rem;
+    gap: 4px;
+  }
+  .omni-tab-btn .omni-tab-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+  .omni-tab-badge {
+    padding: 1px 5px;
+    font-size: 0.65rem;
+  }
 }
 
 /* Status Indicator */
