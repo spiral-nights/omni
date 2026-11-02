@@ -11,6 +11,7 @@ import { mountShellStyles, unmountShellStyles } from "./styles/loader.js";
 import { EDITORIAL_SHELL_CSS } from "./styles/editorial-styles.js";
 import { shellRegistry } from "./shell-registry.js";
 import {
+  renderGeneralPermissionsSection,
   renderNostrWritePermissionsSection,
   renderHandledIntentsSection
 } from "./permissions-intents-ui.js";
@@ -2049,11 +2050,15 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       relayTitle.textContent = "Relay Access";
 
       const allRelays = this.kernel.relayPool.getAllRelays().map((r) => r.url);
+      const isLocalOnly = Array.isArray(plugin.relays) && plugin.relays.length === 0;
       const isCustomRelays = Array.isArray(plugin.relays) && plugin.relays.length > 0;
+      const isAllRelays = !isLocalOnly && !isCustomRelays;
 
       const relayModePill = document.createElement("span");
       relayModePill.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.65rem; padding: 1px 6px; background: var(--omni-bg-elevated); color: var(--omni-accent-primary); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
-      relayModePill.textContent = isCustomRelays
+      relayModePill.textContent = isLocalOnly
+        ? "Local Only (No Relays)"
+        : isCustomRelays
         ? `Custom (${plugin.relays!.length} relay${plugin.relays!.length === 1 ? "" : "s"})`
         : "All Relays (Default)";
 
@@ -2063,22 +2068,24 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
       const relayDesc = document.createElement("p");
       relayDesc.style.cssText = "font-family: var(--omni-font-sans); font-size: 0.75rem; color: var(--omni-text-muted); margin: 0; line-height: 1.35;";
-      relayDesc.textContent = "Restrict this plugin to specific relays, or allow it to use all configured relays.";
+      relayDesc.textContent = "Restrict this plugin to specific relays, allow all configured relays, or run in offline local-only mode.";
       relayAccessBox.appendChild(relayDesc);
 
       const relayOptionsWrap = document.createElement("div");
       relayOptionsWrap.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 4px;";
 
+      // Option 1: All Relays
       const radAllLabel = document.createElement("label");
       radAllLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-primary); cursor: pointer;";
       const radAll = document.createElement("input");
       radAll.type = "radio";
       radAll.name = `editorial-relay-scope-${safeId}`;
-      radAll.checked = !isCustomRelays;
+      radAll.checked = isAllRelays;
       radAllLabel.appendChild(radAll);
       radAllLabel.appendChild(document.createTextNode("All Configured Relays (Default)"));
       relayOptionsWrap.appendChild(radAllLabel);
 
+      // Option 2: Custom Relays
       const radCustomLabel = document.createElement("label");
       radCustomLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-primary); cursor: pointer;";
       const radCustom = document.createElement("input");
@@ -2092,7 +2099,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       const customCheckboxesContainer = document.createElement("div");
       customCheckboxesContainer.style.cssText = `display: ${isCustomRelays ? "flex" : "none"}; flex-direction: column; gap: 5px; margin-left: 20px; padding-top: 4px;`;
 
-      const selectedCustomRelays = new Set<string>(plugin.relays || []);
+      const selectedCustomRelays = new Set<string>(plugin.relays && plugin.relays.length > 0 ? plugin.relays : []);
 
       for (const rUrl of allRelays) {
         const cbLabel = document.createElement("label");
@@ -2119,6 +2126,28 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         customCheckboxesContainer.appendChild(cbLabel);
       }
 
+      // Option 3: Local Only / Offline
+      const radLocalLabel = document.createElement("label");
+      radLocalLabel.style.cssText = "display: flex; align-items: flex-start; gap: 6px; font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-primary); cursor: pointer;";
+      const radLocal = document.createElement("input");
+      radLocal.type = "radio";
+      radLocal.name = `editorial-relay-scope-${safeId}`;
+      radLocal.checked = isLocalOnly;
+      radLocal.style.marginTop = "3px";
+      const radLocalTextWrap = document.createElement("div");
+      radLocalTextWrap.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+      const radLocalTitle = document.createElement("span");
+      radLocalTitle.style.fontWeight = "600";
+      radLocalTitle.textContent = "Local Only / Offline (Disable All Relays)";
+      const radLocalDesc = document.createElement("span");
+      radLocalDesc.style.cssText = "font-size: 0.7rem; color: var(--omni-text-muted); line-height: 1.3;";
+      radLocalDesc.textContent = "Disconnects this plugin from the network. Notes and state will only be saved and loaded from local browser storage / IndexedDB.";
+      radLocalTextWrap.appendChild(radLocalTitle);
+      radLocalTextWrap.appendChild(radLocalDesc);
+      radLocalLabel.appendChild(radLocal);
+      radLocalLabel.appendChild(radLocalTextWrap);
+      relayOptionsWrap.appendChild(radLocalLabel);
+
       radAll.addEventListener("change", async () => {
         if (radAll.checked) {
           customCheckboxesContainer.style.display = "none";
@@ -2144,92 +2173,27 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         }
       });
 
+      radLocal.addEventListener("change", async () => {
+        if (radLocal.checked) {
+          customCheckboxesContainer.style.display = "none";
+          plugin.relays = [];
+          relayModePill.textContent = "Local Only (No Relays)";
+          this.saveLocalWorkspace();
+          await this.remountPlugin(plugin);
+        }
+      });
+
       relayOptionsWrap.appendChild(customCheckboxesContainer);
       relayAccessBox.appendChild(relayOptionsWrap);
       detailsContainer.appendChild(relayAccessBox);
 
       // 4. Permissions & Capabilities Section
-      const permSection = document.createElement("div");
-      permSection.className = "plugin-permissions-section";
-      permSection.style.cssText = "display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--omni-border-subtle); padding-top: 10px;";
-
-      const permHeader = document.createElement("div");
-      permHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
-
-      const permTitle = document.createElement("span");
-      permTitle.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--omni-text-primary);";
-      permTitle.textContent = "Permissions & Capabilities";
-      permHeader.appendChild(permTitle);
-      permSection.appendChild(permHeader);
-
-      const permList = document.createElement("div");
-      permList.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 4px;";
-
-      const declaredPerms: Array<{ key: string; name: string; desc: string }> = [
-        {
-          key: "system:geolocation",
-          name: "Device Location (GPS)",
-          desc: "Allow this app to access your device GPS coordinates for local weather and location features"
-        },
-        {
-          key: "nostr:read",
-          name: "Nostr Subscriptions (Read)",
-          desc: "Subscribe to public notes, profiles, and live timeline streams"
-        }
-      ];
-
-      if (
-        synthManifest.permissions?.relays ||
-        this.kernel.getPluginPermission(plugin.id, "relays:manage") ||
-        plugin.id === "org.omni.plugin.relays"
-      ) {
-        declaredPerms.push({
-          key: "relays:manage",
-          name: "Relay Management (relays:manage)",
-          desc: "Add, remove, and monitor connected WebSocket relays in the host relay pool"
-        });
-      }
-
-      for (const perm of declaredPerms) {
-        const row = document.createElement("div");
-        row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 8px 10px;";
-
-        const info = document.createElement("div");
-        info.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
-
-        const pName = document.createElement("strong");
-        pName.style.cssText = "font-size: 0.78rem; font-weight: 600; color: var(--omni-text-primary);";
-        pName.textContent = perm.name;
-
-        const pDesc = document.createElement("span");
-        pDesc.style.cssText = "font-size: 0.7rem; color: var(--omni-text-muted); line-height: 1.3;";
-        pDesc.textContent = perm.desc;
-
-        info.appendChild(pName);
-        info.appendChild(pDesc);
-
-        const toggle = document.createElement("label");
-        toggle.className = "omni-toggle";
-
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.checked = this.kernel.getPluginPermission(plugin.id, perm.key);
-        input.addEventListener("change", () => {
-          this.kernel.setPluginPermission(plugin.id, perm.key, input.checked);
-        });
-
-        const slider = document.createElement("span");
-        slider.className = "toggle-slider";
-
-        toggle.appendChild(input);
-        toggle.appendChild(slider);
-
-        row.appendChild(info);
-        row.appendChild(toggle);
-        permList.appendChild(row);
-      }
-
-      permSection.appendChild(permList);
+      const permSection = renderGeneralPermissionsSection({
+        kernel: this.kernel,
+        plugin,
+        theme: "classic",
+        onUpdate: () => this.saveLocalWorkspace()
+      });
 
       // Collapsible Nostr Write Permissions
       const writeSection = renderNostrWritePermissionsSection({

@@ -31,7 +31,7 @@ export interface InstalledPluginEntry {
   sourceUrl: string;
   enabled: boolean;
   pinned?: boolean;
-  relays?: string[]; // Custom relay URLs allowed for this plugin. If undefined or empty, uses all configured relays.
+  relays?: string[]; // Custom relay URLs allowed for this plugin. If undefined, uses all configured relays. If empty ([]), disables all relays (offline / local-only).
   handledIntents?: string[]; // Intents this plugin can handle
   disabledIntents?: string[]; // Intents user explicitly turned off for this plugin
   naddr?: string;
@@ -791,7 +791,7 @@ export abstract class BaseShell implements OmniShellHost {
           route: p.route,
           viewId: p.viewId,
           pinned: p.pinned,
-          relays: Array.isArray(p.relays) && p.relays.length > 0 ? p.relays : [],
+          relays: Array.isArray(p.relays) ? p.relays : undefined,
           handledIntents: p.handledIntents,
           disabledIntents: p.disabledIntents,
           placements,
@@ -1018,7 +1018,7 @@ export abstract class BaseShell implements OmniShellHost {
           }
         }
         if (item.relays !== undefined) {
-          plugin.relays = Array.isArray(item.relays) && item.relays.length > 0 ? item.relays : undefined;
+          plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
         }
         if (item.handledIntents !== undefined) {
           plugin.handledIntents = item.handledIntents;
@@ -1209,7 +1209,7 @@ export abstract class BaseShell implements OmniShellHost {
                 }
               }
               if (item.relays !== undefined) {
-                plugin.relays = Array.isArray(item.relays) && item.relays.length > 0 ? item.relays : undefined;
+                plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
               }
               if (item.placements && Array.isArray(item.placements)) {
                 // Filter out legacy "main" placements and phantom "dock" placements that were converted from main-primary

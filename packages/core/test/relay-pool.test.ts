@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import omniRuntimeScript from "../src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
 import { RelayPool, parseNip65Relays, buildNip65Tags, STORAGE_KEY_CONFIGURED_RELAYS } from "../src/nostr/relay-pool.js";
@@ -294,6 +294,29 @@ describe("Per-Plugin Relay Scoping & Isolation", () => {
     expect(Object.keys(resRestricted.result)).toEqual(["wss://nos.lol"]);
     expect(resRestricted.result["wss://relay.damus.io"]).toBeUndefined();
     expect(resRestricted.result["wss://relay.ditto.pub"]).toBeUndefined();
+
+    // 3. Offline / Local-only plugin (allowedRelays: []) gets zero relays
+    const channelLocal = new MessageChannel();
+    new JsonRpcDispatcher({
+      pluginId: "plugin-local-only",
+      port: channelLocal.port1,
+      aclEngine,
+      relayPool: pool,
+      storageManager: {} as any,
+      intentBroker: {} as any,
+      subscriptionCoordinator: {} as any,
+      keystore: {} as any,
+      eventStore: {} as any,
+      allowedRelays: []
+    });
+
+    const resLocal = await sendRpc(channelLocal.port2, {
+      jsonrpc: "2.0",
+      id: 3,
+      method: "nostr.getRelays"
+    });
+    expect(Object.keys(resLocal.result)).toHaveLength(0);
+    expect(resLocal.result).toEqual({});
   });
 
   it("filters publish targets when targetRelays are specified", async () => {
@@ -390,6 +413,45 @@ describe("Per-Plugin Relay Scoping & Isolation", () => {
     const published = await pool.publish(testEvent);
     expect(published).toContain("wss://write.relay");
     expect(published).not.toContain("wss://read.relay");
+  });
+
+  it("handles offline/local-only targetRelays: [] by publishing to 0 relays and immediate eose", async () => {
+    const pool = new RelayPool({
+      bootstrapRelays: ["wss://relay.damus.io"]
+    });
+    const mockWs: any = { readyState: 1, send: vi.fn() };
+    (pool as any).relays.set("wss://relay.damus.io", mockWs);
+
+    const testEvent = {
+      id: "ev_local",
+      pubkey: "pk1",
+      created_at: 1000,
+      kind: 1,
+      tags: [],
+      content: "Offline post",
+      sig: "sig_local"
+    };
+
+    // 1. Publish with empty targetRelays array
+    const published = await pool.publish(testEvent, []);
+    expect(published).toEqual([]);
+    expect(mockWs.send).not.toHaveBeenCalled();
+
+    // 2. Subscribe with empty targetRelays array
+    let eoseCalled = false;
+    const unsub = pool.subscribe(
+      "sub_local",
+      [{ kinds: [1] }],
+      () => {},
+      () => { eoseCalled = true; },
+      []
+    );
+    expect(typeof unsub).toBe("function");
+    // wait for microtask
+    await new Promise((r) => queueMicrotask(r));
+    expect(eoseCalled).toBe(true);
+    expect(mockWs.send).not.toHaveBeenCalled();
+    unsub();
   });
 });
 

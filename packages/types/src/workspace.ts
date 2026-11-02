@@ -11,7 +11,7 @@ export interface PluginPlacement {
   viewId?: string; // matched view ID
   enabled?: boolean;
   pinned?: boolean; // Whether pinned directly to navigation dock (for main full-page apps)
-  relays?: string[]; // Custom relay URLs allowed for this placement/plugin. If undefined or empty, uses all configured relays.
+  relays?: string[]; // Custom relay URLs allowed for this placement/plugin. If undefined, uses all configured relays. If empty ([]), disables all relays (offline / local-only).
 }
 
 export interface OmniWorkspacePluginConfig {
@@ -28,7 +28,7 @@ export interface OmniWorkspacePluginConfig {
   icon?: string;
   route?: string; // Target route/query (e.g. "?view=widget", "?view=settings", or "")
   viewId?: string; // View identifier (e.g. "main", "widget", "settings")
-  relays?: string[]; // Custom relay URLs allowed for this plugin. If undefined or empty, uses all configured relays.
+  relays?: string[]; // Custom relay URLs allowed for this plugin. If undefined, uses all configured relays. If empty ([]), disables all relays (offline / local-only).
   placements?: PluginPlacement[]; // Multi-viewport placements
   handledIntents?: string[]; // List of intent actions this plugin is enabled to handle
   disabledIntents?: string[]; // Specific intent actions user explicitly disabled for this plugin

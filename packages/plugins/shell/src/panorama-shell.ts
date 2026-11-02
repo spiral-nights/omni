@@ -3,6 +3,7 @@ import { OmniWorkspaceState, OmniWorkspacePluginConfig, PluginPlacement, OMNI_WO
 import { ICONS, icon, IconName, renderPluginIcon } from "./icons.js";
 import { BaseShell, InstalledPluginEntry, OmniShellOptions } from "./base-shell.js";
 import {
+  renderGeneralPermissionsSection,
   renderNostrWritePermissionsSection,
   renderHandledIntentsSection,
   showIntentEnableToast
@@ -1720,11 +1721,15 @@ export class PanoramaShell extends BaseShell {
         relayTitle.textContent = "Relay Access";
 
         const allRelays = this.kernel.relayPool.getAllRelays().map((r) => r.url);
+        const isLocalOnly = Array.isArray(plugin.relays) && plugin.relays.length === 0;
         const isCustomRelays = Array.isArray(plugin.relays) && plugin.relays.length > 0;
+        const isAllRelays = !isLocalOnly && !isCustomRelays;
 
         const relayModePill = document.createElement("span");
         relayModePill.style.cssText = "font-size: 0.68rem; padding: 1px 6px; background: #222; color: #aaa;";
-        relayModePill.textContent = isCustomRelays
+        relayModePill.textContent = isLocalOnly
+          ? "Local Only (No Relays)"
+          : isCustomRelays
           ? `Custom (${plugin.relays!.length} relay${plugin.relays!.length === 1 ? "" : "s"})`
           : "All Relays (Default)";
 
@@ -1734,22 +1739,24 @@ export class PanoramaShell extends BaseShell {
 
         const relayDesc = document.createElement("div");
         relayDesc.style.cssText = "font-size: 0.72rem; color: #888;";
-        relayDesc.textContent = "Restrict this plugin to specific relays, or allow it to use all configured relays.";
+        relayDesc.textContent = "Restrict this plugin to specific relays, allow all configured relays, or run in offline local-only mode.";
         relayAccessBox.appendChild(relayDesc);
 
         const relayOptionsWrap = document.createElement("div");
         relayOptionsWrap.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 2px;";
 
+        // Option 1: All Relays
         const radAllLabel = document.createElement("label");
         radAllLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #fff; cursor: pointer;";
         const radAll = document.createElement("input");
         radAll.type = "radio";
         radAll.name = `panorama-relay-scope-${safeId}`;
-        radAll.checked = !isCustomRelays;
+        radAll.checked = isAllRelays;
         radAllLabel.appendChild(radAll);
         radAllLabel.appendChild(document.createTextNode("All Configured Relays (Default)"));
         relayOptionsWrap.appendChild(radAllLabel);
 
+        // Option 2: Custom Relays
         const radCustomLabel = document.createElement("label");
         radCustomLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #fff; cursor: pointer;";
         const radCustom = document.createElement("input");
@@ -1763,7 +1770,7 @@ export class PanoramaShell extends BaseShell {
         const customCheckboxesContainer = document.createElement("div");
         customCheckboxesContainer.style.cssText = `display: ${isCustomRelays ? "flex" : "none"}; flex-direction: column; gap: 5px; margin-left: 18px; padding-top: 4px;`;
 
-        const selectedCustomRelays = new Set<string>(plugin.relays || []);
+        const selectedCustomRelays = new Set<string>(plugin.relays && plugin.relays.length > 0 ? plugin.relays : []);
 
         for (const rUrl of allRelays) {
           const cbLabel = document.createElement("label");
@@ -1779,6 +1786,7 @@ export class PanoramaShell extends BaseShell {
             }
             plugin.relays = Array.from(selectedCustomRelays);
             relayModePill.textContent = `Custom (${plugin.relays.length} relay${plugin.relays.length === 1 ? "" : "s"})`;
+            this.saveLocalWorkspace();
             await this.remountPlugin(plugin);
           });
           cbLabel.appendChild(cb);
@@ -1789,11 +1797,34 @@ export class PanoramaShell extends BaseShell {
           customCheckboxesContainer.appendChild(cbLabel);
         }
 
+        // Option 3: Local Only / Offline
+        const radLocalLabel = document.createElement("label");
+        radLocalLabel.style.cssText = "display: flex; align-items: flex-start; gap: 6px; font-size: 0.75rem; color: #fff; cursor: pointer;";
+        const radLocal = document.createElement("input");
+        radLocal.type = "radio";
+        radLocal.name = `panorama-relay-scope-${safeId}`;
+        radLocal.checked = isLocalOnly;
+        radLocal.style.marginTop = "2px";
+        const radLocalTextWrap = document.createElement("div");
+        radLocalTextWrap.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+        const radLocalTitle = document.createElement("span");
+        radLocalTitle.style.fontWeight = "600";
+        radLocalTitle.textContent = "Local Only / Offline (Disable All Relays)";
+        const radLocalDesc = document.createElement("span");
+        radLocalDesc.style.cssText = "font-size: 0.68rem; color: #888; line-height: 1.3;";
+        radLocalDesc.textContent = "Disconnects this plugin from the network. Notes and state will only be saved and loaded from local browser storage / IndexedDB.";
+        radLocalTextWrap.appendChild(radLocalTitle);
+        radLocalTextWrap.appendChild(radLocalDesc);
+        radLocalLabel.appendChild(radLocal);
+        radLocalLabel.appendChild(radLocalTextWrap);
+        relayOptionsWrap.appendChild(radLocalLabel);
+
         radAll.addEventListener("change", async () => {
           if (radAll.checked) {
             customCheckboxesContainer.style.display = "none";
             plugin.relays = undefined;
             relayModePill.textContent = "All Relays (Default)";
+            this.saveLocalWorkspace();
             await this.remountPlugin(plugin);
           }
         });
@@ -1808,6 +1839,17 @@ export class PanoramaShell extends BaseShell {
             }
             plugin.relays = Array.from(selectedCustomRelays);
             relayModePill.textContent = `Custom (${plugin.relays.length} relay${plugin.relays.length === 1 ? "" : "s"})`;
+            this.saveLocalWorkspace();
+            await this.remountPlugin(plugin);
+          }
+        });
+
+        radLocal.addEventListener("change", async () => {
+          if (radLocal.checked) {
+            customCheckboxesContainer.style.display = "none";
+            plugin.relays = [];
+            relayModePill.textContent = "Local Only (No Relays)";
+            this.saveLocalWorkspace();
             await this.remountPlugin(plugin);
           }
         });
@@ -1815,6 +1857,15 @@ export class PanoramaShell extends BaseShell {
         relayOptionsWrap.appendChild(customCheckboxesContainer);
         relayAccessBox.appendChild(relayOptionsWrap);
         details.appendChild(relayAccessBox);
+
+        // Section C1: Permissions & Capabilities
+        const permSection = renderGeneralPermissionsSection({
+          kernel: this.kernel,
+          plugin,
+          theme: "panorama",
+          onUpdate: () => this.saveLocalWorkspace()
+        });
+        details.appendChild(permSection);
 
         // Section C2: Nostr Write Permissions (Collapsible Section)
         const writeSection = renderNostrWritePermissionsSection({

@@ -46,6 +46,16 @@ export class SubscriptionCoordinator {
       }
     }
 
+    // If targetRelays is explicitly an empty array (offline / local-only), skip remote relay network calls
+    if (targetRelays !== undefined && targetRelays.length === 0) {
+      if (onEose) {
+        queueMicrotask(() => onEose());
+      }
+      return () => {
+        seenEventIds.clear();
+      };
+    }
+
     // 2. Start Live Multiplexed Relay Subscription with ACL Filtering
     const unsubscribeRelays = this.relayPool.subscribe(
       subId,

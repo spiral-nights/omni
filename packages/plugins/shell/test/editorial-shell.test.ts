@@ -641,6 +641,9 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       const permSection = details?.querySelector(".plugin-permissions-section");
       expect(permSection).toBeTruthy();
       expect(permSection?.textContent).toContain("Device Location (GPS)");
+      expect(permSection?.textContent).toContain("Scoped Storage (KV)");
+      expect(permSection?.textContent).toContain("Intent Dispatch");
+      expect(permSection?.textContent).toContain("Nostr Subscriptions (Read)");
 
       const gpsToggle = Array.from(permSection?.querySelectorAll("input[type=checkbox]") || []).find((input) => {
         const text = input.closest("div")?.textContent || "";
@@ -865,6 +868,18 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       const savedWs = JSON.parse(localStorage.getItem(shell.LOCAL_WORKSPACE_KEY) || "{}");
       const savedFeed = savedWs.plugins?.find((p: any) => p.id === "org.omni.plugin.feed");
       expect(savedFeed.relays).toBeDefined();
+
+      // Select Local Only / Offline radio (radRadios[2])
+      const radLocalBtn = radRadios?.[2] as HTMLInputElement;
+      expect(radLocalBtn).toBeTruthy();
+      radLocalBtn.click();
+      radLocalBtn.dispatchEvent(new Event("change"));
+
+      expect(feedPlugin.relays).toEqual([]);
+      const savedWsAfterLocal = JSON.parse(localStorage.getItem(shell.LOCAL_WORKSPACE_KEY) || "{}");
+      const savedFeedLocal = savedWsAfterLocal.plugins?.find((p: any) => p.id === "org.omni.plugin.feed");
+      expect(savedFeedLocal.relays).toEqual([]);
+      expect(relayBox?.textContent).toContain("Local Only (No Relays)");
     });
 
     it("renders Workspace & Sync tab for NIP-78 synchronization without duplicating relays plugin UI", () => {

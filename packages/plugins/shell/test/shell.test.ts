@@ -1347,9 +1347,30 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       const routeSelect = panoramaRoot.querySelector(".plugin-route-select") as HTMLSelectElement | null;
       expect(routeSelect).toBeTruthy();
 
-      // Verify relay scoping controls
-      const radAll = panoramaRoot.querySelector("input[name='panorama-relay-scope-org-omni-plugin-timer'][type='radio']") as HTMLInputElement | null;
+      // Verify relay scoping controls (3 options: all, custom, local-only)
+      const relayRadios = panoramaRoot.querySelectorAll("input[name='panorama-relay-scope-org-omni-plugin-timer'][type='radio']");
+      expect(relayRadios.length).toBe(3);
+      const radAll = relayRadios[0] as HTMLInputElement;
+      const radCustom = relayRadios[1] as HTMLInputElement;
+      const radLocal = relayRadios[2] as HTMLInputElement;
       expect(radAll).toBeTruthy();
+      expect(radCustom).toBeTruthy();
+      expect(radLocal).toBeTruthy();
+
+      // Test switching to Local Only
+      radLocal.click();
+      radLocal.dispatchEvent(new Event("change"));
+      const timerPluginEntry = panoramaShell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer")!;
+      expect(timerPluginEntry.relays).toEqual([]);
+
+      // Verify permissions & capabilities section
+      const permSection = panoramaRoot.querySelector(".plugin-permissions-section");
+      expect(permSection).toBeTruthy();
+      expect(permSection?.textContent).toContain("Permissions & Capabilities");
+      expect(permSection?.textContent).toContain("Scoped Storage (KV)");
+      expect(permSection?.textContent).toContain("Intent Dispatch");
+      expect(permSection?.textContent).toContain("Device Location (GPS)");
+      expect(permSection?.textContent).toContain("Nostr Subscriptions (Read)");
 
       // Verify inspect button and modal
       const btnInspect = panoramaRoot.querySelector("#btn-inspect-org-omni-plugin-timer") as HTMLButtonElement | null;

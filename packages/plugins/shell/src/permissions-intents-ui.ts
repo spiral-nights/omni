@@ -527,3 +527,141 @@ export function showIntentEnableToast(options: IntentToastOptions): () => void {
 
   return cleanup;
 }
+
+export interface GeneralPermissionsSectionOptions {
+  kernel: OmniKernel;
+  plugin: InstalledPluginEntry;
+  theme?: "classic" | "panorama";
+  onUpdate?: () => void;
+}
+
+/**
+ * Renders a per-plugin Permissions & Capabilities section with toggles for
+ * storage:kv, intents:dispatch, system:geolocation, nostr:read, relays:manage, and identity:manage_keys.
+ */
+export function renderGeneralPermissionsSection(options: GeneralPermissionsSectionOptions): HTMLElement {
+  const { kernel, plugin, theme = "classic", onUpdate } = options;
+  const isPanorama = theme === "panorama";
+
+  const synthManifest = plugin.manifest || {};
+
+  const container = document.createElement("div");
+  container.className = isPanorama
+    ? "panorama-config-section plugin-permissions-section"
+    : "plugin-permissions-section";
+  container.style.cssText = isPanorama
+    ? "display: flex; flex-direction: column; gap: 8px; background: #141414; padding: 10px 12px; border: 1px solid #222;"
+    : "display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--omni-border-subtle); padding-top: 10px;";
+
+  const header = document.createElement("div");
+  header.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
+
+  const title = document.createElement("span");
+  title.style.cssText = isPanorama
+    ? "font-size: 0.78rem; font-weight: 600; color: #fff;"
+    : "font-family: var(--omni-font-mono); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--omni-text-primary);";
+  title.textContent = "Permissions & Capabilities";
+  header.appendChild(title);
+  container.appendChild(header);
+
+  const permList = document.createElement("div");
+  permList.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 4px;";
+
+  const declaredPerms: Array<{ key: string; name: string; desc: string }> = [
+    {
+      key: "storage:kv",
+      name: "Scoped Storage (KV)",
+      desc: `Persistent IndexedDB key-value storage (Quota: ${synthManifest.permissions?.storage?.quotaMb || 5} MB)`
+    },
+    {
+      key: "intents:dispatch",
+      name: "Intent Dispatch",
+      desc: "Allow cross-plugin intent calls, viewing profiles, and opening notes"
+    },
+    {
+      key: "system:geolocation",
+      name: "Device Location (GPS)",
+      desc: "Allow this app to access your device GPS coordinates for local weather and location features"
+    },
+    {
+      key: "nostr:read",
+      name: "Nostr Subscriptions (Read)",
+      desc: "Subscribe to public notes, profiles, and live timeline streams"
+    }
+  ];
+
+  if (
+    synthManifest.permissions?.relays ||
+    kernel.getPluginPermission(plugin.id, "relays:manage") ||
+    plugin.id === "org.omni.plugin.relays" ||
+    plugin.id.includes("relays")
+  ) {
+    declaredPerms.push({
+      key: "relays:manage",
+      name: "Relay Management (relays:manage)",
+      desc: "Add, remove, and monitor connected WebSocket relays in the host relay pool"
+    });
+  }
+
+  if (
+    synthManifest.permissions?.identity ||
+    kernel.getPluginPermission(plugin.id, "identity:manage_keys") ||
+    plugin.id === "org.omni.plugin.profile-viewer" ||
+    plugin.id.includes("profile")
+  ) {
+    declaredPerms.push({
+      key: "identity:manage_keys",
+      name: "Identity & Key Custody",
+      desc: "Manage cryptographic key generation, nsec imports, and profile identity custody"
+    });
+  }
+
+  for (const perm of declaredPerms) {
+    const row = document.createElement("div");
+    row.style.cssText = isPanorama
+      ? "display: flex; justify-content: space-between; align-items: center; background: #1c1c1c; border: 1px solid #2a2a2a; padding: 8px 10px;"
+      : "display: flex; justify-content: space-between; align-items: center; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); padding: 8px 10px;";
+
+    const info = document.createElement("div");
+    info.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+
+    const pName = document.createElement("strong");
+    pName.style.cssText = isPanorama
+      ? "font-size: 0.76rem; font-weight: 600; color: #fff;"
+      : "font-size: 0.78rem; font-weight: 600; color: var(--omni-text-primary);";
+    pName.textContent = perm.name;
+
+    const pDesc = document.createElement("span");
+    pDesc.style.cssText = isPanorama
+      ? "font-size: 0.68rem; color: #888; line-height: 1.3;"
+      : "font-size: 0.7rem; color: var(--omni-text-muted); line-height: 1.3;";
+    pDesc.textContent = perm.desc;
+
+    info.appendChild(pName);
+    info.appendChild(pDesc);
+
+    const toggle = document.createElement("label");
+    toggle.className = "omni-toggle";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = kernel.getPluginPermission(plugin.id, perm.key);
+    input.addEventListener("change", () => {
+      kernel.setPluginPermission(plugin.id, perm.key, input.checked);
+      onUpdate?.();
+    });
+
+    const slider = document.createElement("span");
+    slider.className = "toggle-slider";
+
+    toggle.appendChild(input);
+    toggle.appendChild(slider);
+
+    row.appendChild(info);
+    row.appendChild(toggle);
+    permList.appendChild(row);
+  }
+
+  container.appendChild(permList);
+  return container;
+}

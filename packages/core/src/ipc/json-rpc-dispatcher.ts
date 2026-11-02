@@ -177,7 +177,7 @@ export class JsonRpcDispatcher {
   }
 
   private getAllowedRelays(): string[] | undefined {
-    if (this.ctx.allowedRelays && this.ctx.allowedRelays.length > 0) {
+    if (Array.isArray(this.ctx.allowedRelays)) {
       return this.ctx.allowedRelays;
     }
     return undefined;
@@ -294,7 +294,8 @@ export class JsonRpcDispatcher {
         const signed = await this.ctx.keystore.signEvent(draft);
         await this.ctx.eventStore.saveEvent(signed);
 
-        if (params?.localOnly === true) {
+        const allowedRelays = this.getAllowedRelays();
+        if (params?.localOnly === true || (allowedRelays !== undefined && allowedRelays.length === 0)) {
           return {
             id: signed.id,
             pubkey: signed.pubkey,
@@ -303,7 +304,7 @@ export class JsonRpcDispatcher {
           };
         }
 
-        const acceptedRelays = await this.ctx.relayPool.publish(signed, this.getAllowedRelays());
+        const acceptedRelays = await this.ctx.relayPool.publish(signed, allowedRelays);
 
         return {
           id: signed.id,
@@ -381,6 +382,9 @@ export class JsonRpcDispatcher {
       // 5b. Nostr Get Relays (NIP-07)
       case "nostr.getRelays": {
         const allowed = this.getAllowedRelays();
+        if (allowed !== undefined && allowed.length === 0) {
+          return {};
+        }
         const normalizedAllowed = allowed && allowed.length > 0
           ? new Set(allowed.map((u) => u.trim().replace(/\/+$/, "")))
           : null;

@@ -281,6 +281,9 @@ export class RelayPool {
   }
 
   async publish(event: NostrEvent, targetRelays?: string[]): Promise<string[]> {
+    if (targetRelays !== undefined && targetRelays.length === 0) {
+      return [];
+    }
     const acceptedRelays: string[] = [];
     const message = JSON.stringify(["EVENT", event]);
 
@@ -312,6 +315,12 @@ export class RelayPool {
     onEose?: EoseCallback,
     targetRelays?: string[]
   ): () => void {
+    if (targetRelays !== undefined && targetRelays.length === 0) {
+      if (onEose) {
+        queueMicrotask(() => onEose("local"));
+      }
+      return () => {};
+    }
     const sub: ActiveSubscription = { subId, filters, onEvent, onEose };
     this.subscriptions.set(subId, sub);
 
