@@ -307,7 +307,11 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     const addBtn = timerPane.querySelector(".btn-add-placement") as HTMLButtonElement;
     expect(addBtn).toBeTruthy();
     addBtn.click();
-    await new Promise((r) => setTimeout(r, 60));
+    for (let i = 0; i < 20; i++) {
+      const rows = root.querySelector("#settings-pane-org-omni-plugin-timer")?.querySelectorAll(".plugin-placement-row");
+      if (rows && rows.length === 2) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
 
     // Should now have 2 placement rows
     const updatedTimerPane = root.querySelector("#settings-pane-org-omni-plugin-timer") as HTMLElement;
@@ -322,7 +326,10 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     expect(selects.length).toBe(2);
     selects[1].value = "dock";
     selects[1].dispatchEvent(new Event("change"));
-    await new Promise((r) => setTimeout(r, 60));
+    for (let i = 0; i < 20; i++) {
+      if (timerPlugin.placements?.[1]?.viewport === "dock") break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
 
     expect(timerPlugin.placements?.[1].viewport).toBe("dock");
 
@@ -335,7 +342,11 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
     const removeBtns = updatedTimerPane.querySelectorAll(".btn-remove-placement") as NodeListOf<HTMLButtonElement>;
     expect(removeBtns.length).toBe(2);
     removeBtns[1].click();
-    await new Promise((r) => setTimeout(r, 60));
+    for (let i = 0; i < 20; i++) {
+      const rows = root.querySelector("#settings-pane-org-omni-plugin-timer")?.querySelectorAll(".plugin-placement-row");
+      if (rows && rows.length === 1) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
 
     const timerPaneAfterRemove = root.querySelector("#settings-pane-org-omni-plugin-timer") as HTMLElement;
     const rowsAfterRemove = timerPaneAfterRemove.querySelectorAll(".plugin-placement-row");
@@ -835,7 +846,10 @@ describe("Milestone 4: Decouple Shell UI into @omni/plugin-shell", () => {
       toggleBtn.click();
 
       // Wait for async mount
-      await new Promise((r) => setTimeout(r, 60));
+      for (let i = 0; i < 20; i++) {
+        if (kernel.getPluginSettingsSandbox("org.omni.test.timer2")) break;
+        await new Promise((r) => setTimeout(r, 20));
+      }
       expect(kernel.getPluginSettingsSandbox("org.omni.test.timer2")).toBeTruthy();
       expect(toggleBtn.textContent).toBe("Close Settings");
       expect(mountContainer.style.display).toBe("block");

@@ -910,10 +910,10 @@ export class OmniShell extends BaseShell {
         };
         p.placements = [...currentPlacements, newPl];
         p.viewport = p.placements[0].viewport;
-        await this.remountPlugin(p);
         this.renderDockLaunchers();
         this.renderSettingsNavAndPanes();
         this.switchSettingsTab(p.id);
+        await this.remountPlugin(p);
       });
 
       placementsHeader.appendChild(placementsTitle);
@@ -978,10 +978,10 @@ export class OmniShell extends BaseShell {
           if (primaryComp) {
             this.layoutManager.setComponentSlot(p.id, primaryComp.id, pl.viewport);
           }
-          await this.remountPlugin(p);
           this.renderDockLaunchers();
           this.renderSettingsNavAndPanes();
           this.switchSettingsTab(p.id);
+          await this.remountPlugin(p);
         });
 
         const routeLabel = document.createElement("span");
@@ -1053,10 +1053,10 @@ export class OmniShell extends BaseShell {
             p.viewport = "";
             this.layoutManager.unregisterPlugin(p.id);
           }
-          await this.remountPlugin(p);
           this.renderDockLaunchers();
           this.renderSettingsNavAndPanes();
           this.switchSettingsTab(p.id);
+          await this.remountPlugin(p);
         });
         row.appendChild(btnRemovePl);
 
