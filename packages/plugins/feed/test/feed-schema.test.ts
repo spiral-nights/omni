@@ -262,4 +262,13 @@ describe("Feed Schema UI (Server-Driven Declarative Feed)", () => {
     expect(toggle).toBeDefined();
     expect(toggle?.checked).toBe(false);
   });
+
+  it("formats video URLs as callout links without video previews", async () => {
+    const { formatContent } = await import("../src/format/content.js");
+    const formatted = formatContent("Check this video: https://cdn.ditto.pub/media/fun-video.mp4 and https://cdn.ditto.pub/movie.webm");
+    expect(formatted).toContain("feed-media-callout feed-video-link");
+    expect(formatted).toContain("Video");
+    expect(formatted).toContain("fun-video.mp4");
+    expect(formatted).not.toContain("<video");
+  });
 });

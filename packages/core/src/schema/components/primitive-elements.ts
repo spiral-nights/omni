@@ -302,12 +302,18 @@ function formatTextWithLinks(raw: string, showInlineImages?: boolean): string {
     }
 
     const cleanUrl = url.replace(/^http:\/\//i, "https://");
-    const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(cleanUrl);
+    const isVideo = /\.(mp4|webm|mov|m4v|ogv|ogg|mkv)(\?.*)?$/i.test(cleanUrl);
     const isImage = /\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i.test(cleanUrl);
 
     if (isVideo) {
-      mediaUrls.push({ type: "video", url: cleanUrl });
-      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="feed-link" style="color: var(--omni-accent-primary, #d4a373); text-decoration: underline; text-underline-offset: 3px; word-break: break-all;">${cleanUrl}</a>${trailing}`;
+      let displayLabel = cleanUrl;
+      try {
+        const parsed = new URL(cleanUrl);
+        const name = parsed.pathname.split("/").filter(Boolean).pop() || parsed.hostname;
+        displayLabel = name.length > 28 ? `${name.slice(0, 12)}…${name.slice(-10)}` : name;
+      } catch (_) {}
+
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="feed-media-callout feed-video-link" style="display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; margin: 3px 0; background: var(--omni-bg-surface, #191816); border: 1px solid var(--omni-border-subtle, #33312c); border-radius: var(--omni-radius-sm, 6px); color: var(--omni-accent-primary, #d4a373); text-decoration: none; font-size: 0.85em; font-weight: 500; transition: all 0.15s ease; max-width: 100%; word-break: break-all;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px;">${displayLabel}</span><span class="media-callout-badge" style="font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; background: rgba(212, 163, 115, 0.15); padding: 1px 5px; border-radius: 3px; margin-left: 2px;">Video</span></a>${trailing}`;
     }
 
     if (isImage) {
@@ -335,12 +341,10 @@ function formatTextWithLinks(raw: string, showInlineImages?: boolean): string {
     text = text.replace(`___OMNI_LINK_PLACEHOLDER_${i}___`, placeholders[i]);
   }
 
-  // 5. Append media preview elements if video/image URLs were found
+  // 5. Append media preview elements if image URLs were found and enabled
   if (mediaUrls.length > 0) {
     for (const m of mediaUrls) {
-      if (m.type === "video") {
-        text += `<div class="feed-media-wrap" style="margin-top: 8px;"><video controls playsinline preload="metadata" style="max-width: 100%; border-radius: 6px; display: block; max-height: 480px; background: #000;" src="${m.url}"></video></div>`;
-      } else if (m.type === "image" && inlineImages) {
+      if (m.type === "image" && inlineImages) {
         text += `<div class="feed-media-wrap" style="margin-top: 8px;"><img src="${m.url}" loading="lazy" style="max-width: 100%; border-radius: 6px; display: block; max-height: 480px; object-fit: contain;" /></div>`;
       }
     }

@@ -366,6 +366,26 @@ describe("SchemaRenderer & Custom Web Components", () => {
     expect(imgEl).not.toBeNull();
     expect(imgEl?.getAttribute("src")).toBe("https://blossom.ditto.pub/test-screenshot.png");
 
+    // 3. Video URLs: ALWAYS renders as a callout link and NEVER an inline video element
+    renderer.render({
+      type: "card",
+      children: [
+        {
+          type: "text",
+          content: "Watch clip: https://blossom.ditto.pub/test-video.mp4",
+          variant: "body",
+          showInlineImages: true
+        }
+      ]
+    });
+
+    const videoTextEl = container.querySelector("omni-text");
+    const videoCallout = videoTextEl?.querySelector(".feed-media-callout.feed-video-link");
+    expect(videoCallout).not.toBeNull();
+    expect(videoCallout?.getAttribute("href")).toBe("https://blossom.ditto.pub/test-video.mp4");
+    expect(videoCallout?.textContent).toContain("Video");
+    expect(videoTextEl?.querySelector("video")).toBeNull();
+
     renderer.destroy();
   });
 });

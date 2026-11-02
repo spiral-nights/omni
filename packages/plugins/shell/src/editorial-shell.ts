@@ -16,6 +16,7 @@ import {
   renderHandledIntentsSection
 } from "./permissions-intents-ui.js";
 import { renderRelayScopingSection } from "./relay-scoping-ui.js";
+import { renderPluginPlacementsSection, renderPluginCustomSettingsSection } from "./placements-ui.js";
 
 export type EditorialThemeMode = "light" | "dark" | "system";
 
@@ -1814,227 +1815,37 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       }
 
       // 1. Placements & Viewports Section
-      const placementsBox = document.createElement("div");
-      placementsBox.className = "plugin-placements-section";
-
-      const placementsHeader = document.createElement("div");
-      placementsHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
-
-      const placementsTitle = document.createElement("span");
-      placementsTitle.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--omni-text-primary);";
-      placementsTitle.textContent = "Placements & Viewports";
-      placementsHeader.appendChild(placementsTitle);
-
-      const btnAddPlacement = document.createElement("button");
-      btnAddPlacement.className = "editorial-btn-secondary btn-add-placement";
-      btnAddPlacement.id = `btn-add-placement-${safeId}`;
-      btnAddPlacement.style.cssText = "font-size: 0.68rem; padding: 3px 8px;";
-      btnAddPlacement.textContent = "+ Add Location";
-      btnAddPlacement.addEventListener("click", async () => {
-        this.expandedPluginDetails.add(plugin.id);
-        const currentPlacements = this.getPluginPlacements(plugin);
-        const newPl: PluginPlacement = {
-          id: `placement-${Date.now()}`,
-          viewport: "sidebar",
-          route: pluginViews[0]?.path || "",
-          viewId: pluginViews[0]?.id || "main",
-          enabled: true
-        };
-        plugin.placements = [...currentPlacements, newPl];
-        plugin.viewport = plugin.placements[0].viewport;
-        this.saveLocalWorkspace();
-        await this.remountPlugin(plugin);
-        this.renderPluginSettingsList();
-        this.renderDock();
-        this.renderAppsIndex();
-        this.renderWidgetsView();
-      });
-      placementsHeader.appendChild(btnAddPlacement);
-      placementsBox.appendChild(placementsHeader);
-
-      const placements = this.getPluginPlacements(plugin);
-      if (placements.length === 0) {
-        const emptyPl = document.createElement("div");
-        emptyPl.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.68rem; color: var(--omni-text-muted); font-style: italic;";
-        emptyPl.textContent = "Unassigned — Not currently placed in any viewport.";
-        placementsBox.appendChild(emptyPl);
-      }
-
-      for (let plIdx = 0; plIdx < placements.length; plIdx++) {
-        const pl = placements[plIdx];
-        const row = document.createElement("div");
-        row.className = "plugin-placement-row";
-
-        const rowHeader = document.createElement("div");
-        rowHeader.style.cssText = "display: flex; align-items: center; justify-content: space-between;";
-
-        const plNumber = document.createElement("span");
-        plNumber.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.7rem; font-weight: 700; color: var(--omni-text-primary); text-transform: uppercase;";
-        plNumber.textContent = `Placement #${plIdx + 1}`;
-        rowHeader.appendChild(plNumber);
-
-        const btnRemovePl = document.createElement("button");
-        btnRemovePl.className = "editorial-btn-secondary btn-remove-placement";
-        btnRemovePl.style.cssText = "font-size: 0.65rem; padding: 2px 6px; color: #ff5555; border-color: #552222;";
-        btnRemovePl.textContent = placements.length > 1 ? "Remove" : "Unassign";
-        btnRemovePl.addEventListener("click", async () => {
+      const placementsBox = renderPluginPlacementsSection({
+        plugin,
+        theme: "editorial",
+        viewportOptions,
+        pluginViews,
+        synthManifest,
+        layoutManager: this.layoutManager,
+        getPluginPlacements: (p) => this.getPluginPlacements(p),
+        onUpdate: () => {
           this.expandedPluginDetails.add(plugin.id);
-          plugin.placements = placements.filter((_, idx) => idx !== plIdx);
-          if (plugin.placements.length > 0) {
-            plugin.viewport = plugin.placements[0].viewport;
-          } else {
-            plugin.viewport = "";
-            this.layoutManager?.unregisterPlugin(plugin.id);
-          }
           this.saveLocalWorkspace();
-          await this.remountPlugin(plugin);
+        },
+        onRemount: () => this.remountPlugin(plugin),
+        onRefreshAll: () => {
           this.renderPluginSettingsList();
           this.renderDock();
           this.renderAppsIndex();
           this.renderWidgetsView();
-        });
-        rowHeader.appendChild(btnRemovePl);
-        row.appendChild(rowHeader);
-
-        const fieldsGrid = document.createElement("div");
-        fieldsGrid.className = "plugin-placement-fields";
-
-        // Viewport Column
-        const vpCol = document.createElement("label");
-        vpCol.style.cssText = "display: flex; flex-direction: column; gap: 4px; font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); text-transform: uppercase;";
-        const vpLabel = document.createElement("span");
-        vpLabel.textContent = "Viewport";
-        vpCol.appendChild(vpLabel);
-
-        const vpSelect = document.createElement("select");
-        vpSelect.className = "plugin-viewport-select";
-
-        let hasSelectedVp = false;
-        for (const optDef of viewportOptions) {
-          const opt = document.createElement("option");
-          opt.value = optDef.id;
-          opt.textContent = optDef.label;
-          if (optDef.id === pl.viewport) {
-            opt.selected = true;
-            hasSelectedVp = true;
-          }
-          vpSelect.appendChild(opt);
         }
-        if (!hasSelectedVp) {
-          const placeholder = document.createElement("option");
-          placeholder.value = "";
-          placeholder.textContent = "Select Viewport...";
-          placeholder.disabled = true;
-          placeholder.selected = true;
-          vpSelect.insertBefore(placeholder, vpSelect.firstChild);
-        }
-
-        vpSelect.addEventListener("change", async () => {
-          pl.viewport = vpSelect.value;
-          plugin.viewport = pl.viewport;
-          if (pl.viewport === "dock") {
-            plugin.pinned = true;
-          }
-          const primaryComp = synthManifest.components?.[0];
-          if (primaryComp && this.layoutManager) {
-            this.layoutManager.setComponentSlot(plugin.id, primaryComp.id, pl.viewport);
-          }
-          this.saveLocalWorkspace();
-          await this.remountPlugin(plugin);
-          this.renderDock();
-          this.renderAppsIndex();
-          this.renderWidgetsView();
-        });
-        vpCol.appendChild(vpSelect);
-        fieldsGrid.appendChild(vpCol);
-
-        // Route Column
-        const routeCol = document.createElement("label");
-        routeCol.style.cssText = "display: flex; flex-direction: column; gap: 4px; font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); text-transform: uppercase;";
-        const routeLabel = document.createElement("span");
-        routeLabel.textContent = "View / Route";
-        routeCol.appendChild(routeLabel);
-
-        const routeSelect = document.createElement("select");
-        routeSelect.className = "plugin-route-select";
-
-        for (const v of pluginViews) {
-          const opt = document.createElement("option");
-          opt.value = v.path || "";
-          opt.textContent = `${v.title || v.id} (${v.path || "/"})`;
-          if ((v.path || "") === (pl.route || "")) opt.selected = true;
-          routeSelect.appendChild(opt);
-        }
-
-        routeSelect.addEventListener("change", async () => {
-          pl.route = routeSelect.value;
-          const matchedView = pluginViews.find((v: any) => (v.path || "") === pl.route);
-          if (matchedView) pl.viewId = matchedView.id;
-          this.saveLocalWorkspace();
-          await this.remountPlugin(plugin);
-          this.renderWidgetsView();
-        });
-        routeCol.appendChild(routeSelect);
-        fieldsGrid.appendChild(routeCol);
-
-        row.appendChild(fieldsGrid);
-        placementsBox.appendChild(row);
-      }
+      });
       detailsContainer.appendChild(placementsBox);
 
       // 2. Custom Plugin Settings View (e.g. for Feed filtering)
-      const settingsView = pluginViews.find((v: any) => v.id === "settings" || v.path?.includes("view=settings"));
-      if (settingsView && this.kernel?.mountPluginSettings) {
-        const settingsBox = document.createElement("div");
-        settingsBox.className = "plugin-custom-settings-container";
-
-        const settingsHeader = document.createElement("div");
-        settingsHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
-
-        const settingsTitle = document.createElement("span");
-        settingsTitle.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--omni-text-primary);";
-        settingsTitle.textContent = "Plugin Settings & Rules";
-        settingsHeader.appendChild(settingsTitle);
-
-        const btnToggleSettings = document.createElement("button");
-        btnToggleSettings.className = "editorial-btn-secondary";
-        btnToggleSettings.style.cssText = "font-size: 0.68rem; padding: 3px 8px; color: var(--omni-accent-primary); border-color: var(--omni-accent-primary);";
-        btnToggleSettings.textContent = "Configure Settings";
-
-        const mountContainer = document.createElement("div");
-        mountContainer.style.cssText = "display: none; padding: 10px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); margin-top: 6px;";
-
-        btnToggleSettings.addEventListener("click", async () => {
-          const isCurrentlyOpen = mountContainer.style.display !== "none";
-          if (!isCurrentlyOpen) {
-            mountContainer.style.display = "block";
-            mountContainer.innerHTML = '<div style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-muted);">Loading settings...</div>';
-            try {
-              await this.kernel.mountPluginSettings(
-                plugin.id,
-                synthManifest,
-                plugin.htmlContent || plugin.scriptContent,
-                mountContainer,
-                settingsView.path || "?view=settings",
-                plugin.relays
-              );
-              btnToggleSettings.textContent = "Close Settings";
-            } catch (err: any) {
-              console.error(`Failed to mount settings for ${plugin.id}:`, err);
-              mountContainer.textContent = "Failed to load settings.";
-              btnToggleSettings.textContent = "Configure Settings";
-            }
-          } else {
-            this.kernel.destroyPluginSettings(plugin.id);
-            mountContainer.style.display = "none";
-            mountContainer.innerHTML = "";
-            btnToggleSettings.textContent = "Configure Settings";
-          }
-        });
-
-        settingsHeader.appendChild(btnToggleSettings);
-        settingsBox.appendChild(settingsHeader);
-        settingsBox.appendChild(mountContainer);
+      const settingsBox = renderPluginCustomSettingsSection({
+        kernel: this.kernel,
+        plugin,
+        theme: "editorial",
+        pluginViews,
+        synthManifest
+      });
+      if (settingsBox) {
         detailsContainer.appendChild(settingsBox);
       }
 
