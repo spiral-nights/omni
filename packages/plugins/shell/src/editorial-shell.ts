@@ -15,6 +15,7 @@ import {
   renderNostrWritePermissionsSection,
   renderHandledIntentsSection
 } from "./permissions-intents-ui.js";
+import { renderRelayScopingSection } from "./relay-scoping-ui.js";
 
 export type EditorialThemeMode = "light" | "dark" | "system";
 
@@ -1509,10 +1510,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         el.style.display = areAllExpanded ? "flex" : "none";
       });
       this.root.querySelectorAll<HTMLElement>(".btn-toggle-placements").forEach((btn) => {
-        btn.textContent = areAllExpanded ? "Close Viewports ▴" : "Configure Viewports ▾";
+        btn.textContent = areAllExpanded ? "Done All ▴" : "Configure All ▾";
         btn.classList.toggle("active", areAllExpanded);
       });
-      btnExpandAll.textContent = areAllExpanded ? "Collapse All Viewports" : "Expand All Viewports";
+      btnExpandAll.textContent = areAllExpanded ? "Collapse All" : "Configure All";
     });
   }
 
@@ -1751,7 +1752,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
               Update
             </button>
             <button class="editorial-btn-secondary btn-toggle-placements" id="btn-toggle-placements-${safeId}" style="font-size: 0.68rem; padding: 4px 8px;">
-              Configure Viewports ▾
+              Configure ▾
             </button>
             <button class="editorial-btn-secondary btn-toggle-pin-pref" style="font-size: 0.68rem; padding: 4px 8px;">
               ${isPinned ? "Unpin" : "Pin"}
@@ -1794,19 +1795,19 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
       const togglePlacementsBtn = card.querySelector(`#btn-toggle-placements-${safeId}`) as HTMLElement | null;
       if (togglePlacementsBtn) {
-        togglePlacementsBtn.textContent = isExpanded ? "Close Viewports ▴" : "Configure Viewports ▾";
+        togglePlacementsBtn.textContent = isExpanded ? "Done ▴" : "Configure ▾";
         togglePlacementsBtn.classList.toggle("active", isExpanded);
         togglePlacementsBtn.addEventListener("click", () => {
           const currentlyExpanded = this.expandedPluginDetails.has(plugin.id);
           if (currentlyExpanded) {
             this.expandedPluginDetails.delete(plugin.id);
             detailsContainer.style.display = "none";
-            togglePlacementsBtn.textContent = "Configure Viewports ▾";
+            togglePlacementsBtn.textContent = "Configure ▾";
             togglePlacementsBtn.classList.remove("active");
           } else {
             this.expandedPluginDetails.add(plugin.id);
             detailsContainer.style.display = "flex";
-            togglePlacementsBtn.textContent = "Close Viewports ▴";
+            togglePlacementsBtn.textContent = "Done ▴";
             togglePlacementsBtn.classList.add("active");
           }
         });
@@ -2038,153 +2039,13 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       }
 
       // 3. Relay Access Scoping Section
-      const relayAccessBox = document.createElement("div");
-      relayAccessBox.className = "plugin-relay-access-box";
-      relayAccessBox.style.cssText = "display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--omni-border-subtle); padding-top: 10px;";
-
-      const relayHeader = document.createElement("div");
-      relayHeader.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
-
-      const relayTitle = document.createElement("span");
-      relayTitle.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--omni-text-primary);";
-      relayTitle.textContent = "Relay Access";
-
-      const allRelays = this.kernel.relayPool.getAllRelays().map((r) => r.url);
-      const isLocalOnly = Array.isArray(plugin.relays) && plugin.relays.length === 0;
-      const isCustomRelays = Array.isArray(plugin.relays) && plugin.relays.length > 0;
-      const isAllRelays = !isLocalOnly && !isCustomRelays;
-
-      const relayModePill = document.createElement("span");
-      relayModePill.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.65rem; padding: 1px 6px; background: var(--omni-bg-elevated); color: var(--omni-accent-primary); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm);";
-      relayModePill.textContent = isLocalOnly
-        ? "Local Only (No Relays)"
-        : isCustomRelays
-        ? `Custom (${plugin.relays!.length} relay${plugin.relays!.length === 1 ? "" : "s"})`
-        : "All Relays (Default)";
-
-      relayHeader.appendChild(relayTitle);
-      relayHeader.appendChild(relayModePill);
-      relayAccessBox.appendChild(relayHeader);
-
-      const relayDesc = document.createElement("p");
-      relayDesc.style.cssText = "font-family: var(--omni-font-sans); font-size: 0.75rem; color: var(--omni-text-muted); margin: 0; line-height: 1.35;";
-      relayDesc.textContent = "Restrict this plugin to specific relays, allow all configured relays, or run in offline local-only mode.";
-      relayAccessBox.appendChild(relayDesc);
-
-      const relayOptionsWrap = document.createElement("div");
-      relayOptionsWrap.style.cssText = "display: flex; flex-direction: column; gap: 6px; margin-top: 4px;";
-
-      // Option 1: All Relays
-      const radAllLabel = document.createElement("label");
-      radAllLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-primary); cursor: pointer;";
-      const radAll = document.createElement("input");
-      radAll.type = "radio";
-      radAll.name = `editorial-relay-scope-${safeId}`;
-      radAll.checked = isAllRelays;
-      radAllLabel.appendChild(radAll);
-      radAllLabel.appendChild(document.createTextNode("All Configured Relays (Default)"));
-      relayOptionsWrap.appendChild(radAllLabel);
-
-      // Option 2: Custom Relays
-      const radCustomLabel = document.createElement("label");
-      radCustomLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-primary); cursor: pointer;";
-      const radCustom = document.createElement("input");
-      radCustom.type = "radio";
-      radCustom.name = `editorial-relay-scope-${safeId}`;
-      radCustom.checked = isCustomRelays;
-      radCustomLabel.appendChild(radCustom);
-      radCustomLabel.appendChild(document.createTextNode("Custom Relays"));
-      relayOptionsWrap.appendChild(radCustomLabel);
-
-      const customCheckboxesContainer = document.createElement("div");
-      customCheckboxesContainer.style.cssText = `display: ${isCustomRelays ? "flex" : "none"}; flex-direction: column; gap: 5px; margin-left: 20px; padding-top: 4px;`;
-
-      const selectedCustomRelays = new Set<string>(plugin.relays && plugin.relays.length > 0 ? plugin.relays : []);
-
-      for (const rUrl of allRelays) {
-        const cbLabel = document.createElement("label");
-        cbLabel.style.cssText = "display: flex; align-items: center; gap: 6px; font-family: var(--omni-font-sans); font-size: 0.75rem; color: var(--omni-text-secondary); cursor: pointer;";
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = selectedCustomRelays.has(rUrl);
-        cb.addEventListener("change", async () => {
-          if (cb.checked) {
-            selectedCustomRelays.add(rUrl);
-          } else {
-            selectedCustomRelays.delete(rUrl);
-          }
-          plugin.relays = Array.from(selectedCustomRelays);
-          relayModePill.textContent = `Custom (${plugin.relays.length} relay${plugin.relays.length === 1 ? "" : "s"})`;
-          this.saveLocalWorkspace();
-          await this.remountPlugin(plugin);
-        });
-        cbLabel.appendChild(cb);
-        const codeSpan = document.createElement("code");
-        codeSpan.style.cssText = "font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-primary);";
-        codeSpan.textContent = rUrl;
-        cbLabel.appendChild(codeSpan);
-        customCheckboxesContainer.appendChild(cbLabel);
-      }
-
-      // Option 3: Local Only / Offline
-      const radLocalLabel = document.createElement("label");
-      radLocalLabel.style.cssText = "display: flex; align-items: flex-start; gap: 6px; font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-primary); cursor: pointer;";
-      const radLocal = document.createElement("input");
-      radLocal.type = "radio";
-      radLocal.name = `editorial-relay-scope-${safeId}`;
-      radLocal.checked = isLocalOnly;
-      radLocal.style.marginTop = "3px";
-      const radLocalTextWrap = document.createElement("div");
-      radLocalTextWrap.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
-      const radLocalTitle = document.createElement("span");
-      radLocalTitle.style.fontWeight = "600";
-      radLocalTitle.textContent = "Local Only / Offline (Disable All Relays)";
-      const radLocalDesc = document.createElement("span");
-      radLocalDesc.style.cssText = "font-size: 0.7rem; color: var(--omni-text-muted); line-height: 1.3;";
-      radLocalDesc.textContent = "Disconnects this plugin from the network. Notes and state will only be saved and loaded from local browser storage / IndexedDB.";
-      radLocalTextWrap.appendChild(radLocalTitle);
-      radLocalTextWrap.appendChild(radLocalDesc);
-      radLocalLabel.appendChild(radLocal);
-      radLocalLabel.appendChild(radLocalTextWrap);
-      relayOptionsWrap.appendChild(radLocalLabel);
-
-      radAll.addEventListener("change", async () => {
-        if (radAll.checked) {
-          customCheckboxesContainer.style.display = "none";
-          plugin.relays = undefined;
-          relayModePill.textContent = "All Relays (Default)";
-          this.saveLocalWorkspace();
-          await this.remountPlugin(plugin);
-        }
+      const relayAccessBox = renderRelayScopingSection({
+        kernel: this.kernel,
+        plugin,
+        theme: "classic",
+        onUpdate: () => this.saveLocalWorkspace(),
+        onRemount: () => this.remountPlugin(plugin)
       });
-
-      radCustom.addEventListener("change", async () => {
-        if (radCustom.checked) {
-          customCheckboxesContainer.style.display = "flex";
-          if (selectedCustomRelays.size === 0 && allRelays.length > 0) {
-            selectedCustomRelays.add(allRelays[0]);
-            const firstCb = customCheckboxesContainer.querySelector("input[type=checkbox]") as HTMLInputElement | null;
-            if (firstCb) firstCb.checked = true;
-          }
-          plugin.relays = Array.from(selectedCustomRelays);
-          relayModePill.textContent = `Custom (${plugin.relays.length} relay${plugin.relays.length === 1 ? "" : "s"})`;
-          this.saveLocalWorkspace();
-          await this.remountPlugin(plugin);
-        }
-      });
-
-      radLocal.addEventListener("change", async () => {
-        if (radLocal.checked) {
-          customCheckboxesContainer.style.display = "none";
-          plugin.relays = [];
-          relayModePill.textContent = "Local Only (No Relays)";
-          this.saveLocalWorkspace();
-          await this.remountPlugin(plugin);
-        }
-      });
-
-      relayOptionsWrap.appendChild(customCheckboxesContainer);
-      relayAccessBox.appendChild(relayOptionsWrap);
       detailsContainer.appendChild(relayAccessBox);
 
       // 4. Permissions & Capabilities Section

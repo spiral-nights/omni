@@ -40,15 +40,16 @@ const initialPlugins: InstalledPluginEntry[] = [
   },
   {
     id: "org.omni.plugin.checklist",
-    name: "Daily Checklist",
-    description: "Track daily goals and productivity tasks.",
+    name: "Task List",
+    displayName: "Tasks",
+    description: "Decentralized task and todo list synced across Nostr relays.",
     icon: "check-circle",
     viewport: "sidebar",
     views: [
-      { id: "main", title: "Full Task List", path: "", format: "schema" },
+      { id: "main", title: "Task List", path: "", format: "schema" },
       { id: "compact", title: "Live Tile", path: "?view=compact", format: "schema" },
-      { id: "widget", title: "Checklist Card", path: "?view=widget", format: "schema" },
-      { id: "settings", title: "Checklist Settings", path: "?view=settings", format: "schema" }
+      { id: "widget", title: "Task List", path: "?view=widget", format: "schema" },
+      { id: "settings", title: "Task List Settings", path: "?view=settings", format: "schema" }
     ],
     handledIntents: ["create_task"],
     scriptContent: checklistScript,

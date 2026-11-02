@@ -25,7 +25,7 @@ export const INTENT_FRIENDLY_NAMES: Record<string, { label: string; desc: string
   share: { label: "Web Share", desc: "Target for navigator.share() drafts" },
   view_profile: { label: "View Profile", desc: "Display user profile and metadata" },
   edit_profile: { label: "Edit Profile", desc: "Edit account metadata and keys" },
-  create_task: { label: "Create Task", desc: "Add tasks and daily checklist items" },
+  create_task: { label: "Create Task", desc: "Add tasks and todo list items" },
   pay_invoice: { label: "Lightning Payment", desc: "Pay Lightning / Cashu invoices" }
 };
 

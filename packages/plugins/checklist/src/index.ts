@@ -19,6 +19,85 @@ let tasks: TaskItem[] = [
   { id: 3, text: "Test Focus Timer", done: false }
 ];
 
+export const TASKS_NIP78_D_TAG = "omni/tasks/v1";
+
+let syncSocket: WebSocket | null = null;
+let lastSyncedRemoteTimestamp = 0;
+
+export function syncTasksToRelays(): void {
+  if (typeof window === "undefined") return;
+  const nostr = (window as any).nostr;
+  if (!nostr || typeof nostr.signEvent !== "function") return;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const unsigned = {
+    kind: 30078,
+    created_at: nowSec,
+    tags: [["d", TASKS_NIP78_D_TAG]],
+    content: JSON.stringify(tasks)
+  };
+
+  nostr.signEvent(unsigned).then((signed: any) => {
+    if (!signed) return;
+    lastSyncedRemoteTimestamp = signed.created_at;
+
+    if (syncSocket && syncSocket.readyState === WebSocket.OPEN) {
+      syncSocket.send(JSON.stringify(["EVENT", signed]));
+    } else {
+      try {
+        const ws = new WebSocket("wss://relay.damus.io");
+        ws.onopen = () => {
+          ws.send(JSON.stringify(["EVENT", signed]));
+          setTimeout(() => {
+            try { ws.close(); } catch (_) {}
+          }, 1500);
+        };
+      } catch (_) {}
+    }
+  }).catch((err: any) => {
+    console.warn("[Tasks] Failed to sign task list event for relay sync:", err);
+  });
+}
+
+export function initTasksRelaySync(onUpdate?: () => void): void {
+  if (typeof WebSocket === "undefined") return;
+  const g = typeof globalThis !== "undefined" ? (globalThis as any) : null;
+  if (g?.process?.env?.NODE_ENV === "test" || g?.process?.env?.VITEST) return;
+  if (typeof window !== "undefined") {
+    const w = window as any;
+    if (w.happyDOM || w.__VITEST_ENVIRONMENT__) return;
+    if (typeof navigator !== "undefined" && navigator.userAgent && (navigator.userAgent.includes("happy-dom") || navigator.userAgent.includes("jsdom"))) return;
+  }
+  if (syncSocket && (syncSocket.readyState === WebSocket.OPEN || syncSocket.readyState === WebSocket.CONNECTING)) return;
+
+  try {
+    syncSocket = new WebSocket("wss://relay.damus.io");
+    syncSocket.onopen = () => {
+      syncSocket?.send(JSON.stringify(["REQ", "tasks_sync_sub", { kinds: [30078], "#d": [TASKS_NIP78_D_TAG], limit: 1 }]));
+    };
+
+    syncSocket.onmessage = (event) => {
+      try {
+        const frame = JSON.parse(event.data);
+        if (Array.isArray(frame) && frame[0] === "EVENT" && frame[2]) {
+          const ev = frame[2];
+          if (ev.kind === 30078 && ev.created_at > lastSyncedRemoteTimestamp) {
+            const remoteTasks = JSON.parse(ev.content);
+            if (Array.isArray(remoteTasks)) {
+              tasks = remoteTasks;
+              lastSyncedRemoteTimestamp = ev.created_at;
+              persistTasks();
+              onUpdate?.();
+            }
+          }
+        }
+      } catch (_) {}
+    };
+  } catch (err) {
+    console.warn("[Tasks] Could not open relay sync socket:", err);
+  }
+}
+
 function loadTasks(): TaskItem[] {
   try {
     if (typeof localStorage !== "undefined") {
@@ -43,7 +122,7 @@ export function getChecklistSchema(view = "widget"): OmniComponentNode {
     const completed = tasks.filter((t) => t.done).length;
     return {
       type: "card",
-      title: "Daily Checklist Settings",
+      title: "Task List Settings",
       subtitle: "Manage persistent tasks storage and cleanup completed items.",
       children: [
         {
@@ -81,7 +160,7 @@ export function getChecklistSchema(view = "widget"): OmniComponentNode {
   // Default: widget view
   return {
     type: "card",
-    title: "Daily Tasks",
+    title: "Task List",
     icon: "check",
     children: [
       {
@@ -132,11 +211,12 @@ export function handleChecklistAction(
 ): OmniComponentNode {
   loadTasks();
   const actName = action.name;
-  if (actName === "add-task") {
-    const text = String(payload?.taskText || payload?.value || "").trim();
+  if (actName === "add-task" || actName === "create_task") {
+    const text = String(payload?.title || payload?.text || payload?.taskText || payload?.value || "").trim();
     if (text) {
       tasks.push({ id: Date.now(), text, done: false });
       persistTasks();
+      syncTasksToRelays();
     }
   } else if (actName === "toggle-task") {
     const id = Number(payload?.id || action.payload?.id);
@@ -144,6 +224,7 @@ export function handleChecklistAction(
     if (item) {
       item.done = payload?.checked !== undefined ? Boolean(payload.checked) : !item.done;
       persistTasks();
+      syncTasksToRelays();
     }
   } else if (actName === "delete-task") {
     const id = Number(payload?.id || action.payload?.id);
@@ -151,10 +232,12 @@ export function handleChecklistAction(
     if (idx !== -1) {
       tasks.splice(idx, 1);
       persistTasks();
+      syncTasksToRelays();
     }
   } else if (actName === "clear-completed") {
     tasks = tasks.filter((t) => !t.done);
     persistTasks();
+    syncTasksToRelays();
   }
   return getChecklistSchema(action.name === "clear-completed" ? "settings" : "widget");
 }
@@ -299,7 +382,7 @@ async function mountChecklist(root: any) {
     <div class="checklist-widget-card" style="background: var(--bg-surface, #191816); border: 1px solid var(--border-strong, #383530); border-radius: var(--radius-md, 10px); padding: 16px; display: flex; flex-direction: column; gap: 12px; color: var(--text-primary, #ede8df);">
       <style>${CHECKLIST_CSS}</style>
       <div class="widget-header" style="display: flex; justify-content: space-between; align-items: center;">
-        <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary, #ede8df);">Daily Tasks</h3>
+        <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary, #ede8df);">Task List</h3>
       </div>
       <div class="task-input-row" style="display: flex; gap: 8px;">
         <input class="task-input" type="text" placeholder="Add task..." style="flex: 1; background: var(--bg-subtle, #2a2824); border: 1px solid var(--border-strong, #383530); color: var(--text-primary, #ede8df); padding: 8px 12px; border-radius: var(--radius-sm, 6px); font-size: 0.88rem;" />
@@ -328,6 +411,7 @@ async function mountChecklist(root: any) {
       cb.addEventListener("change", async () => {
         t.done = cb.checked;
         persistTasks();
+        syncTasksToRelays();
         renderTasks();
       });
 
@@ -337,6 +421,7 @@ async function mountChecklist(root: any) {
         if (idx !== -1) {
           tasks.splice(idx, 1);
           persistTasks();
+          syncTasksToRelays();
           renderTasks();
         }
       });
@@ -351,6 +436,7 @@ async function mountChecklist(root: any) {
     tasks.push({ id: Date.now(), text: val, done: false });
     input.value = "";
     persistTasks();
+    syncTasksToRelays();
     renderTasks();
   });
 
@@ -369,7 +455,7 @@ async function mountChecklistSettings(root: any) {
 
   const container = html<HTMLDivElement>`
     <div class="checklist-settings-container" style="display: flex; flex-direction: column; gap: 12px; font-family: inherit; color: var(--text-primary, #ede8df);">
-      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--accent-primary, #d4a373);">Daily Checklist Settings</h4>
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--accent-primary, #d4a373);">Task List Settings</h4>
       <p style="margin: 0; font-size: 0.78rem; color: var(--text-muted, #78716c);">Manage persistent tasks storage and cleanup completed items.</p>
       <div class="checklist-stats-row" style="display: flex; gap: 16px; font-size: 0.8rem; background: var(--bg-subtle, #2a2824); padding: 8px 12px; border-radius: var(--radius-sm, 6px);">
         <span class="total-tasks-label">Total Tasks: ${tasks.length}</span>
@@ -387,11 +473,8 @@ async function mountChecklistSettings(root: any) {
 
   btnClear.addEventListener("click", async () => {
     tasks = tasks.filter((t) => !t.done);
-    try {
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem("tasks", JSON.stringify(tasks));
-      }
-    } catch (_) {}
+    persistTasks();
+    syncTasksToRelays();
     totalSpan.textContent = `Total Tasks: ${tasks.length}`;
     completedSpan.textContent = `Completed: 0`;
     btnClear.textContent = "Cleared!";
@@ -479,6 +562,9 @@ if (typeof window !== "undefined") {
 
   // Dispatch initial schema for the active route/view
   dispatchSchema(getChecklistSchema(getActiveView()));
+
+  // Initialize Nostr relay sync
+  initTasksRelaySync(() => dispatchSchema(getChecklistSchema(getActiveView())));
 
   // Listen for host actions over standard Web messaging
   window.addEventListener("message", (event) => {

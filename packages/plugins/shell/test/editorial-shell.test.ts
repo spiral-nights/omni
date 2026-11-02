@@ -666,7 +666,7 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
 
       const toggleBtn = root.querySelector("#btn-toggle-placements-org-omni-plugin-checklist") as HTMLElement | null;
       expect(toggleBtn).toBeTruthy();
-      expect(toggleBtn?.textContent).toContain("Configure Viewports");
+      expect(toggleBtn?.textContent).toContain("Configure");
 
       const details = root.querySelector("#plugin-details-org-omni-plugin-checklist") as HTMLElement | null;
       expect(details).toBeTruthy();
@@ -674,7 +674,7 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
 
       toggleBtn?.click();
       expect(details?.style.display).toBe("flex");
-      expect(toggleBtn?.textContent).toContain("Close Viewports");
+      expect(toggleBtn?.textContent).toContain("Done");
 
       toggleBtn?.click();
       expect(details?.style.display).toBe("none");

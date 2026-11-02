@@ -1506,7 +1506,7 @@ export abstract class BaseShell implements OmniShellHost {
         ${icon("pin", 14)} <span>${isPinned ? "Unpin from Dock" : "Pin to Dock"}</span>
       </button>
       <button class="context-menu-item ctx-btn-settings">
-        ${icon("settings", 14)} <span>Configure Viewports</span>
+        ${icon("settings", 14)} <span>Configure App</span>
       </button>
       <div class="context-menu-divider"></div>
       <button class="context-menu-item ctx-btn-uninstall danger">
