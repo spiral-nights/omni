@@ -282,23 +282,9 @@ export class OmniKernel {
           onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
           onHandleShare: (payload, srcId) => this.handleShare(payload, srcId),
           onHistoryPush: (params) => {
-            this.navigation.push({
-              type: "subroute",
-              appId: manifest.id,
-              url: params.url,
-              state: params.state,
-              title: params.title
-            }, false);
             return this.onHistoryPush?.(manifest.id, params);
           },
           onHistoryReplace: (params) => {
-            this.navigation.replace({
-              type: "subroute",
-              appId: manifest.id,
-              url: params.url,
-              state: params.state,
-              title: params.title
-            }, false);
             return this.onHistoryReplace?.(manifest.id, params);
           },
           onHistoryBack: () => {
@@ -550,23 +536,9 @@ export class OmniKernel {
       onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
       onHandleShare: (payload, srcId) => this.handleShare(payload, srcId),
       onHistoryPush: (params) => {
-        this.navigation.push({
-          type: "subroute",
-          appId: manifest.id,
-          url: params.url,
-          state: params.state,
-          title: params.title
-        }, false);
         return this.onHistoryPush?.(manifest.id, params);
       },
       onHistoryReplace: (params) => {
-        this.navigation.replace({
-          type: "subroute",
-          appId: manifest.id,
-          url: params.url,
-          state: params.state,
-          title: params.title
-        }, false);
         return this.onHistoryReplace?.(manifest.id, params);
       },
       onHistoryBack: () => {

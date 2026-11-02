@@ -1233,10 +1233,15 @@
 
   function applyHistoryNavigate(delta, state, targetUrl) {
     if (virtualHistory.entries.length > 0) {
-      virtualHistory.index = Math.max(0, Math.min(virtualHistory.entries.length - 1, virtualHistory.index + delta));
+      virtualHistory.index = Math.max(0, Math.min(virtualHistory.entries.length - 1, virtualHistory.index + (delta || 0)));
       const entry = virtualHistory.entries[virtualHistory.index];
       if (entry) {
         if (state !== undefined) entry.state = state;
+        if (targetUrl) {
+          const { search, hash } = parseUrlParts(targetUrl);
+          entry.search = search;
+          entry.hash = hash;
+        }
         updateVirtualLocation(entry.search, entry.hash);
       }
     } else if (targetUrl) {

@@ -121,11 +121,16 @@ export function handleFeedAction(
   } else if (actName === "view-thread" || actName === "view_note" || actName === "view-note" || actName === "reply-note") {
     const id = String(payload?.id || payload?.eventId || action.payload?.id || action.payload?.eventId || "");
     const noteData: any = (payload as any)?.note || (action.payload as any)?.note;
+    const isFromIntent = Boolean((payload as any)?.isFromIntent || (action.payload as any)?.isFromIntent);
     if (id) {
       currentFeedState.activeThreadNoteId = id;
       try {
-        if (typeof window !== "undefined" && window.history && typeof window.history.pushState === "function") {
-          window.history.pushState({ view: "thread", id }, "", `?note=${id}`);
+        if (typeof window !== "undefined" && window.history) {
+          if (isFromIntent && typeof window.history.replaceState === "function") {
+            window.history.replaceState({ view: "thread", id }, "", `?note=${id}`);
+          } else if (typeof window.history.pushState === "function") {
+            window.history.pushState({ view: "thread", id }, "", `?note=${id}`);
+          }
         }
       } catch (_) {}
 

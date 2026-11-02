@@ -282,8 +282,18 @@ export class NavigationManager {
       return { handled: false };
     }
 
+    // If pointer is already at targetIdx (e.g. popstate event arriving after back()/forward() updated pointer),
+    // acknowledge without duplicate processing
+    if (targetIdx === this.pointer) {
+      return {
+        handled: true,
+        currentFrame: this.stack[this.pointer],
+        direction: "jump"
+      };
+    }
+
     const previousFrame = this.stack[this.pointer];
-    const direction = targetIdx < this.pointer ? "back" : targetIdx > this.pointer ? "forward" : "jump";
+    const direction = targetIdx < this.pointer ? "back" : "forward";
     this.pointer = targetIdx;
     const currentFrame = this.stack[this.pointer];
 

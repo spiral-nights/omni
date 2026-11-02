@@ -2380,9 +2380,10 @@ export abstract class BaseShell implements OmniShellHost {
       const res = this.kernel.navigation.back();
       if (res.handled && res.currentFrame) {
         const frame = res.currentFrame;
+        const activePage = (this as any).activePage;
         if (frame.type === "app" && frame.appId) {
           const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
-          if (currentId !== frame.appId) {
+          if (currentId !== frame.appId || (activePage && activePage !== "app")) {
             if ((this as any).openApp) {
               (this as any).openApp(frame.appId, false);
             } else {
@@ -2391,14 +2392,14 @@ export abstract class BaseShell implements OmniShellHost {
           }
           if (res.isInternalSubroute) {
             this.kernel.dispatchHistoryPopstate(frame.appId, {
-              delta: 0,
-              state: frame.state,
-              url: frame.url
+              delta: -1,
+              state: frame.state ?? null,
+              url: frame.url || ""
             });
           }
         } else if (frame.type === "subroute" && frame.appId) {
           const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
-          if (currentId !== frame.appId) {
+          if (currentId !== frame.appId || (activePage && activePage !== "app")) {
             if ((this as any).openApp) {
               (this as any).openApp(frame.appId, false);
             } else {
@@ -2406,9 +2407,9 @@ export abstract class BaseShell implements OmniShellHost {
             }
           }
           this.kernel.dispatchHistoryPopstate(frame.appId, {
-            delta: 0,
-            state: frame.state,
-            url: frame.url
+            delta: -1,
+            state: frame.state ?? null,
+            url: frame.url || ""
           });
         } else if (frame.type === "section" && frame.section) {
           if (frame.section === "apps") {
@@ -2443,9 +2444,11 @@ export abstract class BaseShell implements OmniShellHost {
       const popRes = this.kernel.navigation.handlePopState(state);
       if (popRes.handled && popRes.currentFrame) {
         const frame = popRes.currentFrame;
+        const activePage = (this as any).activePage;
+        const delta = popRes.direction === "forward" ? 1 : -1;
         if (frame.type === "app" && frame.appId) {
           const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
-          if (currentId !== frame.appId) {
+          if (currentId !== frame.appId || (activePage && activePage !== "app")) {
             if ((this as any).openApp) {
               (this as any).openApp(frame.appId, false);
             } else {
@@ -2454,14 +2457,14 @@ export abstract class BaseShell implements OmniShellHost {
           }
           if (popRes.isInternalSubroute) {
             this.kernel.dispatchHistoryPopstate(frame.appId, {
-              delta: 0,
-              state: frame.state,
-              url: frame.url
+              delta,
+              state: frame.state ?? null,
+              url: frame.url || ""
             });
           }
         } else if (frame.type === "subroute" && frame.appId) {
           const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
-          if (currentId !== frame.appId) {
+          if (currentId !== frame.appId || (activePage && activePage !== "app")) {
             if ((this as any).openApp) {
               (this as any).openApp(frame.appId, false);
             } else {
@@ -2469,9 +2472,9 @@ export abstract class BaseShell implements OmniShellHost {
             }
           }
           this.kernel.dispatchHistoryPopstate(frame.appId, {
-            delta: 0,
-            state: frame.state,
-            url: frame.url
+            delta,
+            state: frame.state ?? null,
+            url: frame.url || ""
           });
         } else if (frame.type === "section" && frame.section) {
           if (frame.section === "apps") {
@@ -2499,7 +2502,7 @@ export abstract class BaseShell implements OmniShellHost {
         }
       }
       this.kernel.dispatchHistoryPopstate(pluginId, {
-        delta: 0,
+        delta: -1,
         state: state.pluginState || state,
         url: state.url || ""
       });

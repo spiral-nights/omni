@@ -414,6 +414,22 @@ export class OmniShell extends BaseShell {
     });
 
     this.initPullToRefresh();
+
+    if (this.kernel?.navigation) {
+      const initialPage = this.getActivePageId() || "feed";
+      const rootFrame = this.kernel.navigation.initInitialFrame({
+        type: initialPage === "apps" || initialPage === "widgets" ? "section" : "app",
+        appId: initialPage !== "apps" && initialPage !== "widgets" ? initialPage : undefined,
+        section: initialPage === "apps" || initialPage === "widgets" ? initialPage : undefined,
+        url: `?page=${initialPage}`
+      });
+      if (typeof window !== "undefined" && window.history) {
+        try {
+          window.history.replaceState({ omniNavId: rootFrame.id, ...rootFrame }, document.title, window.location.href);
+        } catch (_) {}
+      }
+    }
+    this.updateHeaderBackVisibility();
   }
 
   public destroy(): void {

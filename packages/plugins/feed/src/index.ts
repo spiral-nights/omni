@@ -108,7 +108,7 @@ if (typeof window !== "undefined") {
             localStorage.removeItem("omni_active_note_data");
           }
         } catch (_) {}
-        onActionMsg({ name: "view-thread", payload: { id: savedNoteId, note: noteData } });
+        onActionMsg({ name: "view-thread", payload: { id: savedNoteId, note: noteData, isFromIntent: true } });
       }
     } catch (_) {}
   };
@@ -120,7 +120,7 @@ if (typeof window !== "undefined") {
     if (action === "view_note" || action === "view-note") {
       const noteId = data?.eventId || data?.id;
       if (noteId) {
-        onActionMsg({ name: "view-thread", payload: { id: noteId, note: data?.note } });
+        onActionMsg({ name: "view-thread", payload: { id: noteId, note: data?.note, isFromIntent: true } });
       }
     }
   };

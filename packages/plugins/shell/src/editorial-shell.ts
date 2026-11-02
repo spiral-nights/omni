@@ -80,9 +80,11 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   }
 
   public getActivePageId(): string {
+    if (this.activePage === "apps") return "apps";
+    if (this.activePage === "widgets") return "widgets";
     if (this.activePluginId) return this.activePluginId;
     const defaultPage = this.root?.querySelector("#editorial-page-app") as HTMLElement | null;
-    if (defaultPage?.dataset.pluginId) return defaultPage.dataset.pluginId;
+    if (this.activePage === "app" && defaultPage?.dataset.pluginId) return defaultPage.dataset.pluginId;
     const firstMain = this.installedPlugins.find((p) => p.viewport === "main" || p.pinned);
     return firstMain?.id || "";
   }
@@ -1149,13 +1151,39 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
   private selectInitialView(): void {
     const pinned = this.getPinnedPlugins();
-    if (pinned.length > 0) {
-      this.openApp(pinned[0].id);
-    } else if (this.installedPlugins.length > 0) {
-      this.openApp(this.installedPlugins[0].id);
+    const initialId = pinned.length > 0 ? pinned[0].id : (this.installedPlugins[0]?.id || "");
+    if (initialId) {
+      if (this.kernel?.navigation) {
+        const rootFrame = this.kernel.navigation.initInitialFrame({
+          type: "app",
+          appId: initialId,
+          title: this.installedPlugins.find((p) => p.id === initialId)?.displayName || "Feed",
+          url: `?app=${initialId}`
+        });
+        if (typeof window !== "undefined" && window.history) {
+          try {
+            window.history.replaceState({ omniNavId: rootFrame.id, ...rootFrame }, rootFrame.title || document.title, window.location.href);
+          } catch (_) {}
+        }
+      }
+      this.openApp(initialId, false);
     } else {
-      this.showAppsIndex();
+      if (this.kernel?.navigation) {
+        const rootFrame = this.kernel.navigation.initInitialFrame({
+          type: "section",
+          section: "apps",
+          title: "Apps",
+          url: "?view=apps"
+        });
+        if (typeof window !== "undefined" && window.history) {
+          try {
+            window.history.replaceState({ omniNavId: rootFrame.id, ...rootFrame }, "Apps", window.location.href);
+          } catch (_) {}
+        }
+      }
+      this.showAppsIndex(false);
     }
+    this.updateHeaderBackVisibility();
     this.ensurePinnedAppsMounted().catch(console.warn);
   }
 

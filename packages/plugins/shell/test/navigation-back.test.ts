@@ -141,4 +141,119 @@ describe("Unified Navigation & Back Button Integration", () => {
     shell.triggerBack();
     expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
   });
+
+  it("Scenario 1: In feed, viewing note thread then clicking back returns to feed timeline", async () => {
+    // Start at feed
+    await shell.openApp("org.omni.plugin.feed");
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+
+    // Feed pushes a note thread subroute
+    shell.handleHistoryPush("org.omni.plugin.feed", {
+      state: { view: "thread", id: "note_abc123" },
+      title: "Note Conversation",
+      url: "?note=note_abc123"
+    });
+
+    expect(kernel.navigation.canGoBack()).toBe(true);
+
+    let popPayload: any = null;
+    (kernel as any).dispatchHistoryPopstate = (pluginId: string, payload: any) => {
+      popPayload = { pluginId, payload };
+    };
+
+    // User triggers back
+    shell.triggerBack();
+
+    // Still in feed, but subroute popped back to root timeline (state is null)
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    expect(popPayload).not.toBeNull();
+    expect(popPayload.pluginId).toBe("org.omni.plugin.feed");
+    expect(popPayload.payload.state).toBeNull();
+    expect(kernel.navigation.canGoBack()).toBe(false);
+  });
+
+  it("Scenario 2: In feed, going to All Apps page then clicking back returns to feed", async () => {
+    // Start at feed
+    await shell.openApp("org.omni.plugin.feed");
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+
+    // Go to All Apps index
+    shell.showAppsIndex(true);
+    expect(shell.getActivePageId()).toBe("apps");
+    expect(kernel.navigation.canGoBack()).toBe(true);
+
+    // Browser back
+    shell.triggerBack();
+
+    // Should return to Feed
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    expect(kernel.navigation.canGoBack()).toBe(false);
+  });
+
+  it("Scenario 3: Feed -> All Apps -> Another plugin -> Back returns to All Apps -> Back returns to Feed", async () => {
+    // Start at feed
+    await shell.openApp("org.omni.plugin.feed");
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+
+    // Go to All Apps
+    shell.showAppsIndex(true);
+    expect(shell.getActivePageId()).toBe("apps");
+
+    // Open another plugin (Profiles) from Apps
+    await shell.openApp("org.omni.plugin.profile-viewer");
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
+
+    // First back should return to Apps
+    shell.triggerBack();
+    expect(shell.getActivePageId()).toBe("apps");
+
+    // Second back should return to Feed
+    shell.triggerBack();
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    expect(kernel.navigation.canGoBack()).toBe(false);
+  });
+
+  it("Scenario 4: Profile plugin -> View Note in Feed -> Back returns to Profile plugin", async () => {
+    // Start in Profile Viewer
+    await shell.openApp("org.omni.plugin.profile-viewer");
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
+
+    // User is viewing a profile in Profiles (subroute)
+    shell.handleHistoryPush("org.omni.plugin.profile-viewer", {
+      state: { tab: "user-profile", pubkey: "alice_pubkey" },
+      title: "Alice",
+      url: "?view=user-profile&pubkey=alice_pubkey"
+    });
+
+    // User clicks a note -> dispatches view_note intent
+    shell.installedPlugins[0].handledIntents = ["view_note"];
+    (shell as any).registerHandledIntents();
+
+    await kernel.intentBroker.dispatch("org.omni.plugin.profile-viewer", "view_note", {
+      id: "alice_note_999",
+      eventId: "alice_note_999"
+    });
+
+    // Feed replaces state with thread view (simulating isFromIntent: true replaceState)
+    shell.handleHistoryReplace("org.omni.plugin.feed", {
+      state: { view: "thread", id: "alice_note_999" },
+      title: "Thread",
+      url: "?note=alice_note_999"
+    });
+
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+
+    // Trigger back: should return straight to Profiles on the user-profile subroute
+    let restoredState: any = null;
+    (kernel as any).dispatchHistoryPopstate = (pluginId: string, payload: any) => {
+      restoredState = { pluginId, payload };
+    };
+
+    shell.triggerBack();
+
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
+    expect(restoredState).not.toBeNull();
+    expect(restoredState.pluginId).toBe("org.omni.plugin.profile-viewer");
+    expect(restoredState.payload.state).toEqual({ tab: "user-profile", pubkey: "alice_pubkey" });
+  });
 });
