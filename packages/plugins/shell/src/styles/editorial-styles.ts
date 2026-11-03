@@ -281,7 +281,7 @@ style, script, head, title, meta, link,
   margin: 0 auto;
   box-sizing: border-box;
   padding-top: 58px;
-  padding-bottom: 84px;
+  padding-bottom: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -305,7 +305,7 @@ style, script, head, title, meta, link,
 
 .editorial-shell-root.has-active-app .editorial-app-container {
   max-width: 100%;
-  padding: 12px 0 24px;
+  padding: 12px 0 88px;
 }
 
 /* Fullscreen Immersive Mode */
@@ -500,7 +500,7 @@ style, script, head, title, meta, link,
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px 16px 24px;
+  padding: 16px 16px 88px;
   box-sizing: border-box;
 }
 
@@ -1281,7 +1281,7 @@ style, script, head, title, meta, link,
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px 16px 24px;
+  padding: 16px 16px 88px;
   box-sizing: border-box;
 }
 
