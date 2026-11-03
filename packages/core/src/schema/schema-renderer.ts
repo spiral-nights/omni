@@ -138,6 +138,19 @@ export class SchemaRenderer {
   }
 
   private renderNode(node: OmniComponentNode): HTMLElement | null {
+    const el = this.renderNodeInternal(node);
+    if (el && (node as any)?.style) {
+      const s = (node as any).style;
+      if (typeof s === "string") {
+        el.style.cssText += `; ${s}`;
+      } else if (typeof s === "object") {
+        Object.assign(el.style, s);
+      }
+    }
+    return el;
+  }
+
+  private renderNodeInternal(node: OmniComponentNode): HTMLElement | null {
     if (!node || node.visible === false) return null;
 
     switch (node.type) {

@@ -90,10 +90,21 @@ export class OmniBoxElement extends BaseElement {
       if (props.wrap) this.setAttribute("wrap", "");
       else this.removeAttribute("wrap");
     }
+    if (props.background) {
+      this.style.background = props.background;
+    }
+    if (props.style) {
+      if (typeof props.style === "string") {
+        this.style.cssText += `; ${props.style}`;
+      } else if (typeof props.style === "object") {
+        Object.assign(this.style, props.style);
+      }
+    }
   }
 }
 
 export class OmniCardElement extends BaseElement {
+  private bannerEl: HTMLElement | null = null;
   private headerEl: HTMLElement | null = null;
   private titleEl: HTMLElement | null = null;
   private subtitleEl: HTMLElement | null = null;
@@ -159,11 +170,24 @@ export class OmniCardElement extends BaseElement {
     return this.footerEl;
   }
 
+  private ensureBanner(): HTMLElement {
+    if (!this.bannerEl) {
+      this.bannerEl = document.createElement("div");
+      this.bannerEl.className = "omni-card-banner";
+      this.insertBefore(this.bannerEl, this.firstChild);
+    }
+    return this.bannerEl;
+  }
+
   private ensureHeader(): void {
     if (!this.headerEl) {
       this.headerEl = document.createElement("div");
       this.headerEl.className = "omni-card-header";
-      this.insertBefore(this.headerEl, this.bodyEl || this.firstChild);
+      if (this.bannerEl && this.bannerEl.nextSibling) {
+        this.insertBefore(this.headerEl, this.bannerEl.nextSibling);
+      } else {
+        this.insertBefore(this.headerEl, this.bodyEl || this.firstChild);
+      }
     }
   }
 
@@ -175,6 +199,17 @@ export class OmniCardElement extends BaseElement {
     } else {
       this.style.cursor = "";
     }
+
+    if (props.bannerBackground) {
+      this.classList.add("has-banner");
+      const bEl = this.ensureBanner();
+      bEl.style.background = props.bannerBackground;
+    } else if (this.bannerEl) {
+      this.bannerEl.remove();
+      this.bannerEl = null;
+      this.classList.remove("has-banner");
+    }
+
     if (props.title || props.subtitle || props.icon) {
       this.ensureHeader();
       

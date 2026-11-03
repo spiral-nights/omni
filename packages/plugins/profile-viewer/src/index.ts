@@ -315,6 +315,7 @@ export function getProfileSchema(
       type: "card",
       title: "Active Identity",
       icon: "user",
+      bannerBackground: getProfileGradientBanner(pubkey || "default"),
       children: [
         {
           type: "box",
@@ -539,11 +540,20 @@ export function getProfileSchema(
       ]
     });
 
+    const targetPubkey = targetUser.pubkey || "";
+    const userBannerGradient = getProfileGradientBanner(targetPubkey || "default");
+    children.push({
+      type: "box",
+      style: `width: 100%; height: 115px; min-height: 115px; border-radius: var(--omni-radius-md, 10px); background: ${userBannerGradient}; margin-bottom: -36px; transition: background 0.25s ease;`,
+      children: []
+    });
+
     children.push({
       type: "box",
       direction: "row",
       justify: "between",
       align: "center",
+      style: "margin-top: -36px; margin-bottom: 8px; z-index: 1; padding: 0 4px; flex-wrap: wrap; gap: 8px;",
       children: [
         {
           type: "box",
@@ -555,8 +565,9 @@ export function getProfileSchema(
               type: "avatar",
               name: targetUser.name || "Nostr User",
               src: targetUser.picture || "",
-              pubkey: targetUser.pubkey || "",
-              size: "lg"
+              pubkey: targetPubkey,
+              size: "xl",
+              style: "border: 3px solid var(--omni-bg-elevated, #22201d); border-radius: 50%; box-shadow: 0 4px 16px rgba(0,0,0,0.5); background: var(--omni-bg-surface, #191816); flex-shrink: 0;"
             },
             {
               type: "box",
@@ -573,9 +584,10 @@ export function getProfileSchema(
           type: "button",
           label: isFollowing ? "Unfollow" : "+ Follow",
           variant: isFollowing ? "secondary" : "primary",
+          size: "sm",
           action: {
             name: isFollowing ? "unfollow" : "follow",
-            payload: { pubkey: targetUser.pubkey }
+            payload: { pubkey: targetPubkey }
           }
         }
       ]
@@ -800,18 +812,27 @@ export function getProfileSchema(
     }
   } else {
     // "my-profile"
+    const bannerGradient = getProfileGradientBanner(pubkey || "default");
+    children.push({
+      type: "box",
+      style: `width: 100%; height: 115px; min-height: 115px; border-radius: var(--omni-radius-md, 10px); background: ${bannerGradient}; margin-bottom: -36px; transition: background 0.25s ease;`,
+      children: []
+    });
+
     children.push({
       type: "box",
       direction: "row",
       gap: "md",
       align: "center",
+      style: "margin-top: -36px; margin-bottom: 8px; z-index: 1; padding: 0 4px;",
       children: [
         {
           type: "avatar",
           name,
           src: picture,
           pubkey,
-          size: "lg"
+          size: "xl",
+          style: "border: 3px solid var(--omni-bg-elevated, #22201d); border-radius: 50%; box-shadow: 0 4px 16px rgba(0,0,0,0.5); background: var(--omni-bg-surface, #191816); flex-shrink: 0;"
         },
         {
           type: "box",

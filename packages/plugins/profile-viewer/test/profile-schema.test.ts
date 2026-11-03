@@ -71,6 +71,13 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     const codeBlock = schema.children?.find((c) => c.type === "code-block") as any;
     expect(codeBlock).toBeDefined();
     expect(codeBlock.code).toBe("npub1alicesatoshi123");
+
+    // Verify dynamic gradient banner box
+    const bannerBox = schema.children?.find(
+      (c) => c.type === "box" && (c as any).style?.includes("linear-gradient")
+    ) as any;
+    expect(bannerBox).toBeDefined();
+    expect(bannerBox.style).toContain("linear-gradient");
   });
 
   it("renders the Edit Profile tab schema with Kind 0 input fields", () => {

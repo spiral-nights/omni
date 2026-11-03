@@ -43,6 +43,7 @@ export interface OmniPrimitiveBase {
   id?: string;
   key?: string;
   visible?: boolean;
+  style?: string | Record<string, string>;
 }
 
 export interface OmniBoxPrimitive extends OmniPrimitiveBase {
@@ -54,7 +55,8 @@ export interface OmniBoxPrimitive extends OmniPrimitiveBase {
   wrap?: boolean;
   padding?: "none" | "xs" | "sm" | "md" | "lg";
   action?: OmniAction;
-  children: OmniComponentNode[];
+  background?: string;
+  children?: OmniComponentNode[];
 }
 
 export interface OmniCardPrimitive extends OmniPrimitiveBase {
@@ -66,6 +68,7 @@ export interface OmniCardPrimitive extends OmniPrimitiveBase {
   children: OmniComponentNode[];
   footer?: OmniComponentNode[];
   action?: OmniAction;
+  bannerBackground?: string;
 }
 
 export interface OmniDividerPrimitive extends OmniPrimitiveBase {
@@ -115,7 +118,7 @@ export interface OmniAvatarPrimitive extends OmniPrimitiveBase {
   src?: string;
   pubkey?: string;
   name?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg" | "xl";
   action?: OmniAction;
 }
 

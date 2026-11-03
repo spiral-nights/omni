@@ -63,6 +63,26 @@ omni-card {
   width: 100%;
   transition: border-color 0.15s ease;
 }
+omni-card.has-banner {
+  padding-top: 0;
+  overflow: hidden;
+}
+.omni-card-banner {
+  width: calc(100% + 36px);
+  margin-left: -18px;
+  margin-right: -18px;
+  height: 120px;
+  min-height: 120px;
+  margin-bottom: 14px;
+  border-radius: var(--omni-radius-md, 10px) var(--omni-radius-md, 10px) 0 0;
+  transition: background 0.25s ease;
+}
+@media (max-width: 600px) {
+  .omni-card-banner {
+    height: 90px;
+    min-height: 90px;
+  }
+}
 omni-card:hover {
   border-color: var(--omni-border-strong, #383530);
 }
