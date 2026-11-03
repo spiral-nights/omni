@@ -400,6 +400,52 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       );
       expect(inDockAfter).toBe(false);
     });
+
+    it("renders floating Swiss architectural capsule dock and includes proper styles", () => {
+      shell.mount();
+      const dock = root.querySelector(".editorial-dock");
+      const dockInner = root.querySelector("#editorial-dock-items");
+      expect(dock).toBeTruthy();
+      expect(dockInner).toBeTruthy();
+      expect(EDITORIAL_SHELL_CSS).toContain(".editorial-dock");
+      expect(EDITORIAL_SHELL_CSS).toContain(".editorial-dock.dock-hidden");
+      expect(EDITORIAL_SHELL_CSS).toContain("border-radius: var(--omni-radius-lg, 8px);");
+    });
+
+    it("auto-hides dock when scrolling down and reveals when scrolling up or tapping top", () => {
+      shell.mount();
+      const dock = root.querySelector(".editorial-dock");
+      const activePage = root.querySelector(".editorial-viewport-page.active") as HTMLElement;
+      expect(dock).toBeTruthy();
+      expect(dock?.classList.contains("dock-hidden")).toBe(false);
+
+      // Simulate scrolling down past threshold (> 60px scrollTop and > 15px diff)
+      activePage.scrollTop = 120;
+      root.dispatchEvent(new Event("scroll"));
+      expect(dock?.classList.contains("dock-hidden")).toBe(true);
+
+      // Simulate scrolling up by more than 15px (120 - 90 = 30px diff)
+      activePage.scrollTop = 90;
+      root.dispatchEvent(new Event("scroll"));
+      expect(dock?.classList.contains("dock-hidden")).toBe(false);
+
+      // Scroll down again past 200px
+      activePage.scrollTop = 250;
+      root.dispatchEvent(new Event("scroll"));
+      expect(dock?.classList.contains("dock-hidden")).toBe(true);
+
+      // Back to top button should also be visible (> 200px)
+      const backToTopBtn = root.querySelector("#editorial-back-to-top") as HTMLElement;
+      expect(backToTopBtn?.classList.contains("visible")).toBe(true);
+
+      // Clicking back to top button resets scroll and reveals dock
+      backToTopBtn.click();
+      expect(dock?.classList.contains("dock-hidden")).toBe(false);
+
+      // Navigating to apps index reveals dock
+      shell.showAppsIndex();
+      expect(dock?.classList.contains("dock-hidden")).toBe(false);
+    });
   });
 
   describe("Settings & Preferences Modal & Installed Shells", () => {

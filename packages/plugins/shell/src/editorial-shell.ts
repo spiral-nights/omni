@@ -120,6 +120,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   private boundFullscreenMouseHandler: ((e: MouseEvent) => void) | null = null;
   private boundFullscreenTouchHandler: ((e: TouchEvent) => void) | null = null;
   private expandedPluginDetails: Set<string> = new Set();
+  private lastScrollTop = 0;
 
   constructor(options: OmniShellOptions) {
     super(options);
@@ -817,6 +818,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     this.activePage = "app";
     this.activePluginId = pluginId;
+    this.revealDock();
 
     // Update Header Title & Subtitle
     this.updateHeaderSubtitle(plugin.displayName || plugin.name || "App");
@@ -1035,6 +1037,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     this.activePage = "apps";
     this.activePluginId = null;
+    this.revealDock();
     this.root.classList.remove("has-active-app");
     this.root.classList.remove("has-widgets-page");
     if (this.isAppFullscreen) this.toggleAppFullscreen(false);
@@ -1100,6 +1103,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     this.activePage = "widgets";
     this.activePluginId = null;
+    this.revealDock();
     this.root.classList.remove("has-active-app");
     this.root.classList.add("has-widgets-page");
     if (this.isAppFullscreen) this.toggleAppFullscreen(false);
@@ -1556,16 +1560,40 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     });
   }
 
+  public revealDock(): void {
+    const dock = this.root.querySelector(".editorial-dock");
+    dock?.classList.remove("dock-hidden");
+    this.lastScrollTop = 0;
+  }
+
   private wireBackToTop(): void {
     const backToTopBtn = this.root.querySelector("#editorial-back-to-top");
+    const dock = this.root.querySelector(".editorial-dock");
 
     this.boundScrollHandler = () => {
       const activePage = this.root.querySelector(".editorial-viewport-page.active") as HTMLElement | null;
-      if (activePage && activePage.scrollTop > 200) {
+      if (!activePage) return;
+
+      const currentScrollTop = activePage.scrollTop;
+      const diff = currentScrollTop - this.lastScrollTop;
+
+      // Handle Back to Top button visibility
+      if (currentScrollTop > 200) {
         backToTopBtn?.classList.add("visible");
       } else {
         backToTopBtn?.classList.remove("visible");
       }
+
+      // Handle Smart Reading Auto-Hide:
+      // Scrolling down past threshold hides dock; scrolling up or near top reveals it
+      const SCROLL_THRESHOLD = 15;
+      if (diff > SCROLL_THRESHOLD && currentScrollTop > 60) {
+        dock?.classList.add("dock-hidden");
+      } else if (diff < -SCROLL_THRESHOLD || currentScrollTop <= 20) {
+        dock?.classList.remove("dock-hidden");
+      }
+
+      this.lastScrollTop = currentScrollTop;
     };
 
     this.root.addEventListener("scroll", this.boundScrollHandler, { capture: true, passive: true });
@@ -1575,6 +1603,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       if (activePage) {
         activePage.scrollTo({ top: 0, behavior: "smooth" });
       }
+      this.revealDock();
     });
 
     this.root.addEventListener("click", (e: Event) => {
@@ -1583,6 +1612,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         const page = topBtn.closest(".editorial-viewport-page") || (this.root.querySelector(".editorial-viewport-page.active") as HTMLElement | null);
         if (page) {
           (page as HTMLElement).scrollTo({ top: 0, behavior: "smooth" });
+          this.revealDock();
         }
       }
     });

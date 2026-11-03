@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-editorial" data-theme-mode="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Omni Editorial Shell — Floating Capsule Dock & Auto-Hide Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* -------------------------------------------------------------
+       THEME VARIABLES & SWISS EDITORIAL FOUNDATIONS
+       ------------------------------------------------------------- */
+    :root {
+      --omni-font-serif: "Newsreader", "Charter", "Georgia", serif;
+      --omni-font-mono: "Space Mono", ui-monospace, SFMono-Regular, monospace;
+      --omni-font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+      --omni-accent-primary: #d4a373; /* Warm Amber default */
+      --omni-accent-hover: #e0b488;
+      --omni-accent-contrast: #141312;
+      --omni-status-online: #2ecc71;
+    }
+
+    /* Dark Mode (Obsidian Sanctuary) */
+    html[data-theme-mode="dark"] {
+      color-scheme: dark;
+      --bg-canvas: #151417;
+      --bg-surface: #1e1d22;
+      --bg-elevated: #26252b;
+      --bg-subtle: #2f2e36;
+      --editorial-bg-rgb: 21, 20, 23;
+
+      --text-primary: #ede8df;
+      --text-secondary: #9e988f;
+      --text-muted: #6b665f;
+
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --dock-shadow: 0 16px 40px -6px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
+      --dock-bg: rgba(26, 25, 30, 0.88);
+    }
+
+    /* Light Mode (Papyrus Archival) */
+    html[data-theme-mode="light"] {
+      color-scheme: light;
+      --bg-canvas: #fbfbf9;
+      --bg-surface: #f3f3f0;
+      --bg-elevated: #ffffff;
+      --bg-subtle: #eaeae6;
+      --editorial-bg-rgb: 251, 251, 249;
+
+      --text-primary: #0f172a;
+      --text-secondary: #565e74;
+      --text-muted: #94a3b8;
+
+      --border-subtle: rgba(15, 23, 42, 0.08);
+      --border-strong: rgba(15, 23, 42, 0.16);
+      --dock-shadow: 0 16px 36px -6px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(15, 23, 42, 0.06);
+      --dock-bg: rgba(255, 255, 255, 0.90);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      font-family: var(--omni-font-sans);
+      line-height: 1.6;
+      overflow-x: hidden;
+      transition: background-color 0.25s ease, color 0.25s ease;
+      position: relative;
+    }
+
+    /* Subtle print paper grain effect */
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      opacity: 0.025;
+      pointer-events: none;
+      background-image: radial-gradient(var(--text-primary) 1px, transparent 1px);
+      background-size: 16px 16px;
+      z-index: 1;
+    }
+
+    /* -------------------------------------------------------------
+       SIMULATION & TESTING CONTROLS TOOLBAR
+       ------------------------------------------------------------- */
+    .sim-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 42px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-strong);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-family: var(--omni-font-mono);
+      font-size: 0.72rem;
+    }
+
+    .sim-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sim-badge {
+      padding: 2px 6px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: 3px;
+      color: var(--text-secondary);
+    }
+
+    .sim-badge.active-state {
+      border-color: var(--omni-accent-primary);
+      color: var(--omni-accent-primary);
+    }
+
+    .sim-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sim-btn {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      font-family: var(--omni-font-mono);
+      font-size: 0.70rem;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .sim-btn:hover {
+      border-color: var(--omni-accent-primary);
+      color: var(--omni-accent-primary);
+    }
+
+    /* -------------------------------------------------------------
+       PAGE CONTENT & BROADSHEET LAYOUT
+       ------------------------------------------------------------- */
+    .page-container {
+      max-width: 860px;
+      margin: 42px auto 0;
+      padding: 48px 24px 140px;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Swiss Masthead */
+    .masthead {
+      text-align: center;
+      border-bottom: 2px solid var(--text-primary);
+      padding-bottom: 20px;
+      margin-bottom: 40px;
+    }
+
+    .masthead-meta {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+      font-family: var(--omni-font-mono);
+      font-size: 0.70rem;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .masthead-title {
+      font-family: var(--omni-font-serif);
+      font-size: clamp(2.4rem, 6vw, 3.8rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .masthead-sub {
+      font-family: var(--omni-font-serif);
+      font-style: italic;
+      font-size: 1.15rem;
+      color: var(--text-secondary);
+    }
+
+    /* Broadsheet Columns */
+    .article-headline {
+      font-family: var(--omni-font-serif);
+      font-size: 2.2rem;
+      line-height: 1.2;
+      font-weight: 600;
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .article-deck {
+      font-family: var(--omni-font-sans);
+      font-size: 1.1rem;
+      line-height: 1.5;
+      color: var(--text-secondary);
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .article-byline {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+      font-family: var(--omni-font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .article-byline strong {
+      color: var(--omni-accent-primary);
+    }
+
+    .article-body {
+      font-family: var(--omni-font-serif);
+      font-size: 1.25rem;
+      line-height: 1.75;
+      color: var(--text-primary);
+    }
+
+    .article-body p {
+      margin-bottom: 24px;
+    }
+
+    /* Drop Cap */
+    .article-body p:first-of-type::first-letter {
+      font-family: var(--omni-font-serif);
+      float: left;
+      font-size: 4.6rem;
+      line-height: 0.8;
+      padding-top: 4px;
+      padding-right: 12px;
+      padding-bottom: 4px;
+      color: var(--omni-accent-primary);
+      font-weight: 700;
+    }
+
+    .pullquote {
+      font-family: var(--omni-font-serif);
+      font-style: italic;
+      font-size: 1.6rem;
+      line-height: 1.4;
+      text-align: center;
+      padding: 32px 40px;
+      margin: 40px 0;
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+    }
+
+    .pullquote span {
+      display: block;
+      font-family: var(--omni-font-mono);
+      font-size: 0.72rem;
+      font-style: normal;
+      color: var(--text-muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 12px;
+    }
+
+    /* Sample Feed Cards */
+    .section-title {
+      font-family: var(--omni-font-mono);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      margin: 48px 0 20px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .mock-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+      padding: 20px;
+      margin-bottom: 16px;
+      transition: border-color 0.15s ease;
+    }
+
+    .mock-card:hover {
+      border-color: var(--border-strong);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      font-size: 0.85rem;
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--omni-accent-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--omni-font-mono);
+      font-weight: 700;
+      color: var(--omni-accent-contrast);
+      font-size: 0.75rem;
+    }
+
+    /* -------------------------------------------------------------
+       FEATURE A & B: FLOATING SWISS CAPSULE DOCK WITH AUTO-HIDE
+       ------------------------------------------------------------- */
+    .editorial-dock-wrapper {
+      position: fixed;
+      bottom: 24px;
+      left: 0;
+      right: 0;
+      z-index: 999;
+      display: flex;
+      justify-content: center;
+      pointer-events: none; /* Only the capsule itself catches clicks */
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+    }
+
+    /* State: Auto-Hidden when scrolling down */
+    .editorial-dock-wrapper.dock-hidden {
+      transform: translateY(calc(100% + 40px));
+      opacity: 0;
+    }
+
+    /* The Floating Island Capsule */
+    .editorial-capsule-dock {
+      pointer-events: auto;
+      position: relative;
+      background: var(--dock-bg);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid var(--border-strong);
+      border-radius: 9999px; /* Default Pill */
+      box-shadow: var(--dock-shadow);
+      padding: 5px 8px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Style Mode: Swiss Architectural (Subtle 8px Radius variant) */
+    .editorial-capsule-dock.shape-architectural {
+      border-radius: 8px;
+      padding: 6px 10px;
+    }
+
+    /* Dock Items */
+    .editorial-dock-item {
+      position: relative;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      min-width: 58px;
+      user-select: none;
+      transition: color 0.2s ease;
+      z-index: 2;
+    }
+
+    .shape-architectural .editorial-dock-item {
+      border-radius: 4px;
+      padding: 6px 12px;
+    }
+
+    .editorial-dock-item:hover {
+      color: var(--text-primary);
+    }
+
+    .editorial-dock-item.active {
+      color: var(--text-primary);
+    }
+
+    .dock-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .editorial-dock-item:hover .dock-icon {
+      transform: translateY(-1px);
+    }
+
+    .editorial-dock-item.active .dock-icon {
+      transform: translateY(-1px);
+      color: var(--omni-accent-primary);
+    }
+
+    .dock-label {
+      font-family: var(--omni-font-mono);
+      font-size: 0.60rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      line-height: 1;
+      font-weight: 500;
+      opacity: 0.85;
+    }
+
+    .editorial-dock-item.active .dock-label {
+      opacity: 1;
+      font-weight: 700;
+    }
+
+    /* Subtle active indicator dot below the label */
+    .dock-dot {
+      position: absolute;
+      bottom: 2px;
+      left: 50%;
+      transform: translateX(-50%) scale(0);
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--omni-accent-primary);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .editorial-dock-item.active .dock-dot {
+      transform: translateX(-50%) scale(1);
+    }
+
+    /* Floating Sliding Highlight Underlay */
+    .dock-highlight-pill {
+      position: absolute;
+      top: 5px;
+      bottom: 5px;
+      border-radius: 9999px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .shape-architectural .dock-highlight-pill {
+      border-radius: 4px;
+      top: 6px;
+      bottom: 6px;
+    }
+
+    /* Floating Back to Top Button */
+    .editorial-back-to-top {
+      position: fixed;
+      bottom: 32px;
+      right: 28px;
+      z-index: 998;
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border-strong);
+      padding: 8px 16px;
+      font-family: var(--omni-font-mono);
+      font-size: 0.70rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(12px);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+
+    .editorial-back-to-top.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .editorial-back-to-top:hover {
+      border-color: var(--omni-accent-primary);
+      color: var(--omni-accent-primary);
+      transform: translateY(-2px);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 640px) {
+      .editorial-dock-wrapper {
+        bottom: 16px;
+        left: 12px;
+        right: 12px;
+      }
+      .editorial-capsule-dock {
+        width: 100%;
+        max-width: 440px;
+        justify-content: space-around;
+        padding: 4px 6px;
+      }
+      .editorial-dock-item {
+        padding: 6px 8px;
+        min-width: 48px;
+      }
+      .editorial-back-to-top {
+        bottom: 84px;
+        right: 16px;
+        padding: 6px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Simulation Status & Toggles -->
+  <header class="sim-bar">
+    <div class="sim-status">
+      <span>Omni Editorial Dock Simulation:</span>
+      <span id="badge-scroll-state" class="sim-badge active-state">Dock Visible (Scroll Idle)</span>
+      <span id="badge-dock-shape" class="sim-badge">Capsule (Pill)</span>
+    </div>
+
+    <div class="sim-actions">
+      <button id="btn-toggle-shape" class="sim-btn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/></svg>
+        Toggle Shape (Pill / 8px)
+      </button>
+
+      <button id="btn-toggle-autohide" class="sim-btn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+        Auto-Hide: <strong id="lbl-autohide">ON</strong>
+      </button>
+
+      <button id="btn-toggle-theme" class="sim-btn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        Theme Mode
+      </button>
+    </div>
+  </header>
+
+  <!-- Editorial Broadsheet Content Container -->
+  <main class="page-container">
+    <header class="masthead">
+      <div class="masthead-meta">
+        <span>No. 404 • Swiss Edition</span>
+        <span>The Decentralized Broadsheet</span>
+        <span>Vol. I — Autumn 2026</span>
+      </div>
+      <h1 class="masthead-title">The Sacred Sanctuary</h1>
+      <p class="masthead-sub">A study in typography, calm interfaces, and distraction-free Nostr reading</p>
+    </header>
+
+    <article>
+      <h2 class="article-headline">The Quiet Web: Why Floating Navigation Belongs in Modern Editorial Design</h2>
+      <div class="article-deck">
+        Traditional mobile browsers pin rigid 100vw bars across the bottom of the viewport, cutting off text and boxing the reader into a claustrophobic viewport. By detaching navigation into a floating Swiss capsule that breathes with the reader's scroll, we reclaim the sacred dignity of long-form reading.
+      </div>
+
+      <div class="article-byline">
+        <span>By <strong>Elena Rostova</strong></span>
+        <span>•</span>
+        <span>Published 2h ago on Damus Relay</span>
+        <span>•</span>
+        <span>5 min read</span>
+      </div>
+
+      <div class="article-body">
+        <p>
+          In the early days of physical broadsheet newspapers, every square centimeter of paper was precious. But the goal was never to crowd the eye; it was to create a harmonious cadence of ink and margin. When we read on screens today, our senses are constantly assaulted by fixed chrome, flashing banners, and rigid toolbars that never leave the eye in peace.
+        </p>
+
+        <p>
+          The Swiss International Style taught us that whitespace is not empty space—it is an active design element. When navigation is enclosed in a floating capsule, the underlying text gracefully peeks beneath the frosted glass borders, reassuring the subconscious mind that content continues uninterrupted.
+        </p>
+
+        <div class="pullquote">
+          "When you scroll down, you are immersed in contemplation. The interface should disappear like mist over Lake Geneva, reappearing only when summoned by a gentle reverse flick."
+          <span>— Principles of Swiss Screen Typography</span>
+        </div>
+
+        <p>
+          Auto-hiding on scroll is not merely an animation trick; it is an ergonomic gesture of respect for the reader's focus. When the user scrolls downward, their intent is singular: ingestion of ideas. The bottom dock smoothly slides out of the viewport. The moment the user pauses or begins an upward stroke, the dock reappears instantaneously.
+        </p>
+
+        <p>
+          Notice how the floating capsule dock below maintains a tactile, physical presence without obstructing the text. Try scrolling down right now to watch it tuck away smoothly, then scroll up slightly to summon it back.
+        </p>
+      </div>
+    </article>
+
+    <!-- Sample Feed Cards Section -->
+    <section>
+      <h3 class="section-title">Dispatches from the Relay Mesh</h3>
+
+      <div class="mock-card">
+        <div class="card-header">
+          <div class="avatar">MK</div>
+          <div>
+            <strong>Maxime Keller</strong>
+            <span style="color: var(--text-muted); font-size: 0.75rem; margin-left: 6px;">@maxime • 18m ago</span>
+          </div>
+        </div>
+        <p style="font-size: 0.95rem; color: var(--text-secondary); line-height: 1.5;">
+          Just deployed my new nsite on Blossom! Zero build steps, pure static HTML and ES modules running inside Omni's sandboxed micro-kernel. Web standards win every single time.
+        </p>
+      </div>
+
+      <div class="mock-card">
+        <div class="card-header">
+          <div class="avatar" style="background: #1e40af;">SL</div>
+          <div>
+            <strong>Sophie Laurent</strong>
+            <span style="color: var(--text-muted); font-size: 0.75rem; margin-left: 6px;">@sophie • 42m ago</span>
+          </div>
+        </div>
+        <p style="font-size: 0.95rem; color: var(--text-secondary); line-height: 1.5;">
+          Loving the warm paper typography in Editorial shell. It feels like reading an archival journal rather than Doomscrolling Twitter.
+        </p>
+      </div>
+
+      <div class="mock-card">
+        <div class="card-header">
+          <div class="avatar" style="background: #2ecc71;">DR</div>
+          <div>
+            <strong>Damian Ross</strong>
+            <span style="color: var(--text-muted); font-size: 0.75rem; margin-left: 6px;">@damian • 1h ago</span>
+          </div>
+        </div>
+        <p style="font-size: 0.95rem; color: var(--text-secondary); line-height: 1.5;">
+          The sliding highlight under the active icon in the capsule menu provides such crisp tactile feedback without needing loud animations.
+        </p>
+      </div>
+
+      <div class="mock-card">
+        <div class="card-header">
+          <div class="avatar" style="background: #e51400;">AL</div>
+          <div>
+            <strong>Astrid Lind</strong>
+            <span style="color: var(--text-muted); font-size: 0.75rem; margin-left: 6px;">@astrid • 3h ago</span>
+          </div>
+        </div>
+        <p style="font-size: 0.95rem; color: var(--text-secondary); line-height: 1.5;">
+          The contrast between the warm broadsheet background and the sharp monospace captions creates an undeniable sense of craftsmanship.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <!-- FEATURE A & B: FLOATING SWISS CAPSULE DOCK -->
+  <div id="dock-wrapper" class="editorial-dock-wrapper">
+    <nav id="capsule-dock" class="editorial-capsule-dock" role="navigation" aria-label="Editorial Navigation">
+      <!-- Dynamic Highlight Slider -->
+      <div id="dock-highlight" class="dock-highlight-pill"></div>
+
+      <!-- Feed / Chrono -->
+      <button class="editorial-dock-item active" data-app="feed" title="Timeline Feed">
+        <div class="dock-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </div>
+        <span class="dock-label">Feed</span>
+        <div class="dock-dot"></div>
+      </button>
+
+      <!-- Articles / Longform -->
+      <button class="editorial-dock-item" data-app="articles" title="Longform Articles">
+        <div class="dock-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </div>
+        <span class="dock-label">Reading</span>
+        <div class="dock-dot"></div>
+      </button>
+
+      <!-- Apps Launcher -->
+      <button class="editorial-dock-item" data-app="apps" title="All Applications">
+        <div class="dock-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        </div>
+        <span class="dock-label">Apps</span>
+        <div class="dock-dot"></div>
+      </button>
+
+      <!-- Widgets Grid -->
+      <button class="editorial-dock-item" data-app="widgets" title="Workspace Widgets">
+        <div class="dock-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        </div>
+        <span class="dock-label">Widgets</span>
+        <div class="dock-dot"></div>
+      </button>
+
+      <!-- Settings / Preferences -->
+      <button class="editorial-dock-item" data-app="settings" title="Settings & Preferences">
+        <div class="dock-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </div>
+        <span class="dock-label">Settings</span>
+        <div class="dock-dot"></div>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Floating Back to Top Button -->
+  <button id="btn-back-to-top" class="editorial-back-to-top" title="Back to top">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 15l-6-6-6 6"/></svg>
+    <span>Top</span>
+  </button>
+
+  <script>
+    // -------------------------------------------------------------
+    // INTERACTIVE SCRIPT: AUTO-HIDE SCROLL LOGIC & HIGHLIGHT SLIDER
+    // -------------------------------------------------------------
+    const dockWrapper = document.getElementById("dock-wrapper");
+    const capsuleDock = document.getElementById("capsule-dock");
+    const highlight = document.getElementById("dock-highlight");
+    const backToTopBtn = document.getElementById("btn-back-to-top");
+    const dockItems = document.querySelectorAll(".editorial-dock-item");
+
+    const badgeScrollState = document.getElementById("badge-scroll-state");
+    const badgeDockShape = document.getElementById("badge-dock-shape");
+    const btnToggleShape = document.getElementById("btn-toggle-shape");
+    const btnToggleAutoHide = document.getElementById("btn-toggle-autohide");
+    const lblAutoHide = document.getElementById("lbl-autohide");
+    const btnToggleTheme = document.getElementById("btn-toggle-theme");
+
+    let isAutoHideEnabled = true;
+    let lastScrollY = window.scrollY;
+    let scrollDelta = 0;
+    const SCROLL_THRESHOLD = 15; // Minimum px scroll to trigger hide/reveal
+
+    // 1. Sliding highlight positioning
+    function updateHighlightPosition(target) {
+      if (!target) return;
+      const dockRect = capsuleDock.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+
+      const leftOffset = targetRect.left - dockRect.left;
+      const width = targetRect.width;
+
+      highlight.style.left = `${leftOffset}px`;
+      highlight.style.width = `${width}px`;
+    }
+
+    // Set initial position on active item
+    const initialActive = document.querySelector(".editorial-dock-item.active");
+    if (initialActive) {
+      updateHighlightPosition(initialActive);
+    }
+
+    // Handle Item Clicks
+    dockItems.forEach((item) => {
+      item.addEventListener("click", () => {
+        dockItems.forEach((i) => i.classList.remove("active"));
+        item.classList.add("active");
+        updateHighlightPosition(item);
+      });
+    });
+
+    // Recalculate on window resize
+    window.addEventListener("resize", () => {
+      const active = document.querySelector(".editorial-dock-item.active");
+      if (active) updateHighlightPosition(active);
+    });
+
+    // 2. Feature B: Smart Auto-Hide on Scroll
+    window.addEventListener("scroll", () => {
+      const currentScrollY = window.scrollY;
+      const diff = currentScrollY - lastScrollY;
+
+      // Handle Back to Top visibility
+      if (currentScrollY > 260) {
+        backToTopBtn.classList.add("visible");
+      } else {
+        backToTopBtn.classList.remove("visible");
+      }
+
+      if (!isAutoHideEnabled) {
+        lastScrollY = currentScrollY;
+        return;
+      }
+
+      // Scrolling Down -> Hide dock
+      if (diff > SCROLL_THRESHOLD && currentScrollY > 60) {
+        dockWrapper.classList.add("dock-hidden");
+        badgeScrollState.textContent = "Dock Hidden (Reading Mode)";
+        badgeScrollState.classList.remove("active-state");
+      }
+      // Scrolling Up -> Reveal dock
+      else if (diff < -SCROLL_THRESHOLD || currentScrollY <= 20) {
+        dockWrapper.classList.remove("dock-hidden");
+        badgeScrollState.textContent = "Dock Visible (Active Navigation)";
+        badgeScrollState.classList.add("active-state");
+      }
+
+      lastScrollY = currentScrollY;
+    }, { passive: true });
+
+    // Back to top click
+    backToTopBtn.addEventListener("click", () => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      dockWrapper.classList.remove("dock-hidden");
+    });
+
+    // 3. Testing Toggles
+    // Toggle Shape (Pill vs 8px Architectural)
+    btnToggleShape.addEventListener("click", () => {
+      const isArch = capsuleDock.classList.toggle("shape-architectural");
+      badgeDockShape.textContent = isArch ? "Swiss 8px (Architectural)" : "Capsule (Full Pill)";
+      const active = document.querySelector(".editorial-dock-item.active");
+      if (active) updateHighlightPosition(active);
+    });
+
+    // Toggle Auto-Hide
+    btnToggleAutoHide.addEventListener("click", () => {
+      isAutoHideEnabled = !isAutoHideEnabled;
+      lblAutoHide.textContent = isAutoHideEnabled ? "ON" : "OFF";
+      if (!isAutoHideEnabled) {
+        dockWrapper.classList.remove("dock-hidden");
+        badgeScrollState.textContent = "Auto-Hide Disabled";
+      } else {
+        badgeScrollState.textContent = "Dock Visible (Scroll Idle)";
+      }
+    });
+
+    // Toggle Theme (Dark / Light)
+    btnToggleTheme.addEventListener("click", () => {
+      const html = document.documentElement;
+      const current = html.getAttribute("data-theme-mode");
+      const next = current === "dark" ? "light" : "dark";
+      html.setAttribute("data-theme-mode", next);
+      const active = document.querySelector(".editorial-dock-item.active");
+      if (active) updateHighlightPosition(active);
+    });
+  </script>
+</body>
+</html>
