@@ -116,6 +116,9 @@ importers:
       '@omni/types':
         specifier: workspace:*
         version: link:../../types
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -128,6 +131,9 @@ importers:
       '@omni/types':
         specifier: workspace:*
         version: link:../../types
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

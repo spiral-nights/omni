@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && esbuild src/index.ts --bundle --format=esm --target=es2022 --outfile=dist/index.js",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@omni/types": "workspace:*",
+    "esbuild": "^0.28.2",
     "typescript": "^5.7.0"
   }
 }
