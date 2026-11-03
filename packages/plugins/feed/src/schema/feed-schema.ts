@@ -311,7 +311,7 @@ export function getFeedSchema(
                 children: [
                   {
                     type: "avatar",
-                    name: "You",
+                    name: " ", // empty avatar
                     size: "sm"
                   },
                   {
