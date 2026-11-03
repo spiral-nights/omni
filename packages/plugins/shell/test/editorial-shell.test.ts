@@ -1014,7 +1014,7 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(ledgerNames).toEqual(["Alpha Notes", "Beta Reader", "Zeta Studio"]);
     });
 
-    it("toggles between Grid and Swiss Ledger view modes and persists preference", () => {
+    it("toggles between Swiss Ledger (default) and Grid view modes and persists preference", () => {
       shell.mount();
       shell.showAppsIndex();
 
@@ -1023,27 +1023,28 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       const btnGrid = root.querySelector("#btn-apps-view-grid") as HTMLElement;
       const btnLedger = root.querySelector("#btn-apps-view-ledger") as HTMLElement;
 
-      expect(shell.getAppsViewMode()).toBe("grid");
-      expect(gridView.style.display).not.toBe("none");
-      expect(ledgerView.style.display).toBe("none");
-      expect(btnGrid.classList.contains("active")).toBe(true);
-      expect(btnLedger.classList.contains("active")).toBe(false);
-
-      // Switch to Ledger mode
-      btnLedger.click();
+      // Swiss Ledger is default
       expect(shell.getAppsViewMode()).toBe("ledger");
-      expect(localStorage.getItem("omni_editorial_apps_view_mode")).toBe("ledger");
+      expect(ledgerView.style.display).not.toBe("none");
       expect(gridView.style.display).toBe("none");
-      expect(ledgerView.style.display).toBe("block");
-      expect(btnGrid.classList.contains("active")).toBe(false);
       expect(btnLedger.classList.contains("active")).toBe(true);
+      expect(btnGrid.classList.contains("active")).toBe(false);
 
-      // Switch back to Grid mode
+      // Switch to Grid mode
       btnGrid.click();
       expect(shell.getAppsViewMode()).toBe("grid");
       expect(localStorage.getItem("omni_editorial_apps_view_mode")).toBe("grid");
       expect(gridView.style.display).toBe("block");
       expect(ledgerView.style.display).toBe("none");
+      expect(btnGrid.classList.contains("active")).toBe(true);
+      expect(btnLedger.classList.contains("active")).toBe(false);
+
+      // Switch back to Ledger mode
+      btnLedger.click();
+      expect(shell.getAppsViewMode()).toBe("ledger");
+      expect(localStorage.getItem("omni_editorial_apps_view_mode")).toBe("ledger");
+      expect(gridView.style.display).toBe("none");
+      expect(ledgerView.style.display).toBe("block");
     });
 
     it("supports search filtering and displays empty state in ledger view", () => {

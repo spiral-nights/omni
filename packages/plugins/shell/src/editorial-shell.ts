@@ -121,7 +121,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   private boundFullscreenTouchHandler: ((e: TouchEvent) => void) | null = null;
   private expandedPluginDetails: Set<string> = new Set();
   private lastScrollTop = 0;
-  private appsViewMode: "grid" | "ledger" = "grid";
+  private appsViewMode: "grid" | "ledger" = "ledger";
 
   constructor(options: OmniShellOptions) {
     super(options);
@@ -2045,11 +2045,11 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
             <div class="editorial-apps-view-switcher">
               <span class="editorial-view-switcher-label">View:</span>
               <div class="editorial-view-mode-toggles">
-                <button id="btn-apps-view-grid" class="editorial-view-toggle-btn active" title="Cards Grid">
+                <button id="btn-apps-view-grid" class="editorial-view-toggle-btn" title="Cards Grid">
                   ${icon("grid", 13)}
                   <span>Grid</span>
                 </button>
-                <button id="btn-apps-view-ledger" class="editorial-view-toggle-btn" title="Swiss Ledger Table">
+                <button id="btn-apps-view-ledger" class="editorial-view-toggle-btn active" title="Swiss Ledger Table">
                   ${icon("layout", 13)}
                   <span>Ledger</span>
                 </button>
@@ -2068,7 +2068,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           </div>
 
           <!-- Mode A: Cards Grid Container -->
-          <div id="editorial-apps-grid-view">
+          <div id="editorial-apps-grid-view" style="display: none;">
             <!-- Pinned to Dock Section -->
             <div id="editorial-pinned-section" style="margin-bottom: 24px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -2089,7 +2089,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           </div>
 
           <!-- Mode B: Swiss Ledger Table Container -->
-          <div id="editorial-apps-ledger-view" class="editorial-ledger-table-wrap" style="display: none;">
+          <div id="editorial-apps-ledger-view" class="editorial-ledger-table-wrap">
             <table class="editorial-ledger-table">
               <thead>
                 <tr>
