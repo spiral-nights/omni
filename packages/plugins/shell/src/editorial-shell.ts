@@ -842,6 +842,9 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.activePage = "app";
     this.activePluginId = pluginId;
     this.revealDock();
+    this.root.classList.remove("has-widgets-page");
+    this.root.classList.remove("has-apps-page");
+    this.root.classList.add("has-active-app");
 
     // Update Header Title & Subtitle
     this.updateHeaderSubtitle(plugin.displayName || plugin.name || "App");
@@ -893,9 +896,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       defaultPage.classList.remove("active", "fade-out", "fade-in");
       defaultPage.style.display = "none";
     }
-
-    this.root.classList.remove("has-widgets-page");
-    this.root.classList.add("has-active-app");
 
     if (targetPage) {
       targetPage.classList.remove("fade-out");
@@ -1063,6 +1063,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.revealDock();
     this.root.classList.remove("has-active-app");
     this.root.classList.remove("has-widgets-page");
+    this.root.classList.add("has-apps-page");
     if (this.isAppFullscreen) this.toggleAppFullscreen(false);
     const btnFsApps = this.root.querySelector("#btn-editorial-toggle-fullscreen") as HTMLElement | null;
     if (btnFsApps) btnFsApps.style.display = "none";
@@ -1128,6 +1129,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.activePluginId = null;
     this.revealDock();
     this.root.classList.remove("has-active-app");
+    this.root.classList.remove("has-apps-page");
     this.root.classList.add("has-widgets-page");
     if (this.isAppFullscreen) this.toggleAppFullscreen(false);
     const btnFsWidgets = this.root.querySelector("#btn-editorial-toggle-fullscreen") as HTMLElement | null;
@@ -1432,25 +1434,25 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
         row.innerHTML = `
           <td>
-            <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 0; width: 100%;">
               <div class="editorial-plate-card-icon" style="width: 28px; height: 28px; flex-shrink: 0;">
                 ${renderPluginIcon(plugin.icon, 16, "", plugin.id || plugin.name)}
               </div>
-              <div style="min-width: 0;">
+              <div style="min-width: 0; flex: 1; overflow: hidden;">
                 <div style="font-family: var(--omni-font-serif); font-size: 0.98rem; font-weight: 600; color: var(--omni-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                   ${plugin.displayName || plugin.name || plugin.id}
                 </div>
-                <div style="font-family: var(--omni-font-sans); font-size: 0.72rem; color: var(--omni-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px;">
+                <div style="font-family: var(--omni-font-sans); font-size: 0.72rem; color: var(--omni-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                   ${plugin.description || "Decentralized application"}
                 </div>
               </div>
             </div>
           </td>
           <td>
-            <span style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-secondary);">${category}</span>
+            <span style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">${category}</span>
           </td>
           <td>
-            <span style="font-family: var(--omni-font-mono); font-size: 0.70rem; color: var(--omni-text-muted);">v${plugin.version || "1.0.0"}</span>
+            <span style="font-family: var(--omni-font-mono); font-size: 0.70rem; color: var(--omni-text-muted); white-space: nowrap;">v${plugin.version || "1.0.0"}</span>
           </td>
           <td>
             <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
@@ -1460,11 +1462,11 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
             </div>
           </td>
           <td style="text-align: right;">
-            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
-              <button class="editorial-btn-secondary btn-toggle-pin" style="font-size: 0.65rem; padding: 3px 8px;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap;">
+              <button class="editorial-btn-secondary btn-toggle-pin" style="font-size: 0.65rem; padding: 3px 8px; flex-shrink: 0;">
                 ${isPinned ? "Unpin" : "Pin"}
               </button>
-              <button class="editorial-btn-open-row" title="Launch" style="background: transparent; border: none; color: var(--omni-text-muted); cursor: pointer; padding: 2px 4px; display: flex; align-items: center;">
+              <button class="editorial-btn-open-row" title="Launch" style="background: transparent; border: none; color: var(--omni-text-muted); cursor: pointer; padding: 2px 4px; display: flex; align-items: center; flex-shrink: 0;">
                 ${icon("chevron-right", 15)}
               </button>
             </div>
@@ -2094,10 +2096,10 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
               <thead>
                 <tr>
                   <th style="width: 38%;">Application</th>
-                  <th style="width: 18%;">Domain</th>
+                  <th style="width: 16%;">Domain</th>
                   <th style="width: 12%;">Version</th>
                   <th style="width: 18%;">Viewports</th>
-                  <th style="text-align: right; width: 14%;">Action</th>
+                  <th style="text-align: right; width: 16%;">Action</th>
                 </tr>
               </thead>
               <tbody id="editorial-apps-ledger-tbody"></tbody>

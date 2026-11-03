@@ -1093,5 +1093,28 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(shell.activePage).toBe("app");
       expect(shell.activePluginId).toBe("org.omni.plugin.feed");
     });
+
+    it("applies responsive expansive layout (.has-apps-page) without desktop horizontal overflow", async () => {
+      shell.mount();
+      shell.showAppsIndex();
+
+      expect(root.classList.contains("has-apps-page")).toBe(true);
+
+      const tableWrap = root.querySelector(".editorial-ledger-table-wrap") as HTMLElement;
+      expect(tableWrap).toBeTruthy();
+
+      const table = root.querySelector(".editorial-ledger-table") as HTMLElement;
+      expect(table).toBeTruthy();
+
+      // When switching to app, has-apps-page is cleanly removed
+      await shell.openApp("org.omni.plugin.feed");
+      expect(root.classList.contains("has-apps-page")).toBe(false);
+      expect(root.classList.contains("has-active-app")).toBe(true);
+
+      // When switching back to apps, has-apps-page is restored
+      shell.showAppsIndex();
+      expect(root.classList.contains("has-apps-page")).toBe(true);
+      expect(root.classList.contains("has-active-app")).toBe(false);
+    });
   });
 });
