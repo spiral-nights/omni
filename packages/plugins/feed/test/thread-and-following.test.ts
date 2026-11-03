@@ -326,4 +326,49 @@ describe("feed plugin thread view and following tabs", () => {
     const threadPage = feed().querySelector<HTMLElement>(".feed-thread-page")!;
     expect(threadPage.style.display).toBe("block");
   });
+
+  it("batch fetches interactions and synchronizes note card reply count with thread view", async () => {
+    await flush();
+    feed().querySelector<HTMLButtonElement>(".btn-tab-global")!.click();
+    const ws = FakeWebSocket.instances[0];
+
+    const noteId = "sync-reply-note-999";
+    ws.deliver(["EVENT", "feed-initial", {
+      id: noteId,
+      pubkey: strangerPubkey,
+      kind: 1,
+      created_at: 1700000000,
+      content: "A note that will receive replies",
+      tags: []
+    }]);
+
+    // Allow interaction batch scheduler to fire
+    await new Promise((r) => setTimeout(r, 160));
+
+    // Verify interaction request was sent with #e filter
+    const reactReq = ws.sent.find((f: any[]) => f[0] === "REQ" && f[1]?.startsWith("feed_d_react_") && f[2]?.["#e"]?.includes(noteId));
+    expect(reactReq).toBeDefined();
+    expect(reactReq[2].kinds).toEqual([1, 6, 7]);
+
+    // Deliver a reply via the interaction subscription
+    ws.deliver(["EVENT", reactReq[1], {
+      id: "reply-event-1",
+      pubkey: friendPubkey,
+      kind: 1,
+      created_at: 1700000020,
+      content: "Great point!",
+      tags: [["e", noteId]]
+    }]);
+
+    const card = feed().querySelector<HTMLElement>(`[data-note-id="${noteId}"]`)!;
+    const replyCountSpan = card.querySelector<HTMLElement>(".action-reply .action-count")!;
+    expect(replyCountSpan.textContent).toBe("1");
+
+    // Open thread
+    card.click();
+    await flush();
+
+    const threadRepliesHeader = feed().querySelector<HTMLElement>(".thread-replies-header")!;
+    expect(threadRepliesHeader.textContent).toContain("Replies (1)");
+  });
 });

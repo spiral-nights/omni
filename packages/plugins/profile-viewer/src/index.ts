@@ -1479,6 +1479,44 @@ html, body {
   margin-bottom: 16px;
 }
 
+.pv-banner {
+  width: 100%;
+  height: 110px;
+  position: relative;
+  border-radius: var(--omni-radius-md, 10px) var(--omni-radius-md, 10px) 0 0;
+  transition: background 0.25s ease;
+}
+
+.pv-stats-strip .pv-stat-item {
+  transition: opacity 0.15s ease;
+}
+
+.pv-stats-strip .pv-stat-item:hover {
+  opacity: 0.85;
+}
+
+@media (max-width: 600px) {
+  .pv-banner {
+    height: 90px;
+  }
+  .pv-avatar-actions-header {
+    margin-top: -36px !important;
+  }
+  .pv-avatar-wrap {
+    width: 66px !important;
+    height: 66px !important;
+  }
+  .pv-avatar-fallback {
+    font-size: 1.5rem !important;
+  }
+  .pv-action-buttons {
+    justify-content: flex-end !important;
+  }
+  .pv-stats-strip {
+    gap: 14px !important;
+  }
+}
+
 .people-user-card {
   display: flex;
   align-items: center;
@@ -2234,6 +2272,42 @@ const AVATAR_GRADIENTS = [
   "linear-gradient(135deg, #e11d48, #be123c)"
 ];
 
+// Diverse spectrum of vibrant, sophisticated color harmonies used for avatars and complementary gradient banners
+export const AVATAR_PALETTES = [
+  ["#c85d3e", "#3d190e", "#ffd2c2"], // Terracotta / Rust
+  ["#288755", "#0b2e1b", "#bcf5d4"], // Emerald / Forest
+  ["#356ec4", "#102347", "#cce0ff"], // Cobalt / Royal Blue
+  ["#85419c", "#2b1036", "#f3cbff"], // Plum / Violet
+  ["#aa3148", "#3b0d17", "#ffd0d9"], // Crimson / Wine
+  ["#23858a", "#0a2d2f", "#bdf4f7"], // Deep Teal / Marine
+  ["#b88320", "#3d2905", "#ffe6b0"], // Ochre / Amber Gold
+  ["#4d5ec2", "#161b42", "#d4dcff"], // Indigo / Dusk
+  ["#c24965", "#3b0f1b", "#ffd2dc"], // Coral / Rose
+  ["#6b8028", "#222c09", "#e4f7a8"], // Olive / Moss
+  ["#8e4a7d", "#2e1227", "#f9d0ee"], // Berry / Heather
+  ["#1c83a8", "#072b38", "#bceeff"], // Azure / Vibrant Cyan
+  ["#bd5726", "#381506", "#ffd3bb"], // Burnt Sienna
+  ["#6a47b8", "#1e113d", "#e0d4ff"], // Violet / Lavender
+  ["#25846f", "#092d24", "#bcf5e6"], // Jade / Spruce
+  ["#a16328", "#331c07", "#fedec0"]  // Warm Copper / Cinnamon
+];
+
+/**
+ * Generates a vibrant, dynamic CSS gradient banner derived deterministically from pubkey entropy.
+ * Uses complementary harmonies that pair seamlessly with the avatar.
+ */
+export function getProfileGradientBanner(pubkey: string): string {
+  let hash = 0;
+  for (let i = 0; i < (pubkey || "").length; i++) {
+    hash = (hash << 5) - hash + pubkey.charCodeAt(i);
+    hash |= 0;
+  }
+  const seed = Math.abs(hash);
+  const [stop1, stop2, accent] = AVATAR_PALETTES[seed % AVATAR_PALETTES.length];
+  const angle = (seed % 60) + 115;
+  return `linear-gradient(${angle}deg, ${stop2} 0%, color-mix(in srgb, ${stop1} 65%, #141312) 55%, color-mix(in srgb, ${accent} 30%, #1c1b18) 100%)`;
+}
+
 function getAvatarGradient(pubkey: string): string {
   let hash = 0;
   for (let i = 0; i < (pubkey || "").length; i++) {
@@ -2371,27 +2445,7 @@ function getAvatarSvg(pubkey: string, letter: string): string {
     hash |= 0;
   }
   const seed = Math.abs(hash);
-
-  // Diverse spectrum of vibrant, sophisticated color harmonies
-  const palettes = [
-    ["#c85d3e", "#3d190e", "#ffd2c2"], // Terracotta / Rust
-    ["#288755", "#0b2e1b", "#bcf5d4"], // Emerald / Forest
-    ["#356ec4", "#102347", "#cce0ff"], // Cobalt / Royal Blue
-    ["#85419c", "#2b1036", "#f3cbff"], // Plum / Violet
-    ["#aa3148", "#3b0d17", "#ffd0d9"], // Crimson / Wine
-    ["#23858a", "#0a2d2f", "#bdf4f7"], // Deep Teal / Marine
-    ["#b88320", "#3d2905", "#ffe6b0"], // Ochre / Amber Gold
-    ["#4d5ec2", "#161b42", "#d4dcff"], // Indigo / Dusk
-    ["#c24965", "#3b0f1b", "#ffd2dc"], // Coral / Rose
-    ["#6b8028", "#222c09", "#e4f7a8"], // Olive / Moss
-    ["#8e4a7d", "#2e1227", "#f9d0ee"], // Berry / Heather
-    ["#1c83a8", "#072b38", "#bceeff"], // Azure / Vibrant Cyan
-    ["#bd5726", "#381506", "#ffd3bb"], // Burnt Sienna
-    ["#6a47b8", "#1e113d", "#e0d4ff"], // Violet / Lavender
-    ["#25846f", "#092d24", "#bcf5e6"], // Jade / Spruce
-    ["#a16328", "#331c07", "#fedec0"]  // Warm Copper / Cinnamon
-  ];
-  const [stop1, stop2, accent] = palettes[seed % palettes.length];
+  const [stop1, stop2, accent] = AVATAR_PALETTES[seed % AVATAR_PALETTES.length];
 
   // Varied placement of nested circles derived from pubkey entropy
   const c1_x = 20 + (seed % 60);
@@ -2647,6 +2701,8 @@ async function mountProfileViewer(root: HTMLElement) {
             if (t[0] === "p" && t[1]) myFollows.add(t[1]);
           }
           if (countFollowingEl) countFollowingEl.textContent = String(myFollows.size);
+          const countFollowingStat = typeof container !== "undefined" && container ? container.querySelector<HTMLElement>(".count-following-stat") : null;
+          if (countFollowingStat) countFollowingStat.textContent = String(myFollows.size);
           updateActionButtons(activePubkey);
           if (activeTab === "following") {
             renderFollowingList();
@@ -2797,6 +2853,8 @@ async function mountProfileViewer(root: HTMLElement) {
     }
           }
           if (countFollowingEl) countFollowingEl.textContent = String(myFollows.size);
+          const countFollowingStat = typeof container !== "undefined" && container ? container.querySelector<HTMLElement>(".count-following-stat") : null;
+          if (countFollowingStat) countFollowingStat.textContent = String(myFollows.size);
           updateActionButtons(activePubkey);
           if (activeTab === "following") {
             renderFollowingList();
@@ -2867,6 +2925,8 @@ async function mountProfileViewer(root: HTMLElement) {
               myNoteCount++;
               if (myNotesCountEl) myNotesCountEl.textContent = `${myNoteCount} note${myNoteCount === 1 ? "" : "s"}`;
               if (myNotesCountPill) myNotesCountPill.textContent = String(myNoteCount);
+              const countMyNotesStat = container.querySelector<HTMLElement>(".count-my-notes-stat");
+              if (countMyNotesStat) countMyNotesStat.textContent = String(myNoteCount);
               if (myNotesListEl) insertNoteCard(myNotesListEl, ev);
               if (mySentinelEl && myNoteCount >= 10) {
                 mySentinelEl.style.display = "flex";
@@ -2892,6 +2952,8 @@ async function mountProfileViewer(root: HTMLElement) {
               }
               noteCount++;
               if (notesCountEl) notesCountEl.textContent = `${noteCount} note${noteCount === 1 ? "" : "s"}`;
+              const countUserNotesStat = container.querySelector<HTMLElement>(".count-user-notes-stat");
+              if (countUserNotesStat) countUserNotesStat.textContent = String(noteCount);
               if (notesListEl) insertNoteCard(notesListEl, ev);
               if (userSentinelEl && noteCount >= 10) {
                 userSentinelEl.style.display = "flex";
@@ -3003,23 +3065,30 @@ async function mountProfileViewer(root: HTMLElement) {
         <!-- My Profile Card -->
         <div class="pv-card pv-my-card" style="background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); border-radius: var(--omni-radius-md, 10px); overflow: hidden; display: flex; flex-direction: column; width: 100%; box-sizing: border-box;">
           
+          <!-- Dynamic Gradient Banner (Complementary to pubkey & avatar) -->
+          <div class="pv-banner pv-my-banner" style="width: 100%; height: 110px; background: ${getProfileGradientBanner(myPubkey || 'default')};"></div>
+
           <!-- Identity & Metadata Section -->
-          <div class="pv-info-section" style="padding: 20px; display: flex; flex-direction: column; gap: 14px; position: relative; width: 100%; box-sizing: border-box;">
+          <div class="pv-info-section" style="padding: 0 20px 20px 20px; display: flex; flex-direction: column; gap: 14px; position: relative; width: 100%; box-sizing: border-box;">
             
-            <!-- Avatar & Actions Header -->
-            <div class="pv-avatar-actions-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 8px; flex-wrap: wrap; width: 100%; box-sizing: border-box;">
-              <div class="pv-avatar-wrap pv-my-avatar-wrap" style="width: 72px; height: 72px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0; padding: 0;">
+            <!-- Avatar & Actions Header (Avatar overlaps banner) -->
+            <div class="pv-avatar-actions-header" style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: -42px; margin-bottom: 6px; gap: 8px; flex-wrap: wrap; width: 100%; box-sizing: border-box;">
+              <div class="pv-avatar-wrap pv-my-avatar-wrap" style="width: 76px; height: 76px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.5); border: 3px solid var(--omni-bg-surface, var(--bg-surface, #232227)); flex-shrink: 0; padding: 0; background: var(--omni-bg-surface, var(--bg-surface, #232227));">
                 <div class="pv-avatar-fallback pv-my-avatar-fallback" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff;">?</div>
               </div>
               
-              <div class="pv-action-buttons pv-my-action-buttons" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; min-width: 0; flex-shrink: 1;">
+              <div class="pv-action-buttons pv-my-action-buttons" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; min-width: 0; flex-shrink: 1; padding-bottom: 2px;">
                 <button class="pv-btn-edit-profile-card btn-secondary" style="white-space: nowrap; flex-shrink: 0;" title="Edit Profile Details">
                   ${ICONS.edit}
                   <span>Edit Profile</span>
                 </button>
+                <button class="pv-btn-keys-shortcut btn-secondary" style="white-space: nowrap; flex-shrink: 0;" title="Keys & Custody">
+                  ${ICONS.shield}
+                  <span>Keys</span>
+                </button>
                 <button class="pv-btn-my-sync btn-secondary" style="white-space: nowrap; flex-shrink: 0;" title="Sync metadata from Relays">
                   ${ICONS.refresh}
-                  <span>Sync from Relays</span>
+                  <span>Sync</span>
                 </button>
               </div>
             </div>
@@ -3059,6 +3128,18 @@ async function mountProfileViewer(root: HTMLElement) {
               <div class="pv-website-wrap pv-my-website-wrap" style="display: none; align-items: center; gap: 4px; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));">
                 ${ICONS.link}
                 <a class="pv-website-link pv-my-website-link" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: none;"></a>
+              </div>
+            </div>
+
+            <!-- Social Stats Strip -->
+            <div class="pv-stats-strip pv-my-stats-strip" style="display: flex; align-items: center; gap: 20px; padding-top: 12px; border-top: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); font-size: 0.86rem;">
+              <div class="pv-stat-item pv-stat-following btn-stat-following" role="button" tabindex="0" style="cursor: pointer; display: flex; align-items: center; gap: 5px;" title="View Following">
+                <strong class="pv-stat-count count-following-stat" style="color: var(--omni-text-primary, #e5e1e4); font-weight: 700;">0</strong>
+                <span style="color: var(--omni-text-secondary, #9e988f);">Following</span>
+              </div>
+              <div class="pv-stat-item pv-stat-notes btn-stat-notes" role="button" tabindex="0" style="cursor: pointer; display: flex; align-items: center; gap: 5px;" title="View Notes">
+                <strong class="pv-stat-count count-my-notes-stat" style="color: var(--omni-text-primary, #e5e1e4); font-weight: 700;">0</strong>
+                <span style="color: var(--omni-text-secondary, #9e988f);">Notes</span>
               </div>
             </div>
           </div>
@@ -3245,16 +3326,19 @@ async function mountProfileViewer(root: HTMLElement) {
         <!-- Target User Card -->
         <div class="pv-card pv-user-card" style="display: none; background: var(--omni-bg-surface, var(--bg-surface, #232227)); border: 1px solid var(--omni-border-strong, var(--border-strong, #42404b)); border-radius: var(--omni-radius-md, 10px); overflow: hidden; flex-direction: column; width: 100%; max-width: 100%; box-sizing: border-box;">
           
+          <!-- Dynamic Gradient Banner (Complementary to target pubkey & avatar) -->
+          <div class="pv-banner pv-user-banner" style="width: 100%; height: 110px; background: ${getProfileGradientBanner('default')};"></div>
+
           <!-- Identity & Metadata Section -->
-          <div class="pv-info-section" style="padding: 16px; display: flex; flex-direction: column; gap: 14px; position: relative; width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden;">
+          <div class="pv-info-section" style="padding: 0 16px 16px 16px; display: flex; flex-direction: column; gap: 14px; position: relative; width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden;">
             
-            <!-- Avatar & Actions Header -->
-            <div class="pv-avatar-actions-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 8px; flex-wrap: wrap; width: 100%; box-sizing: border-box;">
-              <div class="pv-avatar-wrap pv-user-avatar-wrap" style="width: 72px; height: 72px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0; padding: 0;">
+            <!-- Avatar & Actions Header (Avatar overlaps banner) -->
+            <div class="pv-avatar-actions-header" style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: -40px; margin-bottom: 6px; gap: 8px; flex-wrap: wrap; width: 100%; box-sizing: border-box;">
+              <div class="pv-avatar-wrap pv-user-avatar-wrap" style="width: 76px; height: 76px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.5); border: 3px solid var(--omni-bg-surface, var(--bg-surface, #232227)); flex-shrink: 0; padding: 0; background: var(--omni-bg-surface, var(--bg-surface, #232227));">
                 <div class="pv-avatar-fallback pv-user-avatar-fallback" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff;">?</div>
               </div>
               
-              <div class="pv-action-buttons pv-user-action-buttons" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; min-width: 0; flex-shrink: 1;">
+              <div class="pv-action-buttons pv-user-action-buttons" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; min-width: 0; flex-shrink: 1; padding-bottom: 2px;">
                 <button class="pv-btn-follow btn-follow-toggle" style="display: none; white-space: nowrap; flex-shrink: 0;" title="Follow or Unfollow user">Follow</button>
                 <button class="pv-btn-block btn-block-toggle" style="display: none; white-space: nowrap; flex-shrink: 0;" title="Block or Unblock user">Block</button>
                 <button class="pv-btn-refresh btn-secondary" style="white-space: nowrap; flex-shrink: 0;" title="Refresh Profile & Notes">
@@ -3299,6 +3383,14 @@ async function mountProfileViewer(root: HTMLElement) {
               <div class="pv-website-wrap pv-user-website-wrap" style="display: none; align-items: center; gap: 4px; color: var(--omni-text-secondary, var(--text-secondary, #c2c6d6));">
                 ${ICONS.link}
                 <a class="pv-website-link pv-user-website-link" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: none;"></a>
+              </div>
+            </div>
+
+            <!-- Social Stats Strip -->
+            <div class="pv-stats-strip pv-user-stats-strip" style="display: flex; align-items: center; gap: 20px; padding-top: 12px; border-top: 1px solid var(--omni-border-subtle, var(--border-subtle, #313038)); font-size: 0.86rem;">
+              <div class="pv-stat-item pv-stat-notes" style="display: flex; align-items: center; gap: 5px;">
+                <strong class="pv-stat-count count-user-notes-stat" style="color: var(--omni-text-primary, #e5e1e4); font-weight: 700;">0</strong>
+                <span style="color: var(--omni-text-secondary, #9e988f);">Notes</span>
               </div>
             </div>
           </div>
@@ -3561,6 +3653,23 @@ async function mountProfileViewer(root: HTMLElement) {
   btnEditCard?.addEventListener("click", () => {
     toggleEditPanel("profile");
     editPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  const btnKeysShortcut = tabMyProfile.querySelector<HTMLButtonElement>(".pv-btn-keys-shortcut");
+  btnKeysShortcut?.addEventListener("click", () => {
+    toggleEditPanel("keys");
+    editPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  const btnStatFollowing = tabMyProfile.querySelector<HTMLElement>(".btn-stat-following");
+  btnStatFollowing?.addEventListener("click", () => {
+    switchTab("following", true);
+  });
+
+  const btnStatNotes = tabMyProfile.querySelector<HTMLElement>(".btn-stat-notes");
+  btnStatNotes?.addEventListener("click", () => {
+    toggleEditPanel("notes");
+    myNotesListEl?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   btnInnerTabProfile.addEventListener("click", () => toggleEditPanel("profile"));
@@ -4073,6 +4182,10 @@ async function mountProfileViewer(root: HTMLElement) {
     userCardEl.style.display = "flex";
     userNotesSectionEl.style.display = "flex";
 
+    if (bannerEl) {
+      bannerEl.style.background = getProfileGradientBanner(pubkey);
+    }
+
     const npub = hexToNpub(pubkey);
     const initial = (meta?.display_name || meta?.name || pubkey)[0]?.toUpperCase() || "?";
 
@@ -4080,6 +4193,10 @@ async function mountProfileViewer(root: HTMLElement) {
 
     // Dynamic vector avatar (0 KB remote downloads)
     avatarWrapEl.innerHTML = getAvatarSvg(pubkey, initial);
+
+    // Update user stats strip
+    const countUserNotesStat = tabUserProfile.querySelector<HTMLElement>(".count-user-notes-stat");
+    if (countUserNotesStat) countUserNotesStat.textContent = String(noteCount);
 
     // Names
     displayNameEl.textContent = meta?.display_name || meta?.name || `nostr:${pubkey.slice(0, 8)}`;
@@ -4130,6 +4247,10 @@ async function mountProfileViewer(root: HTMLElement) {
     if (!pubkey) return;
 
     myProfileRendered = true;
+    if (myBannerEl) {
+      myBannerEl.style.background = getProfileGradientBanner(pubkey || myPubkey || "default");
+    }
+
     const npub = hexToNpub(pubkey);
     const initial = (meta?.display_name || meta?.name || pubkey)[0]?.toUpperCase() || "?";
 
@@ -4137,6 +4258,12 @@ async function mountProfileViewer(root: HTMLElement) {
 
     // Dynamic vector avatar (0 KB remote downloads)
     myAvatarWrapEl.innerHTML = getAvatarSvg(pubkey, initial);
+
+    // Update social stats strip
+    const countFollowingStat = tabMyProfile.querySelector<HTMLElement>(".count-following-stat");
+    if (countFollowingStat) countFollowingStat.textContent = String(myFollows.size);
+    const countMyNotesStat = tabMyProfile.querySelector<HTMLElement>(".count-my-notes-stat");
+    if (countMyNotesStat) countMyNotesStat.textContent = String(myNoteCount);
 
     // Names
     myDisplayNameEl.textContent = meta?.display_name || meta?.name || `nostr:${pubkey.slice(0, 8)}`;

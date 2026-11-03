@@ -609,6 +609,36 @@ export function mountFeed(root: any) {
     });
   }
 
+  const queriedDomInteractionNoteIds = new Set<string>();
+  let domInteractionsTimer: any = null;
+
+  function scheduleDomFeedInteractionsFetch() {
+    if (!activeWs || activeWs.readyState !== WebSocket.OPEN) return;
+    if (domInteractionsTimer) clearTimeout(domInteractionsTimer);
+    domInteractionsTimer = setTimeout(() => {
+      const unqueried = Array.from(renderedIds).filter((id) => id && !queriedDomInteractionNoteIds.has(id));
+      if (unqueried.length === 0) return;
+      unqueried.forEach((id) => queriedDomInteractionNoteIds.add(id));
+
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < unqueried.length; i += CHUNK_SIZE) {
+        const chunk = unqueried.slice(i, i + CHUNK_SIZE);
+        const subId = `feed_d_react_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        try {
+          activeWs.send(JSON.stringify([
+            "REQ",
+            subId,
+            {
+              kinds: [1, 6, 7],
+              "#e": chunk,
+              limit: chunk.length * 50
+            }
+          ]));
+        } catch (_) {}
+      }
+    }, 120);
+  }
+
   function handleIncomingEvent(event: any, prepend = false) {
     if (!event || !event.id) return;
     allKnownNotes.set(event.id, event);
@@ -617,6 +647,7 @@ export function mountFeed(root: any) {
     if (isContentFiltered(event.content || "", filterPatterns)) return;
     if (!shouldDisplayInActiveTab(event)) return;
     renderNote(event, prepend);
+    scheduleDomFeedInteractionsFetch();
   }
 
   function renderActiveFeedTab() {
@@ -959,6 +990,12 @@ export function mountFeed(root: any) {
         const repCard = buildThreadReplyCard(rep, parentNote, parentId !== note.id);
         threadRepliesList.appendChild(repCard);
       }
+    }
+
+    const totalReplies = threadRepliesList.querySelectorAll(".note-card").length;
+    const threadRepliesHeader = container.querySelector(".thread-replies-header");
+    if (threadRepliesHeader) {
+      threadRepliesHeader.textContent = `Replies (${totalReplies})`;
     }
 
     if (activeWs && activeWs.readyState === WebSocket.OPEN) {
@@ -1730,6 +1767,62 @@ export function mountFeed(root: any) {
                     const repCard = buildNoteCard(ev);
                     threadRepliesList.appendChild(repCard);
                   }
+                  const count = threadRepliesList.querySelectorAll(".note-card").length;
+                  const repliesHeader = container.querySelector(".thread-replies-header");
+                  if (repliesHeader) {
+                    repliesHeader.textContent = `Replies (${count})`;
+                  }
+                  const feedParentCard = notesList.querySelector(`[data-note-id="${currentThreadNote.id}"]`);
+                  if (feedParentCard) {
+                    const countSpan = feedParentCard.querySelector(".action-reply .action-count, .btn-reply .action-count");
+                    if (countSpan) countSpan.textContent = count > 0 ? String(count) : "";
+                  }
+                }
+                return;
+              }
+
+              // Handle interaction query arrivals (kinds 1, 6, 7)
+              if (subId?.startsWith("feed_d_react_")) {
+                if (ev.kind === 1) {
+                  allKnownNotes.set(ev.id, ev);
+                  const eTags = (ev.tags || []).filter((t: any[]) => t[0] === "e" && t[1]);
+                  for (const t of eTags) {
+                    const parentId = t[1];
+                    const existing = schemaThreadReplies.get(parentId) || [];
+                    if (!existing.some((r) => r.id === ev.id)) {
+                      existing.push(ev);
+                      schemaThreadReplies.set(parentId, existing);
+                    }
+                    const parentCard = container.querySelector(`[data-note-id="${parentId}"]`);
+                    if (parentCard) {
+                      const countSpan = parentCard.querySelector(".action-reply .action-count, .btn-reply .action-count");
+                      if (countSpan) countSpan.textContent = existing.length > 0 ? String(existing.length) : "";
+                    }
+                  }
+                }
+                return;
+              }
+
+              if (ev.kind === 6 || ev.kind === 7) {
+                const eTags = (ev.tags || []).filter((t: any[]) => t[0] === "e" && t[1]);
+                for (const t of eTags) {
+                  const parentId = t[1];
+                  const card = container.querySelector(`[data-note-id="${parentId}"]`);
+                  if (card) {
+                    if (ev.kind === 7 && ev.content !== "-") {
+                      const countSpan = card.querySelector(".action-like .action-count");
+                      if (countSpan) {
+                        const cur = parseInt(countSpan.textContent || "0", 10) || 0;
+                        countSpan.textContent = String(cur + 1);
+                      }
+                    } else if (ev.kind === 6) {
+                      const countSpan = card.querySelector(".action-repost .action-count");
+                      if (countSpan) {
+                        const cur = parseInt(countSpan.textContent || "0", 10) || 0;
+                        countSpan.textContent = String(cur + 1);
+                      }
+                    }
+                  }
                 }
                 return;
               }
@@ -1741,12 +1834,26 @@ export function mountFeed(root: any) {
                   const repCard = buildNoteCard(ev);
                   threadRepliesList.appendChild(repCard);
                 }
+                const count = threadRepliesList.querySelectorAll(".note-card").length;
+                const repliesHeader = container.querySelector(".thread-replies-header");
+                if (repliesHeader) {
+                  repliesHeader.textContent = `Replies (${count})`;
+                }
+                const feedParentCard = notesList.querySelector(`[data-note-id="${currentThreadNote.id}"]`);
+                if (feedParentCard) {
+                  const countSpan = feedParentCard.querySelector(".action-reply .action-count, .btn-reply .action-count");
+                  if (countSpan) countSpan.textContent = count > 0 ? String(count) : "";
+                }
               }
 
               const isRefresh = subId?.startsWith("refresh-");
               handleIncomingEvent(ev, isRefresh);
             } else if (type === "EOSE") {
-              if (subId === "feed-initial") {
+              if (subId?.startsWith("feed_d_react_")) {
+                try {
+                  ws.send(JSON.stringify(["CLOSE", subId]));
+                } catch (_) {}
+              } else if (subId === "feed-initial") {
                 clearTimeout(initialLoadTimeout);
                 if (renderedIds.size === 0) {
                   if (activeTab === "following") {

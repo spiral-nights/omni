@@ -686,4 +686,27 @@ describe("People plugin (profile, follows, mutes)", () => {
     expect(replyCount).toBe("1");
     expect(repostCount).toBe("1");
   });
+
+  it("renders dynamically generated gradient banner and stats strip without remote banner downloads", async () => {
+    await flush();
+    const myBanner = peopleRoot().querySelector<HTMLElement>(".pv-my-banner");
+    expect(myBanner).toBeTruthy();
+    expect(myBanner?.style.background).toContain("linear-gradient");
+
+    const statsStrip = peopleRoot().querySelector<HTMLElement>(".pv-my-stats-strip");
+    expect(statsStrip).toBeTruthy();
+    const followingStat = statsStrip?.querySelector<HTMLElement>(".count-following-stat");
+    expect(followingStat).toBeTruthy();
+
+    // Inspect target user profile and verify user banner is dynamically colored
+    const intentHandler = ((window as any).omni.intents.handle as any).mock.calls.find(
+      (c: any[]) => c[0] === "view_profile"
+    )?.[1];
+    intentHandler({ pubkey: friendPubkey });
+    await flush();
+
+    const userBanner = peopleRoot().querySelector<HTMLElement>(".pv-user-banner");
+    expect(userBanner).toBeTruthy();
+    expect(userBanner?.style.background).toContain("linear-gradient");
+  });
 });

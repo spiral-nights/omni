@@ -26,6 +26,38 @@ import { getFeedSchema } from "../schema/feed-schema.js";
 import type { FeedNoteItem } from "../types.js";
 
 let schemaDispatchTimeout: any = null;
+const queriedInteractionNoteIds = new Set<string>();
+let feedInteractionsTimer: any = null;
+
+export function scheduleFeedInteractionsFetch(ws?: WebSocket | null) {
+  const socket = ws || schemaWs;
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  if (feedInteractionsTimer) clearTimeout(feedInteractionsTimer);
+  feedInteractionsTimer = setTimeout(() => {
+    const unqueried = currentFeedState.notes
+      .map((n) => n.id)
+      .filter((id) => id && !queriedInteractionNoteIds.has(id));
+    if (unqueried.length === 0) return;
+    unqueried.forEach((id) => queriedInteractionNoteIds.add(id));
+
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < unqueried.length; i += CHUNK_SIZE) {
+      const chunk = unqueried.slice(i, i + CHUNK_SIZE);
+      const subId = `feed_s_react_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      try {
+        socket.send(JSON.stringify([
+          "REQ",
+          subId,
+          {
+            kinds: [1, 6, 7],
+            "#e": chunk,
+            limit: chunk.length * 50
+          }
+        ]));
+      } catch (_) {}
+    }
+  }, 120);
+}
 
 export function scheduleSchemaDispatch() {
   if (schemaDispatchTimeout) return;
@@ -319,6 +351,35 @@ export function initFeedSchemaSocket() {
             }
 
             scheduleSchemaDispatch();
+            scheduleFeedInteractionsFetch(ws);
+          }
+
+          if (ev.kind === 6 || ev.kind === 7) {
+            const eTags = (ev.tags || []).filter((t: string[]) => t[0] === "e" && t[1]);
+            let updated = false;
+            for (const t of eTags) {
+              const parentId = t[1];
+              const parentNote = currentFeedState.notes.find((n) => n.id === parentId);
+              if (parentNote) {
+                if (ev.kind === 7) {
+                  if (ev.content !== "-") {
+                    parentNote.likes = (parentNote.likes || 0) + 1;
+                    updated = true;
+                  }
+                } else if (ev.kind === 6) {
+                  parentNote.reposts = (parentNote.reposts || 0) + 1;
+                  updated = true;
+                }
+              }
+            }
+            if (updated) scheduleSchemaDispatch();
+            return;
+          }
+        } else if (type === "EOSE") {
+          if (subId?.startsWith("feed_s_react_")) {
+            try {
+              ws.send(JSON.stringify(["CLOSE", subId]));
+            } catch (_) {}
           }
         }
       } catch (_) {}
