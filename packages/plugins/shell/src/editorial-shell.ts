@@ -121,13 +121,36 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   private boundFullscreenTouchHandler: ((e: TouchEvent) => void) | null = null;
   private expandedPluginDetails: Set<string> = new Set();
   private lastScrollTop = 0;
+  private appsViewMode: "grid" | "ledger" = "grid";
 
   constructor(options: OmniShellOptions) {
     super(options);
+    try {
+      if (typeof localStorage !== "undefined") {
+        const saved = localStorage.getItem("omni_editorial_apps_view_mode");
+        if (saved === "ledger" || saved === "grid") {
+          this.appsViewMode = saved;
+        }
+      }
+    } catch (_) {}
   }
 
   public getShellType(): string {
     return "editorial";
+  }
+
+  public getAppsViewMode(): "grid" | "ledger" {
+    return this.appsViewMode;
+  }
+
+  public setAppsViewMode(mode: "grid" | "ledger"): void {
+    this.appsViewMode = mode;
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("omni_editorial_apps_view_mode", mode);
+      }
+    } catch (_) {}
+    this.renderAppsIndex();
   }
 
   public getActivePageId(): string {
@@ -1246,32 +1269,98 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
   // --- Broadsheet Applications Index ---
 
+  public getAppCategory(p: InstalledPluginEntry): string {
+    const id = (p.id || "").toLowerCase();
+    const name = (p.name || p.displayName || "").toLowerCase();
+    const combined = `${id} ${name}`;
+    if (combined.includes("feed") || combined.includes("social") || combined.includes("note")) return "Social & Feed";
+    if (combined.includes("profile") || combined.includes("people") || combined.includes("identity")) return "Identity";
+    if (combined.includes("publisher") || combined.includes("studio") || combined.includes("blossom")) return "Dev & Studio";
+    if (combined.includes("relay") || combined.includes("pool") || combined.includes("network")) return "System & Network";
+    if (combined.includes("checklist") || combined.includes("task") || combined.includes("weather")) return "Productivity";
+    return "Application";
+  }
+
   public renderAppsIndex(): void {
     const pinnedGrid = this.root.querySelector("#editorial-pinned-apps-grid");
     const allGrid = this.root.querySelector("#editorial-all-apps-grid");
+    const ledgerTbody = this.root.querySelector("#editorial-apps-ledger-tbody");
+    const gridView = this.root.querySelector("#editorial-apps-grid-view") as HTMLElement | null;
+    const ledgerView = this.root.querySelector("#editorial-apps-ledger-view") as HTMLElement | null;
+    const emptyNotice = this.root.querySelector("#editorial-apps-search-empty") as HTMLElement | null;
+    const btnGrid = this.root.querySelector("#btn-apps-view-grid") as HTMLElement | null;
+    const btnLedger = this.root.querySelector("#btn-apps-view-ledger") as HTMLElement | null;
+
     if (!pinnedGrid || !allGrid) return;
 
     pinnedGrid.innerHTML = "";
     allGrid.innerHTML = "";
+    if (ledgerTbody) ledgerTbody.innerHTML = "";
+
+    // Apply active class to the view mode buttons
+    if (this.appsViewMode === "ledger") {
+      if (gridView) gridView.style.display = "none";
+      if (ledgerView) ledgerView.style.display = "block";
+      btnGrid?.classList.remove("active");
+      btnLedger?.classList.add("active");
+    } else {
+      if (gridView) gridView.style.display = "block";
+      if (ledgerView) ledgerView.style.display = "none";
+      btnGrid?.classList.add("active");
+      btnLedger?.classList.remove("active");
+    }
 
     const filterInput = this.root.querySelector("#editorial-apps-search-input") as HTMLInputElement | null;
     const query = filterInput?.value.trim().toLowerCase() || "";
 
     const filtered = this.installedPlugins.filter((p) => {
       if (!query) return true;
-      const n = (p.name || p.id).toLowerCase();
+      const n = (p.displayName || p.name || p.id).toLowerCase();
       const d = (p.description || "").toLowerCase();
-      return n.includes(query) || d.includes(query);
+      return n.includes(query) || d.includes(query) || p.id.toLowerCase().includes(query);
     });
+
+    // Sort strictly in alphabetical order by app display name
+    const sortAlphabetical = (a: InstalledPluginEntry, b: InstalledPluginEntry) => {
+      const nameA = (a.displayName || a.name || a.id).toLowerCase();
+      const nameB = (b.displayName || b.name || b.id).toLowerCase();
+      return nameA.localeCompare(nameB);
+    };
+
+    filtered.sort(sortAlphabetical);
 
     const pinnedList = filtered.filter((p) => this.isAppPinned(p));
     const unpinnedList = filtered.filter((p) => !this.isAppPinned(p));
 
+    // Handle empty search results
+    if (filtered.length === 0) {
+      if (emptyNotice) emptyNotice.style.display = "block";
+      if (gridView) gridView.style.display = "none";
+      if (ledgerView) ledgerView.style.display = "none";
+    } else {
+      if (emptyNotice) emptyNotice.style.display = "none";
+      if (this.appsViewMode === "ledger") {
+        if (ledgerView) ledgerView.style.display = "block";
+      } else {
+        if (gridView) gridView.style.display = "block";
+      }
+    }
+
+    // Hide pinned section in Grid mode if there are no pinned apps matching filter
+    const pinnedSection = this.root.querySelector("#editorial-pinned-section") as HTMLElement | null;
+    if (pinnedSection) {
+      pinnedSection.style.display = pinnedList.length > 0 ? "block" : "none";
+    }
+
+    // 1. Render Cards Grid (in strictly alphabetical order)
     const renderCard = (plugin: InstalledPluginEntry, container: Element) => {
       const card = document.createElement("div");
       card.className = "editorial-plate-card";
-      const iconKey = (plugin.icon as IconName) || "apps";
+      card.dataset.pluginId = plugin.id;
       const isPinned = this.isAppPinned(plugin);
+      const placements = this.getPluginPlacements(plugin);
+      const hasWidget = placements.some((pl) => pl.enabled !== false && (pl.viewport === "sidebar" || pl.viewport === "widget"));
+      const category = this.getAppCategory(plugin);
 
       card.innerHTML = `
         <div class="editorial-plate-card-header">
@@ -1284,7 +1373,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
                 ${plugin.displayName || plugin.name || plugin.id}
               </div>
               <div style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted);">
-                v${plugin.version || "1.0.0"}
+                v${plugin.version || "1.0.0"} • ${category}
               </div>
             </div>
           </div>
@@ -1293,6 +1382,16 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           </button>
         </div>
         <p class="editorial-plate-card-desc">${plugin.description || "Decentralized micro-frontend application."}</p>
+        <div class="editorial-plate-card-footer" style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--omni-border-subtle); padding-top: 8px; margin-top: 2px;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            ${isPinned ? `<span class="editorial-badge editorial-badge-pinned">★ Pinned</span>` : ""}
+            ${hasWidget ? `<span class="editorial-badge editorial-badge-widget">Widget</span>` : ""}
+            <span class="editorial-badge editorial-badge-domain">${category}</span>
+          </div>
+          <button class="editorial-btn-open" title="Open App" style="background: transparent; border: none; color: var(--omni-text-muted); cursor: pointer; display: flex; align-items: center; padding: 2px 4px;">
+            ${icon("chevron-right", 15)}
+          </button>
+        </div>
       `;
 
       card.addEventListener("click", (e) => {
@@ -1308,7 +1407,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       });
 
       this.bindAppContextMenu(card, plugin);
-
       container.appendChild(card);
     };
 
@@ -1320,6 +1418,75 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     const allCount = this.root.querySelector("#editorial-all-count");
     if (allCount) allCount.textContent = `${unpinnedList.length} unpinned`;
+
+    // 2. Render Swiss Ledger Table (all matching apps, strictly in alphabetical order)
+    if (ledgerTbody) {
+      for (const plugin of filtered) {
+        const isPinned = this.isAppPinned(plugin);
+        const placements = this.getPluginPlacements(plugin);
+        const hasWidget = placements.some((pl) => pl.enabled !== false && (pl.viewport === "sidebar" || pl.viewport === "widget"));
+        const category = this.getAppCategory(plugin);
+        const row = document.createElement("tr");
+        row.className = "editorial-ledger-row";
+        row.dataset.pluginId = plugin.id;
+
+        row.innerHTML = `
+          <td>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div class="editorial-plate-card-icon" style="width: 28px; height: 28px; flex-shrink: 0;">
+                ${renderPluginIcon(plugin.icon, 16, "", plugin.id || plugin.name)}
+              </div>
+              <div style="min-width: 0;">
+                <div style="font-family: var(--omni-font-serif); font-size: 0.98rem; font-weight: 600; color: var(--omni-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  ${plugin.displayName || plugin.name || plugin.id}
+                </div>
+                <div style="font-family: var(--omni-font-sans); font-size: 0.72rem; color: var(--omni-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px;">
+                  ${plugin.description || "Decentralized application"}
+                </div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <span style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-secondary);">${category}</span>
+          </td>
+          <td>
+            <span style="font-family: var(--omni-font-mono); font-size: 0.70rem; color: var(--omni-text-muted);">v${plugin.version || "1.0.0"}</span>
+          </td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+              ${isPinned ? `<span class="editorial-badge editorial-badge-pinned">★ Dock</span>` : ""}
+              ${hasWidget ? `<span class="editorial-badge editorial-badge-widget">Widget</span>` : ""}
+              ${!isPinned && !hasWidget ? `<span style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted);">—</span>` : ""}
+            </div>
+          </td>
+          <td style="text-align: right;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+              <button class="editorial-btn-secondary btn-toggle-pin" style="font-size: 0.65rem; padding: 3px 8px;">
+                ${isPinned ? "Unpin" : "Pin"}
+              </button>
+              <button class="editorial-btn-open-row" title="Launch" style="background: transparent; border: none; color: var(--omni-text-muted); cursor: pointer; padding: 2px 4px; display: flex; align-items: center;">
+                ${icon("chevron-right", 15)}
+              </button>
+            </div>
+          </td>
+        `;
+
+        row.addEventListener("click", (e) => {
+          if ((e.target as HTMLElement).closest(".btn-toggle-pin")) return;
+          this.openApp(plugin.id);
+        });
+
+        row.querySelector(".btn-toggle-pin")?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.setAppPinned(plugin.id, !this.isAppPinned(plugin));
+          this.renderDock();
+          this.renderAppsIndex();
+        });
+
+        this.bindAppContextMenu(row, plugin);
+        ledgerTbody.appendChild(row);
+      }
+    }
   }
 
   // --- Companion Widgets View ---
@@ -1393,6 +1560,17 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     const searchInput = this.root.querySelector("#editorial-apps-search-input") as HTMLInputElement | null;
     searchInput?.addEventListener("input", () => {
       this.renderAppsIndex();
+    });
+
+    const btnGrid = this.root.querySelector("#btn-apps-view-grid");
+    const btnLedger = this.root.querySelector("#btn-apps-view-ledger");
+
+    btnGrid?.addEventListener("click", () => {
+      this.setAppsViewMode("grid");
+    });
+
+    btnLedger?.addEventListener("click", () => {
+      this.setAppsViewMode("ledger");
     });
   }
 
@@ -1860,8 +2038,23 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         <!-- Viewport B: Broadsheet Applications Index -->
         <section id="editorial-page-apps" class="editorial-viewport-page" style="padding: 20px 16px 88px;">
           <div class="editorial-section-header">
-            <h2 class="editorial-section-title">Applications</h2>
-            <div class="editorial-section-meta">All Installed Apps • Pin to Dock or Launch Directly</div>
+            <div>
+              <h2 class="editorial-section-title">Applications</h2>
+              <div class="editorial-section-meta">All Installed Apps • Pin to Dock or Launch Directly</div>
+            </div>
+            <div class="editorial-apps-view-switcher">
+              <span class="editorial-view-switcher-label">View:</span>
+              <div class="editorial-view-mode-toggles">
+                <button id="btn-apps-view-grid" class="editorial-view-toggle-btn active" title="Cards Grid">
+                  ${icon("grid", 13)}
+                  <span>Grid</span>
+                </button>
+                <button id="btn-apps-view-ledger" class="editorial-view-toggle-btn" title="Swiss Ledger Table">
+                  ${icon("layout", 13)}
+                  <span>Ledger</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Apps Search -->
@@ -1874,22 +2067,47 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
             />
           </div>
 
-          <!-- Pinned to Dock Section -->
-          <div style="margin-bottom: 24px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-              <span class="editorial-pref-label">Pinned to Dock</span>
-              <span id="editorial-pinned-count" class="editorial-pref-status">0 pinned</span>
+          <!-- Mode A: Cards Grid Container -->
+          <div id="editorial-apps-grid-view">
+            <!-- Pinned to Dock Section -->
+            <div id="editorial-pinned-section" style="margin-bottom: 24px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span class="editorial-pref-label">Pinned to Dock</span>
+                <span id="editorial-pinned-count" class="editorial-pref-status">0 pinned</span>
+              </div>
+              <div id="editorial-pinned-apps-grid" class="editorial-apps-grid"></div>
             </div>
-            <div id="editorial-pinned-apps-grid" class="editorial-apps-grid"></div>
+
+            <!-- All Apps Section -->
+            <div id="editorial-unpinned-section">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span class="editorial-pref-label">Unpinned Applications</span>
+                <span id="editorial-all-count" class="editorial-pref-status">0 unpinned</span>
+              </div>
+              <div id="editorial-all-apps-grid" class="editorial-apps-grid"></div>
+            </div>
           </div>
 
-          <!-- All Apps Section -->
-          <div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-              <span class="editorial-pref-label">Unpinned Applications</span>
-              <span id="editorial-all-count" class="editorial-pref-status">0 unpinned</span>
-            </div>
-            <div id="editorial-all-apps-grid" class="editorial-apps-grid"></div>
+          <!-- Mode B: Swiss Ledger Table Container -->
+          <div id="editorial-apps-ledger-view" class="editorial-ledger-table-wrap" style="display: none;">
+            <table class="editorial-ledger-table">
+              <thead>
+                <tr>
+                  <th style="width: 38%;">Application</th>
+                  <th style="width: 18%;">Domain</th>
+                  <th style="width: 12%;">Version</th>
+                  <th style="width: 18%;">Viewports</th>
+                  <th style="text-align: right; width: 14%;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="editorial-apps-ledger-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- Empty search result notice -->
+          <div id="editorial-apps-search-empty" class="editorial-pref-card" style="align-items: center; text-align: center; padding: 32px 16px; display: none;">
+            <div style="font-family: var(--omni-font-serif); font-size: 1.1rem; color: var(--omni-text-primary); margin-bottom: 4px;">No applications found</div>
+            <p style="font-family: var(--omni-font-sans); font-size: 0.82rem; color: var(--omni-text-muted); margin: 0;">Try a different keyword or search query.</p>
           </div>
         </section>
 

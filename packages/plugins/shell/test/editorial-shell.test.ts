@@ -949,4 +949,148 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(panelWorkspace?.querySelector("#editorial-relays-list")).toBeNull();
     });
   });
+
+  describe("Dual-Mode Applications Index (Cards Grid ↔ Swiss Ledger Table) with Alphabetical Sorting", () => {
+    it("renders cards and ledger rows strictly in alphabetical order", () => {
+      shell.installedPlugins = [
+        {
+          id: "org.omni.plugin.zeta",
+          name: "Zeta Studio",
+          displayName: "Zeta Studio",
+          description: "Zeta app",
+          icon: "edit-3",
+          viewport: "main",
+          pinned: true,
+          enabled: true,
+          manifest: { id: "org.omni.plugin.zeta", name: "Zeta Studio", version: "1.0.0", entry: "dist/index.js", components: [], views: [] },
+          scriptContent: "console.log('zeta');",
+          sourceUrl: "local:@omni/plugin-zeta"
+        },
+        {
+          id: "org.omni.plugin.alpha",
+          name: "Alpha Notes",
+          displayName: "Alpha Notes",
+          description: "Alpha app",
+          icon: "feed",
+          viewport: "main",
+          pinned: false,
+          enabled: true,
+          manifest: { id: "org.omni.plugin.alpha", name: "Alpha Notes", version: "1.0.0", entry: "dist/index.js", components: [], views: [] },
+          scriptContent: "console.log('alpha');",
+          sourceUrl: "local:@omni/plugin-alpha"
+        },
+        {
+          id: "org.omni.plugin.beta",
+          name: "Beta Reader",
+          displayName: "Beta Reader",
+          description: "Beta app",
+          icon: "book",
+          viewport: "main",
+          pinned: true,
+          enabled: true,
+          manifest: { id: "org.omni.plugin.beta", name: "Beta Reader", version: "1.0.0", entry: "dist/index.js", components: [], views: [] },
+          scriptContent: "console.log('beta');",
+          sourceUrl: "local:@omni/plugin-beta"
+        }
+      ];
+
+      shell.mount();
+      shell.showAppsIndex();
+
+      // Check cards grid alphabetical order
+      // Pinned grid has Beta and Zeta in alphabetical order
+      const pinnedCards = Array.from(root.querySelectorAll("#editorial-pinned-apps-grid .editorial-plate-card"));
+      const pinnedNames = pinnedCards.map((c) => c.querySelector(".editorial-plate-card-name")?.textContent?.trim());
+      expect(pinnedNames).toEqual(["Beta Reader", "Zeta Studio"]);
+
+      // Unpinned grid has Alpha Notes
+      const unpinnedCards = Array.from(root.querySelectorAll("#editorial-all-apps-grid .editorial-plate-card"));
+      const unpinnedNames = unpinnedCards.map((c) => c.querySelector(".editorial-plate-card-name")?.textContent?.trim());
+      expect(unpinnedNames).toEqual(["Alpha Notes"]);
+
+      // Check Swiss Ledger Table alphabetical order across ALL apps
+      const ledgerRows = Array.from(root.querySelectorAll("#editorial-apps-ledger-tbody .editorial-ledger-row"));
+      const ledgerNames = ledgerRows.map((r) => r.querySelector("td div div div")?.textContent?.trim());
+      expect(ledgerNames).toEqual(["Alpha Notes", "Beta Reader", "Zeta Studio"]);
+    });
+
+    it("toggles between Grid and Swiss Ledger view modes and persists preference", () => {
+      shell.mount();
+      shell.showAppsIndex();
+
+      const gridView = root.querySelector("#editorial-apps-grid-view") as HTMLElement;
+      const ledgerView = root.querySelector("#editorial-apps-ledger-view") as HTMLElement;
+      const btnGrid = root.querySelector("#btn-apps-view-grid") as HTMLElement;
+      const btnLedger = root.querySelector("#btn-apps-view-ledger") as HTMLElement;
+
+      expect(shell.getAppsViewMode()).toBe("grid");
+      expect(gridView.style.display).not.toBe("none");
+      expect(ledgerView.style.display).toBe("none");
+      expect(btnGrid.classList.contains("active")).toBe(true);
+      expect(btnLedger.classList.contains("active")).toBe(false);
+
+      // Switch to Ledger mode
+      btnLedger.click();
+      expect(shell.getAppsViewMode()).toBe("ledger");
+      expect(localStorage.getItem("omni_editorial_apps_view_mode")).toBe("ledger");
+      expect(gridView.style.display).toBe("none");
+      expect(ledgerView.style.display).toBe("block");
+      expect(btnGrid.classList.contains("active")).toBe(false);
+      expect(btnLedger.classList.contains("active")).toBe(true);
+
+      // Switch back to Grid mode
+      btnGrid.click();
+      expect(shell.getAppsViewMode()).toBe("grid");
+      expect(localStorage.getItem("omni_editorial_apps_view_mode")).toBe("grid");
+      expect(gridView.style.display).toBe("block");
+      expect(ledgerView.style.display).toBe("none");
+    });
+
+    it("supports search filtering and displays empty state in ledger view", () => {
+      shell.mount();
+      shell.showAppsIndex();
+      shell.setAppsViewMode("ledger");
+
+      const searchInput = root.querySelector("#editorial-apps-search-input") as HTMLInputElement;
+      const ledgerRows = () => root.querySelectorAll("#editorial-apps-ledger-tbody .editorial-ledger-row");
+      const emptyState = root.querySelector("#editorial-apps-search-empty") as HTMLElement;
+
+      expect(ledgerRows().length).toBeGreaterThan(0);
+      expect(emptyState.style.display).toBe("none");
+
+      // Search for specific app
+      searchInput.value = "Feed";
+      searchInput.dispatchEvent(new Event("input"));
+      expect(ledgerRows().length).toBe(1);
+      expect(emptyState.style.display).toBe("none");
+
+      // Search for nonexistent query
+      searchInput.value = "nonexistent_app_query_xyz";
+      searchInput.dispatchEvent(new Event("input"));
+      expect(ledgerRows().length).toBe(0);
+      expect(emptyState.style.display).toBe("block");
+    });
+
+    it("allows pinning and launching directly from the Swiss ledger table", () => {
+      shell.mount();
+      shell.showAppsIndex();
+      shell.setAppsViewMode("ledger");
+
+      const checklistRow = root.querySelector('.editorial-ledger-row[data-plugin-id="org.omni.plugin.checklist"]') as HTMLElement;
+      expect(checklistRow).toBeTruthy();
+
+      // Pin button in ledger row
+      const pinBtn = checklistRow.querySelector(".btn-toggle-pin") as HTMLElement;
+      expect(pinBtn.textContent?.trim()).toBe("Pin");
+
+      pinBtn.click();
+      expect(shell.isAppPinned(shell.installedPlugins.find((p) => p.id === "org.omni.plugin.checklist")!)).toBe(true);
+
+      // Clicking row launches app
+      const feedRow = root.querySelector('.editorial-ledger-row[data-plugin-id="org.omni.plugin.feed"]') as HTMLElement;
+      feedRow.click();
+      expect(shell.activePage).toBe("app");
+      expect(shell.activePluginId).toBe("org.omni.plugin.feed");
+    });
+  });
 });
