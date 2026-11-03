@@ -62,15 +62,10 @@ export { extractDisplayName } from "./net/profiles.js";
 export { getFeedSchema } from "./schema/feed-schema.js";
 export { handleFeedAction } from "./schema/actions.js";
 
-// Legacy DOM Fallback
-export { mountFeed } from "./legacy/dom-feed.js";
-
 // Internal Runtime Imports
 import { isSchemaRoute, isSettingsRoute, isSearchRoute, isWidgetRoute, isCompactRoute } from "./routes.js";
 import { getFeedSchema } from "./schema/feed-schema.js";
 import { handleFeedAction } from "./schema/actions.js";
-import { mountFeed } from "./legacy/dom-feed.js";
-import { mountFeedSettings } from "./filter/filter-settings.js";
 import { initFeedSchemaSocket } from "./net/relay-client.js";
 import { currentFeedState } from "./state.js";
 
@@ -190,32 +185,5 @@ if (typeof window !== "undefined") {
     initFeedSchemaSocket();
     checkPendingActiveNote();
     dispatchFeedSchema(getFeedSchema(getFeedView()));
-  }
-}
-
-// ── Fallback DOM Auto-mount (when running in isolated iframe or test mode) ─────
-
-function init() {
-  if (typeof document !== "undefined") {
-    const root = document.body;
-    if (isSchemaRoute()) {
-      return;
-    }
-    if (isSettingsRoute()) {
-      mountFeedSettings(root);
-    } else {
-      const feed = mountFeed(root);
-      if (isSearchRoute()) {
-        feed.showSearchPage();
-      }
-    }
-  }
-}
-
-if (typeof document !== "undefined") {
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
   }
 }

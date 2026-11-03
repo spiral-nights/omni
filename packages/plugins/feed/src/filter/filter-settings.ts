@@ -4,8 +4,26 @@ import {
   saveFilterPatterns,
   compileFilterRegex
 } from "./content-filter.js";
-import { FEED_CSS } from "../legacy/dom-css.js";
-import { html, escapeHtml, ICONS } from "../legacy/dom-helpers.js";
+
+const TRASH_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+
+function html<T extends HTMLElement = HTMLElement>(
+  strings: TemplateStringsArray,
+  ...values: any[]
+): T {
+  const template = document.createElement("template");
+  template.innerHTML = strings.reduce((acc, str, i) => acc + str + (values[i] ?? ""), "").trim();
+  return template.content.firstElementChild as T;
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 export const STORAGE_KEY_FEED_INLINE_IMAGES = "omni_feed_inline_images";
 
@@ -31,8 +49,6 @@ export function renderFilterSettings(container: HTMLElement, onFiltersChanged?: 
 
   const wrapper = html<HTMLDivElement>`
     <div class="feed-filter-settings" style="display: flex; flex-direction: column; gap: 18px; font-family: inherit; color: var(--text-primary, #ede8df);">
-      <style class="omni-feed-styles">${FEED_CSS}</style>
-
       <!-- Display Preferences -->
       <div class="feed-display-preferences" style="display: flex; flex-direction: column; gap: 8px;">
         <h3 style="margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary, #ede8df);">Display Preferences</h3>
@@ -134,7 +150,7 @@ export function renderFilterSettings(container: HTMLElement, onFiltersChanged?: 
             ${isJsonDefault ? `<span class="pattern-badge-default" style="font-size: 0.7rem; color: var(--text-muted, #78716c); white-space: nowrap;">(JSON payloads default)</span>` : ""}
           </div>
           <button class="btn-remove-pattern" data-index="${i}" title="Remove pattern" aria-label="Remove pattern" style="background: transparent; border: none; color: var(--text-muted, #78716c); cursor: pointer; padding: 4px; display: flex; align-items: center;">
-            ${ICONS.trash}
+            ${TRASH_ICON}
           </button>
         </div>
       `;

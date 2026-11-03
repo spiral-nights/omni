@@ -21,6 +21,7 @@ import {
   queueProfileFetch,
   flushProfileBatch
 } from "./profiles.js";
+import { isContentFiltered, loadFilterPatterns } from "../filter/content-filter.js";
 import { isWidgetRoute, isCompactRoute } from "../routes.js";
 import { getFeedSchema } from "../schema/feed-schema.js";
 import type { FeedNoteItem } from "../types.js";
@@ -312,6 +313,7 @@ export function initFeedSchemaSocket() {
               return;
             }
 
+            if (isContentFiltered(ev.content || "", loadFilterPatterns())) return;
             if (currentFeedState.notes.some((n) => n.id === ev.id)) return;
 
             if (ev.created_at && ev.created_at < schemaOldestTimestamp) {

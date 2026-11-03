@@ -44,6 +44,10 @@ function isSchemaView(
     if (route && route.includes("format=iframe")) return false;
     return true;
   }
+  if (manifest.id === "org.omni.plugin.publisher") {
+    if (route && route.includes("format=iframe")) return false;
+    return true;
+  }
   if (
     scriptContent &&
     (scriptContent.includes('type="application/json"#omni-schema') ||

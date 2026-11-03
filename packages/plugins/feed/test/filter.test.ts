@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   DEFAULT_FILTER_PATTERNS,
   STORAGE_KEY_FEED_FILTERS,
@@ -7,54 +7,8 @@ import {
   saveFilterPatterns,
   compileFilterRegex,
   isContentFiltered,
-  renderFilterSettings,
-  mountFeedSettings,
-  isSettingsRoute
+  renderFilterSettings
 } from "../src/index";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
-const feedCode = readFileSync(
-  join(__dirname, "../dist/index.js"),
-  "utf8"
-).replace(/^export /gm, "");
-
-class FakeWebSocket {
-  static OPEN = 1;
-  static instances: FakeWebSocket[] = [];
-  url: string;
-  readyState = 0;
-  onopen: any = null;
-  onmessage: any = null;
-  onerror: any = null;
-  onclose: any = null;
-  sent: any[] = [];
-
-  constructor(url: string) {
-    this.url = url;
-    FakeWebSocket.instances.push(this);
-    setTimeout(() => {
-      this.readyState = 1;
-      this.onopen?.(new Event("open"));
-    }, 0);
-  }
-
-  send(data: string) {
-    this.sent.push(JSON.parse(data));
-  }
-
-  close() {
-    this.readyState = 3;
-  }
-
-  deliver(frame: any[]) {
-    this.onmessage?.({ data: JSON.stringify(frame) });
-  }
-}
-
-function flush() {
-  return new Promise((r) => setTimeout(r, 20));
-}
 
 function createMemoryStorage() {
   const store = new Map<string, string>();
@@ -205,96 +159,6 @@ describe("Feed Regex Content Filtering", () => {
       const codes = Array.from(container.querySelectorAll(".feed-pattern-code")).map((c) => c.textContent);
       expect(codes).toEqual(DEFAULT_FILTER_PATTERNS);
       expect(loadFilterPatterns()).toEqual(DEFAULT_FILTER_PATTERNS);
-    });
-  });
-
-  describe("Feed timeline integration with regex filter", () => {
-    let document: Document;
-
-    beforeEach(() => {
-      document = window.document;
-      document.body.innerHTML = "";
-      FakeWebSocket.instances = [];
-      (window as any).WebSocket = FakeWebSocket;
-      (window as any).nostr = { getPublicKey: async () => "a".repeat(64) };
-      (window as any).omni = { intents: { dispatch: vi.fn(async () => ({})) } };
-      (window as any).location.search = "";
-      (window as any).__OMNI_ROUTE__ = "";
-    });
-
-    const feed = () => document.body.querySelector<HTMLElement>(".feed-container")!;
-
-    it("filters out JSON events while rendering non-JSON events", async () => {
-      new Function(feedCode)();
-      await flush();
-      feed().querySelector<HTMLButtonElement>(".btn-tab-global")?.click();
-
-      const ws = FakeWebSocket.instances[0];
-      // Deliver non-JSON event
-      ws.deliver(["EVENT", "feed-initial", {
-        id: "note-regular", pubkey: "b".repeat(64), kind: 1, created_at: 1700000000,
-        content: "Hello Nostr universe!", tags: []
-      }]);
-
-      // Deliver raw JSON event (e.g. automated bot payload)
-      ws.deliver(["EVENT", "feed-initial", {
-        id: "note-json-bot", pubkey: "c".repeat(64), kind: 1, created_at: 1700000001,
-        content: '{"action": "ping", "uptime": 3600}', tags: []
-      }]);
-
-      // Deliver multi-line JSON event
-      ws.deliver(["EVENT", "feed-initial", {
-        id: "note-json-multiline", pubkey: "d".repeat(64), kind: 1, created_at: 1700000002,
-        content: '  \n{\n  "version": "1.0",\n  "status": "ok"\n}  \n', tags: []
-      }]);
-
-      const cards = feed().querySelectorAll(".note-card");
-      expect(cards.length).toBe(1);
-      expect(cards[0].getAttribute("data-note-id")).toBe("note-regular");
-    });
-
-    it("navigates to settings page from header and back", async () => {
-      new Function(feedCode)();
-      await flush();
-
-      const btnSettings = feed().querySelector<HTMLButtonElement>(".btn-settings-feed")!;
-      expect(btnSettings).not.toBeNull();
-      btnSettings.click();
-
-      const settingsPage = feed().querySelector<HTMLElement>(".feed-settings-page")!;
-      expect(settingsPage.style.display).not.toBe("none");
-      expect(feed().querySelector<HTMLElement>(".notes-list")!.style.display).toBe("none");
-
-      const btnBack = feed().querySelector<HTMLButtonElement>(".btn-settings-back")!;
-      btnBack.click();
-
-      expect(settingsPage.style.display).toBe("none");
-      expect(feed().querySelector<HTMLElement>(".notes-list")!.style.display).toBe("");
-    });
-
-    it("mounts standalone settings view when route has ?view=settings and does not mount the feed", async () => {
-      (window as any).__OMNI_ROUTE__ = "?view=settings";
-      new Function(feedCode)();
-      await flush();
-
-      const standalone = document.body.querySelector(".feed-standalone-settings");
-      expect(standalone).not.toBeNull();
-      expect(standalone!.querySelector(".feed-filter-settings")).not.toBeNull();
-      // Verify main feed is NOT mounted in the settings view
-      expect(document.body.querySelector(".feed-container")).toBeNull();
-      expect(document.body.querySelector(".feed-composer")).toBeNull();
-    });
-
-    it("mounts standalone settings view when __OMNI_VIEW__ is settings", async () => {
-      (window as any).__OMNI_ROUTE__ = "";
-      (window as any).__OMNI_VIEW__ = "settings";
-      new Function(feedCode)();
-      await flush();
-
-      const standalone = document.body.querySelector(".feed-standalone-settings");
-      expect(standalone).not.toBeNull();
-      expect(standalone!.querySelector(".feed-filter-settings")).not.toBeNull();
-      expect(document.body.querySelector(".feed-container")).toBeNull();
     });
   });
 });

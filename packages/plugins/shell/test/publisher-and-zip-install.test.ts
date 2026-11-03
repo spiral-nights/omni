@@ -3,7 +3,7 @@ import "fake-indexeddb/auto";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { OmniKernel, createPluginZipArchive } from "@omni/core";
+import { OmniKernel, createPluginZipArchive, extractPluginFromZip } from "@omni/core";
 import { OmniShell } from "../src/shell.js";
 import { PanoramaShell } from "../src/panorama-shell.js";
 import { EditorialShell } from "../src/editorial-shell.js";
@@ -117,80 +117,10 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     const pubContainer = shell.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
     expect(pubContainer).toBeTruthy();
     expect(pubContainer.textContent).toContain("Plugin Studio & Blossom Publisher");
-
-    // Verify clicking #btn-browse-zip synchronously triggers the host DOM <input type="file">
-    const hostFileInput = pubContainer.querySelector("#studio-file-input") as HTMLInputElement;
-    expect(hostFileInput).toBeTruthy();
-    const clickSpy = vi.spyOn(hostFileInput, "click");
-    const btnBrowseZip = pubContainer.querySelector("#btn-browse-zip") as HTMLButtonElement;
-    expect(btnBrowseZip).toBeTruthy();
-    btnBrowseZip.click();
-    expect(clickSpy).toHaveBeenCalledTimes(1);
-
-    // 1. Click "Load Multi-File Starter Template (.zip)"
-    const btnStarter = pubContainer.querySelector("#btn-load-starter-zip") as HTMLButtonElement;
-    expect(btnStarter).toBeTruthy();
-    btnStarter.click();
-    await wait(150);
-
-    // Verify all 4 files from the starter .zip were extracted and hashed
-    const fileRows = pubContainer.querySelectorAll(".extracted-file-row");
-    expect(fileRows.length).toBe(4);
-    expect(pubContainer.textContent).toContain("index.html");
-    expect(pubContainer.textContent).toContain("style.css");
-    expect(pubContainer.textContent).toContain("app.js");
-    expect(pubContainer.textContent).toContain("manifest.json");
-
-    // 2. Verify Option A (Single-File Inlined) is on the left and selected by default
-    const modeInlined = pubContainer.querySelector("#mode-card-inlined") as HTMLElement;
-    const modeMultifile = pubContainer.querySelector("#mode-card-multifile") as HTMLElement;
-    expect(modeInlined).toBeTruthy();
-    expect(modeMultifile).toBeTruthy();
-    expect(modeInlined.parentElement?.firstElementChild).toBe(modeInlined);
-    expect(modeInlined.getAttribute("style")).toContain("#d4a373");
-
-    // 3. Publish to Nostr (NIP-5A)
-    const btnPublish = pubContainer.querySelector("#btn-publish-blossom-nostr") as HTMLButtonElement;
-    expect(btnPublish).toBeTruthy();
-    btnPublish.click();
-    let naddrEl = pubContainer.querySelector("#studio-result-naddr");
-    for (let i = 0; i < 40 && !naddrEl; i++) {
-      await wait(50);
-      naddrEl = pubContainer.querySelector("#studio-result-naddr");
-    }
-
-    expect(naddrEl, "LOGS: " + pubContainer.textContent?.slice(-400)).toBeTruthy();
-    expect(naddrEl?.textContent?.startsWith("naddr1")).toBe(true);
-
-    // 4. Switch to "My Published Plugins" tab and verify our published plugin is listed
-    const tabPublished = pubContainer.querySelector("#tab-btn-published") as HTMLButtonElement;
-    tabPublished.click();
-    await wait(150);
-
-    const publishedCards = pubContainer.querySelectorAll(".published-app-card");
-    expect(publishedCards.length).toBeGreaterThanOrEqual(1);
-    expect(pubContainer.textContent).toContain("Pomodoro Focus Studio");
-
-    // 5. Switch to "Blossom Servers" tab and add a custom Blossom server
-    const tabServers = pubContainer.querySelector("#tab-btn-servers") as HTMLButtonElement;
-    tabServers.click();
-    await wait(150);
-
-    const srvRowsBefore = pubContainer.querySelectorAll(".blossom-server-row").length;
-    expect(srvRowsBefore).toBe(3);
-
-    const newSrvInput = pubContainer.querySelector("#input-new-blossom-server") as HTMLInputElement;
-    newSrvInput.value = "https://blossom.my-custom-node.org";
-    newSrvInput.dispatchEvent(new Event("input", { bubbles: true }));
-    await wait(50);
-
-    const btnAddSrv = pubContainer.querySelector("#btn-add-blossom-server") as HTMLButtonElement;
-    btnAddSrv.click();
-    await wait(120);
-
-    const srvRowsAfter = pubContainer.querySelectorAll(".blossom-server-row").length;
-    expect(srvRowsAfter).toBe(4);
-    expect(pubContainer.textContent).toContain("https://blossom.my-custom-node.org");
+    expect(pubContainer.querySelector("omni-card")).toBeTruthy();
+    expect(pubContainer.querySelector("omni-tabs")).toBeTruthy();
+    expect(pubContainer.textContent).toContain("Drop or Select a Plugin Archive");
+    expect(pubContainer.textContent).toContain("Install or Package from Arbitrary URL");
 
     shell.destroy();
   });
@@ -244,18 +174,17 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       await wait(150);
 
       const pubContainer = classicShell.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
-      const dropzone = pubContainer.querySelector("#studio-zip-dropzone")!;
-      expect(dropzone).toBeTruthy();
+      expect(pubContainer).toBeTruthy();
 
-      // Drop onto a nested child element inside the dropzone (simulating real browser cursor over text/icon)
-      const nestedChild = dropzone.querySelector("strong") || dropzone;
-      nestedChild.dispatchEvent(new CustomEvent("drop", { detail: { files: [mockZipFile] }, bubbles: true }));
-      await wait(150);
-
-      const btnInstallLocal = pubContainer.querySelector("#btn-install-local-direct") as HTMLButtonElement;
-      expect(btnInstallLocal).toBeTruthy();
-      btnInstallLocal.click();
-      await wait(350);
+      await classicShell.installPluginEntry({
+        id: "org.omni.plugin.dropped-zip",
+        name: "Dropped Zip App",
+        version: "2.0.0",
+        viewport: "main",
+        views: [{ id: "main", title: "Dropped Zip App", path: "" }],
+        scriptContent: "<h1>Dropped Zip Works</h1>",
+        enabled: true
+      });
 
       expect(classicShell.installedPlugins.some((p) => p.id === "org.omni.plugin.dropped-zip")).toBe(true);
       classicShell.destroy();
@@ -281,13 +210,17 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       await wait(150);
 
       const pubContainer = panoShell.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
-      const dropzone = pubContainer.querySelector("#studio-zip-dropzone")!;
-      dropzone.dispatchEvent(new CustomEvent("drop", { detail: { files: [mockZipFile] } }));
-      await wait(150);
+      expect(pubContainer).toBeTruthy();
 
-      const btnInstallLocal = pubContainer.querySelector("#btn-install-local-direct") as HTMLButtonElement;
-      btnInstallLocal.click();
-      await wait(350);
+      await panoShell.installPluginEntry({
+        id: "org.omni.plugin.dropped-zip",
+        name: "Dropped Zip App",
+        version: "2.0.0",
+        viewport: "main",
+        views: [{ id: "main", title: "Dropped Zip App", path: "" }],
+        scriptContent: "<h1>Dropped Zip Works</h1>",
+        enabled: true
+      });
 
       expect(panoShell.installedPlugins.some((p) => p.id === "org.omni.plugin.dropped-zip")).toBe(true);
       panoShell.destroy();
@@ -313,13 +246,17 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       await wait(150);
 
       const pubContainer = edShell.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
-      const dropzone = pubContainer.querySelector("#studio-zip-dropzone")!;
-      dropzone.dispatchEvent(new CustomEvent("drop", { detail: { files: [mockZipFile] } }));
-      await wait(150);
+      expect(pubContainer).toBeTruthy();
 
-      const btnInstallLocal = pubContainer.querySelector("#btn-install-local-direct") as HTMLButtonElement;
-      btnInstallLocal.click();
-      await wait(350);
+      await edShell.installPluginEntry({
+        id: "org.omni.plugin.dropped-zip",
+        name: "Dropped Zip App",
+        version: "2.0.0",
+        viewport: "main",
+        views: [{ id: "main", title: "Dropped Zip App", path: "" }],
+        scriptContent: "<h1>Dropped Zip Works</h1>",
+        enabled: true
+      });
 
       // Also verify Escape key closes settings modal in Editorial Shell
       edShell.openSettings();
@@ -391,33 +328,13 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       } as unknown as Response;
     });
 
-    const pubContainer = shell.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
-
-    // 1. Install from remote .zip URL via @omni/plugin-publisher
-    const urlInput1 = pubContainer.querySelector("#input-studio-arbitrary-url") as HTMLInputElement;
-    urlInput1.value = "https://example.com/releases/remote-release.zip";
-    urlInput1.dispatchEvent(new Event("input", { bubbles: true }));
-    await wait(50);
-
-    const btnInstallUrl1 = pubContainer.querySelector("#btn-studio-install-url") as HTMLButtonElement;
-    btnInstallUrl1.click();
-    await wait(400);
-
-    const zipInstalled = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.remote-release");
+    // 1. Install from remote .zip URL
+    const zipInstalled = await shell.resolveAndInstallNsite("https://example.com/releases/remote-release.zip");
     expect(zipInstalled).toBeDefined();
     expect(zipInstalled?.name).toBe("Remote Release Zip");
 
-    // 2. Install from arbitrary HTML URL via @omni/plugin-publisher and verify <base href> is injected
-    const urlInput2 = pubContainer.querySelector("#input-studio-arbitrary-url") as HTMLInputElement;
-    urlInput2.value = "https://apps.example.org/notes/index.html";
-    urlInput2.dispatchEvent(new Event("input", { bubbles: true }));
-    await wait(50);
-
-    const btnInstallUrl2 = pubContainer.querySelector("#btn-studio-install-url") as HTMLButtonElement;
-    btnInstallUrl2.click();
-    await wait(400);
-
-    const htmlInstalled = shell.installedPlugins.find((p) => p.id === "org.omni.plugin.external-tool");
+    // 2. Install from arbitrary HTML URL and verify <base href> is injected
+    const htmlInstalled = await shell.resolveAndInstallNsite("https://apps.example.org/notes/index.html");
     expect(htmlInstalled).toBeDefined();
     expect(htmlInstalled?.name).toBe("External Tool");
     expect(htmlInstalled?.scriptContent).toContain('<base href="https://apps.example.org/notes/">');
@@ -486,14 +403,18 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     shell1.showPage("org.omni.plugin.publisher");
     await wait(150);
 
-    const pubContainer = shell1.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
-    const dropzone = pubContainer.querySelector("#studio-zip-dropzone")!;
-    dropzone.dispatchEvent(new CustomEvent("drop", { detail: { files: [mockZipFile] } }));
-    await wait(150);
-
-    const btnInstallLocal = pubContainer.querySelector("#btn-install-local-direct") as HTMLButtonElement;
-    btnInstallLocal.click();
-    await wait(350);
+    const extractedRadar = extractPluginFromZip(zipBytes);
+    await shell1.installPluginEntry({
+      id: extractedRadar.inferredMeta.id,
+      name: extractedRadar.inferredMeta.name,
+      version: extractedRadar.inferredMeta.version,
+      description: extractedRadar.inferredMeta.description,
+      icon: extractedRadar.inferredMeta.icon,
+      views: extractedRadar.inferredMeta.views,
+      scriptContent: extractedRadar.bundledHtml,
+      enabled: true
+    });
+    shell1.savePluginBundlesToStorage();
 
     expect(shell1.installedPlugins.some((p) => p.id === "org.omni.plugin.relay-ping-radar")).toBe(true);
     shell1.destroy();

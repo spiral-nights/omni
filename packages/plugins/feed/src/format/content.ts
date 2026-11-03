@@ -1,7 +1,15 @@
-import { escapeHtml } from "../legacy/dom-helpers.js";
 import { decodeNostrEntity } from "./bech32.js";
 import { loadInlineImagesPreference } from "../filter/filter-settings.js";
 import type { ParsedSearchQuery } from "../types.js";
+
+export function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 export function parseSearchQuery(raw: string): ParsedSearchQuery {
   const authors: string[] = [];

@@ -445,6 +445,21 @@ ${baseHtml}
   // Detect views from HTML + Web App Manifest
   const views = NostrPluginResolver.detectPluginViews(null, bundledHtml);
   if (manifestFile && manifestFile.textContent) {
+    try {
+      const parsed = JSON.parse(manifestFile.textContent);
+      if (Array.isArray(parsed.views)) {
+        for (const pv of parsed.views) {
+          if (pv && pv.id && !views.some((v) => v.id === pv.id)) {
+            views.push({
+              id: pv.id,
+              title: pv.title || (pv.id.charAt(0).toUpperCase() + pv.id.slice(1)),
+              path: pv.path !== undefined ? pv.path : (pv.id === "main" ? "" : `?view=${encodeURIComponent(pv.id)}`),
+              format: pv.format || "auto"
+            });
+          }
+        }
+      }
+    } catch {}
     const manifestViews = NostrPluginResolver.detectPluginViews(
       null,
       `<script type="application/manifest+json">${manifestFile.textContent}</script>`

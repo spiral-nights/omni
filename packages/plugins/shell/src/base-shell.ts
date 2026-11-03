@@ -1498,22 +1498,53 @@ export abstract class BaseShell implements OmniShellHost {
       };
     } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
       const res = await fetch(trimmed);
-      const text = await res.text();
-      if (text.startsWith("<") || text.startsWith("<!DOCTYPE") || /<html[\s>]/i.test(text)) {
-        scriptContent = text;
-        const titleMatch = text.match(/<title>([^<]+)<\/title>/i);
-        const title = titleMatch ? titleMatch[1].trim() : "Custom nsite";
+      const contentType = res.headers?.get?.("content-type") || "";
+      const isZip =
+        trimmed.toLowerCase().split("?")[0].endsWith(".zip") ||
+        contentType.toLowerCase().includes("application/zip");
+
+      if (isZip) {
+        const ab = await res.arrayBuffer();
+        const extracted = extractPluginFromZip(new Uint8Array(ab));
+        scriptContent = extracted.bundledHtml;
+        customViews = extracted.inferredMeta.views;
         manifest = {
-          id: `nsite-${Date.now()}`,
-          name: title,
-          version: "1.0.0",
+          id: extracted.inferredMeta.id,
+          name: extracted.inferredMeta.name,
+          version: extracted.inferredMeta.version,
+          description: extracted.inferredMeta.description,
+          icon: extracted.inferredMeta.icon,
           entry: "index.html",
-          components: [{ id: "main", slot: "main", title }]
+          components: [{ id: "main", slot: "main", title: extracted.inferredMeta.name }],
+          views: extracted.inferredMeta.views
         };
       } else {
-        manifest = JSON.parse(text);
-        if (typeof manifest.script === "string" && !scriptContent) {
-          scriptContent = manifest.script;
+        const text = await res.text();
+        if (text.startsWith("<") || text.startsWith("<!DOCTYPE") || /<html[\s>]/i.test(text)) {
+          const baseHref = trimmed.endsWith("/") ? trimmed : trimmed.replace(/\/[^/]*$/, "/");
+          let htmlWithBase = text;
+          if (!/<base\s/i.test(htmlWithBase)) {
+            if (/<head[^>]*>/i.test(htmlWithBase)) {
+              htmlWithBase = htmlWithBase.replace(/<head[^>]*>/i, (m) => `${m}\n  <base href="${baseHref}">`);
+            } else {
+              htmlWithBase = `<head><base href="${baseHref}"></head>\n${htmlWithBase}`;
+            }
+          }
+          scriptContent = htmlWithBase;
+          const titleMatch = text.match(/<title>([^<]+)<\/title>/i);
+          const title = titleMatch ? titleMatch[1].trim() : "Custom nsite";
+          manifest = {
+            id: `nsite-${Date.now()}`,
+            name: title,
+            version: "1.0.0",
+            entry: "index.html",
+            components: [{ id: "main", slot: "main", title }]
+          };
+        } else {
+          manifest = JSON.parse(text);
+          if (typeof manifest.script === "string" && !scriptContent) {
+            scriptContent = manifest.script;
+          }
         }
       }
     } else if (trimmed.startsWith("naddr1") || trimmed.startsWith("nostr:naddr1") || /^\d+:[0-9a-fA-F]{64}:/.test(trimmed)) {
