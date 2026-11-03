@@ -11,6 +11,11 @@ import { mountShellStyles, unmountShellStyles } from "./styles/loader.js";
 import { EDITORIAL_SHELL_CSS } from "./styles/editorial-styles.js";
 import { shellRegistry } from "./shell-registry.js";
 import {
+  renderInstalledShellsList,
+  renderCuratedShellCatalog as renderSharedCuratedShellCatalog,
+  wireShellManagerModal
+} from "./shell-manager-ui.js";
+import {
   renderGeneralPermissionsSection,
   renderNostrWritePermissionsSection,
   renderHandledIntentsSection
@@ -1521,156 +1526,33 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   // --- Installed Shells Manager in Editorial ---
 
   public renderShellManager(): void {
-    const shellsList = this.root.querySelector("#editorial-installed-shells-list");
-    const countBadge = this.root.querySelector("#editorial-shell-count-badge");
-    if (!shellsList) return;
-
-    const shells = shellRegistry.list();
-    const currentActive = shellRegistry.getActiveShellId();
-
-    if (countBadge) {
-      countBadge.textContent = `${shells.length} installed`;
-    }
-
-    shellsList.innerHTML = "";
-
-    for (const s of shells) {
-      const isActive = currentActive === s.id;
-      const isBuiltin = s.isBuiltin !== false;
-
-      const card = document.createElement("div");
-      card.className = "editorial-pref-card";
-      card.style.cssText = `border: 1px solid ${isActive ? "var(--omni-accent-primary)" : "var(--omni-border-subtle)"};`;
-
-      card.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="width: 32px; height: 32px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
-              ${s.icon && ICONS[s.icon as IconName] ? icon(s.icon as IconName, 18) : icon("layout", 18)}
-            </div>
-            <div>
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <strong style="font-family: var(--omni-font-serif); font-size: 0.95rem; color: var(--omni-text-primary);">${s.name}</strong>
-                ${isActive ? `<span style="font-family: var(--omni-font-mono); font-size: 0.62rem; font-weight: 700; text-transform: uppercase; padding: 1px 6px; background: var(--omni-accent-primary); color: #fff; border-radius: 2px;">Active</span>` : ""}
-                ${!isBuiltin ? `<span style="font-family: var(--omni-font-mono); font-size: 0.62rem; text-transform: uppercase; padding: 1px 6px; background: var(--omni-bg-elevated); color: var(--omni-text-muted); border: 1px solid var(--omni-border-subtle); border-radius: 2px;">Custom</span>` : ""}
-              </div>
-              <div style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted); margin-top: 2px;">
-                ${s.author ? `by ${s.author}` : "Omni Core Team"} • v${s.version || "1.0.0"}
-              </div>
-            </div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            ${!isActive ? `
-              <button class="editorial-btn-secondary btn-activate-shell" data-shell-id="${s.id}" style="color: var(--omni-accent-primary); border-color: var(--omni-accent-primary); font-size: 0.72rem; padding: 4px 8px;">
-                Activate
-              </button>
-            ` : `
-              <span style="font-family: var(--omni-font-mono); font-size: 0.68rem; color: var(--omni-accent-primary); font-weight: 600; padding: 4px 6px;">Current</span>
-            `}
-            ${!isBuiltin ? `
-              <button class="editorial-btn-secondary btn-uninstall-shell" data-shell-id="${s.id}" style="color: #ff5555; border-color: #552222; font-size: 0.72rem; padding: 4px 8px;">
-                Uninstall
-              </button>
-            ` : ""}
-          </div>
-        </div>
-        <p style="font-family: var(--omni-font-sans); font-size: 0.78rem; color: var(--omni-text-secondary); margin: 0; line-height: 1.35;">${s.description}</p>
-      `;
-
-      card.querySelector(".btn-activate-shell")?.addEventListener("click", () => {
-        shellRegistry.setActiveShell(s.id);
-        this.reloadPage();
-      });
-
-      card.querySelector(".btn-uninstall-shell")?.addEventListener("click", () => {
-        if (confirm(`Uninstall shell '${s.name}'?`)) {
-          shellRegistry.uninstall(s.id);
-          this.renderShellManager();
-        }
-      });
-
-      shellsList.appendChild(card);
-    }
-
+    renderInstalledShellsList({
+      root: this.root,
+      prefix: "editorial",
+      isEditorial: true,
+      onReload: () => this.reloadPage(),
+      onRefresh: () => this.renderShellManager()
+    });
     this.renderCuratedShellCatalog();
   }
 
   public renderCuratedShellCatalog(): void {
-    const catalogContainer = this.root.querySelector("#editorial-curated-shell-catalog");
-    if (!catalogContainer) return;
-    catalogContainer.innerHTML = "";
-
-    const curated = shellRegistry.getCuratedCatalog();
-    const installed = shellRegistry.list();
-
-    for (const c of curated) {
-      const isInstalled = installed.some((s) => s.id === c.id);
-      const isCurrentActive = shellRegistry.getActiveShellId() === c.id;
-
-      const item = document.createElement("div");
-      item.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--omni-bg-elevated); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); gap: 10px;";
-      item.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-          <div style="width: 30px; height: 30px; background: var(--omni-bg-surface); border: 1px solid var(--omni-border-subtle); border-radius: var(--omni-radius-sm); display: flex; align-items: center; justify-content: center; color: var(--omni-accent-primary); flex-shrink: 0;">
-            ${c.icon && ICONS[c.icon as IconName] ? icon(c.icon as IconName, 16) : icon("layout", 16)}
-          </div>
-          <div style="min-width: 0;">
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <strong style="font-family: var(--omni-font-serif); font-size: 0.88rem; color: var(--omni-text-primary);">${c.name}</strong>
-              <span style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted);">v${c.version || "1.0.0"}</span>
-            </div>
-            <div style="font-family: var(--omni-font-sans); font-size: 0.72rem; color: var(--omni-text-muted); margin-top: 1px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
-              ${c.description}
-            </div>
-          </div>
-        </div>
-        <div style="flex-shrink: 0;">
-          ${isInstalled ? (
-            isCurrentActive ? `
-              <span style="font-family: var(--omni-font-mono); font-size: 0.68rem; color: var(--omni-accent-primary); font-weight: 600;">Active</span>
-            ` : `
-              <button class="editorial-btn-secondary btn-activate-curated-shell" data-shell-id="${c.id}" style="font-size: 0.72rem; padding: 3px 8px;">
-                Activate
-              </button>
-            `
-          ) : `
-            <button class="editorial-btn-secondary btn-install-curated-shell" data-shell-id="${c.id}" style="color: var(--omni-accent-primary); border-color: var(--omni-accent-primary); font-size: 0.72rem; padding: 3px 8px;">
-              Install Shell
-            </button>
-          `}
-        </div>
-      `;
-
-      item.querySelector(".btn-install-curated-shell")?.addEventListener("click", () => {
-        shellRegistry.install(c);
-        this.renderShellManager();
-      });
-
-      item.querySelector(".btn-activate-curated-shell")?.addEventListener("click", () => {
-        shellRegistry.setActiveShell(c.id);
-        this.reloadPage();
-      });
-
-      catalogContainer.appendChild(item);
-    }
+    renderSharedCuratedShellCatalog({
+      root: this.root,
+      prefix: "editorial",
+      isEditorial: true,
+      onReload: () => this.reloadPage(),
+      onRefresh: () => this.renderShellManager()
+    });
   }
 
   private wireShellManager(): void {
-    const modal = this.root.querySelector("#editorial-install-shell-modal");
-    const btnOpen = this.root.querySelector("#btn-editorial-open-install-shell");
-    const btnClose = this.root.querySelector("#btn-editorial-close-install-shell");
-
-    btnOpen?.addEventListener("click", () => {
-      modal?.classList.add("open");
-      this.renderCuratedShellCatalog();
-    });
-
-    btnClose?.addEventListener("click", () => {
-      modal?.classList.remove("open");
-    });
-
-    modal?.addEventListener("click", (e) => {
-      if (e.target === modal) modal.classList.remove("open");
+    wireShellManagerModal({
+      root: this.root,
+      prefix: "editorial",
+      isEditorial: true,
+      onReload: () => this.reloadPage(),
+      onRefresh: () => this.renderShellManager()
     });
   }
 
