@@ -440,7 +440,7 @@ export interface IntentToastOptions {
   candidateName: string;
   onEnable: () => void;
   onDismiss: () => void;
-  theme?: "classic" | "panorama";
+  theme?: "editorial" | "panorama" | "classic";
   timeoutMs?: number;
 }
 
@@ -455,7 +455,7 @@ export function showIntentEnableToast(options: IntentToastOptions): () => void {
     candidateName,
     onEnable,
     onDismiss,
-    theme = "classic",
+    theme = "editorial",
     timeoutMs = 10000
   } = options;
   const isPanorama = theme === "panorama";

@@ -223,9 +223,9 @@ export abstract class BaseShell implements OmniShellHost {
   public abstract getActivePageId(): string;
 
   /**
-   * Returns the canonical shell identifier (e.g. 'classic', 'panorama').
+   * Returns the canonical shell identifier (e.g. 'editorial', 'panorama').
    */
-  public abstract getShellType(): "classic" | "panorama" | string;
+  public abstract getShellType(): "editorial" | "panorama" | string;
 
   /**
    * Hook invoked whenever plugins, placements, or workspace configurations change.
@@ -1597,7 +1597,7 @@ export abstract class BaseShell implements OmniShellHost {
     showIntentEnableToast({
       action,
       candidateName: candidate.name || candidate.pluginId,
-      theme: this.getShellType() === "panorama" ? "panorama" : "classic",
+      theme: this.getShellType() === "panorama" ? "panorama" : "editorial",
       onEnable: () => {
         this.kernel.intentBroker.setPluginIntentEnabled(candidate.pluginId, action, true);
         const p = this.installedPlugins.find((x) => x.id === candidate.pluginId);
@@ -1614,13 +1614,62 @@ export abstract class BaseShell implements OmniShellHost {
     });
   }
 
+  public ensureOpenWithModal(): HTMLElement {
+    let modal = document.getElementById("open-with-modal");
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.className = "modal-overlay";
+      modal.id = "open-with-modal";
+      modal.innerHTML = `
+        <div class="modal-card" style="max-width: 440px; background: var(--omni-bg-elevated, #22201d); border: 1px solid var(--omni-border-subtle, #33302a); border-radius: 8px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+          <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1.1rem; color: var(--omni-accent-primary, #d4a373);">✦</span>
+              <h3 style="font-size: 1.05rem; font-weight: 600; margin: 0; color: var(--omni-text-primary, #ede8df);">Open With...</h3>
+            </div>
+            <button class="btn-drawer-close" id="btn-close-open-with" style="background: transparent; border: none; color: var(--omni-text-muted, #9e988f); cursor: pointer; font-size: 1.1rem;">
+              ✕
+            </button>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="background: var(--omni-bg-surface, #191816); padding: 10px 12px; border-radius: 4px; border: 1px solid var(--omni-border-subtle, #33302a); display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 0.72rem; color: var(--omni-text-muted, #9e988f);">Incoming URI / Intent:</span>
+              <code id="open-with-target-uri" style="font-size: 0.78rem; color: var(--omni-text-primary, #ede8df); word-break: break-all; font-family: var(--omni-font-mono, monospace);">nostr:...</code>
+            </div>
+
+            <p style="font-size: 0.8rem; color: var(--omni-text-secondary, #9e988f); margin: 0;">
+              Select an installed application or handler to open this content:
+            </p>
+
+            <div id="open-with-handlers-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto;"></div>
+
+            <div style="display: flex; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid var(--omni-border-subtle, #33302a);">
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--omni-text-secondary, #9e988f); cursor: pointer;">
+                <input type="checkbox" id="open-with-always-checkbox" />
+                <span id="open-with-always-label">Always use this app</span>
+              </label>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+              <button class="btn-secondary" id="btn-cancel-open-with" style="padding: 6px 12px; font-size: 0.8rem; cursor: pointer;">Cancel</button>
+              <button class="btn-primary" id="btn-confirm-open-with" disabled style="padding: 6px 12px; font-size: 0.8rem; cursor: pointer;">Confirm</button>
+            </div>
+          </div>
+        </div>
+      `;
+      (this.root || document.body).appendChild(modal);
+    }
+    return modal;
+  }
+
   public async promptDisambiguateIntent(
     action: string,
     candidates: Array<{ pluginId: string; name?: string; icon?: string; description?: string }>,
     data?: any
   ): Promise<string | null> {
     return new Promise((resolve) => {
-      const modal = document.getElementById("open-with-modal");
+      const modal = this.ensureOpenWithModal();
       const uriEl = document.getElementById("open-with-target-uri");
       const listEl = document.getElementById("open-with-handlers-list");
       const alwaysChk = document.getElementById("open-with-always-checkbox") as HTMLInputElement | null;
@@ -1914,7 +1963,7 @@ export abstract class BaseShell implements OmniShellHost {
     }
 
     return new Promise((resolve) => {
-      const modal = document.getElementById("open-with-modal");
+      const modal = this.ensureOpenWithModal();
       const uriEl = document.getElementById("open-with-target-uri");
       const listEl = document.getElementById("open-with-handlers-list");
       const alwaysChk = document.getElementById("open-with-always-checkbox") as HTMLInputElement | null;
@@ -2181,7 +2230,7 @@ export abstract class BaseShell implements OmniShellHost {
   public updateHeaderBackVisibility(): void {
     if (typeof document === "undefined") return;
     const canBack = this.kernel?.navigation ? this.kernel.navigation.canGoBack() : false;
-    const backBtns = document.querySelectorAll(".omni-header-back-btn, #btn-editorial-back, #btn-classic-back, #btn-panorama-back");
+    const backBtns = document.querySelectorAll(".omni-header-back-btn, #btn-editorial-back, #btn-panorama-back");
     backBtns.forEach((btn) => {
       (btn as HTMLElement).style.display = canBack ? "inline-flex" : "none";
     });

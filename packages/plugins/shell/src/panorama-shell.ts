@@ -1114,7 +1114,7 @@ export class PanoramaShell extends BaseShell {
   }
 
   public renderWidgetsEmptyState(): void {
-    const widgetsSlot = document.getElementById("panorama-widgets-slot");
+    const widgetsSlot = (this.root.querySelector("#panorama-widgets-slot") || document.getElementById("panorama-widgets-slot")) as HTMLElement | null;
     if (!widgetsSlot) return;
     const hasActiveWidgets = this.installedPlugins.some((p) => {
       if (!p.enabled) return false;

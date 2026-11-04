@@ -388,4 +388,244 @@ describe("SchemaRenderer & Custom Web Components", () => {
 
     renderer.destroy();
   });
+
+  describe("DOM Reconciliation & Morphing Engine", () => {
+    it("preserves element identity across renders when updating properties", () => {
+      const renderer = new SchemaRenderer({ container });
+
+      renderer.render({
+        type: "card",
+        id: "main-card",
+        title: "Initial Title",
+        children: [
+          { type: "text", id: "status-text", content: "Initial content" }
+        ]
+      });
+
+      const cardBefore = container.querySelector("omni-card");
+      const textBefore = container.querySelector("omni-text");
+      expect(cardBefore).not.toBeNull();
+      expect(textBefore).not.toBeNull();
+      expect(cardBefore?.querySelector(".omni-card-title")?.textContent).toBe("Initial Title");
+      expect(textBefore?.textContent).toBe("Initial content");
+
+      // Re-render with modified content and title
+      renderer.render({
+        type: "card",
+        id: "main-card",
+        title: "Updated Title",
+        children: [
+          { type: "text", id: "status-text", content: "Updated content" }
+        ]
+      });
+
+      const cardAfter = container.querySelector("omni-card");
+      const textAfter = container.querySelector("omni-text");
+
+      // Exact DOM reference equality: nodes were preserved, not destroyed!
+      expect(cardAfter).toBe(cardBefore);
+      expect(textAfter).toBe(textBefore);
+
+      // Attributes patched in-place
+      expect(cardAfter?.querySelector(".omni-card-title")?.textContent).toBe("Updated Title");
+      expect(textAfter?.textContent).toBe("Updated content");
+
+      renderer.destroy();
+    });
+
+    it("preserves active input focus and cursor during live updates", () => {
+      const renderer = new SchemaRenderer({ container });
+
+      renderer.render({
+        type: "box",
+        children: [
+          { type: "input", name: "searchQuery", value: "nostr", placeholder: "Search..." },
+          { type: "text", content: "Results: 0" }
+        ]
+      });
+
+      const inputWrapper = container.querySelector("omni-input") as HTMLElement;
+      const nativeInput = inputWrapper.querySelector("input") as HTMLInputElement;
+      expect(nativeInput).not.toBeNull();
+
+      // Simulate user focusing input
+      nativeInput.focus();
+      expect(document.activeElement).toBe(nativeInput);
+
+      // Re-render when background search finishes (updating sibling text)
+      renderer.render({
+        type: "box",
+        children: [
+          { type: "input", name: "searchQuery", value: "nostr", placeholder: "Search..." },
+          { type: "text", content: "Results: 42" }
+        ]
+      });
+
+      const inputWrapperAfter = container.querySelector("omni-input");
+      const nativeInputAfter = inputWrapperAfter?.querySelector("input");
+
+      // Input was preserved and NOT re-created
+      expect(inputWrapperAfter).toBe(inputWrapper);
+      expect(nativeInputAfter).toBe(nativeInput);
+
+      // Focus remained uninterrupted!
+      expect(document.activeElement).toBe(nativeInput);
+      expect(container.querySelector("omni-text")?.textContent).toBe("Results: 42");
+
+      renderer.destroy();
+    });
+
+    it("intelligently prepends new items into a keyed list without destroying existing items", () => {
+      const renderer = new SchemaRenderer({ container });
+
+      // Initial list with 2 items
+      renderer.render({
+        type: "box",
+        children: [
+          { type: "card", id: "item-1", title: "First Note", children: [{ type: "text", content: "Note 1" }] },
+          { type: "card", id: "item-2", title: "Second Note", children: [{ type: "text", content: "Note 2" }] }
+        ]
+      });
+
+      const firstNoteBefore = container.querySelector("#item-1");
+      const secondNoteBefore = container.querySelector("#item-2");
+      expect(firstNoteBefore).not.toBeNull();
+      expect(secondNoteBefore).not.toBeNull();
+
+      // Prepend a third note at index 0
+      renderer.render({
+        type: "box",
+        children: [
+          { type: "card", id: "item-new", title: "Newest Note", children: [{ type: "text", content: "Note New" }] },
+          { type: "card", id: "item-1", title: "First Note", children: [{ type: "text", content: "Note 1" }] },
+          { type: "card", id: "item-2", title: "Second Note", children: [{ type: "text", content: "Note 2" }] }
+        ]
+      });
+
+      const cards = container.querySelectorAll("omni-card");
+      expect(cards.length).toBe(3);
+
+      // First child is the newly inserted note
+      expect(cards[0].id).toBe("item-new");
+      expect(cards[0].querySelector(".omni-card-title")?.textContent).toBe("Newest Note");
+
+      // Existing notes were re-used, preserving DOM instance identity!
+      expect(cards[1]).toBe(firstNoteBefore);
+      expect(cards[2]).toBe(secondNoteBefore);
+
+      renderer.destroy();
+    });
+
+    it("supports structural positional matching when id or key is omitted", () => {
+      const renderer = new SchemaRenderer({ container });
+
+      renderer.render({
+        type: "box",
+        direction: "column",
+        gap: "sm",
+        children: [
+          { type: "text", content: "Section Header" },
+          { type: "divider" },
+          { type: "button", label: "Submit" }
+        ]
+      });
+
+      const initialText = container.querySelector("omni-text");
+      const initialBtn = container.querySelector("omni-button");
+
+      // Re-render with updated text and button label (no IDs provided)
+      renderer.render({
+        type: "box",
+        direction: "column",
+        gap: "sm",
+        children: [
+          { type: "text", content: "Updated Header" },
+          { type: "divider" },
+          { type: "button", label: "Saving..." }
+        ]
+      });
+
+      const updatedText = container.querySelector("omni-text");
+      const updatedBtn = container.querySelector("omni-button");
+
+      // Re-used positionally
+      expect(updatedText).toBe(initialText);
+      expect(updatedBtn).toBe(initialBtn);
+
+      expect(updatedText?.textContent).toBe("Updated Header");
+      expect(updatedBtn?.textContent).toContain("Saving...");
+
+      renderer.destroy();
+    });
+
+    it("cleans up removed children when new schema has fewer nodes", () => {
+      const renderer = new SchemaRenderer({ container });
+
+      renderer.render({
+        type: "box",
+        children: [
+          { type: "text", id: "t1", content: "One" },
+          { type: "text", id: "t2", content: "Two" },
+          { type: "text", id: "t3", content: "Three" }
+        ]
+      });
+
+      expect(container.querySelectorAll("omni-text").length).toBe(3);
+
+      // Re-render with only 1 item
+      renderer.render({
+        type: "box",
+        children: [
+          { type: "text", id: "t2", content: "Two Updated" }
+        ]
+      });
+
+      const remainingTexts = container.querySelectorAll("omni-text");
+      expect(remainingTexts.length).toBe(1);
+      expect(remainingTexts[0].id).toBe("t2");
+      expect(remainingTexts[0].textContent).toBe("Two Updated");
+
+      renderer.destroy();
+    });
+
+    it("renders virtual list primitive with spacer height and windowed slice", () => {
+      const renderer = new SchemaRenderer({ container });
+
+      // Generate 100 virtual list items
+      const items = Array.from({ length: 100 }, (_, i) => ({
+        type: "card" as const,
+        id: `note-${i}`,
+        title: `Note #${i}`,
+        children: [{ type: "text" as const, content: `Content of note ${i}` }]
+      }));
+
+      renderer.render({
+        type: "virtual-list",
+        itemHeight: 80,
+        overscan: 2,
+        items
+      });
+
+      const vList = container.querySelector("omni-virtual-list") as HTMLElement;
+      expect(vList).not.toBeNull();
+
+      const spacer = vList.querySelector(".omni-virtual-list-spacer") as HTMLElement;
+      expect(spacer).not.toBeNull();
+      // Total virtual height is 100 items * 80px = 8000px
+      expect(spacer.style.height).toBe("8000px");
+
+      const viewport = vList.querySelector(".omni-virtual-list-viewport") as HTMLElement;
+      expect(viewport).not.toBeNull();
+
+      // Only windowed slice of cards is rendered in the DOM, far fewer than 100!
+      const renderedCards = viewport.querySelectorAll("omni-card");
+      expect(renderedCards.length).toBeGreaterThan(0);
+      expect(renderedCards.length).toBeLessThan(30);
+
+      // Verify first rendered card is note-0
+      expect(renderedCards[0].id).toBe("note-0");
+
+      renderer.destroy();
+    });
+  });
 });

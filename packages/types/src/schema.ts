@@ -27,7 +27,8 @@ export type OmniPrimitiveType =
   | "banner"
   | "list"
   | "list-item"
-  | "empty-state";
+  | "empty-state"
+  | "virtual-list";
 
 export interface OmniAction {
   name: string;
@@ -266,6 +267,14 @@ export interface OmniEmptyStatePrimitive extends OmniPrimitiveBase {
   actionLabel?: string;
 }
 
+export interface OmniVirtualListPrimitive extends OmniPrimitiveBase {
+  type: "virtual-list";
+  items: OmniComponentNode[];
+  itemHeight?: number;
+  overscan?: number;
+  maxHeight?: string;
+}
+
 export type OmniComponentNode =
   | OmniBoxPrimitive
   | OmniCardPrimitive
@@ -289,7 +298,8 @@ export type OmniComponentNode =
   | OmniBannerPrimitive
   | OmniListPrimitive
   | OmniListItemPrimitive
-  | OmniEmptyStatePrimitive;
+  | OmniEmptyStatePrimitive
+  | OmniVirtualListPrimitive;
 
 export interface OmniSchemaViewResponse {
   schemaVersion: "1.0";

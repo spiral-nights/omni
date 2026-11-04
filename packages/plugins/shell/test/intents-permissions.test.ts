@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import omniRuntimeScript from "../../../core/src/sandbox/omni-runtime.js?raw";
 import "fake-indexeddb/auto";
 import { OmniKernel } from "@omni/core";
-import { OmniShell } from "../src/shell.js";
+import { EditorialShell } from "../src/editorial-shell.js";
 import { PanoramaShell } from "../src/panorama-shell.js";
 import { InstalledPluginEntry } from "../src/index.js";
 import {
@@ -190,7 +190,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
 
   describe("3. Multi-Handler Resolution & 0-Handler Toast Prompt", () => {
     it("prompts toast when 0 active handlers exist but 1 disabled candidate exists", async () => {
-      const shell = new OmniShell({ root, kernel, installedPlugins: [...mockPlugins] });
+      const shell = new EditorialShell({ root, kernel, installedPlugins: [...mockPlugins] });
       shell.mount();
 
       // Register mock handler for create_task
@@ -228,7 +228,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
     });
 
     it("disambiguates when multiple active handlers exist via Open With modal", async () => {
-      const shell = new OmniShell({ root, kernel, installedPlugins: [...mockPlugins] });
+      const shell = new EditorialShell({ root, kernel, installedPlugins: [...mockPlugins] });
       shell.mount();
 
       let feedExecuted = false;
@@ -268,7 +268,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
 
   describe("4. Workspace State Serialization & Persistence", () => {
     it("round-trips defaultIntents, handledIntents, and disabledIntents through export and apply", () => {
-      const shell = new OmniShell({ root, kernel, installedPlugins: [...mockPlugins] });
+      const shell = new EditorialShell({ root, kernel, installedPlugins: [...mockPlugins] });
       shell.mount();
 
       // Configure a default handler and a disabled intent
@@ -310,7 +310,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
   });
 
   describe("5. Display Name vs Actual Name Resolution", () => {
-    it("renders displayName on OmniShell dock launchers and preserves it in workspace export", () => {
+    it("renders displayName on EditorialShell dock launchers and preserves it in workspace export", () => {
       const plugins: InstalledPluginEntry[] = [
         {
           id: "org.omni.plugin.checklist",
@@ -336,7 +336,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
         }
       ];
 
-      const shell = new OmniShell({ root, kernel, installedPlugins: plugins });
+      const shell = new EditorialShell({ root, kernel, installedPlugins: plugins });
       shell.mount();
 
       const metaChecklist = shell.getPluginMeta(plugins[0]);
@@ -348,7 +348,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
       expect(metaProfiles.displayName).toBe("Profiles");
 
       // Verify dock items display the distinct displayNames
-      const dockItems = Array.from(root.querySelectorAll<HTMLElement>(".dock-item"));
+      const dockItems = Array.from(root.querySelectorAll<HTMLElement>(".dock-item, .editorial-dock-item"));
       const checklistDock = dockItems.find((el) => el.textContent?.includes("Daily"));
       const profilesDock = dockItems.find((el) => el.textContent?.includes("Profiles"));
 
@@ -412,7 +412,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
         }
       ];
 
-      const shell = new OmniShell({ root, kernel, installedPlugins: plugins });
+      const shell = new EditorialShell({ root, kernel, installedPlugins: plugins });
       shell.mount();
 
       // Dispatch view_profile intent
@@ -460,7 +460,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
     });
 
     it("synthesizes manifests with intents permissions and grants ACL checks", async () => {
-      const shell = new OmniShell({ root, kernel, installedPlugins: mockPlugins });
+      const shell = new EditorialShell({ root, kernel, installedPlugins: mockPlugins });
       const manifest = shell.ensurePluginManifest(mockPlugins[0]);
       expect(manifest.permissions.intents).toBeDefined();
       expect(manifest.permissions.intents.call).toContain("*");
@@ -496,7 +496,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
         }
       ];
 
-      const shell = new OmniShell({ root, kernel, installedPlugins: plugins });
+      const shell = new EditorialShell({ root, kernel, installedPlugins: plugins });
       shell.mount();
 
       const testPubkey = "1111111111111111111111111111111111111111111111111111111111111111";
@@ -514,9 +514,9 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
       expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
 
       // Verify slot container has only ONE component container for profile viewer, never duplicates
-      const slotContainer = document.getElementById("slot-main-org-omni-plugin-profile-viewer");
+      const slotContainer = document.getElementById("editorial-app-page-org-omni-plugin-profile-viewer") || document.getElementById("slot-main-org-omni-plugin-profile-viewer");
       expect(slotContainer).not.toBeNull();
-      const compSlots = slotContainer?.querySelectorAll(".omni-component-slot");
+      const compSlots = slotContainer?.querySelectorAll(".editorial-app-container, .omni-component-slot");
       expect(compSlots?.length).toBe(1);
     });
 
@@ -594,7 +594,7 @@ describe("Granular Kind-Level Nostr Permissions & Multi-Handler Intent System", 
     });
 
     it("dispatches view_note and stores omni_active_note_id in localStorage", async () => {
-      const shell = new OmniShell({ root, kernel, installedPlugins: [...mockPlugins] });
+      const shell = new EditorialShell({ root, kernel, installedPlugins: [...mockPlugins] });
       shell.mount();
 
       let noteViewed = false;

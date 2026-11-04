@@ -64,22 +64,8 @@ export const CURATED_SHELLS: ShellDescriptor[] = [
     isBuiltin: false,
     sourceUrl: "curated:@omni/shell-mantra",
     load: async () => {
-      const { PanoramaShell } = await import("./panorama-shell.js");
-      return PanoramaShell;
-    }
-  },
-  {
-    id: "minimalist",
-    name: "Minimalist Terminal",
-    description: "Ultra-lean high-density terminal shell for keyboard-centric power users.",
-    icon: "terminal",
-    author: "Community",
-    version: "0.9.0",
-    isBuiltin: false,
-    sourceUrl: "curated:@omni/shell-minimalist",
-    load: async () => {
-      const { OmniShell } = await import("./shell.js");
-      return OmniShell;
+      const { EditorialShell } = await import("./editorial-shell.js");
+      return EditorialShell;
     }
   }
 ];
@@ -234,7 +220,7 @@ export class ShellRegistry {
    * Only the code and styles for the requested shell will be downloaded.
    */
   public async createAsync(id: string, options: OmniShellOptions): Promise<OmniShellHost> {
-    const descriptor = this.shells.get(id) || this.shells.get("classic") || BUILTIN_SHELLS[0];
+    const descriptor = this.shells.get(id) || this.shells.get("editorial") || BUILTIN_SHELLS[0];
     if (!descriptor) {
       throw new Error(`Shell '${id}' is not registered.`);
     }

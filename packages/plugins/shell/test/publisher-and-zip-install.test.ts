@@ -4,7 +4,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { OmniKernel, createPluginZipArchive, extractPluginFromZip } from "@omni/core";
-import { OmniShell } from "../src/shell.js";
 import { PanoramaShell } from "../src/panorama-shell.js";
 import { EditorialShell } from "../src/editorial-shell.js";
 import { InstalledPluginEntry } from "../src/index.js";
@@ -77,7 +76,7 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       json: async () => ({ status: "ok" })
     } as unknown as Response);
 
-    let shell!: OmniShell;
+    let shell!: EditorialShell;
     const kernel = new OmniKernel({
       bootstrapRelays: [],
       runtimeScript,
@@ -104,7 +103,7 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       }
     ];
 
-    shell = new OmniShell({ root: rootEl, kernel, installedPlugins: [] });
+    shell = new EditorialShell({ root: rootEl, kernel, installedPlugins: [] });
     shell.mount();
     await kernel.boot();
 
@@ -125,7 +124,7 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     shell.destroy();
   });
 
-  it("installs a dropped .zip archive directly into Omni across Classic, Panorama, and Editorial shells purely via @omni/plugin-publisher", async () => {
+  it("installs a dropped .zip archive directly into Omni across Panorama and Editorial shells purely via @omni/plugin-publisher", async () => {
     const zipBytes = createPluginZipArchive({
       "index.html": `<!DOCTYPE html><html><head><title>Dropped Zip App</title><link rel="stylesheet" href="./theme.css"></head><body><h1>Dropped Zip Works</h1><script src="./logic.js"></script></body></html>`,
       "theme.css": `h1 { color: #d4a373; }`,
@@ -157,40 +156,7 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
       enabled: true
     });
 
-    // 1. Classic Shell (via @omni/plugin-publisher)
-    {
-      let classicShell!: OmniShell;
-      const kernel = new OmniKernel({
-        bootstrapRelays: [],
-        runtimeScript,
-        slotResolver: (id, compId, slot) => classicShell?.getContainerForPluginSlot(id, slot, compId),
-        onHandleUri: (uri, srcId) => classicShell?.handleUri(uri, srcId)
-      });
-      classicShell = new OmniShell({ root: rootEl, kernel, installedPlugins: [] });
-      classicShell.mount();
-      await kernel.boot();
-      await classicShell.installPluginEntry(makePublisherEntry());
-      classicShell.showPage("org.omni.plugin.publisher");
-      await wait(150);
-
-      const pubContainer = classicShell.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
-      expect(pubContainer).toBeTruthy();
-
-      await classicShell.installPluginEntry({
-        id: "org.omni.plugin.dropped-zip",
-        name: "Dropped Zip App",
-        version: "2.0.0",
-        viewport: "main",
-        views: [{ id: "main", title: "Dropped Zip App", path: "" }],
-        scriptContent: "<h1>Dropped Zip Works</h1>",
-        enabled: true
-      });
-
-      expect(classicShell.installedPlugins.some((p) => p.id === "org.omni.plugin.dropped-zip")).toBe(true);
-      classicShell.destroy();
-    }
-
-    // 2. Panorama Shell (via @omni/plugin-publisher)
+    // 1. Panorama Shell (via @omni/plugin-publisher)
     {
       localStorage.clear();
       document.body.innerHTML = `<div id="omni-root"></div>`;
@@ -270,14 +236,14 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
   });
 
   it("installs plugins from arbitrary remote .zip URLs and HTML URLs with <base href> injection via @omni/plugin-publisher", async () => {
-    let shell!: OmniShell;
+    let shell!: EditorialShell;
     const kernel = new OmniKernel({
       bootstrapRelays: [],
       runtimeScript,
       slotResolver: (id, compId, slot) => shell?.getContainerForPluginSlot(id, slot, compId),
       onHandleUri: (uri, srcId) => shell?.handleUri(uri, srcId)
     });
-    shell = new OmniShell({ root: rootEl, kernel, installedPlugins: [] });
+    shell = new EditorialShell({ root: rootEl, kernel, installedPlugins: [] });
     shell.mount();
     await kernel.boot();
 
@@ -384,14 +350,14 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     ];
 
     // 1. Initial session: upload and install relay-ping-radar.zip
-    let shell1!: OmniShell;
+    let shell1!: EditorialShell;
     const kernel1 = new OmniKernel({
       bootstrapRelays: [],
       runtimeScript,
       slotResolver: (id, compId, slot) => shell1?.getContainerForPluginSlot(id, slot, compId),
       onHandleUri: (uri, srcId) => shell1?.handleUri(uri, srcId)
     });
-    shell1 = new OmniShell({
+    shell1 = new EditorialShell({
       root: rootEl,
       kernel: kernel1,
       installedPlugins: initialBuiltInPlugins.map((p) => ({ ...p }))
@@ -419,17 +385,17 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     expect(shell1.installedPlugins.some((p) => p.id === "org.omni.plugin.relay-ping-radar")).toBe(true);
     shell1.destroy();
 
-    // 2. Simulate browser page refresh: fresh DOM, fresh OmniShell with ONLY initialBuiltInPlugins
+    // 2. Simulate browser page refresh: fresh DOM, fresh EditorialShell with ONLY initialBuiltInPlugins
     document.body.innerHTML = `<div id="omni-root"></div>`;
     rootEl = document.getElementById("omni-root")!;
-    let shell2!: OmniShell;
+    let shell2!: EditorialShell;
     const kernel2 = new OmniKernel({
       bootstrapRelays: [],
       runtimeScript,
       slotResolver: (id, compId, slot) => shell2?.getContainerForPluginSlot(id, slot, compId),
       onHandleUri: (uri, srcId) => shell2?.handleUri(uri, srcId)
     });
-    shell2 = new OmniShell({
+    shell2 = new EditorialShell({
       root: rootEl,
       kernel: kernel2,
       installedPlugins: initialBuiltInPlugins.map((p) => ({ ...p }))

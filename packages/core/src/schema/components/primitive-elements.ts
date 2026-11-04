@@ -22,7 +22,8 @@ import {
   OmniBannerPrimitive,
   OmniListPrimitive,
   OmniListItemPrimitive,
-  OmniEmptyStatePrimitive
+  OmniEmptyStatePrimitive,
+  OmniVirtualListPrimitive
 } from "@omni/types";
 import { renderSvgIcon } from "../icons.js";
 
@@ -810,7 +811,9 @@ export class OmniInputElement extends BaseElement {
       this.inputEl!.name = props.name;
     }
     if (props.placeholder !== undefined) this.inputEl!.placeholder = props.placeholder;
-    if (props.value !== undefined && props.inputType !== "file") this.inputEl!.value = props.value;
+    if (props.value !== undefined && props.inputType !== "file" && this.inputEl!.value !== props.value) {
+      this.inputEl!.value = props.value;
+    }
     if (props.inputType) this.inputEl!.type = props.inputType;
     if (props.accept) this.inputEl!.accept = props.accept;
   }
@@ -840,7 +843,9 @@ export class OmniTextareaElement extends BaseElement {
     if (!this.textareaEl) this.connectedCallback();
     if (props.name) this.textareaEl!.name = props.name;
     if (props.placeholder !== undefined) this.textareaEl!.placeholder = props.placeholder;
-    if (props.value !== undefined) this.textareaEl!.value = props.value;
+    if (props.value !== undefined && this.textareaEl!.value !== props.value) {
+      this.textareaEl!.value = props.value;
+    }
     if (props.rows !== undefined) this.textareaEl!.rows = props.rows;
   }
 }
@@ -1481,6 +1486,145 @@ export class OmniEmptyStateElement extends BaseElement {
   }
 }
 
+export class OmniVirtualListElement extends BaseElement {
+  private spacerEl: HTMLElement | null = null;
+  private viewportEl: HTMLElement | null = null;
+  private itemsData: any[] = [];
+  private itemHeight = 72;
+  private overscan = 4;
+  private scrollListener: (() => void) | null = null;
+  private scrollContainer: HTMLElement | Window | null = null;
+  public onRenderSlice?: (slice: any[], startIndex: number) => void;
+
+  connectedCallback(): void {
+    this.classList.add("omni-virtual-list");
+    this.style.display = "block";
+    this.style.position = "relative";
+    this.style.width = "100%";
+    this.style.boxSizing = "border-box";
+
+    if (!this.spacerEl) {
+      this.spacerEl = document.createElement("div");
+      this.spacerEl.className = "omni-virtual-list-spacer";
+      this.spacerEl.style.width = "100%";
+      this.spacerEl.style.pointerEvents = "none";
+      this.appendChild(this.spacerEl);
+    }
+
+    if (!this.viewportEl) {
+      this.viewportEl = document.createElement("div");
+      this.viewportEl.className = "omni-virtual-list-viewport";
+      this.viewportEl.style.position = "absolute";
+      this.viewportEl.style.top = "0";
+      this.viewportEl.style.left = "0";
+      this.viewportEl.style.right = "0";
+      this.viewportEl.style.width = "100%";
+      this.appendChild(this.viewportEl);
+    }
+
+    this.attachScrollListener();
+  }
+
+  disconnectedCallback(): void {
+    this.detachScrollListener();
+  }
+
+  private findScrollContainer(): HTMLElement | Window {
+    let parent = this.parentElement;
+    while (parent && parent !== document.body) {
+      const style = typeof window !== "undefined" && window.getComputedStyle ? window.getComputedStyle(parent) : null;
+      if (style && (style.overflowY === "auto" || style.overflowY === "scroll")) {
+        return parent;
+      }
+      parent = parent.parentElement;
+    }
+    return typeof window !== "undefined" ? window : (this as any);
+  }
+
+  private attachScrollListener(): void {
+    this.detachScrollListener();
+    this.scrollContainer = this.findScrollContainer();
+    this.scrollListener = () => {
+      this.updateWindow();
+    };
+    if (this.scrollContainer && typeof this.scrollContainer.addEventListener === "function") {
+      this.scrollContainer.addEventListener("scroll", this.scrollListener, { passive: true });
+    }
+  }
+
+  private detachScrollListener(): void {
+    if (this.scrollContainer && this.scrollListener && typeof this.scrollContainer.removeEventListener === "function") {
+      this.scrollContainer.removeEventListener("scroll", this.scrollListener);
+      this.scrollListener = null;
+      this.scrollContainer = null;
+    }
+  }
+
+  public getViewport(): HTMLElement {
+    if (!this.viewportEl) this.connectedCallback();
+    return this.viewportEl!;
+  }
+
+  public getVisibleSlice(): { slice: any[]; startIndex: number; endIndex: number; offsetY: number } {
+    const totalItems = this.itemsData.length;
+    if (totalItems === 0) {
+      return { slice: [], startIndex: 0, endIndex: 0, offsetY: 0 };
+    }
+
+    let scrollTop = 0;
+    let viewportHeight = 800;
+
+    if (this.scrollContainer && typeof (this.scrollContainer as HTMLElement).scrollTop === "number") {
+      scrollTop = (this.scrollContainer as HTMLElement).scrollTop;
+      viewportHeight = (this.scrollContainer as HTMLElement).clientHeight || 800;
+    } else if (typeof window !== "undefined") {
+      scrollTop = window.scrollY || window.pageYOffset || 0;
+      viewportHeight = window.innerHeight || 800;
+    }
+
+    let effectiveScrollTop = scrollTop;
+    if (typeof this.getBoundingClientRect === "function") {
+      const rect = this.getBoundingClientRect();
+      effectiveScrollTop = Math.max(0, -rect.top);
+    }
+
+    const startIndex = Math.max(0, Math.floor(effectiveScrollTop / this.itemHeight) - this.overscan);
+    const visibleCount = Math.ceil(viewportHeight / this.itemHeight) + this.overscan * 2;
+    const endIndex = Math.min(totalItems - 1, startIndex + visibleCount);
+
+    const offsetY = startIndex * this.itemHeight;
+    const slice = this.itemsData.slice(startIndex, endIndex + 1);
+
+    return { slice, startIndex, endIndex, offsetY };
+  }
+
+  public updateWindow(): void {
+    if (!this.viewportEl || !this.spacerEl) return;
+    const totalHeight = this.itemsData.length * this.itemHeight;
+    this.spacerEl.style.height = `${totalHeight}px`;
+
+    const { slice, startIndex, offsetY } = this.getVisibleSlice();
+    this.viewportEl.style.transform = `translate3d(0, ${offsetY}px, 0)`;
+
+    if (this.onRenderSlice) {
+      this.onRenderSlice(slice, startIndex);
+    }
+  }
+
+  setProps(props: Partial<OmniVirtualListPrimitive>): void {
+    if (!this.viewportEl) this.connectedCallback();
+    this.itemsData = Array.isArray(props.items) ? props.items : [];
+    if (props.itemHeight) this.itemHeight = props.itemHeight;
+    if (props.overscan !== undefined) this.overscan = props.overscan;
+    if (props.maxHeight) {
+      this.style.maxHeight = props.maxHeight;
+      this.style.overflowY = "auto";
+      this.attachScrollListener();
+    }
+    this.updateWindow();
+  }
+}
+
 // ============================================================================
 // Registration Helper
 // ============================================================================
@@ -1511,7 +1655,8 @@ export function registerOmniPrimitives(): void {
     ["omni-banner", OmniBannerElement],
     ["omni-list", OmniListElement],
     ["omni-list-item", OmniListItemElement],
-    ["omni-empty-state", OmniEmptyStateElement]
+    ["omni-empty-state", OmniEmptyStateElement],
+    ["omni-virtual-list", OmniVirtualListElement]
   ];
 
   for (const [tag, constructor] of definitions) {

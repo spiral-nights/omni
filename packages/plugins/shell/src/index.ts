@@ -7,7 +7,6 @@ export type {
 } from "./base-shell.js";
 
 // Lazy-loaded Shell types (type-only exports erased at compile-time to enable dynamic code-splitting)
-export type { OmniShell } from "./shell.js";
 export type { PanoramaShell, PanoramaPivot, PanoramaAccentPreset } from "./panorama-shell.js";
 export type {
   EditorialShell,

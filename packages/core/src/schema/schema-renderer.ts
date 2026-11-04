@@ -24,7 +24,8 @@ import {
   OmniBannerElement,
   OmniListElement,
   OmniListItemElement,
-  OmniEmptyStateElement
+  OmniEmptyStateElement,
+  OmniVirtualListElement
 } from "./components/primitive-elements.js";
 
 export interface SchemaRendererOptions {
@@ -96,19 +97,174 @@ export class SchemaRenderer {
   }
 
   /**
-   * Renders or updates a component tree into the container.
+   * Renders or reconciles a component tree into the container using in-place DOM morphing.
    */
   render(rootNode: OmniComponentNode): void {
-    // Clear existing container contents
-    while (this.container.firstChild) {
-      this.container.removeChild(this.container.firstChild);
+    if (!rootNode || rootNode.visible === false) {
+      while (this.container.firstChild) {
+        this.container.removeChild(this.container.firstChild);
+      }
+      return;
     }
 
-    const element = this.renderNode(rootNode);
-    if (element) {
-      this.container.appendChild(element);
+    const currentFirstChild = this.container.firstElementChild as HTMLElement | null;
+    const expectedTag = `omni-${rootNode.type}`;
+
+    if (currentFirstChild && currentFirstChild.tagName.toLowerCase() === expectedTag) {
+      // In-place reconciliation of root
+      this.patchNode(currentFirstChild, rootNode);
+      while (this.container.children.length > 1) {
+        this.container.removeChild(this.container.lastElementChild!);
+      }
+    } else {
+      // Root replaced or initial render
+      while (this.container.firstChild) {
+        this.container.removeChild(this.container.firstChild);
+      }
+      const element = this.createNode(rootNode);
+      if (element) {
+        this.container.appendChild(element);
+      }
     }
+
     this.setupInfiniteScroll();
+  }
+
+  /**
+   * Reconciles child nodes of a container element without destroying preserved nodes.
+   */
+  private reconcileChildren(container: HTMLElement, newNodes: OmniComponentNode[]): void {
+    const visibleNewNodes = (newNodes || []).filter((n) => n && n.visible !== false);
+    const oldChildren = Array.from(container.children) as HTMLElement[];
+
+    // Index keyed old elements
+    const oldKeyMap = new Map<string, HTMLElement>();
+    for (const oldEl of oldChildren) {
+      const key = oldEl.dataset.omniKey || (oldEl.id ? oldEl.id : null);
+      if (key) {
+        oldKeyMap.set(key, oldEl);
+      }
+    }
+
+    const usedElements = new Set<HTMLElement>();
+    const reconciledElements: HTMLElement[] = [];
+
+    for (let i = 0; i < visibleNewNodes.length; i++) {
+      const newNode = visibleNewNodes[i];
+      const expectedTag = `omni-${newNode.type}`;
+      const newKey = newNode.key || newNode.id;
+
+      let matchedEl: HTMLElement | null = null;
+
+      // 1. Keyed matching
+      if (newKey && oldKeyMap.has(newKey)) {
+        const candidate = oldKeyMap.get(newKey)!;
+        if (candidate.tagName.toLowerCase() === expectedTag) {
+          matchedEl = candidate;
+          oldKeyMap.delete(newKey);
+        }
+      } else {
+        // 2. Positional structural matching
+        const candidate = oldChildren[i];
+        if (candidate && !usedElements.has(candidate)) {
+          const candidateKey = candidate.dataset.omniKey || (candidate.id ? candidate.id : null);
+          if (!candidateKey && candidate.tagName.toLowerCase() === expectedTag) {
+            matchedEl = candidate;
+          }
+        }
+      }
+
+      if (matchedEl) {
+        this.patchNode(matchedEl, newNode);
+        usedElements.add(matchedEl);
+        reconciledElements.push(matchedEl);
+      } else {
+        const created = this.createNode(newNode);
+        if (created) {
+          usedElements.add(created);
+          reconciledElements.push(created);
+        }
+      }
+    }
+
+    // Remove un-reused old elements
+    for (const oldEl of oldChildren) {
+      if (!usedElements.has(oldEl) && oldEl.parentNode === container) {
+        container.removeChild(oldEl);
+      }
+    }
+
+    // Re-position or insert elements in desired order
+    for (let i = 0; i < reconciledElements.length; i++) {
+      const targetEl = reconciledElements[i];
+      const currentChildAtI = container.children[i] || null;
+      if (currentChildAtI !== targetEl) {
+        container.insertBefore(targetEl, currentChildAtI);
+      }
+    }
+  }
+
+  /**
+   * Patches attributes, properties, and subtrees of an existing DOM primitive in place.
+   */
+  private patchNode(el: HTMLElement, node: OmniComponentNode): void {
+    if (!el || !node) return;
+
+    if (node.id) el.id = node.id;
+    else el.removeAttribute("id");
+
+    if (node.key) el.dataset.omniKey = node.key;
+    else delete el.dataset.omniKey;
+
+    if ((el as any).setProps) {
+      (el as any).setProps(node);
+    }
+
+    if ((node as any)?.style) {
+      const s = (node as any).style;
+      if (typeof s === "string") {
+        el.style.cssText += `; ${s}`;
+      } else if (typeof s === "object") {
+        Object.assign(el.style, s);
+      }
+    }
+
+    // Reconcile nested child slots
+    switch (node.type) {
+      case "box": {
+        this.reconcileChildren(el, Array.isArray(node.children) ? node.children : []);
+        break;
+      }
+
+      case "card": {
+        const card = el as OmniCardElement;
+        this.reconcileChildren(card.getHeaderActionSlot(), node.headerAction ? [node.headerAction] : []);
+        this.reconcileChildren(card.getBody(), Array.isArray(node.children) ? node.children : []);
+        this.reconcileChildren(card.getFooterSlot(), Array.isArray(node.footer) ? node.footer : []);
+        break;
+      }
+
+      case "list": {
+        const list = el as OmniListElement;
+        this.reconcileChildren(list.getItemsContainer(), Array.isArray(node.items) ? node.items : []);
+        break;
+      }
+
+      case "list-item": {
+        const listItem = el as OmniListItemElement;
+        this.reconcileChildren(listItem.getActionsSlot(), Array.isArray(node.actions) ? node.actions : []);
+        break;
+      }
+
+      case "virtual-list": {
+        const vList = el as OmniVirtualListElement;
+        vList.onRenderSlice = (slice) => {
+          this.reconcileChildren(vList.getViewport(), slice);
+        };
+        vList.setProps(node);
+        break;
+      }
+    }
   }
 
   private setupInfiniteScroll(): void {
@@ -137,9 +293,14 @@ export class SchemaRenderer {
     }
   }
 
-  private renderNode(node: OmniComponentNode): HTMLElement | null {
-    const el = this.renderNodeInternal(node);
-    if (el && (node as any)?.style) {
+  private createNode(node: OmniComponentNode): HTMLElement | null {
+    const el = this.createNodeInternal(node);
+    if (!el) return null;
+
+    if (node.id) el.id = node.id;
+    if (node.key) el.dataset.omniKey = node.key;
+
+    if ((node as any)?.style) {
       const s = (node as any).style;
       if (typeof s === "string") {
         el.style.cssText += `; ${s}`;
@@ -150,17 +311,16 @@ export class SchemaRenderer {
     return el;
   }
 
-  private renderNodeInternal(node: OmniComponentNode): HTMLElement | null {
+  private createNodeInternal(node: OmniComponentNode): HTMLElement | null {
     if (!node || node.visible === false) return null;
 
     switch (node.type) {
       case "box": {
         const el = document.createElement("omni-box") as OmniBoxElement;
         el.setProps(node);
-        if (node.id) el.id = node.id;
         if (Array.isArray(node.children)) {
           for (const child of node.children) {
-            const childEl = this.renderNode(child);
+            const childEl = this.createNode(child);
             if (childEl) el.appendChild(childEl);
           }
         }
@@ -170,17 +330,16 @@ export class SchemaRenderer {
       case "card": {
         const el = document.createElement("omni-card") as OmniCardElement;
         el.setProps(node);
-        if (node.id) el.id = node.id;
 
         if (node.headerAction) {
-          const actionEl = this.renderNode(node.headerAction);
+          const actionEl = this.createNode(node.headerAction);
           if (actionEl) el.getHeaderActionSlot().appendChild(actionEl);
         }
 
         if (Array.isArray(node.children)) {
           const body = el.getBody();
           for (const child of node.children) {
-            const childEl = this.renderNode(child);
+            const childEl = this.createNode(child);
             if (childEl) body.appendChild(childEl);
           }
         }
@@ -188,7 +347,7 @@ export class SchemaRenderer {
         if (Array.isArray(node.footer)) {
           const footer = el.getFooterSlot();
           for (const item of node.footer) {
-            const footerEl = this.renderNode(item);
+            const footerEl = this.createNode(item);
             if (footerEl) footer.appendChild(footerEl);
           }
         }
@@ -309,7 +468,7 @@ export class SchemaRenderer {
         if (Array.isArray(node.items)) {
           const itemsContainer = el.getItemsContainer();
           for (const item of node.items) {
-            const itemEl = this.renderNode(item);
+            const itemEl = this.createNode(item);
             if (itemEl) itemsContainer.appendChild(itemEl);
           }
         }
@@ -322,7 +481,7 @@ export class SchemaRenderer {
         if (Array.isArray(node.actions)) {
           const actionsSlot = el.getActionsSlot();
           for (const act of node.actions) {
-            const actEl = this.renderNode(act);
+            const actEl = this.createNode(act);
             if (actEl) actionsSlot.appendChild(actEl);
           }
         }
@@ -331,6 +490,15 @@ export class SchemaRenderer {
 
       case "empty-state": {
         const el = document.createElement("omni-empty-state") as OmniEmptyStateElement;
+        el.setProps(node);
+        return el;
+      }
+
+      case "virtual-list": {
+        const el = document.createElement("omni-virtual-list") as OmniVirtualListElement;
+        el.onRenderSlice = (slice) => {
+          this.reconcileChildren(el.getViewport(), slice);
+        };
         el.setProps(node);
         return el;
       }
