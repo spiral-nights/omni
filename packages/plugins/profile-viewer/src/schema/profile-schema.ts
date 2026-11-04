@@ -511,7 +511,9 @@ export function getProfileSchema(
       });
     } else {
       children.push({
-        type: "list",
+        type: "virtual-list",
+        itemHeight: 56,
+        overscan: 6,
         items: followsList.map((f: any) => {
           const fPk = typeof f === "string" ? f : f.pubkey;
           const meta = profileStore.schemaProfileCache.get(fPk);
@@ -527,6 +529,7 @@ export function getProfileSchema(
           return {
             type: "list-item",
             id: fPk,
+            key: fPk,
             title: fName,
             subtitle: fAbout ? (fAbout.length > 80 ? fAbout.slice(0, 80) + "..." : fAbout) : (fNip05 || `${fPk.slice(0, 16)}...`),
             meta: fNip05 || `${fPk.slice(0, 8)}...`,

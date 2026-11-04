@@ -977,4 +977,26 @@ omni-list-item[checked] .omni-list-item-title {
 @keyframes omni-spin {
   to { transform: rotate(360deg); }
 }
+
+/* 8. Virtual List */
+omni-virtual-list {
+  display: block;
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+.omni-virtual-list-spacer {
+  width: 100%;
+  pointer-events: none;
+}
+.omni-virtual-list-viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 `;

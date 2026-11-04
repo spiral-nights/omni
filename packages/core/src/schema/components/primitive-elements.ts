@@ -1519,6 +1519,9 @@ export class OmniVirtualListElement extends BaseElement {
       this.viewportEl.style.left = "0";
       this.viewportEl.style.right = "0";
       this.viewportEl.style.width = "100%";
+      this.viewportEl.style.display = "flex";
+      this.viewportEl.style.flexDirection = "column";
+      this.viewportEl.style.gap = "4px";
       this.appendChild(this.viewportEl);
     }
 

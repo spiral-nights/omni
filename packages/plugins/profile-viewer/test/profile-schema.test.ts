@@ -125,8 +125,9 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     const tabsNode = schema.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;
     expect(tabsNode.activeTab).toBe("following");
 
-    const listNode = schema.children?.find((c) => c.type === "list") as any;
+    const listNode = schema.children?.find((c) => c.type === "virtual-list" || c.type === "list") as any;
     expect(listNode).toBeDefined();
+    expect(listNode.type).toBe("virtual-list");
     expect(listNode.items.length).toBe(1);
     expect(listNode.items[0].title).toBe("Bob");
     expect(listNode.items[0].subtitle).toBe("Bitcoin dev");
@@ -183,7 +184,7 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
       { tab: "following" }
     )) as OmniCardPrimitive;
 
-    const listNode = followingSchema.children?.find((c) => c.type === "list") as any;
+    const listNode = followingSchema.children?.find((c) => c.type === "virtual-list" || c.type === "list") as any;
     expect(listNode.items.some((i: any) => i.id === friendPubkey)).toBe(true);
 
     // Unfollow
@@ -296,8 +297,9 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
       { tab: "following" }
     )) as OmniCardPrimitive;
 
-    const listNode = followingSchema.children?.find((c) => c.type === "list") as any;
+    const listNode = followingSchema.children?.find((c) => c.type === "virtual-list" || c.type === "list") as any;
     expect(listNode).toBeDefined();
+    expect(listNode.type).toBe("virtual-list");
     const friendItem = listNode.items.find((i: any) => i.id === friendPubkey);
     expect(friendItem).toBeDefined();
     expect(friendItem.title).toBe("Hal Finney");
