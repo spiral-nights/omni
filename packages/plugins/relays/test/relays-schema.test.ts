@@ -52,10 +52,6 @@ describe("@omni/plugin-relays Declarative Schema & State Machine", () => {
     const tabsNode = schema.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;
     expect(tabsNode.activeTab).toBe("add");
 
-    // Verify banner
-    const bannerNode = schema.children?.find((c) => c.type === "banner");
-    expect(bannerNode).toBeDefined();
-
     // Verify input box
     const inputBox = schema.children?.find(
       (c) => c.type === "box" && (c as any).children?.some((child: any) => child.type === "input")

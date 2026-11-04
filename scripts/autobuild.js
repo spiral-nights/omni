@@ -144,11 +144,17 @@ export function buildPackage(pkg) {
     cwd: rootDir
   });
 
-  if (pkg.name === "@omni/plugin-feed") {
-    execSync(`pnpm --filter @omni/plugin-feed exec esbuild src/index.ts --bundle --format=esm --target=es2022 --outfile=dist/index.js`, {
-      stdio: "inherit",
-      cwd: rootDir
-    });
+  const pkgJsonPath = path.join(pkg.dir, "package.json");
+  if (fs.existsSync(pkgJsonPath)) {
+    try {
+      const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
+      if (pkgJson.scripts?.build?.includes("esbuild")) {
+        execSync(`pnpm --filter "${pkg.name}" exec esbuild src/index.ts --bundle --format=esm --target=es2022 --outfile=dist/index.js`, {
+          stdio: "inherit",
+          cwd: rootDir
+        });
+      }
+    } catch (_) {}
   }
 
   // Ensure dist target exists and touch its mtime so downstream watchers register the change

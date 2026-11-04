@@ -29,7 +29,7 @@ describe("@omni/plugin-publisher Declarative Schema & State Machine", () => {
     // Header card
     const headerCard = root.children?.[0] as OmniCardPrimitive;
     expect(headerCard.type).toBe("card");
-    expect(headerCard.title).toBe("Plugin Studio & Blossom Publisher");
+    expect(headerCard.title).toBe("Plugin Publisher");
 
     const tabsNode = headerCard.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;
     expect(tabsNode).toBeDefined();

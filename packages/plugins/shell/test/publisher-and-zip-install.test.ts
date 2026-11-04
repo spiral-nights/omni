@@ -115,7 +115,7 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
 
     const pubContainer = shell.getContainerForPluginSlot("org.omni.plugin.publisher", "main")!;
     expect(pubContainer).toBeTruthy();
-    expect(pubContainer.textContent).toContain("Plugin Studio & Blossom Publisher");
+    expect(pubContainer.textContent).toContain("Plugin Publisher");
     expect(pubContainer.querySelector("omni-card")).toBeTruthy();
     expect(pubContainer.querySelector("omni-tabs")).toBeTruthy();
     expect(pubContainer.textContent).toContain("Drop or Select a Plugin Archive");
