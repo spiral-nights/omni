@@ -46,7 +46,7 @@ describe("@omni/plugin-relays Declarative Schema & State Machine", () => {
     expect(listNode.items[0].actions[0].action.name).toBe("remove-relay");
   });
 
-  it("renders the Add & Presets tab with input and one-click community presets", () => {
+  it("renders the Add Relays tab with input and one-click community presets", () => {
     const schema = getRelaysSchema("add", []) as OmniCardPrimitive;
 
     const tabsNode = schema.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;

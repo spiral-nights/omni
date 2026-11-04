@@ -1010,7 +1010,7 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
 
       // Check Swiss Ledger Table alphabetical order across ALL apps
       const ledgerRows = Array.from(root.querySelectorAll("#editorial-apps-ledger-tbody .editorial-ledger-row"));
-      const ledgerNames = ledgerRows.map((r) => r.querySelector("td div div div")?.textContent?.trim());
+      const ledgerNames = ledgerRows.map((r) => r.querySelector(".editorial-ledger-name")?.textContent?.trim());
       expect(ledgerNames).toEqual(["Alpha Notes", "Beta Reader", "Zeta Studio"]);
     });
 
@@ -1072,7 +1072,7 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(emptyState.style.display).toBe("block");
     });
 
-    it("allows pinning and launching directly from the Swiss ledger table", () => {
+    it("allows launching directly from the Swiss ledger table and actions via context menu", () => {
       shell.mount();
       shell.showAppsIndex();
       shell.setAppsViewMode("ledger");
@@ -1080,11 +1080,13 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       const checklistRow = root.querySelector('.editorial-ledger-row[data-plugin-id="org.omni.plugin.checklist"]') as HTMLElement;
       expect(checklistRow).toBeTruthy();
 
-      // Pin button in ledger row
-      const pinBtn = checklistRow.querySelector(".btn-toggle-pin") as HTMLElement;
-      expect(pinBtn.textContent?.trim()).toBe("Pin");
-
-      pinBtn.click();
+      // Actions are accessible via contextmenu (long-press on mobile / right-click on desktop)
+      checklistRow.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
+      const contextMenu = document.querySelector(".omni-app-context-menu") as HTMLElement;
+      expect(contextMenu).toBeTruthy();
+      const ctxPinBtn = contextMenu.querySelector(".ctx-btn-pin") as HTMLElement;
+      expect(ctxPinBtn.textContent).toContain("Pin to Dock");
+      ctxPinBtn.click();
       expect(shell.isAppPinned(shell.installedPlugins.find((p) => p.id === "org.omni.plugin.checklist")!)).toBe(true);
 
       // Clicking row launches app

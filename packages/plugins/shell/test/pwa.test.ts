@@ -14,7 +14,7 @@ describe("Offline-First PWA (Service Worker & Cache-First Architecture)", () => 
     const content = fs.readFileSync(manifestPath, "utf-8");
     const manifest = JSON.parse(content);
 
-    expect(manifest.name).toBe("Omni — Modular Nostr Runtime");
+    expect(manifest.name).toBe("Omni");
     expect(manifest.short_name).toBe("Omni");
     expect(manifest.display).toBe("standalone");
     expect(manifest.start_url).toMatch(/^(\/|\.\/)/);

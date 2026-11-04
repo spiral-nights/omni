@@ -1271,18 +1271,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
   // --- Broadsheet Applications Index ---
 
-  public getAppCategory(p: InstalledPluginEntry): string {
-    const id = (p.id || "").toLowerCase();
-    const name = (p.name || p.displayName || "").toLowerCase();
-    const combined = `${id} ${name}`;
-    if (combined.includes("feed") || combined.includes("social") || combined.includes("note")) return "Social & Feed";
-    if (combined.includes("profile") || combined.includes("people") || combined.includes("identity")) return "Identity";
-    if (combined.includes("publisher") || combined.includes("studio") || combined.includes("blossom")) return "Dev & Studio";
-    if (combined.includes("relay") || combined.includes("pool") || combined.includes("network")) return "System & Network";
-    if (combined.includes("checklist") || combined.includes("task") || combined.includes("weather")) return "Productivity";
-    return "Application";
-  }
-
   public renderAppsIndex(): void {
     const pinnedGrid = this.root.querySelector("#editorial-pinned-apps-grid");
     const allGrid = this.root.querySelector("#editorial-all-apps-grid");
@@ -1362,7 +1350,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       const isPinned = this.isAppPinned(plugin);
       const placements = this.getPluginPlacements(plugin);
       const hasWidget = placements.some((pl) => pl.enabled !== false && (pl.viewport === "sidebar" || pl.viewport === "widget"));
-      const category = this.getAppCategory(plugin);
 
       card.innerHTML = `
         <div class="editorial-plate-card-header">
@@ -1375,7 +1362,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
                 ${plugin.displayName || plugin.name || plugin.id}
               </div>
               <div style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted);">
-                v${plugin.version || "1.0.0"} • ${category}
+                v${plugin.version || "1.0.0"}
               </div>
             </div>
           </div>
@@ -1388,7 +1375,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
             ${isPinned ? `<span class="editorial-badge editorial-badge-pinned">★ Pinned</span>` : ""}
             ${hasWidget ? `<span class="editorial-badge editorial-badge-widget">Widget</span>` : ""}
-            <span class="editorial-badge editorial-badge-domain">${category}</span>
           </div>
           <button class="editorial-btn-open" title="Open App" style="background: transparent; border: none; color: var(--omni-text-muted); cursor: pointer; display: flex; align-items: center; padding: 2px 4px;">
             ${icon("chevron-right", 15)}
@@ -1425,9 +1411,6 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     if (ledgerTbody) {
       for (const plugin of filtered) {
         const isPinned = this.isAppPinned(plugin);
-        const placements = this.getPluginPlacements(plugin);
-        const hasWidget = placements.some((pl) => pl.enabled !== false && (pl.viewport === "sidebar" || pl.viewport === "widget"));
-        const category = this.getAppCategory(plugin);
         const row = document.createElement("tr");
         row.className = "editorial-ledger-row";
         row.dataset.pluginId = plugin.id;
@@ -1439,8 +1422,11 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
                 ${renderPluginIcon(plugin.icon, 16, "", plugin.id || plugin.name)}
               </div>
               <div style="min-width: 0; flex: 1; overflow: hidden;">
-                <div style="font-family: var(--omni-font-serif); font-size: 0.98rem; font-weight: 600; color: var(--omni-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                  ${plugin.displayName || plugin.name || plugin.id}
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span class="editorial-ledger-name" style="font-family: var(--omni-font-serif); font-size: 0.95rem; font-weight: 600; color: var(--omni-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${plugin.displayName || plugin.name || plugin.id}
+                  </span>
+                  ${isPinned ? `<span class="editorial-badge editorial-badge-pinned" style="font-size: 0.58rem; padding: 1px 4px;">★ Pinned</span>` : ""}
                 </div>
                 <div style="font-family: var(--omni-font-sans); font-size: 0.72rem; color: var(--omni-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                   ${plugin.description || "Decentralized application"}
@@ -1448,41 +1434,13 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
               </div>
             </div>
           </td>
-          <td>
-            <span style="font-family: var(--omni-font-mono); font-size: 0.72rem; color: var(--omni-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">${category}</span>
-          </td>
-          <td>
-            <span style="font-family: var(--omni-font-mono); font-size: 0.70rem; color: var(--omni-text-muted); white-space: nowrap;">v${plugin.version || "1.0.0"}</span>
-          </td>
-          <td>
-            <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-              ${isPinned ? `<span class="editorial-badge editorial-badge-pinned">★ Dock</span>` : ""}
-              ${hasWidget ? `<span class="editorial-badge editorial-badge-widget">Widget</span>` : ""}
-              ${!isPinned && !hasWidget ? `<span style="font-family: var(--omni-font-mono); font-size: 0.65rem; color: var(--omni-text-muted);">—</span>` : ""}
-            </div>
-          </td>
-          <td style="text-align: right;">
-            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap;">
-              <button class="editorial-btn-secondary btn-toggle-pin" style="font-size: 0.65rem; padding: 3px 8px; flex-shrink: 0;">
-                ${isPinned ? "Unpin" : "Pin"}
-              </button>
-              <button class="editorial-btn-open-row" title="Launch" style="background: transparent; border: none; color: var(--omni-text-muted); cursor: pointer; padding: 2px 4px; display: flex; align-items: center; flex-shrink: 0;">
-                ${icon("chevron-right", 15)}
-              </button>
-            </div>
+          <td style="text-align: right; white-space: nowrap;">
+            <span style="font-family: var(--omni-font-mono); font-size: 0.70rem; color: var(--omni-text-muted);">v${plugin.version || "1.0.0"}</span>
           </td>
         `;
 
-        row.addEventListener("click", (e) => {
-          if ((e.target as HTMLElement).closest(".btn-toggle-pin")) return;
+        row.addEventListener("click", () => {
           this.openApp(plugin.id);
-        });
-
-        row.querySelector(".btn-toggle-pin")?.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.setAppPinned(plugin.id, !this.isAppPinned(plugin));
-          this.renderDock();
-          this.renderAppsIndex();
         });
 
         this.bindAppContextMenu(row, plugin);
@@ -1533,14 +1491,14 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
 
     const btnProfile = this.root.querySelector("#btn-editorial-profile-toggle");
     btnProfile?.addEventListener("click", () => {
-      const profilePlugin = this.installedPlugins.find(
-        (p) => p.id === "org.omni.plugin.profile-viewer" || p.id === "org.omni.plugin.profile" || p.id.includes("profile")
-      );
-      if (profilePlugin && profilePlugin.enabled) {
-        this.openApp(profilePlugin.id);
-      } else {
-        this.dispatchIntent("view_profile", {}).catch(() => {});
-      }
+      this.dispatchIntent("view_profile", {}).catch(() => {
+        const handlerPlugin = this.installedPlugins.find(
+          (p) => p.enabled !== false && (p.handledIntents?.includes("view_profile") || p.manifest?.permissions?.intents?.handle?.includes("view_profile"))
+        );
+        if (handlerPlugin) {
+          this.openApp(handlerPlugin.id);
+        }
+      });
     });
 
     const btnFullscreen = this.root.querySelector("#btn-editorial-toggle-fullscreen");
@@ -2095,11 +2053,8 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
             <table class="editorial-ledger-table">
               <thead>
                 <tr>
-                  <th style="width: 38%;">Application</th>
-                  <th style="width: 16%;">Domain</th>
-                  <th style="width: 12%;">Version</th>
-                  <th style="width: 18%;">Viewports</th>
-                  <th style="text-align: right; width: 16%;">Action</th>
+                  <th>Application</th>
+                  <th style="text-align: right; width: 85px;">Version</th>
                 </tr>
               </thead>
               <tbody id="editorial-apps-ledger-tbody"></tbody>

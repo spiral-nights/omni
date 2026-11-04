@@ -1,6 +1,6 @@
 {
   "id": "./",
-  "name": "Omni — Modular Nostr Runtime",
+  "name": "Omni",
   "short_name": "Omni",
   "description": "Local-first extensible Nostr client and sandboxed micro-frontend runtime for standard Nostr sites.",
   "start_url": "./",

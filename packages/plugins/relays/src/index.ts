@@ -125,7 +125,7 @@ export function getRelaysSchema(tab = currentTab, relays = currentRelayList): Om
     activeTab: tab,
     tabs: [
       { id: "relays", label: "Connected Relays", icon: "server", badge: relays.length },
-      { id: "add", label: "Add & Presets", icon: "plus" }
+      { id: "add", label: "Add Relays", icon: "plus" }
     ],
     action: { name: "switch-tab" }
   };

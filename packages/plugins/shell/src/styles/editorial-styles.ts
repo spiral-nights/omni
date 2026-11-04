@@ -812,8 +812,11 @@ style, script, head, title, meta, link,
 
 @media (max-width: 640px) {
   .editorial-ledger-table-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: hidden;
+  }
+  .editorial-ledger-table th,
+  .editorial-ledger-table td {
+    padding: 8px 10px;
   }
 }
 
