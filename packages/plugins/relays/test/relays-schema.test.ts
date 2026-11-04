@@ -29,9 +29,10 @@ describe("@omni/plugin-relays Declarative Schema & State Machine", () => {
     const tabsNode = schema.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;
     expect(tabsNode).toBeDefined();
     expect(tabsNode.activeTab).toBe("relays");
-    expect(tabsNode.tabs.length).toBe(3);
+    expect(tabsNode.tabs.length).toBe(2);
     expect(tabsNode.tabs[0].id).toBe("relays");
     expect(tabsNode.tabs[0].badge).toBe(2);
+    expect(tabsNode.tabs[1].id).toBe("add");
 
     // Verify top pool overview box
     const overviewBox = schema.children?.[1];
@@ -68,25 +69,6 @@ describe("@omni/plugin-relays Declarative Schema & State Machine", () => {
       (c) => c.type === "box" && (c as any).children?.some((child: any) => child.type === "box")
     ) as any;
     expect(presetsBox).toBeDefined();
-  });
-
-  it("renders the Pool Health & Cache stats tab", () => {
-    const schema = getRelaysSchema("stats", [
-      { url: "wss://relay.damus.io", status: "online" }
-    ]) as OmniCardPrimitive;
-
-    const tabsNode = schema.children?.find((c) => c.type === "tabs") as OmniTabsPrimitive;
-    expect(tabsNode.activeTab).toBe("stats");
-
-    // Verify 0ms cache banner
-    const bannerNode = schema.children?.find((c) => c.type === "banner") as any;
-    expect(bannerNode).toBeDefined();
-    expect(bannerNode.title).toContain("0ms Local-First Event Cache");
-
-    // Verify status indicator
-    const statusIndicator = schema.children?.find((c) => c.type === "status-indicator") as any;
-    expect(statusIndicator).toBeDefined();
-    expect(statusIndicator.status).toBe("online");
   });
 
   it("handles switch-tab action", async () => {

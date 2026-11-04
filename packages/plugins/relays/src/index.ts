@@ -27,7 +27,7 @@ const PRESETS = [
   { name: "Nostr.band", url: "wss://relay.nostr.band" }
 ];
 
-let currentTab = "relays"; // "relays" | "add" | "stats"
+let currentTab = "relays"; // "relays" | "add"
 let currentRelayList: RelayInfo[] = DEFAULT_RELAYS.map((url) => ({ url, status: "online" }));
 
 function normalizeRelayUrl(input: string): string {
@@ -125,8 +125,7 @@ export function getRelaysSchema(tab = currentTab, relays = currentRelayList): Om
     activeTab: tab,
     tabs: [
       { id: "relays", label: "Connected Relays", icon: "server", badge: relays.length },
-      { id: "add", label: "Add & Presets", icon: "plus" },
-      { id: "stats", label: "Pool Health & Cache", icon: "activity" }
+      { id: "add", label: "Add & Presets", icon: "plus" }
     ],
     action: { name: "switch-tab" }
   };
@@ -266,47 +265,6 @@ export function getRelaysSchema(tab = currentTab, relays = currentRelayList): Om
           }))
         }
       ]
-    });
-  } else if (tab === "stats") {
-    children.push({
-      type: "banner",
-      tone: "success",
-      title: "0ms Local-First Event Cache",
-      message: "Omni writes all received and published Nostr events to the local IndexedDB event store (`omni_event_store`). Even offline, timeline queries resolve with zero network latency."
-    });
-
-    children.push({
-      type: "box",
-      direction: "row",
-      gap: "md",
-      justify: "between",
-      children: [
-        {
-          type: "metric",
-          label: "Configured Relays",
-          value: relays.length,
-          subtext: `${activeRelaysCount} active`
-        },
-        {
-          type: "metric",
-          label: "Cache Read Hit Rate",
-          value: "100%",
-          subtext: "0ms local store hits"
-        },
-        {
-          type: "metric",
-          label: "Relay Protocol",
-          value: "NIP-01 / NIP-42",
-          subtext: "Secured WebSocket pool"
-        }
-      ]
-    });
-
-    children.push({
-      type: "status-indicator",
-      status: "online",
-      label: "Local Storage & Relay Pool Healthy",
-      pulse: true
     });
   }
 

@@ -39,7 +39,7 @@
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Daily Checklist",
+      "name": "Tasks",
       "short_name": "Tasks",
       "description": "Track daily goals and productivity tasks",
       "url": "./?view=widget",

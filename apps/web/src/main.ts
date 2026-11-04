@@ -90,8 +90,8 @@ const initialPlugins: InstalledPluginEntry[] = [
   },
   {
     id: "org.omni.plugin.publisher",
-    name: "Plugin Studio",
-    displayName: "Publisher",
+    name: "Plugin Publisher",
+    displayName: "Plugin Publisher",
     description: "Package .zip archives into NIP-5A nsites, upload to Blossom servers, and manage published plugins.",
     icon: "globe",
     views: [

@@ -325,7 +325,7 @@ export function getFeedSchema(
               {
                 type: "textarea",
                 name: "noteText",
-                placeholder: "What's happening? Compose note to broadcast...",
+                placeholder: "What's happening?",
                 value: state.composerText || "",
                 rows: 3
               },
@@ -335,12 +335,6 @@ export function getFeedSchema(
                 justify: "between",
                 align: "center",
                 children: [
-                  {
-                    type: "text",
-                    content: "NIP-07 signer connected",
-                    variant: "caption",
-                    tone: "muted"
-                  },
                   {
                     type: "button",
                     label: "Publish Note",
