@@ -24,7 +24,7 @@ export function getPublisherSchema(
 
   const headerCard: OmniComponentNode = {
     type: "card",
-    title: "Plugin Studio & Blossom Publisher",
+    title: "Plugin Publisher",
     subtitle: "Package .zip archives into NIP-5A nsites, upload to Blossom servers, or install directly.",
     icon: "package",
     children: [

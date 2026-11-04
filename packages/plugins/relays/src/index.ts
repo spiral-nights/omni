@@ -208,13 +208,6 @@ export function getRelaysSchema(tab = currentTab, relays = currentRelayList): Om
     }
   } else if (tab === "add") {
     children.push({
-      type: "banner",
-      tone: "info",
-      title: "Decentralized Nostr Relay Network",
-      message: "Connect to any standard Nostr WebSocket relay (NIP-01). Relays replicate public notes, profiles, and feeds across the network."
-    });
-
-    children.push({
       type: "box",
       direction: "row",
       gap: "sm",

@@ -87,8 +87,8 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     const initialPlugins: InstalledPluginEntry[] = [
       {
         id: "org.omni.plugin.publisher",
-        name: "Plugin Studio",
-        displayName: "Publisher",
+        name: "Plugin Publisher",
+        displayName: "Plugin Publisher",
         description: "Package .zip archives into NIP-5A nsites and upload to Blossom.",
         icon: "globe",
         viewport: "main",
@@ -145,8 +145,8 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
 
     const makePublisherEntry = (): InstalledPluginEntry => ({
       id: "org.omni.plugin.publisher",
-      name: "Plugin Studio",
-      displayName: "Publisher",
+      name: "Plugin Publisher",
+      displayName: "Plugin Publisher",
       description: "Package .zip archives into NIP-5A nsites and upload to Blossom.",
       icon: "globe",
       viewport: "main",
@@ -249,8 +249,8 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
 
     await shell.installPluginEntry({
       id: "org.omni.plugin.publisher",
-      name: "Plugin Studio",
-      displayName: "Publisher",
+      name: "Plugin Publisher",
+      displayName: "Plugin Publisher",
       description: "Package .zip archives into NIP-5A nsites and upload to Blossom.",
       icon: "globe",
       viewport: "main",
@@ -337,8 +337,8 @@ describe("Plugin Studio (@omni/plugin-publisher) & Direct ZIP / URL Installation
     const initialBuiltInPlugins: InstalledPluginEntry[] = [
       {
         id: "org.omni.plugin.publisher",
-        name: "Plugin Studio",
-        displayName: "Publisher",
+        name: "Plugin Publisher",
+        displayName: "Plugin Publisher",
         description: "Package .zip archives into NIP-5A nsites.",
         icon: "globe",
         viewport: "main",
