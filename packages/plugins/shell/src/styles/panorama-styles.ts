@@ -627,11 +627,26 @@ style, script, head, title, meta, link,
   overflow: visible !important;
 }
 
+.panorama-app-page.has-iframe-slot,
+.panorama-app-page:has(iframe) {
+  height: 100% !important;
+  display: flex;
+  flex-direction: column;
+}
+
 .panorama-app-page .omni-slot {
   overflow: visible !important;
   height: auto !important;
   min-height: 100% !important;
   contain: none !important;
+}
+
+.panorama-app-page .omni-slot.has-iframe-slot,
+.panorama-app-page .omni-slot:has(iframe) {
+  height: 100% !important;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 6. Action Circle Buttons (Header / Inspector / Dialogs) */

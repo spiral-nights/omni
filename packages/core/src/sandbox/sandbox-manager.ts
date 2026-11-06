@@ -416,6 +416,11 @@ export class SandboxInstance {
         if (renderer) {
           if (this.iframe && this.iframe.style.display !== "none") {
             this.iframe.style.display = "none";
+            if (primaryIframeContainer) {
+              primaryIframeContainer.classList.remove("omni-iframe-slot");
+              primaryIframeContainer.parentElement?.classList.remove("has-iframe-slot");
+              primaryIframeContainer.parentElement?.parentElement?.classList.remove("has-iframe-slot");
+            }
           }
           renderer.render(data.schema);
         }
@@ -486,6 +491,7 @@ export class SandboxInstance {
           this.options.targetSlot === "sidebar" ||
           this.options.targetSlot === "widget";
         compContainer.style.height = isCompanionWidget ? "auto" : "100%";
+        compContainer.style.flex = isCompanionWidget ? "none" : "1";
         if (isCompanionWidget) {
           compContainer.style.minHeight = "380px";
         }
@@ -567,6 +573,9 @@ export class SandboxInstance {
           this.iframe.style.flex = "1";
           this.iframe.style.position = "static";
           this.iframe.style.visibility = "visible";
+          compContainer.classList.add("omni-iframe-slot");
+          slotContainer.classList.add("has-iframe-slot");
+          slotContainer.parentElement?.classList.add("has-iframe-slot");
           primaryIframeContainer = compContainer;
           setupIframeContainerProxy(compContainer, this.iframe, slotContainer);
         }

@@ -132,6 +132,7 @@ style, script, head, title, meta, link,
   font-size: 16px;
   line-height: 1.6;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
   display: flex;
@@ -505,6 +506,20 @@ style, script, head, title, meta, link,
   box-sizing: border-box;
 }
 
+.editorial-app-page.has-iframe-slot,
+.editorial-app-page:has(iframe) {
+  padding-bottom: 0 !important;
+  overflow: hidden;
+}
+
+.editorial-app-container.has-iframe-slot,
+.editorial-app-container:has(iframe) {
+  padding: 0 !important;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+}
+
 /* Floating Swiss Architectural Capsule Bottom Dock */
 .editorial-dock {
   position: fixed;
@@ -685,10 +700,14 @@ style, script, head, title, meta, link,
     padding: 6px 8px;
     min-width: 46px;
   }
-  .editorial-app-container {
+  .editorial-app-container:not(.has-iframe-slot) {
     padding: 10px 8px calc(100px + env(safe-area-inset-bottom, 0px)) !important;
   }
-  .editorial-viewport-page {
+  .editorial-app-container.has-iframe-slot,
+  .editorial-app-container:has(iframe) {
+    padding: 0 !important;
+  }
+  .editorial-viewport-page:not(.editorial-app-page) {
     padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)) !important;
   }
   .editorial-back-to-top {
@@ -1446,6 +1465,20 @@ style, script, head, title, meta, link,
   flex-direction: column;
   padding: 16px 16px calc(96px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
+}
+
+.editorial-app-page.has-iframe-slot,
+.editorial-app-page:has(iframe) {
+  padding-bottom: 0 !important;
+  overflow: hidden;
+}
+
+.editorial-app-container.has-iframe-slot,
+.editorial-app-container:has(iframe) {
+  padding: 0 !important;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
 }
 
 /* Companion Cards (Widgets) Dashboard */

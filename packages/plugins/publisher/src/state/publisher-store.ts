@@ -102,18 +102,35 @@ export function saveDeletedAppIds(set: Set<string>): void {
 
 export function getCurrentRouteView(): string {
   try {
-    if (typeof window !== "undefined") {
-      const search = window.location.search || (window as any).__OMNI_SEARCH__ || "";
-      const params = new URLSearchParams(search);
-      const v = params.get("view") || (window as any).__OMNI_VIEW__ || "main";
-      return v;
+    const win =
+      typeof window !== "undefined"
+        ? (window as any)
+        : typeof globalThis !== "undefined"
+          ? (globalThis as any)
+          : {};
+    const search = win.location?.search || win.__OMNI_SEARCH__ || win.__OMNI_ROUTE__ || "";
+    if (search) {
+      const qIdx = search.indexOf("?");
+      const qs = qIdx !== -1 ? search.slice(qIdx) : search;
+      const params = new URLSearchParams(qs);
+      const v = params.get("view");
+      if (v) return v;
+    }
+    if (win.__OMNI_VIEW__ && win.__OMNI_VIEW__ !== "main") {
+      return String(win.__OMNI_VIEW__);
     }
   } catch {}
   return "main";
 }
 
+function getInitialActiveTab(): "create" | "published" | "servers" {
+  const v = getCurrentRouteView();
+  if (v === "published" || v === "servers") return v;
+  return "create";
+}
+
 export const publisherStore = {
-  activeTab: "create" as "create" | "published" | "servers",
+  activeTab: getInitialActiveTab(),
   servers: loadConfiguredServers(),
   deletedAppIds: loadDeletedAppIds(),
   publishedApps: loadPublishedApps().filter((p) => !loadDeletedAppIds().has(p.id) && !loadDeletedAppIds().has(p.eventId || "")),

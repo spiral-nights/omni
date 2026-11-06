@@ -30,8 +30,20 @@ export function dispatchPublisherSchema(schema: OmniComponentNode | null): void 
   }
 }
 
+function dispatchCurrentViewSchema(): void {
+  const view = getCurrentRouteView();
+  if (view === "widget" || view === "compact") {
+    dispatchPublisherSchema(getPublisherWidgetSchema());
+  } else {
+    if (view === "published" || view === "servers") {
+      publisherStore.activeTab = view;
+    }
+    dispatchPublisherSchema(getPublisherSchema());
+  }
+}
+
 onPublisherStoreUpdate(() => {
-  dispatchPublisherSchema(getPublisherSchema());
+  dispatchCurrentViewSchema();
 });
 
 // Auto-Init & Event Listeners (Schema UI Mode)
@@ -49,28 +61,47 @@ if (typeof window !== "undefined") {
 
   window.addEventListener("message", async (event: MessageEvent) => {
     const data = event.data;
-    if (data && (data.type === "omni:action" || data.type === "action") && data.action) {
+    if (!data) return;
+    if (data.type === "omni:init") {
+      const view = getCurrentRouteView();
+      if (view === "published" || view === "servers") {
+        publisherStore.activeTab = view;
+      }
+      dispatchCurrentViewSchema();
+      syncPublishedFromRelays().catch(() => {});
+      return;
+    }
+    if ((data.type === "omni:action" || data.type === "action") && data.action) {
       const next = await handlePublisherAction(data.action, data.payload);
       dispatchPublisherSchema(next);
     }
   });
 
+  window.addEventListener("nostr:keychanged", () => {
+    syncPublishedFromRelays().catch(() => {});
+  });
+
   window.addEventListener("popstate", (event: PopStateEvent) => {
     const tab = event?.state?.tab;
-    if (tab) {
+    if (tab === "create" || tab === "published" || tab === "servers") {
       publisherStore.activeTab = tab;
       dispatchPublisherSchema(getPublisherSchema(publisherStore.activeTab));
+      if (tab === "published") {
+        syncPublishedFromRelays().catch(() => {});
+      }
+    } else {
+      dispatchCurrentViewSchema();
     }
   });
 
   (async () => {
-    await syncPublishedFromRelays().catch(() => {});
     const view = getCurrentRouteView();
-    if (view === "widget" || view === "compact") {
-      dispatchPublisherSchema(getPublisherWidgetSchema());
-    } else {
-      dispatchPublisherSchema(getPublisherSchema());
+    if (view === "published" || view === "servers") {
+      publisherStore.activeTab = view;
     }
+    dispatchCurrentViewSchema();
+    await syncPublishedFromRelays().catch(() => {});
+    dispatchCurrentViewSchema();
   })();
 }
 

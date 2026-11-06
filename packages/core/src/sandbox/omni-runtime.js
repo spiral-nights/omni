@@ -507,6 +507,11 @@
           try {
             window.dispatchEvent(new CustomEvent("nostr:keychanged", { detail: { pubkey: msg.params.pubkey } }));
           } catch (_) {}
+          try {
+            if (rootScope !== window && typeof rootScope.dispatchEvent === "function") {
+              rootScope.dispatchEvent(new CustomEvent("nostr:keychanged", { detail: { pubkey: msg.params.pubkey } }));
+            }
+          } catch (_) {}
         }
       }
     };
@@ -666,7 +671,7 @@
   const virtualFetch = async function(input, init) {
     const urlStr = typeof input === "string" ? input : (input && input.url ? String(input.url) : String(input || ""));
     const method = (init && init.method ? String(init.method) : "GET").toUpperCase();
-    if ((method === "PUT" || method === "GET") && /^https?:\/\//i.test(urlStr)) {
+    if ((method === "PUT" || method === "GET" || method === "DELETE") && /^https?:\/\//i.test(urlStr)) {
       await initPromise;
       let bytes = new Uint8Array(0);
       const body = init ? init.body : null;
@@ -712,6 +717,9 @@
   window.fetch = virtualFetch;
   if (typeof globalThis !== "undefined") {
     globalThis.fetch = virtualFetch;
+  }
+  if (typeof self !== "undefined") {
+    self.fetch = virtualFetch;
   }
 
   // 4b. Virtual SpeechSynthesis Shim
