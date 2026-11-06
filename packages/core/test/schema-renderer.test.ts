@@ -627,5 +627,124 @@ describe("SchemaRenderer & Custom Web Components", () => {
 
       renderer.destroy();
     });
+
+    it("formats inline nostr entities into clickable entity badges with svg line icons", () => {
+      const renderer = new SchemaRenderer({ container });
+
+      // Valid Bech32 checksummed entities for 32-byte hex '00'.repeat(32)
+      const testNpub = "npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzqujme";
+      const testNote = "note1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqn2l0z3";
+
+      renderer.render({
+        type: "card",
+        title: "Test Note",
+        children: [
+          {
+            type: "text",
+            content: `Hello ${testNpub}! Check out nostr:${testNote} for context.`
+          }
+        ]
+      });
+
+      const textEl = container.querySelector("omni-text");
+      expect(textEl).not.toBeNull();
+
+      // Check for inline entity links
+      const links = textEl?.querySelectorAll("a.omni-nostr-entity");
+      expect(links?.length).toBe(2);
+
+      // Verify the links have proper protocol hrefs
+      expect(links?.[0].getAttribute("href")).toBe(`nostr:${testNpub}`);
+      expect(links?.[1].getAttribute("href")).toBe(`nostr:${testNote}`);
+
+      // Verify monochrome SVG icons are embedded inside the entity pills
+      expect(links?.[0].querySelector("svg")).not.toBeNull();
+      expect(links?.[1].querySelector("svg")).not.toBeNull();
+
+      renderer.destroy();
+    });
+
+    it("resets inline style on omni-box when updated without retaining obsolete properties", () => {
+      const renderer = new SchemaRenderer({ container });
+
+      // First render with custom background and negative margin
+      renderer.render({
+        type: "box",
+        id: "styled-box",
+        style: {
+          background: "url(https://example.com/banner.jpg)",
+          marginTop: "-20px"
+        },
+        children: []
+      });
+
+      const box = container.querySelector("#styled-box") as HTMLElement;
+      expect(box).not.toBeNull();
+      expect(box.style.marginTop).toBe("-20px");
+      expect(box.style.background).toContain("url(");
+
+      // Re-render the box without custom background or negative margin
+      renderer.render({
+        type: "box",
+        id: "styled-box",
+        style: {
+          padding: "16px"
+        },
+        children: []
+      });
+
+      // Old styles must be cleared, not accumulated!
+      expect(box.style.marginTop).toBe("");
+      expect(box.style.background).toBe("");
+      expect(box.style.padding).toBe("16px");
+
+      renderer.destroy();
+    });
+
+    it("renders inline quote card for nevent/note with author and quoted content", async () => {
+      const renderer = new SchemaRenderer({ container });
+
+      // Valid Bech32 checksummed entities for 32-byte hex '00'.repeat(32)
+      const testNoteHex = "00".repeat(32);
+      const testNote = "note1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqn2l0z3";
+
+      // Pre-register quoted note in event cache
+      const { registerOmniEvent } = await import("../src/schema/components/primitive-elements.js");
+      registerOmniEvent({
+        id: testNoteHex,
+        pubkey: "11".repeat(32),
+        authorName: "Satoshi Nakamoto",
+        content: "If you don't believe it or don't get it, I don't have the time to try to convince you, sorry."
+      });
+
+      renderer.render({
+        type: "card",
+        title: "Quote Repost Note",
+        children: [
+          {
+            type: "text",
+            content: `A legendary quote:\nnostr:${testNote}\nTimeless wisdom.`
+          }
+        ]
+      });
+
+      const textEl = container.querySelector("omni-text");
+      expect(textEl).not.toBeNull();
+
+      // Check that inline quote card is rendered
+      const quoteCard = textEl?.querySelector(".omni-quote-card");
+      expect(quoteCard).not.toBeNull();
+
+      const authorEl = quoteCard?.querySelector(".omni-quote-author");
+      expect(authorEl?.textContent).toBe("Satoshi Nakamoto");
+
+      const badgeEl = quoteCard?.querySelector(".omni-quote-badge");
+      expect(badgeEl?.textContent).toBe("Quoted Note");
+
+      const contentEl = quoteCard?.querySelector(".omni-quote-content");
+      expect(contentEl?.textContent).toContain("If you don't believe it");
+
+      renderer.destroy();
+    });
   });
 });

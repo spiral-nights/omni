@@ -461,4 +461,31 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
       })
     }));
   });
+
+  it("assigns distinct stable keys to banner and header boxes in both my-profile and user-profile views", () => {
+    const myProfileSchema = getProfileSchema("my-profile", mockProfile) as OmniCardPrimitive;
+    const myBanner = myProfileSchema.children?.find((c: any) => c.key === "my-profile-banner");
+    const myHeader = myProfileSchema.children?.find((c: any) => c.key === "my-profile-header");
+    expect(myBanner).toBeDefined();
+    expect(myHeader).toBeDefined();
+
+    const userProfileSchema = getProfileSchema("user-profile", mockProfile, {
+      userProfilePubkey: "b".repeat(64),
+      userProfileData: {
+        name: "Bob",
+        banner: "https://example.com/banner.png",
+        picture: "https://example.com/bob.png"
+      }
+    }) as OmniCardPrimitive;
+    const userBanner = userProfileSchema.children?.find((c: any) => c.key === "user-profile-banner");
+    const userHeader = userProfileSchema.children?.find((c: any) => c.key === "user-profile-header");
+    const userBackBar = userProfileSchema.children?.find((c: any) => c.key === "user-profile-back-bar");
+    expect(userBanner).toBeDefined();
+    expect(userHeader).toBeDefined();
+    expect(userBackBar).toBeDefined();
+
+    // Verify banner keys are distinct to prevent cross-view DOM element reuse
+    expect(myBanner?.key).not.toBe(userBanner?.key);
+    expect(myHeader?.key).not.toBe(userHeader?.key);
+  });
 });

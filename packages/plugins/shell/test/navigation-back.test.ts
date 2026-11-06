@@ -307,4 +307,97 @@ describe("Unified Navigation & Back Button Integration", () => {
     shell.triggerBack();
     expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
   });
+
+  it("handles clicking a linked nevent inside a note thread and stepping back cleanly to the parent note and feed timeline", async () => {
+    // 1. Start on Feed timeline
+    await shell.openApp("org.omni.plugin.feed");
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    const backBtn = root.querySelector("#btn-editorial-back") as HTMLElement;
+    expect(backBtn.style.display).toBe("none");
+
+    const note1Hex = "1111111111111111111111111111111111111111111111111111111111111111";
+    // 2. Click into Note 1 thread from timeline
+    shell.handleHistoryPush("org.omni.plugin.feed", {
+      state: { view: "thread", id: note1Hex },
+      title: "Note 1",
+      url: `?note=${note1Hex}`
+    });
+    expect(backBtn.style.display).toBe("inline-flex");
+    expect(kernel.navigation.canGoBack()).toBe(true);
+
+    // 3. User clicks an inline nevent link inside Note 1
+    // Standard note1 bech32 encoded from 32-byte hex 222222...
+    const note2Hex = "2222222222222222222222222222222222222222222222222222222222222222";
+    // Construct a standard NIP-19 note1 string for note2Hex
+    // Bech32 encoding of 32 bytes of 0x22
+    const note2Uri = "nostr:note1yg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3qmtdh3n";
+
+    const poppedHistory: any[] = [];
+    (kernel as any).dispatchHistoryPopstate = (pluginId: string, payload: any) => {
+      poppedHistory.push({ pluginId, payload });
+    };
+
+    let intentNotified: any = null;
+    (kernel as any).notifyPlugin = (pluginId: string, method: string, params: any) => {
+      intentNotified = { pluginId, method, params };
+    };
+
+    const res = await shell.handleUri(note2Uri);
+    expect(res.handled).toBe(true);
+    expect(intentNotified).not.toBeNull();
+    expect(intentNotified.params.data.isAlreadyActive).toBe(true);
+
+    // Subroute frame for Note 2 must be on top of stack
+    expect(kernel.navigation.canGoBack()).toBe(true);
+    expect(kernel.navigation.getCurrentFrame()?.state?.id).toBe(note2Hex);
+
+    // 4. First Back: returns from Note 2 -> Note 1
+    shell.triggerBack();
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    expect(poppedHistory.length).toBe(1);
+    expect(poppedHistory[0].pluginId).toBe("org.omni.plugin.feed");
+    expect(poppedHistory[0].payload.state).toEqual({ view: "thread", id: note1Hex });
+    expect(kernel.navigation.canGoBack()).toBe(true);
+    expect(backBtn.style.display).toBe("inline-flex");
+
+    // 5. Second Back: returns from Note 1 -> Feed Timeline
+    shell.triggerBack();
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    expect(poppedHistory.length).toBe(2);
+    expect(poppedHistory[1].pluginId).toBe("org.omni.plugin.feed");
+    expect(poppedHistory[1].payload.state).toBeNull();
+    expect(kernel.navigation.canGoBack()).toBe(false);
+    expect(backBtn.style.display).toBe("none");
+  });
+
+  it("handles clicking a linked nevent directly from the feed timeline and stepping back to timeline", async () => {
+    // 1. Start on Feed timeline
+    await shell.openApp("org.omni.plugin.feed");
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    const backBtn = root.querySelector("#btn-editorial-back") as HTMLElement;
+    expect(backBtn.style.display).toBe("none");
+
+    const noteHex = "2222222222222222222222222222222222222222222222222222222222222222";
+    const noteUri = "nostr:note1yg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3qmtdh3n";
+
+    const poppedHistory: any[] = [];
+    (kernel as any).dispatchHistoryPopstate = (pluginId: string, payload: any) => {
+      poppedHistory.push({ pluginId, payload });
+    };
+
+    // User clicks a linked note directly from a note on the timeline
+    const res = await shell.handleUri(noteUri);
+    expect(res.handled).toBe(true);
+    expect(kernel.navigation.canGoBack()).toBe(true);
+    expect(backBtn.style.display).toBe("inline-flex");
+
+    // Stepping back should return directly to feed timeline
+    shell.triggerBack();
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    expect(poppedHistory.length).toBe(1);
+    expect(poppedHistory[0].pluginId).toBe("org.omni.plugin.feed");
+    expect(poppedHistory[0].payload.state).toBeNull();
+    expect(kernel.navigation.canGoBack()).toBe(false);
+    expect(backBtn.style.display).toBe("none");
+  });
 });

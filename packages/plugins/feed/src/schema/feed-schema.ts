@@ -106,110 +106,143 @@ export function getFeedSchema(
       ? n.authorName
       : (resolvedName || n.authorName);
 
-    return {
-      type: "card",
-      action: { name: "view-thread", payload: { id: n.id } },
+    const cardChildren: OmniComponentNode[] = [];
+
+    // Thread Context Indicator: When note is a reply, show subtle parent thread indicator
+    if (n.replyToId) {
+      const replyLabel = n.replyToAuthor
+        ? `Replying to @${n.replyToAuthor}`
+        : (n.replyToPubkey ? `Replying to @${n.replyToPubkey.slice(0, 8)}...` : "Replying to thread");
+      cardChildren.push({
+        type: "box",
+        direction: "row",
+        align: "center",
+        gap: "xs",
+        action: { name: "view-thread", payload: { id: n.replyToId } },
+        style: "margin-bottom: 6px; opacity: 0.82; cursor: pointer;",
+        children: [
+          {
+            type: "icon",
+            name: "reply",
+            size: 13
+          },
+          {
+            type: "text",
+            content: replyLabel,
+            variant: "caption",
+            tone: "muted"
+          }
+        ]
+      });
+    }
+
+    cardChildren.push({
+      type: "box",
+      direction: "row",
+      justify: "between",
+      align: "center",
       children: [
         {
           type: "box",
           direction: "row",
-          justify: "between",
+          gap: "sm",
           align: "center",
+          action: {
+            name: "view-profile",
+            payload: { pubkey: n.pubkey }
+          },
           children: [
             {
-              type: "box",
-              direction: "row",
-              gap: "sm",
-              align: "center",
+              type: "avatar",
+              pubkey: n.pubkey,
+              name: authorDisplayName,
+              size: "md",
               action: {
                 name: "view-profile",
                 payload: { pubkey: n.pubkey }
-              },
+              }
+            },
+            {
+              type: "box",
+              direction: "column",
+              gap: "xs",
               children: [
                 {
-                  type: "avatar",
-                  pubkey: n.pubkey,
-                  name: authorDisplayName,
-                  size: "md",
-                  action: {
-                    name: "view-profile",
-                    payload: { pubkey: n.pubkey }
-                  }
+                  type: "text",
+                  content: authorDisplayName,
+                  variant: "body",
+                  tone: "primary"
                 },
                 {
-                  type: "box",
-                  direction: "column",
-                  gap: "xs",
-                  children: [
-                    {
-                      type: "text",
-                      content: authorDisplayName,
-                      variant: "body",
-                      tone: "primary"
-                    },
-                    {
-                      type: "text",
-                      content: `${new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${n.npub.slice(0, 12)}...`,
-                      variant: "caption",
-                      tone: "muted"
-                    }
-                  ]
+                  type: "text",
+                  content: `${new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${n.npub.slice(0, 12)}...`,
+                  variant: "caption",
+                  tone: "muted"
                 }
               ]
             }
           ]
-        },
+        }
+      ]
+    });
+
+    cardChildren.push({
+      type: "text",
+      content: n.content,
+      variant: "body",
+      showInlineImages: loadInlineImagesPreference(),
+      action: { name: "view-thread", payload: { id: n.id } }
+    });
+
+    cardChildren.push({
+      type: "divider"
+    });
+
+    cardChildren.push({
+      type: "box",
+      direction: "row",
+      justify: "between",
+      align: "center",
+      children: [
         {
-          type: "text",
-          content: n.content,
-          variant: "body",
-          showInlineImages: loadInlineImagesPreference(),
+          type: "button",
+          variant: "ghost",
+          size: "sm",
+          icon: "reply",
+          label: String(n.replies || "0"),
           action: { name: "view-thread", payload: { id: n.id } }
         },
         {
-          type: "divider"
+          type: "button",
+          variant: n.reposted ? "secondary" : "ghost",
+          size: "sm",
+          icon: "repeat",
+          label: String(n.reposts || "0"),
+          action: { name: "repost-note", payload: { id: n.id } }
         },
         {
-          type: "box",
-          direction: "row",
-          justify: "between",
-          align: "center",
-          children: [
-            {
-              type: "button",
-              variant: "ghost",
-              size: "sm",
-              icon: "reply",
-              label: String(n.replies || "0"),
-              action: { name: "view-thread", payload: { id: n.id } }
-            },
-            {
-              type: "button",
-              variant: n.reposted ? "secondary" : "ghost",
-              size: "sm",
-              icon: "repeat",
-              label: String(n.reposts || "0"),
-              action: { name: "repost-note", payload: { id: n.id } }
-            },
-            {
-              type: "button",
-              variant: n.liked ? "secondary" : "ghost",
-              size: "sm",
-              icon: "heart",
-              label: String(n.likes || "0"),
-              action: { name: "like-note", payload: { id: n.id } }
-            },
-            {
-              type: "button",
-              variant: "ghost",
-              size: "sm",
-              icon: "zap",
-              label: String(n.zaps || "0"),
-              action: { name: "zap-note", payload: { id: n.id } }
-            }
-          ]
+          type: "button",
+          variant: n.liked ? "secondary" : "ghost",
+          size: "sm",
+          icon: "heart",
+          label: String(n.likes || "0"),
+          action: { name: "like-note", payload: { id: n.id } }
+        },
+        {
+          type: "button",
+          variant: "ghost",
+          size: "sm",
+          icon: "zap",
+          label: String(n.zaps || "0"),
+          action: { name: "zap-note", payload: { id: n.id } }
         }
       ]
+    });
+
+    return {
+      type: "card",
+      action: { name: "view-thread", payload: { id: n.id } },
+      children: cardChildren
     };
   });
 

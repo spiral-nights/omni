@@ -271,4 +271,40 @@ describe("Feed Schema UI (Server-Driven Declarative Feed)", () => {
     expect(formatted).toContain("fun-video.mp4");
     expect(formatted).not.toContain("<video");
   });
+
+  it("renders reply context indicator when a feed note is a reply", () => {
+    const testState: FeedSchemaState = {
+      activeTab: "global",
+      composerText: "",
+      notes: [
+        {
+          id: "reply_note_1",
+          pubkey: "pk_alice",
+          authorName: "Alice",
+          npub: "npub1alice",
+          content: "This is a reply to Bob",
+          created_at: Date.now(),
+          likes: 0,
+          reposts: 0,
+          replies: 0,
+          zaps: 0,
+          replyToId: "root_note_1",
+          replyToAuthor: "Bob"
+        }
+      ]
+    };
+
+    const schema = getFeedSchema("main", testState) as OmniBoxPrimitive;
+    const noteCard = schema.children[2] as OmniCardPrimitive;
+    expect(noteCard).toBeDefined();
+
+    const replyHeader = noteCard.children.find(
+      (c) => c.type === "box" && (c as OmniBoxPrimitive).action?.name === "view-thread"
+    ) as OmniBoxPrimitive;
+    expect(replyHeader).toBeDefined();
+    const replyText = replyHeader.children.find(
+      (c) => c.type === "text" && (c as OmniTextPrimitive).content?.includes("Replying to @Bob")
+    );
+    expect(replyText).toBeDefined();
+  });
 });

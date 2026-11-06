@@ -145,6 +145,22 @@ export function handleSchemaWsMessage(event: any): void {
 
       // Kind 1: User notes
       else if (k === 1 && ev.id) {
+        if (typeof window !== "undefined") {
+          const cache = (window as any).__omni_event_cache || new Map();
+          (window as any).__omni_event_cache = cache;
+          const author = profileStore.schemaProfileCache.get(ev.pubkey);
+          const existing = cache.get(ev.id) || { id: ev.id };
+          existing.pubkey = ev.pubkey;
+          if (author?.name) existing.authorName = author.name;
+          if (author?.picture) existing.avatar = author.picture;
+          existing.content = ev.content;
+          existing.created_at = ev.created_at ? ev.created_at * 1000 : undefined;
+          cache.set(ev.id, existing);
+          try {
+            window.dispatchEvent(new CustomEvent("omni:event_cached", { detail: { id: ev.id, event: existing } }));
+          } catch (_) {}
+        }
+
         const activePk =
           profileStore.currentSchemaTab === "user-profile"
             ? profileStore.schemaTargetUser?.pubkey

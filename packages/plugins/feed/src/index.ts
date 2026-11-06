@@ -22,7 +22,8 @@ export {
 export {
   formatContent,
   isNostrIdentifier,
-  parseSearchQuery
+  parseSearchQuery,
+  extractReplyInfo
 } from "./format/content.js";
 
 // Filtering & Moderation Engine
@@ -115,7 +116,15 @@ if (typeof window !== "undefined") {
     if (action === "view_note" || action === "view-note") {
       const noteId = data?.eventId || data?.id;
       if (noteId) {
-        onActionMsg({ name: "view-thread", payload: { id: noteId, note: data?.note, isFromIntent: true } });
+        onActionMsg({
+          name: "view-thread",
+          payload: {
+            id: noteId,
+            note: data?.note,
+            isFromIntent: true,
+            isAlreadyActive: Boolean(data?.isAlreadyActive)
+          }
+        });
       }
     }
   };

@@ -24,7 +24,35 @@ import {
 import { isContentFiltered, loadFilterPatterns } from "../filter/content-filter.js";
 import { isWidgetRoute, isCompactRoute } from "../routes.js";
 import { getFeedSchema } from "../schema/feed-schema.js";
+import { extractReplyInfo } from "../format/content.js";
+import { extractQuotedNoteId } from "../format/bech32.js";
 import type { FeedNoteItem } from "../types.js";
+
+function registerNoteInGlobalCache(note: {
+  id: string;
+  pubkey?: string;
+  authorName?: string;
+  avatar?: string;
+  content?: string;
+  created_at?: number;
+}) {
+  if (typeof window !== "undefined") {
+    const cache = (window as any).__omni_event_cache || new Map();
+    (window as any).__omni_event_cache = cache;
+    const existing = cache.get(note.id) || { id: note.id };
+    if (note.pubkey) existing.pubkey = note.pubkey;
+    if (note.authorName) existing.authorName = note.authorName;
+    if (note.avatar) existing.avatar = note.avatar;
+    if (note.content !== undefined) existing.content = note.content;
+    if (note.created_at) existing.created_at = note.created_at;
+    cache.set(note.id, existing);
+    try {
+      window.dispatchEvent(
+        new CustomEvent("omni:event_cached", { detail: { id: note.id, event: existing } })
+      );
+    } catch (_) {}
+  }
+}
 
 let schemaDispatchTimeout: any = null;
 const queriedInteractionNoteIds = new Set<string>();
@@ -161,12 +189,20 @@ export function initFeedSchemaSocket() {
                   if (parsed.picture) n.avatar = parsed.picture;
                   updated = true;
                 }
+                if (n.replyToPubkey === ev.pubkey) {
+                  if (resolvedName) n.replyToAuthor = resolvedName;
+                  updated = true;
+                }
               }
               for (const replies of schemaThreadReplies.values()) {
                 for (const r of replies) {
                   if (r.pubkey === ev.pubkey) {
                     if (resolvedName) r.authorName = resolvedName;
                     if (parsed.picture) r.avatar = parsed.picture;
+                    updated = true;
+                  }
+                  if (r.replyToPubkey === ev.pubkey) {
+                    if (resolvedName) r.replyToAuthor = resolvedName;
                     updated = true;
                   }
                 }
@@ -202,8 +238,44 @@ export function initFeedSchemaSocket() {
           if (ev.kind === 1 && ev.id) {
             allKnownNotes.set(ev.id, ev);
 
+            const initialAuthor = profileCache.get(ev.pubkey);
+            const initialAuthorName = extractDisplayName(initialAuthor) || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User");
+            registerNoteInGlobalCache({
+              id: ev.id,
+              pubkey: ev.pubkey,
+              authorName: initialAuthorName,
+              avatar: initialAuthor?.picture,
+              content: ev.content || "",
+              created_at: ev.created_at ? ev.created_at * 1000 : undefined
+            });
+
+            // Fetch any quoted note if not already in allKnownNotes
+            const quotedId = extractQuotedNoteId(ev.content || "");
+            if (quotedId && !allKnownNotes.has(quotedId)) {
+              try {
+                ws.send(JSON.stringify(["REQ", `quote_${quotedId.slice(0, 8)}`, { ids: [quotedId], limit: 1 }]));
+              } catch (_) {}
+            }
+
+            if (subId?.startsWith("quote_")) {
+              if (ev.pubkey && !profileCache.has(ev.pubkey)) {
+                queueProfileFetch(ev.pubkey);
+              }
+              scheduleSchemaDispatch();
+              return;
+            }
+
+            const repInfo = extractReplyInfo(ev);
+            let replyToAuthor = "";
+            if (repInfo.replyToPubkey) {
+              const repAuthorObj = profileCache.get(repInfo.replyToPubkey);
+              replyToAuthor = extractDisplayName(repAuthorObj) || "";
+              if (!repAuthorObj) queueProfileFetch(repInfo.replyToPubkey);
+            }
+
             if (
               subId?.startsWith("schema_thread_note_") ||
+              subId?.startsWith("schema_thread_anc_") ||
               ev.id === currentFeedState.activeThreadNoteId
             ) {
               const author = profileCache.get(ev.pubkey);
@@ -215,6 +287,10 @@ export function initFeedSchemaSocket() {
                   existingNote.authorName = authorName;
                 }
                 if (author?.picture) existingNote.avatar = author.picture;
+                if (repInfo.replyToId) existingNote.replyToId = repInfo.replyToId;
+                if (repInfo.rootId) existingNote.rootId = repInfo.rootId;
+                if (repInfo.replyToPubkey) existingNote.replyToPubkey = repInfo.replyToPubkey;
+                if (replyToAuthor) existingNote.replyToAuthor = replyToAuthor;
               } else {
                 currentFeedState.notes.push({
                   id: ev.id,
@@ -227,7 +303,11 @@ export function initFeedSchemaSocket() {
                   likes: 0,
                   reposts: 0,
                   replies: schemaThreadReplies.get(ev.id)?.length || 0,
-                  zaps: 0
+                  zaps: 0,
+                  replyToId: repInfo.replyToId,
+                  replyToPubkey: repInfo.replyToPubkey,
+                  replyToAuthor: replyToAuthor || undefined,
+                  rootId: repInfo.rootId
                 });
               }
               if (ev.pubkey && !profileCache.has(ev.pubkey)) {
@@ -242,13 +322,14 @@ export function initFeedSchemaSocket() {
             const isForActiveThread = Boolean(
               activeTid && (
                 subId?.startsWith(`schema_thread_rep_${activeTid.slice(0, 8)}`) ||
+                subId?.startsWith("schema_thread_all_") ||
                 eTags.some((t: string[]) => t[1] === activeTid)
               )
             );
 
             if (isForActiveThread && activeTid) {
               const existing = schemaThreadReplies.get(activeTid) || [];
-              if (!existing.some((r) => r.id === ev.id)) {
+              if (!existing.some((r) => r.id === ev.id) && ev.id !== activeTid) {
                 const author = profileCache.get(ev.pubkey);
                 const repAuthorName = extractDisplayName(author) || (ev.pubkey ? `nostr:${ev.pubkey.slice(0, 8)}` : "Nostr User");
                 const repItem: FeedNoteItem = {
@@ -262,7 +343,11 @@ export function initFeedSchemaSocket() {
                   likes: 0,
                   reposts: 0,
                   replies: 0,
-                  zaps: 0
+                  zaps: 0,
+                  replyToId: repInfo.replyToId,
+                  replyToPubkey: repInfo.replyToPubkey,
+                  replyToAuthor: replyToAuthor || undefined,
+                  rootId: repInfo.rootId
                 };
                 existing.push(repItem);
                 existing.sort((a, b) => a.created_at - b.created_at);
@@ -296,7 +381,11 @@ export function initFeedSchemaSocket() {
                     likes: 0,
                     reposts: 0,
                     replies: 0,
-                    zaps: 0
+                    zaps: 0,
+                    replyToId: repInfo.replyToId,
+                    replyToPubkey: repInfo.replyToPubkey,
+                    replyToAuthor: replyToAuthor || undefined,
+                    rootId: repInfo.rootId
                   };
                   existing.push(repItem);
                   existing.sort((a, b) => a.created_at - b.created_at);
@@ -309,7 +398,11 @@ export function initFeedSchemaSocket() {
               }
             }
 
-            if (subId?.startsWith("schema_thread_rep_")) {
+            if (
+              subId?.startsWith("schema_thread_rep_") ||
+              subId?.startsWith("schema_thread_anc_") ||
+              subId?.startsWith("schema_thread_all_")
+            ) {
               return;
             }
 
@@ -343,7 +436,11 @@ export function initFeedSchemaSocket() {
               likes: 0,
               reposts: 0,
               replies: existingReplies?.length || 0,
-              zaps: 0
+              zaps: 0,
+              replyToId: repInfo.replyToId,
+              replyToPubkey: repInfo.replyToPubkey,
+              replyToAuthor: replyToAuthor || undefined,
+              rootId: repInfo.rootId
             });
 
             currentFeedState.notes.sort((a, b) => b.created_at - a.created_at);

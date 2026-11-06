@@ -306,7 +306,7 @@ style, script, head, title, meta, link,
 
 .editorial-shell-root.has-active-app .editorial-app-container {
   max-width: 100%;
-  padding: 12px 0 88px;
+  padding: 12px 0 calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Fullscreen Immersive Mode */
@@ -501,7 +501,7 @@ style, script, head, title, meta, link,
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px 16px 88px;
+  padding: 16px 16px calc(96px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
@@ -686,7 +686,10 @@ style, script, head, title, meta, link,
     min-width: 46px;
   }
   .editorial-app-container {
-    padding: 10px 8px 24px !important;
+    padding: 10px 8px calc(100px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .editorial-viewport-page {
+    padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)) !important;
   }
   .editorial-back-to-top {
     bottom: calc(80px + env(safe-area-inset-bottom, 0px));
@@ -1441,7 +1444,7 @@ style, script, head, title, meta, link,
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px 16px 88px;
+  padding: 16px 16px calc(96px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 

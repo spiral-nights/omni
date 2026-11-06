@@ -410,6 +410,8 @@ describe("EditorialShell — Sacred Swiss Editorial & Papyrus Sanctuary", () => 
       expect(EDITORIAL_SHELL_CSS).toContain(".editorial-dock");
       expect(EDITORIAL_SHELL_CSS).toContain(".editorial-dock.dock-hidden");
       expect(EDITORIAL_SHELL_CSS).toContain("border-radius: var(--omni-radius-lg, 8px);");
+      // Floating bottom dock clearance on mobile to prevent obscuring bottom content
+      expect(EDITORIAL_SHELL_CSS).toContain("calc(100px + env(safe-area-inset-bottom, 0px))");
     });
 
     it("auto-hides dock when scrolling down and reveals when scrolling up or tapping top", () => {

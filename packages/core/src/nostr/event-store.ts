@@ -1,4 +1,5 @@
 import { NostrEvent, NostrFilter } from "@omni/types";
+import { registerOmniEvent } from "../schema/components/primitive-elements.js";
 
 export interface LocalEventStoreOptions {
   dbName?: string;
@@ -306,6 +307,14 @@ export class LocalEventStore {
 
     // 1. In-memory LRU cache update
     this.putInMemoryCache(event);
+    if (event.kind === 1 && event.id) {
+      registerOmniEvent({
+        id: event.id,
+        pubkey: event.pubkey,
+        content: event.content,
+        created_at: event.created_at
+      });
+    }
 
     // 2. Ephemeral events (kind 20000..29999) MUST NOT be persisted to disk per Nostr spec
     if (this.isEphemeral(event)) {

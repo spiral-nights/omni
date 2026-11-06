@@ -223,10 +223,13 @@ export class SchemaRenderer {
     if ((node as any)?.style) {
       const s = (node as any).style;
       if (typeof s === "string") {
-        el.style.cssText += `; ${s}`;
+        el.style.cssText = s;
       } else if (typeof s === "object") {
+        el.removeAttribute("style");
         Object.assign(el.style, s);
       }
+    } else if (!(el as any).setProps) {
+      el.removeAttribute("style");
     }
 
     // Reconcile nested child slots
@@ -303,10 +306,13 @@ export class SchemaRenderer {
     if ((node as any)?.style) {
       const s = (node as any).style;
       if (typeof s === "string") {
-        el.style.cssText += `; ${s}`;
+        el.style.cssText = s;
       } else if (typeof s === "object") {
+        el.removeAttribute("style");
         Object.assign(el.style, s);
       }
+    } else if (!(el as any).setProps) {
+      el.removeAttribute("style");
     }
     return el;
   }

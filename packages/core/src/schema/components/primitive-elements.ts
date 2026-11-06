@@ -83,23 +83,39 @@ export class OmniBoxElement extends BaseElement {
       this.style.cursor = "";
     }
     if (props.direction) this.setAttribute("direction", props.direction);
+    else this.removeAttribute("direction");
     if (props.gap) this.setAttribute("gap", props.gap);
+    else this.removeAttribute("gap");
     if (props.align) this.setAttribute("align", props.align);
+    else this.removeAttribute("align");
     if (props.justify) this.setAttribute("justify", props.justify);
+    else this.removeAttribute("justify");
     if (props.padding) this.setAttribute("padding", props.padding);
+    else this.removeAttribute("padding");
     if (props.wrap !== undefined) {
       if (props.wrap) this.setAttribute("wrap", "");
       else this.removeAttribute("wrap");
+    } else {
+      this.removeAttribute("wrap");
     }
     if (props.background) {
       this.style.background = props.background;
+    } else {
+      this.style.background = "";
     }
     if (props.style) {
       if (typeof props.style === "string") {
-        this.style.cssText += `; ${props.style}`;
+        this.style.cssText = props.style;
       } else if (typeof props.style === "object") {
+        this.removeAttribute("style");
         Object.assign(this.style, props.style);
       }
+    } else {
+      const bg = this.style.background;
+      const cur = this.style.cursor;
+      this.removeAttribute("style");
+      if (bg) this.style.background = bg;
+      if (cur) this.style.cursor = cur;
     }
   }
 }
@@ -291,6 +307,245 @@ export class OmniSpacerElement extends BaseElement {
 // 2. Typography & Status Display
 // ============================================================================
 
+const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+function bech32Decode(str: string): { hrp: string; words: number[] } | null {
+  try {
+    const s = str.toLowerCase().trim();
+    const pos = s.lastIndexOf("1");
+    if (pos < 1 || pos + 7 > s.length || s.length > 5000) return null;
+    const hrp = s.slice(0, pos);
+    for (const ch of hrp) if (ch.charCodeAt(0) < 33 || ch.charCodeAt(0) > 126) return null;
+    const words: number[] = [];
+    for (const ch of s.slice(pos + 1)) {
+      const idx = BECH32_CHARSET.indexOf(ch);
+      if (idx === -1) return null;
+      words.push(idx);
+    }
+    const gen = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+    let chk = 1;
+    for (const v of [
+      ...hrp.split("").map((c) => c.charCodeAt(0) >> 5),
+      0,
+      ...hrp.split("").map((c) => c.charCodeAt(0) & 31),
+      ...words
+    ]) {
+      const top = chk >> 25;
+      chk = ((chk & 0x1ffffff) << 5) ^ v;
+      for (let i = 0; i < 5; i++) {
+        chk ^= ((top >> i) & 1) ? gen[i] : 0;
+      }
+    }
+    if (chk !== 1) return null;
+    return { hrp, words: words.slice(0, -6) };
+  } catch (_) {
+    return null;
+  }
+}
+
+function wordsToBytes(words: number[]): number[] {
+  let acc = 0;
+  let bits = 0;
+  const ret: number[] = [];
+  for (const v of words) {
+    acc = (acc << 5) | v;
+    bits += 5;
+    while (bits >= 8) {
+      bits -= 8;
+      ret.push((acc >> bits) & 0xff);
+    }
+  }
+  return ret;
+}
+
+function bytesToHex(bytes: number[]): string {
+  return bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+interface DecodedEntity {
+  type: "npub" | "nprofile" | "note" | "nevent" | "naddr";
+  hex?: string;
+  pubkey?: string;
+  identifier?: string;
+}
+
+function decodeNostrEntityInline(raw: string): DecodedEntity | null {
+  const s = raw.trim().replace(/^nostr:/i, "").toLowerCase();
+  if (!/^(npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+$/.test(s)) return null;
+  const decoded = bech32Decode(s);
+  if (!decoded) return null;
+  const bytes = wordsToBytes(decoded.words);
+  const hex = bytesToHex(bytes);
+
+  switch (decoded.hrp) {
+    case "npub":
+      return bytes.length === 32 ? { type: "npub", hex, pubkey: hex } : null;
+    case "note":
+      return bytes.length === 32 ? { type: "note", hex } : null;
+    case "nprofile": {
+      let pubkey: string | undefined;
+      let i = 0;
+      while (i + 2 <= bytes.length) {
+        const tag = bytes[i];
+        const len = bytes[i + 1];
+        const val = bytes.slice(i + 2, i + 2 + len);
+        if (tag === 0 && len === 32) pubkey = bytesToHex(val);
+        i += 2 + len;
+      }
+      return pubkey ? { type: "nprofile", pubkey, hex: pubkey } : null;
+    }
+    case "nevent": {
+      let eventId: string | undefined;
+      let pubkey: string | undefined;
+      let i = 0;
+      while (i + 2 <= bytes.length) {
+        const tag = bytes[i];
+        const len = bytes[i + 1];
+        if (tag === 0 && len === 32) eventId = bytesToHex(bytes.slice(i + 2, i + 2 + len));
+        if (tag === 2 && len === 32) pubkey = bytesToHex(bytes.slice(i + 2, i + 2 + len));
+        i += 2 + bytes[i + 1];
+      }
+      return eventId ? { type: "nevent", hex: eventId, pubkey } : null;
+    }
+    case "naddr": {
+      let identifier: string | undefined;
+      let pubkey: string | undefined;
+      let i = 0;
+      while (i + 2 <= bytes.length) {
+        const tag = bytes[i];
+        const len = bytes[i + 1];
+        const val = bytes.slice(i + 2, i + 2 + len);
+        if (tag === 1 && len === 32) pubkey = bytesToHex(val);
+        if (tag === 2) identifier = String.fromCharCode(...val);
+        i += 2 + len;
+      }
+      return pubkey ? { type: "naddr", pubkey, identifier } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+export interface OmniCachedEvent {
+  id: string;
+  pubkey?: string;
+  authorName?: string;
+  avatar?: string;
+  content?: string;
+  created_at?: number;
+}
+
+const eventMemoryCache = new Map<string, OmniCachedEvent>();
+
+export function registerOmniEvent(ev: {
+  id: string;
+  pubkey?: string;
+  authorName?: string;
+  avatar?: string;
+  content?: string;
+  created_at?: number;
+}): void {
+  if (!ev || !ev.id) return;
+  const existing = eventMemoryCache.get(ev.id) || { id: ev.id };
+  if (ev.pubkey) existing.pubkey = ev.pubkey;
+  if (ev.authorName) existing.authorName = ev.authorName;
+  if (ev.avatar) existing.avatar = ev.avatar;
+  if (ev.content !== undefined) existing.content = ev.content;
+  if (ev.created_at) existing.created_at = ev.created_at;
+  eventMemoryCache.set(ev.id, existing);
+
+  if (typeof window !== "undefined") {
+    (window as any).__omni_event_cache = eventMemoryCache;
+    try {
+      window.dispatchEvent(
+        new CustomEvent("omni:event_cached", {
+          detail: { id: ev.id, event: existing }
+        })
+      );
+    } catch (_) {}
+  }
+}
+
+export function getOmniCachedEvent(id: string): OmniCachedEvent | undefined {
+  if (!id) return undefined;
+  if (eventMemoryCache.has(id)) return eventMemoryCache.get(id);
+  if (typeof window !== "undefined" && (window as any).__omni_event_cache?.has(id)) {
+    return (window as any).__omni_event_cache.get(id);
+  }
+  return undefined;
+}
+
+function escapeHtml(str: string): string {
+  if (!str) return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function queryIndexedDbEvent(id: string): Promise<OmniCachedEvent | null> {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === "undefined") return resolve(null);
+    try {
+      const req = indexedDB.open("omni_event_store");
+      req.onerror = () => resolve(null);
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains("events")) {
+          db.close();
+          return resolve(null);
+        }
+        const tx = db.transaction(["events"], "readonly");
+        const store = tx.objectStore("events");
+        const getReq = store.get(id);
+        getReq.onerror = () => {
+          db.close();
+          resolve(null);
+        };
+        getReq.onsuccess = () => {
+          const res = getReq.result;
+          db.close();
+          if (res && res.id) {
+            resolve({
+              id: res.id,
+              pubkey: res.pubkey,
+              content: res.content,
+              created_at: res.created_at
+            });
+          } else {
+            resolve(null);
+          }
+        };
+      };
+    } catch (_) {
+      resolve(null);
+    }
+  });
+}
+
+function renderQuoteCardHtml(hex: string, entity: string, fallbackPubkey?: string): string {
+  const cached = getOmniCachedEvent(hex);
+  const authorName = cached?.authorName || (cached?.pubkey ? `nostr:${cached.pubkey.slice(0, 8)}` : (fallbackPubkey ? `nostr:${fallbackPubkey.slice(0, 8)}` : "Nostr User"));
+  const short = `${entity.slice(0, 9)}…${entity.slice(-4)}`;
+  const hasContent = Boolean(cached?.content);
+  const contentSnippet = hasContent ? escapeHtml(cached!.content!) : "Loading quoted note…";
+
+  return `<div class="omni-quote-card feed-quote-card ${hasContent ? '' : 'loading'}" data-note-id="${hex}" data-entity="${entity}" style="display: block; margin: 8px 0; background: var(--omni-bg-surface, #191816); border: 1px solid var(--omni-border-subtle, #33312c); border-radius: var(--omni-radius-sm, 6px); padding: 10px 12px; cursor: pointer; text-decoration: none; color: inherit; user-select: text; transition: border-color 0.15s ease;">
+    <div class="omni-quote-header" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 0.85em;">
+      <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; color: var(--omni-accent-primary, #d4a373);"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <strong class="omni-quote-author" style="font-weight: 600; color: var(--omni-text-primary, #ede8df); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${authorName}</strong>
+        <span class="omni-quote-id" style="font-family: monospace; font-size: 0.85em; color: var(--omni-text-muted, #78716c);">${short}</span>
+      </div>
+      <span class="omni-quote-badge" style="font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--omni-accent-primary, #d4a373); background: rgba(212, 163, 115, 0.12); padding: 1px 6px; border-radius: 3px; flex-shrink: 0;">Quoted Note</span>
+    </div>
+    <div class="omni-quote-content" style="font-size: 0.9em; line-height: 1.45; color: var(--omni-text-secondary, #9e988f); overflow: hidden; word-break: break-word; ${hasContent ? '' : 'font-style: italic; opacity: 0.75;'}">${contentSnippet}</div>
+    <a href="nostr:${entity}" data-nostr-entity="${entity}" data-note-id="${hex}" class="feed-nostr-entity omni-nostr-entity feed-nostr-note" style="display: none;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>${short}</span></a>
+  </div>`;
+}
+
 function formatTextWithLinks(raw: string, showInlineImages?: boolean): string {
   if (!raw) return "";
 
@@ -372,12 +627,38 @@ function formatTextWithLinks(raw: string, showInlineImages?: boolean): string {
     return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="feed-link" style="color: var(--omni-accent-primary, #d4a373); text-decoration: underline; text-underline-offset: 3px; word-break: break-all;">${cleanUrl}</a>${trailing}`;
   });
 
-  // 4. Restore placeholders
+  // 4. NIP-19 / NIP-21 inline Nostr entities (npub, nprofile, note, nevent, naddr)
+  const nostrRegex = /(?:nostr:)?((?:npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{20,})/gi;
+  text = text.replace(nostrRegex, (match, entity) => {
+    const decoded = decodeNostrEntityInline(entity);
+    if (!decoded) return match;
+
+    const short = `${entity.slice(0, 9)}…${entity.slice(-4)}`;
+
+    if (decoded.type === "npub" || decoded.type === "nprofile") {
+      const pk = decoded.pubkey || decoded.hex || "";
+      return `<a href="nostr:${entity}" data-nostr-entity="${entity}" data-pubkey="${pk}" class="feed-nostr-entity omni-nostr-entity feed-nostr-profile" style="display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; margin: 0 2px; background: rgba(212, 163, 115, 0.12); border: 1px solid rgba(212, 163, 115, 0.28); border-radius: 4px; color: var(--omni-accent-primary, #d4a373); text-decoration: none; font-size: 0.88em; font-weight: 500; vertical-align: baseline; font-family: monospace; transition: all 0.15s ease;" title="Nostr Profile: ${entity}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></svg><span>@${short}</span></a>`;
+    }
+
+    if (decoded.type === "note" || decoded.type === "nevent") {
+      const hex = decoded.hex || "";
+      return renderQuoteCardHtml(hex, entity, decoded.pubkey);
+    }
+
+    if (decoded.type === "naddr") {
+      const label = decoded.identifier ? (decoded.identifier.length > 20 ? `${decoded.identifier.slice(0, 16)}…` : decoded.identifier) : short;
+      return `<a href="nostr:${entity}" data-nostr-entity="${entity}" class="feed-nostr-entity omni-nostr-entity feed-nostr-addr" style="display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; margin: 0 2px; background: rgba(212, 163, 115, 0.12); border: 1px solid rgba(212, 163, 115, 0.28); border-radius: 4px; color: var(--omni-accent-primary, #d4a373); text-decoration: none; font-size: 0.88em; font-weight: 500; vertical-align: baseline; font-family: monospace; transition: all 0.15s ease;" title="Nostr Addressable Event"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>${label}</span></a>`;
+    }
+
+    return match;
+  });
+
+  // 5. Restore placeholders
   for (let i = 0; i < placeholders.length; i++) {
     text = text.replace(`___OMNI_LINK_PLACEHOLDER_${i}___`, placeholders[i]);
   }
 
-  // 5. Append media preview elements if image URLs were found and enabled
+  // 6. Append media preview elements if image URLs were found and enabled
   if (mediaUrls.length > 0) {
     for (const m of mediaUrls) {
       if (m.type === "image" && inlineImages) {
@@ -391,16 +672,41 @@ function formatTextWithLinks(raw: string, showInlineImages?: boolean): string {
 
 export class OmniTextElement extends BaseElement {
   public actionData: OmniAction | null = null;
+  private boundOnEventCached = (e: Event) => {
+    const detail = (e as CustomEvent).detail;
+    if (!detail || !detail.id) return;
+    const cards = this.querySelectorAll<HTMLElement>(`.omni-quote-card[data-note-id="${detail.id}"]`);
+    for (const c of Array.from(cards)) {
+      this.updateQuoteCard(c, detail.event);
+    }
+  };
 
   connectedCallback(): void {
     this.classList.add("omni-text");
+    if (typeof window !== "undefined") {
+      window.addEventListener("omni:event_cached", this.boundOnEventCached);
+    }
     this.addEventListener("click", (e) => {
       // 1. If user is selecting text to copy, do not trigger action
       const sel = typeof window !== "undefined" ? window.getSelection()?.toString()?.trim() : "";
       if (sel && sel.length > 0) {
         return;
       }
-      // 2. If clicking a link or interactive media control, let browser handle it instead of triggering action
+      // 2. If clicking inside quote card, handle quote navigation and do not trigger parent action
+      const quoteCard = (e.target as HTMLElement).closest(".omni-quote-card") as HTMLElement | null;
+      if (quoteCard) {
+        const entity = quoteCard.dataset.entity || quoteCard.dataset.noteId;
+        if (entity) {
+          const uri = entity.startsWith("nostr:") ? entity : `nostr:${entity}`;
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("omni:open_uri", { detail: { uri } }));
+            const link = quoteCard.querySelector<HTMLAnchorElement>("a[data-nostr-entity]");
+            if (link) link.click();
+          }
+        }
+        return;
+      }
+      // 3. If clicking a link or interactive media control, let browser handle it instead of triggering action
       if ((e.target as HTMLElement).closest("a, button, input, textarea, video, audio")) {
         return;
       }
@@ -408,6 +714,59 @@ export class OmniTextElement extends BaseElement {
         this.dispatchEvent(new OmniActionEvent(this.actionData));
       }
     });
+  }
+
+  disconnectedCallback(): void {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("omni:event_cached", this.boundOnEventCached);
+    }
+  }
+
+  private updateQuoteCard(card: HTMLElement, ev: OmniCachedEvent): void {
+    if (!card) return;
+    card.classList.remove("loading");
+    const authorEl = card.querySelector<HTMLElement>(".omni-quote-author");
+    if (authorEl && ev.authorName) {
+      authorEl.textContent = ev.authorName;
+    } else if (authorEl && ev.pubkey) {
+      authorEl.textContent = `nostr:${ev.pubkey.slice(0, 8)}`;
+    }
+    const contentEl = card.querySelector<HTMLElement>(".omni-quote-content");
+    if (contentEl && ev.content) {
+      contentEl.textContent = ev.content;
+      contentEl.style.fontStyle = "";
+      contentEl.style.opacity = "";
+    }
+  }
+
+  private async resolvePendingQuotes(): Promise<void> {
+    const loadingCards = this.querySelectorAll<HTMLElement>(".omni-quote-card.loading");
+    if (!loadingCards.length) return;
+
+    for (const card of Array.from(loadingCards)) {
+      const noteId = card.dataset.noteId;
+      if (!noteId) continue;
+      const cached = getOmniCachedEvent(noteId);
+      if (cached && cached.content) {
+        this.updateQuoteCard(card, cached);
+        continue;
+      }
+
+      // Query IndexedDB omni_event_store
+      try {
+        const ev = await queryIndexedDbEvent(noteId);
+        if (ev && ev.content) {
+          registerOmniEvent(ev);
+          this.updateQuoteCard(card, ev);
+          continue;
+        }
+      } catch (_) {}
+
+      // Dispatch request so active relay clients can fetch
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("omni:request_event", { detail: { id: noteId } }));
+      }
+    }
   }
 
   setProps(props: Partial<OmniTextPrimitive>): void {
@@ -424,8 +783,13 @@ export class OmniTextElement extends BaseElement {
       else this.removeAttribute("truncate");
     }
     if (props.content !== undefined) {
-      if (/(https?:\/\/[^\s<]+|\[.*?\]\(https?:\/\/)/i.test(props.content)) {
+      if (
+        /(https?:\/\/[^\s<]+|\[.*?\]\(https?:\/\/|(?:nostr:)?(?:npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{20,})/i.test(
+          props.content
+        )
+      ) {
         this.innerHTML = formatTextWithLinks(props.content, props.showInlineImages);
+        this.resolvePendingQuotes();
       } else {
         this.textContent = props.content;
       }

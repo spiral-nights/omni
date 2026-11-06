@@ -1,4 +1,4 @@
-import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STANDARD_SLOTS, STANDARD_VIEWPORTS, extractPluginFromZip } from "@omni/core";
+import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STANDARD_SLOTS, STANDARD_VIEWPORTS, extractPluginFromZip, fromBech32, hexToBytes, bytesToHex } from "@omni/core";
 import {
   OmniWorkspaceState,
   OmniWorkspacePluginConfig,
@@ -167,6 +167,26 @@ export abstract class BaseShell implements OmniShellHost {
     }
     this.registerHandledIntents();
     this.setupIntentListener();
+    this.wireProtocolInterception();
+  }
+
+  protected wireProtocolInterception(): void {
+    if (!this.root || typeof this.root.addEventListener !== "function") return;
+    this.root.addEventListener("click", (e: MouseEvent) => {
+      let target = e.target as HTMLElement | null;
+      while (target && target !== this.root && target !== document.body) {
+        if (target.tagName === "A" && target.hasAttribute("href")) {
+          const href = target.getAttribute("href") || "";
+          if (/^(nostr|lightning|cashu):/i.test(href)) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.handleUri(href);
+            return;
+          }
+        }
+        target = target.parentElement;
+      }
+    }, true);
   }
 
   // --- Pull Down to Refresh (Mobile Web & PWA) ---
@@ -2053,7 +2073,17 @@ export abstract class BaseShell implements OmniShellHost {
     });
   }
 
+  private lastHandledUri = "";
+  private lastHandledUriTime = 0;
+
   public async handleUri(uri: string, sourcePluginId?: string): Promise<any> {
+    const now = Date.now();
+    if (uri === this.lastHandledUri && now - this.lastHandledUriTime < 300) {
+      return { handled: true, uri };
+    }
+    this.lastHandledUri = uri;
+    this.lastHandledUriTime = now;
+
     const cleanTarget = uri.trim().replace(/^nostr:/i, "");
     if (cleanTarget.startsWith("naddr1")) {
       try {
@@ -2065,6 +2095,112 @@ export abstract class BaseShell implements OmniShellHost {
         }
       } catch {
         // Fall through to standard Open With chooser
+      }
+    }
+
+    // Direct routing for standard Nostr profiles (npub1, nprofile1) per NIP-19 / NIP-21
+    if (cleanTarget.startsWith("npub1") || cleanTarget.startsWith("nprofile1")) {
+      let pubkeyHex = "";
+      try {
+        if (cleanTarget.startsWith("npub1")) {
+          const res = fromBech32(cleanTarget);
+          if (res.hex) pubkeyHex = res.hex;
+        } else {
+          const res = fromBech32(cleanTarget);
+          const bytes = Array.from(hexToBytes(res.hex)) as number[];
+          let i = 0;
+          while (i + 2 <= bytes.length) {
+            const tag = bytes[i];
+            const len = bytes[i + 1];
+            if (tag === 0 && len === 32) {
+              pubkeyHex = bytesToHex(new Uint8Array(bytes.slice(i + 2, i + 2 + len)));
+              break;
+            }
+            i += 2 + len;
+          }
+        }
+      } catch (_) {}
+
+      if (pubkeyHex) {
+        try {
+          localStorage.setItem("omni_active_profile_pubkey", pubkeyHex);
+        } catch (_) {}
+        const profilePlugin = this.installedPlugins.find(
+          (p) => p.enabled !== false && (p.id === "org.omni.plugin.profile-viewer" || p.handledIntents?.includes("view_profile"))
+        );
+        const targetId = profilePlugin ? profilePlugin.id : "org.omni.plugin.profile-viewer";
+        const isAlreadyOnProfile = this.getActivePageId() === targetId || (this as any).activePluginId === targetId;
+
+        if ((this as any).openApp) {
+          await (this as any).openApp(targetId, true);
+        } else {
+          await this.showPage(targetId);
+        }
+        if (isAlreadyOnProfile) {
+          this.handleHistoryPush(targetId, {
+            state: { type: "omni-people-view", tab: "user-profile", pubkey: pubkeyHex },
+            title: "User Profile",
+            url: `?view=user-profile&pubkey=${pubkeyHex}`
+          });
+        }
+        this.kernel.notifyPlugin(targetId, "intent.invoke", {
+          action: "view_profile",
+          data: { pubkey: pubkeyHex, isAlreadyActive: isAlreadyOnProfile }
+        });
+        return { handled: true, uri, handlerId: targetId };
+      }
+    }
+
+    // Direct routing for standard Nostr events/notes (note1, nevent1) per NIP-19 / NIP-21
+    if (cleanTarget.startsWith("note1") || cleanTarget.startsWith("nevent1")) {
+      let eventIdHex = "";
+      try {
+        if (cleanTarget.startsWith("note1")) {
+          const res = fromBech32(cleanTarget);
+          if (res.hex) eventIdHex = res.hex;
+        } else {
+          const res = fromBech32(cleanTarget);
+          const bytes = Array.from(hexToBytes(res.hex)) as number[];
+          let i = 0;
+          while (i + 2 <= bytes.length) {
+            const tag = bytes[i];
+            const len = bytes[i + 1];
+            if (tag === 0 && len === 32) {
+              eventIdHex = bytesToHex(new Uint8Array(bytes.slice(i + 2, i + 2 + len)));
+              break;
+            }
+            i += 2 + len;
+          }
+        }
+      } catch (_) {}
+
+      if (eventIdHex) {
+        try {
+          localStorage.setItem("omni_active_note_id", eventIdHex);
+        } catch (_) {}
+        const feedPlugin = this.installedPlugins.find(
+          (p) => p.enabled !== false && (p.id === "org.omni.plugin.feed" || p.handledIntents?.includes("view_note"))
+        );
+        const targetId = feedPlugin ? feedPlugin.id : "org.omni.plugin.feed";
+        const isAlreadyOnFeed = this.getActivePageId() === targetId || (this as any).activePluginId === targetId;
+
+        if ((this as any).openApp) {
+          await (this as any).openApp(targetId, true);
+        } else {
+          await this.showPage(targetId);
+        }
+        if (isAlreadyOnFeed) {
+          this.handleHistoryPush(targetId, {
+            state: { view: "thread", id: eventIdHex },
+            title: "Note Thread",
+            url: `?note=${eventIdHex}`
+          });
+        }
+        this.kernel.notifyPlugin(targetId, "intent.invoke", {
+          action: "view_note",
+          data: { eventId: eventIdHex, id: eventIdHex, isAlreadyActive: isAlreadyOnFeed }
+        });
+        return { handled: true, uri, handlerId: targetId };
       }
     }
 

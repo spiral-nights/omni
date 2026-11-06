@@ -61,6 +61,17 @@ export class NavigationManager {
     syncBrowser = true
   ): NavigationFrame {
     const previousFrame = this.getCurrentFrame();
+    if (
+      previousFrame &&
+      previousFrame.appId === frame.appId &&
+      previousFrame.type === frame.type &&
+      previousFrame.url === frame.url &&
+      JSON.stringify(previousFrame.state ?? null) === JSON.stringify(frame.state ?? null)
+    ) {
+      console.debug("[Omni Nav] stack.push -> ignoring duplicate frame:", previousFrame);
+      return previousFrame;
+    }
+
     const newFrame: NavigationFrame = {
       ...frame,
       id: generateNavId(),

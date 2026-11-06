@@ -239,8 +239,11 @@ export async function handleProfileViewerAction(
             pubkey: targetPk,
             from: profileStore.schemaPreviousTab || "following"
           };
+          const isAlreadyActive = Boolean(payload?.isAlreadyActive || action.payload?.isAlreadyActive);
+          const wasAlreadyViewingAnyProfile = profileStore.currentSchemaTab === "user-profile" && Boolean(profileStore.schemaTargetUser);
+          const shouldReplace = isFromIntent && !isAlreadyActive && !wasAlreadyViewingAnyProfile;
           if (rootHist) {
-            if (isFromIntent && typeof rootHist.replaceState === "function") {
+            if (shouldReplace && typeof rootHist.replaceState === "function") {
               rootHist.replaceState(nextState, "", `?view=user-profile&pubkey=${targetPk}`);
             } else if (!wasAlreadyViewingSameProfile && typeof rootHist.pushState === "function") {
               profileStore.schemaPushedHistory = true;

@@ -12,6 +12,10 @@ export interface FeedNoteItem {
   zaps: number;
   liked?: boolean;
   reposted?: boolean;
+  replyToId?: string;
+  replyToAuthor?: string;
+  replyToPubkey?: string;
+  rootId?: string;
 }
 
 export interface FeedSchemaState {

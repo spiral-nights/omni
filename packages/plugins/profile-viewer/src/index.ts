@@ -146,15 +146,26 @@ export async function initSchemaData(explicitPk?: string): Promise<void> {
         fetchMissingSchemaProfiles(Array.from(profileStore.schemaFollowsSet));
       }
 
-      // 3. Parse route view/pubkey
+      // 3. Parse route view/pubkey and active profile target
       try {
         const searchParams = getInitialRouteParams();
-        const targetPk = searchParams.get("pubkey");
+        let targetPk = searchParams.get("pubkey");
+        if (!targetPk && typeof localStorage !== "undefined") {
+          try {
+            const stored = localStorage.getItem("omni_active_profile_pubkey");
+            if (stored && stored !== pk) {
+              targetPk = stored;
+            }
+          } catch (_) {}
+        }
         if (targetPk && targetPk !== pk) {
+          const cached = profileStore.schemaProfileCache.get(targetPk);
           profileStore.schemaTargetUser = {
             pubkey: targetPk,
-            name: `User ${targetPk.slice(0, 8)}`,
-            about: "Nostr user",
+            name: cached?.display_name || cached?.name || `User ${targetPk.slice(0, 8)}`,
+            about: cached?.about || "Nostr user",
+            picture: cached?.picture || "",
+            nip05: cached?.nip05 || "",
             isFollowing: profileStore.schemaFollowsSet.has(targetPk)
           };
           profileStore.currentSchemaTab = "user-profile";
@@ -217,7 +228,11 @@ if (rootContext && typeof rootContext.addEventListener === "function") {
     if (detail && (detail.action === "view_profile" || detail.action === "view-profile") && detail.data?.pubkey) {
       const next = await handleProfileViewerAction({
         name: "view_profile",
-        payload: { pubkey: detail.data.pubkey, isFromIntent: true }
+        payload: {
+          pubkey: detail.data.pubkey,
+          isFromIntent: true,
+          isAlreadyActive: Boolean(detail.data?.isAlreadyActive)
+        }
       }, undefined, initSchemaData);
       dispatchProfileSchema(next);
     }

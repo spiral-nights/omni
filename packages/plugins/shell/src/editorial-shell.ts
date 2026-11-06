@@ -1996,7 +1996,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         </section>
 
         <!-- Viewport B: Broadsheet Applications Index -->
-        <section id="editorial-page-apps" class="editorial-viewport-page" style="padding: 20px 16px 88px;">
+        <section id="editorial-page-apps" class="editorial-viewport-page" style="padding: 20px 16px calc(100px + env(safe-area-inset-bottom, 0px));">
           <div class="editorial-section-header">
             <div>
               <h2 class="editorial-section-title">Applications</h2>
@@ -2069,7 +2069,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         </section>
 
         <!-- Viewport C: Companion Cards (Widgets) -->
-        <section id="editorial-page-widgets" class="editorial-viewport-page" style="padding: 20px 16px 88px;">
+        <section id="editorial-page-widgets" class="editorial-viewport-page" style="padding: 20px 16px calc(100px + env(safe-area-inset-bottom, 0px));">
           <div class="editorial-section-header">
             <h2 class="editorial-section-title">Companion Cards</h2>
             <div class="editorial-section-meta">Workspace Widgets</div>

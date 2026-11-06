@@ -122,8 +122,10 @@ export function handleFeedAction(
     const id = String(payload?.id || payload?.eventId || action.payload?.id || action.payload?.eventId || "");
     const noteData: any = (payload as any)?.note || (action.payload as any)?.note;
     const isFromIntent = Boolean((payload as any)?.isFromIntent || (action.payload as any)?.isFromIntent);
+    const isAlreadyActive = Boolean((payload as any)?.isAlreadyActive || (action.payload as any)?.isAlreadyActive);
     if (id) {
       const wasAlreadyViewingSameNote = currentFeedState.activeThreadNoteId === id;
+      const previousNoteId = currentFeedState.activeThreadNoteId;
       currentFeedState.activeThreadNoteId = id;
       try {
         const rootHist =
@@ -131,10 +133,13 @@ export function handleFeedAction(
           (typeof self !== "undefined" ? (self as any).history : null) ||
           (typeof globalThis !== "undefined" ? (globalThis as any).history : null);
         if (rootHist) {
-          if (isFromIntent && typeof rootHist.replaceState === "function") {
-            rootHist.replaceState({ view: "thread", id }, "", `?note=${id}`);
-          } else if (!wasAlreadyViewingSameNote && typeof rootHist.pushState === "function") {
-            rootHist.pushState({ view: "thread", id }, "", `?note=${id}`);
+          if (!wasAlreadyViewingSameNote) {
+            const shouldReplace = isFromIntent && !isAlreadyActive && !previousNoteId;
+            if (shouldReplace && typeof rootHist.replaceState === "function") {
+              rootHist.replaceState({ view: "thread", id }, "", `?note=${id}`);
+            } else if (typeof rootHist.pushState === "function") {
+              rootHist.pushState({ view: "thread", id }, "", `?note=${id}`);
+            }
           }
         }
       } catch (_) {}
@@ -250,6 +255,21 @@ export function handleFeedAction(
         targetNote.replies = existingReplies.length;
       }
 
+      const focalEv = allKnownNotes.get(id) || targetNote;
+      const focalTags = (focalEv?.tags || []).filter((t: any[]) => t[0] === "e" && t[1]);
+      const markedRoot = focalTags.find((t: any[]) => t[3] === "root")?.[1];
+      const markedReply = focalTags.find((t: any[]) => t[3] === "reply")?.[1];
+      const rootId = markedRoot || (focalTags.length > 0 ? focalTags[0][1] : targetNote?.rootId);
+      const parentId = markedReply || (focalTags.length > 0 ? focalTags[focalTags.length - 1][1] : targetNote?.replyToId);
+
+      const allAncestorIds = Array.from(new Set([
+        rootId,
+        parentId,
+        ...(targetNote?.replyToId ? [targetNote.replyToId] : []),
+        ...(targetNote?.rootId ? [targetNote.rootId] : []),
+        ...focalTags.map((t: any[]) => t[1])
+      ].filter(Boolean))) as string[];
+
       if (!schemaWs || schemaWs.readyState === WebSocket.CLOSED || schemaWs.readyState === WebSocket.CLOSING) {
         initFeedSchemaSocket();
       }
@@ -259,6 +279,12 @@ export function handleFeedAction(
       if (ws) {
         try {
           ws.send(JSON.stringify(["REQ", `schema_thread_note_${id.slice(0, 8)}`, { ids: [id], limit: 1 }]));
+          if (allAncestorIds.length > 0) {
+            ws.send(JSON.stringify(["REQ", `schema_thread_anc_${id.slice(0, 8)}`, { kinds: [1], ids: allAncestorIds }]));
+          }
+          if (rootId && rootId !== id) {
+            ws.send(JSON.stringify(["REQ", `schema_thread_all_${rootId.slice(0, 8)}`, { kinds: [1], "#e": [rootId], limit: 100 }]));
+          }
           ws.send(JSON.stringify(["REQ", `schema_thread_rep_${id.slice(0, 8)}`, { kinds: [1], "#e": [id], limit: 50 }]));
         } catch (_) {}
       }

@@ -251,6 +251,7 @@ export function getProfileSchema(
 
   const tabsNode: OmniTabsPrimitive = {
     type: "tabs",
+    key: "profile-tabs",
     activeTab,
     tabs,
     action: { name: "switch-tab" }
@@ -264,6 +265,7 @@ export function getProfileSchema(
     const backLabel = profileStore.schemaPreviousTab === "blocked" ? "← Back to Blocked" : "← Back to Following";
     children.push({
       type: "box",
+      key: "user-profile-back-bar",
       direction: "row",
       justify: "between",
       align: "center",
@@ -282,12 +284,14 @@ export function getProfileSchema(
     const userBannerGradient = getProfileGradientBanner(targetPubkey || "default");
     children.push({
       type: "box",
+      key: "user-profile-banner",
       style: `width: 100%; height: 115px; min-height: 115px; border-radius: var(--omni-radius-md, 10px); background: ${userBannerGradient}; margin-bottom: -36px; transition: background 0.25s ease;`,
       children: []
     });
 
     children.push({
       type: "box",
+      key: "user-profile-header",
       direction: "row",
       justify: "between",
       align: "center",
@@ -334,6 +338,7 @@ export function getProfileSchema(
     if (targetUser.nip05) {
       children.push({
         type: "box",
+        key: "user-profile-nip05",
         direction: "row",
         align: "center",
         gap: "xs",
@@ -346,17 +351,20 @@ export function getProfileSchema(
     if (targetUser.pubkey) {
       children.push({
         type: "code-block",
+        key: "user-profile-pubkey",
         code: targetUser.pubkey,
         language: "text"
       });
     }
 
     children.push({
-      type: "divider"
+      type: "divider",
+      key: "user-profile-divider"
     });
 
     children.push({
       type: "text",
+      key: "user-profile-posts-title",
       content: "Recent Posts",
       variant: "title"
     });
@@ -364,6 +372,7 @@ export function getProfileSchema(
     if (profileStore.schemaUserNotes.length === 0) {
       children.push({
         type: "banner",
+        key: "user-profile-no-posts",
         tone: "info",
         message: "No posts found for this user."
       });
@@ -556,12 +565,14 @@ export function getProfileSchema(
     const bannerGradient = getProfileGradientBanner(pubkey || "default");
     children.push({
       type: "box",
+      key: "my-profile-banner",
       style: `width: 100%; height: 115px; min-height: 115px; border-radius: var(--omni-radius-md, 10px); background: ${bannerGradient}; margin-bottom: -36px; transition: background 0.25s ease;`,
       children: []
     });
 
     children.push({
       type: "box",
+      key: "my-profile-header",
       direction: "row",
       gap: "md",
       align: "center",
@@ -590,6 +601,7 @@ export function getProfileSchema(
     if (nip05) {
       children.push({
         type: "box",
+        key: "my-profile-nip05",
         direction: "row",
         align: "center",
         gap: "xs",
@@ -602,6 +614,7 @@ export function getProfileSchema(
     if (pubkey) {
       children.push({
         type: "code-block",
+        key: "my-profile-pubkey",
         code: npub || pubkey,
         language: "text"
       });
@@ -609,6 +622,7 @@ export function getProfileSchema(
 
     children.push({
       type: "box",
+      key: "my-profile-metrics",
       direction: "row",
       gap: "md",
       children: [
@@ -629,6 +643,7 @@ export function getProfileSchema(
 
     children.push({
       type: "box",
+      key: "my-profile-actions",
       direction: "row",
       gap: "sm",
       children: [
@@ -649,10 +664,12 @@ export function getProfileSchema(
 
     if (profileStore.schemaUserNotes.length > 0) {
       children.push({
-        type: "divider"
+        type: "divider",
+        key: "my-profile-divider"
       });
       children.push({
         type: "text",
+        key: "my-profile-posts-title",
         content: "Recent Posts",
         variant: "title"
       });

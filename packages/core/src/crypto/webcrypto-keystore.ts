@@ -1,6 +1,7 @@
 import { schnorr, secp256k1 } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, hexToBytes } from "@noble/curves/abstract/utils";
+export { bytesToHex, hexToBytes };
 import { NostrEvent, UnsignedEvent } from "@omni/types";
 
 const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
