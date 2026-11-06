@@ -1,5 +1,10 @@
 import { StudioFileEntry } from "../types.js";
 import { escapeHtml } from "../utils.js";
+import { detectMimeType, uint8ToBase64, resolveRelativeArchivePath } from "@omni/types";
+
+export { uint8ToBase64 };
+export const getMimeInfo = detectMimeType;
+export const resolveRelPath = resolveRelativeArchivePath;
 
 const CRC32_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -277,40 +282,6 @@ export function unzipArchiveSync(zipBytes: Uint8Array): Record<string, Uint8Arra
   }
 
   throw new Error("Invalid or corrupted ZIP file (End of Central Directory signature not found).");
-}
-
-export function getMimeInfo(filePath: string): { mime: string; isText: boolean } {
-  const lower = filePath.toLowerCase();
-  if (lower.endsWith(".html") || lower.endsWith(".htm")) return { mime: "text/html", isText: true };
-  if (lower.endsWith(".js") || lower.endsWith(".mjs")) return { mime: "application/javascript", isText: true };
-  if (lower.endsWith(".css")) return { mime: "text/css", isText: true };
-  if (lower.endsWith(".json") || lower.endsWith(".webmanifest")) return { mime: "application/json", isText: true };
-  if (lower.endsWith(".svg")) return { mime: "image/svg+xml", isText: true };
-  if (lower.endsWith(".txt") || lower.endsWith(".md")) return { mime: "text/plain", isText: true };
-  if (lower.endsWith(".png")) return { mime: "image/png", isText: false };
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return { mime: "image/jpeg", isText: false };
-  if (lower.endsWith(".webp")) return { mime: "image/webp", isText: false };
-  return { mime: "application/octet-stream", isText: false };
-}
-
-export function uint8ToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-export function resolveRelPath(baseFile: string, relRef: string): string {
-  const clean = relRef.split("?")[0].split("#")[0].trim();
-  if (!clean || /^(https?:|data:|blob:|nostr:|\/\/)/i.test(clean)) return "";
-  const stack = clean.startsWith("/") ? [] : baseFile.split("/").slice(0, -1);
-  for (const part of clean.replace(/^\/+/, "").split("/")) {
-    if (!part || part === ".") continue;
-    if (part === "..") stack.pop();
-    else stack.push(part);
-  }
-  return stack.join("/");
 }
 
 export function inlineHtmlBundle(htmlContent: string, entryPath: string, fileMap: Map<string, StudioFileEntry>): string {

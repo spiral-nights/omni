@@ -67,6 +67,10 @@ export class SubscriptionCoordinator {
         }
 
         const isNew = !seenEventIds.has(event.id);
+        if (seenEventIds.size >= 5000) {
+          const oldest = seenEventIds.values().next().value;
+          if (oldest) seenEventIds.delete(oldest);
+        }
         seenEventIds.add(event.id);
 
         // Ingest into local store in background so UI rendering is never delayed

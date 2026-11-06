@@ -69,6 +69,10 @@ const initialPlugins: InstalledPluginEntry[] = [
     ],
     scriptContent: relaysScript,
     sourceUrl: "local:@omni/plugin-relays",
+    permissions: {
+      nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true },
+      relays: { manage: true, read: true }
+    },
     enabled: true
   },
   {
@@ -124,31 +128,31 @@ const kernel = new OmniKernel({
     }
   } : undefined,
   slotResolver: (pluginId, compId, slot) => {
-    return (shell as any)?.getContainerForPluginSlot(pluginId, slot, compId);
+    return shell?.getContainerForPluginSlot(pluginId, slot, compId);
   },
   onSlotAction: (action, slot) => {
-    (shell as any)?.handleSlotAction?.(action, slot);
+    shell?.handleSlotAction?.(action, slot);
   },
   onScrollTo: (params) => {
-    (shell as any)?.scrollToTop?.(params);
+    shell?.scrollToTop?.(params);
   },
   onHandleUri: (uri, srcId) => {
-    return (shell as any)?.handleUri?.(uri, srcId);
+    return shell?.handleUri?.(uri, srcId);
   },
   onHandleShare: (payload, srcId) => {
-    return (shell as any)?.handleShare?.(payload, srcId);
+    return shell?.handleShare?.(payload, srcId);
   },
   onHistoryPush: (pluginId, params) => {
-    return (shell as any)?.handleHistoryPush?.(pluginId, params);
+    return shell?.handleHistoryPush?.(pluginId, params as any);
   },
   onHistoryReplace: (pluginId, params) => {
-    return (shell as any)?.handleHistoryReplace?.(pluginId, params);
+    return shell?.handleHistoryReplace?.(pluginId, params as any);
   },
   onHistoryBack: (pluginId) => {
-    return (shell as any)?.handleHistoryBack?.(pluginId);
+    return shell?.handleHistoryBack?.(pluginId);
   },
   onHistoryGo: (pluginId, delta) => {
-    return (shell as any)?.handleHistoryGo?.(pluginId, delta);
+    return shell?.handleHistoryGo?.(pluginId, delta);
   }
 });
 

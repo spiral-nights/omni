@@ -583,8 +583,7 @@ export class JsonRpcDispatcher {
       }
 
       case "relays.add": {
-        const isRelaysPlugin = this.ctx.pluginId === "org.omni.plugin.relays";
-        const allowed = isRelaysPlugin || (await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "relays:manage"));
+        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "relays:manage");
         if (!allowed) {
           throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for relays:manage" };
         }
@@ -600,8 +599,7 @@ export class JsonRpcDispatcher {
       }
 
       case "relays.remove": {
-        const isRelaysPlugin = this.ctx.pluginId === "org.omni.plugin.relays";
-        const allowed = isRelaysPlugin || (await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "relays:manage"));
+        const allowed = await this.ctx.aclEngine.checkPermission(this.ctx.pluginId, "relays:manage");
         if (!allowed) {
           throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for relays:manage" };
         }

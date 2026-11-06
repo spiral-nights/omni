@@ -231,6 +231,7 @@ describe("WorkerGuestHost (Off-Thread Web Worker Execution Engine)", () => {
       name: "Checklist",
       version: "1.0.0",
       entry: "index.js",
+      views: [{ id: "main", title: "Checklist", path: "", format: "schema" }],
       permissions: [],
       components: [{ id: "main", type: "main", title: "Checklist", slot: "main" }]
     };

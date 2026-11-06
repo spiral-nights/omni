@@ -1,7 +1,7 @@
 import { StudioFileEntry, PublishedAppRecord } from "../types.js";
 import { sha256Hex } from "../crypto/sha256.js";
 import { encodeNaddr } from "../crypto/bech32.js";
-import { uint8ToBase64 } from "../zip/zip-engine.js";
+import { createBlossomAuthEventDraft, encodeBlossomAuthHeader, uint8ToBase64 } from "@omni/types";
 import { escapeHtml } from "../utils.js";
 import {
   publisherStore,
@@ -275,19 +275,9 @@ export async function deletePublishedApp(app: PublishedAppRecord): Promise<void>
       const cleanSrv = srv.replace(/\/+$/, "");
       for (const file of app.files) {
         try {
-          const now = Math.floor(Date.now() / 1000);
-          const authDraft = {
-            kind: 24242,
-            content: `delete ${file.sha256}`,
-            tags: [
-              ["t", "delete"],
-              ["x", file.sha256],
-              ["expiration", String(now + 3600)]
-            ],
-            created_at: now
-          };
+          const authDraft = createBlossomAuthEventDraft(file.sha256, undefined, "delete");
           const signedAuth = await nostr.signEvent(authDraft);
-          const authHeader = `Nostr ${uint8ToBase64(new TextEncoder().encode(JSON.stringify(signedAuth)))}`;
+          const authHeader = encodeBlossomAuthHeader(signedAuth);
           if (typeof fetch === "function") {
             const resp = await fetch(`${cleanSrv}/${file.sha256}`, {
               method: "DELETE",
@@ -358,22 +348,11 @@ export async function executePublishWorkflow(skipBlossom = false): Promise<void>
       };
       notifyStateChanged();
 
-      const now = Math.floor(Date.now() / 1000);
-      const authDraft = {
-        kind: 24242,
-        content: `upload ${file.path}`,
-        tags: [
-          ["t", "upload"],
-          ["x", file.sha256],
-          ["expiration", String(now + 3600)]
-        ],
-        created_at: now
-      };
-
+      const authDraft = createBlossomAuthEventDraft(file.sha256, file.path, "upload");
       let authHeader = "";
       try {
         const signedAuth = await nostr.signEvent(authDraft);
-        authHeader = `Nostr ${uint8ToBase64(new TextEncoder().encode(JSON.stringify(signedAuth)))}`;
+        authHeader = encodeBlossomAuthHeader(signedAuth);
       } catch (err: any) {
         appendLog(`Warning: Could not sign BUD-06 auth event for ${file.path}: ${err?.message || err}`);
       }

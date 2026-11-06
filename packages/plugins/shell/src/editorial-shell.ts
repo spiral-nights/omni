@@ -389,6 +389,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
   }
 
   public destroy(): void {
+    super.destroy();
     if (this.fullscreenFadeTimeout) {
       clearTimeout(this.fullscreenFadeTimeout);
       this.fullscreenFadeTimeout = null;

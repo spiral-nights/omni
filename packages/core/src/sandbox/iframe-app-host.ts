@@ -123,7 +123,7 @@ export class IframeAppHost {
     this.iframe.className = `omni-app-iframe omni-app-${options.pluginId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
     this.iframe.setAttribute(
       "sandbox",
-      "allow-scripts allow-forms allow-same-origin allow-modals allow-popups allow-downloads"
+      "allow-scripts allow-forms allow-modals allow-popups allow-downloads"
     );
     this.iframe.style.width = "100%";
     this.iframe.style.height = "100%";

@@ -26,6 +26,7 @@ import {
   OmniVirtualListPrimitive
 } from "@omni/types";
 import { renderSvgIcon } from "../icons.js";
+import { decodeNostrEntity } from "../../crypto/bech32.js";
 
 const BaseElement: typeof HTMLElement =
   typeof HTMLElement !== "undefined" ? HTMLElement : (class {} as unknown as typeof HTMLElement);
@@ -307,124 +308,7 @@ export class OmniSpacerElement extends BaseElement {
 // 2. Typography & Status Display
 // ============================================================================
 
-const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
-function bech32Decode(str: string): { hrp: string; words: number[] } | null {
-  try {
-    const s = str.toLowerCase().trim();
-    const pos = s.lastIndexOf("1");
-    if (pos < 1 || pos + 7 > s.length || s.length > 5000) return null;
-    const hrp = s.slice(0, pos);
-    for (const ch of hrp) if (ch.charCodeAt(0) < 33 || ch.charCodeAt(0) > 126) return null;
-    const words: number[] = [];
-    for (const ch of s.slice(pos + 1)) {
-      const idx = BECH32_CHARSET.indexOf(ch);
-      if (idx === -1) return null;
-      words.push(idx);
-    }
-    const gen = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
-    let chk = 1;
-    for (const v of [
-      ...hrp.split("").map((c) => c.charCodeAt(0) >> 5),
-      0,
-      ...hrp.split("").map((c) => c.charCodeAt(0) & 31),
-      ...words
-    ]) {
-      const top = chk >> 25;
-      chk = ((chk & 0x1ffffff) << 5) ^ v;
-      for (let i = 0; i < 5; i++) {
-        chk ^= ((top >> i) & 1) ? gen[i] : 0;
-      }
-    }
-    if (chk !== 1) return null;
-    return { hrp, words: words.slice(0, -6) };
-  } catch (_) {
-    return null;
-  }
-}
-
-function wordsToBytes(words: number[]): number[] {
-  let acc = 0;
-  let bits = 0;
-  const ret: number[] = [];
-  for (const v of words) {
-    acc = (acc << 5) | v;
-    bits += 5;
-    while (bits >= 8) {
-      bits -= 8;
-      ret.push((acc >> bits) & 0xff);
-    }
-  }
-  return ret;
-}
-
-function bytesToHex(bytes: number[]): string {
-  return bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-interface DecodedEntity {
-  type: "npub" | "nprofile" | "note" | "nevent" | "naddr";
-  hex?: string;
-  pubkey?: string;
-  identifier?: string;
-}
-
-function decodeNostrEntityInline(raw: string): DecodedEntity | null {
-  const s = raw.trim().replace(/^nostr:/i, "").toLowerCase();
-  if (!/^(npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+$/.test(s)) return null;
-  const decoded = bech32Decode(s);
-  if (!decoded) return null;
-  const bytes = wordsToBytes(decoded.words);
-  const hex = bytesToHex(bytes);
-
-  switch (decoded.hrp) {
-    case "npub":
-      return bytes.length === 32 ? { type: "npub", hex, pubkey: hex } : null;
-    case "note":
-      return bytes.length === 32 ? { type: "note", hex } : null;
-    case "nprofile": {
-      let pubkey: string | undefined;
-      let i = 0;
-      while (i + 2 <= bytes.length) {
-        const tag = bytes[i];
-        const len = bytes[i + 1];
-        const val = bytes.slice(i + 2, i + 2 + len);
-        if (tag === 0 && len === 32) pubkey = bytesToHex(val);
-        i += 2 + len;
-      }
-      return pubkey ? { type: "nprofile", pubkey, hex: pubkey } : null;
-    }
-    case "nevent": {
-      let eventId: string | undefined;
-      let pubkey: string | undefined;
-      let i = 0;
-      while (i + 2 <= bytes.length) {
-        const tag = bytes[i];
-        const len = bytes[i + 1];
-        if (tag === 0 && len === 32) eventId = bytesToHex(bytes.slice(i + 2, i + 2 + len));
-        if (tag === 2 && len === 32) pubkey = bytesToHex(bytes.slice(i + 2, i + 2 + len));
-        i += 2 + bytes[i + 1];
-      }
-      return eventId ? { type: "nevent", hex: eventId, pubkey } : null;
-    }
-    case "naddr": {
-      let identifier: string | undefined;
-      let pubkey: string | undefined;
-      let i = 0;
-      while (i + 2 <= bytes.length) {
-        const tag = bytes[i];
-        const len = bytes[i + 1];
-        const val = bytes.slice(i + 2, i + 2 + len);
-        if (tag === 1 && len === 32) pubkey = bytesToHex(val);
-        if (tag === 2) identifier = String.fromCharCode(...val);
-        i += 2 + len;
-      }
-      return pubkey ? { type: "naddr", pubkey, identifier } : null;
-    }
-    default:
-      return null;
-  }
-}
 
 export interface OmniCachedEvent {
   id: string;
@@ -435,6 +319,7 @@ export interface OmniCachedEvent {
   created_at?: number;
 }
 
+const MAX_EVENT_MEMORY_CACHE = 2000;
 const eventMemoryCache = new Map<string, OmniCachedEvent>();
 
 export function registerOmniEvent(ev: {
@@ -452,6 +337,13 @@ export function registerOmniEvent(ev: {
   if (ev.avatar) existing.avatar = ev.avatar;
   if (ev.content !== undefined) existing.content = ev.content;
   if (ev.created_at) existing.created_at = ev.created_at;
+
+  if (eventMemoryCache.has(ev.id)) {
+    eventMemoryCache.delete(ev.id);
+  } else if (eventMemoryCache.size >= MAX_EVENT_MEMORY_CACHE) {
+    const oldestKey = eventMemoryCache.keys().next().value;
+    if (oldestKey) eventMemoryCache.delete(oldestKey);
+  }
   eventMemoryCache.set(ev.id, existing);
 
   if (typeof window !== "undefined") {
@@ -630,7 +522,7 @@ function formatTextWithLinks(raw: string, showInlineImages?: boolean): string {
   // 4. NIP-19 / NIP-21 inline Nostr entities (npub, nprofile, note, nevent, naddr)
   const nostrRegex = /(?:nostr:)?((?:npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{20,})/gi;
   text = text.replace(nostrRegex, (match, entity) => {
-    const decoded = decodeNostrEntityInline(entity);
+    const decoded = decodeNostrEntity(entity);
     if (!decoded) return match;
 
     const short = `${entity.slice(0, 9)}…${entity.slice(-4)}`;

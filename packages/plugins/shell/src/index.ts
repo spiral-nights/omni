@@ -16,12 +16,13 @@ export type {
 
 export { ICONS, icon, renderPluginIcon } from "./icons.js";
 export type { IconName } from "./icons.js";
+export { LayoutManager } from "@omni/core";
+export type { SlotMapping } from "@omni/core";
 export {
-  LayoutManager,
   STANDARD_SLOTS,
   STANDARD_VIEWPORTS
-} from "@omni/core";
-export type { SlotMapping, AvailableSlot } from "@omni/core";
+} from "./viewports.js";
+export type { AvailableSlot } from "./viewports.js";
 
 export {
   ShellRegistry,

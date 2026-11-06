@@ -1,4 +1,5 @@
-import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STANDARD_SLOTS } from "@omni/core";
+import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager } from "@omni/core";
+import { STANDARD_SLOTS } from "./viewports.js";
 import { OmniWorkspaceState, OmniWorkspacePluginConfig, PluginPlacement, OMNI_WORKSPACE_D_TAG, NostrEvent, PluginViewDeclaration, OmniShellHost } from "@omni/types";
 import { ICONS, icon, IconName, renderPluginIcon } from "./icons.js";
 import { BaseShell, InstalledPluginEntry, OmniShellOptions } from "./base-shell.js";
@@ -73,7 +74,7 @@ export class PanoramaShell extends BaseShell {
 
   private currentAccentColor: string = PanoramaShell.DEFAULT_ACCENT_COLOR;
   private activePivot: PanoramaPivot = "feed";
-  private currentOpenedAppId: string | null = null;
+  public override currentOpenedAppId: string | null = null;
   private isProgrammaticScroll: boolean = false;
   private programmaticScrollTimer: any = null;
   private scrollDebounceTimer: any = null;
@@ -90,8 +91,12 @@ export class PanoramaShell extends BaseShell {
   private pendingCompactMounts: Set<string> = new Set();
   private activeContextMenu: HTMLElement | null = null;
   private dynamicAppSection: HTMLElement | null = null;
+  private dynamicAppCloseTimer: any = null;
   private boundKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
   private boundGliderScrollHandler: (() => void) | null = null;
+  private boundPopstateHandler: ((e: PopStateEvent) => void) | null = null;
+  private boundDocumentClickHandler: ((e: MouseEvent) => void) | null = null;
+  private boundEscapeKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   // New element references
   private gliderLeft!: HTMLElement;
@@ -314,6 +319,18 @@ export class PanoramaShell extends BaseShell {
     if (typeof window !== "undefined" && this.boundKeydownHandler) {
       window.removeEventListener("keydown", this.boundKeydownHandler);
       this.boundKeydownHandler = null;
+    }
+    if (typeof window !== "undefined" && this.boundEscapeKeyHandler) {
+      window.removeEventListener("keydown", this.boundEscapeKeyHandler);
+      this.boundEscapeKeyHandler = null;
+    }
+    if (typeof window !== "undefined" && this.boundPopstateHandler) {
+      window.removeEventListener("popstate", this.boundPopstateHandler);
+      this.boundPopstateHandler = null;
+    }
+    if (typeof document !== "undefined" && this.boundDocumentClickHandler) {
+      document.removeEventListener("click", this.boundDocumentClickHandler);
+      this.boundDocumentClickHandler = null;
     }
     if (this.panoramaContainer && this.boundGliderScrollHandler) {
       this.panoramaContainer.removeEventListener("scroll", this.boundGliderScrollHandler);
@@ -1468,9 +1485,9 @@ export class PanoramaShell extends BaseShell {
       const btn = document.createElement("button");
       btn.className = "panorama-pivot-item";
       btn.dataset.pivot = app.id;
-      const label = app.id === "org.omni.plugin.feed" ? "feed" : (app.name || meta.name).toLowerCase();
+      const label = (app.name || meta.name).toLowerCase();
       btn.textContent = label;
-      if (this.activePivot === app.id || (app.id === "org.omni.plugin.feed" && this.activePivot === "feed")) {
+      if (this.activePivot === app.id || this.activePivot === label) {
         btn.classList.add("active");
       }
       btn.addEventListener("click", () => this.showPivot(app.id));
@@ -1517,6 +1534,10 @@ export class PanoramaShell extends BaseShell {
   }
 
   public async openApp(pluginId: string, pushHistory = true): Promise<void> {
+    if (this.dynamicAppCloseTimer) {
+      clearTimeout(this.dynamicAppCloseTimer);
+      this.dynamicAppCloseTimer = null;
+    }
     const plugin = this.installedPlugins.find((p) => p.id === pluginId);
     if (!plugin) {
       return;
@@ -1674,6 +1695,10 @@ export class PanoramaShell extends BaseShell {
   }
 
   public closeApp(immediate = false): void {
+    if (this.dynamicAppCloseTimer) {
+      clearTimeout(this.dynamicAppCloseTimer);
+      this.dynamicAppCloseTimer = null;
+    }
     const prevOpenedAppId = this.currentOpenedAppId;
     this.currentOpenedAppId = null;
     this.updateHeaderCloseButton(false);
@@ -1722,7 +1747,8 @@ export class PanoramaShell extends BaseShell {
         dynamicSec.remove();
         this.renderPivotNavigation();
       } else {
-        setTimeout(() => {
+        this.dynamicAppCloseTimer = setTimeout(() => {
+          this.dynamicAppCloseTimer = null;
           dynamicSec.remove();
           this.renderPivotNavigation();
         }, 220);
@@ -2025,11 +2051,15 @@ export class PanoramaShell extends BaseShell {
     });
 
     if (typeof document !== "undefined") {
-      document.addEventListener("click", (e) => {
+      if (this.boundDocumentClickHandler) {
+        document.removeEventListener("click", this.boundDocumentClickHandler);
+      }
+      this.boundDocumentClickHandler = (e: MouseEvent) => {
         if (menu && menu.style.display === "flex" && !(e.target as HTMLElement).closest("#panorama-bottom-app-bar")) {
           menu.style.display = "none";
         }
-      });
+      };
+      document.addEventListener("click", this.boundDocumentClickHandler);
     }
   }
 
@@ -2050,11 +2080,12 @@ export class PanoramaShell extends BaseShell {
       btn.classList.toggle("active", btn.dataset.pivot === pivot);
     });
 
-    const safeId = pivot.replace(/[^a-zA-Z0-9_-]/g, "-");
-    const targetSection = document.getElementById(`panorama-section-${pivot}`) ||
+    const primaryApp = (pivot === "feed" || pivot === "now") ? this.getMainAppPlugins()[0] : null;
+    const targetPivot = primaryApp ? primaryApp.id : pivot;
+    const safeId = targetPivot.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const targetSection = document.getElementById(`panorama-section-${targetPivot}`) ||
       document.getElementById(`panorama-section-${safeId}`) ||
-      (pivot === "feed" ? document.getElementById("panorama-section-org-omni-plugin-feed") : null) ||
-      (pivot === "org.omni.plugin.feed" ? document.getElementById("panorama-section-feed") : null) ||
+      (this.panoramaContainer?.querySelector<HTMLElement>(`.panorama-section[data-pivot="${targetPivot}"]`)) ||
       (this.panoramaContainer?.querySelector<HTMLElement>(`.panorama-section[data-pivot="${pivot}"]`));
 
     if (targetSection && this.panoramaContainer) {
@@ -2072,8 +2103,7 @@ export class PanoramaShell extends BaseShell {
       });
 
       const btn = this.pivotHeadersTrack?.querySelector<HTMLElement>(`.panorama-pivot-item[data-pivot="${pivot}"]`) ||
-        (pivot === "feed" ? this.pivotHeadersTrack?.querySelector<HTMLElement>(`.panorama-pivot-item[data-pivot="org.omni.plugin.feed"]`) : null) ||
-        (pivot === "org.omni.plugin.feed" ? this.pivotHeadersTrack?.querySelector<HTMLElement>(`.panorama-pivot-item[data-pivot="feed"]`) : null);
+        this.pivotHeadersTrack?.querySelector<HTMLElement>(`.panorama-pivot-item[data-pivot="${safeId}"]`);
       if (btn && this.pivotHeadersTrack) {
         const firstOffset = this.pivotHeadersTrack.querySelector<HTMLElement>(".panorama-pivot-item")?.offsetLeft || 0;
         const btnIndex = Array.from(buttons).indexOf(btn);
@@ -2098,25 +2128,27 @@ export class PanoramaShell extends BaseShell {
 
   public async showPage(page: string): Promise<void> {
     if (page === "apps") {
-      this.closeApp();
+      this.closeApp(true);
       this.showPivot("apps");
     } else if (page === "widgets" || page === "dashboard") {
-      this.closeApp();
+      this.closeApp(true);
       this.showPivot("widgets");
       await this.ensureWidgetsMounted().catch(console.warn);
     } else if (page === "system" || page === "settings") {
-      this.closeApp();
+      this.closeApp(true);
       this.showPivot("system");
     } else {
-      const safeId = page.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const primaryApp = (page === "feed" || page === "now") ? this.getMainAppPlugins()[0] : null;
+      const targetId = primaryApp ? primaryApp.id : page;
+      const safeId = targetId.replace(/[^a-zA-Z0-9_-]/g, "-");
       const section = document.getElementById(`panorama-section-${safeId}`) ||
-        (page === "feed" ? document.getElementById("panorama-section-org-omni-plugin-feed") : null) ||
-        (page === "org.omni.plugin.feed" ? document.getElementById("panorama-section-feed") : null);
+        document.getElementById(`panorama-section-${targetId}`) ||
+        document.getElementById(`panorama-section-${page}`);
       if (section) {
-        this.closeApp();
-        this.showPivot(page);
+        this.closeApp(true);
+        this.showPivot(targetId);
         const plugin = this.installedPlugins.find(
-          (p) => p.id === page || p.id === `org.omni.plugin.${page}`
+          (p) => p.id === targetId || p.id === safeId || p.id === page
         );
         if (plugin && plugin.enabled) {
           const isMounted = Boolean(this.kernel.getSandbox(plugin.id));
@@ -2324,7 +2356,10 @@ export class PanoramaShell extends BaseShell {
     });
 
     if (typeof window !== "undefined") {
-      window.addEventListener("popstate", (e) => {
+      if (this.boundPopstateHandler) {
+        window.removeEventListener("popstate", this.boundPopstateHandler);
+      }
+      this.boundPopstateHandler = (e: PopStateEvent) => {
         if (this.handlePopState(e)) return;
         if (this.currentOpenedAppId) {
           if (e.state?.type !== "omni-panorama-app" && e.state?.type !== "omni-people-view") {
@@ -2333,7 +2368,8 @@ export class PanoramaShell extends BaseShell {
         } else if (e.state?.type === "omni-panorama-app" && e.state.pluginId) {
           this.openApp(e.state.pluginId, false);
         }
-      });
+      };
+      window.addEventListener("popstate", this.boundPopstateHandler);
     }
 
     // Inspector Modal Close
@@ -2354,19 +2390,19 @@ export class PanoramaShell extends BaseShell {
     document.getElementById("btn-panorama-sync")?.addEventListener("click", async () => {
       try {
         await this.syncWorkspaceToNostr();
-        alert("Workspace synced to Nostr relays!");
+        this.showToast("Workspace synced to Nostr relays!");
       } catch (err: any) {
-        alert(`Sync failed: ${err.message || String(err)}`);
+        this.showToast(`Sync failed: ${err.message || String(err)}`);
       }
     });
 
     document.getElementById("btn-panorama-restore")?.addEventListener("click", async () => {
       try {
         const restored = await this.restoreWorkspaceFromNostr();
-        if (restored) alert("Workspace restored from Nostr relays!");
-        else alert("No remote workspace found on relays.");
+        if (restored) this.showToast("Workspace restored from Nostr relays!");
+        else this.showToast("No remote workspace found on relays.");
       } catch (err: any) {
-        alert(`Restore failed: ${err.message || String(err)}`);
+        this.showToast(`Restore failed: ${err.message || String(err)}`);
       }
     });
 
@@ -2411,7 +2447,7 @@ export class PanoramaShell extends BaseShell {
         const published = await this.kernel.publishNsitePlugin(sampleManifest as any, sampleScript);
         if (panoUrlInput) panoUrlInput.value = published.naddr;
       } catch (err: any) {
-        alert(`Failed: ${err.message || String(err)}`);
+        this.showToast(`Failed: ${err.message || String(err)}`);
       } finally {
         if (btn) btn.disabled = false;
       }
@@ -2420,7 +2456,7 @@ export class PanoramaShell extends BaseShell {
     document.getElementById("btn-panorama-confirm-install")?.addEventListener("click", async () => {
       const urlText = panoUrlInput?.value.trim();
       if (!urlText) {
-        alert("Please enter a Nostr naddr or App URL.");
+        this.showToast("Please enter a Nostr naddr or App URL.");
         return;
       }
       const confirmBtn = document.getElementById("btn-panorama-confirm-install") as HTMLButtonElement | null;
@@ -2434,9 +2470,9 @@ export class PanoramaShell extends BaseShell {
         if (panoUrlInput) panoUrlInput.value = "";
         this.renderSystemPluginList();
         this.renderAppsTiles();
-        if (typeof alert === "function") { try { alert(`Installed '${installed.name}' successfully!`); } catch (_) {} }
+        this.showToast(`Installed '${installed.name}' successfully!`);
       } catch (err: any) {
-        if (typeof alert === "function") { try { alert(`Install failed: ${err.message || String(err)}`); } catch (_) {} }
+        this.showToast(`Install failed: ${err.message || String(err)}`);
       } finally {
         if (confirmBtn) {
           confirmBtn.disabled = false;
@@ -2474,9 +2510,9 @@ export class PanoramaShell extends BaseShell {
             btnInstallApp.textContent = "Installed";
             this.renderSystemPluginList();
             this.renderAppsTiles();
-            if (typeof alert === "function") { try { alert(`Installed ${app.name}!`); } catch (_) {} }
+            this.showToast(`Installed ${app.name}!`);
           } catch (err: any) {
-            if (typeof alert === "function") { try { alert(`Install failed: ${err.message || String(err)}`); } catch (_) {} }
+            this.showToast(`Install failed: ${err.message || String(err)}`);
             btnInstallApp.disabled = false;
             btnInstallApp.textContent = "Install";
           }
@@ -2488,7 +2524,10 @@ export class PanoramaShell extends BaseShell {
 
     // Escape key closes modals / overlay / settings pivot
     if (typeof window !== "undefined") {
-      window.addEventListener("keydown", (e) => {
+      if (this.boundEscapeKeyHandler) {
+        window.removeEventListener("keydown", this.boundEscapeKeyHandler);
+      }
+      this.boundEscapeKeyHandler = (e: KeyboardEvent) => {
         if (e.key === "Escape") {
           if (this.currentOpenedAppId) {
             this.closeApp();
@@ -2508,7 +2547,8 @@ export class PanoramaShell extends BaseShell {
             this.showPivot("feed");
           }
         }
-      });
+      };
+      window.addEventListener("keydown", this.boundEscapeKeyHandler);
     }
   }
 

@@ -157,9 +157,17 @@ describe("ZIP Plugin Bundler, Multi-File Blossom Upload & Resolution", () => {
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input: any) => {
       const url = String(input);
-      if (url.endsWith(htmlHash)) return { ok: true, text: async () => htmlText } as Response;
-      if (url.endsWith(cssHash)) return { ok: true, text: async () => cssText } as Response;
-      if (url.endsWith(jsHash)) return { ok: true, text: async () => jsText } as Response;
+      const makeResp = (content: string) => {
+        const u8 = new TextEncoder().encode(content);
+        return {
+          ok: true,
+          text: async () => content,
+          arrayBuffer: async () => u8.buffer
+        } as Response;
+      };
+      if (url.endsWith(htmlHash)) return makeResp(htmlText);
+      if (url.endsWith(cssHash)) return makeResp(cssText);
+      if (url.endsWith(jsHash)) return makeResp(jsText);
       return { ok: false, status: 404 } as Response;
     });
 

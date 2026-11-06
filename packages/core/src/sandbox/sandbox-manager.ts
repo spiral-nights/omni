@@ -29,31 +29,18 @@ function isSchemaView(
   if (matchingView?.format === "iframe") {
     return false;
   }
-  if (manifest.id === "org.omni.plugin.checklist") {
-    return true;
-  }
-  if (manifest.id === "org.omni.plugin.feed") {
-    if (route && route.includes("format=iframe")) return false;
-    return true;
-  }
-  if (manifest.id === "org.omni.plugin.relays") {
-    if (route && route.includes("format=iframe")) return false;
-    return true;
-  }
-  if (manifest.id === "org.omni.plugin.profile-viewer") {
-    if (route && route.includes("format=iframe")) return false;
-    return true;
-  }
-  if (manifest.id === "org.omni.plugin.publisher") {
+  if ((manifest as any).format === "schema" || manifest.views?.some((v) => v.format === "schema")) {
     if (route && route.includes("format=iframe")) return false;
     return true;
   }
   if (
     scriptContent &&
-    (scriptContent.includes('type="application/json"#omni-schema') ||
+    (scriptContent.includes("omni:schema") ||
       scriptContent.includes('id="omni-schema"') ||
-      scriptContent.includes('type="omni:schema"'))
+      scriptContent.includes('application/json"#omni-schema') ||
+      scriptContent.includes('application/json" id="omni-schema"'))
   ) {
+    if (route && route.includes("format=iframe")) return false;
     return true;
   }
   return false;
@@ -509,22 +496,28 @@ export class SandboxInstance {
             if (action.navigate?.route && this.options.onHandleUri) {
               this.options.onHandleUri(action.navigate.route, this.manifest.id);
             }
+            const handlesProfile = (this.manifest as any).handledIntents?.includes("view_profile") || 
+              (this.manifest as any).handledIntents?.includes("view-profile") ||
+              this.manifest.permissions?.intents?.handle?.includes("view_profile") ||
+              this.manifest.permissions?.intents?.handle?.includes("view-profile");
             if (
               (action.name === "view-profile" || action.name === "view_profile") &&
               this.options.intentBroker &&
-              this.manifest.id !== "org.omni.plugin.profile-viewer" &&
-              this.manifest.id !== "org.omni.plugin.feed"
+              !handlesProfile
             ) {
               const pubkey = (payload?.pubkey || action.payload?.pubkey) as string;
               if (pubkey) {
                 this.options.intentBroker.dispatch(this.manifest.id, "view_profile", { pubkey }).catch(() => {});
               }
             }
+            const handlesNote = (this.manifest as any).handledIntents?.includes("view_note") || 
+              (this.manifest as any).handledIntents?.includes("view-note") ||
+              this.manifest.permissions?.intents?.handle?.includes("view_note") ||
+              this.manifest.permissions?.intents?.handle?.includes("view-note");
             if (
               (action.name === "view_note" || action.name === "view-note" || action.name === "view-thread") &&
               this.options.intentBroker &&
-              this.manifest.id !== "org.omni.plugin.feed" &&
-              this.manifest.id !== "org.omni.plugin.profile-viewer"
+              !handlesNote
             ) {
               const noteId = (payload?.id || payload?.eventId || action.payload?.id || action.payload?.eventId) as string;
               if (noteId) {

@@ -1,4 +1,5 @@
-import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, STANDARD_SLOTS, STANDARD_VIEWPORTS, extractPluginFromZip, fromBech32, hexToBytes, bytesToHex } from "@omni/core";
+import { OmniKernel, WebCryptoKeystore, NostrPluginResolver, LayoutManager, extractPluginFromZip, fromBech32, hexToBytes, bytesToHex, decodeNostrEntity } from "@omni/core";
+import { STANDARD_SLOTS, STANDARD_VIEWPORTS } from "./viewports.js";
 import {
   OmniWorkspaceState,
   OmniWorkspacePluginConfig,
@@ -28,6 +29,7 @@ export interface InstalledPluginEntry {
   views?: PluginViewDeclaration[];
   placements?: PluginPlacement[];
   manifest?: any;
+  permissions?: any;
   htmlContent?: string;
   scriptContent: string;
   sourceUrl: string;
@@ -150,6 +152,17 @@ export abstract class BaseShell implements OmniShellHost {
   protected syncDebounceTimer: any = null;
   public readonly LOCAL_WORKSPACE_KEY = "omni_workspace_state";
   public readonly LOCAL_PLUGIN_BUNDLES_KEY = "omni_installed_plugin_bundles";
+
+  // Polymorphic navigation & viewport hooks (implemented by concrete shells)
+  public activePluginId?: string | null;
+  public currentOpenedAppId?: string | null;
+  public activePage?: string;
+
+  public openApp?(pluginId: string, pushState?: boolean): Promise<void> | void;
+  public openSettings?(pushState?: boolean): void;
+  public showAppsIndex?(pushState?: boolean): void;
+  public showWidgetsView?(pushState?: boolean): void;
+  public scrollToTop?(params?: { behavior?: ScrollBehavior }): void;
 
   constructor(options: OmniShellOptions) {
     this.root = options.root;
@@ -292,8 +305,8 @@ export abstract class BaseShell implements OmniShellHost {
 
       const currentActive = this.getActivePageId();
       if (currentActive !== targetPluginId) {
-        if ((this as any).openApp) {
-          await (this as any).openApp(targetPluginId, true);
+        if (this.openApp) {
+          await this.openApp(targetPluginId, true);
         } else {
           await this.showPage(targetPluginId);
         }
@@ -346,14 +359,8 @@ export abstract class BaseShell implements OmniShellHost {
     icon: string;
     viewport: string;
   } {
-    let displayName = p.displayName || p.manifest?.displayName || p.name || p.manifest?.name || p.id;
-    if (p.id === "org.omni.plugin.profile-viewer" && (displayName === "Profile" || displayName === "People" || displayName === "Profile Viewer")) {
-      displayName = "Profiles";
-    }
-    let name = p.name || p.manifest?.name || p.id;
-    if (p.id === "org.omni.plugin.profile-viewer" && (name === "Profile" || name === "People" || name === "Profile Viewer")) {
-      name = "Profiles";
-    }
+    const displayName = p.displayName || p.manifest?.displayName || p.name || p.manifest?.name || p.id;
+    const name = p.name || p.manifest?.name || p.id;
     const placements = this.getPluginPlacements(p);
     let icon = p.icon || p.manifest?.icon || (placements.length === 0 ? "widgets" : (placements[0]?.viewport === "sidebar" ? "widgets" : "feed"));
 
@@ -412,11 +419,11 @@ export abstract class BaseShell implements OmniShellHost {
         }
       ],
       views: p.views || [{ id: "main", title: "Main App", path: "" }],
-      permissions: {
+      permissions: p.permissions || p.manifest?.permissions || {
         nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true },
         storage: { quotaMb: 5 },
         intents: { call: ["*"], handle: ["*"] },
-        relays: p.id === "org.omni.plugin.relays" ? { manage: true, read: true } : undefined
+        relays: p.permissions?.relays || p.manifest?.permissions?.relays || undefined
       }
     };
   }
@@ -869,16 +876,11 @@ export abstract class BaseShell implements OmniShellHost {
     const bundles = this.getSavedPluginBundles();
 
     for (const item of state.plugins) {
-      if (item.id === "org.omni.plugin.profile") continue;
       let plugin = this.installedPlugins.find((p) => p.id === item.id);
       if (!plugin && !(item.sourceUrl && item.sourceUrl.startsWith("local:@omni/"))) {
         plugin = this.restoreMissingPluginEntry(item, bundles);
       }
       if (plugin) {
-        if (plugin.id === "org.omni.plugin.profile-viewer") {
-          plugin.name = "Profiles";
-          plugin.displayName = "Profiles";
-        }
         if (typeof item.enabled === "boolean") {
           plugin.enabled = item.enabled;
         }
@@ -886,11 +888,7 @@ export abstract class BaseShell implements OmniShellHost {
           plugin.pinned = item.pinned;
         }
         if (item.displayName !== undefined) {
-          if (plugin.id === "org.omni.plugin.profile-viewer") {
-            plugin.displayName = (item.displayName !== "Profile" && item.displayName !== "People" && item.displayName !== "Profile Viewer") ? item.displayName : "Profiles";
-          } else {
-            plugin.displayName = item.displayName;
-          }
+          plugin.displayName = item.displayName;
         }
         if (item.relays !== undefined) {
           plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
@@ -1059,16 +1057,11 @@ export abstract class BaseShell implements OmniShellHost {
         }
         if (state && state.plugins) {
           for (const item of state.plugins) {
-            if (item.id === "org.omni.plugin.profile") continue;
             let plugin = this.installedPlugins.find((p) => p.id === item.id);
             if (!plugin && !(item.sourceUrl && item.sourceUrl.startsWith("local:@omni/"))) {
               plugin = this.restoreMissingPluginEntry(item, bundles);
             }
             if (plugin) {
-              if (plugin.id === "org.omni.plugin.profile-viewer") {
-                plugin.name = "Profiles";
-                plugin.displayName = "Profiles";
-              }
               if (item.viewport === "main") {
                 plugin.viewport = "";
               } else if (item.viewport) {
@@ -1077,11 +1070,7 @@ export abstract class BaseShell implements OmniShellHost {
               if (typeof item.enabled === "boolean") plugin.enabled = item.enabled;
               if (typeof item.pinned === "boolean") plugin.pinned = item.pinned;
               if (item.displayName !== undefined) {
-                if (plugin.id === "org.omni.plugin.profile-viewer") {
-                  plugin.displayName = (item.displayName !== "Profile" && item.displayName !== "People" && item.displayName !== "Profile Viewer") ? item.displayName : "Profiles";
-                } else {
-                  plugin.displayName = item.displayName;
-                }
+                plugin.displayName = item.displayName;
               }
               if (item.relays !== undefined) {
                 plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
@@ -1420,7 +1409,7 @@ export abstract class BaseShell implements OmniShellHost {
 
     menu.querySelector(".ctx-btn-open")?.addEventListener("click", () => {
       closeMenu();
-      (this as any).openApp?.(plugin.id) || this.showPage(plugin.id);
+      this.openApp?.(plugin.id) || this.showPage(plugin.id);
     });
 
     menu.querySelector(".ctx-btn-update")?.addEventListener("click", () => {
@@ -1435,7 +1424,7 @@ export abstract class BaseShell implements OmniShellHost {
 
     menu.querySelector(".ctx-btn-settings")?.addEventListener("click", () => {
       closeMenu();
-      (this as any).openSettings?.() || this.showPage("settings");
+      this.openSettings?.() || this.showPage("settings");
       const tabBtn = document.querySelector("#tab-editorial-plugins") as HTMLElement | null;
       tabBtn?.click();
       const safeId = plugin.id.replace(/[^a-zA-Z0-9_-]/g, "-");
@@ -1461,8 +1450,8 @@ export abstract class BaseShell implements OmniShellHost {
       onResolveAndInstall: (target) => this.resolveAndInstallNsite(target),
       onWorkspaceUpdated: () => this.onWorkspaceUpdated(),
       onRefreshActiveApp: () => {
-        if ((this as any).activePluginId === plugin.id) {
-          (this as any).openApp?.(plugin.id);
+        if (this.activePluginId === plugin.id) {
+          this.openApp?.(plugin.id);
         }
       }
     });
@@ -2102,22 +2091,9 @@ export abstract class BaseShell implements OmniShellHost {
     if (cleanTarget.startsWith("npub1") || cleanTarget.startsWith("nprofile1")) {
       let pubkeyHex = "";
       try {
-        if (cleanTarget.startsWith("npub1")) {
-          const res = fromBech32(cleanTarget);
-          if (res.hex) pubkeyHex = res.hex;
-        } else {
-          const res = fromBech32(cleanTarget);
-          const bytes = Array.from(hexToBytes(res.hex)) as number[];
-          let i = 0;
-          while (i + 2 <= bytes.length) {
-            const tag = bytes[i];
-            const len = bytes[i + 1];
-            if (tag === 0 && len === 32) {
-              pubkeyHex = bytesToHex(new Uint8Array(bytes.slice(i + 2, i + 2 + len)));
-              break;
-            }
-            i += 2 + len;
-          }
+        const entity = decodeNostrEntity(cleanTarget);
+        if (entity && (entity.type === "npub" || entity.type === "nprofile")) {
+          pubkeyHex = entity.pubkey || entity.hex || "";
         }
       } catch (_) {}
 
@@ -2129,10 +2105,10 @@ export abstract class BaseShell implements OmniShellHost {
           (p) => p.enabled !== false && (p.id === "org.omni.plugin.profile-viewer" || p.handledIntents?.includes("view_profile"))
         );
         const targetId = profilePlugin ? profilePlugin.id : "org.omni.plugin.profile-viewer";
-        const isAlreadyOnProfile = this.getActivePageId() === targetId || (this as any).activePluginId === targetId;
+        const isAlreadyOnProfile = this.getActivePageId() === targetId || this.activePluginId === targetId;
 
-        if ((this as any).openApp) {
-          await (this as any).openApp(targetId, true);
+        if (this.openApp) {
+          await this.openApp(targetId, true);
         } else {
           await this.showPage(targetId);
         }
@@ -2155,22 +2131,9 @@ export abstract class BaseShell implements OmniShellHost {
     if (cleanTarget.startsWith("note1") || cleanTarget.startsWith("nevent1")) {
       let eventIdHex = "";
       try {
-        if (cleanTarget.startsWith("note1")) {
-          const res = fromBech32(cleanTarget);
-          if (res.hex) eventIdHex = res.hex;
-        } else {
-          const res = fromBech32(cleanTarget);
-          const bytes = Array.from(hexToBytes(res.hex)) as number[];
-          let i = 0;
-          while (i + 2 <= bytes.length) {
-            const tag = bytes[i];
-            const len = bytes[i + 1];
-            if (tag === 0 && len === 32) {
-              eventIdHex = bytesToHex(new Uint8Array(bytes.slice(i + 2, i + 2 + len)));
-              break;
-            }
-            i += 2 + len;
-          }
+        const entity = decodeNostrEntity(cleanTarget);
+        if (entity && (entity.type === "note" || entity.type === "nevent")) {
+          eventIdHex = entity.hex || "";
         }
       } catch (_) {}
 
@@ -2182,10 +2145,10 @@ export abstract class BaseShell implements OmniShellHost {
           (p) => p.enabled !== false && (p.id === "org.omni.plugin.feed" || p.handledIntents?.includes("view_note"))
         );
         const targetId = feedPlugin ? feedPlugin.id : "org.omni.plugin.feed";
-        const isAlreadyOnFeed = this.getActivePageId() === targetId || (this as any).activePluginId === targetId;
+        const isAlreadyOnFeed = this.getActivePageId() === targetId || this.activePluginId === targetId;
 
-        if ((this as any).openApp) {
-          await (this as any).openApp(targetId, true);
+        if (this.openApp) {
+          await this.openApp(targetId, true);
         } else {
           await this.showPage(targetId);
         }
@@ -2226,7 +2189,11 @@ export abstract class BaseShell implements OmniShellHost {
     return { handled: true, payload };
   }
 
-  public handleSlotAction(action: "toggle" | "open" | "close", slot: string): void {
+  public handleSlotAction(action: "toggle" | "open" | "close" | "scrollToTop", slot: string): void {
+    if (action === "scrollToTop") {
+      this.scrollToTop?.();
+      return;
+    }
     if (slot === "sidebar" || slot === "widgets") {
       if (action === "open") this.showPage("widgets");
       else if (action === "close") this.showPage("feed");
@@ -2327,9 +2294,9 @@ export abstract class BaseShell implements OmniShellHost {
       const res = this.kernel.navigation.back(false);
       if (res.handled && res.currentFrame) {
         const frame = res.currentFrame;
-        const activePage = (this as any).activePage;
+        const activePage = this.activePage;
         if ((frame.type === "app" || frame.type === "subroute") && frame.appId) {
-          const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
+          const currentId = this.activePluginId || this.currentOpenedAppId || this.getActivePageId();
           const targetAppId = frame.appId;
           const popPayload = {
             delta: -1,
@@ -2337,10 +2304,10 @@ export abstract class BaseShell implements OmniShellHost {
             url: frame.url || ""
           };
           if (currentId !== targetAppId || (activePage && activePage !== "app")) {
-            if ((this as any).openApp) {
-              const maybePromise = (this as any).openApp(targetAppId, false);
-              if (maybePromise && typeof maybePromise.then === "function") {
-                maybePromise.then(() => {
+            if (this.openApp) {
+              const maybePromise = this.openApp(targetAppId, false);
+              if (maybePromise && typeof (maybePromise as any).then === "function") {
+                (maybePromise as Promise<void>).then(() => {
                   this.kernel.dispatchHistoryPopstate(targetAppId, popPayload);
                 }).catch(() => {});
               }
@@ -2351,11 +2318,11 @@ export abstract class BaseShell implements OmniShellHost {
           this.kernel.dispatchHistoryPopstate(targetAppId, popPayload);
         } else if (frame.type === "section" && frame.section) {
           if (frame.section === "apps") {
-            (this as any).showAppsIndex?.(false);
+            this.showAppsIndex?.(false);
           } else if (frame.section === "widgets") {
-            (this as any).showWidgetsView?.(false);
+            this.showWidgetsView?.(false);
           } else if (frame.section === "settings") {
-            (this as any).openSettings?.(false);
+            this.openSettings?.(false);
           }
         }
         this.updateHeaderBackVisibility();
@@ -2382,10 +2349,10 @@ export abstract class BaseShell implements OmniShellHost {
       console.debug("[Omni Nav] NavigationManager.handlePopState result", popRes);
       if (popRes.handled && popRes.currentFrame) {
         const frame = popRes.currentFrame;
-        const activePage = (this as any).activePage;
+        const activePage = this.activePage;
         const delta = popRes.direction === "forward" ? 1 : -1;
         if ((frame.type === "app" || frame.type === "subroute") && frame.appId) {
-          const currentId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
+          const currentId = this.activePluginId || this.currentOpenedAppId || this.getActivePageId();
           const targetAppId = frame.appId;
           const popPayload = {
             delta,
@@ -2393,10 +2360,10 @@ export abstract class BaseShell implements OmniShellHost {
             url: frame.url || ""
           };
           if (currentId !== targetAppId || (activePage && activePage !== "app")) {
-            if ((this as any).openApp) {
-              const maybePromise = (this as any).openApp(targetAppId, false);
-              if (maybePromise && typeof maybePromise.then === "function") {
-                maybePromise.then(() => {
+            if (this.openApp) {
+              const maybePromise = this.openApp(targetAppId, false);
+              if (maybePromise && typeof (maybePromise as any).then === "function") {
+                (maybePromise as Promise<void>).then(() => {
                   this.kernel.dispatchHistoryPopstate(targetAppId, popPayload);
                 }).catch(() => {});
               }
@@ -2407,19 +2374,19 @@ export abstract class BaseShell implements OmniShellHost {
           this.kernel.dispatchHistoryPopstate(targetAppId, popPayload);
         } else if (frame.type === "section" && frame.section) {
           if (frame.section === "apps") {
-            if ((this as any).showAppsIndex) {
-              (this as any).showAppsIndex(false);
+            if (this.showAppsIndex) {
+              this.showAppsIndex(false);
             } else {
               this.showPage("apps", false);
             }
           } else if (frame.section === "widgets") {
-            if ((this as any).showWidgetsView) {
-              (this as any).showWidgetsView(false);
+            if (this.showWidgetsView) {
+              this.showWidgetsView(false);
             } else {
               this.showPage("widgets", false);
             }
           } else if (frame.section === "settings") {
-            (this as any).openSettings?.(false);
+            this.openSettings?.(false);
           }
         }
         this.updateHeaderBackVisibility();
@@ -2430,10 +2397,10 @@ export abstract class BaseShell implements OmniShellHost {
     // 2. Fallback for legacy state
     if (state && (state.type === "omni-plugin-history" || state.type === "omni-people-view")) {
       const pluginId = state.pluginId || "org.omni.plugin.profile-viewer";
-      const activeAppId = (this as any).activePluginId || (this as any).currentOpenedAppId || this.getActivePageId();
+      const activeAppId = this.activePluginId || this.currentOpenedAppId || this.getActivePageId();
       if (activeAppId !== pluginId) {
-        if ((this as any).openApp) {
-          (this as any).openApp(pluginId, false);
+        if (this.openApp) {
+          this.openApp(pluginId, false);
         } else {
           this.showPage(pluginId);
         }

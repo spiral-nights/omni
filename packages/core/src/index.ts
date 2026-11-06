@@ -1,4 +1,5 @@
 export * from "./crypto/webcrypto-keystore.js";
+export * from "./crypto/bech32.js";
 export * from "./nostr/event-store.js";
 export * from "./nostr/relay-pool.js";
 export * from "./nostr/subscription-coordinator.js";

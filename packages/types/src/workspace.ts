@@ -63,7 +63,7 @@ export interface OmniShellHost {
   /**
    * Handles drawer / slot toggling requests triggered by plugins or user actions
    */
-  handleSlotAction?(action: "toggle" | "open" | "close", slot: string): void;
+  handleSlotAction?(action: "toggle" | "open" | "close" | "scrollToTop", slot: string): void;
 
   /**
    * Handles protocol URIs (nostr:, lightning:, cashu:) intercepted at the sandbox boundary
@@ -79,6 +79,41 @@ export interface OmniShellHost {
    * Ensures companion widgets mapped to sidebar/widgets slots are mounted
    */
   ensureWidgetsMounted?(): Promise<void>;
+
+  /**
+   * Scrolls the main viewport or active page container to top
+   */
+  scrollToTop?(params?: { behavior?: ScrollBehavior }): void;
+
+  /**
+   * Handles history pushState routed from plugin sandboxes
+   */
+  handleHistoryPush?(pluginId: string, params: { path?: string; title?: string; state?: any }): void;
+
+  /**
+   * Handles history replaceState routed from plugin sandboxes
+   */
+  handleHistoryReplace?(pluginId: string, params: { path?: string; title?: string; state?: any }): void;
+
+  /**
+   * Handles history.back() routed from plugin sandboxes
+   */
+  handleHistoryBack?(pluginId: string): void;
+
+  /**
+   * Handles history.go() routed from plugin sandboxes
+   */
+  handleHistoryGo?(pluginId: string, delta: number): void;
+
+  /**
+   * Opens an application directly as active full-page app
+   */
+  openApp?(pluginId: string, pushState?: boolean): Promise<void> | void;
+
+  /**
+   * Opens the settings dialog or settings page
+   */
+  openSettings?(pushState?: boolean): void;
 
   /**
    * Exports the current workspace layout state for NIP-78 and local persistence

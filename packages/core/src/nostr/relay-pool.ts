@@ -78,6 +78,7 @@ export class RelayPool {
   private persistRelays: boolean;
   private statusListeners: Set<RelayStatusCallback> = new Set();
   private reconnectTimers: Map<string, any> = new Map();
+  private reconnectAttempts: Map<string, number> = new Map();
   private manuallyClosedRelays: Set<string> = new Set();
   private hasUserCustomizedRelays: boolean = false;
 
@@ -182,6 +183,7 @@ export class RelayPool {
       const ws = new WebSocket(normalized);
 
       ws.onopen = () => {
+        this.reconnectAttempts.delete(normalized);
         // Re-send existing subscriptions
         for (const sub of this.subscriptions.values()) {
           ws.send(JSON.stringify(["REQ", sub.subId, ...sub.filters]));
@@ -207,10 +209,14 @@ export class RelayPool {
             this.userRelays.has(normalized));
 
         if (isStillConfigured) {
+          const attempts = this.reconnectAttempts.get(normalized) || 0;
+          this.reconnectAttempts.set(normalized, attempts + 1);
+          // Exponential backoff: base 2000ms * 1.5^attempts (capped at 30s) + jitter
+          const delay = Math.min(30000, 2000 * Math.pow(1.5, attempts)) + Math.floor(Math.random() * 1000);
           const timer = setTimeout(() => {
             this.reconnectTimers.delete(normalized);
             this.connectRelay(normalized);
-          }, 5000);
+          }, delay);
           this.reconnectTimers.set(normalized, timer);
         }
       };
@@ -455,6 +461,7 @@ export class RelayPool {
       clearTimeout(this.reconnectTimers.get(normalized));
       this.reconnectTimers.delete(normalized);
     }
+    this.reconnectAttempts.delete(normalized);
 
     const ws = this.relays.get(normalized);
     if (ws) {

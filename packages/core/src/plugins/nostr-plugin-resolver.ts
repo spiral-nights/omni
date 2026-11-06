@@ -456,9 +456,9 @@ export class NostrPluginResolver {
   }
 
   /**
-   * Fetch a blob from Blossom servers and verify its cryptographic SHA-256 integrity
+   * Fetch raw binary bytes of a blob from Blossom servers and verify its cryptographic SHA-256 integrity
    */
-  static async fetchAndVerifyBlossomBlob(hash: string, servers: string[]): Promise<string> {
+  static async fetchAndVerifyBlossomBlobBytes(hash: string, servers: string[], timeoutMs = 10000): Promise<Uint8Array> {
     hash = hash.toLowerCase().trim();
     let lastError: any = null;
 
@@ -468,12 +468,25 @@ export class NostrPluginResolver {
         continue;
       }
       const url = `${cleanServer}/${hash}`;
+      const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
       try {
-        const resp = await fetch(url);
+        const resp = await fetch(url, {
+          signal: controller?.signal
+        });
         if (!resp.ok) continue;
 
-        const text = await resp.text();
-        const bytes = new TextEncoder().encode(text);
+        let bytes: Uint8Array;
+        if (typeof resp.arrayBuffer === "function") {
+          const ab = await resp.arrayBuffer();
+          bytes = new Uint8Array(ab);
+        } else if (typeof resp.text === "function") {
+          const text = await resp.text();
+          bytes = new TextEncoder().encode(text);
+        } else {
+          continue;
+        }
         const computedHash = bytesToHex(sha256(bytes));
 
         if (computedHash.toLowerCase() !== hash) {
@@ -482,15 +495,25 @@ export class NostrPluginResolver {
           );
         }
 
-        return text;
+        return bytes;
       } catch (err) {
         lastError = err;
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
       }
     }
 
     throw new Error(
       `Failed to download verified Blossom blob (${hash}) from available servers: ${lastError?.message || "All servers unreachable"}`
     );
+  }
+
+  /**
+   * Fetch a blob from Blossom servers as text and verify its cryptographic SHA-256 integrity
+   */
+  static async fetchAndVerifyBlossomBlob(hash: string, servers: string[], timeoutMs = 10000): Promise<string> {
+    const bytes = await NostrPluginResolver.fetchAndVerifyBlossomBlobBytes(hash, servers, timeoutMs);
+    return new TextDecoder().decode(bytes);
   }
 
   /**

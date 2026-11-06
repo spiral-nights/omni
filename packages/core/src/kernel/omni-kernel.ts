@@ -217,16 +217,13 @@ export class OmniKernel {
               this.capabilityStore.setGrant(manifest.id, "nostr:sign", "always");
             }
           }
-          if (
-            (manifest.id === "org.omni.plugin.relays" || manifest.permissions?.relays?.manage) &&
-            isTrusted
-          ) {
-            if (manifest.id === "org.omni.plugin.relays" || this.capabilityStore.getGrant(manifest.id, "relays:manage") === null) {
+          if (manifest.permissions?.relays?.manage && isTrusted) {
+            if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null) {
               this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
             }
           }
           if (
-            (manifest.id === "org.omni.plugin.profile-viewer" || manifest.id === "org.omni.plugin.profile" || (manifest.permissions as any)?.identity?.manageKeys) &&
+            ((manifest.permissions as any)?.identity?.manageKeys || manifest.permissions?.identity) &&
             isTrusted
           ) {
             if (this.capabilityStore.getGrant(manifest.id, "identity:manage_keys") === null) {
@@ -237,13 +234,6 @@ export class OmniKernel {
             if (this.capabilityStore.getGrant(manifest.id, "system:geolocation") === null) {
               this.capabilityStore.setGrant(manifest.id, "system:geolocation", "always");
             }
-          }
-        } else if ((manifest.id === "org.omni.plugin.relays" && isTrusted) || isTrusted) {
-          if (this.capabilityStore.getGrant(manifest.id, "relays:manage") === null && manifest.id === "org.omni.plugin.relays") {
-            this.capabilityStore.setGrant(manifest.id, "relays:manage", "always");
-          }
-          if (this.capabilityStore.getGrant(manifest.id, "identity:manage_keys") === null && (manifest.id === "org.omni.plugin.profile-viewer" || manifest.id === "org.omni.plugin.profile")) {
-            this.capabilityStore.setGrant(manifest.id, "identity:manage_keys", "always");
           }
         }
 

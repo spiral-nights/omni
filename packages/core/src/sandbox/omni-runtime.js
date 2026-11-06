@@ -107,33 +107,35 @@
   };
 
   try {
-    if (typeof window !== "undefined" && window.localStorage) {
-      window.localStorage.getItem("__omni_probe__");
-    } else if (typeof window !== "undefined") {
+    if (typeof window !== "undefined") {
       Object.defineProperty(window, "localStorage", {
         value: storageShim,
         configurable: true,
-        enumerable: true
+        enumerable: true,
+        writable: true
       });
     }
-  } catch (_) {
-    try {
-      Object.defineProperty(window, "localStorage", {
-        value: storageShim,
-        configurable: true,
-        enumerable: true
-      });
-    } catch (_) {}
-  }
-  if (typeof self !== "undefined" && !self.localStorage) {
-    try {
+  } catch (_) {}
+  try {
+    if (typeof self !== "undefined") {
       Object.defineProperty(self, "localStorage", {
         value: storageShim,
         configurable: true,
-        enumerable: true
+        enumerable: true,
+        writable: true
       });
-    } catch (_) {}
-  }
+    }
+  } catch (_) {}
+  try {
+    if (typeof globalThis !== "undefined") {
+      Object.defineProperty(globalThis, "localStorage", {
+        value: storageShim,
+        configurable: true,
+        enumerable: true,
+        writable: true
+      });
+    }
+  } catch (_) {}
 
   // Schema-based UI forwarding using standard Web postMessage
   let pendingSchema = null;
@@ -908,6 +910,20 @@
       async decrypt(pubkey, ciphertext) {
         await initPromise;
         return callRpc("nostr.nip44.decrypt", { pubkey, ciphertext });
+      }
+    },
+    relays: {
+      async list() {
+        await initPromise;
+        return callRpc("relays.list");
+      },
+      async add(url) {
+        await initPromise;
+        return callRpc("relays.add", { url });
+      },
+      async remove(url) {
+        await initPromise;
+        return callRpc("relays.remove", { url });
       }
     }
   };

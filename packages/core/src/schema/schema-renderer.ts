@@ -288,10 +288,16 @@ export class SchemaRenderer {
       { rootMargin: "400px" }
     );
 
-    const buttons = this.container.querySelectorAll("omni-button, [data-action='load-more']");
-    for (const btn of Array.from(buttons)) {
-      if (btn.textContent?.toLowerCase().includes("load more") || (btn as any).actionData?.name === "load-more") {
-        this.infiniteScrollObserver.observe(btn);
+    const sentinels = this.container.querySelectorAll(
+      "[data-action='load-more'], [data-infinite-scroll], omni-button, button"
+    );
+    for (const el of Array.from(sentinels)) {
+      const isLoadMoreAction =
+        (el as any).actionData?.name === "load-more" ||
+        el.getAttribute("data-action") === "load-more" ||
+        el.hasAttribute("data-infinite-scroll");
+      if (isLoadMoreAction) {
+        this.infiniteScrollObserver.observe(el);
       }
     }
   }

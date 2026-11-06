@@ -432,6 +432,45 @@ export class LocalEventStore {
       const events: NostrEvent[] = [];
 
       // Determine the most selective index to query based on filter
+      if (filter.ids && filter.ids.length > 0) {
+        let pending = filter.ids.length;
+        const seen = new Set<string>();
+
+        const finalize = () => {
+          for (const ev of this.memoryCache.values()) {
+            if (!seen.has(ev.id) && this.matchesFilter(ev, filter)) {
+              events.push(ev);
+              seen.add(ev.id);
+            }
+          }
+          events.sort((a, b) => b.created_at - a.created_at);
+          if (filter.limit && events.length > filter.limit) {
+            events.length = filter.limit;
+          }
+          resolve(events);
+        };
+
+        for (const id of filter.ids) {
+          const getReq = store.get(id);
+          getReq.onsuccess = () => {
+            if (getReq.result) {
+              const ev = getReq.result as NostrEvent;
+              if (this.matchesFilter(ev, filter) && !seen.has(ev.id)) {
+                events.push(ev);
+                seen.add(ev.id);
+              }
+            }
+            pending--;
+            if (pending === 0) finalize();
+          };
+          getReq.onerror = () => {
+            pending--;
+            if (pending === 0) finalize();
+          };
+        }
+        return;
+      }
+
       let req: IDBRequest<IDBCursorWithValue | null>;
 
       if (filter.kinds && filter.kinds.length === 1) {

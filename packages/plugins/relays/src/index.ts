@@ -63,6 +63,8 @@ function persistStoredRelays(urls: string[]): void {
 export async function syncRelaysFromHost(): Promise<RelayInfo[]> {
   try {
     const omniApi =
+      (typeof nostr !== "undefined" && (nostr as any)?.relays) ||
+      (typeof window !== "undefined" && (window as any).nostr?.relays) ||
       (typeof omni !== "undefined" && (omni as any)?.relays) ||
       (typeof window !== "undefined" && (window as any).omni?.relays) ||
       null;
@@ -288,6 +290,8 @@ export async function handleRelaysAction(
     const url = normalizeRelayUrl(raw);
     if (url) {
       const omniApi =
+        (typeof nostr !== "undefined" && (nostr as any)?.relays) ||
+        (typeof window !== "undefined" && (window as any).nostr?.relays) ||
         (typeof omni !== "undefined" && (omni as any)?.relays) ||
         (typeof window !== "undefined" && (window as any).omni?.relays) ||
         null;
@@ -304,6 +308,8 @@ export async function handleRelaysAction(
     const url = String(payload?.url || action.payload?.url || "").trim();
     if (url) {
       const omniApi =
+        (typeof nostr !== "undefined" && (nostr as any)?.relays) ||
+        (typeof window !== "undefined" && (window as any).nostr?.relays) ||
         (typeof omni !== "undefined" && (omni as any)?.relays) ||
         (typeof window !== "undefined" && (window as any).omni?.relays) ||
         null;
