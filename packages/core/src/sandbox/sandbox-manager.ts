@@ -20,8 +20,12 @@ function isSchemaView(
   if (route && (route.includes("format=schema") || route.includes("view=schema"))) {
     return true;
   }
+  if (route && (route.includes("format=iframe") || route.includes("view=iframe"))) {
+    return false;
+  }
+  const effectiveViewId = viewId || "main";
   const matchingView = manifest.views?.find(
-    (v) => v.id === viewId || (route && v.path && route.includes(v.path))
+    (v) => v.id === effectiveViewId || (route && v.path && route.includes(v.path))
   );
   if (matchingView?.format === "schema") {
     return true;
@@ -29,9 +33,11 @@ function isSchemaView(
   if (matchingView?.format === "iframe") {
     return false;
   }
-  if ((manifest as any).format === "schema" || manifest.views?.some((v) => v.format === "schema")) {
-    if (route && route.includes("format=iframe")) return false;
+  if ((manifest as any).format === "schema") {
     return true;
+  }
+  if ((manifest as any).format === "iframe") {
+    return false;
   }
   if (
     scriptContent &&
@@ -40,7 +46,6 @@ function isSchemaView(
       scriptContent.includes('application/json"#omni-schema') ||
       scriptContent.includes('application/json" id="omni-schema"'))
   ) {
-    if (route && route.includes("format=iframe")) return false;
     return true;
   }
   return false;

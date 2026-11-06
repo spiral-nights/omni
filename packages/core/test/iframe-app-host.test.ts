@@ -21,12 +21,14 @@ describe("IframeAppHost (Direct Visual IFrame Embed)", () => {
     expect(iframe).not.toBeNull();
     expect(iframe?.getAttribute("sandbox")).toContain("allow-scripts");
     expect(iframe?.getAttribute("sandbox")).toContain("allow-forms");
+    expect(iframe?.getAttribute("allow")).toContain("geolocation");
 
     const srcdoc = iframe?.srcdoc || "";
     expect(srcdoc).toContain("Hello from nsite");
     expect(srcdoc).toContain("omni-design-tokens");
     expect(srcdoc).toContain("omni-guest-bridge");
     expect(srcdoc).toContain("window.nostr =");
+    expect(srcdoc).toContain("createStorageShim");
 
     host.destroy();
     expect(container.querySelector("iframe")).toBeNull();

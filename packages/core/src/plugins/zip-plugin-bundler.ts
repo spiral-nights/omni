@@ -392,8 +392,8 @@ ${baseHtml}
     ? rewriteHtmlRelativeUrlsToBlossom(baseHtml, entryFile, fileMap, options.blossomServer)
     : baseHtml;
 
-  // Detect views from HTML + Web App Manifest
-  const views = NostrPluginResolver.detectPluginViews(null, bundledHtml);
+  // Detect views from HTML + Web App Manifest (use baseHtml to preserve relative route paths before inlining)
+  const views = NostrPluginResolver.detectPluginViews(null, baseHtml);
   if (manifestFile && manifestFile.textContent) {
     try {
       const parsed = JSON.parse(manifestFile.textContent);

@@ -71,6 +71,55 @@ export function buildGuestBridgeScript(pluginId: string): string {
     });
   }
 
+  // Virtual in-memory storage fallback for opaque-origin sandboxed iframes
+  try {
+    var _probe = window.localStorage;
+    if (_probe) {
+      _probe.getItem("__omni_probe__");
+    }
+  } catch (_) {
+    var createStorageShim = function() {
+      var store = new Map();
+      return {
+        getItem: function(key) {
+          var k = String(key);
+          return store.has(k) ? store.get(k) : null;
+        },
+        setItem: function(key, val) {
+          store.set(String(key), String(val));
+        },
+        removeItem: function(key) {
+          store.delete(String(key));
+        },
+        clear: function() {
+          store.clear();
+        },
+        key: function(i) {
+          return Array.from(store.keys())[i] || null;
+        },
+        get length() {
+          return store.size;
+        }
+      };
+    };
+    try {
+      var memLocal = createStorageShim();
+      var memSession = createStorageShim();
+      Object.defineProperty(window, "localStorage", {
+        value: memLocal,
+        configurable: true,
+        writable: true,
+        enumerable: true
+      });
+      Object.defineProperty(window, "sessionStorage", {
+        value: memSession,
+        configurable: true,
+        writable: true,
+        enumerable: true
+      });
+    } catch (_) {}
+  }
+
   // Standard NIP-07 Signer (window.nostr)
   window.nostr = {
     getPublicKey: function() { return callRpc("nostr.getPublicKey"); },
@@ -125,6 +174,7 @@ export class IframeAppHost {
       "sandbox",
       "allow-scripts allow-forms allow-modals allow-popups allow-downloads"
     );
+    this.iframe.setAttribute("allow", "autoplay; geolocation");
     this.iframe.style.width = "100%";
     this.iframe.style.height = "100%";
     this.iframe.style.border = "none";

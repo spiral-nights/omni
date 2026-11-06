@@ -314,6 +314,14 @@ export class NostrPluginResolver {
       format: "iframe"
     });
 
+    const hasSchemaMarkers = Boolean(
+      htmlOrScript &&
+      (htmlOrScript.includes("omni:schema") ||
+        htmlOrScript.includes('id="omni-schema"') ||
+        htmlOrScript.includes('application/json"#omni-schema') ||
+        htmlOrScript.includes('application/json" id="omni-schema"'))
+    );
+
     // --- Tier 1: Nostr-Native Event Tags ---
     if (event && Array.isArray(event.tags)) {
       const viewTags = event.tags.filter((t) => t[0] === "view" || t[0] === "route");
@@ -329,7 +337,7 @@ export class NostrPluginResolver {
           const rawFmt = tag[4]?.trim()?.toLowerCase();
           const format = rawFmt === "schema" || rawFmt === "iframe"
             ? rawFmt
-            : (id === "widget" || id === "settings" ? "schema" : "auto");
+            : (hasSchemaMarkers && (id === "widget" || id === "settings") ? "schema" : "auto");
           viewsMap.set(id, { id, title, path, format });
         }
       }
@@ -342,7 +350,7 @@ export class NostrPluginResolver {
           if (!id || viewsMap.has(id)) continue;
           const title = id.charAt(0).toUpperCase() + id.slice(1);
           const path = id === "main" ? "" : `?view=${encodeURIComponent(id)}`;
-          const format = id === "widget" || id === "settings" ? "schema" : "auto";
+          const format = hasSchemaMarkers && (id === "widget" || id === "settings") ? "schema" : "auto";
           viewsMap.set(id, { id, title, path, format });
         }
       }
@@ -364,14 +372,16 @@ export class NostrPluginResolver {
           const viewParamMatch = /[?&]view=([^&#]+)/i.exec(href);
           if (viewParamMatch) {
             id = decodeURIComponent(viewParamMatch[1]);
-          } else {
+          } else if (!href.startsWith("data:")) {
             const cleanHref = href.replace(/^[/#?]+/, "").replace(/\.html$/, "");
             id = cleanHref || "view";
           }
-          const title = titleMatch ? titleMatch[1].trim() : (id.charAt(0).toUpperCase() + id.slice(1));
-          const format = isJson ? "schema" : (id === "widget" || id === "settings" ? "schema" : "auto");
-          if (id && !viewsMap.has(id)) {
-            viewsMap.set(id, { id, title, path: href, format });
+          if (id && id.length <= 100 && !id.startsWith("data:")) {
+            const title = titleMatch ? titleMatch[1].trim() : (id.charAt(0).toUpperCase() + id.slice(1));
+            const format = isJson ? "schema" : (hasSchemaMarkers && (id === "widget" || id === "settings") ? "schema" : "auto");
+            if (!viewsMap.has(id)) {
+              viewsMap.set(id, { id, title, path: href.startsWith("data:") ? (id === "main" ? "" : `?view=${encodeURIComponent(id)}`) : href, format });
+            }
           }
         }
       }
