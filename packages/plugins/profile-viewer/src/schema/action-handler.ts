@@ -192,6 +192,11 @@ export async function handleProfileViewerAction(
     if (targetPk) {
       const wasAlreadyViewingSameProfile =
         profileStore.currentSchemaTab === "user-profile" && profileStore.schemaTargetUser?.pubkey === targetPk;
+      const wasAlreadyViewingAnyProfile =
+        profileStore.currentSchemaTab === "user-profile" && Boolean(profileStore.schemaTargetUser);
+      const isAlreadyActive = Boolean(payload?.isAlreadyActive || action.payload?.isAlreadyActive);
+      const shouldReplace = isFromIntent && (!isAlreadyActive || !wasAlreadyViewingAnyProfile);
+
       if (profileStore.currentSchemaTab !== "user-profile") {
         profileStore.schemaPreviousTab = profileStore.currentSchemaTab || "following";
       }
@@ -239,9 +244,6 @@ export async function handleProfileViewerAction(
             pubkey: targetPk,
             from: profileStore.schemaPreviousTab || "following"
           };
-          const isAlreadyActive = Boolean(payload?.isAlreadyActive || action.payload?.isAlreadyActive);
-          const wasAlreadyViewingAnyProfile = profileStore.currentSchemaTab === "user-profile" && Boolean(profileStore.schemaTargetUser);
-          const shouldReplace = isFromIntent && !isAlreadyActive && !wasAlreadyViewingAnyProfile;
           if (rootHist) {
             if (shouldReplace && typeof rootHist.replaceState === "function") {
               rootHist.replaceState(nextState, "", `?view=user-profile&pubkey=${targetPk}`);

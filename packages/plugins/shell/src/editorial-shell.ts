@@ -824,20 +824,44 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     const plugin = this.installedPlugins.find((p) => p.id === pluginId);
     if (!plugin) return;
 
-    if (pushState && typeof window !== "undefined" && (this.activePluginId !== pluginId || this.activePage !== "app")) {
-      try {
-        if (this.kernel?.navigation) {
+    if (pushState && typeof window !== "undefined") {
+      if (this.activePluginId !== pluginId || this.activePage !== "app") {
+        try {
+          if (this.kernel?.navigation) {
+            this.kernel.navigation.push({
+              type: "app",
+              appId: pluginId,
+              title: plugin.displayName || plugin.name,
+              url: `?app=${pluginId}`
+            });
+          } else {
+            window.history.pushState({ type: "omni-editorial-view", page: "app", pluginId }, "");
+          }
+        } catch (_) {}
+        this.updateHeaderBackVisibility();
+      } else if (this.kernel?.navigation) {
+        const curFrame = this.kernel.navigation.getCurrentFrame();
+        if (
+          curFrame &&
+          curFrame.appId === pluginId &&
+          !curFrame.intentEntry &&
+          (curFrame.type === "subroute" || Boolean(curFrame.state))
+        ) {
           this.kernel.navigation.push({
             type: "app",
             appId: pluginId,
             title: plugin.displayName || plugin.name,
-            url: `?app=${pluginId}`
+            url: `?app=${pluginId}`,
+            state: null
           });
-        } else {
-          window.history.pushState({ type: "omni-editorial-view", page: "app", pluginId }, "");
+          this.kernel.dispatchHistoryPopstate(pluginId, {
+            delta: -1,
+            state: null,
+            url: ""
+          });
+          this.updateHeaderBackVisibility();
         }
-      } catch (_) {}
-      this.updateHeaderBackVisibility();
+      }
     }
 
     this.activePage = "app";

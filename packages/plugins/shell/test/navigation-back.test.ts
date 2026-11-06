@@ -400,4 +400,72 @@ describe("Unified Navigation & Back Button Integration", () => {
     expect(kernel.navigation.canGoBack()).toBe(false);
     expect(backBtn.style.display).toBe("none");
   });
+
+  it("Feed -> click username (view_profile intent) -> User Profile -> Back returns directly to Feed in 1 click (never stops on My Profile)", async () => {
+    // 1. Start on Feed
+    await shell.openApp("org.omni.plugin.feed");
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    const backBtn = root.querySelector("#btn-editorial-back") as HTMLElement;
+    expect(backBtn.style.display).toBe("none");
+
+    // 2. Click username in Feed -> dispatches view_profile intent to Profile Viewer
+    await kernel.intentBroker.dispatch("org.omni.plugin.feed", "view_profile", {
+      pubkey: "alice_pubkey_12345"
+    });
+
+    // Profile Viewer receives intent and pushes subroute for Alice's profile
+    shell.handleHistoryPush("org.omni.plugin.profile-viewer", {
+      pageId: "user-profile:alice_pubkey_12345",
+      state: { tab: "user-profile", pubkey: "alice_pubkey_12345" },
+      title: "Alice",
+      url: "?view=user-profile&pubkey=alice_pubkey_12345"
+    });
+
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
+    expect(kernel.navigation.canGoBack()).toBe(true);
+    expect(backBtn.style.display).toBe("inline-flex");
+
+    const poppedStates: any[] = [];
+    (kernel as any).dispatchHistoryPopstate = (pluginId: string, payload: any) => {
+      poppedStates.push({ pluginId, payload });
+    };
+
+    // 3. User clicks Back ONCE: must return directly to Feed, NEVER stopping at "My Profile"
+    shell.triggerBack();
+
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    expect(kernel.navigation.canGoBack()).toBe(false);
+    expect(backBtn.style.display).toBe("none");
+
+    // Profile Viewer should have been reset to root/clean state so future visits don't linger on Alice
+    const pvReset = poppedStates.find((p) => p.pluginId === "org.omni.plugin.profile-viewer");
+    expect(pvReset).toBeDefined();
+    expect(pvReset.payload.state).toBeNull();
+  });
+
+  it("delegates in-app Back button on User Profile to host NavigationManager when coming from Feed", async () => {
+    // 1. Start in Feed
+    await shell.openApp("org.omni.plugin.feed");
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+
+    // 2. Open Alice's profile via intent
+    await kernel.intentBroker.dispatch("org.omni.plugin.feed", "view_profile", {
+      pubkey: "carol_pubkey"
+    });
+    shell.handleHistoryPush("org.omni.plugin.profile-viewer", {
+      pageId: "user-profile:carol_pubkey",
+      state: { tab: "user-profile", pubkey: "carol_pubkey" },
+      title: "Carol",
+      url: "?view=user-profile&pubkey=carol_pubkey"
+    });
+
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
+
+    // 3. Trigger in-app Back button (handleHistoryBack)
+    shell.handleHistoryBack("org.omni.plugin.profile-viewer");
+
+    // Should return directly to Feed in 1 action
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    expect(kernel.navigation.canGoBack()).toBe(false);
+  });
 });

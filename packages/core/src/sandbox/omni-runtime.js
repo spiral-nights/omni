@@ -1234,7 +1234,12 @@
   };
 
   function parseUrlParts(urlStr) {
-    if (!urlStr || typeof urlStr !== "string") return { search: virtualSearch, hash: virtualHash };
+    if (urlStr === undefined || urlStr === null || typeof urlStr !== "string") {
+      return { search: virtualSearch, hash: virtualHash };
+    }
+    if (urlStr === "" || urlStr === "/") {
+      return { search: "", hash: "" };
+    }
     let search = "";
     let hash = "";
     const hashIdx = urlStr.indexOf("#");
@@ -1265,14 +1270,14 @@
       const entry = virtualHistory.entries[virtualHistory.index];
       if (entry) {
         if (state !== undefined) entry.state = state;
-        if (targetUrl) {
+        if (targetUrl !== undefined && targetUrl !== null) {
           const { search, hash } = parseUrlParts(targetUrl);
           entry.search = search;
           entry.hash = hash;
         }
         updateVirtualLocation(entry.search, entry.hash);
       }
-    } else if (targetUrl) {
+    } else if (targetUrl !== undefined && targetUrl !== null) {
       const { search, hash } = parseUrlParts(targetUrl);
       updateVirtualLocation(search, hash);
     }

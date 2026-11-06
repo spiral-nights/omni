@@ -133,10 +133,11 @@ export interface SandboxInstanceOptions {
   onScrollTo?: (params: any) => void;
   onHandleUri?: (uri: string, sourcePluginId: string) => Promise<any>;
   onHandleShare?: (payload: any, sourcePluginId: string) => Promise<any>;
-  onHistoryPush?: (params: { state: any; title: string; url: string }) => Promise<any> | any;
-  onHistoryReplace?: (params: { state: any; title: string; url: string }) => Promise<any> | any;
+  onHistoryPush?: (params: { pageId?: string; state: any; title: string; url: string }) => Promise<any> | any;
+  onHistoryReplace?: (params: { pageId?: string; state: any; title: string; url: string }) => Promise<any> | any;
   onHistoryBack?: () => Promise<any> | any;
   onHistoryGo?: (delta?: number) => Promise<any> | any;
+  canGoBack?: () => boolean;
   theme?: any;
   useShadowDom?: boolean;
 }
@@ -153,9 +154,48 @@ export class SandboxInstance {
   private channel1: MessageChannel | null = null;
   private channel2: MessageChannel | null = null;
   private cleanupFns: Array<() => void> = [];
+  private currentPageId: string | null = null;
+  private rootPageId: string | null = null;
+  private isRestoringPopstate = false;
+  private pageSnapshots: Map<
+    string,
+    {
+      schema: OmniComponentNode;
+      meta: { id: string; title?: string; url?: string; state?: any };
+    }
+  > = new Map();
 
   constructor(private options: SandboxInstanceOptions) {
     this.manifest = options.manifest;
+  }
+
+  private extractSchemaPageMeta(data: any): { id: string; title?: string; url?: string; state?: any } | null {
+    const rawPage = data?.page ?? data?.schema?.page;
+    if (typeof rawPage === "string" && rawPage.trim()) {
+      return { id: rawPage.trim() };
+    }
+    if (rawPage && typeof rawPage === "object" && typeof rawPage.id === "string" && rawPage.id.trim()) {
+      return {
+        id: rawPage.id.trim(),
+        title: rawPage.title,
+        url: rawPage.url,
+        state: rawPage.state
+      };
+    }
+    const schema = data?.schema;
+    if (schema && typeof schema === "object") {
+      if (schema.type === "tabs" && typeof schema.activeTab === "string" && schema.activeTab.trim()) {
+        return { id: schema.activeTab.trim(), state: { tab: schema.activeTab.trim() } };
+      }
+      if (Array.isArray(schema.children)) {
+        for (const child of schema.children) {
+          if (child && child.type === "tabs" && typeof child.activeTab === "string" && child.activeTab.trim()) {
+            return { id: child.activeTab.trim(), state: { tab: child.activeTab.trim() } };
+          }
+        }
+      }
+    }
+    return null;
   }
 
   getComponentContainer(componentId: string): Element | undefined {
@@ -422,6 +462,47 @@ export class SandboxInstance {
               primaryIframeContainer.parentElement?.parentElement?.classList.remove("has-iframe-slot");
             }
           }
+          const isMainAppView =
+            (!this.options.targetSlot || this.options.targetSlot === "main") &&
+            (!this.options.viewId || this.options.viewId === "main");
+          const pageMeta = isMainAppView ? this.extractSchemaPageMeta(data) : null;
+          if (pageMeta) {
+            this.pageSnapshots.set(pageMeta.id, {
+              schema: data.schema,
+              meta: pageMeta
+            });
+            if (!this.rootPageId) {
+              this.rootPageId = pageMeta.id;
+            }
+            const prevPageId = this.currentPageId;
+            if (this.isRestoringPopstate) {
+              this.isRestoringPopstate = false;
+              this.currentPageId = pageMeta.id;
+            } else {
+              this.currentPageId = pageMeta.id;
+              if (this.options.onHistoryPush) {
+                if (prevPageId === null) {
+                  const isRootRender = pageMeta.state === null || (!pageMeta.state && !pageMeta.url);
+                  this.options.onHistoryPush({
+                    pageId: pageMeta.id,
+                    state: isRootRender ? null : (pageMeta.state ?? { pageId: pageMeta.id }),
+                    title: pageMeta.title || this.manifest.name,
+                    url: pageMeta.url || ""
+                  });
+                } else if (prevPageId !== pageMeta.id) {
+                  const isRootRender =
+                    pageMeta.id === this.rootPageId &&
+                    (pageMeta.state === null || (!pageMeta.state && !pageMeta.url));
+                  this.options.onHistoryPush({
+                    pageId: pageMeta.id,
+                    state: isRootRender ? null : (pageMeta.state ?? { pageId: pageMeta.id }),
+                    title: pageMeta.title || this.manifest.name,
+                    url: pageMeta.url || ""
+                  });
+                }
+              }
+            }
+          }
           renderer.render(data.schema);
         }
       }
@@ -504,6 +585,23 @@ export class SandboxInstance {
         const schemaRenderer = new SchemaRenderer({
           container: compContainer,
           onAction: (action, payload) => {
+            const isBackAction =
+              action.name === "back" ||
+              action.name === "close-thread" ||
+              Boolean(
+                action.navigate?.back ||
+                (payload && (payload as any).isBack) ||
+                (action.payload && (action.payload as any).isBack)
+              );
+            if (
+              isBackAction &&
+              !isCompanionWidget &&
+              this.options.canGoBack?.() &&
+              this.options.onHistoryBack
+            ) {
+              this.options.onHistoryBack();
+              return;
+            }
             if (action.navigate?.route && this.options.onHandleUri) {
               this.options.onHandleUri(action.navigate.route, this.manifest.id);
             }
@@ -977,13 +1075,35 @@ ${themeVarsCss}
     });
   }
 
-  public dispatchHistoryPopstate(delta: number, state: any, url?: string): void {
-    if (this.channel2 && this.channel2.port1) {
-      this.channel2.port1.postMessage({
-        jsonrpc: "2.0",
-        method: "history.popstate",
-        params: { delta, state, url }
-      });
+  public dispatchHistoryPopstate(delta: number, state: any, url?: string, pageId?: string): void {
+    const resolvedPageId =
+      pageId ||
+      (state && typeof state === "object" && typeof state.pageId === "string" ? state.pageId : null) ||
+      (state === null && (!url || url === "") ? this.rootPageId : null);
+
+    this.isRestoringPopstate = true;
+    try {
+      if (resolvedPageId) {
+        this.currentPageId = resolvedPageId;
+        const snapshot = this.pageSnapshots.get(resolvedPageId);
+        if (snapshot) {
+          const renderer = this.schemaRenderers.values().next().value;
+          if (renderer) {
+            renderer.render(snapshot.schema);
+          }
+        }
+      }
+      if (this.channel2 && this.channel2.port1) {
+        this.channel2.port1.postMessage({
+          jsonrpc: "2.0",
+          method: "history.popstate",
+          params: { delta, state, url, pageId: resolvedPageId ?? undefined }
+        });
+      }
+    } finally {
+      setTimeout(() => {
+        this.isRestoringPopstate = false;
+      }, 25);
     }
   }
 

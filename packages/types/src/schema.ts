@@ -30,6 +30,17 @@ export type OmniPrimitiveType =
   | "empty-state"
   | "virtual-list";
 
+export interface OmniPageDeclaration {
+  /** Logical page identifier within the plugin (e.g. "timeline", "thread:123", "my-profile", "user-profile:abc") */
+  id: string;
+  /** Human-readable page title */
+  title?: string;
+  /** Optional query/path URL representation (e.g. "?view=user-profile&pubkey=abc") */
+  url?: string;
+  /** Optional serializable history state associated with this page */
+  state?: Record<string, unknown> | null;
+}
+
 export interface OmniAction {
   name: string;
   payload?: Record<string, unknown>;
@@ -37,6 +48,8 @@ export interface OmniAction {
     pluginId?: string;
     view?: string;
     route?: string;
+    page?: string;
+    back?: boolean;
   };
 }
 
@@ -45,6 +58,12 @@ export interface OmniPrimitiveBase {
   key?: string;
   visible?: boolean;
   style?: string | Record<string, string>;
+  /**
+   * Optional logical page identifier or page metadata declaration.
+   * When declared on the root schema node, the host runtime automatically
+   * manages page history frames, snapshots, and back navigation.
+   */
+  page?: string | OmniPageDeclaration;
 }
 
 export interface OmniBoxPrimitive extends OmniPrimitiveBase {

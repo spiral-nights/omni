@@ -5,10 +5,12 @@ export interface NavigationFrame {
   type: NavigationType;
   appId?: string;
   section?: string;
+  pageId?: string;
   url?: string;
   state?: any;
   title?: string;
   timestamp: number;
+  intentEntry?: boolean;
 }
 
 export interface NavigationEvent {
@@ -31,11 +33,41 @@ export class NavigationManager {
   private pointer = -1;
   private listeners: Set<NavigationListener> = new Set();
   private isProcessingPopState = false;
+  private pendingIntentAppId: string | null = null;
+  private intentEntryTimestamp = 0;
 
   constructor(initialFrame?: Omit<NavigationFrame, "id" | "timestamp">) {
     if (initialFrame) {
       this.initInitialFrame(initialFrame);
     }
+  }
+
+  /**
+   * Marks the next entry or current entry for `appId` as an intent-driven navigation
+   * so that opening an inactive app + navigating to its target page/subroute coalesces
+   * into a single history frame (preventing phantom root frames on Back).
+   */
+  public markIntentEntry(appId: string): void {
+    this.pendingIntentAppId = appId;
+    this.intentEntryTimestamp = Date.now();
+    const current = this.getCurrentFrame();
+    if (current && current.appId === appId) {
+      current.intentEntry = true;
+    }
+  }
+
+  /**
+   * Returns the most recent frame in the stack for `appId` at or before `maxIndex`
+   * (defaults to the current pointer).
+   */
+  public getLastFrameForApp(appId: string, maxIndex: number = this.pointer): NavigationFrame | undefined {
+    const start = Math.min(maxIndex, this.stack.length - 1);
+    for (let i = start; i >= 0; i--) {
+      if (this.stack[i]?.appId === appId) {
+        return this.stack[i];
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -61,19 +93,118 @@ export class NavigationManager {
     syncBrowser = true
   ): NavigationFrame {
     const previousFrame = this.getCurrentFrame();
+    const isPendingIntent = Boolean(
+      frame.appId &&
+      this.pendingIntentAppId === frame.appId &&
+      Date.now() - this.intentEntryTimestamp <= 1500
+    );
+    if (frame.appId && this.pendingIntentAppId === frame.appId) {
+      this.pendingIntentAppId = null;
+    }
+
+    // 1. Automatic Intent Coalescing:
+    // When an app was just opened via cross-plugin intent or URI, its initial "app" frame
+    // has `intentEntry: true`. When the plugin subsequently pushes its target page/subroute,
+    // coalesce it in-place into that frame so Back returns directly to the originating app.
+    const isActiveIntentEntry = Boolean(
+      previousFrame &&
+      previousFrame.appId &&
+      previousFrame.appId === frame.appId &&
+      previousFrame.intentEntry &&
+      Date.now() - this.intentEntryTimestamp <= 1500
+    );
+    if (isActiveIntentEntry && previousFrame) {
+      if (frame.type === "app" && !frame.state && !frame.pageId) {
+        return previousFrame;
+      }
+      // If the plugin emits its default initial root render (state: null, empty url) before
+      // handling the intent payload, absorb pageId in-place while keeping intentEntry active.
+      if (frame.state === null && (!frame.url || frame.url === "")) {
+        if (frame.pageId) {
+          previousFrame.pageId = frame.pageId;
+        }
+        return previousFrame;
+      }
+      // Target subroute/page of the intent: replace the entry frame in-place and consume intentEntry
+      return this.replace(
+        {
+          ...frame,
+          type: frame.type || "subroute",
+          intentEntry: false
+        },
+        syncBrowser
+      );
+    }
+
+    // 2. Initial Root Page Hydration:
+    // When an app is freshly opened (type === "app", no state, no pageId yet) and its root
+    // schema or initial render reports the default root page (state === null, empty url),
+    // hydrate the existing app frame in-place instead of pushing a duplicate root frame.
     if (
       previousFrame &&
+      previousFrame.appId &&
       previousFrame.appId === frame.appId &&
-      previousFrame.type === frame.type &&
-      previousFrame.url === frame.url &&
-      JSON.stringify(previousFrame.state ?? null) === JSON.stringify(frame.state ?? null)
+      previousFrame.type === "app" &&
+      !previousFrame.pageId &&
+      !previousFrame.state &&
+      frame.state === null &&
+      (!frame.url || frame.url === "")
     ) {
-      console.debug("[Omni Nav] stack.push -> ignoring duplicate frame:", previousFrame);
+      previousFrame.pageId = frame.pageId;
+      previousFrame.url = frame.url ?? previousFrame.url;
+      if (frame.title) {
+        previousFrame.title = frame.title;
+      }
       return previousFrame;
+    }
+
+    // 3. Same-Page / Duplicate Frame Deduplication:
+    if (previousFrame && previousFrame.appId === frame.appId) {
+      const sameExplicitPage = Boolean(frame.pageId && previousFrame.pageId && previousFrame.pageId === frame.pageId);
+      const sameNonEmptyUrl = Boolean(frame.url && previousFrame.url && previousFrame.url === frame.url);
+      const sameStateAndUrl =
+        previousFrame.url === frame.url &&
+        JSON.stringify(previousFrame.state ?? null) === JSON.stringify(frame.state ?? null) &&
+        (previousFrame.type === frame.type || Boolean(frame.url) || frame.state !== undefined);
+      const sameLogicalTabTarget = Boolean(
+        (!previousFrame.pageId || !frame.pageId) &&
+        previousFrame.state &&
+        frame.state &&
+        typeof previousFrame.state === "object" &&
+        typeof frame.state === "object" &&
+        previousFrame.state.tab &&
+        previousFrame.state.tab === frame.state.tab &&
+        previousFrame.state.pubkey === frame.state.pubkey &&
+        previousFrame.state.noteId === frame.state.noteId
+      );
+
+      if (sameExplicitPage || sameNonEmptyUrl || sameStateAndUrl || sameLogicalTabTarget) {
+        if (frame.pageId && !previousFrame.pageId) {
+          previousFrame.pageId = frame.pageId;
+        }
+        if (frame.state && typeof frame.state === "object") {
+          previousFrame.state =
+            previousFrame.state && typeof previousFrame.state === "object"
+              ? { ...previousFrame.state, ...frame.state }
+              : frame.state;
+        } else if (frame.state !== undefined && previousFrame.state === undefined) {
+          previousFrame.state = frame.state;
+        }
+        if (frame.url && !previousFrame.url) {
+          previousFrame.url = frame.url;
+        }
+        console.debug("[Omni Nav] stack.push -> ignoring duplicate frame:", previousFrame);
+        return previousFrame;
+      }
+    }
+
+    if (previousFrame && previousFrame.appId !== frame.appId && previousFrame.intentEntry) {
+      previousFrame.intentEntry = false;
     }
 
     const newFrame: NavigationFrame = {
       ...frame,
+      intentEntry: isPendingIntent || frame.intentEntry,
       id: generateNavId(),
       timestamp: Date.now()
     };

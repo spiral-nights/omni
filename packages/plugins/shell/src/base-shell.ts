@@ -181,6 +181,15 @@ export abstract class BaseShell implements OmniShellHost {
     this.registerHandledIntents();
     this.setupIntentListener();
     this.wireProtocolInterception();
+    if (this.kernel) {
+      const k = this.kernel as any;
+      if (!k.onHistoryPush) k.onHistoryPush = (id: string, p: any) => this.handleHistoryPush(id, p);
+      if (!k.onHistoryReplace) k.onHistoryReplace = (id: string, p: any) => this.handleHistoryReplace(id, p);
+      if (!k.onHistoryBack) k.onHistoryBack = (id: string) => this.handleHistoryBack(id);
+      if (!k.onHistoryGo) k.onHistoryGo = (id: string, d?: number) => this.handleHistoryGo(id, d);
+      if (!k.onHandleUri) k.onHandleUri = (uri: string, src?: string) => this.handleUri(uri, src);
+      if (!k.onHandleShare) k.onHandleShare = (payload: any, src?: string) => this.handleShare(payload, src);
+    }
   }
 
   protected wireProtocolInterception(): void {
@@ -304,19 +313,25 @@ export abstract class BaseShell implements OmniShellHost {
       }
 
       const currentActive = this.getActivePageId();
-      if (currentActive !== targetPluginId) {
+      const isAlreadyActive = currentActive === targetPluginId || this.activePluginId === targetPluginId;
+      if (!isAlreadyActive) {
+        this.kernel?.navigation?.markIntentEntry(targetPluginId);
         if (this.openApp) {
           await this.openApp(targetPluginId, true);
         } else {
           await this.showPage(targetPluginId);
         }
+        this.kernel?.navigation?.markIntentEntry(targetPluginId);
         this.updateHeaderBackVisibility();
       }
 
       this.kernel.notifyPlugin(targetPluginId, "intent.invoke", {
         action: event.action,
         effectiveAction: event.effectiveAction,
-        data: event.data
+        data:
+          event.data && typeof event.data === "object"
+            ? { ...event.data, isAlreadyActive }
+            : event.data
       });
     });
   }
@@ -2107,12 +2122,20 @@ export abstract class BaseShell implements OmniShellHost {
         const targetId = profilePlugin ? profilePlugin.id : "org.omni.plugin.profile-viewer";
         const isAlreadyOnProfile = this.getActivePageId() === targetId || this.activePluginId === targetId;
 
-        if (this.openApp) {
-          await this.openApp(targetId, true);
+        if (!isAlreadyOnProfile) {
+          this.kernel?.navigation?.markIntentEntry(targetId);
+          if (this.openApp) {
+            await this.openApp(targetId, true);
+          } else {
+            await this.showPage(targetId);
+          }
+          this.handleHistoryReplace(targetId, {
+            state: { type: "omni-people-view", tab: "user-profile", pubkey: pubkeyHex },
+            title: "User Profile",
+            url: `?view=user-profile&pubkey=${pubkeyHex}`
+          });
+          this.kernel?.navigation?.markIntentEntry(targetId);
         } else {
-          await this.showPage(targetId);
-        }
-        if (isAlreadyOnProfile) {
           this.handleHistoryPush(targetId, {
             state: { type: "omni-people-view", tab: "user-profile", pubkey: pubkeyHex },
             title: "User Profile",
@@ -2147,12 +2170,20 @@ export abstract class BaseShell implements OmniShellHost {
         const targetId = feedPlugin ? feedPlugin.id : "org.omni.plugin.feed";
         const isAlreadyOnFeed = this.getActivePageId() === targetId || this.activePluginId === targetId;
 
-        if (this.openApp) {
-          await this.openApp(targetId, true);
+        if (!isAlreadyOnFeed) {
+          this.kernel?.navigation?.markIntentEntry(targetId);
+          if (this.openApp) {
+            await this.openApp(targetId, true);
+          } else {
+            await this.showPage(targetId);
+          }
+          this.handleHistoryReplace(targetId, {
+            state: { view: "thread", id: eventIdHex },
+            title: "Note Thread",
+            url: `?note=${eventIdHex}`
+          });
+          this.kernel?.navigation?.markIntentEntry(targetId);
         } else {
-          await this.showPage(targetId);
-        }
-        if (isAlreadyOnFeed) {
           this.handleHistoryPush(targetId, {
             state: { view: "thread", id: eventIdHex },
             title: "Note Thread",
@@ -2201,12 +2232,13 @@ export abstract class BaseShell implements OmniShellHost {
     }
   }
 
-  public handleHistoryPush(pluginId: string, params: { state: any; title: string; url: string }): void {
-    console.debug("[Omni Nav] handleHistoryPush", { pluginId, url: params.url, state: params.state });
+  public handleHistoryPush(pluginId: string, params: { pageId?: string; state: any; title: string; url: string }): void {
+    console.debug("[Omni Nav] handleHistoryPush", { pluginId, pageId: params.pageId, url: params.url, state: params.state });
     if (this.kernel?.navigation) {
       this.kernel.navigation.push({
         type: "subroute",
         appId: pluginId,
+        pageId: params.pageId,
         url: params.url,
         state: params.state,
         title: params.title
@@ -2229,12 +2261,13 @@ export abstract class BaseShell implements OmniShellHost {
     } catch (_) {}
   }
 
-  public handleHistoryReplace(pluginId: string, params: { state: any; title: string; url: string }): void {
-    console.debug("[Omni Nav] handleHistoryReplace", { pluginId, url: params.url, state: params.state });
+  public handleHistoryReplace(pluginId: string, params: { pageId?: string; state: any; title: string; url: string }): void {
+    console.debug("[Omni Nav] handleHistoryReplace", { pluginId, pageId: params.pageId, url: params.url, state: params.state });
     if (this.kernel?.navigation) {
       this.kernel.navigation.replace({
         type: "subroute",
         appId: pluginId,
+        pageId: params.pageId,
         url: params.url,
         state: params.state,
         title: params.title
@@ -2258,29 +2291,55 @@ export abstract class BaseShell implements OmniShellHost {
 
   public handleHistoryBack(pluginId: string): void {
     console.debug("[Omni Nav] handleHistoryBack", { pluginId });
-    if (typeof window !== "undefined" && window.history && typeof window.history.back === "function") {
-      window.history.back();
-      return;
-    }
-    if (this.kernel?.navigation && this.kernel.navigation.canGoBack()) {
-      this.kernel.navigation.back(false);
-    }
+    this.triggerBack();
   }
 
   public handleHistoryGo(pluginId: string, delta?: number): void {
     console.debug("[Omni Nav] handleHistoryGo", { pluginId, delta });
+    if (delta === -1) {
+      this.triggerBack();
+      return;
+    }
     if (typeof window !== "undefined" && window.history && typeof window.history.go === "function") {
       window.history.go(delta ?? 0);
       return;
     }
     if (this.kernel?.navigation) {
-      if (delta === -1) {
-        this.kernel.navigation.back(false);
-        return;
-      } else if (delta === 1) {
+      if (delta === 1) {
         this.kernel.navigation.forward(false);
         return;
       }
+    }
+  }
+
+  private resetOutgoingPluginOnBack(previousFrame?: any, currentFrame?: any): void {
+    if (!previousFrame?.appId || previousFrame.appId === currentFrame?.appId) return;
+    const wasOnSubroute =
+      previousFrame.type === "subroute" ||
+      Boolean(previousFrame.state) ||
+      Boolean(previousFrame.pageId);
+    if (!wasOnSubroute) return;
+
+    try {
+      localStorage.removeItem("omni_active_profile_pubkey");
+      localStorage.removeItem("omni_active_note_id");
+      localStorage.removeItem("omni_active_note_data");
+    } catch (_) {}
+
+    const earlierFrame = this.kernel?.navigation?.getLastFrameForApp?.(previousFrame.appId);
+    if (earlierFrame) {
+      this.kernel.dispatchHistoryPopstate(previousFrame.appId, {
+        delta: -1,
+        state: earlierFrame.state ?? null,
+        url: earlierFrame.url || "",
+        pageId: earlierFrame.pageId
+      });
+    } else {
+      this.kernel.dispatchHistoryPopstate(previousFrame.appId, {
+        delta: -1,
+        state: null,
+        url: ""
+      });
     }
   }
 
@@ -2295,22 +2354,19 @@ export abstract class BaseShell implements OmniShellHost {
       if (res.handled && res.currentFrame) {
         const frame = res.currentFrame;
         const activePage = this.activePage;
+        this.resetOutgoingPluginOnBack(res.previousFrame, frame);
         if ((frame.type === "app" || frame.type === "subroute") && frame.appId) {
           const currentId = this.activePluginId || this.currentOpenedAppId || this.getActivePageId();
           const targetAppId = frame.appId;
           const popPayload = {
             delta: -1,
             state: frame.state ?? null,
-            url: frame.url || ""
+            url: frame.url || "",
+            pageId: frame.pageId
           };
           if (currentId !== targetAppId || (activePage && activePage !== "app")) {
             if (this.openApp) {
-              const maybePromise = this.openApp(targetAppId, false);
-              if (maybePromise && typeof (maybePromise as any).then === "function") {
-                (maybePromise as Promise<void>).then(() => {
-                  this.kernel.dispatchHistoryPopstate(targetAppId, popPayload);
-                }).catch(() => {});
-              }
+              this.openApp(targetAppId, false);
             } else {
               this.showPage(targetAppId, false);
             }
@@ -2351,22 +2407,21 @@ export abstract class BaseShell implements OmniShellHost {
         const frame = popRes.currentFrame;
         const activePage = this.activePage;
         const delta = popRes.direction === "forward" ? 1 : -1;
+        if (delta < 0) {
+          this.resetOutgoingPluginOnBack(popRes.previousFrame, frame);
+        }
         if ((frame.type === "app" || frame.type === "subroute") && frame.appId) {
           const currentId = this.activePluginId || this.currentOpenedAppId || this.getActivePageId();
           const targetAppId = frame.appId;
           const popPayload = {
             delta,
             state: frame.state ?? null,
-            url: frame.url || ""
+            url: frame.url || "",
+            pageId: frame.pageId
           };
           if (currentId !== targetAppId || (activePage && activePage !== "app")) {
             if (this.openApp) {
-              const maybePromise = this.openApp(targetAppId, false);
-              if (maybePromise && typeof (maybePromise as any).then === "function") {
-                (maybePromise as Promise<void>).then(() => {
-                  this.kernel.dispatchHistoryPopstate(targetAppId, popPayload);
-                }).catch(() => {});
-              }
+              this.openApp(targetAppId, false);
             } else {
               this.showPage(targetAppId, false);
             }

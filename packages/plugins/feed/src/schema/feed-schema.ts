@@ -282,6 +282,12 @@ export function getFeedSchema(
     type: "box",
     direction: "column",
     gap: "md",
+    page: {
+      id: "timeline",
+      title: "Feed Timeline",
+      url: "",
+      state: null
+    },
     children: [
       // Top timeline header
       {

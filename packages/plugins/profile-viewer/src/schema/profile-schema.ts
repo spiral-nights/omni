@@ -261,8 +261,15 @@ export function getProfileSchema(
 
   if (activeTab === "user-profile" && isViewingOtherUser) {
     const isFollowing = extraState?.isFollowing ?? targetUser.isFollowing;
-    const backTarget = profileStore.schemaPreviousTab === "blocked" ? "blocked" : "following";
-    const backLabel = profileStore.schemaPreviousTab === "blocked" ? "← Back to Blocked" : "← Back to Following";
+    const backTarget = profileStore.schemaPreviousTab === "blocked" ? "blocked" : (profileStore.schemaPreviousTab || "following");
+    const backLabel =
+      profileStore.schemaPreviousTab === "blocked"
+        ? "← Back to Blocked"
+        : profileStore.schemaPreviousTab === "following"
+        ? "← Back to Following"
+        : profileStore.schemaPreviousTab === "my-profile"
+        ? "← Back to My Profile"
+        : "← Back";
     children.push({
       type: "box",
       key: "user-profile-back-bar",
@@ -275,7 +282,7 @@ export function getProfileSchema(
           label: backLabel,
           variant: "secondary",
           size: "sm",
-          action: { name: "switch-tab", payload: { tab: backTarget, isBack: true } }
+          action: { name: "back", payload: { tab: backTarget, isBack: true }, navigate: { back: true } }
         }
       ]
     });
@@ -679,11 +686,34 @@ export function getProfileSchema(
     }
   }
 
+  const pageDeclaration =
+    activeTab === "user-profile" && isViewingOtherUser
+      ? {
+          id: `user-profile:${targetUser.pubkey}`,
+          title: targetUser.name || "User Profile",
+          url: `?view=user-profile&pubkey=${targetUser.pubkey}`,
+          state: { tab: "user-profile", pubkey: targetUser.pubkey }
+        }
+      : activeTab === "my-profile"
+      ? {
+          id: "my-profile",
+          title: "My Profile",
+          url: "",
+          state: null
+        }
+      : {
+          id: activeTab,
+          title: activeTab.charAt(0).toUpperCase() + activeTab.slice(1),
+          url: `?tab=${activeTab}`,
+          state: { tab: activeTab }
+        };
+
   return {
     type: "card",
     title: "Profiles & Key Custody",
     subtitle: "Decentralized Nostr identity and custody manager",
     icon: "users",
+    page: pageDeclaration,
     children
   };
 }

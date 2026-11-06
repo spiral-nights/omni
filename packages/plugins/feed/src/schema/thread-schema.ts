@@ -74,7 +74,7 @@ export function renderSchemaThreadView(state: FeedSchemaState): OmniComponentNod
           label: "← Back to Feed",
           variant: "secondary",
           size: "sm",
-          action: { name: "close-thread" }
+          action: { name: "close-thread", payload: { isBack: true }, navigate: { back: true } }
         }
       ]
     }
@@ -552,6 +552,12 @@ export function renderSchemaThreadView(state: FeedSchemaState): OmniComponentNod
     type: "box",
     direction: "column",
     gap: "md",
+    page: {
+      id: `thread:${activeTid}`,
+      title: "Note Conversation",
+      url: `?note=${activeTid}`,
+      state: { view: "thread", id: activeTid }
+    },
     children: threadChildren
   };
 }

@@ -24,8 +24,8 @@ export interface OmniKernelOptions {
   onScrollTo?: (params: any) => void;
   onHandleUri?: (uri: string, sourcePluginId?: string) => Promise<any>;
   onHandleShare?: (payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string) => Promise<any>;
-  onHistoryPush?: (pluginId: string, params: { state: any; title: string; url: string }) => Promise<any> | any;
-  onHistoryReplace?: (pluginId: string, params: { state: any; title: string; url: string }) => Promise<any> | any;
+  onHistoryPush?: (pluginId: string, params: { pageId?: string; state: any; title: string; url: string }) => Promise<any> | any;
+  onHistoryReplace?: (pluginId: string, params: { pageId?: string; state: any; title: string; url: string }) => Promise<any> | any;
   onHistoryBack?: (pluginId: string) => Promise<any> | any;
   onHistoryGo?: (pluginId: string, delta?: number) => Promise<any> | any;
   slotResolver?: (pluginId: string, componentId: string, slot: string) => Element | undefined;
@@ -73,8 +73,8 @@ export class OmniKernel {
   private onScrollTo?: (params: any) => void;
   private onHandleUri?: (uri: string, sourcePluginId?: string) => Promise<any>;
   private onHandleShare?: (payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string) => Promise<any>;
-  private onHistoryPush?: (pluginId: string, params: { state: any; title: string; url: string }) => Promise<any> | any;
-  private onHistoryReplace?: (pluginId: string, params: { state: any; title: string; url: string }) => Promise<any> | any;
+  private onHistoryPush?: (pluginId: string, params: { pageId?: string; state: any; title: string; url: string }) => Promise<any> | any;
+  private onHistoryReplace?: (pluginId: string, params: { pageId?: string; state: any; title: string; url: string }) => Promise<any> | any;
   private onHistoryBack?: (pluginId: string) => Promise<any> | any;
   private onHistoryGo?: (pluginId: string, delta?: number) => Promise<any> | any;
   private defaultHandlersMemory: Record<string, string> = {};
@@ -251,6 +251,7 @@ export class OmniKernel {
           route: options?.route,
           viewId: options?.viewId,
           instanceId: options?.instanceId,
+          targetSlot: options?.targetSlot,
           allowedRelays: options?.relays,
           slotResolver: (pluginId: string, componentId: string, defaultSlot: string) => {
             const targetSlot = options?.targetSlot || this.layoutManager.getSlotForComponent(pluginId, componentId) || defaultSlot;
@@ -271,21 +272,54 @@ export class OmniKernel {
           onScrollTo: this.onScrollTo,
           onHandleUri: (uri, srcId) => this.handleUri(uri, srcId),
           onHandleShare: (payload, srcId) => this.handleShare(payload, srcId),
-          onHistoryPush: (params) => {
-            return this.onHistoryPush?.(manifest.id, params);
-          },
-          onHistoryReplace: (params) => {
-            return this.onHistoryReplace?.(manifest.id, params);
-          },
-          onHistoryBack: () => {
-            if (this.onHistoryBack) return this.onHistoryBack(manifest.id);
-            return this.navigation.back();
-          },
-          onHistoryGo: (delta) => {
-            if (this.onHistoryGo) return this.onHistoryGo(manifest.id, delta);
-            if (delta === -1) return this.navigation.back();
-            if (delta === 1) return this.navigation.forward();
-          },
+          onHistoryPush:
+            options?.targetSlot === "sidebar" ||
+            options?.targetSlot === "widget" ||
+            options?.targetSlot === "header-actions" ||
+            options?.targetSlot === "dock" ||
+            options?.viewId === "widget" ||
+            options?.viewId === "compact"
+              ? undefined
+              : (params) => {
+                  return this.onHistoryPush?.(manifest.id, params);
+                },
+          onHistoryReplace:
+            options?.targetSlot === "sidebar" ||
+            options?.targetSlot === "widget" ||
+            options?.targetSlot === "header-actions" ||
+            options?.targetSlot === "dock" ||
+            options?.viewId === "widget" ||
+            options?.viewId === "compact"
+              ? undefined
+              : (params) => {
+                  return this.onHistoryReplace?.(manifest.id, params);
+                },
+          onHistoryBack:
+            options?.targetSlot === "sidebar" ||
+            options?.targetSlot === "widget" ||
+            options?.targetSlot === "header-actions" ||
+            options?.targetSlot === "dock" ||
+            options?.viewId === "widget" ||
+            options?.viewId === "compact"
+              ? undefined
+              : () => {
+                  if (this.onHistoryBack) return this.onHistoryBack(manifest.id);
+                  return this.navigation.back();
+                },
+          onHistoryGo:
+            options?.targetSlot === "sidebar" ||
+            options?.targetSlot === "widget" ||
+            options?.targetSlot === "header-actions" ||
+            options?.targetSlot === "dock" ||
+            options?.viewId === "widget" ||
+            options?.viewId === "compact"
+              ? undefined
+              : (delta) => {
+                  if (this.onHistoryGo) return this.onHistoryGo(manifest.id, delta);
+                  if (delta === -1) return this.navigation.back();
+                  if (delta === 1) return this.navigation.forward();
+                },
+          canGoBack: () => this.navigation.canGoBack(),
           useShadowDom: this.useShadowDom
         });
 
@@ -572,15 +606,19 @@ export class OmniKernel {
     }
   }
 
-  dispatchHistoryPopstate(pluginId: string, payload: { delta: number; state: any; url?: string }): void {
+  dispatchHistoryPopstate(
+    pluginId: string,
+    payload: { delta: number; state: any; url?: string; pageId?: string }
+  ): void {
     for (const [key, sandbox] of this.sandboxes.entries()) {
       if (sandbox.manifest.id === pluginId || key === pluginId || key.startsWith(`${pluginId}::`)) {
-        sandbox.dispatchHistoryPopstate(payload.delta, payload.state, payload.url);
+        if (key.endsWith("::compact") || key.endsWith("::widget") || key.endsWith("::sidebar")) continue;
+        sandbox.dispatchHistoryPopstate(payload.delta, payload.state, payload.url, payload.pageId);
       }
     }
     const settingsSandbox = this.settingsSandboxes.get(pluginId);
     if (settingsSandbox) {
-      settingsSandbox.dispatchHistoryPopstate(payload.delta, payload.state, payload.url);
+      settingsSandbox.dispatchHistoryPopstate(payload.delta, payload.state, payload.url, payload.pageId);
     }
   }
 

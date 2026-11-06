@@ -327,8 +327,9 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     expect(backBtnBox).toBeDefined();
     const backBtn = backBtnBox.children.find((c: any) => c.label?.includes("Back to Following"));
     expect(backBtn.action).toEqual({
-      name: "switch-tab",
-      payload: { tab: "following", isBack: true }
+      name: "back",
+      payload: { tab: "following", isBack: true },
+      navigate: { back: true }
     });
 
     // Check target user's details

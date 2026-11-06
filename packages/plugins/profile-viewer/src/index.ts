@@ -155,6 +155,7 @@ export async function initSchemaData(explicitPk?: string): Promise<void> {
             const stored = localStorage.getItem("omni_active_profile_pubkey");
             if (stored && stored !== pk) {
               targetPk = stored;
+              localStorage.removeItem("omni_active_profile_pubkey");
             }
           } catch (_) {}
         }
@@ -225,16 +226,25 @@ if (rootContext && typeof rootContext.addEventListener === "function") {
 
   rootContext.addEventListener("omni:intent", async (event: any) => {
     const detail = event.detail;
-    if (detail && (detail.action === "view_profile" || detail.action === "view-profile") && detail.data?.pubkey) {
-      const next = await handleProfileViewerAction({
-        name: "view_profile",
-        payload: {
-          pubkey: detail.data.pubkey,
-          isFromIntent: true,
-          isAlreadyActive: Boolean(detail.data?.isAlreadyActive)
-        }
-      }, undefined, initSchemaData);
-      dispatchProfileSchema(next);
+    if (detail && (detail.action === "view_profile" || detail.action === "view-profile")) {
+      const pubkey = detail.data?.pubkey;
+      if (pubkey && pubkey !== profileStore.currentProfilePubkey) {
+        const next = await handleProfileViewerAction({
+          name: "view_profile",
+          payload: {
+            pubkey,
+            isFromIntent: true,
+            isAlreadyActive: Boolean(detail.data?.isAlreadyActive)
+          }
+        }, undefined, initSchemaData);
+        dispatchProfileSchema(next);
+      } else {
+        const next = await handleProfileViewerAction({
+          name: "switch-tab",
+          payload: { tab: "my-profile" }
+        }, undefined, initSchemaData);
+        dispatchProfileSchema(next);
+      }
     }
   });
 
@@ -254,8 +264,7 @@ if (rootContext && typeof rootContext.addEventListener === "function") {
       state?.tab ||
       (state?.pluginState && state.pluginState.tab) ||
       (state?.from as string) ||
-      profileStore.schemaPreviousTab ||
-      "my-profile";
+      (state === null ? "my-profile" : (profileStore.schemaPreviousTab || "my-profile"));
     const targetPk = state?.pubkey || (state?.pluginState && state.pluginState.pubkey);
     profileStore.schemaPreviousTab = (state?.from as string) || null;
     profileStore.schemaPushedHistory = false;

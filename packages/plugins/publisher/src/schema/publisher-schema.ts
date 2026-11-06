@@ -443,6 +443,12 @@ export function getPublisherSchema(
     type: "box",
     direction: "column",
     gap: "md",
+    page: {
+      id: currentTab,
+      title: currentTab === "create" ? "Plugin Studio" : currentTab === "published" ? "My Published Plugins" : "Blossom Servers",
+      url: currentTab === "create" ? "" : `?tab=${currentTab}`,
+      state: currentTab === "create" ? null : { tab: currentTab }
+    },
     children: [headerCard, ...contentChildren]
   };
 }
