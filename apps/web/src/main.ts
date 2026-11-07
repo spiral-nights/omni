@@ -9,6 +9,7 @@ import relaysScript from "../../../packages/plugins/relays/dist/index.js?raw";
 import profileViewerScript from "../../../packages/plugins/profile-viewer/dist/index.js?raw";
 import checklistScript from "../../../packages/plugins/checklist/dist/index.js?raw";
 import publisherScript from "../../../packages/plugins/publisher/dist/index.js?raw";
+import notesScript from "../../../packages/plugins/notes/dist/index.js?raw";
 import omniRuntimeScript from "../../../packages/core/src/sandbox/omni-runtime.js?raw";
 
 const STORAGE_KEY_NSEC = "omni_privkey";
@@ -104,6 +105,24 @@ const initialPlugins: InstalledPluginEntry[] = [
     ],
     scriptContent: publisherScript,
     sourceUrl: "local:@omni/plugin-publisher",
+    enabled: true
+  },
+  {
+    id: "org.omni.plugin.notes",
+    name: "Notes",
+    displayName: "Notes",
+    description: "Private, encrypted personal notebook synced seamlessly across your devices.",
+    icon: "notes",
+    viewport: "main",
+    views: [
+      { id: "main", title: "Notes", path: "", format: "iframe" }
+    ],
+    scriptContent: notesScript,
+    sourceUrl: "local:@omni/plugin-notes",
+    permissions: {
+      nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true },
+      storage: { get: true, set: true }
+    },
     enabled: true
   }
 ];

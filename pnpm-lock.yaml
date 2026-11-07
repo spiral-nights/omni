@@ -111,6 +111,21 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  packages/plugins/notes:
+    devDependencies:
+      '@omni/types':
+        specifier: workspace:*
+        version: link:../../types
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.20.4)(happy-dom@20.14.5)
+
   packages/plugins/profile-viewer:
     devDependencies:
       '@omni/types':

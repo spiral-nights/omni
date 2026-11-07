@@ -1,0 +1,16 @@
+{
+  "name": "@omni/plugin-notes",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc && esbuild src/index.ts --bundle --format=esm --target=es2022 --outfile=dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@omni/types": "workspace:*",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -413,6 +413,7 @@ export class JsonRpcDispatcher {
       }
 
       // 5c. Nostr NIP-04 Encrypt/Decrypt
+      case "nostr.nip04Encrypt":
       case "nostr.nip04.encrypt": {
         const pubkey = params?.pubkey;
         const plaintext = params?.plaintext;
@@ -426,6 +427,7 @@ export class JsonRpcDispatcher {
         return this.ctx.keystore.nip04Encrypt(pubkey, String(plaintext));
       }
 
+      case "nostr.nip04Decrypt":
       case "nostr.nip04.decrypt": {
         const pubkey = params?.pubkey;
         const ciphertext = params?.ciphertext;
@@ -440,10 +442,12 @@ export class JsonRpcDispatcher {
       }
 
       // 5d. Nostr NIP-44 Encrypt/Decrypt
+      case "nostr.nip44Encrypt":
       case "nostr.nip44.encrypt": {
         return this.ctx.keystore.nip44Encrypt(params?.pubkey, params?.plaintext);
       }
 
+      case "nostr.nip44Decrypt":
       case "nostr.nip44.decrypt": {
         return this.ctx.keystore.nip44Decrypt(params?.pubkey, params?.ciphertext);
       }

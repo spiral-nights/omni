@@ -4,6 +4,8 @@ import { ICON_INNER_SVGS } from "@omni/core";
 
 export type IconName =
   | "feed"
+  | "notes"
+  | "file-text"
   | "widgets"
   | "plugins"
   | "settings"
