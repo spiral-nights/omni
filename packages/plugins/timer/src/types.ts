@@ -3,6 +3,5 @@ export interface TimerState {
   remainingSeconds: number;
   isRunning: boolean;
   isFinished: boolean;
-  showNumbers: boolean;
-  customMinutesInput: string;
+  isFocusMode: boolean;
 }

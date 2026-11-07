@@ -244,6 +244,7 @@ export interface OmniProgressPrimitive extends OmniPrimitiveBase {
   size?: number; // Diameter in pixels for disk/ring (e.g. 260)
   color?: string; // Fill or stroke color for disk/ring
   showTicks?: boolean; // Clock rim ticks (0, 5, ..., 55, 60m)
+  action?: OmniAction; // Interactive action triggered on click
 }
 
 export interface OmniBannerPrimitive extends OmniPrimitiveBase {

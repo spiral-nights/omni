@@ -278,6 +278,14 @@ export class OmniCardElement extends BaseElement {
         this.subtitleEl = null;
       }
     }
+
+    if (props.style) {
+      if (typeof props.style === "string") {
+        this.style.cssText = props.style;
+      } else if (typeof props.style === "object") {
+        Object.assign(this.style, props.style);
+      }
+    }
   }
 }
 
@@ -1378,12 +1386,31 @@ export class OmniProgressElement extends BaseElement {
   private barEl: HTMLElement | null = null;
   private labelEl: HTMLElement | null = null;
   private svgEl: SVGSVGElement | null = null;
+  public actionData: OmniAction | null = null;
 
   connectedCallback(): void {
     this.classList.add("omni-progress-wrapper");
+    this.addEventListener("click", () => {
+      if (this.actionData) {
+        this.dispatchEvent(new OmniActionEvent(this.actionData));
+      }
+    });
   }
 
   setProps(props: Partial<OmniProgressPrimitive>): void {
+    this.actionData = props.action || null;
+    if (props.action) {
+      this.style.cursor = "pointer";
+    } else {
+      this.style.cursor = "";
+    }
+    if (props.style) {
+      if (typeof props.style === "string") {
+        this.style.cssText = props.style;
+      } else if (typeof props.style === "object") {
+        Object.assign(this.style, props.style);
+      }
+    }
     const isCircular = props.variant === "disk" || props.variant === "ring";
 
     if (isCircular) {
@@ -1452,6 +1479,7 @@ export class OmniProgressElement extends BaseElement {
     this.style.justifyContent = "center";
     this.style.alignItems = "center";
     this.style.width = "100%";
+    this.style.transition = "all 0.5s cubic-bezier(0.16, 1, 0.3, 1)";
 
     if (!this.svgEl) {
       this.svgEl = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -1460,6 +1488,10 @@ export class OmniProgressElement extends BaseElement {
       this.appendChild(this.svgEl);
     }
 
+    this.svgEl.style.transition = "width 0.5s cubic-bezier(0.16, 1, 0.3, 1), height 0.5s cubic-bezier(0.16, 1, 0.3, 1)";
+    this.svgEl.style.maxWidth = "88vw";
+    this.svgEl.style.maxHeight = "72vh";
+    this.svgEl.style.aspectRatio = "1 / 1";
     this.svgEl.style.width = `${size}px`;
     this.svgEl.style.height = `${size}px`;
 
@@ -1491,11 +1523,12 @@ export class OmniProgressElement extends BaseElement {
         <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${diskColor}" stroke-width="7"
           stroke-dasharray="${strokeDash} ${circumference}"
           stroke-linecap="round"
+          style="transition: stroke 0.6s ease;"
           transform="rotate(-90 ${cx} ${cy})"/>
       `;
     } else {
       if (ratio >= 0.999) {
-        wedgeSvg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${diskColor}" fill-opacity="0.92"/>`;
+        wedgeSvg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${diskColor}" fill-opacity="0.92" style="transition: fill 0.6s ease;"/>`;
       } else if (ratio > 0.001) {
         const angle = ratio * 2 * Math.PI;
         const startX = cx;
@@ -1503,7 +1536,7 @@ export class OmniProgressElement extends BaseElement {
         const endX = (cx + r * Math.sin(angle)).toFixed(2);
         const endY = (cy - r * Math.cos(angle)).toFixed(2);
         const largeArc = ratio > 0.5 ? 1 : 0;
-        wedgeSvg = `<path d="M ${cx} ${cy} L ${startX} ${startY} A ${r} ${r} 0 ${largeArc} 1 ${endX} ${endY} Z" fill="${diskColor}" fill-opacity="0.92"/>`;
+        wedgeSvg = `<path d="M ${cx} ${cy} L ${startX} ${startY} A ${r} ${r} 0 ${largeArc} 1 ${endX} ${endY} Z" fill="${diskColor}" fill-opacity="0.92" style="transition: fill 0.6s ease;"/>`;
       }
     }
 

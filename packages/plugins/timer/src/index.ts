@@ -3,7 +3,7 @@ import { TimerState } from "./types.js";
 import { getTimerSchema } from "./schema/timer-schema.js";
 import { playTimerCompletionChime } from "./audio/chime.js";
 
-export { getTimerSchema, formatTime } from "./schema/timer-schema.js";
+export { getTimerSchema, formatTime, getTimerDiskColor } from "./schema/timer-schema.js";
 export { playTimerCompletionChime } from "./audio/chime.js";
 export * from "./types.js";
 
@@ -12,8 +12,7 @@ export let timerState: TimerState = {
   remainingSeconds: 15 * 60,
   isRunning: false,
   isFinished: false,
-  showNumbers: true,
-  customMinutesInput: ""
+  isFocusMode: false
 };
 
 let tickerInterval: any = null;
@@ -64,6 +63,7 @@ export function handleTimerAction(
         timerState.isFinished = false;
       }
       timerState.isRunning = true;
+      timerState.isFocusMode = true; // Automatically expand timer to full screen
       startTicker(onUpdate);
       break;
     }
@@ -78,7 +78,23 @@ export function handleTimerAction(
       timerState.isRunning = false;
       timerState.isFinished = false;
       timerState.remainingSeconds = timerState.totalSeconds;
+      timerState.isFocusMode = false;
       stopTicker();
+      break;
+    }
+
+    case "toggle-focus": {
+      timerState.isFocusMode = !timerState.isFocusMode;
+      break;
+    }
+
+    case "shrink-timer": {
+      timerState.isFocusMode = false;
+      break;
+    }
+
+    case "expand-timer": {
+      timerState.isFocusMode = true;
       break;
     }
 
@@ -94,21 +110,6 @@ export function handleTimerAction(
       break;
     }
 
-    case "set-custom-minutes": {
-      const raw = mergedPayload.customMinutes ?? timerState.customMinutesInput;
-      const parsed = parseInt(String(raw).trim(), 10);
-      if (!isNaN(parsed) && parsed > 0) {
-        const newSec = Math.min(360 * 60, parsed * 60); // Max 6 hours
-        timerState.totalSeconds = newSec;
-        timerState.remainingSeconds = newSec;
-        timerState.isRunning = false;
-        timerState.isFinished = false;
-        timerState.customMinutesInput = "";
-        stopTicker();
-      }
-      break;
-    }
-
     case "set-preset": {
       const minutes = Number(mergedPayload.minutes) || 0;
       if (minutes > 0) {
@@ -119,11 +120,6 @@ export function handleTimerAction(
         timerState.isFinished = false;
         stopTicker();
       }
-      break;
-    }
-
-    case "toggle-numbers": {
-      timerState.showNumbers = !timerState.showNumbers;
       break;
     }
   }
