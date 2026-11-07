@@ -323,6 +323,43 @@ describe("SchemaRenderer & Custom Web Components", () => {
     renderer.destroy();
   });
 
+  it("renders circular visual disk progress with clock ticks and wedge arc", () => {
+    const renderer = new SchemaRenderer({ container });
+
+    renderer.render({
+      type: "progress",
+      variant: "disk",
+      value: 15,
+      max: 60,
+      size: 260,
+      label: "15:00",
+      color: "#c85d3e",
+      showTicks: true
+    });
+
+    const progressEl = container.querySelector("omni-progress");
+    expect(progressEl).not.toBeNull();
+
+    const svg = progressEl?.querySelector("svg.omni-progress-circular");
+    expect(svg).not.toBeNull();
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 100 100");
+
+    // Has ticks lines
+    const ticks = svg?.querySelectorAll("line");
+    expect(ticks?.length).toBe(12);
+
+    // Has path wedge arc
+    const path = svg?.querySelector("path");
+    expect(path).not.toBeNull();
+    expect(path?.getAttribute("fill")).toBe("#c85d3e");
+
+    // Has central label
+    const text = svg?.querySelector("text");
+    expect(text?.textContent?.trim()).toBe("15:00");
+
+    renderer.destroy();
+  });
+
   it("renders image URLs as clickable callout links by default, and as inline images when enabled", () => {
     const onAction = vi.fn();
     const renderer = new SchemaRenderer({ container, onAction });

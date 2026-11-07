@@ -240,7 +240,10 @@ export interface OmniProgressPrimitive extends OmniPrimitiveBase {
   value: number;
   max?: number;
   label?: string;
-  variant?: "bar" | "spinner";
+  variant?: "bar" | "spinner" | "disk" | "ring";
+  size?: number; // Diameter in pixels for disk/ring (e.g. 260)
+  color?: string; // Fill or stroke color for disk/ring
+  showTicks?: boolean; // Clock rim ticks (0, 5, ..., 55, 60m)
 }
 
 export interface OmniBannerPrimitive extends OmniPrimitiveBase {

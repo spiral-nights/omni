@@ -1377,9 +1377,36 @@ export class OmniProgressElement extends BaseElement {
   private trackEl: HTMLElement | null = null;
   private barEl: HTMLElement | null = null;
   private labelEl: HTMLElement | null = null;
+  private svgEl: SVGSVGElement | null = null;
 
   connectedCallback(): void {
     this.classList.add("omni-progress-wrapper");
+  }
+
+  setProps(props: Partial<OmniProgressPrimitive>): void {
+    const isCircular = props.variant === "disk" || props.variant === "ring";
+
+    if (isCircular) {
+      if (this.trackEl) {
+        this.trackEl.remove();
+        this.trackEl = null;
+        this.barEl = null;
+      }
+      if (this.labelEl) {
+        this.labelEl.remove();
+        this.labelEl = null;
+      }
+      this.renderCircular(props);
+    } else {
+      if (this.svgEl) {
+        this.svgEl.remove();
+        this.svgEl = null;
+      }
+      this.renderLinear(props);
+    }
+  }
+
+  private renderLinear(props: Partial<OmniProgressPrimitive>): void {
     if (!this.trackEl) {
       this.trackEl = document.createElement("div");
       this.trackEl.className = "omni-progress-track";
@@ -1390,10 +1417,7 @@ export class OmniProgressElement extends BaseElement {
 
       this.appendChild(this.trackEl);
     }
-  }
 
-  setProps(props: Partial<OmniProgressPrimitive>): void {
-    if (!this.trackEl) this.connectedCallback();
     const max = props.max && props.max > 0 ? props.max : 100;
     const val = Math.max(0, Math.min(max, props.value ?? 0));
     const pct = Math.round((val / max) * 100);
@@ -1411,6 +1435,100 @@ export class OmniProgressElement extends BaseElement {
       this.labelEl.remove();
       this.labelEl = null;
     }
+  }
+
+  private renderCircular(props: Partial<OmniProgressPrimitive>): void {
+    const size = props.size || 260;
+    const max = props.max && props.max > 0 ? props.max : 100;
+    const val = Math.max(0, Math.min(max, props.value ?? 0));
+    const ratio = val / max;
+    const isRing = props.variant === "ring";
+    const diskColor = props.color || "var(--omni-accent-primary, #d4a373)";
+    const r = 40;
+    const cx = 50;
+    const cy = 50;
+
+    this.style.display = "flex";
+    this.style.justifyContent = "center";
+    this.style.alignItems = "center";
+    this.style.width = "100%";
+
+    if (!this.svgEl) {
+      this.svgEl = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      this.svgEl.setAttribute("viewBox", "0 0 100 100");
+      this.svgEl.setAttribute("class", "omni-progress-circular");
+      this.appendChild(this.svgEl);
+    }
+
+    this.svgEl.style.width = `${size}px`;
+    this.svgEl.style.height = `${size}px`;
+
+    // Clock dial ticks (every 5 minutes / 30 degrees, with major ticks at 0, 15, 30, 45)
+    let ticksSvg = "";
+    if (props.showTicks !== false) {
+      for (let i = 0; i < 12; i++) {
+        const rad = (i * 30 * Math.PI) / 180;
+        const isMajor = i % 3 === 0;
+        const rInner = isMajor ? 41 : 43;
+        const rOuter = 46;
+        const x1 = (cx + rInner * Math.sin(rad)).toFixed(2);
+        const y1 = (cy - rInner * Math.cos(rad)).toFixed(2);
+        const x2 = (cx + rOuter * Math.sin(rad)).toFixed(2);
+        const y2 = (cy - rOuter * Math.cos(rad)).toFixed(2);
+        const strokeColor = isMajor ? "var(--omni-text-secondary, #9e988f)" : "var(--omni-border-strong, #383530)";
+        const strokeW = isMajor ? "1.4" : "0.8";
+        ticksSvg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${strokeColor}" stroke-width="${strokeW}" stroke-linecap="round"/>`;
+      }
+    }
+
+    // Active Wedge / Disk Arc
+    let wedgeSvg = "";
+    if (isRing) {
+      const circumference = 2 * Math.PI * r;
+      const strokeDash = (ratio * circumference).toFixed(2);
+      wedgeSvg = `
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--omni-bg-elevated, #22201d)" stroke-width="7"/>
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${diskColor}" stroke-width="7"
+          stroke-dasharray="${strokeDash} ${circumference}"
+          stroke-linecap="round"
+          transform="rotate(-90 ${cx} ${cy})"/>
+      `;
+    } else {
+      if (ratio >= 0.999) {
+        wedgeSvg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${diskColor}" fill-opacity="0.92"/>`;
+      } else if (ratio > 0.001) {
+        const angle = ratio * 2 * Math.PI;
+        const startX = cx;
+        const startY = cy - r;
+        const endX = (cx + r * Math.sin(angle)).toFixed(2);
+        const endY = (cy - r * Math.cos(angle)).toFixed(2);
+        const largeArc = ratio > 0.5 ? 1 : 0;
+        wedgeSvg = `<path d="M ${cx} ${cy} L ${startX} ${startY} A ${r} ${r} 0 ${largeArc} 1 ${endX} ${endY} Z" fill="${diskColor}" fill-opacity="0.92"/>`;
+      }
+    }
+
+    // Optional central label
+    let labelSvg = "";
+    if (props.label) {
+      labelSvg = `
+        <circle cx="${cx}" cy="${cy}" r="14" fill="var(--omni-bg-canvas, #141312)" fill-opacity="0.88" stroke="var(--omni-border-subtle, #262421)" stroke-width="0.75"/>
+        <text x="${cx}" y="${cy + 2.5}" text-anchor="middle" font-family="var(--omni-font-mono, monospace)" font-size="6.8" font-weight="600" fill="var(--omni-text-primary, #ede8df)">
+          ${props.label}
+        </text>
+      `;
+    }
+
+    this.svgEl.innerHTML = `
+      <!-- Dial Outer Rim -->
+      <circle cx="${cx}" cy="${cy}" r="47.5" fill="var(--omni-bg-surface, #191816)" stroke="var(--omni-border-subtle, #262421)" stroke-width="1.2"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--omni-bg-elevated, #22201d)" stroke="var(--omni-border-strong, #383530)" stroke-width="0.8"/>
+      ${ticksSvg}
+      <!-- Colored Countdown Disk / Ring -->
+      ${wedgeSvg}
+      <!-- Center Pivot Pin -->
+      <circle cx="${cx}" cy="${cy}" r="2.5" fill="var(--omni-border-strong, #383530)"/>
+      ${labelSvg}
+    `;
   }
 }
 

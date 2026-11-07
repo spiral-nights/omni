@@ -30,6 +30,9 @@ importers:
       '@omni/plugin-feed':
         specifier: workspace:*
         version: link:../../packages/plugins/feed
+      '@omni/plugin-notes':
+        specifier: workspace:*
+        version: link:../../packages/plugins/notes
       '@omni/plugin-profile-viewer':
         specifier: workspace:*
         version: link:../../packages/plugins/profile-viewer
@@ -42,6 +45,9 @@ importers:
       '@omni/plugin-shell':
         specifier: workspace:*
         version: link:../../packages/plugins/shell
+      '@omni/plugin-timer':
+        specifier: workspace:*
+        version: link:../../packages/plugins/timer
       '@omni/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -180,6 +186,21 @@ importers:
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
+
+  packages/plugins/timer:
+    devDependencies:
+      '@omni/types':
+        specifier: workspace:*
+        version: link:../../types
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.20.4)(happy-dom@20.14.5)
 
   packages/types:
     dependencies:

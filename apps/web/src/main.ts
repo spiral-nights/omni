@@ -10,6 +10,7 @@ import profileViewerScript from "../../../packages/plugins/profile-viewer/dist/i
 import checklistScript from "../../../packages/plugins/checklist/dist/index.js?raw";
 import publisherScript from "../../../packages/plugins/publisher/dist/index.js?raw";
 import notesScript from "../../../packages/plugins/notes/dist/index.js?raw";
+import timerScript from "../../../packages/plugins/timer/dist/index.js?raw";
 import omniRuntimeScript from "../../../packages/core/src/sandbox/omni-runtime.js?raw";
 
 const STORAGE_KEY_NSEC = "omni_privkey";
@@ -123,6 +124,21 @@ const initialPlugins: InstalledPluginEntry[] = [
       nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true },
       storage: { get: true, set: true }
     },
+    enabled: true
+  },
+  {
+    id: "org.omni.plugin.timer",
+    name: "Timer",
+    displayName: "Visual Timer",
+    description: "Visual circular countdown timer.",
+    icon: "timer",
+    viewport: "main",
+    views: [
+      { id: "main", title: "Visual Timer", path: "", format: "schema" },
+      { id: "widget", title: "Timer Widget", path: "?view=widget", format: "schema" }
+    ],
+    scriptContent: timerScript,
+    sourceUrl: "local:@omni/plugin-timer",
     enabled: true
   }
 ];

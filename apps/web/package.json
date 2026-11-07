@@ -17,7 +17,9 @@
     "@omni/plugin-relays": "workspace:*",
     "@omni/plugin-checklist": "workspace:*",
     "@omni/plugin-profile-viewer": "workspace:*",
-    "@omni/plugin-publisher": "workspace:*"
+    "@omni/plugin-publisher": "workspace:*",
+    "@omni/plugin-notes": "workspace:*",
+    "@omni/plugin-timer": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
