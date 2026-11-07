@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc && esbuild src/index.ts --bundle --format=esm --target=es2022 --outfile=dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@omni/types": "workspace:*",

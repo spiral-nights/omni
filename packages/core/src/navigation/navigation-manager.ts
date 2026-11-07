@@ -158,53 +158,58 @@ export class NavigationManager {
       return previousFrame;
     }
 
+    let cleanState = frame.state;
+    while (cleanState && typeof cleanState === "object" && "omniNavId" in cleanState && "state" in cleanState) {
+      cleanState = (cleanState as any).state;
+    }
+    const frameWithCleanState = { ...frame, state: cleanState };
+
     // 3. Same-Page / Duplicate Frame Deduplication:
-    if (previousFrame && previousFrame.appId === frame.appId) {
-      const sameExplicitPage = Boolean(frame.pageId && previousFrame.pageId && previousFrame.pageId === frame.pageId);
-      const sameNonEmptyUrl = Boolean(frame.url && previousFrame.url && previousFrame.url === frame.url);
+    if (previousFrame && previousFrame.appId === frameWithCleanState.appId) {
+      const sameExplicitPage = Boolean(frameWithCleanState.pageId && previousFrame.pageId && previousFrame.pageId === frameWithCleanState.pageId);
+      const sameNonEmptyUrl = Boolean(frameWithCleanState.url && previousFrame.url && previousFrame.url === frameWithCleanState.url);
       const sameStateAndUrl =
-        previousFrame.url === frame.url &&
-        JSON.stringify(previousFrame.state ?? null) === JSON.stringify(frame.state ?? null) &&
-        (previousFrame.type === frame.type || Boolean(frame.url) || frame.state !== undefined);
+        previousFrame.url === frameWithCleanState.url &&
+        JSON.stringify(previousFrame.state ?? null) === JSON.stringify(frameWithCleanState.state ?? null) &&
+        (previousFrame.type === frameWithCleanState.type || Boolean(frameWithCleanState.url) || frameWithCleanState.state !== undefined);
       const sameLogicalTabTarget = Boolean(
-        (!previousFrame.pageId || !frame.pageId) &&
+        (!previousFrame.pageId || !frameWithCleanState.pageId) &&
         previousFrame.state &&
-        frame.state &&
+        frameWithCleanState.state &&
         typeof previousFrame.state === "object" &&
-        typeof frame.state === "object" &&
+        typeof frameWithCleanState.state === "object" &&
         previousFrame.state.tab &&
-        previousFrame.state.tab === frame.state.tab &&
-        previousFrame.state.pubkey === frame.state.pubkey &&
-        previousFrame.state.noteId === frame.state.noteId
+        previousFrame.state.tab === frameWithCleanState.state.tab &&
+        previousFrame.state.pubkey === frameWithCleanState.state.pubkey &&
+        previousFrame.state.noteId === frameWithCleanState.state.noteId
       );
 
       if (sameExplicitPage || sameNonEmptyUrl || sameStateAndUrl || sameLogicalTabTarget) {
-        if (frame.pageId && !previousFrame.pageId) {
-          previousFrame.pageId = frame.pageId;
+        if (frameWithCleanState.pageId && !previousFrame.pageId) {
+          previousFrame.pageId = frameWithCleanState.pageId;
         }
-        if (frame.state && typeof frame.state === "object") {
+        if (frameWithCleanState.state && typeof frameWithCleanState.state === "object") {
           previousFrame.state =
             previousFrame.state && typeof previousFrame.state === "object"
-              ? { ...previousFrame.state, ...frame.state }
-              : frame.state;
-        } else if (frame.state !== undefined && previousFrame.state === undefined) {
-          previousFrame.state = frame.state;
+              ? { ...previousFrame.state, ...frameWithCleanState.state }
+              : frameWithCleanState.state;
+        } else if (frameWithCleanState.state !== undefined && previousFrame.state === undefined) {
+          previousFrame.state = frameWithCleanState.state;
         }
-        if (frame.url && !previousFrame.url) {
-          previousFrame.url = frame.url;
+        if (frameWithCleanState.url && !previousFrame.url) {
+          previousFrame.url = frameWithCleanState.url;
         }
-        console.debug("[Omni Nav] stack.push -> ignoring duplicate frame:", previousFrame);
         return previousFrame;
       }
     }
 
-    if (previousFrame && previousFrame.appId !== frame.appId && previousFrame.intentEntry) {
+    if (previousFrame && previousFrame.appId !== frameWithCleanState.appId && previousFrame.intentEntry) {
       previousFrame.intentEntry = false;
     }
 
     const newFrame: NavigationFrame = {
-      ...frame,
-      intentEntry: isPendingIntent || frame.intentEntry,
+      ...frameWithCleanState,
+      intentEntry: isPendingIntent || frameWithCleanState.intentEntry,
       id: generateNavId(),
       timestamp: Date.now()
     };
@@ -216,7 +221,6 @@ export class NavigationManager {
 
     this.stack.push(newFrame);
     this.pointer = this.stack.length - 1;
-    console.debug("[Omni Nav] stack.push -> pointer:", this.pointer, "length:", this.stack.length, "frame:", newFrame);
 
     if (syncBrowser && typeof window !== "undefined" && window.history && !this.isProcessingPopState) {
       try {
@@ -253,8 +257,13 @@ export class NavigationManager {
     syncBrowser = true
   ): NavigationFrame {
     const previousFrame = this.getCurrentFrame();
+    let cleanState = frame.state;
+    while (cleanState && typeof cleanState === "object" && "omniNavId" in cleanState && "state" in cleanState) {
+      cleanState = (cleanState as any).state;
+    }
     const newFrame: NavigationFrame = {
       ...frame,
+      state: cleanState,
       id: previousFrame ? previousFrame.id : generateNavId(),
       timestamp: Date.now()
     };
@@ -265,7 +274,6 @@ export class NavigationManager {
       this.stack = [newFrame];
       this.pointer = 0;
     }
-    console.debug("[Omni Nav] stack.replace -> pointer:", this.pointer, "length:", this.stack.length, "frame:", newFrame);
 
     if (syncBrowser && typeof window !== "undefined" && window.history && !this.isProcessingPopState) {
       try {

@@ -2231,7 +2231,6 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public handleHistoryPush(pluginId: string, params: { pageId?: string; state: any; title: string; url: string }): void {
-    console.debug("[Omni Nav] handleHistoryPush", { pluginId, pageId: params.pageId, url: params.url, state: params.state });
     if (this.kernel?.navigation) {
       this.kernel.navigation.push({
         type: "subroute",
@@ -2260,7 +2259,6 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public handleHistoryReplace(pluginId: string, params: { pageId?: string; state: any; title: string; url: string }): void {
-    console.debug("[Omni Nav] handleHistoryReplace", { pluginId, pageId: params.pageId, url: params.url, state: params.state });
     if (this.kernel?.navigation) {
       this.kernel.navigation.replace({
         type: "subroute",
@@ -2288,12 +2286,10 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public handleHistoryBack(pluginId: string): void {
-    console.debug("[Omni Nav] handleHistoryBack", { pluginId });
     this.triggerBack();
   }
 
   public handleHistoryGo(pluginId: string, delta?: number): void {
-    console.debug("[Omni Nav] handleHistoryGo", { pluginId, delta });
     if (delta === -1) {
       this.triggerBack();
       return;
@@ -2342,7 +2338,6 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public triggerBack(): void {
-    console.debug("[Omni Nav] triggerBack");
     if (this.isDestroyed) return;
 
     // 1. If Settings modal is open, close it cleanly
@@ -2431,7 +2426,6 @@ export abstract class BaseShell implements OmniShellHost {
   public handlePopState(e: PopStateEvent): boolean {
     if (this.isDestroyed) return false;
     const state = e.state;
-    console.debug("[Omni Nav] handlePopState event received", state);
 
     // 1. Primary: handle through unified NavigationManager
     if (this.kernel?.navigation) {
@@ -2441,7 +2435,6 @@ export abstract class BaseShell implements OmniShellHost {
         this.closeSettings?.(false);
       }
       const popRes = this.kernel.navigation.handlePopState(state);
-      console.debug("[Omni Nav] NavigationManager.handlePopState result", popRes);
       if (popRes.handled && popRes.currentFrame) {
         const frame = popRes.currentFrame;
         const activePage = this.activePage;
