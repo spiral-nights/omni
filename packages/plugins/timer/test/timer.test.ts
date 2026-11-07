@@ -64,14 +64,13 @@ describe("@omni/plugin-timer — Child-Friendly Circular Visual Timer", () => {
       // Verify the visual disk progress element
       const diskBox = schema.children[0];
       expect(diskBox.type).toBe("box");
-      expect(diskBox.action).toEqual({ name: "toggle-focus" });
       const diskPrimitive = diskBox.children[0];
       expect(diskPrimitive.type).toBe("progress");
       expect(diskPrimitive.variant).toBe("disk");
       expect(diskPrimitive.size).toBe(260);
       expect(diskPrimitive.color).toBe("#388bfd");
       expect(diskPrimitive.label).toBe("15:00");
-      expect(diskPrimitive.action).toEqual({ name: "toggle-focus" });
+      expect(diskPrimitive.action).toEqual({ name: "expand-timer" });
 
       // Verify controls exist (Start/Pause/Reset, Adjustments, Presets)
       expect(schema.children.length).toBe(4);
@@ -95,11 +94,11 @@ describe("@omni/plugin-timer — Child-Friendly Circular Visual Timer", () => {
       const diskPrimitive = diskBox.children[0];
       expect(diskPrimitive.size).toBe(420);
       expect(diskPrimitive.label).toBe("15:00");
-      expect(diskPrimitive.action).toEqual({ name: "toggle-focus" });
+      expect(diskPrimitive.action).toEqual({ name: "shrink-timer" });
 
       // Indicator to show controls
       const indicatorBox = schema.children[1];
-      expect(indicatorBox.action).toEqual({ name: "toggle-focus" });
+      expect(indicatorBox.action).toEqual({ name: "shrink-timer" });
     });
   });
 

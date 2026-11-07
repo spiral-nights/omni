@@ -90,7 +90,6 @@ export function getTimerSchema(state: TimerState): OmniComponentNode {
             justifyContent: "center",
             cursor: "pointer"
           },
-          action: { name: "toggle-focus" },
           children: [
             {
               type: "progress",
@@ -101,7 +100,7 @@ export function getTimerSchema(state: TimerState): OmniComponentNode {
               color: diskColor,
               label: formatTime(remaining),
               showTicks: true,
-              action: { name: "toggle-focus" }
+              action: { name: "shrink-timer" }
             }
           ]
         },
@@ -116,7 +115,7 @@ export function getTimerSchema(state: TimerState): OmniComponentNode {
             marginTop: "20px",
             cursor: "pointer"
           },
-          action: { name: "toggle-focus" },
+          action: { name: "shrink-timer" },
           children: [
             isFinished
               ? {
@@ -130,7 +129,6 @@ export function getTimerSchema(state: TimerState): OmniComponentNode {
                   content: "Touch timer to show controls",
                   variant: "caption",
                   tone: "muted",
-                  action: { name: "toggle-focus" },
                   style: {
                     cursor: "pointer",
                     opacity: "0.6"
@@ -167,7 +165,7 @@ export function getTimerSchema(state: TimerState): OmniComponentNode {
       type: "icon-button",
       icon: "move",
       tooltip: "Expand timer",
-      action: { name: "toggle-focus" }
+      action: { name: "expand-timer" }
     },
     children: [
       // 1. Circular Visual Disk (Clickable to expand)
@@ -181,7 +179,6 @@ export function getTimerSchema(state: TimerState): OmniComponentNode {
           width: "100%",
           cursor: "pointer"
         },
-        action: { name: "toggle-focus" },
         children: [
           {
             type: "progress",
@@ -192,7 +189,7 @@ export function getTimerSchema(state: TimerState): OmniComponentNode {
             color: diskColor,
             label: formatTime(remaining),
             showTicks: true,
-            action: { name: "toggle-focus" }
+            action: { name: "expand-timer" }
           }
         ]
       },

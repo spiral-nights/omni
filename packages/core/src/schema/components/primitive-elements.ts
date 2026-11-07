@@ -67,7 +67,10 @@ export class OmniBoxElement extends BaseElement {
         if (
           (e.target as HTMLElement).closest("button") ||
           (e.target as HTMLElement).closest("input") ||
-          (e.target as HTMLElement).closest("textarea")
+          (e.target as HTMLElement).closest("textarea") ||
+          (e.target as HTMLElement).closest("omni-progress") ||
+          (e.target as HTMLElement).closest("omni-button") ||
+          (e.target as HTMLElement).closest("omni-icon-button")
         ) {
           return;
         }
@@ -1390,8 +1393,9 @@ export class OmniProgressElement extends BaseElement {
 
   connectedCallback(): void {
     this.classList.add("omni-progress-wrapper");
-    this.addEventListener("click", () => {
+    this.addEventListener("click", (e) => {
       if (this.actionData) {
+        e.stopPropagation();
         this.dispatchEvent(new OmniActionEvent(this.actionData));
       }
     });
