@@ -468,4 +468,114 @@ describe("Unified Navigation & Back Button Integration", () => {
     expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
     expect(kernel.navigation.canGoBack()).toBe(false);
   });
+
+  it("does not show header back button on initial schema render with tabs before navigating", async () => {
+    const backBtn = root.querySelector("#btn-editorial-back") as HTMLElement;
+    expect(backBtn).toBeTruthy();
+    expect(backBtn.style.display).toBe("none");
+    expect(kernel.navigation.canGoBack()).toBe(false);
+
+    // Verify back button classes: must not contain editorial-header-btn (fixed width 38px)
+    expect(backBtn.classList.contains("editorial-header-btn")).toBe(false);
+    expect(backBtn.classList.contains("editorial-back-btn")).toBe(true);
+
+    // Mount feed plugin
+    await shell.mountPlugin(shell.installedPlugins[0]);
+    const feedSandbox = kernel.getSandbox("org.omni.plugin.feed");
+    expect(feedSandbox).toBeDefined();
+
+    // Simulate initial schema render of Feed containing tabs (prevPageId === null)
+    if (feedSandbox) {
+      (feedSandbox as any).channel1.port1.onmessage?.({
+        data: {
+          type: "omni:schema",
+          componentId: "feed-main",
+          schema: {
+            type: "tabs",
+            activeTab: "following",
+            tabs: [
+              { id: "following", label: "Following" },
+              { id: "global", label: "Global" }
+            ]
+          }
+        }
+      });
+    }
+
+    // Verify back button is STILL hidden and canGoBack() is FALSE
+    expect(kernel.navigation.canGoBack()).toBe(false);
+    expect(backBtn.style.display).toBe("none");
+
+    // Now simulate user switching tabs to 'global' (prevPageId !== null && prevPageId !== newPageId)
+    if (feedSandbox) {
+      (feedSandbox as any).channel1.port1.onmessage?.({
+        data: {
+          type: "omni:schema",
+          componentId: "feed-main",
+          schema: {
+            type: "tabs",
+            activeTab: "global",
+            tabs: [
+              { id: "following", label: "Following" },
+              { id: "global", label: "Global" }
+            ]
+          }
+        }
+      });
+    }
+
+    // Now back button should be visible with destination title
+    expect(kernel.navigation.canGoBack()).toBe(true);
+    expect(backBtn.style.display).toBe("inline-flex");
+    expect(backBtn.getAttribute("title")).toContain("Feed");
+  });
+
+  it("handles dock item clicks and back button integration properly", async () => {
+    const backBtn = root.querySelector("#btn-editorial-back") as HTMLElement;
+    expect(kernel.navigation.canGoBack()).toBe(false);
+    expect(backBtn.style.display).toBe("none");
+
+    // 1. Click "Apps" in the dock
+    const btnApps = root.querySelector("#btn-editorial-dock-apps") as HTMLButtonElement;
+    expect(btnApps).not.toBeNull();
+    btnApps.click();
+
+    expect(shell.getActivePageId()).toBe("apps");
+    expect(kernel.navigation.canGoBack()).toBe(true);
+    expect(backBtn.style.display).toBe("inline-flex");
+
+    // 2. Click back button
+    backBtn.click();
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    expect(kernel.navigation.canGoBack()).toBe(false);
+    expect(backBtn.style.display).toBe("none");
+
+    // 3. Switch to Profiles via openApp (e.g. from Apps index)
+    await shell.openApp("org.omni.plugin.profile-viewer");
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.profile-viewer");
+    expect(kernel.navigation.canGoBack()).toBe(true);
+    expect(backBtn.style.display).toBe("inline-flex");
+
+    // 4. Click Feed in the dock: since Feed is the primary root destination (index 0),
+    // clicking its dock icon returns directly to Feed root and clears back history
+    const feedDockItem = root.querySelector('.editorial-dock-item[data-plugin-id="org.omni.plugin.feed"]') as HTMLButtonElement;
+    expect(feedDockItem).not.toBeNull();
+    feedDockItem.click();
+
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    expect(kernel.navigation.canGoBack()).toBe(false);
+    expect(backBtn.style.display).toBe("none");
+
+    // 5. Navigate to Apps index from dock
+    btnApps.click();
+    expect(shell.getActivePageId()).toBe("apps");
+    expect(kernel.navigation.canGoBack()).toBe(true);
+    expect(backBtn.style.display).toBe("inline-flex");
+
+    // 6. Clicking back button returns to Feed
+    backBtn.click();
+    expect(shell.getActivePageId()).toBe("org.omni.plugin.feed");
+    expect(kernel.navigation.canGoBack()).toBe(false);
+    expect(backBtn.style.display).toBe("none");
+  });
 });

@@ -480,19 +480,21 @@ export class SandboxInstance {
               this.currentPageId = pageMeta.id;
             } else {
               this.currentPageId = pageMeta.id;
-              if (this.options.onHistoryPush) {
-                if (prevPageId === null) {
-                  const isRootRender = pageMeta.state === null || (!pageMeta.state && !pageMeta.url);
-                  this.options.onHistoryPush({
+              if (prevPageId === null) {
+                // Initial root render of the app: update/replace current frame's state in-place without pushing
+                if (this.options.onHistoryReplace && pageMeta.state) {
+                  this.options.onHistoryReplace({
                     pageId: pageMeta.id,
-                    state: isRootRender ? null : (pageMeta.state ?? { pageId: pageMeta.id }),
+                    state: pageMeta.state,
                     title: pageMeta.title || this.manifest.name,
                     url: pageMeta.url || ""
                   });
-                } else if (prevPageId !== pageMeta.id) {
-                  const isRootRender =
-                    pageMeta.id === this.rootPageId &&
-                    (pageMeta.state === null || (!pageMeta.state && !pageMeta.url));
+                }
+              } else if (prevPageId !== pageMeta.id) {
+                const isRootRender =
+                  pageMeta.id === this.rootPageId &&
+                  (pageMeta.state === null || (!pageMeta.state && !pageMeta.url));
+                if (this.options.onHistoryPush) {
                   this.options.onHistoryPush({
                     pageId: pageMeta.id,
                     state: isRootRender ? null : (pageMeta.state ?? { pageId: pageMeta.id }),

@@ -381,6 +381,43 @@ export class NavigationManager {
   }
 
   /**
+   * Jumps directly to a specific frame index in the navigation stack.
+   */
+  public jumpTo(targetIdx: number, syncBrowser = true): {
+    handled: boolean;
+    currentFrame?: NavigationFrame;
+    previousFrame?: NavigationFrame;
+  } {
+    if (targetIdx < 0 || targetIdx >= this.stack.length || targetIdx === this.pointer) {
+      return { handled: false };
+    }
+
+    const previousFrame = this.stack[this.pointer];
+    const delta = targetIdx - this.pointer;
+    this.pointer = targetIdx;
+    const currentFrame = this.stack[this.pointer];
+
+    if (syncBrowser && typeof window !== "undefined" && window.history && !this.isProcessingPopState) {
+      try {
+        window.history.go(delta);
+      } catch (_) {}
+    }
+
+    this.emit({
+      direction: delta < 0 ? "back" : "forward",
+      currentFrame,
+      previousFrame,
+      isInternalSubroute: Boolean(previousFrame?.appId && previousFrame.appId === currentFrame?.appId)
+    });
+
+    return {
+      handled: true,
+      currentFrame,
+      previousFrame
+    };
+  }
+
+  /**
    * Handles incoming popstate events from window.addEventListener("popstate").
    * Synchronizes internal pointer with the matching omniNavId in stack.
    */

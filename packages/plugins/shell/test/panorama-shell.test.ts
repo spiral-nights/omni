@@ -561,7 +561,7 @@ describe("PanoramaShell (Windows Phone People Hub Experience)", () => {
     expect(menu?.style.display).toBe("flex");
   });
 
-  it("renders clean empty state in widgets slot when no companion widgets are pinned", () => {
+  it("hides widgets section and omits widgets pivot tab when no companion widgets are assigned", () => {
     const testRoot = document.createElement("div");
     document.body.appendChild(testRoot);
     const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
@@ -573,10 +573,35 @@ describe("PanoramaShell (Windows Phone People Hub Experience)", () => {
     });
     testShell.mount();
 
-    testShell.renderWidgetsEmptyState();
-    const widgetsSlot = testRoot.querySelector("#panorama-widgets-slot");
-    expect(widgetsSlot?.querySelector(".panorama-empty-state")).toBeTruthy();
-    expect(widgetsSlot?.textContent).toContain("No Widgets Pinned");
+    // Verify widgets section is hidden
+    const sectionWidgets = testRoot.querySelector("#panorama-section-widgets") as HTMLElement;
+    expect(sectionWidgets?.style.display).toBe("none");
+
+    // Verify widgets pivot item is omitted from top pivot navigation
+    const pivotItems = Array.from(testRoot.querySelectorAll(".panorama-pivot-item")).map(
+      (el) => el.textContent?.trim()
+    );
+    expect(pivotItems).not.toContain("widgets");
+
+    // Dynamic appearance when a widget is assigned
+    const timer = testShell.installedPlugins.find((p) => p.id === "org.omni.plugin.timer")!;
+    timer.placements = [{ id: "timer-widget-1", viewport: "sidebar", route: "?view=widget", viewId: "widget", enabled: true }];
+    (testShell as any).onWorkspaceUpdated();
+
+    expect(sectionWidgets?.style.display).toBe("");
+    const updatedPivots = Array.from(testRoot.querySelectorAll(".panorama-pivot-item")).map(
+      (el) => el.textContent?.trim()
+    );
+    expect(updatedPivots).toContain("widgets");
+
+    // Dynamic removal when widget is unassigned again
+    timer.placements = [];
+    (testShell as any).onWorkspaceUpdated();
+    expect(sectionWidgets?.style.display).toBe("none");
+    const finalPivots = Array.from(testRoot.querySelectorAll(".panorama-pivot-item")).map(
+      (el) => el.textContent?.trim()
+    );
+    expect(finalPivots).not.toContain("widgets");
 
     testShell.destroy();
     testRoot.remove();

@@ -6,7 +6,7 @@ export interface CuratedApp {
   category: "Social" | "Productivity" | "Games" | "Utilities";
   icon: string;
   author: string;
-  viewport: "main" | "sidebar";
+  viewport?: "main" | "sidebar";
   views?: Array<{ id: string; title: string; path: string }>;
   htmlContent: string;
 }
@@ -20,7 +20,7 @@ export const CURATED_APPS: CuratedApp[] = [
     category: "Social",
     icon: "document",
     author: "cypherpunks@nostr",
-    viewport: "sidebar",
+    viewport: "main",
     views: [
       { id: "main", title: "All Maxims", path: "" },
       { id: "widget", title: "Daily Quote Card", path: "?view=widget" }
@@ -113,7 +113,7 @@ export const CURATED_APPS: CuratedApp[] = [
     category: "Utilities",
     icon: "widgets",
     author: "polls@nostr",
-    viewport: "sidebar",
+    viewport: "main",
     views: [
       { id: "main", title: "Live Poll", path: "" },
       { id: "widget", title: "Poll Card", path: "?view=widget" }

@@ -115,6 +115,13 @@ export class PanoramaShell extends BaseShell {
 
   protected onWorkspaceUpdated(): void {
     this.ensureMainAppSections();
+    const hasWidgets = this.hasActiveWidgets();
+    if (this.sectionWidgets) {
+      this.sectionWidgets.style.display = hasWidgets ? "" : "none";
+    }
+    if (!hasWidgets && this.activePivot === "widgets") {
+      this.activePivot = "apps";
+    }
     this.renderPivotNavigation();
     this.renderAppsTiles();
     this.renderWidgetsEmptyState();
@@ -123,6 +130,14 @@ export class PanoramaShell extends BaseShell {
     this.renderBottomAppBar();
     this.updateEdgeGliders();
     this.ensureWidgetsMounted().catch(console.warn);
+  }
+
+  public hasActiveWidgets(): boolean {
+    return this.installedPlugins.some((p) => {
+      if (p.enabled === false) return false;
+      const placements = this.getPluginPlacements(p);
+      return placements.some((pl) => pl.enabled !== false && (pl.viewport === "sidebar" || pl.viewport === "widgets"));
+    });
   }
 
   public override async ensureWidgetsMounted(): Promise<void> {
@@ -184,7 +199,7 @@ export class PanoramaShell extends BaseShell {
       return document.getElementById("panorama-widgets-slot") || this.sectionWidgets;
     }
 
-    return this.slotContainers.get(slotId) || document.getElementById("panorama-widgets-slot") || this.root;
+    return this.slotContainers.get(slotId) || undefined;
   }
 
   public ensureMainAppSections(): void {
@@ -265,6 +280,10 @@ export class PanoramaShell extends BaseShell {
     this.cacheElementReferences();
     this.initSlotContainers();
     this.ensureMainAppSections();
+    const hasWidgets = this.hasActiveWidgets();
+    if (this.sectionWidgets) {
+      this.sectionWidgets.style.display = hasWidgets ? "" : "none";
+    }
     const mainApps = this.getMainAppPlugins();
     if (mainApps.length > 0) {
       this.activePivot = mainApps[0].id;
@@ -1494,8 +1513,8 @@ export class PanoramaShell extends BaseShell {
       this.pivotHeadersTrack.appendChild(btn);
     }
 
-    // 2. Standard Panorama Pivots: Apps, Widgets, System
-    const standardPivots = ["apps", "widgets", "system"];
+    // 2. Standard Panorama Pivots: Apps, (Widgets if present), System
+    const standardPivots = this.hasActiveWidgets() ? ["apps", "widgets", "system"] : ["apps", "system"];
     for (const sp of standardPivots) {
       const btn = document.createElement("button");
       btn.className = "panorama-pivot-item";
@@ -2068,6 +2087,10 @@ export class PanoramaShell extends BaseShell {
   }
 
   public showPivot(pivot: PanoramaPivot): void {
+    if (pivot === "widgets" && !this.hasActiveWidgets()) {
+      this.showPivot("apps");
+      return;
+    }
     this.activePivot = pivot;
     if (pivot === "widgets") {
       this.ensureWidgetsMounted().catch(console.warn);
@@ -2131,6 +2154,10 @@ export class PanoramaShell extends BaseShell {
       this.closeApp(true);
       this.showPivot("apps");
     } else if (page === "widgets" || page === "dashboard") {
+      if (!this.hasActiveWidgets()) {
+        this.showPivot("apps");
+        return;
+      }
       this.closeApp(true);
       this.showPivot("widgets");
       await this.ensureWidgetsMounted().catch(console.warn);
@@ -2174,7 +2201,9 @@ export class PanoramaShell extends BaseShell {
     if (!this.panoramaContainer || !this.pivotHeadersTrack) return;
 
     const scrollLeft = this.panoramaContainer.scrollLeft;
-    const sections = Array.from(this.panoramaContainer.querySelectorAll<HTMLElement>(".panorama-section"));
+    const sections = Array.from(this.panoramaContainer.querySelectorAll<HTMLElement>(".panorama-section")).filter(
+      (sec) => sec.style.display !== "none"
+    );
     const buttons = Array.from(this.pivotHeadersTrack.querySelectorAll<HTMLElement>(".panorama-pivot-item"));
     if (sections.length === 0 || buttons.length === 0) return;
 

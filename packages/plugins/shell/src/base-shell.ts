@@ -150,6 +150,7 @@ export abstract class BaseShell implements OmniShellHost {
   public localWorkspaceUpdatedAt: number = 0;
   public autoSyncNip78: boolean = true;
   protected syncDebounceTimer: any = null;
+  protected isDestroyed: boolean = false;
   public readonly LOCAL_WORKSPACE_KEY = "omni_workspace_state";
   public readonly LOCAL_PLUGIN_BUNDLES_KEY = "omni_installed_plugin_bundles";
 
@@ -160,6 +161,7 @@ export abstract class BaseShell implements OmniShellHost {
 
   public openApp?(pluginId: string, pushState?: boolean): Promise<void> | void;
   public openSettings?(pushState?: boolean): void;
+  public closeSettings?(pushState?: boolean): void;
   public showAppsIndex?(pushState?: boolean): void;
   public showWidgetsView?(pushState?: boolean): void;
   public scrollToTop?(params?: { behavior?: ScrollBehavior }): void;
@@ -387,7 +389,7 @@ export abstract class BaseShell implements OmniShellHost {
         version: p.version || p.manifest?.version || "1.0.0",
         description: p.description || p.manifest?.description || "",
         icon,
-        viewport: "unassigned"
+        viewport: ""
       };
     }
     const primaryCompId = p.manifest?.components?.[0]?.id || `${p.id}-main`;
@@ -399,7 +401,7 @@ export abstract class BaseShell implements OmniShellHost {
       version: p.version || p.manifest?.version || "1.0.0",
       description: p.description || p.manifest?.description || "",
       icon,
-      viewport: placements[0]?.viewport || layoutSlot || "unassigned"
+      viewport: placements[0]?.viewport || layoutSlot || ""
     };
   }
 
@@ -428,9 +430,9 @@ export abstract class BaseShell implements OmniShellHost {
       components: [
         {
           id: `${meta.id}-main`,
-          type: meta.viewport === "main" ? "main" : "widget",
+          type: "main",
           title: meta.name,
-          slot: meta.viewport
+          slot: "main"
         }
       ],
       views: p.views || [{ id: "main", title: "Main App", path: "" }],
@@ -446,26 +448,18 @@ export abstract class BaseShell implements OmniShellHost {
   public getPluginPlacements(p: InstalledPluginEntry): PluginPlacement[] {
     if (Array.isArray(p.placements)) {
       return p.placements.filter(
-        (pl) => pl.viewport && pl.viewport !== "main" && !(pl.id === "main-primary" && pl.viewport === "dock")
+        (pl) =>
+          pl.viewport &&
+          pl.viewport !== "main" &&
+          pl.viewport !== "unassigned" &&
+          !(pl.id === "main-primary" && pl.viewport === "dock")
       );
     }
-    if (p.viewport && p.viewport !== "" && p.viewport !== "main") {
+    if (p.viewport && p.viewport !== "" && p.viewport !== "main" && p.viewport !== "unassigned") {
       return [
         {
           id: `${p.viewport}-primary`,
           viewport: p.viewport,
-          route: p.route !== undefined ? p.route : "",
-          viewId: p.viewId || "main",
-          enabled: p.enabled !== false
-        }
-      ];
-    }
-    const manifestSlot = p.manifest?.components?.[0]?.slot;
-    if (manifestSlot && manifestSlot !== "main") {
-      return [
-        {
-          id: `${manifestSlot}-primary`,
-          viewport: manifestSlot,
           route: p.route !== undefined ? p.route : "",
           viewId: p.viewId || "main",
           enabled: p.enabled !== false
@@ -1077,7 +1071,7 @@ export abstract class BaseShell implements OmniShellHost {
               plugin = this.restoreMissingPluginEntry(item, bundles);
             }
             if (plugin) {
-              if (item.viewport === "main") {
+              if (item.viewport === "main" || item.viewport === "unassigned") {
                 plugin.viewport = "";
               } else if (item.viewport) {
                 plugin.viewport = item.viewport;
@@ -1091,9 +1085,13 @@ export abstract class BaseShell implements OmniShellHost {
                 plugin.relays = Array.isArray(item.relays) ? item.relays : undefined;
               }
               if (item.placements && Array.isArray(item.placements)) {
-                // Filter out legacy "main" placements and phantom "dock" placements that were converted from main-primary
+                // Filter out legacy "main" placements, unassigned, and phantom "dock" placements that were converted from main-primary
                 plugin.placements = item.placements.filter(
-                  (pl) => pl.viewport && pl.viewport !== "main" && !(pl.id === "main-primary" && pl.viewport === "dock")
+                  (pl) =>
+                    pl.viewport &&
+                    pl.viewport !== "main" &&
+                    pl.viewport !== "unassigned" &&
+                    !(pl.id === "main-primary" && pl.viewport === "dock")
                 );
                 if (plugin.placements.length === 0) {
                   plugin.viewport = "";
@@ -2312,7 +2310,7 @@ export abstract class BaseShell implements OmniShellHost {
     }
   }
 
-  private resetOutgoingPluginOnBack(previousFrame?: any, currentFrame?: any): void {
+  protected resetOutgoingPluginOnBack(previousFrame?: any, currentFrame?: any): void {
     if (!previousFrame?.appId || previousFrame.appId === currentFrame?.appId) return;
     const wasOnSubroute =
       previousFrame.type === "subroute" ||
@@ -2345,10 +2343,22 @@ export abstract class BaseShell implements OmniShellHost {
 
   public triggerBack(): void {
     console.debug("[Omni Nav] triggerBack");
+    if (this.isDestroyed) return;
+
+    // 1. If Settings modal is open, close it cleanly
+    const settingsModal = document.querySelector("#editorial-settings-modal, #settings-modal");
+    if (settingsModal && (settingsModal.classList.contains("open") || (settingsModal as HTMLElement).style.display === "flex")) {
+      this.closeSettings?.(true);
+      return;
+    }
+
+    // 2. Primary: In browser environments with window.history, trigger browser back so popstate handles state & UI in one place
     if (typeof window !== "undefined" && window.history && typeof window.history.back === "function") {
       window.history.back();
       return;
     }
+
+    // 3. Fallback when window.history is not available (e.g. headless tests)
     if (this.kernel?.navigation && this.kernel.navigation.canGoBack()) {
       const res = this.kernel.navigation.back(false);
       if (res.handled && res.currentFrame) {
@@ -2374,9 +2384,17 @@ export abstract class BaseShell implements OmniShellHost {
           this.kernel.dispatchHistoryPopstate(targetAppId, popPayload);
         } else if (frame.type === "section" && frame.section) {
           if (frame.section === "apps") {
-            this.showAppsIndex?.(false);
+            if (this.showAppsIndex) {
+              this.showAppsIndex(false);
+            } else {
+              this.showPage("apps", false);
+            }
           } else if (frame.section === "widgets") {
-            this.showWidgetsView?.(false);
+            if (this.showWidgetsView) {
+              this.showWidgetsView(false);
+            } else {
+              this.showPage("widgets", false);
+            }
           } else if (frame.section === "settings") {
             this.openSettings?.(false);
           }
@@ -2387,20 +2405,41 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public updateHeaderBackVisibility(): void {
-    if (typeof document === "undefined") return;
+    if (this.isDestroyed || typeof document === "undefined") return;
     const canBack = this.kernel?.navigation ? this.kernel.navigation.canGoBack() : false;
     const backBtns = document.querySelectorAll(".omni-header-back-btn, #btn-editorial-back, #btn-panorama-back");
+    let destTitle = "Go Back";
+    if (canBack && this.kernel?.navigation) {
+      const stack = this.kernel.navigation.getStack();
+      const pointer = this.kernel.navigation.getPointer();
+      const prevFrame = pointer > 0 ? stack[pointer - 1] : undefined;
+      if (prevFrame?.title) {
+        destTitle = `Back to ${prevFrame.title}`;
+      }
+    }
     backBtns.forEach((btn) => {
       (btn as HTMLElement).style.display = canBack ? "inline-flex" : "none";
+      btn.setAttribute("title", destTitle);
+      btn.setAttribute("aria-label", destTitle);
     });
+    const header = document.querySelector(".editorial-header, .panorama-hero-header");
+    if (header) {
+      header.classList.toggle("has-back-nav", canBack);
+    }
   }
 
   public handlePopState(e: PopStateEvent): boolean {
+    if (this.isDestroyed) return false;
     const state = e.state;
     console.debug("[Omni Nav] handlePopState event received", state);
 
     // 1. Primary: handle through unified NavigationManager
     if (this.kernel?.navigation) {
+      // If currently on settings and popping backwards, close settings modal
+      const curFrameBefore = this.kernel.navigation.getCurrentFrame();
+      if (curFrameBefore?.section === "settings") {
+        this.closeSettings?.(false);
+      }
       const popRes = this.kernel.navigation.handlePopState(state);
       console.debug("[Omni Nav] NavigationManager.handlePopState result", popRes);
       if (popRes.handled && popRes.currentFrame) {
@@ -2472,6 +2511,7 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public destroy(): void {
+    this.isDestroyed = true;
     unmountShellStyles();
     this.destroyPullToRefresh();
     this.pendingWidgetMounts.clear();

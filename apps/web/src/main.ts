@@ -44,7 +44,6 @@ const initialPlugins: InstalledPluginEntry[] = [
     displayName: "Tasks",
     description: "Decentralized task and todo list synced across Nostr relays.",
     icon: "check-circle",
-    viewport: "sidebar",
     views: [
       { id: "main", title: "Task List", path: "", format: "schema" },
       { id: "compact", title: "Live Tile", path: "?view=compact", format: "schema" },
@@ -61,7 +60,6 @@ const initialPlugins: InstalledPluginEntry[] = [
     name: "Relays",
     description: "Manage connected relays and monitor live WebSocket pool status.",
     icon: "relays",
-    viewport: "sidebar",
     views: [
       { id: "main", title: "Relays", path: "", format: "schema" },
       { id: "widget", title: "Relays Widget", path: "?view=widget", format: "schema" },

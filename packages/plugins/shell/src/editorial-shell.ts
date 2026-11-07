@@ -734,7 +734,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       `;
 
       item.addEventListener("click", () => {
-        this.openApp(plugin.id);
+        this.handleDockItemClick(plugin.id);
       });
 
       this.bindAppContextMenu(item, plugin);
@@ -820,6 +820,62 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
     this.registerHandledIntents();
   }
 
+  public handleDockItemClick(pluginId: string): void {
+    const plugin = this.installedPlugins.find((p) => p.id === pluginId);
+    if (!plugin) return;
+
+    // 1. If clicking the currently active app
+    if (this.activePluginId === pluginId && this.activePage === "app") {
+      this.scrollToTop();
+      // If currently on a subroute or note thread, return to app's root
+      const curFrame = this.kernel?.navigation?.getCurrentFrame();
+      if (
+        curFrame &&
+        curFrame.appId === pluginId &&
+        (curFrame.type === "subroute" || Boolean(curFrame.state) || Boolean(curFrame.pageId))
+      ) {
+        const stack = this.kernel.navigation.getStack();
+        const rootIdx = stack.findIndex(
+          (f) => f.type === "app" && f.appId === pluginId && (!f.state || f.state === null) && !f.pageId
+        );
+        if (rootIdx >= 0 && rootIdx < this.kernel.navigation.getPointer()) {
+          this.kernel.navigation.jumpTo(rootIdx);
+        } else {
+          this.kernel.navigation.replace({
+            type: "app",
+            appId: pluginId,
+            title: plugin.displayName || plugin.name,
+            url: `?app=${pluginId}`,
+            state: null,
+            pageId: undefined
+          });
+        }
+        this.kernel.dispatchHistoryPopstate(pluginId, {
+          delta: -1,
+          state: null,
+          url: ""
+        });
+        this.updateHeaderBackVisibility();
+      }
+      return;
+    }
+
+    // 2. If clicking the initial root home app (index 0, e.g. Feed)
+    if (this.kernel?.navigation) {
+      const stack = this.kernel.navigation.getStack();
+      if (stack.length > 0 && stack[0].type === "app" && stack[0].appId === pluginId) {
+        const prev = stack[this.kernel.navigation.getPointer()];
+        this.kernel.navigation.jumpTo(0);
+        this.resetOutgoingPluginOnBack(prev, stack[0]);
+        this.openApp(pluginId, false);
+        this.updateHeaderBackVisibility();
+        return;
+      }
+    }
+
+    this.openApp(pluginId, true);
+  }
+
   public async openApp(pluginId: string, pushState = true): Promise<void> {
     const plugin = this.installedPlugins.find((p) => p.id === pluginId);
     if (!plugin) return;
@@ -847,13 +903,22 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           !curFrame.intentEntry &&
           (curFrame.type === "subroute" || Boolean(curFrame.state))
         ) {
-          this.kernel.navigation.push({
-            type: "app",
-            appId: pluginId,
-            title: plugin.displayName || plugin.name,
-            url: `?app=${pluginId}`,
-            state: null
-          });
+          const stack = this.kernel.navigation.getStack();
+          const rootIdx = stack.findIndex(
+            (f) => f.type === "app" && f.appId === pluginId && (!f.state || f.state === null) && !f.pageId
+          );
+          if (rootIdx >= 0 && rootIdx < this.kernel.navigation.getPointer()) {
+            this.kernel.navigation.jumpTo(rootIdx);
+          } else {
+            this.kernel.navigation.replace({
+              type: "app",
+              appId: pluginId,
+              title: plugin.displayName || plugin.name,
+              url: `?app=${pluginId}`,
+              state: null,
+              pageId: undefined
+            });
+          }
           this.kernel.dispatchHistoryPopstate(pluginId, {
             delta: -1,
             state: null,
@@ -1975,10 +2040,11 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       <header class="editorial-header">
         <div class="editorial-header-inner">
           <div class="editorial-header-left">
-            <button id="btn-editorial-back" class="editorial-header-btn omni-header-back-btn" title="Go Back" aria-label="Go Back" style="display: none; align-items: center; justify-content: center;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <button id="btn-editorial-back" class="omni-header-back-btn editorial-back-btn" title="Go Back" aria-label="Go Back" style="display: none;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M19 12H5M12 19l-7-7 7-7"/>
               </svg>
+              <span class="editorial-back-text">Back</span>
             </button>
           </div>
 
