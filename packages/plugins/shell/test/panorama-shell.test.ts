@@ -607,6 +607,80 @@ describe("PanoramaShell (Windows Phone People Hub Experience)", () => {
     testRoot.remove();
   });
 
+  it("does not create empty canvas sections or pivot headers for unopened plugins", () => {
+    const testRoot = document.createElement("div");
+    document.body.appendChild(testRoot);
+    const testKernel = new OmniKernel({ runtimeScript: omniRuntimeScript, bootstrapRelays: [] });
+
+    // Multi-plugin setup simulating apps/web: Feed has viewport: "main", other plugins have no viewport
+    const realisticPlugins: InstalledPluginEntry[] = [
+      {
+        id: "org.omni.plugin.feed",
+        name: "Feed",
+        viewport: "main",
+        pinned: true,
+        enabled: true,
+        manifest: { id: "org.omni.plugin.feed", name: "Feed", version: "1.0.0", entry: "dist/index.js" },
+        scriptContent: "console.log('feed');",
+        sourceUrl: "local:@omni/plugin-feed"
+      },
+      {
+        id: "org.omni.plugin.checklist",
+        name: "Tasks",
+        pinned: true,
+        enabled: true,
+        manifest: { id: "org.omni.plugin.checklist", name: "Tasks", version: "1.0.0", entry: "dist/index.js" },
+        scriptContent: "console.log('tasks');",
+        sourceUrl: "local:@omni/plugin-checklist"
+      },
+      {
+        id: "org.omni.plugin.relays",
+        name: "Relays",
+        pinned: true,
+        enabled: true,
+        manifest: { id: "org.omni.plugin.relays", name: "Relays", version: "1.0.0", entry: "dist/index.js" },
+        scriptContent: "console.log('relays');",
+        sourceUrl: "local:@omni/plugin-relays"
+      },
+      {
+        id: "org.omni.plugin.profile-viewer",
+        name: "Profiles",
+        pinned: true,
+        enabled: true,
+        manifest: { id: "org.omni.plugin.profile-viewer", name: "Profiles", version: "1.0.0", entry: "dist/index.js" },
+        scriptContent: "console.log('profiles');",
+        sourceUrl: "local:@omni/plugin-profile-viewer"
+      }
+    ];
+
+    const testShell = new PanoramaShell({
+      root: testRoot,
+      kernel: testKernel,
+      installedPlugins: realisticPlugins
+    });
+    testShell.mount();
+
+    // Verify only Feed has a permanent main section; no empty sections for Tasks, Relays, Profiles
+    expect(testRoot.querySelector("#panorama-section-org-omni-plugin-feed")).toBeTruthy();
+    expect(testRoot.querySelector("#panorama-section-org-omni-plugin-checklist")).toBeFalsy();
+    expect(testRoot.querySelector("#panorama-section-org-omni-plugin-relays")).toBeFalsy();
+    expect(testRoot.querySelector("#panorama-section-org-omni-plugin-profile-viewer")).toBeFalsy();
+
+    // Verify top pivot headers: only feed, apps, system
+    const pivotItems = Array.from(testRoot.querySelectorAll(".panorama-pivot-item")).map(
+      (el) => el.textContent?.trim().toLowerCase()
+    );
+    expect(pivotItems).toContain("feed");
+    expect(pivotItems).toContain("apps");
+    expect(pivotItems).toContain("system");
+    expect(pivotItems).not.toContain("tasks");
+    expect(pivotItems).not.toContain("relays");
+    expect(pivotItems).not.toContain("profiles");
+
+    testShell.destroy();
+    testRoot.remove();
+  });
+
   it("dynamically omits Manage Relays and Compose from bottom bar when corresponding plugins are absent", () => {
     const testRoot = document.createElement("div");
     document.body.appendChild(testRoot);

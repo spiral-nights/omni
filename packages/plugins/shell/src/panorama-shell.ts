@@ -151,17 +151,23 @@ export class PanoramaShell extends BaseShell {
   public getMainAppPlugins(): InstalledPluginEntry[] {
     return this.installedPlugins.filter((p) => {
       if (p.enabled === false) return false;
-      if (p.viewport && p.viewport !== "main" && p.viewport !== "dock") return false;
       const placements = this.getPluginPlacements(p);
-      if (placements.length > 0 && !placements.some((pl) => pl.viewport === "main" || pl.viewport === "dock")) {
-        return false;
+      if (placements.some((pl) => pl.enabled !== false && pl.viewport === "main")) {
+        return true;
       }
-      return (
-        p.viewport === "main" ||
-        p.id === "org.omni.plugin.feed" ||
-        (!p.viewport && p.manifest?.components?.[0]?.slot === "main") ||
-        placements.some((pl) => pl.enabled !== false && pl.viewport === "main")
-      );
+      if (p.viewport === "main") {
+        return true;
+      }
+      // If no placements are configured at all, only the designated default/initial primary app
+      // (Feed, or the first pinned app) serves as the initial main canvas section
+      if (placements.length === 0 && !p.viewport) {
+        const primaryId =
+          this.installedPlugins.find((x) => x.pinned && (x.viewport === "main" || !x.viewport))?.id ||
+          this.installedPlugins.find((x) => x.id === "org.omni.plugin.feed")?.id ||
+          this.installedPlugins[0]?.id;
+        return p.id === primaryId;
+      }
+      return false;
     });
   }
 
@@ -205,7 +211,7 @@ export class PanoramaShell extends BaseShell {
   public ensureMainAppSections(): void {
     if (!this.panoramaContainer) return;
     const mainApps = this.getMainAppPlugins();
-    const appsSection = document.getElementById("panorama-section-apps");
+    const appsSection = this.panoramaContainer.querySelector<HTMLElement>("#panorama-section-apps");
 
     // Remove any main app canvas sections for plugins no longer assigned to main
     const currentSections = this.panoramaContainer.querySelectorAll<HTMLElement>(".panorama-section-custom-main");
@@ -218,7 +224,7 @@ export class PanoramaShell extends BaseShell {
 
     for (const app of mainApps) {
       const safeId = app.id.replace(/[^a-zA-Z0-9_-]/g, "-");
-      let sec = document.getElementById(`panorama-section-${safeId}`) as HTMLElement | null;
+      let sec = this.panoramaContainer.querySelector<HTMLElement>(`#panorama-section-${safeId}`);
       if (!sec) {
         sec = document.createElement("section");
         sec.className = "panorama-section panorama-section-custom-main";
