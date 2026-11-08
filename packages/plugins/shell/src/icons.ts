@@ -49,6 +49,7 @@ export type IconName =
   | "relays"
   | "users"
   | "windows"
+  | "spinner"
   | "star"
   | "sparkle"
   | "sparkles";

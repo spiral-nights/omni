@@ -1053,6 +1053,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
         appSandbox.getComponentContainer(`${plugin.id}-app-main`) ||
         (appSandbox as any).compContainers?.[0];
       if (liveComp) {
+        targetContainer.querySelector(".editorial-app-loading")?.remove();
         // Ensure only this live component is present in targetContainer (no duplicates)
         const compSlots = targetContainer.querySelectorAll(".omni-component-slot");
         compSlots.forEach((slot) => {
@@ -1073,7 +1074,16 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       this.pendingAppMounts.add(appInstanceKey);
       try {
         // Clean up any stale or empty slots before registering fresh
-        targetContainer.innerHTML = "";
+        if (!targetContainer.querySelector(".editorial-app-loading")) {
+          targetContainer.innerHTML = `
+            <div class="editorial-app-loading">
+              <span class="omni-icon omni-icon-spin" style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;">
+                ${icon("spinner", 28)}
+              </span>
+              <span class="editorial-app-loading-text">Loading ${plugin.displayName || plugin.name || "application"}...</span>
+            </div>
+          `;
+        }
 
         const synthManifest = this.ensurePluginManifest(plugin);
         const appManifest = {
@@ -1111,6 +1121,7 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
           (mountedSandbox as any)?.getPrimaryComponentContainer?.() ||
           mountedSandbox?.getFirstPopulatedComponentContainer?.();
         if (liveComp) {
+          targetContainer.querySelector(".editorial-app-loading")?.remove();
           const compSlots = targetContainer.querySelectorAll(".omni-component-slot");
           compSlots.forEach((slot) => {
             if (slot !== liveComp) slot.remove();
@@ -2083,7 +2094,14 @@ export class EditorialShell extends BaseShell implements OmniShellHost {
       <main class="editorial-main-content">
         <!-- Viewport A: Full App View -->
         <section id="editorial-page-app" class="editorial-viewport-page editorial-app-page active">
-          <div id="editorial-main-app-container" class="editorial-app-container"></div>
+          <div id="editorial-main-app-container" class="editorial-app-container">
+            <div class="editorial-app-loading" id="editorial-app-initial-loader">
+              <span class="omni-icon omni-icon-spin" style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;">
+                ${icon("spinner", 28)}
+              </span>
+              <span class="editorial-app-loading-text">Loading application...</span>
+            </div>
+          </div>
         </section>
 
         <!-- Viewport B: Broadsheet Applications Index -->

@@ -507,6 +507,14 @@ export abstract class BaseShell implements OmniShellHost {
         !this.kernel.getSandbox(plugin.id) &&
         !this.kernel.getSandbox(appKey)
       ) {
+        if (targetSlot === "main" && targetContainer && !targetContainer.children.length) {
+          targetContainer.innerHTML = `
+            <div class="editorial-app-loading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 280px; width: 100%; color: var(--omni-text-muted, #78716c);">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="omni-primitive-icon omni-icon-spin" style="color: var(--omni-accent-primary, #d4a373);"><circle cx="12" cy="12" r="9" stroke-opacity="0.2"></circle><path d="M21 12a9 9 0 0 0-9-9"></path></svg>
+              <span style="font-family: var(--omni-font-mono, monospace); font-size: 0.78rem; letter-spacing: 0.05em; color: var(--omni-text-muted, #78716c);">Loading ${plugin.displayName || plugin.name || "application"}...</span>
+            </div>
+          `;
+        }
         await this.kernel.registerPlugin(
           synth,
           plugin.htmlContent || plugin.scriptContent,
@@ -519,6 +527,9 @@ export abstract class BaseShell implements OmniShellHost {
             relays: plugin.relays
           }
         );
+        if (targetSlot === "main" && targetContainer) {
+          targetContainer.querySelector(".editorial-app-loading")?.remove();
+        }
       }
       return;
     }
