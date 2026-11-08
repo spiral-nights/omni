@@ -190,4 +190,49 @@ describe("Live Schema-Driven UI Integration", () => {
 
     sandbox.destroy();
   });
+
+  it("validates that canonical omni-ui.schema.json specifies all 24 UI primitives", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const schemaPath = path.resolve(__dirname, "../../types/schema/omni-ui.schema.json");
+    expect(fs.existsSync(schemaPath)).toBe(true);
+
+    const schemaRaw = fs.readFileSync(schemaPath, "utf-8");
+    const schemaJson = JSON.parse(schemaRaw);
+
+    expect(schemaJson.$id).toBe("https://omni.org/schemas/v1/omni-ui.schema.json");
+    expect(schemaJson.$defs).toBeDefined();
+
+    // Verify all 24 primitive elements are declared in $defs
+    const expectedPrimitives = [
+      "OmniBoxPrimitive",
+      "OmniCardPrimitive",
+      "OmniDividerPrimitive",
+      "OmniSpacerPrimitive",
+      "OmniTextPrimitive",
+      "OmniBadgePrimitive",
+      "OmniMetricPrimitive",
+      "OmniIconPrimitive",
+      "OmniAvatarPrimitive",
+      "OmniButtonPrimitive",
+      "OmniIconButtonPrimitive",
+      "OmniInputPrimitive",
+      "OmniTextareaPrimitive",
+      "OmniTogglePrimitive",
+      "OmniSelectPrimitive",
+      "OmniTabsPrimitive",
+      "OmniStatusIndicatorPrimitive",
+      "OmniCodeBlockPrimitive",
+      "OmniProgressPrimitive",
+      "OmniBannerPrimitive",
+      "OmniListPrimitive",
+      "OmniListItemPrimitive",
+      "OmniEmptyStatePrimitive",
+      "OmniVirtualListPrimitive"
+    ];
+
+    for (const prim of expectedPrimitives) {
+      expect(schemaJson.$defs[prim]).toBeDefined();
+    }
+  });
 });

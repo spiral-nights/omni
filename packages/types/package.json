@@ -4,6 +4,17 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./schema.json": "./schema/omni-ui.schema.json"
+  },
+  "files": [
+    "dist",
+    "schema"
+  ],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit"

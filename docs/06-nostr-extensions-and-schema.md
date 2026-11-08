@@ -260,11 +260,40 @@ export interface NostrDoc<T = any> {
 
 ---
 
-## 5. Declarative Schema UI Primitives
+## 5. Declarative Schema UI Primitives & Machine-Readable Specification
 
 Omni enables lightweight plugins and background workers to render rich interactive interfaces without direct DOM access by emitting declarative JSON component trees.
 
-### 5.1 The Light DOM Custom Elements Pipeline
+### 5.1 Machine-Readable JSON Schema
+
+The canonical, machine-readable JSON Schema specification is maintained at:
+- **File**: [`packages/types/schema/omni-ui.schema.json`](file:///home/spiralnights/code/omni/packages/types/schema/omni-ui.schema.json)
+- **Schema ID**: `https://omni.org/schemas/v1/omni-ui.schema.json`
+- **TypeScript AST**: [`packages/types/src/schema.ts`](file:///home/spiralnights/code/omni/packages/types/src/schema.ts)
+
+Plugin developers and external tools can reference the schema directly in JSON documents for instant autocomplete, hover documentation, and validation in VS Code or any JSON Schema-compatible editor:
+
+```json
+{
+  "$schema": "https://omni.org/schemas/v1/omni-ui.schema.json",
+  "type": "card",
+  "title": "My Plugin Widget",
+  "icon": "clock",
+  "children": [
+    {
+      "type": "box",
+      "direction": "row",
+      "gap": "sm",
+      "children": [
+        { "type": "button", "label": "Start", "action": { "name": "start-timer" } }
+      ]
+    }
+  ]
+}
+```
+
+### 5.2 The Light DOM Custom Elements Pipeline
+
 ```
 +--------------------------+          postMessage           +-----------------------------+
 | Guest Code / Web Worker  | -----------------------------> | Omni Host (SchemaRenderer)  |
@@ -273,23 +302,87 @@ Omni enables lightweight plugins and background workers to render rich interacti
 +--------------------------+    Event: "omni:action"        +-----------------------------+
 ```
 
-### 5.2 Core Schema Primitives
+1. The sandboxed guest emits `{ type: "omni:schema", schema: rootNode }` over Port 1 (`channelSchemaBus`) or `window.parent.postMessage`.
+2. The host `SchemaRenderer` performs in-place morphing and renders native Light DOM Custom Elements (`<omni-box>`, `<omni-card>`, `<omni-button>`, etc.).
+3. When the user interacts (clicks a button, submits an input, toggles a switch), the host captures ambient form state and dispatches an `omni:action` message back to the guest.
 
-| Component Node | Type | Primary Properties | Description |
+---
+
+### 5.3 Complete Reference of All 24 Schema Primitives
+
+Every primitive extends `OmniPrimitiveBase`:
+- `id` *(string)*: Optional DOM identifier.
+- `key` *(string)*: Unique key for smooth list reconciliation and morphing.
+- `visible` *(boolean)*: Toggle display without unmounting.
+- `style` *(string | Record<string, string>)*: Custom inline CSS styling or CSS variables.
+- `page` *(string | OmniPageDeclaration)*: Logical page metadata (`{ id, title, url, state }`) for host navigation stack and back-button management.
+
+#### 1. Layout & Structure
+| Primitive | Type | Key Attributes | Notes |
 | :--- | :--- | :--- | :--- |
-| **`<omni-box>`** | `"box"` | `direction: "row" \| "column"`, `gap`, `children` | Flex container with responsive spacing |
-| **`<omni-card>`** | `"card"` | `title`, `subtitle`, `icon`, `children` | Elevated surface card container |
-| **`<omni-button>`** | `"button"` | `label`, `action`, `variant: "primary" \| "secondary" \| "danger"`, `size` | Interactive button triggering actions |
-| **`<omni-icon-button>`** | `"icon-button"`| `icon`, `tooltip`, `action`, `variant` | Compact icon button |
-| **`<omni-input>`** | `"input"` | `name`, `placeholder`, `actionOnEnter` | Single-line text input |
-| **`<omni-textarea>`** | `"textarea"` | `name`, `placeholder`, `rows` | Multi-line text field |
-| **`<omni-metric>`** | `"metric"` | `label`, `value`, `subtext` | High-visibility metric display |
-| **`<omni-list>`** | `"list"` | `items: OmniListItem[]` | Virtualizable list with checkboxes and action buttons |
-| **`<omni-tabs>`** | `"tabs"` | `tabs: Array<{ id, label, icon }>`, `activeTab`, `onTabChange` | Tabbed navigation switcher |
-| **`<omni-status-indicator>`**| `"status-indicator"` | `status: "online" \| "offline" \| "connecting" \| "error"`, `label`, `pulse` | Pulsing connection status badge |
-| **`<omni-code-block>`** | `"code-block"`| `code`, `language`, `copyable` | Syntax-highlighted code container |
-| **`<omni-progress>`** | `"progress"` | `value`, `max`, `label` | Progress bar with percentage |
-| **`<omni-banner>`** | `"banner"` | `variant: "info" \| "warning" \| "error" \| "success"`, `message` | Callout notification banner |
+| **`<omni-box>`** | `"box"` | `direction`: `"row"` \| `"column"`<br>`gap` / `padding`: `"none"` \| `"xs"` \| `"sm"` \| `"md"` \| `"lg"`<br>`align`: `"start"` \| `"center"` \| `"end"` \| `"stretch"`<br>`justify`: `"start"` \| `"center"` \| `"between"` \| `"end"`<br>`wrap`: boolean<br>`action`: `OmniAction`<br>`children`: `OmniComponentNode[]` | Primary flexbox layout primitive. |
+| **`<omni-card>`** | `"card"` | `title`: string<br>`subtitle`: string<br>`icon`: string<br>`headerAction`: `OmniComponentNode`<br>`children`: `OmniComponentNode[]`<br>`footer`: `OmniComponentNode[]`<br>`action`: `OmniAction` | Elevated surface card container. |
+| **`<omni-divider>`** | `"divider"` | `orientation`: `"horizontal"` \| `"vertical"` | Visual separator rule. |
+| **`<omni-spacer>`** | `"spacer"` | `size`: `"xs"` \| `"sm"` \| `"md"` \| `"lg"` \| `"xl"` | Flexible layout spacing block. |
+
+#### 2. Typography & Content
+| Primitive | Type | Key Attributes | Notes |
+| :--- | :--- | :--- | :--- |
+| **`<omni-text>`** | `"text"` | `content`: string *(required)*<br>`variant`: `"title"` \| `"subtitle"` \| `"body"` \| `"caption"` \| `"mono"`<br>`tone`: `"primary"` \| `"secondary"` \| `"muted"` \| `"accent"` \| `"error"` \| `"success"`<br>`truncate`: boolean<br>`showInlineImages`: boolean | Core text rendering with semantic styling. |
+| **`<omni-badge>`** | `"badge"` | `label`: string *(required)*<br>`tone`: `"neutral"` \| `"success"` \| `"warning"` \| `"error"` \| `"accent"`<br>`variant`: `"solid"` \| `"subtle"` \| `"outline"`<br>`dot`: boolean | Status or category pill badge. |
+| **`<omni-metric>`** | `"metric"` | `label`: string *(required)*<br>`value`: string \| number *(required)*<br>`subtext`: string<br>`trend`: `"up"` \| `"down"` \| `"neutral"` | Prominent numerical or key-value metric. |
+| **`<omni-icon>`** | `"icon"` | `name`: string *(required)*<br>`size`: number (default: 20) | Monochrome geometric SVG line icon. |
+| **`<omni-avatar>`** | `"avatar"` | `src`: string<br>`pubkey`: string<br>`name`: string<br>`size`: `"xs"` \| `"sm"` \| `"md"` \| `"lg"` \| `"xl"` | User avatar with deterministic robohash fallback. |
+| **`<omni-code-block>`** | `"code-block"` | `code`: string *(required)*<br>`language`: string<br>`copyable`: boolean | Formatted code snippet with 1-click copy. |
+
+#### 3. Buttons & Actions
+| Primitive | Type | Key Attributes | Notes |
+| :--- | :--- | :--- | :--- |
+| **`<omni-button>`** | `"button"` | `label`: string *(required)*<br>`action`: `OmniAction` *(required)*<br>`variant`: `"primary"` \| `"secondary"` \| `"ghost"` \| `"danger"`<br>`size`: `"sm"` \| `"md"` \| `"lg"`<br>`icon`: string<br>`iconPosition`: `"left"` \| `"right"`<br>`disabled` / `loading`: boolean | Standard interactive button. |
+| **`<omni-icon-button>`** | `"icon-button"` | `icon`: string *(required)*<br>`action`: `OmniAction` *(required)*<br>`tooltip`: string<br>`variant`: `"ghost"` \| `"secondary"` \| `"danger"`<br>`size`: `"sm"` \| `"md"` | Compact standalone icon button. |
+
+#### 4. Forms & Input Controls
+| Primitive | Type | Key Attributes | Notes |
+| :--- | :--- | :--- | :--- |
+| **`<omni-input>`** | `"input"` | `name`: string *(required)*<br>`placeholder`: string<br>`value`: string<br>`inputType`: `"text"` \| `"number"` \| `"search"` \| `"url"` \| `"password"` \| `"file"`<br>`clearable`: boolean<br>`prefixIcon`: string<br>`actionOnEnter`: `OmniAction`<br>`actionOnChange`: `OmniAction` | Single-line text, number, search, or file input. |
+| **`<omni-textarea>`** | `"textarea"` | `name`: string *(required)*<br>`placeholder`: string<br>`value`: string<br>`rows`: number | Multi-line text entry. |
+| **`<omni-toggle>`** | `"toggle"` | `name`: string *(required)*<br>`label`: string<br>`checked`: boolean *(required)*<br>`action`: `OmniAction` *(required)* | Interactive boolean switch. |
+| **`<omni-select>`** | `"select"` | `name`: string *(required)*<br>`value`: string<br>`options`: `Array<{ label: string, value: string }>` *(required)*<br>`action`: `OmniAction` | Dropdown selector. |
+
+#### 5. Navigation & Feedback
+| Primitive | Type | Key Attributes | Notes |
+| :--- | :--- | :--- | :--- |
+| **`<omni-tabs>`** | `"tabs"` | `tabs`: `Array<{ id: string, label: string, icon?: string, badge?: string \| number }>` *(required)*<br>`activeTab`: string *(required)*<br>`action`: `OmniAction` *(required)* | Horizontal tab bar navigation switcher. |
+| **`<omni-status-indicator>`** | `"status-indicator"` | `status`: `"online"` \| `"connecting"` \| `"offline"` \| `"error"` *(required)*<br>`label`: string<br>`pulse`: boolean | Live connection status indicator dot. |
+| **`<omni-progress>`** | `"progress"` | `value`: number *(required)*<br>`max`: number (default: 100)<br>`label`: string<br>`variant`: `"bar"` \| `"spinner"` \| `"disk"` \| `"ring"`<br>`size`: number (diameter in px for ring/disk)<br>`color`: string<br>`showTicks`: boolean (clock rim markings)<br>`action`: `OmniAction` | Visual progress bar or visual circular timer. |
+| **`<omni-banner>`** | `"banner"` | `tone`: `"info"` \| `"success"` \| `"warning"` \| `"error"`<br>`title`: string<br>`message`: string *(required)*<br>`icon`: string<br>`action`: `OmniAction`<br>`dismissible`: boolean | Full-width contextual callout banner. |
+| **`<omni-empty-state>`** | `"empty-state"` | `icon`: string<br>`title`: string *(required)*<br>`description`: string<br>`action`: `OmniAction`<br>`actionLabel`: string | Friendly placeholder for zero-data views. |
+
+#### 6. Lists & Collections
+| Primitive | Type | Key Attributes | Notes |
+| :--- | :--- | :--- | :--- |
+| **`<omni-list>`** | `"list"` | `items`: `OmniListItemPrimitive[]` *(required)*<br>`onScrollEndAction`: `OmniAction`<br>`hasMore` / `loadingMore`: boolean | Interactive scrollable list with infinite scroll. |
+| **`<omni-list-item>`** | `"list-item"` | `title`: string *(required)*<br>`subtitle` / `meta`: string<br>`icon` / `avatarUrl` / `avatarPubkey`: string<br>`checked`: boolean<br>`onCheckAction` / `onClickAction`: `OmniAction`<br>`actions`: `OmniComponentNode[]` | Rich row item with checkbox and action buttons. |
+| **`<omni-virtual-list>`** | `"virtual-list"` | `items`: `OmniComponentNode[]` *(required)*<br>`itemHeight`: number<br>`overscan`: number<br>`maxHeight`: string | High-performance virtualized list. |
+
+---
+
+### 5.4 Ambient Form State Capture
+
+When an `OmniAction` fires from any child button or input:
+1. `SchemaRenderer` automatically scans the container for all named inputs (`omni-input`, `omni-textarea`, `omni-toggle`).
+2. Their current values are merged into the event payload:
+   ```javascript
+   // If the user typed "Alice" into <omni-input name="username">
+   // and clicks <omni-button action="{ name: 'submit' }">:
+   // The guest receives:
+   {
+     type: "omni:action",
+     action: { name: "submit" },
+     payload: { username: "Alice" }
+   }
+   ```
+This eliminates the need for manual two-way data binding on every keystroke.
 
 ---
 
