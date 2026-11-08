@@ -109,7 +109,7 @@ omni/
 
 ## 3. Sandbox Execution & Standard Web APIs
 
-Plugins execute inside isolated `<iframe>` sandboxes (`sandbox="allow-scripts"`, `connect-src 'none'`) or Web Workers (`WorkerGuestHost`). Omni virtualizes standard web interfaces:
+Plugins execute inside isolated `<iframe>` sandboxes (`sandbox="allow-scripts"`, `connect-src 'none'`), Web Workers (`WorkerGuestHost`), or WebAssembly runtimes (`WasmGuestHost`). Omni virtualizes standard web interfaces:
 - **`window.nostr`**: Full standard NIP-07 signer (`getPublicKey`, `signEvent`, `getRelays`, `nip04`, `nip44`), backed by the host keystore and ACL governance.
 - **Extended `window.nostr` Primitives (Zero Proprietary SDKs)**:
   - `nostr.fetch(filters, options)`: Aggregates 0ms local event store cache and connected relays with deduplication and newest-first sorting.
@@ -138,6 +138,12 @@ Omni uses a clean, zero-proprietary dual-architecture without nested shadow wrap
 - Renders a clean visible `<iframe>` directly into the designated slot container.
 - Design tokens (`--omni-*`) are injected into the iframe root.
 - Standard NIP-07 (`window.nostr`) and protocol links (`nostr:`, `lightning:`, `cashu:`) are transparently bridged to the kernel.
+
+### 3. WebAssembly Component Model & WIT (WasmGuestHost)
+- Used by compiled WebAssembly plugins (Rust, C/C++, Zig, Go).
+- Built against open standards: W3C WebAssembly Component Model & WIT (`packages/types/wit/omni.wit`).
+- Exports `init()` and `handle-action(action, payload)` and imports `ui.render(view)` and `nostr.*`.
+- Rendered natively in the host DOM through `SchemaRenderer` Light DOM Custom Elements with zero DOM in the guest.
 
 ### Dock Launcher Hierarchy
 All dock icons follow standard structure:

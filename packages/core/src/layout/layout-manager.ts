@@ -111,7 +111,7 @@ export class LayoutManager {
 
   registerPlugin(manifest: OmniManifest): void {
     let changed = false;
-    for (const comp of manifest.components) {
+    for (const comp of manifest.components || []) {
       const existing = this.mappings.find(
         (m) => m.pluginId === manifest.id && m.componentId === comp.id
       );

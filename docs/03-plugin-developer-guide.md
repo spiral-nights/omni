@@ -351,3 +351,10 @@ If publishing via external scripts instead of Plugin Studio:
    ```
 3. **Distribute via `naddr`**:
    Encode `(kind: 35129, pubkey, d-tag, relays)` into a NIP-19 `naddr1...` string and open or paste it in Plugin Studio.
+
+### 6.4 WebAssembly Plugins (`format: "wasm"`)
+Developers can build plugins entirely in WebAssembly (compiled from Rust, C/C++, Zig, Go) without any DOM or JavaScript dependencies:
+- Use standard W3C WebAssembly Component Model & WIT definitions from `@omni/types` (`packages/types/wit/omni.wit`).
+- Export `init() -> string` and `handle-action(action: string, payload: string) -> string`.
+- Import `omni:plugin/ui` (`render(view)`) and `omni:plugin/nostr` (`fetch`, `publish`, `get-public-key`).
+- WASM plugins emit Declarative UI JSON schema, which Omni renders natively into the DOM via `SchemaRenderer`. See [docs/06-nostr-extensions-and-schema.md#8-webassembly-component-model--wit-support](file:///home/spiralnights/code/omni/docs/06-nostr-extensions-and-schema.md#8-webassembly-component-model--wit-support) for full specifications and Rust code examples.

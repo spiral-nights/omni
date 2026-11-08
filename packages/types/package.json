@@ -9,11 +9,13 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./schema.json": "./schema/omni-ui.schema.json"
+    "./schema.json": "./schema/omni-ui.schema.json",
+    "./omni.wit": "./wit/omni.wit"
   },
   "files": [
     "dist",
-    "schema"
+    "schema",
+    "wit"
   ],
   "scripts": {
     "build": "tsc",

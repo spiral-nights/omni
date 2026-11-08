@@ -2,6 +2,7 @@ import { OmniManifest, OmniInitMessage, OmniComponentNode } from "@omni/types";
 import { SchemaRenderer } from "../schema/schema-renderer.js";
 import { IframeAppHost } from "./iframe-app-host.js";
 import { WorkerGuestHost } from "./worker-guest-host.js";
+import { WasmGuestHost } from "./wasm-guest-host.js";
 import { JsonRpcDispatcher } from "../ipc/json-rpc-dispatcher.js";
 import { AclEngine } from "../acl/acl-engine.js";
 import { PluginStorageManager } from "../storage/plugin-storage-manager.js";
@@ -41,12 +42,48 @@ function isSchemaView(
   }
   if (
     scriptContent &&
+    typeof scriptContent === "string" &&
     (scriptContent.includes("omni:schema") ||
       scriptContent.includes('id="omni-schema"') ||
       scriptContent.includes('application/json"#omni-schema') ||
       scriptContent.includes('application/json" id="omni-schema"'))
   ) {
     return true;
+  }
+  return false;
+}
+
+function isWasmView(
+  manifest: OmniManifest,
+  route?: string,
+  viewId?: string,
+  scriptContent?: string | Uint8Array | ArrayBuffer
+): boolean {
+  if (route && (route.includes("format=wasm") || route.includes("view=wasm"))) {
+    return true;
+  }
+  const effectiveViewId = viewId || "main";
+  const matchingView = manifest.views?.find(
+    (v) => v.id === effectiveViewId || (route && v.path && route.includes(v.path))
+  );
+  if (matchingView?.format === "wasm") {
+    return true;
+  }
+  if ((manifest as any).format === "wasm") {
+    return true;
+  }
+  if (manifest.entry?.endsWith(".wasm")) {
+    return true;
+  }
+  if (scriptContent instanceof Uint8Array || scriptContent instanceof ArrayBuffer) {
+    const bytes = new Uint8Array(scriptContent);
+    return bytes.length >= 4 && bytes[0] === 0x00 && bytes[1] === 0x61 && bytes[2] === 0x73 && bytes[3] === 0x6d;
+  }
+  if (typeof scriptContent === "string") {
+    const trimmed = scriptContent.trim();
+    if (trimmed.startsWith("\0asm") || trimmed.startsWith("data:application/wasm;base64,") || trimmed.startsWith("AGFzbQ")) {
+      return true;
+    }
   }
   return false;
 }
@@ -109,7 +146,8 @@ function setupIframeContainerProxy(
 
 export interface SandboxInstanceOptions {
   manifest: OmniManifest;
-  scriptContent: string;
+  scriptContent: string | Uint8Array | ArrayBuffer;
+  wasmBytes?: Uint8Array | ArrayBuffer;
   runtimeUrl?: string;
   runtimeScript?: string;
   trusted?: boolean;
@@ -146,6 +184,7 @@ export class SandboxInstance {
   readonly manifest: OmniManifest;
   private iframe: HTMLIFrameElement | null = null;
   private workerHost: WorkerGuestHost | null = null;
+  private wasmHost: WasmGuestHost | null = null;
   private schemaRenderers: Map<string, SchemaRenderer> = new Map();
   private iframeAppHosts: Map<string, IframeAppHost> = new Map();
   private compContainers: Element[] = [];
@@ -269,6 +308,10 @@ export class SandboxInstance {
 
   public getWorkerHost(): WorkerGuestHost | null {
     return this.workerHost;
+  }
+
+  public getWasmHost(): WasmGuestHost | null {
+    return this.wasmHost;
   }
 
   private resolveHostThemeTokens(): {
@@ -527,11 +570,18 @@ export class SandboxInstance {
     }
 
     // 3. Mount UI View (Schema Custom Elements or Direct Visual Iframe)
-    const isSchema = isSchemaView(
+    const isWasm = isWasmView(
       this.manifest,
       this.options.route,
       this.options.viewId,
-      this.options.scriptContent
+      this.options.wasmBytes || this.options.scriptContent
+    );
+
+    const isSchema = isWasm || isSchemaView(
+      this.manifest,
+      this.options.route,
+      this.options.viewId,
+      typeof this.options.scriptContent === "string" ? this.options.scriptContent : ""
     );
 
     const compDeclarations =
@@ -635,7 +685,9 @@ export class SandboxInstance {
                 this.options.intentBroker.dispatch(this.manifest.id, "view_note", { id: noteId, eventId: noteId }).catch(() => {});
               }
             }
-            if (this.workerHost) {
+            if (this.wasmHost) {
+              this.wasmHost.dispatchAction(comp.id, action, payload);
+            } else if (this.workerHost) {
               this.workerHost.dispatchAction(comp.id, action, payload);
             } else if (this.channel1) {
               try {
@@ -705,6 +757,80 @@ export class SandboxInstance {
       onHistoryGo: this.options.onHistoryGo
     });
 
+    const routeVal = this.options.route || "";
+    const viewIdVal = this.options.viewId || "main";
+
+    let initialStorageMap: Record<string, any> = {};
+    try {
+      if (this.options.storageManager) {
+        initialStorageMap = await this.options.storageManager.getAll(this.manifest.id);
+      }
+    } catch (err) {
+      console.warn(`[SandboxInstance] Failed to read initial storage for [${this.manifest.id}]:`, err);
+    }
+
+    if (isWasm) {
+      if (this.iframe && this.iframe.parentNode) {
+        this.iframe.parentNode.removeChild(this.iframe);
+      }
+      this.iframe = null;
+
+      let wasmBytes: Uint8Array | ArrayBuffer | null = this.options.wasmBytes || null;
+      if (!wasmBytes && this.options.scriptContent) {
+        if (this.options.scriptContent instanceof Uint8Array || this.options.scriptContent instanceof ArrayBuffer) {
+          wasmBytes = this.options.scriptContent;
+        } else if (typeof this.options.scriptContent === "string") {
+          const raw = this.options.scriptContent.trim();
+          if (raw.startsWith("data:application/wasm;base64,")) {
+            const b64 = raw.slice("data:application/wasm;base64,".length);
+            const binary = atob(b64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            wasmBytes = bytes;
+          } else if (raw.startsWith("AGFzbQ")) {
+            const binary = atob(raw);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            wasmBytes = bytes;
+          } else {
+            const bytes = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i) & 0xff;
+            wasmBytes = bytes;
+          }
+        }
+      }
+
+      if (wasmBytes) {
+        this.wasmHost = new WasmGuestHost({
+          pluginId: this.manifest.id,
+          wasmBytes,
+          channel1: this.channel1,
+          channel2: this.channel2,
+          initPayload: {
+            pluginId: this.manifest.id,
+            instanceId: this.options.instanceId || `inst_${Math.random().toString(36).slice(2, 9)}`,
+            userPubkey: this.options.userPubkey,
+            theme: this.resolveHostThemeTokens() as any,
+            slots: Array.from(this.options.slotContainers.keys()),
+            components: this.manifest.components?.map((c) => c.id) || ["main"],
+            route: routeVal,
+            viewId: viewIdVal,
+            storage: initialStorageMap
+          },
+          onSchemaUpdate: (schema, componentId) => {
+            applySchema({
+              type: "schema",
+              schema,
+              componentId
+            });
+          }
+        });
+
+        await this.wasmHost.boot();
+        return;
+      }
+    }
+
     // 5. Build srcdoc injecting omni-runtime.js + plugin script
     const csp = isTrusted
       ? "default-src 'self' 'unsafe-inline' blob: http: https: data:; style-src 'unsafe-inline' 'self'; connect-src *;"
@@ -726,10 +852,12 @@ export class SandboxInstance {
       .replace(/\/\*#\s*sourceMappingURL=[\s\S]*?\*\//gi, "")
       .replace(/\/\/[#@]\s*sourceURL=[^\r\n]*/gi, "");
 
-    const pluginCode = (this.options.scriptContent || "")
-      .replace(/\/\/[#@]\s*sourceMappingURL=[^\r\n]*/gi, "")
-      .replace(/\/\*#\s*sourceMappingURL=[\s\S]*?\*\//gi, "")
-      .replace(/\/\/[#@]\s*sourceURL=[^\r\n]*/gi, "");
+    const pluginCode = typeof this.options.scriptContent === "string"
+      ? this.options.scriptContent
+          .replace(/\/\/[#@]\s*sourceMappingURL=[^\r\n]*/gi, "")
+          .replace(/\/\*#\s*sourceMappingURL=[\s\S]*?\*\//gi, "")
+          .replace(/\/\/[#@]\s*sourceURL=[^\r\n]*/gi, "")
+      : "";
 
     const trimmedPluginCode = pluginCode.trim();
     const isHtmlDoc =
@@ -739,18 +867,6 @@ export class SandboxInstance {
         /<head\b/i.test(trimmedPluginCode) ||
         /<body\b/i.test(trimmedPluginCode) ||
         /^<[a-zA-Z!]/.test(trimmedPluginCode));
-
-    const routeVal = this.options.route || "";
-    const viewIdVal = this.options.viewId || "main";
-
-    let initialStorageMap: Record<string, any> = {};
-    try {
-      if (this.options.storageManager) {
-        initialStorageMap = await this.options.storageManager.getAll(this.manifest.id);
-      }
-    } catch (err) {
-      console.warn(`[SandboxInstance] Failed to read initial storage for [${this.manifest.id}]:`, err);
-    }
 
     const canUseWorker =
       isSchema &&
@@ -766,7 +882,7 @@ export class SandboxInstance {
       this.workerHost = new WorkerGuestHost({
         pluginId: this.manifest.id,
         runtimeScript: this.options.runtimeScript,
-        pluginScript: this.options.scriptContent,
+        pluginScript: typeof this.options.scriptContent === "string" ? this.options.scriptContent : "",
         channel1: this.channel1,
         channel2: this.channel2,
         initPayload: {
@@ -898,7 +1014,9 @@ export class SandboxInstance {
     const safeRuntimeCode = runtimeCode.replace(/<\/script/gi, "<\\/script");
 
     const resolvedTheme = this.resolveHostThemeTokens();
-    this.iframe.style.colorScheme = resolvedTheme.mode;
+    if (this.iframe) {
+      this.iframe.style.colorScheme = resolvedTheme.mode;
+    }
     const themeVarsCss = Object.entries(resolvedTheme.tokens)
       .map(([k, v]) => `      ${k}: ${v};`)
       .join("\n");
@@ -921,12 +1039,14 @@ ${themeVarsCss}
     if (isHtmlDoc) {
       const injectedHead = `\n  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  ${themeStyleBlock}\n  <script>\n    window.addEventListener("error", function(e) {\n      console.error("[Omni Sandbox Error: ${this.manifest.id}]", e.message, e.filename, e.lineno);\n    });\n    ${safeRouteInjectionScript}\n  </script>\n  <script>\n    ${safeRuntimeCode}\n  </script>\n`;
 
-      if (/<head\b[^>]*>/i.test(pluginCode)) {
-        this.iframe.srcdoc = pluginCode.replace(/<head\b[^>]*>/i, (match) => `${match}${injectedHead}`);
-      } else if (/<html\b[^>]*>/i.test(pluginCode)) {
-        this.iframe.srcdoc = pluginCode.replace(/<html\b[^>]*>/i, (match) => `${match}\n<head>${injectedHead}</head>`);
-      } else {
-        this.iframe.srcdoc = `<!DOCTYPE html>\n<html>\n<head>${injectedHead}</head>\n<body>\n${pluginCode}\n</body>\n</html>`;
+      if (this.iframe) {
+        if (/<head\b[^>]*>/i.test(pluginCode)) {
+          this.iframe.srcdoc = pluginCode.replace(/<head\b[^>]*>/i, (match) => `${match}${injectedHead}`);
+        } else if (/<html\b[^>]*>/i.test(pluginCode)) {
+          this.iframe.srcdoc = pluginCode.replace(/<html\b[^>]*>/i, (match) => `${match}\n<head>${injectedHead}</head>`);
+        } else {
+          this.iframe.srcdoc = `<!DOCTYPE html>\n<html>\n<head>${injectedHead}</head>\n<body>\n${pluginCode}\n</body>\n</html>`;
+        }
       }
     } else {
       const safeModuleCode = pluginCode
@@ -937,7 +1057,8 @@ ${themeVarsCss}
       const scriptBlock = hasEsModuleSyntax
         ? `<script type="module">\n${safeModuleCode}\n</script>`
         : `<script>\n(async () => {\n${safeModuleCode}\n})();\n</script>`;
-      this.iframe.srcdoc = `<!DOCTYPE html>
+      if (this.iframe) {
+        this.iframe.srcdoc = `<!DOCTYPE html>
 <html data-theme-mode="${resolvedTheme.mode}">
 <head>
   <meta http-equiv="Content-Security-Policy" content="${csp}">
@@ -956,6 +1077,7 @@ ${themeVarsCss}
   ${scriptBlock}
 </body>
 </html>`;
+      }
     }
 
     // 6. Append to document and perform handshake on load
@@ -1134,6 +1256,10 @@ ${themeVarsCss}
     if (this.workerHost) {
       this.workerHost.destroy();
       this.workerHost = null;
+    }
+    if (this.wasmHost) {
+      this.wasmHost.destroy();
+      this.wasmHost = null;
     }
     for (const renderer of this.schemaRenderers.values()) {
       renderer.destroy();

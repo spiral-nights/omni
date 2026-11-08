@@ -500,3 +500,90 @@ init();
    Any state stored in `localStorage` or `indexedDB` is strictly partitioned per `pluginId`.
 4. **Transparent Keystore Protection**:
    Private keys (`nsec`) are **never** shared with plugin sandboxes. Signing occurs strictly inside the host's WebCrypto keystore via IPC.
+
+---
+
+## 8. WebAssembly Component Model & WIT Support
+
+Omni provides first-class support for compiling plugins directly to WebAssembly (`.wasm`) using the **W3C WebAssembly Component Model & WIT (`.wit`)** standards.
+
+### 1. Canonical WIT Interface (`packages/types/wit/omni.wit`)
+
+WASM plugins target the standard WIT interface exported by `@omni/types`:
+
+```wit
+package omni:plugin@0.1.0;
+
+/// Host UI rendering and component updates.
+interface ui {
+    /// Render or update declarative schema for the default or active view.
+    render: func(view: string);
+
+    /// Render or update declarative schema for an explicit component/slot.
+    render-component: func(component-id: string, view: string);
+}
+
+/// Host Nostr and data primitives.
+interface nostr {
+    /// Query local 0ms event store and relay pool.
+    fetch: func(filters: string, options: string) -> string;
+
+    /// Publish a draft event via the host keystore and relay pool.
+    publish: func(draft-event: string) -> string;
+
+    /// Retrieve the user's public key (hex).
+    get-public-key: func() -> string;
+}
+
+/// World representing an Omni WebAssembly guest plugin.
+world omni-plugin {
+    /// Host capabilities imported by the guest plugin.
+    import ui;
+    import nostr;
+
+    /// Initializes the plugin and returns initial declarative schema JSON.
+    export init: func() -> string;
+
+    /// Handles a UI action dispatched by the user and optionally returns updated schema JSON.
+    export handle-action: func(action: string, payload: string) -> string;
+}
+```
+
+### 2. Execution Runtime (`WasmGuestHost`)
+
+WASM plugins execute in `WasmGuestHost` inside the host kernel:
+- **Zero DOM / Zero Proprietary SDKs**: WASM modules compile against standard imports (`ui`, `nostr`, and standard WASI Preview 1 snapshot).
+- **Linear Memory & String Passing**: Strings (JSON schema and payloads) are marshalled across linear memory using UTF-8 encoding. If the module exports `alloc` or `malloc`, the host utilizes the guest allocator; otherwise, a memory-growing bump allocator allocates safely above the guest data heap.
+- **WASI Preview 1 Emulation**: Built-in support for `fd_write` (capturing `stdout` / `println!` into host logger), `clock_time_get`, `proc_exit`, and random seed generation.
+- **Native Light DOM Custom Elements**: When `ui.render(view)` is called or `init()` / `handle-action()` returns JSON schema, Omni's `SchemaRenderer` mounts the declarative UI into the active slot container.
+
+### 3. Example: Rust Plugin Implementation
+
+```rust
+// A pure Rust plugin compiling to wasm32-unknown-unknown or wasm32-wasip1
+#[link(wasm_import_module = "omni:plugin/ui")]
+extern "C" {
+    fn render(ptr: *const u8, len: usize);
+}
+
+#[no_mangle]
+pub extern "C" fn init() -> *const u8 {
+    let schema = r#"{
+        "type": "card",
+        "title": "Rust WASM Plugin",
+        "icon": "cpu",
+        "children": [
+            { "type": "badge", "label": "Compiled to WebAssembly", "variant": "success" },
+            { "type": "button", "label": "Increment Counter", "action": { "name": "increment" } }
+        ]
+    }"#;
+    render(schema.as_ptr(), schema.len());
+    std::ptr::null()
+}
+
+#[no_mangle]
+pub extern "C" fn handle_action(action_ptr: *const u8, action_len: usize, payload_ptr: *const u8, payload_len: usize) -> *const u8 {
+    // Process action and call render() with new state
+    std::ptr::null()
+}
+```

@@ -146,7 +146,7 @@ export class OmniKernel {
 
   async registerPlugin(
     manifest: OmniManifest,
-    scriptContent: string,
+    scriptContent: string | Uint8Array,
     slotContainers: Map<string, Element>,
     options?: { route?: string; viewId?: string; instanceId?: string; targetSlot?: string; relays?: string[]; trusted?: boolean }
   ): Promise<SandboxInstance> {
