@@ -36,6 +36,9 @@ const initialPlugins: InstalledPluginEntry[] = [
       { id: "widget", title: "Feed Widget", path: "?view=widget", format: "wasm" }
     ],
     handledIntents: ["create_note", "compose_note", "view_note", "search", "share"],
+    permissions: {
+      nostr: { read: { allKinds: true }, write: { allKinds: true }, sign: true }
+    },
     scriptContent: feedWasmUrl,
     sourceUrl: "local:@omni/plugin-feed",
     enabled: true

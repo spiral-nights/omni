@@ -169,6 +169,7 @@ pub struct UserProfile {
 pub struct FeedState {
   mut active_tab : String
   mut active_thread_id : String
+  mut thread_replies_loaded : Bool
   notes : Array[Note]
   follows : Array[String]
   profiles : Array[UserProfile]
@@ -184,6 +185,7 @@ pub struct FeedState {
 let global_state : FeedState = {
   active_tab: "following",
   active_thread_id: "",
+  thread_replies_loaded: false,
   notes: [],
   follows: [],
   profiles: [],
@@ -261,23 +263,31 @@ fn extract_all_e_tags(json : String) -> Array[String] {
   let len = json.length()
   let mut i = 0
   while i < len - 6 {
-    if json[i] == '[' && json[i + 1] == '"' && json[i + 2] == 'e' && json[i + 3] == '"' {
-      let mut p = i + 4
-      while p < len && (json[p] == ' ' || json[p] == ',') {
+    if json[i] == '[' {
+      let mut p = i + 1
+      while p < len && (json[p] == ' ' || json[p] == '\t' || json[p] == '\n' || json[p] == '\r') {
         p = p + 1
       }
-      if p < len && json[p] == '"' {
-        p = p + 1
-        let buf = StringBuilder()
-        while p < len && json[p] != '"' {
-          buf.write_char(json[p].to_int().unsafe_to_char())
+      if p + 2 < len && json[p] == '"' && json[p + 1] == 'e' && json[p + 2] == '"' {
+        p = p + 3
+        while p < len && (json[p] == ' ' || json[p] == ',' || json[p] == '\t') {
           p = p + 1
         }
-        let e_id = buf.to_string()
-        if e_id.length() >= 16 {
-          result.push(e_id)
+        if p < len && json[p] == '"' {
+          p = p + 1
+          let buf = StringBuilder()
+          while p < len && json[p] != '"' {
+            buf.write_char(json[p].to_int().unsafe_to_char())
+            p = p + 1
+          }
+          let e_id = buf.to_string()
+          if e_id.length() >= 16 {
+            result.push(e_id)
+          }
+          i = p
+        } else {
+          i = i + 1
         }
-        i = p
       } else {
         i = i + 1
       }
@@ -412,32 +422,9 @@ fn extract_json_int(json : String, key : String) -> Int {
 }
 
 fn extract_reply_id_from_tags(json : String) -> String {
-  let search = "[\"e\",\""
-  let len = json.length()
-  let klen = search.length()
-  if len < klen {
-    return ""
-  }
-  for i in 0..<(len - klen + 1) {
-    let mut match_found = true
-    for j in 0..<klen {
-      if json[i + j] != search[j] {
-        match_found = false
-        break
-      }
-    }
-    if match_found {
-      let start_pos = i + klen
-      let buf = StringBuilder()
-      for k in start_pos..<len {
-        let c = json[k]
-        if c == '"' {
-          break
-        }
-        buf.write_char(c.to_int().unsafe_to_char())
-      }
-      return buf.to_string()
-    }
+  let tags = extract_all_e_tags(json)
+  if tags.length() > 0 {
+    return tags[0]
   }
   ""
 }
@@ -640,7 +627,7 @@ fn render_thread_view(state : FeedState) -> String {
   buf.write_string("\"}},\"children\":[")
   
   // Back to Feed Button
-  buf.write_string("{\"type\":\"button\",\"label\":\"← Back to Feed\",\"icon\":\"arrow-left\",\"variant\":\"ghost\",\"size\":\"sm\",\"action\":{\"name\":\"back-to-feed\",\"navigate\":{\"back\":true}}},")
+  buf.write_string("{\"type\":\"button\",\"label\":\"Back to Feed\",\"icon\":\"arrow-left\",\"variant\":\"ghost\",\"size\":\"sm\",\"action\":{\"name\":\"back-to-feed\",\"navigate\":{\"back\":true}}},")
   buf.write_string("{\"type\":\"divider\"},")
 
   match parent_note {
@@ -709,7 +696,7 @@ fn render_thread_view(state : FeedState) -> String {
       }
       if reply_count == 0 {
         buf.write_string(",")
-        if p.replies > 0 {
+        if !state.thread_replies_loaded && p.replies > 0 {
           buf.write_string("{\"type\":\"text\",\"content\":\"Fetching conversation replies from relays...\",\"tone\":\"muted\",\"style\":\"margin-top: 14px; margin-left: 4px; font-style: italic;\"}")
         } else {
           buf.write_string("{\"type\":\"text\",\"content\":\"No replies yet. Be the first to reply!\",\"tone\":\"muted\",\"style\":\"margin-top: 14px; margin-left: 4px; font-style: italic;\"}")
@@ -804,6 +791,14 @@ pub fn render_feed(state : FeedState) -> String {
       if i > 0 { buf.write_string(",") }
       let n = displayed_notes[i]
       buf.write_string("{\"type\":\"card\",\"style\":\"margin-bottom: 8px;\",\"children\":[")
+      
+      if n.reply_to_id != "" {
+        buf.write_string("{\"type\":\"box\",\"direction\":\"row\",\"align\":\"center\",\"gap\":\"xs\",\"style\":\"margin-bottom: 8px; cursor: pointer;\",\"action\":{\"name\":\"view-thread\",\"payload\":{\"id\":\"")
+        buf.write_string(n.reply_to_id)
+        buf.write_string("\"}},\"children\":[")
+        buf.write_string("{\"type\":\"badge\",\"label\":\"Reply to...\",\"tone\":\"accent\"}")
+        buf.write_string("]},")
+      }
       
       // Header Row: Avatar, Name, npub (clickable to open profile)
       buf.write_string("{\"type\":\"box\",\"direction\":\"row\",\"gap\":\"sm\",\"align\":\"center\",\"style\":\"cursor: pointer;\",\"action\":{\"name\":\"view-profile\",\"payload\":{\"pubkey\":\"")
@@ -959,6 +954,7 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
     }
     if target_id != "" {
       global_state.active_thread_id = target_id
+      global_state.thread_replies_loaded = false
       let buf = StringBuilder()
       buf.write_string("[{\"kinds\":[1],\"#e\":[\"")
       buf.write_string(target_id)
@@ -1031,6 +1027,8 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
     }
   } else if action_name == "zap-note" {
     // Zap note reaction
+  } else if action_name == "nostr:eose" {
+    global_state.thread_replies_loaded = true
   } else if action_name == "nostr:event" {
     let kind = extract_json_int(payload_str, "kind")
     if kind == 3 {
@@ -1139,7 +1137,10 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
             }
           }
         }
-        let should_display = !exists && (reply_to == "" || is_thread_reply)
+        if is_thread_reply {
+          global_state.thread_replies_loaded = true
+        }
+        let should_display = !exists
 
         if should_display {
           let known_name = find_profile_name(pubkey)

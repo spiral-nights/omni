@@ -582,11 +582,15 @@ describe("MoonBit WebAssembly Feed Plugin (WasmGuestHost + SchemaRenderer + Omni
 
     // Verify reply count and like count updated on note action buttons
     const buttons = Array.from(mainSlot.querySelectorAll("omni-button"));
-    const replyBtn = buttons.find((b) => b.getAttribute("tooltip") === "Reply" || b.getAttribute("icon") === "reply");
-    expect(replyBtn?.textContent).toContain("1");
+    const replyBtn = buttons.find((b) => (b.getAttribute("tooltip") === "Reply" || b.getAttribute("icon") === "reply") && b.textContent?.includes("1"));
+    expect(replyBtn).toBeDefined();
 
-    const likeBtn = buttons.find((b) => b.getAttribute("tooltip") === "Like" || b.getAttribute("icon") === "heart");
-    expect(likeBtn?.textContent).toContain("1");
+    const likeBtn = buttons.find((b) => (b.getAttribute("tooltip") === "Like" || b.getAttribute("icon") === "heart") && b.textContent?.includes("1"));
+    expect(likeBtn).toBeDefined();
+
+    // Verify reply note card renders "Reply to..." badge
+    const badge = mainSlot.querySelector("omni-badge");
+    expect(badge?.textContent).toContain("Reply to...");
 
     sandbox.destroy();
   });

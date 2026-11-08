@@ -185,11 +185,11 @@ export class OmniKernel {
         }
 
         const isTrusted = Boolean(options?.trusted) || this.isPluginTrusted(manifest.id, manifest.trusted);
-        if (manifest.permissions) {
-          if (manifest.permissions.storage && this.capabilityStore.getGrant(manifest.id, "storage:kv") === null) {
+        if (manifest.permissions || isTrusted) {
+          if ((manifest.permissions?.storage || isTrusted) && this.capabilityStore.getGrant(manifest.id, "storage:kv") === null) {
             this.capabilityStore.setGrant(manifest.id, "storage:kv", "always");
           }
-          if (manifest.permissions.intents || isTrusted) {
+          if (manifest.permissions?.intents || isTrusted) {
             if (this.capabilityStore.getGrant(manifest.id, "intents:dispatch") === null) {
               this.capabilityStore.setGrant(manifest.id, "intents:dispatch", "always");
             }
@@ -197,7 +197,7 @@ export class OmniKernel {
               this.capabilityStore.setGrant(manifest.id, "intents:handle", "always");
             }
           }
-          if (manifest.permissions.nostr || isTrusted) {
+          if (manifest.permissions?.nostr || isTrusted) {
             if (this.capabilityStore.getGrant(manifest.id, "nostr:read") === null) {
               this.capabilityStore.setGrant(manifest.id, "nostr:read", "always");
             }

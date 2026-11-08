@@ -174,7 +174,7 @@ export class WasmGuestHost {
         } catch (_) {}
 
         if (filters.length > 0) {
-          const isTimeline = filters.some((f) => f.kinds && f.kinds.includes(1) && !f.until && !f["#e"] && !f.authors);
+          const isTimeline = filters.some((f) => f.kinds && f.kinds.includes(1) && !f.until && !f["#e"] && !f.authors && !f.ids);
           if (isTimeline && this.activeTimelineUnsub) {
             try {
               this.activeTimelineUnsub();
@@ -200,6 +200,9 @@ export class WasmGuestHost {
                   } catch (_) {}
                 }
                 this.dispatchAction("main", { name: "nostr:event" }, event as unknown as Record<string, unknown>);
+              },
+              () => {
+                this.dispatchAction("main", { name: "nostr:eose" });
               }
             ).then((unsub) => {
               this.activeSubscriptions.push(unsub);
@@ -241,6 +244,9 @@ export class WasmGuestHost {
                   } catch (_) {}
                 }
                 this.dispatchAction("main", { name: "nostr:event" }, ev as unknown as Record<string, unknown>);
+              },
+              () => {
+                this.dispatchAction("main", { name: "nostr:eose" });
               }
             );
             this.activeSubscriptions.push(unsub);
