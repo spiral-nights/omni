@@ -588,9 +588,9 @@ describe("MoonBit WebAssembly Feed Plugin (WasmGuestHost + SchemaRenderer + Omni
     const likeBtn = buttons.find((b) => (b.getAttribute("tooltip") === "Like" || b.getAttribute("icon") === "heart") && b.textContent?.includes("1"));
     expect(likeBtn).toBeDefined();
 
-    // Verify reply note card renders "Reply to..." badge
+    // Verify reply note card renders "Reply to @author" badge with display name
     const badge = mainSlot.querySelector("omni-badge");
-    expect(badge?.textContent).toContain("Reply to...");
+    expect(badge?.textContent).toContain("Reply to @77777777");
 
     sandbox.destroy();
   });

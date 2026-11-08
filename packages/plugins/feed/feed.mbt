@@ -146,6 +146,7 @@ pub struct Note {
   mut reposts : Int
   mut replies : Int
   reply_to_id : String
+  reply_to_pubkey : String
   e_tags : Array[String]
 }
 
@@ -231,23 +232,31 @@ fn extract_all_p_tags(json : String) -> Array[String] {
   let len = json.length()
   let mut i = 0
   while i < len - 6 {
-    if json[i] == '[' && json[i + 1] == '"' && json[i + 2] == 'p' && json[i + 3] == '"' {
-      let mut p = i + 4
-      while p < len && (json[p] == ' ' || json[p] == ',') {
+    if json[i] == '[' {
+      let mut p = i + 1
+      while p < len && (json[p] == ' ' || json[p] == '\t' || json[p] == '\n' || json[p] == '\r') {
         p = p + 1
       }
-      if p < len && json[p] == '"' {
-        p = p + 1
-        let buf = StringBuilder()
-        while p < len && json[p] != '"' {
-          buf.write_char(json[p].to_int().unsafe_to_char())
+      if p + 2 < len && json[p] == '"' && json[p + 1] == 'p' && json[p + 2] == '"' {
+        p = p + 3
+        while p < len && (json[p] == ' ' || json[p] == ',' || json[p] == '\t') {
           p = p + 1
         }
-        let pk = buf.to_string()
-        if pk.length() >= 16 {
-          result.push(pk)
+        if p < len && json[p] == '"' {
+          p = p + 1
+          let buf = StringBuilder()
+          while p < len && json[p] != '"' {
+            buf.write_char(json[p].to_int().unsafe_to_char())
+            p = p + 1
+          }
+          let pk = buf.to_string()
+          if pk.length() >= 16 {
+            result.push(pk)
+          }
+          i = p
+        } else {
+          i = i + 1
         }
-        i = p
       } else {
         i = i + 1
       }
@@ -436,6 +445,56 @@ fn find_profile_name(pubkey : String) -> String {
     }
   }
   ""
+}
+
+fn get_reply_badge_label(n : Note) -> String {
+  // 1. Try finding parent in global_state.notes
+  if n.reply_to_id != "" {
+    for other in global_state.notes {
+      if other.id == n.reply_to_id {
+        if other.author_name != "" && other.author_name != "Nostr User" {
+          let prefix = if other.author_name.length() > 0 && other.author_name[0] == '@' { "Reply to " } else { "Reply to @" }
+          return prefix + other.author_name
+        }
+        if other.npub != "" {
+          if other.npub.length() > 14 {
+            let buf = StringBuilder()
+            buf.write_string("Reply to ")
+            let max_k = if other.npub.length() > 10 { 10 } else { other.npub.length() }
+            for k in 0..<max_k {
+              buf.write_char(other.npub[k].to_int().unsafe_to_char())
+            }
+            buf.write_string("...")
+            return buf.to_string()
+          }
+          return "Reply to " + other.npub
+        }
+      }
+    }
+  }
+
+  // 2. Try reply_to_pubkey
+  if n.reply_to_pubkey != "" {
+    let known = find_profile_name(n.reply_to_pubkey)
+    if known != "" && known != "Nostr User" {
+      let prefix = if known.length() > 0 && known[0] == '@' { "Reply to " } else { "Reply to @" }
+      return prefix + known
+    }
+    if n.reply_to_pubkey.length() >= 16 {
+      let npub = bech32_encode("npub", n.reply_to_pubkey)
+      let buf = StringBuilder()
+      buf.write_string("Reply to ")
+      let max_k = if npub.length() > 10 { 10 } else { npub.length() }
+      for k in 0..<max_k {
+        buf.write_char(npub[k].to_int().unsafe_to_char())
+      }
+      buf.write_string("...")
+      return buf.to_string()
+    }
+  }
+
+  // 3. Fallback
+  "Reply to thread"
 }
 
 fn set_profile_name(pubkey : String, name : String) -> Unit {
@@ -793,10 +852,13 @@ pub fn render_feed(state : FeedState) -> String {
       buf.write_string("{\"type\":\"card\",\"style\":\"margin-bottom: 8px;\",\"children\":[")
       
       if n.reply_to_id != "" {
+        let badge_label = get_reply_badge_label(n)
         buf.write_string("{\"type\":\"box\",\"direction\":\"row\",\"align\":\"center\",\"gap\":\"xs\",\"style\":\"margin-bottom: 8px; cursor: pointer;\",\"action\":{\"name\":\"view-thread\",\"payload\":{\"id\":\"")
         buf.write_string(n.reply_to_id)
         buf.write_string("\"}},\"children\":[")
-        buf.write_string("{\"type\":\"badge\",\"label\":\"Reply to...\",\"tone\":\"accent\"}")
+        buf.write_string("{\"type\":\"badge\",\"label\":\"")
+        buf.write_string(json_escape(badge_label))
+        buf.write_string("\",\"tone\":\"accent\"}")
         buf.write_string("]},")
       }
       
@@ -1093,12 +1155,22 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
       let content = extract_json_field(payload_str, "content")
       let created_at = extract_json_int(payload_str, "created_at")
       let e_tags = extract_all_e_tags(payload_str)
+      let p_tags = extract_all_p_tags(payload_str)
       let mut reply_to = extract_reply_id_from_tags(payload_str)
       if reply_to == "" && e_tags.length() > 0 {
         reply_to = e_tags[0]
       }
       if reply_to == "" {
         reply_to = extract_json_field(payload_str, "replyToId")
+      }
+      let mut reply_to_pubkey = if p_tags.length() > 0 { p_tags[0] } else { "" }
+      if reply_to_pubkey == "" && reply_to != "" {
+        for other in global_state.notes {
+          if other.id == reply_to {
+            reply_to_pubkey = other.pubkey
+            break
+          }
+        }
       }
 
       // Update reply counts for parent notes
@@ -1165,6 +1237,19 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
             }
           }
 
+          if reply_to_pubkey.length() >= 16 && find_profile_name(reply_to_pubkey) == "" {
+            let mut already_pending = false
+            for pk in global_state.pending_profile_reqs {
+              if pk == reply_to_pubkey {
+                already_pending = true
+                break
+              }
+            }
+            if !already_pending {
+              global_state.pending_profile_reqs.push(reply_to_pubkey)
+            }
+          }
+
           // Register for interaction count queries (replies, reposts, likes)
           let mut already_queried = false
           for q in global_state.queried_interactions {
@@ -1196,6 +1281,7 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
             reposts: 0,
             replies: 0,
             reply_to_id: reply_to,
+            reply_to_pubkey: reply_to_pubkey,
             e_tags: e_tags
           }
 
