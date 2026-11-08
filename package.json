@@ -7,7 +7,8 @@
     "build:stale": "node scripts/autobuild.js",
     "dev": "pnpm --filter @omni/web dev",
     "test": "vitest run",
-    "typecheck": "pnpm -r run typecheck"
+    "typecheck": "pnpm -r run typecheck",
+    "wit:types": "jco types packages/types/wit/omni.wit -o packages/types/src/wit"
   },
   "devDependencies": {
     "@bytecodealliance/jco": "^1.41.0",
