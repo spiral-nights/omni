@@ -92,22 +92,31 @@ omni/
 │       ├── relays/                        # @omni/plugin-relays (Relay status & pool manager)
 │       ├── profile-viewer/                # @omni/plugin-profile-viewer ("Profiles": people, metadata editor & key custody)
 │       ├── checklist/                     # @omni/plugin-checklist (Daily checklist widget)
+│       ├── notes/                         # @omni/plugin-notes (Private encrypted notes app)
+│       ├── timer/                         # @omni/plugin-timer (Focus & visual countdown timer)
 │       └── publisher/                     # @omni/plugin-publisher (Plugin Studio & Blossom uploader)
 │
 └── docs/                                  # Consolidated System Documentation
     ├── 01-architecture.md                 # System Architecture & Core Runtime
     ├── 02-protocols-and-storage.md        # Nostr Protocols, Storage & Decentralized Distribution
     ├── 03-plugin-developer-guide.md       # Plugin & nsite Developer Guide
-    └── 04-intents-and-permissions.md      # Standardized Intents, Discovery & Kind-Level ACL
+    ├── 04-intents-and-permissions.md      # Standardized Intents, Discovery & Kind-Level ACL
+    ├── 05-web-worker-runtime-plan.md      # Off-Thread Web Worker Migration Plan
+    └── 06-nostr-extensions-and-schema.md  # Extended Nostr Client & Declarative Schema Reference
 ```
 
 ---
 
 ## 3. Sandbox Execution & Standard Web APIs
 
-Plugins execute inside isolated `<iframe>` sandboxes (`sandbox="allow-scripts"`, `connect-src 'none'`). Omni virtualizes standard web interfaces:
+Plugins execute inside isolated `<iframe>` sandboxes (`sandbox="allow-scripts"`, `connect-src 'none'`) or Web Workers (`WorkerGuestHost`). Omni virtualizes standard web interfaces:
 - **`window.nostr`**: Full standard NIP-07 signer (`getPublicKey`, `signEvent`, `getRelays`, `nip04`, `nip44`), backed by the host keystore and ACL governance.
-- **`window.WebSocket`**: Virtual WebSocket shim that transparently routes `wss://` Nostr relay frames (`REQ`, `EVENT`, `CLOSE`) through the host's `RelayPool` (`wss://relay.damus.io`, `wss://relay.ditto.pub`) and 0ms local event cache.
+- **Extended `window.nostr` Primitives (Zero Proprietary SDKs)**:
+  - `nostr.fetch(filters, options)`: Aggregates 0ms local event store cache and connected relays with deduplication and newest-first sorting.
+  - `nostr.subscribe(filters, onEvent, onEose)`: Live streaming subscription across local store and relay pool.
+  - `nostr.publish(draftEvent)`: Automatic signing via keystore and broadcast to relays + 0ms local cache commit.
+  - `nostr.doc<T>(dTagOrSpec, options)`: Universal local-first reactive document abstraction with 0ms reads, optimistic mutations, multi-device `onUpdate` synchronization, and transparent encryption (`{ encrypted: true }`) for any replaceable Nostr kind (Kind 30078, 0, 10002, 30000, 30023, etc.).
+- **`window.WebSocket`**: Virtual WebSocket shim that transparently routes `wss://` Nostr relay frames (`REQ`, `EVENT`, `CLOSE`) through the host's `RelayPool` (`wss://relay.damus.io`, `wss://relay.ditto.pub`) and 0ms local event cache for unmodified 3rd-party Nostr clients.
 - **Protocol URIs (NIP-21, Lightning, Cashu)**: Standard `<a href="nostr:...">`, `<a href="lightning:...">`, and `<a href="cashu:...">` links are intercepted at the sandbox boundary and routed to the Shell's "Open With..." chooser.
 - **`navigator.share()`**: Web Share API shim routing note drafts directly into the shell composer.
 - **`localStorage` & `indexedDB`**: Transparently partitioned per `pluginId`.

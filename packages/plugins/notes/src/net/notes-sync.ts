@@ -24,19 +24,58 @@ export function initNotesRelaySync(
   onNoteReceived: (note: NoteItem) => void,
   onStatusChange?: (status: "saved" | "saving" | "offline") => void
 ): void {
-  if (typeof WebSocket === "undefined" || typeof window === "undefined") return;
+  if (typeof window === "undefined") return;
 
-  // Skip in headless testing environments without full mock socket
-  const w = window as any;
-  if (w.happyDOM || w.__VITEST_ENVIRONMENT__) return;
-
-  if (syncSocket && (syncSocket.readyState === WebSocket.OPEN || syncSocket.readyState === WebSocket.CONNECTING)) {
-    return;
-  }
+  const nostr = (window as any).nostr;
 
   getUserPubkey().then((pubkey) => {
     if (!pubkey) {
       onStatusChange?.("saved");
+      return;
+    }
+
+    // High-level subscribe extension available
+    if (nostr && typeof nostr.subscribe === "function") {
+      onStatusChange?.("saved");
+      const handleEvent = async (ev: any) => {
+        if (ev.kind !== 30078 || !ev.content) return;
+        const dTag = ev.tags?.find((t: any[]) => t[0] === "d")?.[1];
+        if (!dTag || !dTag.startsWith(NOTES_NIP78_D_PREFIX)) return;
+
+        if (!nostr.nip04 || typeof nostr.nip04.decrypt !== "function") return;
+        try {
+          const decryptedJson = await nostr.nip04.decrypt(pubkey, ev.content);
+          const noteData: NoteItem = JSON.parse(decryptedJson);
+          if (noteData && noteData.id) {
+            if (!noteData.updatedAt && ev.created_at) {
+              noteData.updatedAt = ev.created_at * 1000;
+            }
+            onNoteReceived(noteData);
+          }
+        } catch (decErr) {
+          console.warn("[NotesSync] Failed to decrypt note event:", decErr);
+        }
+      };
+
+      try {
+        nostr.subscribe(
+          [{ kinds: [30078], authors: [pubkey], limit: 250 }],
+          handleEvent,
+          () => onStatusChange?.("saved")
+        );
+        return;
+      } catch (subErr) {
+        console.warn("[NotesSync] nostr.subscribe error, falling back:", subErr);
+      }
+    }
+
+    if (typeof WebSocket === "undefined") return;
+
+    // Skip in headless testing environments without full mock socket
+    const w = window as any;
+    if (w.happyDOM || w.__VITEST_ENVIRONMENT__) return;
+
+    if (syncSocket && (syncSocket.readyState === WebSocket.OPEN || syncSocket.readyState === WebSocket.CONNECTING)) {
       return;
     }
 
@@ -115,7 +154,25 @@ export async function syncNoteToRelays(
 ): Promise<void> {
   if (typeof window === "undefined") return;
   const nostr = (window as any).nostr;
-  if (!nostr || typeof nostr.signEvent !== "function" || !nostr.nip04) {
+  if (!nostr) {
+    onStatusChange?.("saved");
+    return;
+  }
+
+  // If high-level doc abstraction is available, use it!
+  if (typeof nostr.doc === "function") {
+    onStatusChange?.("saving");
+    try {
+      const doc = await nostr.doc(`${NOTES_NIP78_D_PREFIX}${note.id}`, { encrypted: true });
+      await doc.set(note);
+      onStatusChange?.("saved");
+      return;
+    } catch (docErr) {
+      console.warn("[NotesSync] nostr.doc failed, falling back to manual encryption:", docErr);
+    }
+  }
+
+  if (typeof nostr.signEvent !== "function" || !nostr.nip04) {
     onStatusChange?.("saved");
     return;
   }
@@ -142,6 +199,13 @@ export async function syncNoteToRelays(
       ],
       content: ciphertext
     };
+
+    // If high-level nostr.publish is available:
+    if (typeof nostr.publish === "function") {
+      await nostr.publish(unsigned);
+      onStatusChange?.("saved");
+      return;
+    }
 
     const signed = await nostr.signEvent(unsigned);
     if (!signed) {

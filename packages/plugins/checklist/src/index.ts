@@ -23,11 +23,21 @@ export const TASKS_NIP78_D_TAG = "omni/tasks/v1";
 
 let syncSocket: WebSocket | null = null;
 let lastSyncedRemoteTimestamp = 0;
+let taskDoc: any = null;
 
 export function syncTasksToRelays(): void {
   if (typeof window === "undefined") return;
   const nostr = (window as any).nostr;
-  if (!nostr || typeof nostr.signEvent !== "function") return;
+  if (!nostr) return;
+
+  if (taskDoc && typeof taskDoc.set === "function") {
+    taskDoc.set(tasks).catch((err: any) => {
+      console.warn("[Tasks] Failed to set tasks on nostr.doc:", err);
+    });
+    return;
+  }
+
+  if (typeof nostr.signEvent !== "function") return;
 
   const nowSec = Math.floor(Date.now() / 1000);
   const unsigned = {
@@ -60,6 +70,30 @@ export function syncTasksToRelays(): void {
 }
 
 export function initTasksRelaySync(onUpdate?: () => void): void {
+  if (typeof window !== "undefined") {
+    const nostr = (window as any).nostr;
+    if (nostr && typeof nostr.doc === "function") {
+      nostr.doc(TASKS_NIP78_D_TAG, { encrypted: false }).then((doc: any) => {
+        taskDoc = doc;
+        if (Array.isArray(doc.data) && doc.data.length > 0) {
+          tasks = doc.data;
+          persistTasks();
+          onUpdate?.();
+        }
+        doc.onUpdate((remoteTasks: any) => {
+          if (Array.isArray(remoteTasks)) {
+            tasks = remoteTasks;
+            persistTasks();
+            onUpdate?.();
+          }
+        });
+      }).catch((err: any) => {
+        console.warn("[Tasks] nostr.doc error, falling back to websocket:", err);
+      });
+      return;
+    }
+  }
+
   if (typeof WebSocket === "undefined") return;
   const g = typeof globalThis !== "undefined" ? (globalThis as any) : null;
   if (g?.process?.env?.NODE_ENV === "test" || g?.process?.env?.VITEST) return;

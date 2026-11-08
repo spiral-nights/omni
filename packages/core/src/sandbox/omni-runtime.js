@@ -933,8 +933,249 @@
         await initPromise;
         return callRpc("relays.remove", { url });
       }
+    },
+
+    // Extended High-Level Nostr APIs (Universal Nostr Operations)
+    async fetch(filters, options) {
+      await initPromise;
+      const raw = Array.isArray(filters) ? filters : [filters];
+      return callRpc("nostr.fetch", { filters: raw, ...(options || {}) });
+    },
+
+    subscribe(filters, onEvent, onEose) {
+      const subId = `sub_${Math.random().toString(36).slice(2, 9)}`;
+      let filterList = [];
+      let eventCb = onEvent;
+      let eoseCb = onEose;
+
+      if (Array.isArray(filters)) {
+        filterList = filters;
+      } else if (filters && typeof filters === "object") {
+        const opts = filters;
+        if (opts.kinds || opts.authors || opts.ids || opts.since || opts.until || opts.limit) {
+          filterList = [opts];
+        } else if (opts.filters) {
+          filterList = opts.filters;
+          eventCb = opts.onEvent || onEvent;
+          eoseCb = opts.onEose || onEose;
+        } else {
+          filterList = [opts];
+        }
+      }
+
+      subscriptions.set(subId, {
+        onEvent: eventCb,
+        onEose: eoseCb
+      });
+
+      initPromise.then(() => {
+        callRpc("nostr.subscribe", { subscriptionId: subId, filters: filterList });
+      });
+
+      return {
+        id: subId,
+        unsubscribe() {
+          subscriptions.delete(subId);
+          callRpc("nostr.unsubscribe", { subscriptionId: subId }).catch(() => {});
+        }
+      };
+    },
+
+    async publish(draft) {
+      await initPromise;
+      if (!draft || typeof draft !== "object") {
+        throw new Error("Invalid draft event to publish");
+      }
+      const myPubkey = sessionInfo?.userPubkey || (await window.nostr.getPublicKey());
+      const event = {
+        kind: Number(draft.kind),
+        content: String(draft.content ?? ""),
+        tags: Array.isArray(draft.tags) ? draft.tags : [],
+        created_at: Number(draft.created_at) || Math.floor(Date.now() / 1000),
+        pubkey: draft.pubkey || myPubkey
+      };
+      if (draft.id && draft.sig) {
+        event.id = draft.id;
+        event.sig = draft.sig;
+      }
+      return callRpc("nostr.publish", { event });
+    },
+
+    async doc(dTagOrSpec, docOpts) {
+      await initPromise;
+      const myPubkey = sessionInfo?.userPubkey || (await window.nostr.getPublicKey());
+
+      let spec;
+      if (typeof dTagOrSpec === "string") {
+        spec = {
+          kind: 30078,
+          d: dTagOrSpec,
+          encrypted: docOpts?.encrypted ?? false,
+          encryptionType: docOpts?.encryptionType || "nip04"
+        };
+      } else if (dTagOrSpec && typeof dTagOrSpec === "object") {
+        spec = {
+          kind: dTagOrSpec.kind !== undefined ? Number(dTagOrSpec.kind) : 30078,
+          d: dTagOrSpec.d,
+          encrypted: dTagOrSpec.encrypted ?? docOpts?.encrypted ?? false,
+          encryptionType: dTagOrSpec.encryptionType || docOpts?.encryptionType || "nip04"
+        };
+      } else {
+        throw new Error("Invalid document specification: string or object expected");
+      }
+
+      const isParameterized = spec.d !== undefined;
+      const filter = {
+        kinds: [spec.kind],
+        authors: [myPubkey]
+      };
+      if (isParameterized) {
+        filter["#d"] = [spec.d];
+      }
+
+      async function decryptAndParse(ev) {
+        if (!ev || ev.content === undefined || ev.content === null) return null;
+        let text = ev.content;
+        if (spec.encrypted && text) {
+          try {
+            if (spec.encryptionType === "nip04") {
+              text = await window.nostr.nip04.decrypt(myPubkey, text);
+            } else {
+              text = await window.nostr.nip44.decrypt(myPubkey, text);
+            }
+          } catch (err) {
+            // Fallback between NIP-44 and NIP-04 for seamless backward compatibility
+            try {
+              if (spec.encryptionType === "nip04") {
+                text = await window.nostr.nip44.decrypt(myPubkey, text);
+              } else {
+                text = await window.nostr.nip04.decrypt(myPubkey, text);
+              }
+            } catch (fallbackErr) {
+              console.warn("[Omni nostr.doc] Decryption failed:", fallbackErr);
+              return null;
+            }
+          }
+        }
+        if (typeof text !== "string") return text;
+        try {
+          return JSON.parse(text);
+        } catch (_) {
+          return text;
+        }
+      }
+
+      // Initial query (0ms cache hit + background relay fetch)
+      const initialEvents = await window.nostr.fetch([filter], { timeoutMs: 1500 });
+      let currentEvent = initialEvents[0] || null;
+      let currentData = currentEvent ? await decryptAndParse(currentEvent) : null;
+
+      const listeners = new Set();
+
+      // Live multi-device synchronization
+      const sub = window.nostr.subscribe(
+        [
+          {
+            ...filter,
+            since: currentEvent ? currentEvent.created_at : Math.floor(Date.now() / 1000) - 86400
+          }
+        ],
+        async (incomingEvent) => {
+          if (
+            !currentEvent ||
+            incomingEvent.created_at > currentEvent.created_at ||
+            (incomingEvent.created_at === currentEvent.created_at && incomingEvent.id !== currentEvent.id)
+          ) {
+            currentEvent = incomingEvent;
+            currentData = await decryptAndParse(incomingEvent);
+            for (const cb of Array.from(listeners)) {
+              try {
+                cb(currentData, incomingEvent);
+              } catch (e) {
+                console.error("[Omni nostr.doc] onUpdate listener error:", e);
+              }
+            }
+          }
+        }
+      );
+
+      const docInstance = {
+        get kind() {
+          return spec.kind;
+        },
+        get d() {
+          return spec.d;
+        },
+        get data() {
+          return currentData;
+        },
+        get event() {
+          return currentEvent;
+        },
+        async set(newData, extraTags = []) {
+          let payload = typeof newData === "string" ? newData : JSON.stringify(newData);
+          if (spec.encrypted) {
+            if (spec.encryptionType === "nip04") {
+              payload = await window.nostr.nip04.encrypt(myPubkey, payload);
+            } else {
+              payload = await window.nostr.nip44.encrypt(myPubkey, payload);
+            }
+          }
+          const tags = [...extraTags];
+          if (isParameterized) {
+            const hasD = tags.some((t) => Array.isArray(t) && t[0] === "d");
+            if (!hasD) {
+              tags.unshift(["d", spec.d]);
+            }
+          }
+          const res = await window.nostr.publish({
+            kind: spec.kind,
+            tags,
+            content: payload,
+            created_at: Math.floor(Date.now() / 1000)
+          });
+          currentData = newData;
+          currentEvent = {
+            id: res.id,
+            pubkey: res.pubkey,
+            sig: res.sig,
+            kind: spec.kind,
+            tags,
+            content: payload,
+            created_at: Math.floor(Date.now() / 1000)
+          };
+          return currentEvent;
+        },
+        onUpdate(callback) {
+          listeners.add(callback);
+          return () => {
+            listeners.delete(callback);
+          };
+        },
+        async reload() {
+          const reloaded = await window.nostr.fetch([filter], { timeoutMs: 2000 });
+          if (reloaded && reloaded[0]) {
+            currentEvent = reloaded[0];
+            currentData = await decryptAndParse(currentEvent);
+          }
+          return currentData;
+        },
+        dispose() {
+          listeners.clear();
+          sub.unsubscribe();
+        }
+      };
+
+      return docInstance;
     }
   };
+
+  if (typeof globalThis !== "undefined") {
+    globalThis.nostr = window.nostr;
+  }
+  if (typeof self !== "undefined") {
+    self.nostr = window.nostr;
+  }
 
   // 8. Injected window.omni API (Full backward compatibility)
   window.omni = {

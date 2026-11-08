@@ -22,13 +22,52 @@ Inside Omni, standard web interfaces are transparently virtualized by the host r
 | API | Standard Web Usage | How Omni Handles It |
 | :--- | :--- | :--- |
 | **Identity & Signing** | `window.nostr` (NIP-07) | Host keystore signs events following ACL checks. |
+| **High-Level Nostr** | `window.nostr.fetch / publish / doc` | Direct 0ms local reads, optimistic updates, and transparent encryption. |
 | **Relay Networking** | `new WebSocket("wss://...")` | Multiplexed through host's RelayPool and 0ms local cache. |
 | **Local Storage** | `localStorage` / `indexedDB` | Transparently scoped and isolated per plugin ID. |
 | **UI Mounting** | `document.body` or Schema JSON | Direct visual iframe or native Light DOM Custom Elements (`<omni-*>`). |
 | **Cross-App Links** | `<a href="nostr:...">` | Host intercepts and presents the "Open With..." chooser. |
 | **Sharing** | `navigator.share(...)` | Host opens the timeline composer with pre-populated content. |
 
-### Minimal Complete Example (Vanilla HTML / JS)
+> [!TIP]
+> For a deep dive into Omni's high-level Nostr client extensions and reactive Schema UI engine, see [docs/06-nostr-extensions-and-schema.md](file:///home/spiralnights/code/omni/docs/06-nostr-extensions-and-schema.md).
+
+### Minimal Complete Example: High-Level (1-Line Reactive State)
+
+Using Omni's universal document abstraction `window.nostr.doc()`:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<body>
+  <button id="btn-toggle">Toggle Task</button>
+  <div id="output"></div>
+
+  <script type="module">
+    // 1. Open or create reactive document (Kind 30078 app state)
+    const doc = await window.nostr.doc("omni/tasks/v1", { encrypted: false });
+
+    function render() {
+      document.getElementById("output").textContent = JSON.stringify(doc.data || []);
+    }
+    render();
+
+    // 2. Multi-device live reactivity
+    doc.onUpdate(render);
+
+    // 3. Mutate and broadcast optimistic update
+    document.getElementById("btn-toggle").addEventListener("click", async () => {
+      await doc.set([...(doc.data || []), { text: "Learn Omni", done: true }]);
+      render();
+    });
+  </script>
+</body>
+</html>
+```
+
+### Minimal Complete Example: Low-Level (Standard Wire WebSocket)
+
+For unmodified 3rd-party Nostr code:
 
 ```html
 <!DOCTYPE html>

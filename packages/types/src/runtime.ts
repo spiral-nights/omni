@@ -1,4 +1,4 @@
-import { NostrEvent, NostrFilter, Nip07Signer } from "./nostr.js";
+import { NostrEvent, NostrFilter, Nip07Signer, OmniNostrClient } from "./nostr.js";
 
 /**
  * Metadata received alongside subscribed Nostr events
@@ -127,9 +127,9 @@ export interface OmniHostApi {
 
 declare global {
   const omni: OmniHostApi;
-  const nostr: Nip07Signer;
+  const nostr: OmniNostrClient;
   interface Window {
-    nostr?: Nip07Signer;
+    nostr?: OmniNostrClient;
     omni?: OmniHostApi;
   }
 }

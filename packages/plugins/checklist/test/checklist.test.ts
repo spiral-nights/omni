@@ -106,4 +106,45 @@ describe("@omni/plugin-checklist — Generic Task List", () => {
     expect(signedEvent.tags).toContainEqual(["d", TASKS_NIP78_D_TAG]);
     expect(JSON.parse(signedEvent.content)).toBeInstanceOf(Array);
   });
+
+  it("transparently uses window.nostr.doc when available", async () => {
+    let docData: any = null;
+    let updateCallback: ((data: any) => void) | null = null;
+    const mockDoc = {
+      data: [{ id: 99, text: "Remote task from doc", done: false }],
+      set: vi.fn(async (data: any) => {
+        docData = data;
+        return { id: "doc_event_1", kind: 30078 };
+      }),
+      onUpdate: vi.fn((cb: any) => {
+        updateCallback = cb;
+        return () => {};
+      })
+    };
+
+    (window as any).nostr = {
+      doc: vi.fn(async (dTag: string, opts: any) => {
+        expect(dTag).toBe(TASKS_NIP78_D_TAG);
+        return mockDoc;
+      })
+    };
+
+    const { initTasksRelaySync } = await import("../src/index.js");
+    const onUpdateSpy = vi.fn();
+    initTasksRelaySync(onUpdateSpy);
+
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect((window as any).nostr.doc).toHaveBeenCalledWith(TASKS_NIP78_D_TAG, { encrypted: false });
+    expect(onUpdateSpy).toHaveBeenCalled();
+
+    // Trigger update from doc
+    updateCallback?.([{ id: 100, text: "Live sync task", done: true }]);
+    const currentSchema: any = getChecklistSchema("widget");
+    expect(currentSchema.children[1].items.some((i: any) => i.title === "Live sync task")).toBe(true);
+
+    // Add a task and verify doc.set is called
+    handleChecklistAction({ name: "add-task" }, { taskText: "New task for doc" });
+    expect(mockDoc.set).toHaveBeenCalled();
+  });
 });

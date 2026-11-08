@@ -4,7 +4,9 @@ import {
   JsonRpcNotification,
   JsonRpcErrorCode,
   OmniManifest,
-  UnsignedEvent
+  UnsignedEvent,
+  NostrEvent,
+  NostrFilter
 } from "@omni/types";
 import { AclEngine } from "../acl/acl-engine.js";
 import { PluginStorageManager } from "../storage/plugin-storage-manager.js";
@@ -367,6 +369,68 @@ export class JsonRpcDispatcher {
 
         this.activeSubscriptions.set(subId, unsub);
         return { subscriptionId: subId, status: "subscribed" };
+      }
+
+      // 4b. Nostr One-Shot Fetch
+      case "nostr.fetch": {
+        const rawFilters = params?.filters || (params?.filter ? [params.filter] : []);
+        const filters: NostrFilter[] = Array.isArray(rawFilters) ? rawFilters : [rawFilters];
+        const timeoutMs = Math.max(100, Math.min(15000, Number(params?.timeoutMs) || 3000));
+
+        if (filters.length === 0) {
+          return [];
+        }
+
+        const allowed = await this.ctx.aclEngine.checkPermission(
+          this.ctx.pluginId,
+          "nostr:read",
+          { filters }
+        );
+        if (!allowed) {
+          throw { code: JsonRpcErrorCode.PERMISSION_DENIED, message: "Permission denied for nostr:read" };
+        }
+
+        const eventsMap = new Map<string, NostrEvent>();
+        const targetRelays = params?.localOnly ? [] : (params?.relays || this.getAllowedRelays());
+
+        return new Promise<NostrEvent[]>((resolve) => {
+          let isDone = false;
+          const subId = `fetch_${Math.random().toString(36).slice(2, 9)}`;
+
+          const finish = () => {
+            if (isDone) return;
+            isDone = true;
+            clearTimeout(timer);
+            if (unsub) unsub();
+            const results = Array.from(eventsMap.values()).sort((a, b) => b.created_at - a.created_at);
+            resolve(results);
+          };
+
+          const timer = setTimeout(finish, timeoutMs);
+
+          let unsub: (() => void) | null = null;
+          this.ctx.subscriptionCoordinator.subscribe(
+            `${this.ctx.pluginId}:${subId}`,
+            filters,
+            (event) => {
+              if (!eventsMap.has(event.id)) {
+                eventsMap.set(event.id, event);
+              }
+            },
+            () => {
+              // EOSE arrived from relays
+              finish();
+            },
+            targetRelays
+          ).then((u) => {
+            unsub = u;
+            if (isDone) {
+              u();
+            }
+          }).catch(() => {
+            finish();
+          });
+        });
       }
 
       // 5. Nostr Unsubscribe

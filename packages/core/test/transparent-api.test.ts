@@ -541,5 +541,163 @@ describe("Milestone 1: Transparent APIs (Virtual WebSocket, NIP-07, and DOM Auto
     channel.port1.close();
     channel.port2.close();
   });
+
+  it("handles nostr.fetch in JsonRpcDispatcher with 0ms store and ACL", async () => {
+    const channel = new MessageChannel();
+    const dispatcher = new JsonRpcDispatcher({
+      pluginId: "test-fetch-plugin",
+      port: channel.port1,
+      aclEngine: kernel.aclEngine,
+      storageManager: kernel.storageManager,
+      intentBroker: kernel.intentBroker,
+      subscriptionCoordinator: kernel.subscriptionCoordinator,
+      keystore: kernel.keystore,
+      relayPool: kernel.relayPool,
+      eventStore: kernel.eventStore
+    });
+
+    kernel.capabilityStore.setGrant("test-fetch-plugin", "nostr:read", "always");
+
+    const pubkey = await kernel.getUserPubkey();
+    const ev1 = await kernel.keystore.signEvent({
+      kind: 1,
+      created_at: 1000,
+      tags: [["t", "fetch-test"]],
+      content: "First note"
+    });
+    const ev2 = await kernel.keystore.signEvent({
+      kind: 1,
+      created_at: 2000,
+      tags: [["t", "fetch-test"]],
+      content: "Second note (newer)"
+    });
+
+    await kernel.eventStore.saveEvent(ev1);
+    await kernel.eventStore.saveEvent(ev2);
+
+    const sendRpc = (method: string, params: any) => {
+      return new Promise<any>((resolve) => {
+        channel.port2.onmessage = (e) => resolve(e.data);
+        channel.port2.postMessage({
+          jsonrpc: "2.0",
+          id: Math.floor(Math.random() * 10000),
+          method,
+          params
+        });
+      });
+    };
+
+    const res = await sendRpc("nostr.fetch", {
+      filters: [{ kinds: [1], "#t": ["fetch-test"] }],
+      localOnly: true
+    });
+
+    expect(res.error).toBeUndefined();
+    expect(Array.isArray(res.result)).toBe(true);
+    expect(res.result.length).toBe(2);
+    // Verified sorted newest first
+    expect(res.result[0].content).toBe("Second note (newer)");
+    expect(res.result[1].content).toBe("First note");
+
+    dispatcher.destroy();
+    channel.port1.close();
+    channel.port2.close();
+  });
+
+  it("supports window.nostr.fetch, publish, and doc extensions inside sandbox", async () => {
+    const channelSchemaBus = new MessageChannel();
+    const channelKernelRpc = new MessageChannel();
+
+    const fakeDoc = document.implementation.createHTMLDocument("Sandbox Document");
+    const fakeWindow: any = {
+      addEventListener: vi.fn((event, handler) => {
+        fakeWindow._listeners = fakeWindow._listeners || {};
+        fakeWindow._listeners[event] = fakeWindow._listeners[event] || [];
+        fakeWindow._listeners[event].push(handler);
+      }),
+      dispatchEvent: vi.fn((event: any) => {
+        const list = fakeWindow._listeners?.[event.type] || [];
+        for (const l of list) l(event);
+      }),
+      localStorage: { getItem: vi.fn(), setItem: vi.fn() }
+    };
+    fakeWindow.parent = fakeWindow;
+
+    const fn = new Function("window", "document", "EventTarget", "Event", "MessageEvent", "CloseEvent", omniRuntimeScript);
+    fn(fakeWindow, fakeDoc, EventTarget, Event, MessageEvent, CloseEvent);
+
+    const dispatcher = new JsonRpcDispatcher({
+      pluginId: "nsite-with-extensions",
+      port: channelKernelRpc.port1,
+      aclEngine: kernel.aclEngine,
+      storageManager: kernel.storageManager,
+      intentBroker: kernel.intentBroker,
+      subscriptionCoordinator: kernel.subscriptionCoordinator,
+      keystore: kernel.keystore,
+      relayPool: kernel.relayPool,
+      eventStore: kernel.eventStore
+    });
+
+    kernel.capabilityStore.setGrant("nsite-with-extensions", "nostr:read", "always");
+    kernel.capabilityStore.setGrant("nsite-with-extensions", "nostr:write", "always");
+    kernel.capabilityStore.setGrant("nsite-with-extensions", "nostr:sign", "always");
+
+    const messageListener = fakeWindow.addEventListener.mock.calls.find(
+      (c: any[]) => c[0] === "message"
+    )[1];
+
+    messageListener({
+      data: {
+        type: "omni:init",
+        payload: {
+          pluginId: "nsite-with-extensions",
+          instanceId: "inst_ext",
+          userPubkey: await kernel.getUserPubkey(),
+          theme: { mode: "dark", colors: {} },
+          slots: ["main"],
+          components: ["main"]
+        }
+      },
+      ports: [channelSchemaBus.port2, channelKernelRpc.port2]
+    });
+
+    // 1. Test window.nostr.publish
+    const pubResult = await fakeWindow.nostr.publish({
+      kind: 1,
+      content: "Hello from window.nostr.publish!"
+    });
+    expect(pubResult.id).toBeDefined();
+    expect(pubResult.sig).toBeDefined();
+
+    // 2. Test window.nostr.fetch
+    const fetched = await fakeWindow.nostr.fetch([{ kinds: [1] }], { localOnly: true });
+    expect(fetched.length).toBeGreaterThanOrEqual(1);
+    expect(fetched[0].content).toBe("Hello from window.nostr.publish!");
+
+    // 3. Test window.nostr.doc with NIP-44 transparent encryption
+    const doc = await fakeWindow.nostr.doc("test/app-data", { encrypted: true });
+    expect(doc.kind).toBe(30078);
+    expect(doc.d).toBe("test/app-data");
+
+    // Initially empty
+    expect(doc.data).toBeNull();
+
+    // Set new data
+    const savedEvent = await doc.set({ count: 42, note: "Encrypted checklist state" });
+    expect(savedEvent.id).toBeDefined();
+    expect(savedEvent.content).not.toContain("Encrypted checklist state"); // Content is encrypted!
+    expect(doc.data).toEqual({ count: 42, note: "Encrypted checklist state" });
+
+    // Reload document
+    const reloaded = await doc.reload();
+    expect(reloaded).toEqual({ count: 42, note: "Encrypted checklist state" });
+
+    doc.dispose();
+    dispatcher.destroy();
+    channelSchemaBus.port1.close();
+    channelSchemaBus.port2.close();
+    channelKernelRpc.port1.close();
+    channelKernelRpc.port2.close();
+  });
 });
 
