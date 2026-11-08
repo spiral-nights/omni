@@ -70,7 +70,8 @@ export class OmniBoxElement extends BaseElement {
           (e.target as HTMLElement).closest("textarea") ||
           (e.target as HTMLElement).closest("omni-progress") ||
           (e.target as HTMLElement).closest("omni-button") ||
-          (e.target as HTMLElement).closest("omni-icon-button")
+          (e.target as HTMLElement).closest("omni-icon-button") ||
+          (e.target as HTMLElement).closest("omni-avatar")
         ) {
           return;
         }
@@ -428,9 +429,32 @@ function queryIndexedDbEvent(id: string): Promise<OmniCachedEvent | null> {
   });
 }
 
+function getCachedProfileDisplayName(pubkey: string): string | null {
+  if (!pubkey || typeof localStorage === "undefined") return null;
+  try {
+    const cacheKeys = ["omni_profile_viewer_cache_v2", "omni_profile_cache_v2", "omni_profile_cache_v1"];
+    for (const key of cacheKeys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const records = JSON.parse(raw);
+      const entry = records[pubkey];
+      if (entry) {
+        const meta = entry.meta || entry;
+        const name = meta.display_name || meta.displayName || meta.name || (meta.nip05 ? meta.nip05.split("@")[0] : "");
+        if (name && typeof name === "string" && name.trim()) {
+          return name.trim();
+        }
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
 function renderQuoteCardHtml(hex: string, entity: string, fallbackPubkey?: string): string {
   const cached = getOmniCachedEvent(hex);
-  const authorName = cached?.authorName || (cached?.pubkey ? `nostr:${cached.pubkey.slice(0, 8)}` : (fallbackPubkey ? `nostr:${fallbackPubkey.slice(0, 8)}` : "Nostr User"));
+  const authorPk = cached?.pubkey || fallbackPubkey || "";
+  const resolvedAuthor = authorPk ? getCachedProfileDisplayName(authorPk) : null;
+  const authorName = resolvedAuthor || cached?.authorName || (authorPk ? `nostr:${authorPk.slice(0, 8)}` : "Nostr User");
   const short = `${entity.slice(0, 9)}…${entity.slice(-4)}`;
   const hasContent = Boolean(cached?.content);
   const contentSnippet = hasContent ? escapeHtml(cached!.content!) : "Loading quoted note…";
@@ -540,7 +564,9 @@ function formatTextWithLinks(raw: string, showInlineImages?: boolean): string {
 
     if (decoded.type === "npub" || decoded.type === "nprofile") {
       const pk = decoded.pubkey || decoded.hex || "";
-      return `<a href="nostr:${entity}" data-nostr-entity="${entity}" data-pubkey="${pk}" class="feed-nostr-entity omni-nostr-entity feed-nostr-profile" style="display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; margin: 0 2px; background: rgba(212, 163, 115, 0.12); border: 1px solid rgba(212, 163, 115, 0.28); border-radius: 4px; color: var(--omni-accent-primary, #d4a373); text-decoration: none; font-size: 0.88em; font-weight: 500; vertical-align: baseline; font-family: monospace; transition: all 0.15s ease;" title="Nostr Profile: ${entity}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></svg><span>@${short}</span></a>`;
+      const resolvedName = pk ? getCachedProfileDisplayName(pk) : null;
+      const displayLabel = resolvedName ? `@${resolvedName}` : `@${short}`;
+      return `<a href="nostr:${entity}" data-nostr-entity="${entity}" data-pubkey="${pk}" class="feed-nostr-entity omni-nostr-entity feed-nostr-profile" style="display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; margin: 0 2px; background: rgba(212, 163, 115, 0.12); border: 1px solid rgba(212, 163, 115, 0.28); border-radius: 4px; color: var(--omni-accent-primary, #d4a373); text-decoration: none; font-size: 0.88em; font-weight: 500; vertical-align: baseline; font-family: monospace; transition: all 0.15s ease;" title="Nostr Profile: ${resolvedName || entity}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></svg><span>${escapeHtml(displayLabel)}</span></a>`;
     }
 
     if (decoded.type === "note" || decoded.type === "nevent") {
@@ -850,8 +876,9 @@ export class OmniAvatarElement extends BaseElement {
 
   connectedCallback(): void {
     this.classList.add("omni-avatar");
-    this.addEventListener("click", () => {
+    this.addEventListener("click", (e) => {
       if (this.actionData) {
+        e.stopPropagation();
         this.dispatchEvent(new OmniActionEvent(this.actionData));
       }
     });
@@ -908,6 +935,15 @@ export class OmniButtonElement extends BaseElement {
     }
 
     this.btnEl!.disabled = Boolean(props.disabled || props.loading);
+    if ((props as any).title || (props as any).tooltip) {
+      const tooltipText = (props as any).title || (props as any).tooltip;
+      this.setAttribute("title", tooltipText);
+      this.setAttribute("tooltip", tooltipText);
+      this.btnEl!.title = tooltipText;
+    }
+    if (props.icon) {
+      this.setAttribute("icon", props.icon);
+    }
 
     let content = "";
     if (props.loading) {

@@ -81,7 +81,13 @@ function isWasmView(
   }
   if (typeof scriptContent === "string") {
     const trimmed = scriptContent.trim();
-    if (trimmed.startsWith("\0asm") || trimmed.startsWith("data:application/wasm;base64,") || trimmed.startsWith("AGFzbQ")) {
+    if (
+      trimmed.endsWith(".wasm") ||
+      trimmed.includes(".wasm?") ||
+      trimmed.includes("data:application/wasm;base64,") ||
+      trimmed.startsWith("\0asm") ||
+      trimmed.startsWith("AGFzbQ")
+    ) {
       return true;
     }
   }
@@ -639,6 +645,7 @@ export class SandboxInstance {
           onAction: (action, payload) => {
             const isBackAction =
               action.name === "back" ||
+              action.name === "back-to-feed" ||
               action.name === "close-thread" ||
               Boolean(
                 action.navigate?.back ||
@@ -648,19 +655,32 @@ export class SandboxInstance {
             if (
               isBackAction &&
               !isCompanionWidget &&
-              this.options.canGoBack?.() &&
               this.options.onHistoryBack
             ) {
-              this.options.onHistoryBack();
-              return;
+              if (this.options.canGoBack?.()) {
+                this.options.onHistoryBack();
+              }
             }
-            if (action.navigate?.route && this.options.onHandleUri) {
-              this.options.onHandleUri(action.navigate.route, this.manifest.id);
+            if (action.navigate?.route) {
+              const route = action.navigate.route;
+              if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(route)) {
+                if (this.options.onHandleUri) {
+                  this.options.onHandleUri(route, this.manifest.id);
+                }
+              } else if (this.options.onHistoryPush) {
+                this.options.onHistoryPush({
+                  pageId: comp.id,
+                  state: { route, pluginId: this.manifest.id },
+                  title: (action.navigate as any).title || "",
+                  url: route
+                });
+              }
             }
             const handlesProfile = (this.manifest as any).handledIntents?.includes("view_profile") || 
               (this.manifest as any).handledIntents?.includes("view-profile") ||
               this.manifest.permissions?.intents?.handle?.includes("view_profile") ||
-              this.manifest.permissions?.intents?.handle?.includes("view-profile");
+              this.manifest.permissions?.intents?.handle?.includes("view-profile") ||
+              this.manifest.permissions?.intents?.handle?.includes("*");
             if (
               (action.name === "view-profile" || action.name === "view_profile") &&
               this.options.intentBroker &&
@@ -674,9 +694,11 @@ export class SandboxInstance {
             const handlesNote = (this.manifest as any).handledIntents?.includes("view_note") || 
               (this.manifest as any).handledIntents?.includes("view-note") ||
               this.manifest.permissions?.intents?.handle?.includes("view_note") ||
-              this.manifest.permissions?.intents?.handle?.includes("view-note");
+              this.manifest.permissions?.intents?.handle?.includes("view-note") ||
+              this.manifest.permissions?.intents?.handle?.includes("*") ||
+              this.manifest.id === "org.omni.plugin.feed";
             if (
-              (action.name === "view_note" || action.name === "view-note" || action.name === "view-thread") &&
+              (action.name === "view_note" || action.name === "view-note") &&
               this.options.intentBroker &&
               !handlesNote
             ) {
@@ -781,21 +803,44 @@ export class SandboxInstance {
           wasmBytes = this.options.scriptContent;
         } else if (typeof this.options.scriptContent === "string") {
           const raw = this.options.scriptContent.trim();
-          if (raw.startsWith("data:application/wasm;base64,")) {
-            const b64 = raw.slice("data:application/wasm;base64,".length);
-            const binary = atob(b64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            wasmBytes = bytes;
-          } else if (raw.startsWith("AGFzbQ")) {
-            const binary = atob(raw);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            wasmBytes = bytes;
-          } else {
-            const bytes = new Uint8Array(raw.length);
-            for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i) & 0xff;
-            wasmBytes = bytes;
+          if (
+            raw.endsWith(".wasm") ||
+            raw.includes(".wasm?") ||
+            raw.startsWith("http://") ||
+            raw.startsWith("https://") ||
+            raw.startsWith("/") ||
+            raw.startsWith("./") ||
+            raw.startsWith("blob:")
+          ) {
+            try {
+              if (typeof fetch === "function") {
+                const resp = await fetch(raw);
+                if (resp.ok) {
+                  wasmBytes = new Uint8Array(await resp.arrayBuffer());
+                }
+              }
+            } catch (err) {
+              console.warn(`[SandboxInstance:${this.manifest.id}] Failed to fetch WASM from URL [${raw}]:`, err);
+            }
+          }
+          if (!wasmBytes) {
+            const matchDataUrl = raw.match(/data:application\/wasm;base64,([A-Za-z0-9+/=]+)/);
+            if (matchDataUrl) {
+              const b64 = matchDataUrl[1];
+              const binary = atob(b64);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+              wasmBytes = bytes;
+            } else if (raw.startsWith("AGFzbQ")) {
+              const binary = atob(raw);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+              wasmBytes = bytes;
+            } else {
+              const bytes = new Uint8Array(raw.length);
+              for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i) & 0xff;
+              wasmBytes = bytes;
+            }
           }
         }
       }
@@ -823,7 +868,12 @@ export class SandboxInstance {
               schema,
               componentId
             });
-          }
+          },
+          subscriptionCoordinator: this.options.subscriptionCoordinator,
+          eventStore: this.options.eventStore,
+          relayPool: this.options.relayPool,
+          keystore: this.options.keystore,
+          aclEngine: this.options.aclEngine
         });
 
         await this.wasmHost.boot();
@@ -1216,6 +1266,9 @@ ${themeVarsCss}
             renderer.render(snapshot.schema);
           }
         }
+      }
+      if (this.wasmHost) {
+        this.wasmHost.dispatchAction("main", { name: "back-to-feed" }, { isBack: true });
       }
       if (this.channel2 && this.channel2.port1) {
         this.channel2.port1.postMessage({

@@ -11,7 +11,7 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
 
 ### The Fundamental Architectural Mandates
 1. **Every Functional Domain is a Standalone Plugin**:
-   - The timeline feed and composer (`@omni/plugin-feed`) is a plugin.
+   - The timeline feed and composer (`@omni/plugin-feed`) is a WebAssembly plugin (compiled from MoonBit with Declarative Schema UI).
    - The relay pool inspector and manager (`@omni/plugin-relays`) is a plugin.
    - The profile editor, key custody, and people browser (`@omni/plugin-profile-viewer`) is a unified "Profiles" plugin.
    - The task list (`@omni/plugin-checklist`) is a plugin.

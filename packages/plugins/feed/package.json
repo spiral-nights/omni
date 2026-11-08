@@ -3,12 +3,13 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "tsc && esbuild src/index.ts --bundle --format=esm --target=es2022 --outfile=dist/index.js",
+    "build": "moon build --target wasm --release && node scripts/bundle-wasm.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "devDependencies": {
     "@omni/types": "workspace:*",
+    "@types/node": "^22.0.0",
     "esbuild": "^0.28.2",
     "fake-indexeddb": "^6.2.5",
     "typescript": "^5.7.0"

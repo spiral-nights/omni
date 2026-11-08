@@ -197,11 +197,11 @@ export class OmniKernel {
               this.capabilityStore.setGrant(manifest.id, "intents:handle", "always");
             }
           }
-          if (manifest.permissions.nostr) {
+          if (manifest.permissions.nostr || isTrusted) {
             if (this.capabilityStore.getGrant(manifest.id, "nostr:read") === null) {
               this.capabilityStore.setGrant(manifest.id, "nostr:read", "always");
             }
-            if (manifest.permissions.nostr.write?.kinds && Array.isArray(manifest.permissions.nostr.write.kinds)) {
+            if (manifest.permissions?.nostr?.write?.kinds && Array.isArray(manifest.permissions.nostr.write.kinds)) {
               for (const k of manifest.permissions.nostr.write.kinds) {
                 if (this.capabilityStore.getGrant(manifest.id, "nostr:write", String(k), false) === null) {
                   this.capabilityStore.setGrant(manifest.id, "nostr:write", "always", String(k));

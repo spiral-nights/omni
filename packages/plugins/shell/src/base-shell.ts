@@ -1960,6 +1960,9 @@ export abstract class BaseShell implements OmniShellHost {
   }
 
   public async promptOpenWith(uri: string): Promise<string | null> {
+    if (!uri || uri.startsWith("?") || uri.startsWith("/") || !uri.includes(":")) {
+      return null;
+    }
     const scheme = uri.split(":")[0]?.toLowerCase() || "unknown";
 
     const defaultHandlerId = this.kernel.getDefaultHandler(scheme);

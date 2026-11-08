@@ -16,6 +16,11 @@ interface nostr {
     /// `filter` is a JSON-serialized array of NostrFilter. Returns a JSON-serialized array of NostrEvent.
     fetch: func(filter: string) -> string;
 
+    /// Subscribes to live events across local 0ms store and connected relays.
+    /// `filter` is a JSON-serialized array of NostrFilter. Returns subscription ID.
+    /// Matching events are dispatched to guest's `handle-action("nostr:event", eventJson)`.
+    subscribe: func(filter: string) -> string;
+
     /// Signs and broadcasts an event to the user's connected relays and local cache.
     /// `draft` is a JSON-serialized Nostr draft. Returns JSON-serialized NostrPublishResult.
     publish: func(draft: string) -> string;

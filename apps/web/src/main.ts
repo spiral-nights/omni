@@ -3,8 +3,8 @@ import { shellRegistry } from "@omni/plugin-shell";
 import type { BaseShell, InstalledPluginEntry } from "@omni/plugin-shell";
 import type { OmniShellHost } from "@omni/types";
 
-// Import compiled plugin scripts (using Vite ?raw import)
-import feedScript from "../../../packages/plugins/feed/dist/index.js?raw";
+// Import compiled plugin scripts (using Vite ?raw / ?url imports)
+import feedWasmUrl from "../../../packages/plugins/feed/dist/feed.wasm?url";
 import relaysScript from "../../../packages/plugins/relays/dist/index.js?raw";
 import profileViewerScript from "../../../packages/plugins/profile-viewer/dist/index.js?raw";
 import checklistScript from "../../../packages/plugins/checklist/dist/index.js?raw";
@@ -30,13 +30,13 @@ const initialPlugins: InstalledPluginEntry[] = [
     viewport: "main",
     pinned: true,
     views: [
-      { id: "main", title: "Feed", path: "", format: "schema" },
-      { id: "search", title: "Search", path: "?view=search" },
-      { id: "settings", title: "Feed Settings", path: "?view=settings" },
-      { id: "widget", title: "Feed Widget", path: "?view=widget", format: "schema" }
+      { id: "main", title: "Feed", path: "", format: "wasm" },
+      { id: "search", title: "Search", path: "?view=search", format: "wasm" },
+      { id: "settings", title: "Feed Settings", path: "?view=settings", format: "wasm" },
+      { id: "widget", title: "Feed Widget", path: "?view=widget", format: "wasm" }
     ],
     handledIntents: ["create_note", "compose_note", "view_note", "search", "share"],
-    scriptContent: feedScript,
+    scriptContent: feedWasmUrl,
     sourceUrl: "local:@omni/plugin-feed",
     enabled: true
   },

@@ -587,3 +587,11 @@ pub extern "C" fn handle_action(action_ptr: *const u8, action_len: usize, payloa
     std::ptr::null()
 }
 ```
+
+### 4. MoonBit Flagship Implementation (`@omni/plugin-feed`)
+
+`@omni/plugin-feed` is compiled from **MoonBit** into a **28 KB** standalone WebAssembly binary (`dist/feed.wasm`):
+- **Zero DOM / Pure Functional State**: Maintains notes state, tab selection, and active threads in MoonBit linear memory.
+- **In-Memory Bech32 & String Marshalling**: Decodes `npub` Nostr identifiers and parses action payloads with zero JavaScript GC pauses.
+- **WASI `fd_write` & Line-Buffered Streaming**: Emits Declarative Schema UI JSON directly to the host `SchemaRenderer`.
+- **GitHub Actions Free CI/CD**: Compiled automatically in CI via MoonBit's official free installer script.
