@@ -102,7 +102,7 @@ The primary objective was transitioning Omni from requiring proprietary SDKs and
 |  [MILESTONE 8]  Multi-Tier Signers: NIP-46 Remote Bunker & Hardware Keys              |
 |  [MILESTONE 9]  NIP-65 Gossip / Outbox Relay Routing                                  |
 |  [MILESTONE 10] Multi-Account Management & Passphrase Encryption                      |
-|  [MILESTONE 11] NIP-44 End-to-End Encrypted Messaging                                 |
+|  [MILESTONE 11] NIP-17 / NIP-59 Direct Messaging & Gift Wrapping (NIP-44)        |
 |  [MILESTONE 12] Headless Web Worker Sandbox Mode                                      |
 |  [MILESTONE 13] Atomic Single-File nsite Support (x Tag & NIP-5D Compatibility)       |
 |  [MILESTONE 14] Host Security Hardening & Private Network SSRF Protection             |
@@ -132,11 +132,25 @@ The primary objective was transitioning Omni from requiring proprietary SDKs and
   3. Per-account scoped local cache and layout preferences.
 * **Priority:** Medium / P2
 
-### Milestone 11: NIP-44 End-to-End Encrypted Messaging
-* **Goal:** Private communications in Omni using the modern NIP-44 standard.
+### Milestone 11: NIP-17 / NIP-59 Direct Messaging & Gift Wrapping (NIP-44)
+* **Goal:** Secure, modern end-to-end encrypted direct messaging and metadata-protected communications in Omni using NIP-17, NIP-59 Gift Wrapping, and NIP-44 v2 encryption.
 * **Scope:**
-  1. Implement conversation key exchange and NIP-44 message encryption/decryption.
-  2. Enforce host ACL prompts before plugins can access encrypted conversation streams.
+  1. **NIP-59 3-Layer Onion Gift Wrapping Pipeline:**
+     - **Rumor (Kind 14 / Kind 1060):** The inner unbroadcasted note containing the message content and conversation tags.
+     - **Seal (Kind 13):** The rumor payload encrypted via NIP-44 to the recipient's public key, signed by the sender's real key.
+     - **Gift Wrap (Kind 1059):** The seal encrypted via NIP-44 with a one-time random ephemeral key to the recipient, signed by the ephemeral key with a randomized timestamp (jittered by up to ±2 days) to eliminate metadata leakage and traffic analysis.
+  2. **Host Decryption & Unwrapping Engine:**
+     - Host keystore decrypts incoming Kind 1059 gift wraps using the user's private key, unwraps the Kind 13 seal, verifies the sender's signature, and caches the decrypted Rumor in `LocalEventStore`.
+     - Enforces strict ACL boundaries: sensitive kinds (4, 13, 14, 1059, 1060) are completely isolated and require explicit `nostr:dms` user permission grant.
+  3. **High-Level Keystore & RPC Primitives:**
+     - `messaging.wrapGift(recipientPubkey, kind, content, tags)`: Handles host-side ephemeral key generation, NIP-44 encryption, timestamp jitter, and signing inside the secure host keystore.
+     - `messaging.unwrapGift(giftWrapEvent)`: Decrypts gift wrap down to verified inner rumor.
+     - Support legacy Kind 4 DMs (NIP-04) for backwards compatibility.
+  4. **WebAssembly (WIT) & Component Model Support:**
+     - Expand `packages/types/wit/omni.wit` with `interface messaging` (`wrap-gift`, `unwrap-gift`) and cryptographic imports (`nip44-encrypt`, `nip44-decrypt`, `sign-event`).
+     - Enables WASM guest plugins (compiled from Rust, C/C++, Zig, Go) to send and receive private messages without bundle overhead.
+  5. **First-Class DMs Plugin (`@omni/plugin-dms`):**
+     - Standalone direct messaging app with conversation threads, contact discovery, real-time message composer, read receipts, and multi-device sync.
 * **Priority:** Medium / P2
 
 ### Milestone 12: Headless Web Worker Sandbox Mode
