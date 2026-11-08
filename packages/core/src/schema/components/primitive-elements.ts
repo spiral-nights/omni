@@ -565,8 +565,9 @@ function formatTextWithLinks(raw: string, showInlineImages?: boolean): string {
     if (decoded.type === "npub" || decoded.type === "nprofile") {
       const pk = decoded.pubkey || decoded.hex || "";
       const resolvedName = pk ? getCachedProfileDisplayName(pk) : null;
-      const displayLabel = resolvedName ? `@${resolvedName}` : `@${short}`;
-      return `<a href="nostr:${entity}" data-nostr-entity="${entity}" data-pubkey="${pk}" class="feed-nostr-entity omni-nostr-entity feed-nostr-profile" style="display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; margin: 0 2px; background: rgba(212, 163, 115, 0.12); border: 1px solid rgba(212, 163, 115, 0.28); border-radius: 4px; color: var(--omni-accent-primary, #d4a373); text-decoration: none; font-size: 0.88em; font-weight: 500; vertical-align: baseline; font-family: monospace; transition: all 0.15s ease;" title="Nostr Profile: ${resolvedName || entity}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></svg><span>${escapeHtml(displayLabel)}</span></a>`;
+      const cleanResolved = resolvedName ? resolvedName.trim().replace(/^@+/, "") : null;
+      const displayLabel = cleanResolved ? `@${cleanResolved}` : `@${short}`;
+      return `<a href="nostr:${entity}" data-nostr-entity="${entity}" data-pubkey="${pk}" class="feed-nostr-entity omni-nostr-entity feed-nostr-profile" style="display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; margin: 0 2px; background: rgba(212, 163, 115, 0.12); border: 1px solid rgba(212, 163, 115, 0.28); border-radius: 4px; color: var(--omni-accent-primary, #d4a373); text-decoration: none; font-size: 0.88em; font-weight: 500; vertical-align: baseline; font-family: monospace; transition: all 0.15s ease;" title="Nostr Profile: ${cleanResolved || entity}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></svg><span>${escapeHtml(displayLabel)}</span></a>`;
     }
 
     if (decoded.type === "note" || decoded.type === "nevent") {
@@ -615,6 +616,7 @@ export class OmniTextElement extends BaseElement {
     if (typeof window !== "undefined") {
       window.addEventListener("omni:event_cached", this.boundOnEventCached);
     }
+    this.resolvePendingQuotes();
     this.addEventListener("click", (e) => {
       // 1. If user is selecting text to copy, do not trigger action
       const sel = typeof window !== "undefined" ? window.getSelection()?.toString()?.trim() : "";
@@ -655,10 +657,17 @@ export class OmniTextElement extends BaseElement {
     if (!card) return;
     card.classList.remove("loading");
     const authorEl = card.querySelector<HTMLElement>(".omni-quote-author");
-    if (authorEl && ev.authorName) {
-      authorEl.textContent = ev.authorName;
-    } else if (authorEl && ev.pubkey) {
-      authorEl.textContent = `nostr:${ev.pubkey.slice(0, 8)}`;
+    if (authorEl) {
+      const authorPk = ev.pubkey || "";
+      const resolved = authorPk ? getCachedProfileDisplayName(authorPk) : null;
+      const cleanName = resolved ? resolved.trim().replace(/^@+/, "") : "";
+      if (cleanName) {
+        authorEl.textContent = cleanName;
+      } else if (ev.authorName) {
+        authorEl.textContent = ev.authorName.replace(/^@+/, "");
+      } else if (authorPk) {
+        authorEl.textContent = `nostr:${authorPk.slice(0, 8)}`;
+      }
     }
     const contentEl = card.querySelector<HTMLElement>(".omni-quote-content");
     if (contentEl && ev.content) {
@@ -712,7 +721,9 @@ export class OmniTextElement extends BaseElement {
       else this.removeAttribute("truncate");
     }
     if (props.content !== undefined) {
+      const isRichText = props.variant !== "caption" && props.variant !== "mono";
       if (
+        isRichText &&
         /(https?:\/\/[^\s<]+|\[.*?\]\(https?:\/\/|(?:nostr:)?(?:npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{20,})/i.test(
           props.content
         )

@@ -783,5 +783,102 @@ describe("SchemaRenderer & Custom Web Components", () => {
 
       renderer.destroy();
     });
+
+    it("renders caption with npub as plain text without pill box or duplicate name", async () => {
+      const container = document.createElement("div");
+      const renderer = new SchemaRenderer({ container });
+
+      renderer.render({
+        type: "card",
+        title: "Profile Card",
+        children: [
+          {
+            type: "text",
+            content: "Connie",
+            variant: "body",
+            tone: "primary"
+          },
+          {
+            type: "text",
+            content: "npub103r3k4f999999999999999999999999999999999999999999999999999",
+            variant: "caption",
+            tone: "muted"
+          }
+        ]
+      });
+
+      const textEls = container.querySelectorAll("omni-text");
+      expect(textEls.length).toBe(2);
+
+      // Body text element
+      expect(textEls[0].textContent).toBe("Connie");
+
+      // Caption element must remain plain text, not converted to pill box or profile link
+      expect(textEls[1].querySelector("a")).toBeNull();
+      expect(textEls[1].textContent).toContain("npub103r3k4");
+      expect(textEls[1].textContent).not.toContain("@@");
+
+      renderer.destroy();
+    });
+
+    it("dispatches omni:request_event for uncached quote and updates quote card upon omni:event_cached", async () => {
+      const { toBech32 } = await import("../src/crypto/bech32.js");
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const renderer = new SchemaRenderer({ container });
+
+      const uncachedHex = "22".repeat(32);
+      const uncachedNote = toBech32("note", uncachedHex);
+
+      let requestedId = "";
+      const onRequest = (e: Event) => {
+        requestedId = (e as CustomEvent).detail?.id;
+      };
+      window.addEventListener("omni:request_event", onRequest);
+
+      renderer.render({
+        type: "card",
+        title: "Uncached Quote",
+        children: [
+          {
+            type: "text",
+            content: `Check this: nostr:${uncachedNote}`
+          }
+        ]
+      });
+
+      const textEl = container.querySelector("omni-text");
+      expect(textEl).not.toBeNull();
+
+      const quoteCard = textEl?.querySelector(".omni-quote-card");
+      expect(quoteCard).not.toBeNull();
+      expect(quoteCard?.classList.contains("loading")).toBe(true);
+
+      // Wait a microtask for async resolvePendingQuotes to query IndexedDB and dispatch omni:request_event
+      await new Promise((r) => setTimeout(r, 30));
+      expect(requestedId).toBe(uncachedHex);
+
+      // Now simulate arrival of event via registerOmniEvent
+      const { registerOmniEvent } = await import("../src/schema/components/primitive-elements.js");
+      registerOmniEvent({
+        id: uncachedHex,
+        pubkey: "33".repeat(32),
+        authorName: "@AliceInWonderland",
+        content: "Down the rabbit hole!"
+      });
+
+      // Quote card should no longer be loading and authorName must have single @
+      expect(quoteCard?.classList.contains("loading")).toBe(false);
+      const authorEl = quoteCard?.querySelector(".omni-quote-author");
+      expect(authorEl?.textContent).toBe("AliceInWonderland");
+      expect(authorEl?.textContent).not.toContain("@@");
+
+      const contentEl = quoteCard?.querySelector(".omni-quote-content");
+      expect(contentEl?.textContent).toBe("Down the rabbit hole!");
+
+      window.removeEventListener("omni:request_event", onRequest);
+      renderer.destroy();
+      container.remove();
+    });
   });
 });

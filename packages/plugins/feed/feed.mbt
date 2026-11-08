@@ -173,6 +173,8 @@ pub struct FeedState {
   mut thread_replies_loaded : Bool
   notes : Array[Note]
   follows : Array[String]
+  mut follows_loaded : Bool
+  mut follows_subscribed : Bool
   profiles : Array[UserProfile]
   mut pending_profile_reqs : Array[String]
   mut pending_interaction_reqs : Array[String]
@@ -189,6 +191,8 @@ let global_state : FeedState = {
   thread_replies_loaded: false,
   notes: [],
   follows: [],
+  follows_loaded: false,
+  follows_subscribed: false,
   profiles: [],
   pending_profile_reqs: [],
   pending_interaction_reqs: [],
@@ -292,6 +296,46 @@ fn extract_all_e_tags(json : String) -> Array[String] {
           let e_id = buf.to_string()
           if e_id.length() >= 16 {
             result.push(e_id)
+          }
+          i = p
+        } else {
+          i = i + 1
+        }
+      } else {
+        i = i + 1
+      }
+    } else {
+      i = i + 1
+    }
+  }
+  result
+}
+
+fn extract_all_q_tags(json : String) -> Array[String] {
+  let result : Array[String] = []
+  let len = json.length()
+  let mut i = 0
+  while i < len - 6 {
+    if json[i] == '[' {
+      let mut p = i + 1
+      while p < len && (json[p] == ' ' || json[p] == '\t' || json[p] == '\n' || json[p] == '\r') {
+        p = p + 1
+      }
+      if p + 2 < len && json[p] == '"' && json[p + 1] == 'q' && json[p + 2] == '"' {
+        p = p + 3
+        while p < len && (json[p] == ' ' || json[p] == ',' || json[p] == '\t') {
+          p = p + 1
+        }
+        if p < len && json[p] == '"' {
+          p = p + 1
+          let buf = StringBuilder()
+          while p < len && json[p] != '"' {
+            buf.write_char(json[p].to_int().unsafe_to_char())
+            p = p + 1
+          }
+          let q_id = buf.to_string()
+          if q_id.length() >= 16 {
+            result.push(q_id)
           }
           i = p
         } else {
@@ -431,9 +475,19 @@ fn extract_json_int(json : String, key : String) -> Int {
 }
 
 fn extract_reply_id_from_tags(json : String) -> String {
+  let q_tags = extract_all_q_tags(json)
   let tags = extract_all_e_tags(json)
-  if tags.length() > 0 {
-    return tags[0]
+  for t in tags {
+    let mut is_q = false
+    for q in q_tags {
+      if q == t {
+        is_q = true
+        break
+      }
+    }
+    if !is_q {
+      return t
+    }
   }
   ""
 }
@@ -447,14 +501,26 @@ fn find_profile_name(pubkey : String) -> String {
   ""
 }
 
+fn clean_at_prefix(name : String) -> String {
+  if name.length() > 0 && name[0] == '@' {
+    let buf = StringBuilder()
+    for k in 1..<name.length() {
+      buf.write_char(name[k].to_int().unsafe_to_char())
+    }
+    buf.to_string()
+  } else {
+    name
+  }
+}
+
 fn get_reply_badge_label(n : Note) -> String {
   // 1. Try finding parent in global_state.notes
   if n.reply_to_id != "" {
     for other in global_state.notes {
       if other.id == n.reply_to_id {
         if other.author_name != "" && other.author_name != "Nostr User" {
-          let prefix = if other.author_name.length() > 0 && other.author_name[0] == '@' { "Reply to " } else { "Reply to @" }
-          return prefix + other.author_name
+          let clean = clean_at_prefix(other.author_name)
+          return "Reply to @" + clean
         }
         if other.npub != "" {
           if other.npub.length() > 14 {
@@ -477,8 +543,8 @@ fn get_reply_badge_label(n : Note) -> String {
   if n.reply_to_pubkey != "" {
     let known = find_profile_name(n.reply_to_pubkey)
     if known != "" && known != "Nostr User" {
-      let prefix = if known.length() > 0 && known[0] == '@' { "Reply to " } else { "Reply to @" }
-      return prefix + known
+      let clean = clean_at_prefix(known)
+      return "Reply to @" + clean
     }
     if n.reply_to_pubkey.length() >= 16 {
       let npub = bech32_encode("npub", n.reply_to_pubkey)
@@ -703,12 +769,31 @@ fn render_thread_view(state : FeedState) -> String {
       buf.write_string(p.pubkey)
       buf.write_string("\"}}},")
       buf.write_string("{\"type\":\"box\",\"direction\":\"column\",\"children\":[")
-      buf.write_string("{\"type\":\"text\",\"content\":\"")
-      buf.write_string(json_escape(p.author_name))
-      buf.write_string("\",\"variant\":\"caption\",\"tone\":\"primary\"},")
-      buf.write_string("{\"type\":\"text\",\"content\":\"")
-      buf.write_string(p.npub)
-      buf.write_string("\",\"variant\":\"caption\",\"tone\":\"muted\"}")
+
+      let short_p_npub = if p.npub.length() > 14 {
+        let sbuf = StringBuilder()
+        let max_k = if p.npub.length() > 10 { 10 } else { p.npub.length() }
+        for k in 0..<max_k {
+          sbuf.write_char(p.npub[k].to_int().unsafe_to_char())
+        }
+        sbuf.write_string("...")
+        sbuf.to_string()
+      } else {
+        p.npub
+      }
+      let has_named_p = p.author_name != "" && p.author_name != "Nostr User" && p.author_name != p.npub && p.author_name != short_p_npub
+      if has_named_p {
+        buf.write_string("{\"type\":\"text\",\"content\":\"")
+        buf.write_string(json_escape(p.author_name))
+        buf.write_string("\",\"variant\":\"caption\",\"tone\":\"primary\"},")
+        buf.write_string("{\"type\":\"text\",\"content\":\"")
+        buf.write_string(short_p_npub)
+        buf.write_string("\",\"variant\":\"caption\",\"tone\":\"muted\"}")
+      } else {
+        buf.write_string("{\"type\":\"text\",\"content\":\"")
+        buf.write_string(short_p_npub)
+        buf.write_string("\",\"variant\":\"caption\",\"tone\":\"primary\"}")
+      }
       buf.write_string("]}")
       buf.write_string("]},")
       buf.write_string("{\"type\":\"text\",\"content\":\"")
@@ -732,7 +817,11 @@ fn render_thread_view(state : FeedState) -> String {
         if n.id != p.id && note_is_reply_to(n, p.id) {
           reply_count = reply_count + 1
           buf.write_string(",")
-          buf.write_string("{\"type\":\"card\",\"style\":\"margin-top: 8px; margin-left: 12px;\",\"children\":[")
+          buf.write_string("{\"type\":\"card\",\"key\":\"reply-")
+          buf.write_string(n.id)
+          buf.write_string("\",\"id\":\"reply-")
+          buf.write_string(n.id)
+          buf.write_string("\",\"style\":\"margin-top: 8px; margin-left: 12px;\",\"children\":[")
           buf.write_string("{\"type\":\"box\",\"direction\":\"row\",\"gap\":\"sm\",\"align\":\"center\",\"style\":\"cursor: pointer;\",\"action\":{\"name\":\"view-profile\",\"payload\":{\"pubkey\":\"")
           buf.write_string(n.pubkey)
           buf.write_string("\"}},\"children\":[")
@@ -743,9 +832,30 @@ fn render_thread_view(state : FeedState) -> String {
           buf.write_string("\",\"size\":\"sm\",\"action\":{\"name\":\"view-profile\",\"payload\":{\"pubkey\":\"")
           buf.write_string(n.pubkey)
           buf.write_string("\"}}},")
-          buf.write_string("{\"type\":\"text\",\"content\":\"")
-          buf.write_string(json_escape(n.author_name))
-          buf.write_string("\",\"variant\":\"body\",\"tone\":\"primary\"}")
+          buf.write_string("{\"type\":\"box\",\"direction\":\"column\",\"children\":[")
+
+          let short_reply_npub = if n.npub.length() > 14 {
+            let sbuf = StringBuilder()
+            let max_k = if n.npub.length() > 10 { 10 } else { n.npub.length() }
+            for k in 0..<max_k {
+              sbuf.write_char(n.npub[k].to_int().unsafe_to_char())
+            }
+            sbuf.write_string("...")
+            sbuf.to_string()
+          } else {
+            n.npub
+          }
+          let reply_has_name = n.author_name != "" && n.author_name != "Nostr User" && n.author_name != n.npub && n.author_name != short_reply_npub
+          if reply_has_name {
+            buf.write_string("{\"type\":\"text\",\"content\":\"")
+            buf.write_string(json_escape(n.author_name))
+            buf.write_string("\",\"variant\":\"body\",\"tone\":\"primary\"}")
+          } else {
+            buf.write_string("{\"type\":\"text\",\"content\":\"")
+            buf.write_string(short_reply_npub)
+            buf.write_string("\",\"variant\":\"body\",\"tone\":\"primary\"}")
+          }
+          buf.write_string("]}")
           buf.write_string("]},")
           buf.write_string("{\"type\":\"text\",\"content\":\"")
           buf.write_string(json_escape(n.content))
@@ -812,7 +922,6 @@ pub fn render_feed(state : FeedState) -> String {
     if !is_following {
       displayed_notes.push(n)
     } else if !has_follows {
-      // If user hasn't followed accounts yet, display available notes
       displayed_notes.push(n)
     } else {
       let mut is_followed = false
@@ -839,6 +948,12 @@ pub fn render_feed(state : FeedState) -> String {
     if is_following && has_follows {
       buf.write_string("{\"type\":\"text\",\"content\":\"No notes from followed creators yet\",\"variant\":\"subheading\",\"tone\":\"primary\"},")
       buf.write_string("{\"type\":\"text\",\"content\":\"Follow creators in Profiles or switch to Global to view all network timeline notes.\",\"variant\":\"body\",\"tone\":\"muted\"}")
+    } else if is_following && !state.follows_loaded && state.my_pubkey != "" {
+      buf.write_string("{\"type\":\"text\",\"content\":\"Connecting to Nostr relays...\",\"variant\":\"subheading\",\"tone\":\"primary\"},")
+      buf.write_string("{\"type\":\"text\",\"content\":\"Loading your followed creators and notes...\",\"variant\":\"body\",\"tone\":\"muted\"}")
+    } else if is_following && state.follows_loaded && !has_follows {
+      buf.write_string("{\"type\":\"text\",\"content\":\"No follows found\",\"variant\":\"subheading\",\"tone\":\"primary\"},")
+      buf.write_string("{\"type\":\"text\",\"content\":\"Follow creators in Profiles or switch to Global to view all network timeline notes.\",\"variant\":\"body\",\"tone\":\"muted\"}")
     } else {
       buf.write_string("{\"type\":\"text\",\"content\":\"Connecting to Nostr relays...\",\"variant\":\"subheading\",\"tone\":\"primary\"},")
       buf.write_string("{\"type\":\"text\",\"content\":\"Notes will stream in as relays respond, or post a note above.\",\"variant\":\"body\",\"tone\":\"muted\"}")
@@ -849,7 +964,11 @@ pub fn render_feed(state : FeedState) -> String {
     for i in 0..<displayed_notes.length() {
       if i > 0 { buf.write_string(",") }
       let n = displayed_notes[i]
-      buf.write_string("{\"type\":\"card\",\"style\":\"margin-bottom: 8px;\",\"children\":[")
+      buf.write_string("{\"type\":\"card\",\"key\":\"note-")
+      buf.write_string(n.id)
+      buf.write_string("\",\"id\":\"note-")
+      buf.write_string(n.id)
+      buf.write_string("\",\"style\":\"margin-bottom: 8px;\",\"children\":[")
       
       if n.reply_to_id != "" {
         let badge_label = get_reply_badge_label(n)
@@ -874,12 +993,32 @@ pub fn render_feed(state : FeedState) -> String {
       buf.write_string(n.pubkey)
       buf.write_string("\"}}},")
       buf.write_string("{\"type\":\"box\",\"direction\":\"column\",\"children\":[")
-      buf.write_string("{\"type\":\"text\",\"content\":\"")
-      buf.write_string(json_escape(n.author_name))
-      buf.write_string("\",\"variant\":\"body\",\"tone\":\"primary\"},")
-      buf.write_string("{\"type\":\"text\",\"content\":\"")
-      buf.write_string(n.npub)
-      buf.write_string("\",\"variant\":\"caption\",\"tone\":\"muted\"}")
+
+      let short_npub = if n.npub.length() > 14 {
+        let sbuf = StringBuilder()
+        let max_k = if n.npub.length() > 10 { 10 } else { n.npub.length() }
+        for k in 0..<max_k {
+          sbuf.write_char(n.npub[k].to_int().unsafe_to_char())
+        }
+        sbuf.write_string("...")
+        sbuf.to_string()
+      } else {
+        n.npub
+      }
+
+      let has_named_author = n.author_name != "" && n.author_name != "Nostr User" && n.author_name != n.npub && n.author_name != short_npub
+      if has_named_author {
+        buf.write_string("{\"type\":\"text\",\"content\":\"")
+        buf.write_string(json_escape(n.author_name))
+        buf.write_string("\",\"variant\":\"body\",\"tone\":\"primary\"},")
+        buf.write_string("{\"type\":\"text\",\"content\":\"")
+        buf.write_string(short_npub)
+        buf.write_string("\",\"variant\":\"caption\",\"tone\":\"muted\"}")
+      } else {
+        buf.write_string("{\"type\":\"text\",\"content\":\"")
+        buf.write_string(short_npub)
+        buf.write_string("\",\"variant\":\"body\",\"tone\":\"primary\"}")
+      }
       buf.write_string("]}")
       buf.write_string("]},")
 
@@ -955,10 +1094,12 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
     global_state.is_loading_older = false
     if payload_str.contains("\"global\"") {
       global_state.active_tab = "global"
+      global_state.follows_subscribed = false
       nostr_subscribe("[{\"kinds\":[1],\"limit\":40}]")
     } else {
       global_state.active_tab = "following"
       if global_state.follows.length() > 0 {
+        global_state.follows_subscribed = true
         subscribe_to_follows(global_state.follows)
       } else if global_state.my_pubkey != "" {
         nostr_subscribe("[{\"kinds\":[3],\"authors\":[\"" + global_state.my_pubkey + "\"],\"limit\":1}]")
@@ -1091,6 +1232,15 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
     // Zap note reaction
   } else if action_name == "nostr:eose" {
     global_state.thread_replies_loaded = true
+    if global_state.pending_interaction_reqs.length() > 0 {
+      request_missing_interactions()
+    }
+    if global_state.pending_profile_reqs.length() > 0 {
+      request_missing_profiles()
+    }
+    let updated_schema = render_feed(global_state)
+    emit_schema(updated_schema)
+    return
   } else if action_name == "nostr:event" {
     let kind = extract_json_int(payload_str, "kind")
     if kind == 3 {
@@ -1109,7 +1259,9 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
           new_follows = true
         }
       }
-      if new_follows && global_state.follows.length() > 0 && global_state.active_tab == "following" {
+      global_state.follows_loaded = true
+      if new_follows && !global_state.follows_subscribed && global_state.follows.length() > 0 && global_state.active_tab == "following" {
+        global_state.follows_subscribed = true
         subscribe_to_follows(global_state.follows)
       }
     } else if kind == 0 {
@@ -1156,9 +1308,20 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
       let created_at = extract_json_int(payload_str, "created_at")
       let e_tags = extract_all_e_tags(payload_str)
       let p_tags = extract_all_p_tags(payload_str)
+      let q_tags = extract_all_q_tags(payload_str)
       let mut reply_to = extract_reply_id_from_tags(payload_str)
       if reply_to == "" && e_tags.length() > 0 {
-        reply_to = e_tags[0]
+        let first_e = e_tags[0]
+        let mut is_q = false
+        for q in q_tags {
+          if q == first_e {
+            is_q = true
+            break
+          }
+        }
+        if !is_q {
+          reply_to = first_e
+        }
       }
       if reply_to == "" {
         reply_to = extract_json_field(payload_str, "replyToId")
@@ -1212,7 +1375,22 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
         if is_thread_reply {
           global_state.thread_replies_loaded = true
         }
-        let should_display = !exists
+
+        let is_root = reply_to == ""
+        let mut is_author_followed = false
+        if global_state.my_pubkey != "" && pubkey == global_state.my_pubkey {
+          is_author_followed = true
+        } else {
+          for f in global_state.follows {
+            if f == pubkey {
+              is_author_followed = true
+              break
+            }
+          }
+        }
+
+        let has_follows = global_state.follows.length() > 0
+        let should_display = !exists && (is_root || is_thread_reply || is_author_followed || !has_follows || global_state.active_tab == "global")
 
         if should_display {
           let known_name = find_profile_name(pubkey)
@@ -1268,12 +1446,21 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
             global_state.oldest_timestamp = note_ts
           }
 
+          let mut final_content = content
+          if q_tags.length() > 0 {
+            let q_id = q_tags[0]
+            if !final_content.contains(q_id) && !final_content.contains("nostr:note1") && !final_content.contains("nostr:nevent1") {
+              let note_bech32 = bech32_encode("note", q_id)
+              final_content = final_content + "\n\nnostr:" + note_bech32
+            }
+          }
+
           let note : Note = {
             id: id,
             pubkey: pubkey,
             author_name: author_name,
             npub: if pubkey.length() >= 16 { bech32_encode("npub", pubkey) } else { "npub1..." },
-            content: content,
+            content: final_content,
             created_at: note_ts,
             liked: false,
             reposted: false,
@@ -1304,10 +1491,10 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
       }
     }
 
-    if global_state.pending_interaction_reqs.length() > 0 {
+    if global_state.pending_interaction_reqs.length() >= 20 {
       request_missing_interactions()
     }
-    if global_state.pending_profile_reqs.length() > 0 {
+    if global_state.pending_profile_reqs.length() >= 20 {
       request_missing_profiles()
     }
   }

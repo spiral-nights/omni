@@ -174,7 +174,7 @@ export class WasmGuestHost {
         } catch (_) {}
 
         if (filters.length > 0) {
-          const isTimeline = filters.some((f) => f.kinds && f.kinds.includes(1) && !f.until && !f["#e"] && !f.authors && !f.ids);
+          const isTimeline = filters.some((f) => f.kinds && f.kinds.includes(1) && !f.until && !f["#e"] && !f.ids);
           if (isTimeline && this.activeTimelineUnsub) {
             try {
               this.activeTimelineUnsub();

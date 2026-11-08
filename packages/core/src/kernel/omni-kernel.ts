@@ -12,6 +12,7 @@ import { NostrPluginResolver, ResolvedNostrPlugin, PublishNsiteOptions } from ".
 import { LayoutManager } from "../layout/layout-manager.js";
 import { AppHandler, detectUriScheme } from "../intents/app-handler.js";
 import { NavigationManager } from "../navigation/navigation-manager.js";
+import { registerOmniEvent } from "../schema/components/primitive-elements.js";
 
 export interface OmniKernelOptions {
   privateKeyHex?: string;
@@ -134,6 +135,37 @@ export class OmniKernel {
     });
     await this.storageManager.init();
     this.relayPool.connect().catch(() => {});
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("omni:request_event", async (e: Event) => {
+        const detail = (e as CustomEvent).detail;
+        if (!detail || !detail.id) return;
+        const noteId = detail.id;
+        try {
+          const cachedList = await this.eventStore.getEvents({ ids: [noteId], limit: 1 });
+          if (cachedList && cachedList.length > 0) {
+            const cached = cachedList[0];
+            registerOmniEvent({
+              id: cached.id,
+              pubkey: cached.pubkey,
+              content: cached.content,
+              created_at: cached.created_at
+            });
+            return;
+          }
+          const ev = await this.relayPool.fetchEvent({ ids: [noteId], limit: 1 }, 4000);
+          if (ev) {
+            await this.eventStore.saveEvent(ev);
+            registerOmniEvent({
+              id: ev.id,
+              pubkey: ev.pubkey,
+              content: ev.content,
+              created_at: ev.created_at
+            });
+          }
+        } catch (_) {}
+      });
+    }
   }
 
   getUserPubkey(): Promise<string> {
