@@ -32,6 +32,9 @@ describe("feed plugin full-stack (runtime bridge + schema renderer + kernel)", {
   });
 
   async function bootFeed(route: string = "?format=schema") {
+    if ((window as any).happyDOM?.settings) {
+      (window as any).happyDOM.settings.enableIframePageLoading = true;
+    }
     const iframe = document.createElement("iframe");
     document.body.appendChild(iframe);
     const win = iframe.contentWindow as any;

@@ -14,7 +14,7 @@ export const ComponentDeclarationSchema = z.object({
   type: ComponentTypeSchema,
   title: z.string().min(1),
   slot: z.string().min(1),
-  defaultProps: z.record(z.unknown()).optional()
+  defaultProps: z.record(z.string(), z.unknown()).optional()
 });
 export type ComponentDeclaration = z.infer<typeof ComponentDeclarationSchema>;
 
