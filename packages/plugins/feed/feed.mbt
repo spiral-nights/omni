@@ -17,19 +17,6 @@ pub struct Note {
 }
 
 ///|
-fn note_is_reply_to(n : Note, target_id : String) -> Bool {
-  if n.reply_to_id == target_id {
-    return true
-  }
-  for id in n.e_tags {
-    if id == target_id {
-      return true
-    }
-  }
-  false
-}
-
-///|
 pub struct UserProfile {
   pubkey : String
   mut name : String
@@ -50,6 +37,7 @@ pub struct FeedState {
   queried_interactions : Array[String]
   mut oldest_timestamp : Int32
   mut is_loading_older : Bool
+  mut is_syncing : Bool
   mut my_pubkey : String
   mut view : String
 }
@@ -69,8 +57,34 @@ let global_state : FeedState = {
   queried_interactions: [],
   oldest_timestamp: 0,
   is_loading_older: false,
+  is_syncing: true,
   my_pubkey: "",
   view: "main",
+}
+
+///|
+fn array_contains(arr : Array[String], target : String) -> Bool {
+  for item in arr {
+    if item == target {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn push_unique(arr : Array[String], val : String) -> Bool {
+  if !array_contains(arr, val) {
+    arr.push(val)
+    true
+  } else {
+    false
+  }
+}
+
+///|
+fn note_is_reply_to(n : Note, target_id : String) -> Bool {
+  n.reply_to_id == target_id || array_contains(n.e_tags, target_id)
 }
 
 ///|
@@ -94,6 +108,7 @@ fn subscribe_to_follows(follows : Array[String]) -> Unit {
   if follows.length() == 0 && global_state.my_pubkey == "" {
     return
   }
+  global_state.is_syncing = true
   let authors = build_follows_authors(follows)
   let filters : Json = [{ "kinds": [1], "authors": authors, "limit": 40 }]
   ignore(@nostr.subscribe(filters.stringify()))
@@ -130,13 +145,11 @@ fn truncate_npub(npub : String) -> String {
 
 ///|
 fn get_reply_badge_label(n : Note) -> String {
-  // 1. Try finding parent in global_state.notes
   if n.reply_to_id != "" {
     for other in global_state.notes {
       if other.id == n.reply_to_id {
         if other.author_name != "" && other.author_name != "Nostr User" {
-          let clean = clean_at_prefix(other.author_name)
-          return "Reply to @" + clean
+          return "Reply to @" + clean_at_prefix(other.author_name)
         }
         if other.npub != "" {
           return "Reply to " + truncate_npub(other.npub)
@@ -144,21 +157,16 @@ fn get_reply_badge_label(n : Note) -> String {
       }
     }
   }
-
-  // 2. Try reply_to_pubkey
   if n.reply_to_pubkey != "" {
     let known = find_profile_name(n.reply_to_pubkey)
     if known != "" && known != "Nostr User" {
-      let clean = clean_at_prefix(known)
-      return "Reply to @" + clean
+      return "Reply to @" + clean_at_prefix(known)
     }
     if n.reply_to_pubkey.length() >= 16 {
       let npub = bech32_encode("npub", n.reply_to_pubkey)
       return "Reply to " + truncate_npub(npub)
     }
   }
-
-  // 3. Fallback
   "Reply to thread"
 }
 
@@ -186,47 +194,114 @@ fn set_profile_name(pubkey : String, name : String) -> Unit {
 }
 
 ///|
-fn request_missing_profiles() -> Unit {
-  let count = global_state.pending_profile_reqs.length()
-  if count == 0 {
-    return
-  }
-  let limit = if count > 50 { 50 } else { count }
-  let authors : Array[String] = []
+fn take_batch(
+  queue : Array[String],
+  max_count : Int32,
+) -> (Array[String], Array[String]) {
+  let count = queue.length()
+  let limit = if count > max_count { max_count } else { count }
+  let batch : Array[String] = []
   for i in 0..<limit {
-    authors.push(global_state.pending_profile_reqs[i])
+    batch.push(queue[i])
   }
-  let filters : Json = [{ "kinds": [0], "authors": authors }]
-  ignore(@nostr.subscribe(filters.stringify()))
-
   let remaining : Array[String] = []
   for i in limit..<count {
-    remaining.push(global_state.pending_profile_reqs[i])
+    remaining.push(queue[i])
   }
+  (batch, remaining)
+}
+
+///|
+fn request_missing_profiles() -> Unit {
+  if global_state.pending_profile_reqs.length() == 0 {
+    return
+  }
+  let (authors, remaining) = take_batch(global_state.pending_profile_reqs, 50)
   global_state.pending_profile_reqs = remaining
+  let filters : Json = [{ "kinds": [0], "authors": authors }]
+  ignore(@nostr.subscribe(filters.stringify()))
 }
 
 ///|
 fn request_missing_interactions() -> Unit {
-  let count = global_state.pending_interaction_reqs.length()
-  if count == 0 {
+  if global_state.pending_interaction_reqs.length() == 0 {
     return
   }
-  let limit = if count > 30 { 30 } else { count }
-  let event_ids : Array[String] = []
-  for i in 0..<limit {
-    event_ids.push(global_state.pending_interaction_reqs[i])
-  }
+  let (event_ids, remaining) = take_batch(
+    global_state.pending_interaction_reqs,
+    30,
+  )
+  global_state.pending_interaction_reqs = remaining
   let filters : Json = [
-    { "kinds": [1, 6, 7], "#e": event_ids, "limit": limit * 15 },
+    { "kinds": [1, 6, 7], "#e": event_ids, "limit": event_ids.length() * 15 },
   ]
   ignore(@nostr.subscribe(filters.stringify()))
+}
 
-  let remaining : Array[String] = []
-  for i in limit..<count {
-    remaining.push(global_state.pending_interaction_reqs[i])
+///|
+fn render_author_header(
+  pubkey : String,
+  author_name : String,
+  npub : String,
+  avatar_size : String,
+  primary_variant : String,
+  show_secondary_npub : Bool,
+  extra_style : String,
+) -> Json {
+  let short_npub = truncate_npub(npub)
+  let has_named = author_name != "" &&
+    author_name != "Nostr User" &&
+    author_name != npub &&
+    author_name != short_npub
+  let author_texts : Array[Json] = if has_named && show_secondary_npub {
+    [
+      {
+        "type": "text",
+        "content": author_name,
+        "variant": primary_variant,
+        "tone": "primary",
+      },
+      {
+        "type": "text",
+        "content": short_npub,
+        "variant": "caption",
+        "tone": "muted",
+      },
+    ]
+  } else {
+    let label = if has_named { author_name } else { short_npub }
+    [
+      {
+        "type": "text",
+        "content": label,
+        "variant": primary_variant,
+        "tone": "primary",
+      },
+    ]
   }
-  global_state.pending_interaction_reqs = remaining
+
+  let profile_action : Json = {
+    "name": "view-profile",
+    "payload": { "pubkey": pubkey },
+  }
+  {
+    "type": "box",
+    "direction": "row",
+    "gap": "sm",
+    "align": "center",
+    "style": "cursor: pointer;" + extra_style,
+    "action": profile_action,
+    "children": [
+      {
+        "type": "avatar",
+        "pubkey": pubkey,
+        "name": author_name,
+        "size": avatar_size,
+        "action": profile_action,
+      },
+      { "type": "box", "direction": "column", "children": author_texts },
+    ],
+  }
 }
 
 ///|
@@ -315,6 +390,115 @@ fn render_widget_view(state : FeedState) -> String {
 }
 
 ///|
+fn render_thread_reply_card(n : Note) -> Json {
+  {
+    "type": "card",
+    "key": "reply-" + n.id,
+    "id": "reply-" + n.id,
+    "style": "margin-top: 8px; margin-left: 12px;",
+    "children": [
+      render_author_header(
+        n.pubkey,
+        n.author_name,
+        n.npub,
+        "sm",
+        "body",
+        false,
+        "",
+      ),
+      {
+        "type": "text",
+        "content": n.content,
+        "variant": "body",
+        "style": "margin-top: 6px;",
+      },
+    ],
+  }
+}
+
+///|
+fn append_thread_parent_and_replies(
+  children : Array[Json],
+  state : FeedState,
+  p : Note,
+) -> Unit {
+  children.push(
+    render_author_header(
+      p.pubkey,
+      p.author_name,
+      p.npub,
+      "md",
+      "caption",
+      true,
+      " margin-bottom: 8px;",
+    ),
+  )
+  children.push({ "type": "text", "content": p.content, "variant": "body" })
+  children.push({ "type": "divider" })
+
+  let reply_action : Json = {
+    "name": "publish-reply",
+    "payload": { "replyToId": p.id },
+  }
+  children.push({
+    "type": "box",
+    "direction": "row",
+    "gap": "sm",
+    "children": [
+      {
+        "type": "input",
+        "name": "replyText",
+        "placeholder": "Write a reply...",
+        "actionOnEnter": reply_action,
+      },
+      {
+        "type": "button",
+        "label": "Reply",
+        "variant": "primary",
+        "size": "sm",
+        "action": reply_action,
+      },
+    ],
+  })
+
+  let mut reply_count = 0
+  for n in state.notes {
+    if n.id != p.id && note_is_reply_to(n, p.id) {
+      reply_count = reply_count + 1
+      children.push(render_thread_reply_card(n))
+    }
+  }
+
+  if reply_count == 0 {
+    if !state.thread_replies_loaded && p.replies > 0 {
+      children.push({
+        "type": "box",
+        "direction": "row",
+        "align": "center",
+        "gap": "sm",
+        "style": "margin-top: 14px; margin-left: 4px;",
+        "children": [
+          { "type": "icon", "name": "spinner", "size": 16 },
+          {
+            "type": "text",
+            "content": "Fetching conversation replies from relays...",
+            "tone": "muted",
+            "style": "font-style: italic;",
+          },
+        ],
+      })
+    } else {
+      children.push({
+        "type": "text",
+        "content": "No replies yet. Be the first to reply!",
+        "tone": "muted",
+        "style": "margin-top: 14px; margin-left: 4px; font-style: italic;",
+      })
+    }
+  }
+}
+
+///|
 fn render_thread_view(state : FeedState) -> String {
   let target_id = state.active_thread_id
   let mut parent_note : Note? = None
@@ -338,169 +522,7 @@ fn render_thread_view(state : FeedState) -> String {
   ]
 
   match parent_note {
-    Some(p) => {
-      let short_p_npub = truncate_npub(p.npub)
-      let has_named_p = p.author_name != "" &&
-        p.author_name != "Nostr User" &&
-        p.author_name != p.npub &&
-        p.author_name != short_p_npub
-      let author_texts : Array[Json] = if has_named_p {
-        [
-          {
-            "type": "text",
-            "content": p.author_name,
-            "variant": "caption",
-            "tone": "primary",
-          },
-          {
-            "type": "text",
-            "content": short_p_npub,
-            "variant": "caption",
-            "tone": "muted",
-          },
-        ]
-      } else {
-        [
-          {
-            "type": "text",
-            "content": short_p_npub,
-            "variant": "caption",
-            "tone": "primary",
-          },
-        ]
-      }
-
-      children.push({
-        "type": "box",
-        "direction": "row",
-        "gap": "sm",
-        "align": "center",
-        "style": "cursor: pointer; margin-bottom: 8px;",
-        "action": { "name": "view-profile", "payload": { "pubkey": p.pubkey } },
-        "children": [
-          {
-            "type": "avatar",
-            "pubkey": p.pubkey,
-            "name": p.author_name,
-            "size": "md",
-            "action": {
-              "name": "view-profile",
-              "payload": { "pubkey": p.pubkey },
-            },
-          },
-          { "type": "box", "direction": "column", "children": author_texts },
-        ],
-      })
-      children.push({ "type": "text", "content": p.content, "variant": "body" })
-      children.push({ "type": "divider" })
-      children.push({
-        "type": "box",
-        "direction": "row",
-        "gap": "sm",
-        "children": [
-          {
-            "type": "input",
-            "name": "replyText",
-            "placeholder": "Write a reply...",
-            "actionOnEnter": {
-              "name": "publish-reply",
-              "payload": { "replyToId": p.id },
-            },
-          },
-          {
-            "type": "button",
-            "label": "Reply",
-            "variant": "primary",
-            "size": "sm",
-            "action": {
-              "name": "publish-reply",
-              "payload": { "replyToId": p.id },
-            },
-          },
-        ],
-      })
-
-      let mut reply_count = 0
-      for n in state.notes {
-        if n.id != p.id && note_is_reply_to(n, p.id) {
-          reply_count = reply_count + 1
-          let short_reply_npub = truncate_npub(n.npub)
-          let reply_has_name = n.author_name != "" &&
-            n.author_name != "Nostr User" &&
-            n.author_name != n.npub &&
-            n.author_name != short_reply_npub
-          let reply_author_label = if reply_has_name {
-            n.author_name
-          } else {
-            short_reply_npub
-          }
-
-          children.push({
-            "type": "card",
-            "key": "reply-" + n.id,
-            "id": "reply-" + n.id,
-            "style": "margin-top: 8px; margin-left: 12px;",
-            "children": [
-              {
-                "type": "box",
-                "direction": "row",
-                "gap": "sm",
-                "align": "center",
-                "style": "cursor: pointer;",
-                "action": {
-                  "name": "view-profile",
-                  "payload": { "pubkey": n.pubkey },
-                },
-                "children": [
-                  {
-                    "type": "avatar",
-                    "pubkey": n.pubkey,
-                    "name": n.author_name,
-                    "size": "sm",
-                    "action": {
-                      "name": "view-profile",
-                      "payload": { "pubkey": n.pubkey },
-                    },
-                  },
-                  {
-                    "type": "box",
-                    "direction": "column",
-                    "children": [
-                      {
-                        "type": "text",
-                        "content": reply_author_label,
-                        "variant": "body",
-                        "tone": "primary",
-                      },
-                    ],
-                  },
-                ],
-              },
-              {
-                "type": "text",
-                "content": n.content,
-                "variant": "body",
-                "style": "margin-top: 6px;",
-              },
-            ],
-          })
-        }
-      }
-
-      if reply_count == 0 {
-        let empty_msg = if !state.thread_replies_loaded && p.replies > 0 {
-          "Fetching conversation replies from relays..."
-        } else {
-          "No replies yet. Be the first to reply!"
-        }
-        children.push({
-          "type": "text",
-          "content": empty_msg,
-          "tone": "muted",
-          "style": "margin-top: 14px; margin-left: 4px; font-style: italic;",
-        })
-      }
-    }
+    Some(p) => append_thread_parent_and_replies(children, state, p)
     None =>
       children.push({
         "type": "text",
@@ -525,86 +547,10 @@ fn render_thread_view(state : FeedState) -> String {
 }
 
 ///|
-fn render_note_card(n : Note) -> Json {
-  let card_children : Array[Json] = []
-
-  if n.reply_to_id != "" {
-    let badge_label = get_reply_badge_label(n)
-    card_children.push({
-      "type": "box",
-      "direction": "row",
-      "align": "center",
-      "gap": "xs",
-      "style": "margin-bottom: 8px; cursor: pointer;",
-      "action": { "name": "view-thread", "payload": { "id": n.reply_to_id } },
-      "children": [{ "type": "badge", "label": badge_label, "tone": "accent" }],
-    })
-  }
-
-  let short_npub = truncate_npub(n.npub)
-  let has_named_author = n.author_name != "" &&
-    n.author_name != "Nostr User" &&
-    n.author_name != n.npub &&
-    n.author_name != short_npub
-  let author_texts : Array[Json] = if has_named_author {
-    [
-      {
-        "type": "text",
-        "content": n.author_name,
-        "variant": "body",
-        "tone": "primary",
-      },
-      {
-        "type": "text",
-        "content": short_npub,
-        "variant": "caption",
-        "tone": "muted",
-      },
-    ]
-  } else {
-    [
-      {
-        "type": "text",
-        "content": short_npub,
-        "variant": "body",
-        "tone": "primary",
-      },
-    ]
-  }
-
-  card_children.push({
-    "type": "box",
-    "direction": "row",
-    "gap": "sm",
-    "align": "center",
-    "style": "cursor: pointer;",
-    "action": { "name": "view-profile", "payload": { "pubkey": n.pubkey } },
-    "children": [
-      {
-        "type": "avatar",
-        "pubkey": n.pubkey,
-        "name": n.author_name,
-        "size": "md",
-        "action": { "name": "view-profile", "payload": { "pubkey": n.pubkey } },
-      },
-      { "type": "box", "direction": "column", "children": author_texts },
-    ],
-  })
-
-  card_children.push({
-    "type": "text",
-    "content": n.content,
-    "variant": "body",
-    "style": "margin-top: 8px; margin-bottom: 8px; cursor: pointer;",
-    "action": { "name": "view-thread", "payload": { "id": n.id } },
-  })
-
-  card_children.push({ "type": "divider" })
-
+fn render_note_actions(n : Note) -> Json {
   let repost_variant = if n.reposted { "secondary" } else { "ghost" }
   let like_variant = if n.liked { "secondary" } else { "ghost" }
-
-  card_children.push({
+  {
     "type": "box",
     "direction": "row",
     "justify": "between",
@@ -651,7 +597,46 @@ fn render_note_card(n : Note) -> Json {
         "action": { "name": "zap-note", "payload": { "id": n.id } },
       },
     ],
+  }
+}
+
+///|
+fn render_note_card(n : Note) -> Json {
+  let card_children : Array[Json] = []
+  if n.reply_to_id != "" {
+    card_children.push({
+      "type": "box",
+      "direction": "row",
+      "align": "center",
+      "gap": "xs",
+      "style": "margin-bottom: 8px; cursor: pointer;",
+      "action": { "name": "view-thread", "payload": { "id": n.reply_to_id } },
+      "children": [
+        { "type": "badge", "label": get_reply_badge_label(n), "tone": "accent" },
+      ],
+    })
+  }
+
+  card_children.push(
+    render_author_header(
+      n.pubkey,
+      n.author_name,
+      n.npub,
+      "md",
+      "body",
+      true,
+      "",
+    ),
+  )
+  card_children.push({
+    "type": "text",
+    "content": n.content,
+    "variant": "body",
+    "style": "margin-top: 8px; margin-bottom: 8px; cursor: pointer;",
+    "action": { "name": "view-thread", "payload": { "id": n.id } },
   })
+  card_children.push({ "type": "divider" })
+  card_children.push(render_note_actions(n))
 
   {
     "type": "card",
@@ -663,17 +648,7 @@ fn render_note_card(n : Note) -> Json {
 }
 
 ///|
-pub fn render_feed(state : FeedState) -> String {
-  if state.view == "compact" {
-    return render_compact_view(state)
-  }
-  if state.view == "widget" {
-    return render_widget_view(state)
-  }
-  if state.active_thread_id != "" {
-    return render_thread_view(state)
-  }
-
+fn render_feed_tabs_and_composer(state : FeedState) -> Array[Json] {
   let following_variant = if state.active_tab == "following" {
     "primary"
   } else {
@@ -684,8 +659,7 @@ pub fn render_feed(state : FeedState) -> String {
   } else {
     "ghost"
   }
-
-  let children : Array[Json] = [
+  let bar_items : Array[Json] = [
     {
       "type": "box",
       "direction": "row",
@@ -706,6 +680,23 @@ pub fn render_feed(state : FeedState) -> String {
           "action": { "name": "set-tab", "payload": { "tab": "global" } },
         },
       ],
+    },
+  ]
+  if state.is_syncing || state.is_loading_older {
+    bar_items.push({
+      "type": "status-indicator",
+      "status": "connecting",
+      "label": "Syncing relays...",
+      "pulse": true,
+    })
+  }
+  [
+    {
+      "type": "box",
+      "direction": "row",
+      "justify": "between",
+      "align": "center",
+      "children": bar_items,
     },
     {
       "type": "box",
@@ -737,84 +728,107 @@ pub fn render_feed(state : FeedState) -> String {
       ],
     },
   ]
+}
 
+///|
+fn is_author_in_follows(state : FeedState, pubkey : String) -> Bool {
+  (state.my_pubkey != "" && pubkey == state.my_pubkey) ||
+  array_contains(state.follows, pubkey)
+}
+
+///|
+fn filter_displayed_notes(state : FeedState) -> Array[Note] {
   let is_following = state.active_tab == "following"
   let has_follows = state.follows.length() > 0
-
-  let displayed_notes : Array[Note] = []
+  let displayed : Array[Note] = []
   for n in state.notes {
-    if !is_following {
-      displayed_notes.push(n)
-    } else if !has_follows {
-      displayed_notes.push(n)
-    } else {
-      let mut is_followed = false
-      if state.my_pubkey != "" && n.pubkey == state.my_pubkey {
-        is_followed = true
-      } else {
-        for f in state.follows {
-          if f == n.pubkey {
-            is_followed = true
-            break
-          }
-        }
-      }
-      if is_followed {
-        displayed_notes.push(n)
-      }
+    if !is_following || !has_follows || is_author_in_follows(state, n.pubkey) {
+      displayed.push(n)
     }
   }
+  displayed
+}
+
+///|
+fn render_empty_feed_card(state : FeedState) -> Json {
+  let is_following = state.active_tab == "following"
+  let has_follows = state.follows.length() > 0
+  let (heading, subtext, is_loading) = if is_following && has_follows {
+    (
+      "No notes from followed creators yet",
+      "Follow creators in Profiles or switch to Global to view all network timeline notes.",
+      state.is_syncing,
+    )
+  } else if is_following && !state.follows_loaded && state.my_pubkey != "" {
+    (
+      "Connecting to Nostr relays...", "Loading your followed creators and notes...",
+      true,
+    )
+  } else if is_following && state.follows_loaded && !has_follows {
+    (
+      "No follows found", "Follow creators in Profiles or switch to Global to view all network timeline notes.",
+      false,
+    )
+  } else {
+    (
+      "Connecting to Nostr relays...", "Notes will stream in as relays respond, or post a note above.",
+      true,
+    )
+  }
+
+  let box_children : Array[Json] = []
+  if is_loading {
+    box_children.push({ "type": "icon", "name": "spinner", "size": 24 })
+  }
+  box_children.push({
+    "type": "text",
+    "content": heading,
+    "variant": "subheading",
+    "tone": "primary",
+  })
+  box_children.push({
+    "type": "text",
+    "content": subtext,
+    "variant": "body",
+    "tone": "muted",
+  })
+
+  {
+    "type": "card",
+    "style": "padding: 24px; text-align: center; margin-top: 8px;",
+    "children": [
+      {
+        "type": "box",
+        "direction": "column",
+        "align": "center",
+        "gap": "sm",
+        "children": box_children,
+      },
+    ],
+  }
+}
+
+///|
+pub fn render_feed(state : FeedState) -> String {
+  if state.view == "compact" {
+    return render_compact_view(state)
+  }
+  if state.view == "widget" {
+    return render_widget_view(state)
+  }
+  if state.active_thread_id != "" {
+    return render_thread_view(state)
+  }
+
+  let children = render_feed_tabs_and_composer(state)
+  let displayed_notes = filter_displayed_notes(state)
 
   if displayed_notes.length() == 0 {
-    let (heading, subtext) = if is_following && has_follows {
-      (
-        "No notes from followed creators yet", "Follow creators in Profiles or switch to Global to view all network timeline notes.",
-      )
-    } else if is_following && !state.follows_loaded && state.my_pubkey != "" {
-      (
-        "Connecting to Nostr relays...", "Loading your followed creators and notes...",
-      )
-    } else if is_following && state.follows_loaded && !has_follows {
-      (
-        "No follows found", "Follow creators in Profiles or switch to Global to view all network timeline notes.",
-      )
-    } else {
-      (
-        "Connecting to Nostr relays...", "Notes will stream in as relays respond, or post a note above.",
-      )
-    }
-
-    children.push({
-      "type": "card",
-      "style": "padding: 24px; text-align: center; margin-top: 8px;",
-      "children": [
-        {
-          "type": "box",
-          "direction": "column",
-          "align": "center",
-          "gap": "sm",
-          "children": [
-            {
-              "type": "text",
-              "content": heading,
-              "variant": "subheading",
-              "tone": "primary",
-            },
-            {
-              "type": "text",
-              "content": subtext,
-              "variant": "body",
-              "tone": "muted",
-            },
-          ],
-        },
-      ],
-    })
+    children.push(render_empty_feed_card(state))
   } else {
     for n in displayed_notes {
       children.push(render_note_card(n))
     }
-
     let load_more_label = if state.is_loading_older {
       "Loading older notes..."
     } else {
@@ -832,6 +846,7 @@ pub fn render_feed(state : FeedState) -> String {
           "variant": "secondary",
           "size": "md",
           "icon": "arrow-down",
+          "loading": state.is_loading_older,
           "action": { "name": "load-more" },
         },
       ],
@@ -857,6 +872,7 @@ pub fn render_feed(state : FeedState) -> String {
 fn handle_set_tab(payload_str : String) -> Unit {
   global_state.oldest_timestamp = 0
   global_state.is_loading_older = false
+  global_state.is_syncing = true
   let parsed = parse_json(payload_str)
   let tab = match parsed {
     Some(j) => json_get_string(j, "tab")
@@ -940,64 +956,63 @@ fn handle_back_to_feed() -> Unit {
 
 ///|
 fn handle_like_note(payload_str : String) -> Unit {
-  let parsed = parse_json(payload_str)
-  let target_id = match parsed {
+  let target_id = match parse_json(payload_str) {
     Some(j) => json_get_string(j, "id")
     None => ""
   }
-  if target_id != "" {
-    for n in global_state.notes {
-      if n.id == target_id {
-        n.liked = !n.liked
-        if n.liked {
-          n.likes = n.likes + 1
-          let draft : Json = {
-            "kind": 7,
-            "content": "+",
-            "tags": [["e", target_id]],
-          }
-          ignore(@nostr.publish(draft.stringify()))
-        } else {
-          n.likes = n.likes - 1
+  if target_id == "" {
+    return
+  }
+  for n in global_state.notes {
+    if n.id == target_id {
+      n.liked = !n.liked
+      if n.liked {
+        n.likes = n.likes + 1
+        let draft : Json = {
+          "kind": 7,
+          "content": "+",
+          "tags": [["e", target_id]],
         }
-        break
+        ignore(@nostr.publish(draft.stringify()))
+      } else {
+        n.likes = n.likes - 1
       }
+      break
     }
   }
 }
 
 ///|
 fn handle_repost_note(payload_str : String) -> Unit {
-  let parsed = parse_json(payload_str)
-  let target_id = match parsed {
+  let target_id = match parse_json(payload_str) {
     Some(j) => json_get_string(j, "id")
     None => ""
   }
-  if target_id != "" {
-    for n in global_state.notes {
-      if n.id == target_id {
-        n.reposted = !n.reposted
-        if n.reposted {
-          n.reposts = n.reposts + 1
-          let draft : Json = {
-            "kind": 6,
-            "content": "",
-            "tags": [["e", target_id]],
-          }
-          ignore(@nostr.publish(draft.stringify()))
-        } else {
-          n.reposts = n.reposts - 1
+  if target_id == "" {
+    return
+  }
+  for n in global_state.notes {
+    if n.id == target_id {
+      n.reposted = !n.reposted
+      if n.reposted {
+        n.reposts = n.reposts + 1
+        let draft : Json = {
+          "kind": 6,
+          "content": "",
+          "tags": [["e", target_id]],
         }
-        break
+        ignore(@nostr.publish(draft.stringify()))
+      } else {
+        n.reposts = n.reposts - 1
       }
+      break
     }
   }
 }
 
 ///|
 fn handle_publish_note(payload_str : String) -> Unit {
-  let parsed = parse_json(payload_str)
-  let new_text = match parsed {
+  let new_text = match parse_json(payload_str) {
     Some(j) => {
       let t = json_get_string(j, "noteText")
       if t != "" {
@@ -1017,27 +1032,26 @@ fn handle_publish_note(payload_str : String) -> Unit {
 ///|
 fn handle_publish_reply(payload_str : String) -> Unit {
   let parent_id = global_state.active_thread_id
-  if parent_id != "" {
-    let parsed = parse_json(payload_str)
-    let reply_text = match parsed {
-      Some(j) => json_get_string(j, "replyText")
-      None => ""
+  if parent_id == "" {
+    return
+  }
+  let reply_text = match parse_json(payload_str) {
+    Some(j) => json_get_string(j, "replyText")
+    None => ""
+  }
+  if reply_text != "" {
+    let draft : Json = {
+      "kind": 1,
+      "content": reply_text,
+      "tags": [["e", parent_id, "", "reply"]],
     }
-    if reply_text != "" {
-      let draft : Json = {
-        "kind": 1,
-        "content": reply_text,
-        "tags": [["e", parent_id, "", "reply"]],
-      }
-      ignore(@nostr.publish(draft.stringify()))
-    }
+    ignore(@nostr.publish(draft.stringify()))
   }
 }
 
 ///|
 fn handle_set_view(payload_str : String) -> Unit {
-  let parsed = parse_json(payload_str)
-  let view_str = match parsed {
+  let view_str = match parse_json(payload_str) {
     Some(j) => json_get_string(j, "view")
     None => ""
   }
@@ -1053,14 +1067,15 @@ fn handle_set_view(payload_str : String) -> Unit {
 ///|
 fn handle_nostr_eose() -> Unit {
   global_state.thread_replies_loaded = true
+  global_state.is_syncing = false
+  global_state.is_loading_older = false
   if global_state.pending_interaction_reqs.length() > 0 {
     request_missing_interactions()
   }
   if global_state.pending_profile_reqs.length() > 0 {
     request_missing_profiles()
   }
-  let updated_schema = render_feed(global_state)
-  @ui.render(updated_schema)
+  @ui.render(render_feed(global_state))
 }
 
 ///|
@@ -1080,15 +1095,7 @@ fn handle_kind_3(event : @json.Json) -> Unit {
   let p_tags = json_get_tags_by_type(event, "p")
   let mut new_follows = false
   for pk in p_tags {
-    let mut exists = false
-    for f in global_state.follows {
-      if f == pk {
-        exists = true
-        break
-      }
-    }
-    if !exists {
-      global_state.follows.push(pk)
+    if push_unique(global_state.follows, pk) {
       new_follows = true
     }
   }
@@ -1137,25 +1144,16 @@ fn handle_kind_7(event : @json.Json) -> Unit {
 }
 
 ///|
-fn handle_kind_1(event : @json.Json) -> Unit {
-  let id = json_get_string(event, "id")
-  let pubkey = json_get_string(event, "pubkey")
-  let content = json_get_string(event, "content")
-  let created_at = json_get_int(event, "created_at")
-  let e_tags = json_get_tags_by_type(event, "e")
-  let p_tags = json_get_tags_by_type(event, "p")
-  let q_tags = json_get_tags_by_type(event, "q")
+fn resolve_reply_metadata(
+  event : @json.Json,
+  e_tags : Array[String],
+  p_tags : Array[String],
+  q_tags : Array[String],
+) -> (String, String) {
   let mut reply_to = get_reply_id_from_tags(e_tags, q_tags)
   if reply_to == "" && e_tags.length() > 0 {
     let first_e = e_tags[0]
-    let mut is_q = false
-    for q in q_tags {
-      if q == first_e {
-        is_q = true
-        break
-      }
-    }
-    if !is_q {
+    if !array_contains(q_tags, first_e) {
       reply_to = first_e
     }
   }
@@ -1171,10 +1169,16 @@ fn handle_kind_1(event : @json.Json) -> Unit {
       }
     }
   }
+  (reply_to, reply_to_pubkey)
+}
 
-  // Update reply counts for parent notes
+///|
+fn increment_parent_reply_counts(
+  note_id : String,
+  e_tags : Array[String],
+) -> Unit {
   for target_id in e_tags {
-    if target_id != id {
+    if target_id != note_id {
       for n in global_state.notes {
         if n.id == target_id {
           n.replies = n.replies + 1
@@ -1183,166 +1187,134 @@ fn handle_kind_1(event : @json.Json) -> Unit {
       }
     }
   }
+}
 
-  if id != "" && content != "" {
-    global_state.is_loading_older = false
-    let mut exists = false
-    for n in global_state.notes {
-      if n.id == id {
-        exists = true
-        break
-      }
-    }
+///|
+fn enqueue_note_queries(
+  id : String,
+  pubkey : String,
+  reply_to_pubkey : String,
+) -> Unit {
+  if pubkey.length() >= 16 && find_profile_name(pubkey) == "" {
+    ignore(push_unique(global_state.pending_profile_reqs, pubkey))
+  }
+  if reply_to_pubkey.length() >= 16 && find_profile_name(reply_to_pubkey) == "" {
+    ignore(push_unique(global_state.pending_profile_reqs, reply_to_pubkey))
+  }
+  if push_unique(global_state.queried_interactions, id) {
+    global_state.pending_interaction_reqs.push(id)
+  }
+}
 
-    // Only display if new and either root note or reply to active thread
-    let mut is_thread_reply = false
-    if global_state.active_thread_id != "" {
-      if reply_to == global_state.active_thread_id {
-        is_thread_reply = true
-      } else {
-        for target in e_tags {
-          if target == global_state.active_thread_id {
-            is_thread_reply = true
-            break
-          }
-        }
-      }
-    }
-    if is_thread_reply {
-      global_state.thread_replies_loaded = true
-    }
-
-    let is_root = reply_to == ""
-    let mut is_author_followed = false
-    if global_state.my_pubkey != "" && pubkey == global_state.my_pubkey {
-      is_author_followed = true
-    } else {
-      for f in global_state.follows {
-        if f == pubkey {
-          is_author_followed = true
-          break
-        }
-      }
-    }
-
-    let has_follows = global_state.follows.length() > 0
-    let should_display = !exists &&
-      (
-        is_root ||
-        is_thread_reply ||
-        is_author_followed ||
-        !has_follows ||
-        global_state.active_tab == "global"
-      )
-
-    if should_display {
-      let known_name = find_profile_name(pubkey)
-      let author_name = if known_name != "" {
-        known_name
-      } else if pubkey.length() >= 8 {
-        pubkey[0:8].to_owned()
-      } else {
-        "Nostr User"
-      }
-
-      if known_name == "" && pubkey.length() >= 16 {
-        let mut already_pending = false
-        for pk in global_state.pending_profile_reqs {
-          if pk == pubkey {
-            already_pending = true
-            break
-          }
-        }
-        if !already_pending {
-          global_state.pending_profile_reqs.push(pubkey)
-        }
-      }
-
-      if reply_to_pubkey.length() >= 16 &&
-        find_profile_name(reply_to_pubkey) == "" {
-        let mut already_pending = false
-        for pk in global_state.pending_profile_reqs {
-          if pk == reply_to_pubkey {
-            already_pending = true
-            break
-          }
-        }
-        if !already_pending {
-          global_state.pending_profile_reqs.push(reply_to_pubkey)
-        }
-      }
-
-      // Register for interaction count queries (replies, reposts, likes)
-      let mut already_queried = false
-      for q in global_state.queried_interactions {
-        if q == id {
-          already_queried = true
-          break
-        }
-      }
-      if !already_queried {
-        global_state.queried_interactions.push(id)
-        global_state.pending_interaction_reqs.push(id)
-      }
-
-      let note_ts = if created_at > 0 { created_at } else { 1730000000 }
-      if (
-          note_ts < global_state.oldest_timestamp ||
-          global_state.oldest_timestamp == 0
-        ) &&
-        reply_to == "" {
-        global_state.oldest_timestamp = note_ts
-      }
-
-      let mut final_content = content
-      if q_tags.length() > 0 {
-        let q_id = q_tags[0]
-        if !final_content.contains(q_id) &&
-          !final_content.contains("nostr:note1") &&
-          !final_content.contains("nostr:nevent1") {
-          let note_bech32 = bech32_encode("note", q_id)
-          final_content = final_content + "\n\nnostr:" + note_bech32
-        }
-      }
-
-      let note : Note = {
-        id,
-        pubkey,
-        author_name,
-        npub: if pubkey.length() >= 16 {
-          bech32_encode("npub", pubkey)
-        } else {
-          "npub1..."
-        },
-        content: final_content,
-        created_at: note_ts,
-        liked: false,
-        reposted: false,
-        likes: 0,
-        reposts: 0,
-        replies: 0,
-        reply_to_id: reply_to,
-        reply_to_pubkey,
-        e_tags,
-      }
-
-      let mut inserted = false
-      for i in 0..<global_state.notes.length() {
-        if note.created_at >= global_state.notes[i].created_at {
-          global_state.notes.insert(i, note)
-          inserted = true
-          break
-        }
-      }
-      if !inserted {
-        global_state.notes.push(note)
-      }
-
-      if global_state.notes.length() > 250 {
-        let _ = global_state.notes.pop()
-      }
+///|
+fn insert_note_sorted(note : Note) -> Unit {
+  let mut inserted = false
+  for i in 0..<global_state.notes.length() {
+    if note.created_at >= global_state.notes[i].created_at {
+      global_state.notes.insert(i, note)
+      inserted = true
+      break
     }
   }
+  if !inserted {
+    global_state.notes.push(note)
+  }
+  if global_state.notes.length() > 250 {
+    ignore(global_state.notes.pop())
+  }
+}
+
+///|
+fn handle_kind_1(event : @json.Json) -> Unit {
+  let id = json_get_string(event, "id")
+  let pubkey = json_get_string(event, "pubkey")
+  let content = json_get_string(event, "content")
+  let created_at = json_get_int(event, "created_at")
+  let e_tags = json_get_tags_by_type(event, "e")
+  let p_tags = json_get_tags_by_type(event, "p")
+  let q_tags = json_get_tags_by_type(event, "q")
+  let (reply_to, reply_to_pubkey) = resolve_reply_metadata(
+    event, e_tags, p_tags, q_tags,
+  )
+  increment_parent_reply_counts(id, e_tags)
+
+  if id == "" || content == "" {
+    return
+  }
+  global_state.is_loading_older = false
+  for n in global_state.notes {
+    if n.id == id {
+      return
+    }
+  }
+
+  let is_thread_reply = global_state.active_thread_id != "" &&
+    (
+      reply_to == global_state.active_thread_id ||
+      array_contains(e_tags, global_state.active_thread_id)
+    )
+  if is_thread_reply {
+    global_state.thread_replies_loaded = true
+  }
+
+  let should_display = reply_to == "" ||
+    is_thread_reply ||
+    is_author_in_follows(global_state, pubkey) ||
+    global_state.follows.length() == 0 ||
+    global_state.active_tab == "global"
+  if !should_display {
+    return
+  }
+
+  let known_name = find_profile_name(pubkey)
+  let author_name = if known_name != "" {
+    known_name
+  } else if pubkey.length() >= 8 {
+    pubkey[0:8].to_owned()
+  } else {
+    "Nostr User"
+  }
+  enqueue_note_queries(id, pubkey, reply_to_pubkey)
+
+  let note_ts = if created_at > 0 { created_at } else { 1730000000 }
+  if (
+      note_ts < global_state.oldest_timestamp ||
+      global_state.oldest_timestamp == 0
+    ) &&
+    reply_to == "" {
+    global_state.oldest_timestamp = note_ts
+  }
+
+  let mut final_content = content
+  if q_tags.length() > 0 {
+    let q_id = q_tags[0]
+    if !final_content.contains(q_id) &&
+      !final_content.contains("nostr:note1") &&
+      !final_content.contains("nostr:nevent1") {
+      final_content = final_content + "\n\nnostr:" + bech32_encode("note", q_id)
+    }
+  }
+
+  insert_note_sorted({
+    id,
+    pubkey,
+    author_name,
+    npub: if pubkey.length() >= 16 {
+      bech32_encode("npub", pubkey)
+    } else {
+      "npub1..."
+    },
+    content: final_content,
+    created_at: note_ts,
+    liked: false,
+    reposted: false,
+    likes: 0,
+    reposts: 0,
+    replies: 0,
+    reply_to_id: reply_to,
+    reply_to_pubkey,
+    e_tags,
+  })
 }
 
 ///|
@@ -1351,8 +1323,7 @@ fn handle_nostr_event(payload_str : String) -> Unit {
     Some(j) => j
     None => return
   }
-  let kind = json_get_int(parsed, "kind")
-  match kind {
+  match json_get_int(parsed, "kind") {
     0 => handle_kind_0(parsed)
     1 => handle_kind_1(parsed)
     3 => handle_kind_3(parsed)
@@ -1389,17 +1360,15 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
     "nostr:event" => handle_nostr_event(payload_str)
     _ => ()
   }
-
-  let updated_schema = render_feed(global_state)
-  @ui.render(updated_schema)
+  @ui.render(render_feed(global_state))
 }
 
 ///|
 pub fn start() -> Unit {
   let my_pk = @nostr.get_public_key()
   global_state.my_pubkey = my_pk
-  let schema = render_feed(global_state)
-  @ui.render(schema)
+  global_state.is_syncing = true
+  @ui.render(render_feed(global_state))
   if my_pk != "" {
     let filters : Json = [
       { "kinds": [1], "limit": 40 },

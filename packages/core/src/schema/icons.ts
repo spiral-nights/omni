@@ -63,10 +63,13 @@ export const ICON_INNER_SVGS: Record<string, string> = {
   sparkles: '<path d="M12 3c0 4.5 3.5 8 8 8-4.5 0-8 3.5-8 8 0-4.5-3.5-8-8-8 4.5 0 8-3.5 8-8z"/><path d="M19 17c0 2 1.5 3.5 3.5 3.5-2 0-3.5 1.5-3.5 3.5 0-2-1.5-3.5-3.5-3.5 2 0 3.5-1.5 3.5-3.5z"/>',
   repeat: '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
   repost: '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
-  bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'
+  bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  spinner: '<circle cx="12" cy="12" r="9" stroke-opacity="0.2"/><path d="M21 12a9 9 0 0 0-9-9"/>',
+  loader: '<circle cx="12" cy="12" r="9" stroke-opacity="0.2"/><path d="M21 12a9 9 0 0 0-9-9"/>'
 };
 
 export function renderSvgIcon(name: string, size = 16): string {
   const inner = ICON_INNER_SVGS[name] || ICON_INNER_SVGS["help-circle"] || '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>';
-  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="omni-primitive-icon">${inner}</svg>`;
+  const extraClass = name === "spinner" || name === "loader" ? " omni-icon-spin" : "";
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="omni-primitive-icon${extraClass}">${inner}</svg>`;
 }

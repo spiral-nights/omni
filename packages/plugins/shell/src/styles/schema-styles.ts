@@ -974,6 +974,10 @@ omni-list-item[checked] .omni-list-item-title {
   animation: omni-spin 0.6s linear infinite;
   display: inline-block;
 }
+.omni-icon-spin {
+  animation: omni-spin 0.8s linear infinite;
+  color: var(--omni-accent-primary, #d4a373);
+}
 @keyframes omni-spin {
   to { transform: rotate(360deg); }
 }
