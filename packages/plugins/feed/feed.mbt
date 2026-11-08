@@ -74,34 +74,29 @@ let global_state : FeedState = {
 }
 
 ///|
-fn subscribe_to_follows(follows : Array[String]) -> Unit {
-  if follows.length() == 0 && global_state.my_pubkey == "" {
-    return
-  }
-  let buf = StringBuilder()
-  buf.write_string("[{\"kinds\":[1],\"authors\":[")
+fn build_follows_authors(follows : Array[String]) -> Array[String] {
+  let authors : Array[String] = []
   let limit = if follows.length() > 100 { 100 } else { follows.length() }
-  let mut count = 0
   if global_state.my_pubkey != "" {
-    buf.write_string("\"")
-    buf.write_string(global_state.my_pubkey)
-    buf.write_string("\"")
-    count = 1
+    authors.push(global_state.my_pubkey)
   }
   for i in 0..<limit {
     let f = follows[i]
     if f != global_state.my_pubkey {
-      if count > 0 {
-        buf.write_string(",")
-      }
-      buf.write_string("\"")
-      buf.write_string(f)
-      buf.write_string("\"")
-      count = count + 1
+      authors.push(f)
     }
   }
-  buf.write_string("],\"limit\":40}]")
-  ignore(@nostr.subscribe(buf.to_string()))
+  authors
+}
+
+///|
+fn subscribe_to_follows(follows : Array[String]) -> Unit {
+  if follows.length() == 0 && global_state.my_pubkey == "" {
+    return
+  }
+  let authors = build_follows_authors(follows)
+  let filters : Json = [{ "kinds": [1], "authors": authors, "limit": 40 }]
+  ignore(@nostr.subscribe(filters.stringify()))
 }
 
 ///|
@@ -117,13 +112,19 @@ fn find_profile_name(pubkey : String) -> String {
 ///|
 fn clean_at_prefix(name : String) -> String {
   if name.length() > 0 && name[0] == '@' {
-    let buf = StringBuilder()
-    for k in 1..<name.length() {
-      buf.write_char(name[k].to_int().unsafe_to_char())
-    }
-    buf.to_string()
+    name[1:name.length()].to_owned()
   } else {
     name
+  }
+}
+
+///|
+fn truncate_npub(npub : String) -> String {
+  if npub.length() > 14 {
+    let max_k = if npub.length() > 10 { 10 } else { npub.length() }
+    npub[0:max_k].to_owned() + "..."
+  } else {
+    npub
   }
 }
 
@@ -138,21 +139,7 @@ fn get_reply_badge_label(n : Note) -> String {
           return "Reply to @" + clean
         }
         if other.npub != "" {
-          if other.npub.length() > 14 {
-            let buf = StringBuilder()
-            buf.write_string("Reply to ")
-            let max_k = if other.npub.length() > 10 {
-              10
-            } else {
-              other.npub.length()
-            }
-            for k in 0..<max_k {
-              buf.write_char(other.npub[k].to_int().unsafe_to_char())
-            }
-            buf.write_string("...")
-            return buf.to_string()
-          }
-          return "Reply to " + other.npub
+          return "Reply to " + truncate_npub(other.npub)
         }
       }
     }
@@ -167,14 +154,7 @@ fn get_reply_badge_label(n : Note) -> String {
     }
     if n.reply_to_pubkey.length() >= 16 {
       let npub = bech32_encode("npub", n.reply_to_pubkey)
-      let buf = StringBuilder()
-      buf.write_string("Reply to ")
-      let max_k = if npub.length() > 10 { 10 } else { npub.length() }
-      for k in 0..<max_k {
-        buf.write_char(npub[k].to_int().unsafe_to_char())
-      }
-      buf.write_string("...")
-      return buf.to_string()
+      return "Reply to " + truncate_npub(npub)
     }
   }
 
@@ -212,18 +192,12 @@ fn request_missing_profiles() -> Unit {
     return
   }
   let limit = if count > 50 { 50 } else { count }
-  let buf = StringBuilder()
-  buf.write_string("[{\"kinds\":[0],\"authors\":[")
+  let authors : Array[String] = []
   for i in 0..<limit {
-    if i > 0 {
-      buf.write_string(",")
-    }
-    buf.write_string("\"")
-    buf.write_string(global_state.pending_profile_reqs[i])
-    buf.write_string("\"")
+    authors.push(global_state.pending_profile_reqs[i])
   }
-  buf.write_string("]}]")
-  ignore(@nostr.subscribe(buf.to_string()))
+  let filters : Json = [{ "kinds": [0], "authors": authors }]
+  ignore(@nostr.subscribe(filters.stringify()))
 
   let remaining : Array[String] = []
   for i in limit..<count {
@@ -239,20 +213,14 @@ fn request_missing_interactions() -> Unit {
     return
   }
   let limit = if count > 30 { 30 } else { count }
-  let buf = StringBuilder()
-  buf.write_string("[{\"kinds\":[1,6,7],\"#e\":[")
+  let event_ids : Array[String] = []
   for i in 0..<limit {
-    if i > 0 {
-      buf.write_string(",")
-    }
-    buf.write_string("\"")
-    buf.write_string(global_state.pending_interaction_reqs[i])
-    buf.write_string("\"")
+    event_ids.push(global_state.pending_interaction_reqs[i])
   }
-  buf.write_string("],\"limit\":")
-  buf.write_string((limit * 15).to_string())
-  buf.write_string("}]")
-  ignore(@nostr.subscribe(buf.to_string()))
+  let filters : Json = [
+    { "kinds": [1, 6, 7], "#e": event_ids, "limit": limit * 15 },
+  ]
+  ignore(@nostr.subscribe(filters.stringify()))
 
   let remaining : Array[String] = []
   for i in limit..<count {
@@ -270,84 +238,80 @@ fn render_compact_view(state : FeedState) -> String {
     "Connecting to relays..."
   }
   let preview = if latest.length() > 30 {
-    let buf = StringBuilder()
-    for i in 0..<30 {
-      buf.write_char(latest[i].to_int().unsafe_to_char())
-    }
-    buf.write_string("...")
-    buf.to_string()
+    latest[0:30].to_owned() + "..."
   } else {
     latest
   }
-  let subtext = json_escape(preview)
-  let buf = StringBuilder()
-  buf.write_string(
-    "{\"type\":\"metric\",\"label\":\"Timeline Notes\",\"value\":\"",
-  )
-  buf.write_string(count.to_string())
-  buf.write_string(" notes\",\"subtext\":\"")
-  buf.write_string(subtext)
-  buf.write_string("\"}")
-  buf.to_string()
+  let schema : Json = {
+    "type": "metric",
+    "label": "Timeline Notes",
+    "value": count.to_string() + " notes",
+    "subtext": preview,
+  }
+  schema.stringify()
 }
 
 ///|
 fn render_widget_view(state : FeedState) -> String {
-  let buf = StringBuilder()
-  buf.write_string(
-    "{\"type\":\"card\",\"title\":\"Recent Notes\",\"icon\":\"message\",\"children\":[",
-  )
-
-  // Quick Post Input
-  buf.write_string(
-    "{\"type\":\"box\",\"direction\":\"row\",\"gap\":\"sm\",\"children\":[",
-  )
-  buf.write_string(
-    "{\"type\":\"input\",\"name\":\"noteText\",\"placeholder\":\"Quick note...\",\"actionOnEnter\":{\"name\":\"publish-note\"}},",
-  )
-  buf.write_string(
-    "{\"type\":\"button\",\"label\":\"Post\",\"variant\":\"primary\",\"size\":\"sm\",\"action\":{\"name\":\"publish-note\"}}",
-  )
-  buf.write_string("]},")
-
-  // Recent List Items
-  buf.write_string("{\"type\":\"list\",\"items\":[")
+  let items : Array[Json] = []
   if state.notes.length() == 0 {
-    buf.write_string(
-      "{\"type\":\"list-item\",\"id\":\"empty\",\"title\":\"Connecting to relays...\",\"subtitle\":\"Notes will stream in from relays\"}",
-    )
+    items.push({
+      "type": "list-item",
+      "id": "empty",
+      "title": "Connecting to relays...",
+      "subtitle": "Notes will stream in from relays",
+    })
   } else {
     let limit = if state.notes.length() < 3 { state.notes.length() } else { 3 }
     for i in 0..<limit {
-      if i > 0 {
-        buf.write_string(",")
-      }
       let n = state.notes[i]
-      buf.write_string("{\"type\":\"list-item\",\"id\":\"")
-      buf.write_string(n.id)
-      buf.write_string("\",\"title\":\"")
-      buf.write_string(json_escape(n.author_name))
-      buf.write_string("\",\"subtitle\":\"")
-      buf.write_string(json_escape(n.content))
-      buf.write_string(
-        "\",\"actions\":[{\"type\":\"icon-button\",\"icon\":\"heart\",\"variant\":\"",
-      )
-      if n.liked {
-        buf.write_string("secondary")
-      } else {
-        buf.write_string("ghost")
-      }
-      buf.write_string(
-        "\",\"action\":{\"name\":\"like-note\",\"payload\":{\"id\":\"",
-      )
-      buf.write_string(n.id)
-      buf.write_string("\"}}}]}")
+      let variant = if n.liked { "secondary" } else { "ghost" }
+      items.push({
+        "type": "list-item",
+        "id": n.id,
+        "title": n.author_name,
+        "subtitle": n.content,
+        "actions": [
+          {
+            "type": "icon-button",
+            "icon": "heart",
+            "variant": variant,
+            "action": { "name": "like-note", "payload": { "id": n.id } },
+          },
+        ],
+      })
     }
   }
-  buf.write_string("]}")
 
-  buf.write_string("]}")
-  buf.to_string()
+  let schema : Json = {
+    "type": "card",
+    "title": "Recent Notes",
+    "icon": "message",
+    "children": [
+      {
+        "type": "box",
+        "direction": "row",
+        "gap": "sm",
+        "children": [
+          {
+            "type": "input",
+            "name": "noteText",
+            "placeholder": "Quick note...",
+            "actionOnEnter": { "name": "publish-note" },
+          },
+          {
+            "type": "button",
+            "label": "Post",
+            "variant": "primary",
+            "size": "sm",
+            "action": { "name": "publish-note" },
+          },
+        ],
+      },
+      { "type": "list", "items": items },
+    ],
+  }
+  schema.stringify()
 }
 
 ///|
@@ -361,183 +325,341 @@ fn render_thread_view(state : FeedState) -> String {
     }
   }
 
-  let buf = StringBuilder()
-  buf.write_string(
-    "{\"type\":\"card\",\"title\":\"Conversation Thread\",\"icon\":\"reply\",",
-  )
-  buf.write_string("\"page\":{\"id\":\"thread-")
-  buf.write_string(target_id)
-  buf.write_string(
-    "\",\"title\":\"Conversation Thread\",\"url\":\"?view=thread&id=",
-  )
-  buf.write_string(target_id)
-  buf.write_string("\",\"state\":{\"view\":\"thread\",\"id\":\"")
-  buf.write_string(target_id)
-  buf.write_string("\"}},\"children\":[")
-
-  // Back to Feed Button
-  buf.write_string(
-    "{\"type\":\"button\",\"label\":\"Back to Feed\",\"icon\":\"arrow-left\",\"variant\":\"ghost\",\"size\":\"sm\",\"action\":{\"name\":\"back-to-feed\",\"navigate\":{\"back\":true}}},",
-  )
-  buf.write_string("{\"type\":\"divider\"},")
+  let children : Array[Json] = [
+    {
+      "type": "button",
+      "label": "Back to Feed",
+      "icon": "arrow-left",
+      "variant": "ghost",
+      "size": "sm",
+      "action": { "name": "back-to-feed", "navigate": { "back": true } },
+    },
+    { "type": "divider" },
+  ]
 
   match parent_note {
     Some(p) => {
-      // Parent Note Details
-      buf.write_string(
-        "{\"type\":\"box\",\"direction\":\"row\",\"gap\":\"sm\",\"align\":\"center\",\"style\":\"cursor: pointer; margin-bottom: 8px;\",\"action\":{\"name\":\"view-profile\",\"payload\":{\"pubkey\":\"",
-      )
-      buf.write_string(p.pubkey)
-      buf.write_string("\"}},\"children\":[")
-      buf.write_string("{\"type\":\"avatar\",\"pubkey\":\"")
-      buf.write_string(p.pubkey)
-      buf.write_string("\",\"name\":\"")
-      buf.write_string(json_escape(p.author_name))
-      buf.write_string(
-        "\",\"size\":\"md\",\"action\":{\"name\":\"view-profile\",\"payload\":{\"pubkey\":\"",
-      )
-      buf.write_string(p.pubkey)
-      buf.write_string("\"}}},")
-      buf.write_string(
-        "{\"type\":\"box\",\"direction\":\"column\",\"children\":[",
-      )
-
-      let short_p_npub = if p.npub.length() > 14 {
-        let sbuf = StringBuilder()
-        let max_k = if p.npub.length() > 10 { 10 } else { p.npub.length() }
-        for k in 0..<max_k {
-          sbuf.write_char(p.npub[k].to_int().unsafe_to_char())
-        }
-        sbuf.write_string("...")
-        sbuf.to_string()
-      } else {
-        p.npub
-      }
+      let short_p_npub = truncate_npub(p.npub)
       let has_named_p = p.author_name != "" &&
         p.author_name != "Nostr User" &&
         p.author_name != p.npub &&
         p.author_name != short_p_npub
-      if has_named_p {
-        buf.write_string("{\"type\":\"text\",\"content\":\"")
-        buf.write_string(json_escape(p.author_name))
-        buf.write_string("\",\"variant\":\"caption\",\"tone\":\"primary\"},")
-        buf.write_string("{\"type\":\"text\",\"content\":\"")
-        buf.write_string(short_p_npub)
-        buf.write_string("\",\"variant\":\"caption\",\"tone\":\"muted\"}")
+      let author_texts : Array[Json] = if has_named_p {
+        [
+          {
+            "type": "text",
+            "content": p.author_name,
+            "variant": "caption",
+            "tone": "primary",
+          },
+          {
+            "type": "text",
+            "content": short_p_npub,
+            "variant": "caption",
+            "tone": "muted",
+          },
+        ]
       } else {
-        buf.write_string("{\"type\":\"text\",\"content\":\"")
-        buf.write_string(short_p_npub)
-        buf.write_string("\",\"variant\":\"caption\",\"tone\":\"primary\"}")
+        [
+          {
+            "type": "text",
+            "content": short_p_npub,
+            "variant": "caption",
+            "tone": "primary",
+          },
+        ]
       }
-      buf.write_string("]}")
-      buf.write_string("]},")
-      buf.write_string("{\"type\":\"text\",\"content\":\"")
-      buf.write_string(json_escape(p.content))
-      buf.write_string("\",\"variant\":\"body\"},")
-      buf.write_string("{\"type\":\"divider\"},")
 
-      // Reply Input
-      buf.write_string(
-        "{\"type\":\"box\",\"direction\":\"row\",\"gap\":\"sm\",\"children\":[",
-      )
-      buf.write_string(
-        "{\"type\":\"input\",\"name\":\"replyText\",\"placeholder\":\"Write a reply...\",\"actionOnEnter\":{\"name\":\"publish-reply\",\"payload\":{\"replyToId\":\"",
-      )
-      buf.write_string(p.id)
-      buf.write_string("\"}}},")
-      buf.write_string(
-        "{\"type\":\"button\",\"label\":\"Reply\",\"variant\":\"primary\",\"size\":\"sm\",\"action\":{\"name\":\"publish-reply\",\"payload\":{\"replyToId\":\"",
-      )
-      buf.write_string(p.id)
-      buf.write_string("\"}}}")
-      buf.write_string("]}")
+      children.push({
+        "type": "box",
+        "direction": "row",
+        "gap": "sm",
+        "align": "center",
+        "style": "cursor: pointer; margin-bottom: 8px;",
+        "action": { "name": "view-profile", "payload": { "pubkey": p.pubkey } },
+        "children": [
+          {
+            "type": "avatar",
+            "pubkey": p.pubkey,
+            "name": p.author_name,
+            "size": "md",
+            "action": {
+              "name": "view-profile",
+              "payload": { "pubkey": p.pubkey },
+            },
+          },
+          { "type": "box", "direction": "column", "children": author_texts },
+        ],
+      })
+      children.push({ "type": "text", "content": p.content, "variant": "body" })
+      children.push({ "type": "divider" })
+      children.push({
+        "type": "box",
+        "direction": "row",
+        "gap": "sm",
+        "children": [
+          {
+            "type": "input",
+            "name": "replyText",
+            "placeholder": "Write a reply...",
+            "actionOnEnter": {
+              "name": "publish-reply",
+              "payload": { "replyToId": p.id },
+            },
+          },
+          {
+            "type": "button",
+            "label": "Reply",
+            "variant": "primary",
+            "size": "sm",
+            "action": {
+              "name": "publish-reply",
+              "payload": { "replyToId": p.id },
+            },
+          },
+        ],
+      })
 
-      // Replies to this note
       let mut reply_count = 0
       for n in state.notes {
         if n.id != p.id && note_is_reply_to(n, p.id) {
           reply_count = reply_count + 1
-          buf.write_string(",")
-          buf.write_string("{\"type\":\"card\",\"key\":\"reply-")
-          buf.write_string(n.id)
-          buf.write_string("\",\"id\":\"reply-")
-          buf.write_string(n.id)
-          buf.write_string(
-            "\",\"style\":\"margin-top: 8px; margin-left: 12px;\",\"children\":[",
-          )
-          buf.write_string(
-            "{\"type\":\"box\",\"direction\":\"row\",\"gap\":\"sm\",\"align\":\"center\",\"style\":\"cursor: pointer;\",\"action\":{\"name\":\"view-profile\",\"payload\":{\"pubkey\":\"",
-          )
-          buf.write_string(n.pubkey)
-          buf.write_string("\"}},\"children\":[")
-          buf.write_string("{\"type\":\"avatar\",\"pubkey\":\"")
-          buf.write_string(n.pubkey)
-          buf.write_string("\",\"name\":\"")
-          buf.write_string(json_escape(n.author_name))
-          buf.write_string(
-            "\",\"size\":\"sm\",\"action\":{\"name\":\"view-profile\",\"payload\":{\"pubkey\":\"",
-          )
-          buf.write_string(n.pubkey)
-          buf.write_string("\"}}},")
-          buf.write_string(
-            "{\"type\":\"box\",\"direction\":\"column\",\"children\":[",
-          )
-
-          let short_reply_npub = if n.npub.length() > 14 {
-            let sbuf = StringBuilder()
-            let max_k = if n.npub.length() > 10 { 10 } else { n.npub.length() }
-            for k in 0..<max_k {
-              sbuf.write_char(n.npub[k].to_int().unsafe_to_char())
-            }
-            sbuf.write_string("...")
-            sbuf.to_string()
-          } else {
-            n.npub
-          }
+          let short_reply_npub = truncate_npub(n.npub)
           let reply_has_name = n.author_name != "" &&
             n.author_name != "Nostr User" &&
             n.author_name != n.npub &&
             n.author_name != short_reply_npub
-          if reply_has_name {
-            buf.write_string("{\"type\":\"text\",\"content\":\"")
-            buf.write_string(json_escape(n.author_name))
-            buf.write_string("\",\"variant\":\"body\",\"tone\":\"primary\"}")
+          let reply_author_label = if reply_has_name {
+            n.author_name
           } else {
-            buf.write_string("{\"type\":\"text\",\"content\":\"")
-            buf.write_string(short_reply_npub)
-            buf.write_string("\",\"variant\":\"body\",\"tone\":\"primary\"}")
+            short_reply_npub
           }
-          buf.write_string("]}")
-          buf.write_string("]},")
-          buf.write_string("{\"type\":\"text\",\"content\":\"")
-          buf.write_string(json_escape(n.content))
-          buf.write_string(
-            "\",\"variant\":\"body\",\"style\":\"margin-top: 6px;\"}",
-          )
-          buf.write_string("]}")
+
+          children.push({
+            "type": "card",
+            "key": "reply-" + n.id,
+            "id": "reply-" + n.id,
+            "style": "margin-top: 8px; margin-left: 12px;",
+            "children": [
+              {
+                "type": "box",
+                "direction": "row",
+                "gap": "sm",
+                "align": "center",
+                "style": "cursor: pointer;",
+                "action": {
+                  "name": "view-profile",
+                  "payload": { "pubkey": n.pubkey },
+                },
+                "children": [
+                  {
+                    "type": "avatar",
+                    "pubkey": n.pubkey,
+                    "name": n.author_name,
+                    "size": "sm",
+                    "action": {
+                      "name": "view-profile",
+                      "payload": { "pubkey": n.pubkey },
+                    },
+                  },
+                  {
+                    "type": "box",
+                    "direction": "column",
+                    "children": [
+                      {
+                        "type": "text",
+                        "content": reply_author_label,
+                        "variant": "body",
+                        "tone": "primary",
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                "type": "text",
+                "content": n.content,
+                "variant": "body",
+                "style": "margin-top: 6px;",
+              },
+            ],
+          })
         }
       }
+
       if reply_count == 0 {
-        buf.write_string(",")
-        if !state.thread_replies_loaded && p.replies > 0 {
-          buf.write_string(
-            "{\"type\":\"text\",\"content\":\"Fetching conversation replies from relays...\",\"tone\":\"muted\",\"style\":\"margin-top: 14px; margin-left: 4px; font-style: italic;\"}",
-          )
+        let empty_msg = if !state.thread_replies_loaded && p.replies > 0 {
+          "Fetching conversation replies from relays..."
         } else {
-          buf.write_string(
-            "{\"type\":\"text\",\"content\":\"No replies yet. Be the first to reply!\",\"tone\":\"muted\",\"style\":\"margin-top: 14px; margin-left: 4px; font-style: italic;\"}",
-          )
+          "No replies yet. Be the first to reply!"
         }
+        children.push({
+          "type": "text",
+          "content": empty_msg,
+          "tone": "muted",
+          "style": "margin-top: 14px; margin-left: 4px; font-style: italic;",
+        })
       }
     }
     None =>
-      buf.write_string(
-        "{\"type\":\"text\",\"content\":\"Note not found or deleted.\",\"tone\":\"muted\"}",
-      )
+      children.push({
+        "type": "text",
+        "content": "Note not found or deleted.",
+        "tone": "muted",
+      })
   }
 
-  buf.write_string("]}")
-  buf.to_string()
+  let schema : Json = {
+    "type": "card",
+    "title": "Conversation Thread",
+    "icon": "reply",
+    "page": {
+      "id": "thread-" + target_id,
+      "title": "Conversation Thread",
+      "url": "?view=thread&id=" + target_id,
+      "state": { "view": "thread", "id": target_id },
+    },
+    "children": children,
+  }
+  schema.stringify()
+}
+
+///|
+fn render_note_card(n : Note) -> Json {
+  let card_children : Array[Json] = []
+
+  if n.reply_to_id != "" {
+    let badge_label = get_reply_badge_label(n)
+    card_children.push({
+      "type": "box",
+      "direction": "row",
+      "align": "center",
+      "gap": "xs",
+      "style": "margin-bottom: 8px; cursor: pointer;",
+      "action": { "name": "view-thread", "payload": { "id": n.reply_to_id } },
+      "children": [{ "type": "badge", "label": badge_label, "tone": "accent" }],
+    })
+  }
+
+  let short_npub = truncate_npub(n.npub)
+  let has_named_author = n.author_name != "" &&
+    n.author_name != "Nostr User" &&
+    n.author_name != n.npub &&
+    n.author_name != short_npub
+  let author_texts : Array[Json] = if has_named_author {
+    [
+      {
+        "type": "text",
+        "content": n.author_name,
+        "variant": "body",
+        "tone": "primary",
+      },
+      {
+        "type": "text",
+        "content": short_npub,
+        "variant": "caption",
+        "tone": "muted",
+      },
+    ]
+  } else {
+    [
+      {
+        "type": "text",
+        "content": short_npub,
+        "variant": "body",
+        "tone": "primary",
+      },
+    ]
+  }
+
+  card_children.push({
+    "type": "box",
+    "direction": "row",
+    "gap": "sm",
+    "align": "center",
+    "style": "cursor: pointer;",
+    "action": { "name": "view-profile", "payload": { "pubkey": n.pubkey } },
+    "children": [
+      {
+        "type": "avatar",
+        "pubkey": n.pubkey,
+        "name": n.author_name,
+        "size": "md",
+        "action": { "name": "view-profile", "payload": { "pubkey": n.pubkey } },
+      },
+      { "type": "box", "direction": "column", "children": author_texts },
+    ],
+  })
+
+  card_children.push({
+    "type": "text",
+    "content": n.content,
+    "variant": "body",
+    "style": "margin-top: 8px; margin-bottom: 8px; cursor: pointer;",
+    "action": { "name": "view-thread", "payload": { "id": n.id } },
+  })
+
+  card_children.push({ "type": "divider" })
+
+  let repost_variant = if n.reposted { "secondary" } else { "ghost" }
+  let like_variant = if n.liked { "secondary" } else { "ghost" }
+
+  card_children.push({
+    "type": "box",
+    "direction": "row",
+    "justify": "between",
+    "align": "center",
+    "children": [
+      {
+        "type": "button",
+        "icon": "reply",
+        "label": n.replies.to_string(),
+        "tooltip": "Reply",
+        "title": "Reply",
+        "variant": "ghost",
+        "size": "sm",
+        "action": { "name": "view-thread", "payload": { "id": n.id } },
+      },
+      {
+        "type": "button",
+        "icon": "repeat",
+        "label": n.reposts.to_string(),
+        "tooltip": "Repost",
+        "title": "Repost",
+        "variant": repost_variant,
+        "size": "sm",
+        "action": { "name": "repost-note", "payload": { "id": n.id } },
+      },
+      {
+        "type": "button",
+        "icon": "heart",
+        "label": n.likes.to_string(),
+        "tooltip": "Like",
+        "title": "Like",
+        "variant": like_variant,
+        "size": "sm",
+        "action": { "name": "like-note", "payload": { "id": n.id } },
+      },
+      {
+        "type": "button",
+        "icon": "zap",
+        "label": "0",
+        "tooltip": "Zap",
+        "title": "Zap",
+        "variant": "ghost",
+        "size": "sm",
+        "action": { "name": "zap-note", "payload": { "id": n.id } },
+      },
+    ],
+  })
+
+  {
+    "type": "card",
+    "key": "note-" + n.id,
+    "id": "note-" + n.id,
+    "style": "margin-bottom: 8px;",
+    "children": card_children,
+  }
 }
 
 ///|
@@ -552,57 +674,73 @@ pub fn render_feed(state : FeedState) -> String {
     return render_thread_view(state)
   }
 
-  let buf = StringBuilder()
-  buf.write_string(
-    "{\"type\":\"card\",\"title\":\"Timeline Notes\",\"icon\":\"feed\",\"page\":{\"id\":\"timeline\",\"title\":\"Timeline Notes\",\"url\":\"\",\"state\":null},\"children\":[",
-  )
-
-  // Top Bar: Navigation Tabs (Following, Global)
-  buf.write_string(
-    "{\"type\":\"box\",\"direction\":\"row\",\"gap\":\"xs\",\"children\":[",
-  )
-  buf.write_string(
-    "{\"type\":\"button\",\"label\":\"Following\",\"variant\":\"",
-  )
-  if state.active_tab == "following" {
-    buf.write_string("primary")
+  let following_variant = if state.active_tab == "following" {
+    "primary"
   } else {
-    buf.write_string("ghost")
+    "ghost"
   }
-  buf.write_string(
-    "\",\"size\":\"sm\",\"action\":{\"name\":\"set-tab\",\"payload\":{\"tab\":\"following\"}}},",
-  )
-  buf.write_string("{\"type\":\"button\",\"label\":\"Global\",\"variant\":\"")
-  if state.active_tab == "global" {
-    buf.write_string("primary")
+  let global_variant = if state.active_tab == "global" {
+    "primary"
   } else {
-    buf.write_string("ghost")
+    "ghost"
   }
-  buf.write_string(
-    "\",\"size\":\"sm\",\"action\":{\"name\":\"set-tab\",\"payload\":{\"tab\":\"global\"}}}",
-  )
-  buf.write_string("]},")
 
-  // Composer Box
-  buf.write_string(
-    "{\"type\":\"box\",\"direction\":\"column\",\"gap\":\"sm\",\"style\":\"margin-top: 10px; margin-bottom: 12px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px;\",\"children\":[",
-  )
-  buf.write_string(
-    "{\"type\":\"input\",\"name\":\"composerText\",\"placeholder\":\"What's on your mind? Broadcast to Nostr...\",\"actionOnEnter\":{\"name\":\"publish-note\"}},",
-  )
-  buf.write_string(
-    "{\"type\":\"box\",\"direction\":\"row\",\"justify\":\"end\",\"children\":[",
-  )
-  buf.write_string(
-    "{\"type\":\"button\",\"label\":\"Publish Note\",\"variant\":\"primary\",\"size\":\"sm\",\"icon\":\"send\",\"action\":{\"name\":\"publish-note\"}}",
-  )
-  buf.write_string("]}")
-  buf.write_string("]},")
+  let children : Array[Json] = [
+    {
+      "type": "box",
+      "direction": "row",
+      "gap": "xs",
+      "children": [
+        {
+          "type": "button",
+          "label": "Following",
+          "variant": following_variant,
+          "size": "sm",
+          "action": { "name": "set-tab", "payload": { "tab": "following" } },
+        },
+        {
+          "type": "button",
+          "label": "Global",
+          "variant": global_variant,
+          "size": "sm",
+          "action": { "name": "set-tab", "payload": { "tab": "global" } },
+        },
+      ],
+    },
+    {
+      "type": "box",
+      "direction": "column",
+      "gap": "sm",
+      "style": "margin-top: 10px; margin-bottom: 12px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px;",
+      "children": [
+        {
+          "type": "input",
+          "name": "composerText",
+          "placeholder": "What's on your mind? Broadcast to Nostr...",
+          "actionOnEnter": { "name": "publish-note" },
+        },
+        {
+          "type": "box",
+          "direction": "row",
+          "justify": "end",
+          "children": [
+            {
+              "type": "button",
+              "label": "Publish Note",
+              "variant": "primary",
+              "size": "sm",
+              "icon": "send",
+              "action": { "name": "publish-note" },
+            },
+          ],
+        },
+      ],
+    },
+  ]
 
   let is_following = state.active_tab == "following"
   let has_follows = state.follows.length() > 0
 
-  // Filter notes when Following tab is active and follows list is present
   let displayed_notes : Array[Note] = []
   for n in state.notes {
     if !is_following {
@@ -627,233 +765,118 @@ pub fn render_feed(state : FeedState) -> String {
     }
   }
 
-  // Notes List
   if displayed_notes.length() == 0 {
-    buf.write_string(
-      "{\"type\":\"card\",\"style\":\"padding: 24px; text-align: center; margin-top: 8px;\",\"children\":[",
-    )
-    buf.write_string(
-      "{\"type\":\"box\",\"direction\":\"column\",\"align\":\"center\",\"gap\":\"sm\",\"children\":[",
-    )
-    if is_following && has_follows {
-      buf.write_string(
-        "{\"type\":\"text\",\"content\":\"No notes from followed creators yet\",\"variant\":\"subheading\",\"tone\":\"primary\"},",
-      )
-      buf.write_string(
-        "{\"type\":\"text\",\"content\":\"Follow creators in Profiles or switch to Global to view all network timeline notes.\",\"variant\":\"body\",\"tone\":\"muted\"}",
+    let (heading, subtext) = if is_following && has_follows {
+      (
+        "No notes from followed creators yet", "Follow creators in Profiles or switch to Global to view all network timeline notes.",
       )
     } else if is_following && !state.follows_loaded && state.my_pubkey != "" {
-      buf.write_string(
-        "{\"type\":\"text\",\"content\":\"Connecting to Nostr relays...\",\"variant\":\"subheading\",\"tone\":\"primary\"},",
-      )
-      buf.write_string(
-        "{\"type\":\"text\",\"content\":\"Loading your followed creators and notes...\",\"variant\":\"body\",\"tone\":\"muted\"}",
+      (
+        "Connecting to Nostr relays...", "Loading your followed creators and notes...",
       )
     } else if is_following && state.follows_loaded && !has_follows {
-      buf.write_string(
-        "{\"type\":\"text\",\"content\":\"No follows found\",\"variant\":\"subheading\",\"tone\":\"primary\"},",
-      )
-      buf.write_string(
-        "{\"type\":\"text\",\"content\":\"Follow creators in Profiles or switch to Global to view all network timeline notes.\",\"variant\":\"body\",\"tone\":\"muted\"}",
+      (
+        "No follows found", "Follow creators in Profiles or switch to Global to view all network timeline notes.",
       )
     } else {
-      buf.write_string(
-        "{\"type\":\"text\",\"content\":\"Connecting to Nostr relays...\",\"variant\":\"subheading\",\"tone\":\"primary\"},",
-      )
-      buf.write_string(
-        "{\"type\":\"text\",\"content\":\"Notes will stream in as relays respond, or post a note above.\",\"variant\":\"body\",\"tone\":\"muted\"}",
+      (
+        "Connecting to Nostr relays...", "Notes will stream in as relays respond, or post a note above.",
       )
     }
-    buf.write_string("]}")
-    buf.write_string("]}")
+
+    children.push({
+      "type": "card",
+      "style": "padding: 24px; text-align: center; margin-top: 8px;",
+      "children": [
+        {
+          "type": "box",
+          "direction": "column",
+          "align": "center",
+          "gap": "sm",
+          "children": [
+            {
+              "type": "text",
+              "content": heading,
+              "variant": "subheading",
+              "tone": "primary",
+            },
+            {
+              "type": "text",
+              "content": subtext,
+              "variant": "body",
+              "tone": "muted",
+            },
+          ],
+        },
+      ],
+    })
   } else {
-    for i in 0..<displayed_notes.length() {
-      if i > 0 {
-        buf.write_string(",")
-      }
-      let n = displayed_notes[i]
-      buf.write_string("{\"type\":\"card\",\"key\":\"note-")
-      buf.write_string(n.id)
-      buf.write_string("\",\"id\":\"note-")
-      buf.write_string(n.id)
-      buf.write_string("\",\"style\":\"margin-bottom: 8px;\",\"children\":[")
-
-      if n.reply_to_id != "" {
-        let badge_label = get_reply_badge_label(n)
-        buf.write_string(
-          "{\"type\":\"box\",\"direction\":\"row\",\"align\":\"center\",\"gap\":\"xs\",\"style\":\"margin-bottom: 8px; cursor: pointer;\",\"action\":{\"name\":\"view-thread\",\"payload\":{\"id\":\"",
-        )
-        buf.write_string(n.reply_to_id)
-        buf.write_string("\"}},\"children\":[")
-        buf.write_string("{\"type\":\"badge\",\"label\":\"")
-        buf.write_string(json_escape(badge_label))
-        buf.write_string("\",\"tone\":\"accent\"}")
-        buf.write_string("]},")
-      }
-
-      // Header Row: Avatar, Name, npub (clickable to open profile)
-      buf.write_string(
-        "{\"type\":\"box\",\"direction\":\"row\",\"gap\":\"sm\",\"align\":\"center\",\"style\":\"cursor: pointer;\",\"action\":{\"name\":\"view-profile\",\"payload\":{\"pubkey\":\"",
-      )
-      buf.write_string(n.pubkey)
-      buf.write_string("\"}},\"children\":[")
-      buf.write_string("{\"type\":\"avatar\",\"pubkey\":\"")
-      buf.write_string(n.pubkey)
-      buf.write_string("\",\"name\":\"")
-      buf.write_string(json_escape(n.author_name))
-      buf.write_string(
-        "\",\"size\":\"md\",\"action\":{\"name\":\"view-profile\",\"payload\":{\"pubkey\":\"",
-      )
-      buf.write_string(n.pubkey)
-      buf.write_string("\"}}},")
-      buf.write_string(
-        "{\"type\":\"box\",\"direction\":\"column\",\"children\":[",
-      )
-
-      let short_npub = if n.npub.length() > 14 {
-        let sbuf = StringBuilder()
-        let max_k = if n.npub.length() > 10 { 10 } else { n.npub.length() }
-        for k in 0..<max_k {
-          sbuf.write_char(n.npub[k].to_int().unsafe_to_char())
-        }
-        sbuf.write_string("...")
-        sbuf.to_string()
-      } else {
-        n.npub
-      }
-
-      let has_named_author = n.author_name != "" &&
-        n.author_name != "Nostr User" &&
-        n.author_name != n.npub &&
-        n.author_name != short_npub
-      if has_named_author {
-        buf.write_string("{\"type\":\"text\",\"content\":\"")
-        buf.write_string(json_escape(n.author_name))
-        buf.write_string("\",\"variant\":\"body\",\"tone\":\"primary\"},")
-        buf.write_string("{\"type\":\"text\",\"content\":\"")
-        buf.write_string(short_npub)
-        buf.write_string("\",\"variant\":\"caption\",\"tone\":\"muted\"}")
-      } else {
-        buf.write_string("{\"type\":\"text\",\"content\":\"")
-        buf.write_string(short_npub)
-        buf.write_string("\",\"variant\":\"body\",\"tone\":\"primary\"}")
-      }
-      buf.write_string("]}")
-      buf.write_string("]},")
-
-      // Note Body
-      buf.write_string("{\"type\":\"text\",\"content\":\"")
-      buf.write_string(json_escape(n.content))
-      buf.write_string(
-        "\",\"variant\":\"body\",\"style\":\"margin-top: 8px; margin-bottom: 8px; cursor: pointer;\",\"action\":{\"name\":\"view-thread\",\"payload\":{\"id\":\"",
-      )
-      buf.write_string(n.id)
-      buf.write_string("\"}}},")
-
-      // Divider
-      buf.write_string("{\"type\":\"divider\"},")
-
-      // Action Row (Reply, Repost, Like, Zap)
-      buf.write_string(
-        "{\"type\":\"box\",\"direction\":\"row\",\"justify\":\"between\",\"align\":\"center\",\"children\":[",
-      )
-
-      // Reply Button
-      buf.write_string("{\"type\":\"button\",\"icon\":\"reply\",\"label\":\"")
-      buf.write_string(n.replies.to_string())
-      buf.write_string(
-        "\",\"tooltip\":\"Reply\",\"title\":\"Reply\",\"variant\":\"ghost\",\"size\":\"sm\",\"action\":{\"name\":\"view-thread\",\"payload\":{\"id\":\"",
-      )
-      buf.write_string(n.id)
-      buf.write_string("\"}}},")
-
-      // Repost Button
-      buf.write_string("{\"type\":\"button\",\"icon\":\"repeat\",\"label\":\"")
-      buf.write_string(n.reposts.to_string())
-      buf.write_string(
-        "\",\"tooltip\":\"Repost\",\"title\":\"Repost\",\"variant\":\"",
-      )
-      if n.reposted {
-        buf.write_string("secondary")
-      } else {
-        buf.write_string("ghost")
-      }
-      buf.write_string(
-        "\",\"size\":\"sm\",\"action\":{\"name\":\"repost-note\",\"payload\":{\"id\":\"",
-      )
-      buf.write_string(n.id)
-      buf.write_string("\"}}},")
-
-      // Like Button
-      buf.write_string("{\"type\":\"button\",\"icon\":\"heart\",\"label\":\"")
-      buf.write_string(n.likes.to_string())
-      buf.write_string(
-        "\",\"tooltip\":\"Like\",\"title\":\"Like\",\"variant\":\"",
-      )
-      if n.liked {
-        buf.write_string("secondary")
-      } else {
-        buf.write_string("ghost")
-      }
-      buf.write_string(
-        "\",\"size\":\"sm\",\"action\":{\"name\":\"like-note\",\"payload\":{\"id\":\"",
-      )
-      buf.write_string(n.id)
-      buf.write_string("\"}}},")
-
-      // Zap Button
-      buf.write_string(
-        "{\"type\":\"button\",\"icon\":\"zap\",\"label\":\"0\",\"tooltip\":\"Zap\",\"title\":\"Zap\",\"variant\":\"ghost\",\"size\":\"sm\",\"action\":{\"name\":\"zap-note\",\"payload\":{\"id\":\"",
-      )
-      buf.write_string(n.id)
-      buf.write_string("\"}}}")
-
-      buf.write_string("]}")
-      buf.write_string("]}")
+    for n in displayed_notes {
+      children.push(render_note_card(n))
     }
 
-    // Load More Button / Sentinel for infinite scroll
-    buf.write_string(",")
-    buf.write_string(
-      "{\"type\":\"box\",\"direction\":\"row\",\"justify\":\"center\",\"style\":\"margin-top: 14px; margin-bottom: 20px;\",\"children\":[",
-    )
-    buf.write_string("{\"type\":\"button\",\"label\":\"")
-    if state.is_loading_older {
-      buf.write_string("Loading older notes...")
+    let load_more_label = if state.is_loading_older {
+      "Loading older notes..."
     } else {
-      buf.write_string("Load More Notes")
+      "Load More Notes"
     }
-    buf.write_string(
-      "\",\"variant\":\"secondary\",\"size\":\"md\",\"icon\":\"arrow-down\",\"action\":{\"name\":\"load-more\"}}",
-    )
-    buf.write_string("]}")
+    children.push({
+      "type": "box",
+      "direction": "row",
+      "justify": "center",
+      "style": "margin-top: 14px; margin-bottom: 20px;",
+      "children": [
+        {
+          "type": "button",
+          "label": load_more_label,
+          "variant": "secondary",
+          "size": "md",
+          "icon": "arrow-down",
+          "action": { "name": "load-more" },
+        },
+      ],
+    })
   }
 
-  buf.write_string("]}")
-  buf.to_string()
+  let schema : Json = {
+    "type": "card",
+    "title": "Timeline Notes",
+    "icon": "feed",
+    "page": {
+      "id": "timeline",
+      "title": "Timeline Notes",
+      "url": "",
+      "state": null,
+    },
+    "children": children,
+  }
+  schema.stringify()
 }
 
 ///|
 fn handle_set_tab(payload_str : String) -> Unit {
   global_state.oldest_timestamp = 0
   global_state.is_loading_older = false
-  if payload_str.contains("\"global\"") {
+  let parsed = parse_json(payload_str)
+  let tab = match parsed {
+    Some(j) => json_get_string(j, "tab")
+    None => ""
+  }
+  if tab == "global" || payload_str.contains("\"global\"") {
     global_state.active_tab = "global"
     global_state.follows_subscribed = false
-    ignore(@nostr.subscribe("[{\"kinds\":[1],\"limit\":40}]"))
+    let filters : Json = [{ "kinds": [1], "limit": 40 }]
+    ignore(@nostr.subscribe(filters.stringify()))
   } else {
     global_state.active_tab = "following"
     if global_state.follows.length() > 0 {
       global_state.follows_subscribed = true
       subscribe_to_follows(global_state.follows)
     } else if global_state.my_pubkey != "" {
-      ignore(
-        @nostr.subscribe(
-          "[{\"kinds\":[3],\"authors\":[\"" +
-          global_state.my_pubkey +
-          "\"],\"limit\":1}]",
-        ),
-      )
+      let filters : Json = [
+        { "kinds": [3], "authors": [global_state.my_pubkey], "limit": 1 },
+      ]
+      ignore(@nostr.subscribe(filters.stringify()))
     }
   }
 }
@@ -865,42 +888,14 @@ fn handle_load_more() -> Unit {
     let until_ts = global_state.oldest_timestamp - 1
     if global_state.active_tab == "following" &&
       global_state.follows.length() > 0 {
-      let buf = StringBuilder()
-      buf.write_string("[{\"kinds\":[1],\"authors\":[")
-      let limit = if global_state.follows.length() > 100 {
-        100
-      } else {
-        global_state.follows.length()
-      }
-      let mut count = 0
-      if global_state.my_pubkey != "" {
-        buf.write_string("\"")
-        buf.write_string(global_state.my_pubkey)
-        buf.write_string("\"")
-        count = 1
-      }
-      for i in 0..<limit {
-        let f = global_state.follows[i]
-        if f != global_state.my_pubkey {
-          if count > 0 {
-            buf.write_string(",")
-          }
-          buf.write_string("\"")
-          buf.write_string(f)
-          buf.write_string("\"")
-          count = count + 1
-        }
-      }
-      buf.write_string("],\"until\":")
-      buf.write_string(until_ts.to_string())
-      buf.write_string(",\"limit\":20}]")
-      ignore(@nostr.subscribe(buf.to_string()))
+      let authors = build_follows_authors(global_state.follows)
+      let filters : Json = [
+        { "kinds": [1], "authors": authors, "until": until_ts, "limit": 20 },
+      ]
+      ignore(@nostr.subscribe(filters.stringify()))
     } else {
-      let buf = StringBuilder()
-      buf.write_string("[{\"kinds\":[1],\"until\":")
-      buf.write_string(until_ts.to_string())
-      buf.write_string(",\"limit\":20}]")
-      ignore(@nostr.subscribe(buf.to_string()))
+      let filters : Json = [{ "kinds": [1], "until": until_ts, "limit": 20 }]
+      ignore(@nostr.subscribe(filters.stringify()))
     }
   }
 }
@@ -930,13 +925,11 @@ fn handle_view_thread(payload_str : String) -> Unit {
   if target_id != "" {
     global_state.active_thread_id = target_id
     global_state.thread_replies_loaded = false
-    let buf = StringBuilder()
-    buf.write_string("[{\"kinds\":[1],\"#e\":[\"")
-    buf.write_string(target_id)
-    buf.write_string("\"],\"limit\":50},{\"kinds\":[1],\"ids\":[\"")
-    buf.write_string(target_id)
-    buf.write_string("\"],\"limit\":1}]")
-    ignore(@nostr.subscribe(buf.to_string()))
+    let filters : Json = [
+      { "kinds": [1], "#e": [target_id], "limit": 50 },
+      { "kinds": [1], "ids": [target_id], "limit": 1 },
+    ]
+    ignore(@nostr.subscribe(filters.stringify()))
   }
 }
 
@@ -958,10 +951,12 @@ fn handle_like_note(payload_str : String) -> Unit {
         n.liked = !n.liked
         if n.liked {
           n.likes = n.likes + 1
-          let draft_json = "{\"kind\":7,\"content\":\"+\",\"tags\":[[\"e\",\"" +
-            target_id +
-            "\"]]}"
-          ignore(@nostr.publish(draft_json))
+          let draft : Json = {
+            "kind": 7,
+            "content": "+",
+            "tags": [["e", target_id]],
+          }
+          ignore(@nostr.publish(draft.stringify()))
         } else {
           n.likes = n.likes - 1
         }
@@ -984,10 +979,12 @@ fn handle_repost_note(payload_str : String) -> Unit {
         n.reposted = !n.reposted
         if n.reposted {
           n.reposts = n.reposts + 1
-          let draft_json = "{\"kind\":6,\"content\":\"\",\"tags\":[[\"e\",\"" +
-            target_id +
-            "\"]]}"
-          ignore(@nostr.publish(draft_json))
+          let draft : Json = {
+            "kind": 6,
+            "content": "",
+            "tags": [["e", target_id]],
+          }
+          ignore(@nostr.publish(draft.stringify()))
         } else {
           n.reposts = n.reposts - 1
         }
@@ -1012,10 +1009,8 @@ fn handle_publish_note(payload_str : String) -> Unit {
     None => ""
   }
   if new_text != "" {
-    let draft_json = "{\"kind\":1,\"content\":\"" +
-      json_escape(new_text) +
-      "\",\"tags\":[]}"
-    ignore(@nostr.publish(draft_json))
+    let draft : Json = { "kind": 1, "content": new_text, "tags": [] }
+    ignore(@nostr.publish(draft.stringify()))
   }
 }
 
@@ -1029,12 +1024,12 @@ fn handle_publish_reply(payload_str : String) -> Unit {
       None => ""
     }
     if reply_text != "" {
-      let draft_json = "{\"kind\":1,\"content\":\"" +
-        json_escape(reply_text) +
-        "\",\"tags\":[[\"e\",\"" +
-        parent_id +
-        "\",\"\",\"reply\"]]}"
-      ignore(@nostr.publish(draft_json))
+      let draft : Json = {
+        "kind": 1,
+        "content": reply_text,
+        "tags": [["e", parent_id, "", "reply"]],
+      }
+      ignore(@nostr.publish(draft.stringify()))
     }
   }
 }
@@ -1406,18 +1401,16 @@ pub fn start() -> Unit {
   let schema = render_feed(global_state)
   @ui.render(schema)
   if my_pk != "" {
-    ignore(
-      @nostr.subscribe(
-        "[{\"kinds\":[1],\"limit\":40},{\"kinds\":[3],\"authors\":[\"" +
-        my_pk +
-        "\"],\"limit\":1}]",
-      ),
-    )
+    let filters : Json = [
+      { "kinds": [1], "limit": 40 },
+      { "kinds": [3], "authors": [my_pk], "limit": 1 },
+    ]
+    ignore(@nostr.subscribe(filters.stringify()))
   } else {
-    ignore(
-      @nostr.subscribe(
-        "[{\"kinds\":[1],\"limit\":40},{\"kinds\":[3],\"limit\":1}]",
-      ),
-    )
+    let filters : Json = [
+      { "kinds": [1], "limit": 40 },
+      { "kinds": [3], "limit": 1 },
+    ]
+    ignore(@nostr.subscribe(filters.stringify()))
   }
 }

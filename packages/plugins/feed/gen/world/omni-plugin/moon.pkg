@@ -1,5 +1,0 @@
-import {
-  "omni/plugin",
-}
-
-warnings = "-44"

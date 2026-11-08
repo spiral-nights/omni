@@ -105,11 +105,7 @@ pub fn extract_profile_name(content_json : String) -> String {
         }
       }
       if at_idx > 0 {
-        let buf = StringBuilder()
-        for i in 0..<at_idx {
-          buf.write_char(nip05[i].to_int().unsafe_to_char())
-        }
-        name = buf.to_string()
+        name = nip05[0:at_idx].to_owned()
       } else {
         name = nip05
       }

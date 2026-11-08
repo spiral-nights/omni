@@ -1,1 +1,0 @@
-Host UI rendering interface provided by Omni

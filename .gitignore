@@ -6,3 +6,10 @@ dist
 external-plugins
 _build
 *.mbti
+
+# Auto-generated WIT bindings (jco & wit-bindgen)
+packages/types/src/wit/
+packages/core/src/sandbox/wit-host/
+packages/plugins/*/interface/
+packages/plugins/*/world/
+packages/plugins/*/gen/

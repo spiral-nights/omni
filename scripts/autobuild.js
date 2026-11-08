@@ -139,6 +139,17 @@ export function isPackageStale(pkg) {
  */
 export function buildPackage(pkg) {
   const start = performance.now();
+  if (pkg.name === "@omni/types") {
+    execSync(`"${ path.join(rootDir, "node_modules/.bin/jco") }" types wit/omni.wit -o src/wit`, {
+      stdio: "inherit",
+      cwd: pkg.dir
+    });
+  } else if (pkg.name === "@omni/core") {
+    execSync(`node scripts/generate-wit-host.js`, {
+      stdio: "inherit",
+      cwd: pkg.dir
+    });
+  }
   execSync(`"${tscBin}" -p "${pkg.tsconfig}"`, {
     stdio: "inherit",
     cwd: rootDir
