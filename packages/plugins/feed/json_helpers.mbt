@@ -1,68 +1,71 @@
-pub fn parse_json(s : String) -> Option[@json.Json] {
-  try {
-    Some(@json.parse(s))
-  } catch {
+///|
+pub fn parse_json(s : String) -> @json.Json? {
+  Some(@json.parse(s)) catch {
     _ => None
   }
 }
 
+///|
 pub fn json_get_string(val : @json.Json, key : String) -> String {
   match val {
-    Object(map) => {
+    Object(map) =>
       match map.get(key) {
         Some(String(s)) => s
         _ => ""
       }
-    }
     _ => ""
   }
 }
 
-pub fn json_get_int(val : @json.Json, key : String) -> Int {
+///|
+pub fn json_get_int(val : @json.Json, key : String) -> Int32 {
   match val {
-    Object(map) => {
+    Object(map) =>
       match map.get(key) {
         Some(Number(n, ..)) => n.to_int()
         _ => 0
       }
-    }
     _ => 0
   }
 }
 
-pub fn json_get_tags_by_type(val : @json.Json, tag_type : String) -> Array[String] {
+///|
+pub fn json_get_tags_by_type(
+  val : @json.Json,
+  tag_type : String,
+) -> Array[String] {
   let result : Array[String] = []
   match val {
-    Object(map) => {
+    Object(map) =>
       match map.get("tags") {
-        Some(Array(tags_arr)) => {
+        Some(Array(tags_arr)) =>
           for item in tags_arr {
             match item {
-              Array(tag) => {
+              Array(tag) =>
                 if tag.length() >= 2 {
                   match (tag[0], tag[1]) {
-                    (String(t), String(v)) => {
+                    (String(t), String(v)) =>
                       if t == tag_type && v.length() >= 16 {
                         result.push(v)
                       }
-                    }
                     _ => ()
                   }
                 }
-              }
               _ => ()
             }
           }
-        }
         _ => ()
       }
-    }
     _ => ()
   }
   result
 }
 
-pub fn get_reply_id_from_tags(e_tags : Array[String], q_tags : Array[String]) -> String {
+///|
+pub fn get_reply_id_from_tags(
+  e_tags : Array[String],
+  q_tags : Array[String],
+) -> String {
   for t in e_tags {
     let mut is_q = false
     for q in q_tags {
@@ -78,12 +81,9 @@ pub fn get_reply_id_from_tags(e_tags : Array[String], q_tags : Array[String]) ->
   ""
 }
 
+///|
 pub fn extract_profile_name(content_json : String) -> String {
-  let parsed = try {
-    @json.parse(content_json)
-  } catch {
-    _ => return ""
-  }
+  let parsed = @json.parse(content_json) catch { _ => return "" }
   let mut name = json_get_string(parsed, "display_name")
   if name == "" {
     name = json_get_string(parsed, "displayName")
@@ -117,4 +117,3 @@ pub fn extract_profile_name(content_json : String) -> String {
   }
   name
 }
-

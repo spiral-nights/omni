@@ -7,11 +7,8 @@ pkgtype(kind: "foreign_library")
 options(
   link: {
     "wasm": {
-      "exports": [
-        "start:init",
-        "handle_action"
-      ],
-      "export-memory-name": "memory"
-    }
-  }
+      "exports": [ "start:init", "handle_action" ],
+      "export-memory-name": "memory",
+    },
+  },
 )

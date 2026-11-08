@@ -10,7 +10,8 @@
       "types": "./dist/index.d.ts"
     },
     "./schema.json": "./schema/omni-ui.schema.json",
-    "./omni.wit": "./wit/omni.wit"
+    "./omni.wit": "./wit/omni.wit",
+    "./wit": "./dist/wit/omni.js"
   },
   "files": [
     "dist",
@@ -18,6 +19,7 @@
     "wit"
   ],
   "scripts": {
+    "generate:wit": "jco types wit/omni.wit -o src/wit",
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },

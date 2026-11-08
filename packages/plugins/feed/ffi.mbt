@@ -1,25 +1,36 @@
 // WebAssembly FFI & Low-Level Memory Bridge for Omni Host Runtime
 
-extern "wasm" fn load8_u(addr : Int) -> Int =
+///|
+extern "wasm" fn load8_u(addr : Int32) -> Int32 =
   #|(func (param i32) (result i32) local.get 0 i32.load8_u)
 
-extern "wasm" fn store8(addr : Int, val : Int) -> Unit =
+///|
+extern "wasm" fn store8(addr : Int32, val : Int32) -> Unit =
   #|(func (param i32 i32) local.get 0 local.get 1 i32.store8)
 
-extern "wasm" fn memory_size() -> Int =
+///|
+extern "wasm" fn memory_size() -> Int32 =
   #|(func (result i32) memory.size)
 
-extern "wasm" fn memory_grow(delta : Int) -> Int =
+///|
+extern "wasm" fn memory_grow(delta : Int32) -> Int32 =
   #|(func (param i32) (result i32) local.get 0 memory.grow)
 
-extern "wasm" fn load32_u(addr : Int) -> Int =
+///|
+extern "wasm" fn load32_u(addr : Int32) -> Int32 =
   #|(func (param i32) (result i32) local.get 0 i32.load)
 
-extern "wasm" fn host_subscribe(filter_ptr : Int, filter_len : Int) -> Unit = "nostr" "subscribe"
-extern "wasm" fn host_publish(draft_ptr : Int, draft_len : Int) -> Unit = "nostr" "publish"
-extern "wasm" fn host_get_public_key(ret_ptr : Int) -> Unit = "nostr" "get-public-key"
+///|
+extern "wasm" fn host_subscribe(filter_ptr : Int32, filter_len : Int32) -> Unit = "nostr" "subscribe"
 
-fn write_string_to_scratch(s : String) -> (Int, Int) {
+///|
+extern "wasm" fn host_publish(draft_ptr : Int32, draft_len : Int32) -> Unit = "nostr" "publish"
+
+///|
+extern "wasm" fn host_get_public_key(ret_ptr : Int32) -> Unit = "nostr" "get-public-key"
+
+///|
+fn write_string_to_scratch(s : String) -> (Int32, Int32) {
   let base = 3145728
   let mut byte_len = 0
   for i in 0..<s.length() {
@@ -66,7 +77,8 @@ fn write_string_to_scratch(s : String) -> (Int, Int) {
   (base, byte_len)
 }
 
-fn read_string_from_memory(ptr : Int, len : Int) -> String {
+///|
+fn read_string_from_memory(ptr : Int32, len : Int32) -> String {
   let buf = StringBuilder()
   let mut i = 0
   while i < len {
@@ -89,7 +101,10 @@ fn read_string_from_memory(ptr : Int, len : Int) -> String {
       let b1 = load8_u(ptr + i + 1)
       let b2 = load8_u(ptr + i + 2)
       let b3 = load8_u(ptr + i + 3)
-      let cp = ((b0 & 0x07) << 18) | ((b1 & 0x3f) << 12) | ((b2 & 0x3f) << 6) | (b3 & 0x3f)
+      let cp = ((b0 & 0x07) << 18) |
+        ((b1 & 0x3f) << 12) |
+        ((b2 & 0x3f) << 6) |
+        (b3 & 0x3f)
       if cp > 0xffff {
         let u = cp - 0x10000
         let hs = 0xd800 | (u >> 10)
@@ -108,6 +123,7 @@ fn read_string_from_memory(ptr : Int, len : Int) -> String {
   buf.to_string()
 }
 
+///|
 pub fn nostr_get_public_key() -> String {
   let base = 3145728
   let current_bytes = memory_size() * 65536
@@ -125,21 +141,30 @@ pub fn nostr_get_public_key() -> String {
   }
 }
 
+///|
 pub fn nostr_subscribe(filter_json : String) -> Unit {
   let (ptr, len) = write_string_to_scratch(filter_json)
   host_subscribe(ptr, len)
 }
 
+///|
 pub fn nostr_publish(draft_json : String) -> Unit {
   let (ptr, len) = write_string_to_scratch(draft_json)
   host_publish(ptr, len)
 }
 
+///|
 pub fn emit_schema(schema_json : String) -> Unit {
   println(schema_json)
 }
 
-pub fn handle_action(action_ptr : Int, action_len : Int, payload_ptr : Int, payload_len : Int) -> Unit {
+///|
+pub fn handle_action(
+  action_ptr : Int32,
+  action_len : Int32,
+  payload_ptr : Int32,
+  payload_len : Int32,
+) -> Unit {
   let act = read_string_from_memory(action_ptr, action_len)
   let payload = read_string_from_memory(payload_ptr, payload_len)
   handle_action_impl(act, payload)

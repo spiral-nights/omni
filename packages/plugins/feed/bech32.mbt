@@ -1,6 +1,8 @@
+///|
 let bech32_charset : String = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 
-fn bech32_polymod(values : Array[Int]) -> Int {
+///|
+fn bech32_polymod(values : Array[Int32]) -> Int32 {
   let generator = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
   let mut chk = 1
   for v in values {
@@ -15,8 +17,9 @@ fn bech32_polymod(values : Array[Int]) -> Int {
   chk
 }
 
-fn hrp_expand(hrp : String) -> Array[Int] {
-  let ret : Array[Int] = []
+///|
+fn hrp_expand(hrp : String) -> Array[Int32] {
+  let ret : Array[Int32] = []
   for i in 0..<hrp.length() {
     let c = hrp[i].to_int()
     ret.push(c >> 5)
@@ -29,8 +32,9 @@ fn hrp_expand(hrp : String) -> Array[Int] {
   ret
 }
 
+///|
 pub fn bech32_encode(hrp : String, hex_str : String) -> String {
-  let values : Array[Int] = []
+  let values : Array[Int32] = []
   let mut acc = 0
   let mut bits = 0
   let maxv = 31
@@ -66,10 +70,16 @@ pub fn bech32_encode(hrp : String, hex_str : String) -> String {
 
   // Calculate checksum
   let exp = hrp_expand(hrp)
-  let chk_input : Array[Int] = []
-  for v in exp { chk_input.push(v) }
-  for v in values { chk_input.push(v) }
-  for _ in 0..<6 { chk_input.push(0) }
+  let chk_input : Array[Int32] = []
+  for v in exp {
+    chk_input.push(v)
+  }
+  for v in values {
+    chk_input.push(v)
+  }
+  for _ in 0..<6 {
+    chk_input.push(0)
+  }
 
   let polymod = bech32_polymod(chk_input) ^ 1
   for i in 0..<6 {
