@@ -3654,15 +3654,7 @@ export function instantiate(getCoreModule, imports, instantiateCore, options) {
       };
     }
     
-    const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
-    let _fs;
-    async function fetchCompile (url) {
-      if (isNode) {
-        _fs = _fs || await import('node:fs/promises');
-        return WebAssembly.compile(await _fs.readFile(url));
-      }
-      return fetch(url).then(WebAssembly.compileStreaming);
-    }
+    const fetchCompile = url => fetch(url).then(WebAssembly.compileStreaming);
     
     function _suspendingImport(componentIdx, fn, syncOnly = false, switchesTask = false, convertsRangeErrors = true, callsHost = false) {
       return function (...args) {
@@ -3724,7 +3716,7 @@ export function instantiate(getCoreModule, imports, instantiateCore, options) {
     }
     
     
-    if (!getCoreModule) getCoreModule = (name) => fetchCompile(new URL(`./${name}`, import.meta.url));
+    if (!getCoreModule) throw new Error("getCoreModule is required");
     const module0 = getCoreModule('omni-component.core.wasm');
     Promise.resolve(module0).catch(() => {});
     const module1 = getCoreModule('omni-component.core2.wasm');
