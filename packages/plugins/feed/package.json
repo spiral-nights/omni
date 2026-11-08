@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "wit:gen": "wit-bindgen moonbit ../../types/wit/omni.wit --out-dir src/wit --ignore-stub",
-    "build": "moon build --target wasm --release && node scripts/bundle-wasm.js",
+    "wit:gen": "wit-bindgen moonbit ../../types/wit/omni.wit --out-dir . --ignore-stub && moon fmt",
+    "build": "wit-bindgen moonbit ../../types/wit/omni.wit --out-dir . --ignore-stub && moon fmt && moon build --target wasm --release && node scripts/bundle-wasm.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

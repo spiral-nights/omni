@@ -101,7 +101,7 @@ fn subscribe_to_follows(follows : Array[String]) -> Unit {
     }
   }
   buf.write_string("],\"limit\":40}]")
-  nostr_subscribe(buf.to_string())
+  ignore(@nostr.subscribe(buf.to_string()))
 }
 
 ///|
@@ -223,7 +223,7 @@ fn request_missing_profiles() -> Unit {
     buf.write_string("\"")
   }
   buf.write_string("]}]")
-  nostr_subscribe(buf.to_string())
+  ignore(@nostr.subscribe(buf.to_string()))
 
   let remaining : Array[String] = []
   for i in limit..<count {
@@ -252,7 +252,7 @@ fn request_missing_interactions() -> Unit {
   buf.write_string("],\"limit\":")
   buf.write_string((limit * 15).to_string())
   buf.write_string("}]")
-  nostr_subscribe(buf.to_string())
+  ignore(@nostr.subscribe(buf.to_string()))
 
   let remaining : Array[String] = []
   for i in limit..<count {
@@ -840,17 +840,19 @@ fn handle_set_tab(payload_str : String) -> Unit {
   if payload_str.contains("\"global\"") {
     global_state.active_tab = "global"
     global_state.follows_subscribed = false
-    nostr_subscribe("[{\"kinds\":[1],\"limit\":40}]")
+    ignore(@nostr.subscribe("[{\"kinds\":[1],\"limit\":40}]"))
   } else {
     global_state.active_tab = "following"
     if global_state.follows.length() > 0 {
       global_state.follows_subscribed = true
       subscribe_to_follows(global_state.follows)
     } else if global_state.my_pubkey != "" {
-      nostr_subscribe(
-        "[{\"kinds\":[3],\"authors\":[\"" +
-        global_state.my_pubkey +
-        "\"],\"limit\":1}]",
+      ignore(
+        @nostr.subscribe(
+          "[{\"kinds\":[3],\"authors\":[\"" +
+          global_state.my_pubkey +
+          "\"],\"limit\":1}]",
+        ),
       )
     }
   }
@@ -892,13 +894,13 @@ fn handle_load_more() -> Unit {
       buf.write_string("],\"until\":")
       buf.write_string(until_ts.to_string())
       buf.write_string(",\"limit\":20}]")
-      nostr_subscribe(buf.to_string())
+      ignore(@nostr.subscribe(buf.to_string()))
     } else {
       let buf = StringBuilder()
       buf.write_string("[{\"kinds\":[1],\"until\":")
       buf.write_string(until_ts.to_string())
       buf.write_string(",\"limit\":20}]")
-      nostr_subscribe(buf.to_string())
+      ignore(@nostr.subscribe(buf.to_string()))
     }
   }
 }
@@ -934,7 +936,7 @@ fn handle_view_thread(payload_str : String) -> Unit {
     buf.write_string("\"],\"limit\":50},{\"kinds\":[1],\"ids\":[\"")
     buf.write_string(target_id)
     buf.write_string("\"],\"limit\":1}]")
-    nostr_subscribe(buf.to_string())
+    ignore(@nostr.subscribe(buf.to_string()))
   }
 }
 
@@ -959,7 +961,7 @@ fn handle_like_note(payload_str : String) -> Unit {
           let draft_json = "{\"kind\":7,\"content\":\"+\",\"tags\":[[\"e\",\"" +
             target_id +
             "\"]]}"
-          nostr_publish(draft_json)
+          ignore(@nostr.publish(draft_json))
         } else {
           n.likes = n.likes - 1
         }
@@ -985,7 +987,7 @@ fn handle_repost_note(payload_str : String) -> Unit {
           let draft_json = "{\"kind\":6,\"content\":\"\",\"tags\":[[\"e\",\"" +
             target_id +
             "\"]]}"
-          nostr_publish(draft_json)
+          ignore(@nostr.publish(draft_json))
         } else {
           n.reposts = n.reposts - 1
         }
@@ -1013,7 +1015,7 @@ fn handle_publish_note(payload_str : String) -> Unit {
     let draft_json = "{\"kind\":1,\"content\":\"" +
       json_escape(new_text) +
       "\",\"tags\":[]}"
-    nostr_publish(draft_json)
+    ignore(@nostr.publish(draft_json))
   }
 }
 
@@ -1032,7 +1034,7 @@ fn handle_publish_reply(payload_str : String) -> Unit {
         "\",\"tags\":[[\"e\",\"" +
         parent_id +
         "\",\"\",\"reply\"]]}"
-      nostr_publish(draft_json)
+      ignore(@nostr.publish(draft_json))
     }
   }
 }
@@ -1063,7 +1065,7 @@ fn handle_nostr_eose() -> Unit {
     request_missing_profiles()
   }
   let updated_schema = render_feed(global_state)
-  emit_schema(updated_schema)
+  @ui.render(updated_schema)
 }
 
 ///|
@@ -1394,24 +1396,28 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
   }
 
   let updated_schema = render_feed(global_state)
-  emit_schema(updated_schema)
+  @ui.render(updated_schema)
 }
 
 ///|
 pub fn start() -> Unit {
-  let my_pk = nostr_get_public_key()
+  let my_pk = @nostr.get_public_key()
   global_state.my_pubkey = my_pk
   let schema = render_feed(global_state)
-  emit_schema(schema)
+  @ui.render(schema)
   if my_pk != "" {
-    nostr_subscribe(
-      "[{\"kinds\":[1],\"limit\":40},{\"kinds\":[3],\"authors\":[\"" +
-      my_pk +
-      "\"],\"limit\":1}]",
+    ignore(
+      @nostr.subscribe(
+        "[{\"kinds\":[1],\"limit\":40},{\"kinds\":[3],\"authors\":[\"" +
+        my_pk +
+        "\"],\"limit\":1}]",
+      ),
     )
   } else {
-    nostr_subscribe(
-      "[{\"kinds\":[1],\"limit\":40},{\"kinds\":[3],\"limit\":1}]",
+    ignore(
+      @nostr.subscribe(
+        "[{\"kinds\":[1],\"limit\":40},{\"kinds\":[3],\"limit\":1}]",
+      ),
     )
   }
 }

@@ -3,7 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const wasmPath = path.resolve(__dirname, "../_build/wasm/release/build/feed.wasm");
+const wasmPath = path.resolve(__dirname, "../_build/wasm/release/build/gen/gen.wasm");
 const distDir = path.resolve(__dirname, "../dist");
 
 if (!fs.existsSync(distDir)) {

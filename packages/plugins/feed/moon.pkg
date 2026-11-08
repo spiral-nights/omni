@@ -1,14 +1,5 @@
 import {
   "moonbitlang/core/json",
+  "omni/plugin/interface/omni/plugin/nostr",
+  "omni/plugin/interface/omni/plugin/ui",
 }
-
-pkgtype(kind: "foreign_library")
-
-options(
-  link: {
-    "wasm": {
-      "exports": [ "start:init", "handle_action" ],
-      "export-memory-name": "memory",
-    },
-  },
-)

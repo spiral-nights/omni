@@ -1,0 +1,1 @@
+Host Nostr and protocol capabilities provided to the plugin

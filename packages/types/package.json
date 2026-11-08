@@ -20,7 +20,7 @@
   ],
   "scripts": {
     "generate:wit": "jco types wit/omni.wit -o src/wit",
-    "build": "tsc",
+    "build": "jco types wit/omni.wit -o src/wit && tsc",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

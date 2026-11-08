@@ -4,6 +4,8 @@ import type { LocalEventStore } from "../nostr/event-store.js";
 import type { RelayPool } from "../nostr/relay-pool.js";
 import type { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import type { AclEngine } from "../acl/acl-engine.js";
+import { instantiate as instantiateWitComponent } from "./wit-host/omni-component.js";
+import { CORE2_WASM_BYTES, CORE3_WASM_BYTES } from "./wit-host/core-shims.js";
 
 export interface WasmGuestHostOptions {
   pluginId: string;
@@ -23,6 +25,9 @@ export interface WasmGuestHostOptions {
 export class WasmGuestHost {
   private options: WasmGuestHostOptions;
   private instance: WebAssembly.Instance | null = null;
+  private witComponent: { init: () => string; handleAction: (action: string, payload: string) => string } | null = null;
+  private inGuestCall = false;
+  private queuedActions: Array<{ componentId: string; action: OmniAction; payload?: Record<string, unknown> }> = [];
   private memory: WebAssembly.Memory | null = null;
   private bumpPointer = 0;
   private stdoutBuffer = "";
@@ -49,17 +54,7 @@ export class WasmGuestHost {
         : new Uint8Array(this.options.wasmBytes);
 
       const module = await WebAssembly.compile(bytes as BufferSource);
-      this.instance = await WebAssembly.instantiate(module, importObject);
-
-      // Locate memory: from exports or imported
-      this.memory = (this.instance.exports.memory as WebAssembly.Memory) || this.memory;
-      const MIN_INITIAL_BYTES = 5 * 1024 * 1024; // 5MB reserved space for safe, non-colliding guest/host memory
-      if (this.memory && this.memory.buffer.byteLength < MIN_INITIAL_BYTES) {
-        const needed = Math.ceil((MIN_INITIAL_BYTES - this.memory.buffer.byteLength) / 65536);
-        try {
-          this.memory.grow(needed);
-        } catch (_) {}
-      }
+      const isWitComponent = WebAssembly.Module.exports(module).some((e) => e.name === "cabi_realloc");
 
       // Seed local storage follows and profiles into event store if available so 0ms cache hits immediately
       const userPk = this.options.initPayload?.userPubkey;
@@ -107,8 +102,73 @@ export class WasmGuestHost {
         } catch (_) {}
       }
 
-      // Invoke initialization export if provided
-      this.invokeInit();
+      if (isWitComponent) {
+        const core2Module = await WebAssembly.compile(CORE2_WASM_BYTES as BufferSource);
+        const core3Module = await WebAssembly.compile(CORE3_WASM_BYTES as BufferSource);
+
+        this.witComponent = await instantiateWitComponent(
+          (name: string) => {
+            if (name.endsWith("core2.wasm")) return core2Module;
+            if (name.endsWith("core3.wasm")) return core3Module;
+            return module;
+          },
+          {
+            "omni:plugin/nostr": {
+              getPublicKey: () => this.options.initPayload.userPubkey || "",
+              subscribe: (filterStr: string) => this.handleHostSubscribe(filterStr),
+              publish: (draftStr: string) => this.handleHostPublish(draftStr),
+              fetch: (filterStr: string) => this.handleHostFetch(filterStr)
+            },
+            "omni:plugin/ui": {
+              render: (viewStr: string) => {
+                this.handleSchemaPayload(viewStr, "main");
+              },
+              renderComponent: (compId: string, viewStr: string) => {
+                this.handleSchemaPayload(viewStr, compId);
+              }
+            }
+          },
+          async (mod: WebAssembly.Module, imports: Record<string, any>) => {
+            const mergedImports = {
+              ...importObject,
+              ...imports
+            };
+            const inst = await WebAssembly.instantiate(mod, mergedImports);
+            if (mod === module) {
+              this.instance = inst;
+              this.memory = (inst.exports.memory as WebAssembly.Memory) || this.memory;
+            }
+            return inst;
+          },
+          {}
+        );
+
+        this.inGuestCall = true;
+        try {
+          const ret = this.witComponent!.init();
+          if (typeof ret === "string" && ret.trim()) {
+            this.handleSchemaPayload(ret, "main");
+          }
+        } finally {
+          this.inGuestCall = false;
+          this.drainQueuedActions();
+        }
+      } else {
+        this.instance = await WebAssembly.instantiate(module, importObject);
+
+        // Locate memory: from exports or imported
+        this.memory = (this.instance.exports.memory as WebAssembly.Memory) || this.memory;
+        const MIN_INITIAL_BYTES = 5 * 1024 * 1024; // 5MB reserved space for safe, non-colliding guest/host memory
+        if (this.memory && this.memory.buffer.byteLength < MIN_INITIAL_BYTES) {
+          const needed = Math.ceil((MIN_INITIAL_BYTES - this.memory.buffer.byteLength) / 65536);
+          try {
+            this.memory.grow(needed);
+          } catch (_) {}
+        }
+
+        // Invoke initialization export if provided
+        this.invokeInit();
+      }
     } catch (err: any) {
       const error = new Error(`[WasmGuestHost:${this.options.pluginId}] Boot failed: ${err.message || err}`);
       if (this.options.onError) {
@@ -167,94 +227,7 @@ export class WasmGuestHost {
       // WIT: nostr.subscribe(filter: string) -> string
       subscribe: (filterPtr: number, filterLen: number) => {
         const filterStr = readString(filterPtr, filterLen);
-        let filters: any[] = [];
-        try {
-          const parsed = JSON.parse(filterStr);
-          filters = Array.isArray(parsed) ? parsed : [parsed];
-        } catch (_) {}
-
-        if (filters.length > 0) {
-          const isTimeline = filters.some((f) => f.kinds && f.kinds.includes(1) && !f.until && !f["#e"] && !f.ids);
-          if (isTimeline && this.activeTimelineUnsub) {
-            try {
-              this.activeTimelineUnsub();
-            } catch (_) {}
-            this.activeTimelineUnsub = null;
-          }
-
-          const subId = `wasm_sub_${this.options.pluginId.replace(/[^a-zA-Z0-9]/g, "_")}_${Math.random().toString(36).slice(2, 8)}`;
-          if (this.options.subscriptionCoordinator) {
-            this.options.subscriptionCoordinator.subscribe(
-              `${this.options.pluginId}:${subId}`,
-              filters,
-              (event) => {
-                if (event && event.kind === 0 && event.pubkey && event.content) {
-                  try {
-                    const meta = JSON.parse(event.content);
-                    if (typeof localStorage !== "undefined" && meta && typeof meta === "object") {
-                      const raw = localStorage.getItem("omni_profile_viewer_cache_v2");
-                      const records = raw ? JSON.parse(raw) : {};
-                      records[event.pubkey] = { meta, timestamp: Date.now() };
-                      localStorage.setItem("omni_profile_viewer_cache_v2", JSON.stringify(records));
-                    }
-                  } catch (_) {}
-                }
-                this.dispatchAction("main", { name: "nostr:event" }, event as unknown as Record<string, unknown>);
-              },
-              () => {
-                this.dispatchAction("main", { name: "nostr:eose" });
-              }
-            ).then((unsub) => {
-              this.activeSubscriptions.push(unsub);
-              if (isTimeline) {
-                this.activeTimelineUnsub = unsub;
-              }
-            }).catch((err) => console.warn(`[WasmGuestHost:${this.options.pluginId}] subscribe error:`, err));
-          } else if (this.options.relayPool) {
-            // Immediate 0ms cache query
-            if (this.options.eventStore) {
-              for (const f of filters) {
-                this.options.eventStore.getEvents(f).then((cached) => {
-                  if (cached && cached.length > 0) {
-                    const sorted = [...cached].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
-                    for (const ev of sorted) {
-                      this.dispatchAction("main", { name: "nostr:event" }, ev as unknown as Record<string, unknown>);
-                    }
-                  }
-                }).catch(() => {});
-              }
-            }
-            // Multiplexed relay subscription
-            const unsub = this.options.relayPool.subscribe(
-              subId,
-              filters,
-              async (ev) => {
-                if (this.options.eventStore) {
-                  await this.options.eventStore.saveEvent(ev);
-                }
-                if (ev && ev.kind === 0 && ev.pubkey && ev.content) {
-                  try {
-                    const meta = JSON.parse(ev.content);
-                    if (typeof localStorage !== "undefined" && meta && typeof meta === "object") {
-                      const raw = localStorage.getItem("omni_profile_viewer_cache_v2");
-                      const records = raw ? JSON.parse(raw) : {};
-                      records[ev.pubkey] = { meta, timestamp: Date.now() };
-                      localStorage.setItem("omni_profile_viewer_cache_v2", JSON.stringify(records));
-                    }
-                  } catch (_) {}
-                }
-                this.dispatchAction("main", { name: "nostr:event" }, ev as unknown as Record<string, unknown>);
-              },
-              () => {
-                this.dispatchAction("main", { name: "nostr:eose" });
-              }
-            );
-            this.activeSubscriptions.push(unsub);
-            if (isTimeline) {
-              this.activeTimelineUnsub = unsub;
-            }
-          }
-        }
+        this.handleHostSubscribe(filterStr);
       },
       omni_nostr_subscribe: (filterPtr: number, filterLen: number) => {
         nostrInterface.subscribe(filterPtr, filterLen);
@@ -263,30 +236,7 @@ export class WasmGuestHost {
       // WIT: nostr.publish(draft: string) -> string
       publish: (draftPtr: number, draftLen: number) => {
         const draftStr = readString(draftPtr, draftLen);
-        let draft: any = null;
-        try {
-          draft = JSON.parse(draftStr);
-        } catch (_) {}
-
-        if (draft && this.options.keystore) {
-          (async () => {
-            try {
-              const userPubkey = this.options.initPayload.userPubkey || (await this.options.keystore!.getPublicKey());
-              if (!draft.pubkey) draft.pubkey = userPubkey;
-              if (!draft.created_at) draft.created_at = Math.floor(Date.now() / 1000);
-              const signed = await this.options.keystore!.signEvent(draft);
-              if (this.options.eventStore) {
-                await this.options.eventStore.saveEvent(signed);
-              }
-              if (this.options.relayPool) {
-                await this.options.relayPool.publish(signed);
-              }
-              this.dispatchAction("main", { name: "nostr:event" }, signed as unknown as Record<string, unknown>);
-            } catch (err) {
-              console.error(`[WasmGuestHost:${this.options.pluginId}] publish error:`, err);
-            }
-          })();
-        }
+        this.handleHostPublish(draftStr);
       },
       omni_nostr_publish: (draftPtr: number, draftLen: number) => {
         nostrInterface.publish(draftPtr, draftLen);
@@ -295,24 +245,7 @@ export class WasmGuestHost {
       // WIT: nostr.fetch(filter: string) -> string
       fetch: (filterPtr: number, filterLen: number) => {
         const filterStr = readString(filterPtr, filterLen);
-        let filters: any[] = [];
-        try {
-          const parsed = JSON.parse(filterStr);
-          filters = Array.isArray(parsed) ? parsed : [parsed];
-        } catch (_) {}
-
-        if (filters.length > 0 && this.options.eventStore) {
-          for (const f of filters) {
-            this.options.eventStore.getEvents(f).then((cached) => {
-              if (cached && cached.length > 0) {
-                const sorted = [...cached].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
-                for (const ev of sorted) {
-                  this.dispatchAction("main", { name: "nostr:event" }, ev as unknown as Record<string, unknown>);
-                }
-              }
-            }).catch(() => {});
-          }
-        }
+        this.handleHostFetch(filterStr);
       },
       omni_nostr_fetch: (filterPtr: number, filterLen: number) => {
         nostrInterface.fetch(filterPtr, filterLen);
@@ -494,6 +427,155 @@ export class WasmGuestHost {
     }
   }
 
+  private handleHostSubscribe(filterStr: string): string {
+    let filters: any[] = [];
+    try {
+      const parsed = JSON.parse(filterStr);
+      filters = Array.isArray(parsed) ? parsed : [parsed];
+    } catch (_) {}
+
+    if (filters.length === 0) return "";
+
+    const isTimeline = filters.some((f) => f.kinds && f.kinds.includes(1) && !f.until && !f["#e"] && !f.ids);
+    if (isTimeline && this.activeTimelineUnsub) {
+      try {
+        this.activeTimelineUnsub();
+      } catch (_) {}
+      this.activeTimelineUnsub = null;
+    }
+
+    const subId = `wasm_sub_${this.options.pluginId.replace(/[^a-zA-Z0-9]/g, "_")}_${Math.random().toString(36).slice(2, 8)}`;
+    if (this.options.subscriptionCoordinator) {
+      this.options.subscriptionCoordinator.subscribe(
+        `${this.options.pluginId}:${subId}`,
+        filters,
+        (event) => {
+          if (event && event.kind === 0 && event.pubkey && event.content) {
+            try {
+              const meta = JSON.parse(event.content);
+              if (typeof localStorage !== "undefined" && meta && typeof meta === "object") {
+                const raw = localStorage.getItem("omni_profile_viewer_cache_v2");
+                const records = raw ? JSON.parse(raw) : {};
+                records[event.pubkey] = { meta, timestamp: Date.now() };
+                localStorage.setItem("omni_profile_viewer_cache_v2", JSON.stringify(records));
+              }
+            } catch (_) {}
+          }
+          this.dispatchAction("main", { name: "nostr:event" }, event as unknown as Record<string, unknown>);
+        },
+        () => {
+          this.dispatchAction("main", { name: "nostr:eose" });
+        }
+      ).then((unsub) => {
+        this.activeSubscriptions.push(unsub);
+        if (isTimeline) {
+          this.activeTimelineUnsub = unsub;
+        }
+      }).catch((err) => console.warn(`[WasmGuestHost:${this.options.pluginId}] subscribe error:`, err));
+    } else if (this.options.relayPool) {
+      // Immediate 0ms cache query
+      if (this.options.eventStore) {
+        for (const f of filters) {
+          this.options.eventStore.getEvents(f).then((cached) => {
+            if (cached && cached.length > 0) {
+              const sorted = [...cached].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+              for (const ev of sorted) {
+                this.dispatchAction("main", { name: "nostr:event" }, ev as unknown as Record<string, unknown>);
+              }
+            }
+          }).catch(() => {});
+        }
+      }
+      // Multiplexed relay subscription
+      const unsub = this.options.relayPool.subscribe(
+        subId,
+        filters,
+        async (ev) => {
+          if (this.options.eventStore) {
+            await this.options.eventStore.saveEvent(ev);
+          }
+          if (ev && ev.kind === 0 && ev.pubkey && ev.content) {
+            try {
+              const meta = JSON.parse(ev.content);
+              if (typeof localStorage !== "undefined" && meta && typeof meta === "object") {
+                const raw = localStorage.getItem("omni_profile_viewer_cache_v2");
+                const records = raw ? JSON.parse(raw) : {};
+                records[ev.pubkey] = { meta, timestamp: Date.now() };
+                localStorage.setItem("omni_profile_viewer_cache_v2", JSON.stringify(records));
+              }
+            } catch (_) {}
+          }
+          this.dispatchAction("main", { name: "nostr:event" }, ev as unknown as Record<string, unknown>);
+        },
+        () => {
+          this.dispatchAction("main", { name: "nostr:eose" });
+        }
+      );
+      this.activeSubscriptions.push(unsub);
+      if (isTimeline) {
+        this.activeTimelineUnsub = unsub;
+      }
+    }
+    return subId;
+  }
+
+  private handleHostPublish(draftStr: string): string {
+    let draft: any = null;
+    try {
+      draft = JSON.parse(draftStr);
+    } catch (_) {}
+
+    if (draft && this.options.keystore) {
+      (async () => {
+        try {
+          const userPubkey = this.options.initPayload.userPubkey || (await this.options.keystore!.getPublicKey());
+          if (!draft.pubkey) draft.pubkey = userPubkey;
+          if (!draft.created_at) draft.created_at = Math.floor(Date.now() / 1000);
+          const signed = await this.options.keystore!.signEvent(draft);
+          if (this.options.eventStore) {
+            await this.options.eventStore.saveEvent(signed);
+          }
+          if (this.options.relayPool) {
+            await this.options.relayPool.publish(signed);
+          }
+          this.dispatchAction("main", { name: "nostr:event" }, signed as unknown as Record<string, unknown>);
+        } catch (err) {
+          console.error(`[WasmGuestHost:${this.options.pluginId}] publish error:`, err);
+        }
+      })();
+    }
+    return '{"ok":true}';
+  }
+
+  private handleHostFetch(filterStr: string): string {
+    let filters: any[] = [];
+    try {
+      const parsed = JSON.parse(filterStr);
+      filters = Array.isArray(parsed) ? parsed : [parsed];
+    } catch (_) {}
+
+    if (filters.length > 0 && this.options.eventStore) {
+      for (const f of filters) {
+        this.options.eventStore.getEvents(f).then((cached) => {
+          if (cached && cached.length > 0) {
+            const sorted = [...cached].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+            for (const ev of sorted) {
+              this.dispatchAction("main", { name: "nostr:event" }, ev as unknown as Record<string, unknown>);
+            }
+          }
+        }).catch(() => {});
+      }
+    }
+    return "[]";
+  }
+
+  private drainQueuedActions(): void {
+    while (!this.inGuestCall && !this.destroyed && this.queuedActions.length > 0) {
+      const next = this.queuedActions.shift()!;
+      this.dispatchAction(next.componentId, next.action, next.payload);
+    }
+  }
+
   private invokeInit(): void {
     if (!this.instance) return;
     const exports = this.instance.exports as Record<string, any>;
@@ -518,7 +600,35 @@ export class WasmGuestHost {
   }
 
   public dispatchAction(componentId: string, action: OmniAction, payload?: Record<string, unknown>): void {
-    if (!this.instance || this.destroyed) return;
+    if (this.destroyed) return;
+
+    if (this.witComponent) {
+      if (this.inGuestCall) {
+        this.queuedActions.push({ componentId, action, payload });
+        return;
+      }
+
+      const prevHighFreq = this.isHighFrequencyEvent;
+      this.isHighFrequencyEvent = action.name === "nostr:event";
+      this.inGuestCall = true;
+      try {
+        const actionStr = action.name || "";
+        const payloadStr = JSON.stringify(payload || action.payload || {});
+        const ret = this.witComponent.handleAction(actionStr, payloadStr);
+        if (typeof ret === "string" && ret.trim()) {
+          this.handleSchemaPayload(ret, componentId);
+        }
+      } catch (e) {
+        console.error(`[WasmGuestHost:${this.options.pluginId}] Error executing WIT handleAction:`, e);
+      } finally {
+        this.inGuestCall = false;
+        this.isHighFrequencyEvent = prevHighFreq;
+        this.drainQueuedActions();
+      }
+      return;
+    }
+
+    if (!this.instance) return;
     const exports = this.instance.exports as Record<string, any>;
 
     const actionFn = exports["handle-action"] || exports.handle_action || exports.omni_handle_action;
@@ -709,6 +819,8 @@ export class WasmGuestHost {
       } catch (_) {}
     }
     this.activeSubscriptions = [];
+    this.queuedActions = [];
+    this.witComponent = null;
     this.instance = null;
     this.memory = null;
   }

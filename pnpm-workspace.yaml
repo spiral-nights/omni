@@ -5,6 +5,7 @@ packages:
 allowBuilds:
   esbuild: true
 overrides:
+  minimatch: ">=11.0.1"
   happy-dom: ^21.0.4
   vitest: ^4.1.12
   "@vitest/mocker": ^4.1.12
