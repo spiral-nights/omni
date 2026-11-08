@@ -5,7 +5,7 @@ import {
   loadSchemaProfileCache,
   PROFILE_CACHE_KEY
 } from "../state/profile-store.js";
-import { sendSchemaWs } from "../net/relay-sync.js";
+import { sendSchemaWs, loadCachedNotesForPubkey } from "../net/relay-sync.js";
 import { getProfileSchema } from "./profile-schema.js";
 
 export async function handleProfileViewerAction(
@@ -49,7 +49,13 @@ export async function handleProfileViewerAction(
     }
     if (profileStore.currentSchemaTab === "my-profile" && profileStore.currentProfilePubkey) {
       profileStore.schemaUserNotes = [];
-      sendSchemaWs(["REQ", `pv_schema_my_notes_${Date.now()}`, { kinds: [1], authors: [profileStore.currentProfilePubkey], limit: 20 }]);
+      loadCachedNotesForPubkey(profileStore.currentProfilePubkey);
+      if (profileStore.schemaActiveNotesSubId) {
+        try { sendSchemaWs(["CLOSE", profileStore.schemaActiveNotesSubId]); } catch (_) {}
+      }
+      const myNotesSubId = `pv_schema_my_notes_${Date.now()}`;
+      profileStore.schemaActiveNotesSubId = myNotesSubId;
+      sendSchemaWs(["REQ", myNotesSubId, { kinds: [1], authors: [profileStore.currentProfilePubkey], limit: 20 }]);
     }
   } else if (actName === "save-profile") {
     const updated = {
@@ -231,6 +237,7 @@ export async function handleProfileViewerAction(
       }
       profileStore.currentSchemaTab = "user-profile";
       profileStore.schemaUserNotes = [];
+      loadCachedNotesForPubkey(targetPk);
 
       if (!fromPopState) {
         try {
@@ -256,7 +263,12 @@ export async function handleProfileViewerAction(
       }
 
       sendSchemaWs(["REQ", `pv_schema_target_${Date.now()}`, { kinds: [0], authors: [targetPk], limit: 1 }]);
-      sendSchemaWs(["REQ", `pv_schema_target_notes_${Date.now()}`, { kinds: [1], authors: [targetPk], limit: 20 }]);
+      if (profileStore.schemaActiveNotesSubId) {
+        try { sendSchemaWs(["CLOSE", profileStore.schemaActiveNotesSubId]); } catch (_) {}
+      }
+      const targetNotesSubId = `pv_schema_target_notes_${Date.now()}`;
+      profileStore.schemaActiveNotesSubId = targetNotesSubId;
+      sendSchemaWs(["REQ", targetNotesSubId, { kinds: [1], authors: [targetPk], limit: 20 }]);
     }
   } else if (actName === "view_note" || actName === "view-note" || actName === "view-thread") {
     const noteId = String(payload?.id || payload?.eventId || action.payload?.id || action.payload?.eventId || "");

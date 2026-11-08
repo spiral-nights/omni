@@ -437,6 +437,7 @@ export class WasmGuestHost {
     if (filters.length === 0) return "";
 
     const isTimeline = filters.some((f) => f.kinds && f.kinds.includes(1) && !f.until && !f["#e"] && !f.ids);
+    const isOneShot = true;
     if (isTimeline && this.activeTimelineUnsub) {
       try {
         this.activeTimelineUnsub();
@@ -446,6 +447,23 @@ export class WasmGuestHost {
 
     const subId = `wasm_sub_${this.options.pluginId.replace(/[^a-zA-Z0-9]/g, "_")}_${Math.random().toString(36).slice(2, 8)}`;
     if (this.options.subscriptionCoordinator) {
+      let subUnsub: (() => void) | null = null;
+      let eoseTimer: any = null;
+      const closeSub = () => {
+        if (eoseTimer) {
+          clearTimeout(eoseTimer);
+          eoseTimer = null;
+        }
+        if (subUnsub) {
+          try {
+            subUnsub();
+          } catch (_) {}
+          const idx = this.activeSubscriptions.indexOf(subUnsub);
+          if (idx !== -1) this.activeSubscriptions.splice(idx, 1);
+          subUnsub = null;
+        }
+      };
+
       this.options.subscriptionCoordinator.subscribe(
         `${this.options.pluginId}:${subId}`,
         filters,
@@ -465,11 +483,21 @@ export class WasmGuestHost {
         },
         () => {
           this.dispatchAction("main", { name: "nostr:eose" });
+          if (isOneShot) {
+            closeSub();
+          }
         }
       ).then((unsub) => {
+        subUnsub = unsub;
         this.activeSubscriptions.push(unsub);
         if (isTimeline) {
           this.activeTimelineUnsub = unsub;
+        }
+        if (isOneShot) {
+          // Safety fallback timeout to close one-shot query if EOSE is delayed or missed
+          eoseTimer = setTimeout(() => {
+            closeSub();
+          }, 8000);
         }
       }).catch((err) => console.warn(`[WasmGuestHost:${this.options.pluginId}] subscribe error:`, err));
     } else if (this.options.relayPool) {
@@ -487,6 +515,23 @@ export class WasmGuestHost {
         }
       }
       // Multiplexed relay subscription
+      let subUnsub: (() => void) | null = null;
+      let eoseTimer: any = null;
+      const closeSub = () => {
+        if (eoseTimer) {
+          clearTimeout(eoseTimer);
+          eoseTimer = null;
+        }
+        if (subUnsub) {
+          try {
+            subUnsub();
+          } catch (_) {}
+          const idx = this.activeSubscriptions.indexOf(subUnsub);
+          if (idx !== -1) this.activeSubscriptions.splice(idx, 1);
+          subUnsub = null;
+        }
+      };
+
       const unsub = this.options.relayPool.subscribe(
         subId,
         filters,
@@ -509,11 +554,20 @@ export class WasmGuestHost {
         },
         () => {
           this.dispatchAction("main", { name: "nostr:eose" });
+          if (isOneShot) {
+            closeSub();
+          }
         }
       );
+      subUnsub = unsub;
       this.activeSubscriptions.push(unsub);
       if (isTimeline) {
         this.activeTimelineUnsub = unsub;
+      }
+      if (isOneShot) {
+        eoseTimer = setTimeout(() => {
+          closeSub();
+        }, 8000);
       }
     }
     return subId;

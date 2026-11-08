@@ -489,4 +489,31 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     expect(myBanner?.key).not.toBe(userBanner?.key);
     expect(myHeader?.key).not.toBe(userHeader?.key);
   });
+
+  it("loads user notes immediately from cached memory events when viewing a user profile", async () => {
+    const friendPubkey = "c".repeat(64);
+    const cachedNote = {
+      id: "note_cached_999",
+      pubkey: friendPubkey,
+      content: "Hello from cached memory note!",
+      kind: 1,
+      created_at: 1700000000
+    };
+
+    // Populate window.__omni_event_cache
+    const memCache = new Map();
+    memCache.set(cachedNote.id, cachedNote);
+    (window as any).__omni_event_cache = memCache;
+
+    const schema = (await handleProfileViewerAction(
+      { name: "view_profile", payload: { pubkey: friendPubkey } }
+    )) as OmniCardPrimitive;
+
+    // Check that recent posts rendered the cached note card instead of "No posts found for this user."
+    const noPostsBanner = schema.children?.find((c: any) => c.key === "user-profile-no-posts");
+    expect(noPostsBanner).toBeUndefined();
+
+    const noteCard = schema.children?.find((c: any) => c.type === "card" && c.action?.payload?.id === "note_cached_999");
+    expect(noteCard).toBeDefined();
+  });
 });

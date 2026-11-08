@@ -57,6 +57,32 @@ export class SubscriptionCoordinator {
     }
 
     // 2. Start Live Multiplexed Relay Subscription with ACL Filtering
+    const eosedRelays = new Set<string>();
+    let eoseFired = false;
+    let eoseFallbackTimer: any = null;
+
+    const fireEoseOnce = () => {
+      if (eoseFired) return;
+      eoseFired = true;
+      if (eoseFallbackTimer) {
+        clearTimeout(eoseFallbackTimer);
+        eoseFallbackTimer = null;
+      }
+      if (onEose) onEose();
+    };
+
+    const allConnected = this.relayPool.getConnectedRelayUrls();
+    const normalizedTargets = targetRelays && targetRelays.length > 0
+      ? new Set(targetRelays.map((u) => u.trim().replace(/\/+$/, "")))
+      : null;
+    const expectedRelays = allConnected.filter((u) => !normalizedTargets || normalizedTargets.has(u));
+
+    if (onEose && expectedRelays.length > 0) {
+      eoseFallbackTimer = setTimeout(() => {
+        fireEoseOnce();
+      }, 2500);
+    }
+
     const unsubscribeRelays = this.relayPool.subscribe(
       subId,
       filters,
@@ -80,17 +106,26 @@ export class SubscriptionCoordinator {
           onEvent(event, { fromCache: false, relay: relayUrl });
         }
       },
-      () => {
-        if (onEose) onEose();
+      (relayUrl) => {
+        if (relayUrl) {
+          eosedRelays.add(relayUrl.trim().replace(/\/+$/, ""));
+        }
+        if (expectedRelays.length === 0 || expectedRelays.every((r) => eosedRelays.has(r))) {
+          fireEoseOnce();
+        }
       },
       targetRelays
     );
 
     if ((this.relayPool.getAllRelays().length === 0 || this.relayPool.getConnectedRelayCount() === 0) && onEose) {
-      queueMicrotask(() => onEose());
+      queueMicrotask(() => fireEoseOnce());
     }
 
     return () => {
+      if (eoseFallbackTimer) {
+        clearTimeout(eoseFallbackTimer);
+        eoseFallbackTimer = null;
+      }
       unsubscribeRelays();
       seenEventIds.clear();
     };

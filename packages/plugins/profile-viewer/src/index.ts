@@ -10,7 +10,9 @@ import {
 } from "./state/profile-store.js";
 import {
   startSchemaSubscriptions,
-  fetchMissingSchemaProfiles
+  fetchMissingSchemaProfiles,
+  loadCachedNotesForPubkey,
+  sendSchemaWs
 } from "./net/relay-sync.js";
 import { getProfileSchema } from "./schema/profile-schema.js";
 import { handleProfileViewerAction } from "./schema/action-handler.js";
@@ -170,6 +172,15 @@ export async function initSchemaData(explicitPk?: string): Promise<void> {
             isFollowing: profileStore.schemaFollowsSet.has(targetPk)
           };
           profileStore.currentSchemaTab = "user-profile";
+          profileStore.schemaUserNotes = [];
+          loadCachedNotesForPubkey(targetPk);
+          sendSchemaWs(["REQ", `pv_schema_target_${Date.now()}`, { kinds: [0], authors: [targetPk], limit: 1 }]);
+          if (profileStore.schemaActiveNotesSubId) {
+            try { sendSchemaWs(["CLOSE", profileStore.schemaActiveNotesSubId]); } catch (_) {}
+          }
+          const targetNotesSubId = `pv_schema_target_notes_${Date.now()}`;
+          profileStore.schemaActiveNotesSubId = targetNotesSubId;
+          sendSchemaWs(["REQ", targetNotesSubId, { kinds: [1], authors: [targetPk], limit: 20 }]);
         } else if (searchParams.get("view") === "edit") {
           profileStore.currentSchemaTab = "edit";
         } else if (searchParams.get("view") === "following") {

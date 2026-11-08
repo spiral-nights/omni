@@ -23,6 +23,8 @@ export const profileStore = {
   schemaUserNotes: [] as any[],
   schemaTargetUser: null as TargetUserProfile | null,
   schemaWs: null as WebSocket | null,
+  schemaWsQueue: [] as any[][],
+  schemaActiveNotesSubId: null as string | null,
   schemaUpdateTimer: null as any,
   persistCacheTimer: null as any,
   queriedAuthorsSet: new Set<string>(),

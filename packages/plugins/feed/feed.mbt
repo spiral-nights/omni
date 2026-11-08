@@ -33,6 +33,7 @@ pub struct FeedState {
   mut follows_subscribed : Bool
   profiles : Array[UserProfile]
   mut pending_profile_reqs : Array[String]
+  queried_profiles : Array[String]
   mut pending_interaction_reqs : Array[String]
   queried_interactions : Array[String]
   mut oldest_timestamp : Int32
@@ -40,6 +41,8 @@ pub struct FeedState {
   mut is_syncing : Bool
   mut my_pubkey : String
   mut view : String
+  mut is_fetching_interactions : Bool
+  mut is_fetching_profiles : Bool
 }
 
 ///|
@@ -53,6 +56,7 @@ let global_state : FeedState = {
   follows_subscribed: false,
   profiles: [],
   pending_profile_reqs: [],
+  queried_profiles: [],
   pending_interaction_reqs: [],
   queried_interactions: [],
   oldest_timestamp: 0,
@@ -60,6 +64,8 @@ let global_state : FeedState = {
   is_syncing: true,
   my_pubkey: "",
   view: "main",
+  is_fetching_interactions: false,
+  is_fetching_profiles: false,
 }
 
 ///|
@@ -214,26 +220,32 @@ fn take_batch(
 ///|
 fn request_missing_profiles() -> Unit {
   if global_state.pending_profile_reqs.length() == 0 {
+    global_state.is_fetching_profiles = false
     return
   }
+  global_state.is_fetching_profiles = true
   let (authors, remaining) = take_batch(global_state.pending_profile_reqs, 50)
   global_state.pending_profile_reqs = remaining
-  let filters : Json = [{ "kinds": [0], "authors": authors }]
+  let filters : Json = [
+    { "kinds": [0], "authors": authors, "limit": authors.length() },
+  ]
   ignore(@nostr.subscribe(filters.stringify()))
 }
 
 ///|
 fn request_missing_interactions() -> Unit {
   if global_state.pending_interaction_reqs.length() == 0 {
+    global_state.is_fetching_interactions = false
     return
   }
+  global_state.is_fetching_interactions = true
   let (event_ids, remaining) = take_batch(
     global_state.pending_interaction_reqs,
     30,
   )
   global_state.pending_interaction_reqs = remaining
   let filters : Json = [
-    { "kinds": [1, 6, 7], "#e": event_ids, "limit": event_ids.length() * 15 },
+    { "kinds": [6, 7], "#e": event_ids, "limit": event_ids.length() * 5 },
   ]
   ignore(@nostr.subscribe(filters.stringify()))
 }
@@ -1071,9 +1083,13 @@ fn handle_nostr_eose() -> Unit {
   global_state.is_loading_older = false
   if global_state.pending_interaction_reqs.length() > 0 {
     request_missing_interactions()
+  } else {
+    global_state.is_fetching_interactions = false
   }
   if global_state.pending_profile_reqs.length() > 0 {
     request_missing_profiles()
+  } else {
+    global_state.is_fetching_profiles = false
   }
   @ui.render(render_feed(global_state))
 }
@@ -1194,14 +1210,19 @@ fn enqueue_note_queries(
   id : String,
   pubkey : String,
   reply_to_pubkey : String,
+  is_root : Bool,
 ) -> Unit {
-  if pubkey.length() >= 16 && find_profile_name(pubkey) == "" {
+  if pubkey.length() >= 16 &&
+    find_profile_name(pubkey) == "" &&
+    push_unique(global_state.queried_profiles, pubkey) {
     ignore(push_unique(global_state.pending_profile_reqs, pubkey))
   }
-  if reply_to_pubkey.length() >= 16 && find_profile_name(reply_to_pubkey) == "" {
+  if reply_to_pubkey.length() >= 16 &&
+    find_profile_name(reply_to_pubkey) == "" &&
+    push_unique(global_state.queried_profiles, reply_to_pubkey) {
     ignore(push_unique(global_state.pending_profile_reqs, reply_to_pubkey))
   }
-  if push_unique(global_state.queried_interactions, id) {
+  if is_root && push_unique(global_state.queried_interactions, id) {
     global_state.pending_interaction_reqs.push(id)
   }
 }
@@ -1274,7 +1295,10 @@ fn handle_kind_1(event : @json.Json) -> Unit {
   } else {
     "Nostr User"
   }
-  enqueue_note_queries(id, pubkey, reply_to_pubkey)
+  let is_root = reply_to == ""
+  if is_root || is_thread_reply {
+    enqueue_note_queries(id, pubkey, reply_to_pubkey, is_root)
+  }
 
   let note_ts = if created_at > 0 { created_at } else { 1730000000 }
   if (
@@ -1331,10 +1355,12 @@ fn handle_nostr_event(payload_str : String) -> Unit {
     7 => handle_kind_7(parsed)
     _ => ()
   }
-  if global_state.pending_interaction_reqs.length() >= 20 {
+  if !global_state.is_fetching_interactions &&
+    global_state.pending_interaction_reqs.length() >= 20 {
     request_missing_interactions()
   }
-  if global_state.pending_profile_reqs.length() >= 20 {
+  if !global_state.is_fetching_profiles &&
+    global_state.pending_profile_reqs.length() >= 20 {
     request_missing_profiles()
   }
 }
