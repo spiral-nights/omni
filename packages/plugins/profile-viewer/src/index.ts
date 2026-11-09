@@ -6,6 +6,7 @@ import {
   profileStore,
   loadSchemaProfileCache,
   onProfileStoreUpdate,
+  getOrCreateNoteStats,
   PROFILE_CACHE_KEY
 } from "./state/profile-store.js";
 import {
@@ -152,6 +153,7 @@ export async function initSchemaData(explicitPk?: string): Promise<void> {
       try {
         const searchParams = getInitialRouteParams();
         let targetPk = searchParams.get("pubkey");
+        let initialNote: any = null;
         if (!targetPk && typeof localStorage !== "undefined") {
           try {
             const stored = localStorage.getItem("omni_active_profile_pubkey");
@@ -159,7 +161,15 @@ export async function initSchemaData(explicitPk?: string): Promise<void> {
               targetPk = stored;
               localStorage.removeItem("omni_active_profile_pubkey");
             }
+            const storedNote = localStorage.getItem("omni_active_profile_note");
+            if (storedNote) {
+              initialNote = JSON.parse(storedNote);
+              localStorage.removeItem("omni_active_profile_note");
+            }
           } catch (_) {}
+        }
+        if (targetPk && targetPk.startsWith("npub")) {
+          targetPk = npubToHex(targetPk);
         }
         if (targetPk && targetPk !== pk) {
           const cached = profileStore.schemaProfileCache.get(targetPk);
@@ -172,7 +182,21 @@ export async function initSchemaData(explicitPk?: string): Promise<void> {
             isFollowing: profileStore.schemaFollowsSet.has(targetPk)
           };
           profileStore.currentSchemaTab = "user-profile";
-          profileStore.schemaUserNotes = [];
+          if (initialNote && (initialNote.id || initialNote.content)) {
+            const stats = getOrCreateNoteStats(initialNote.id);
+            profileStore.schemaUserNotes = [{
+              ...initialNote,
+              kind: initialNote.kind || 1,
+              pubkey: targetPk,
+              likes: initialNote.likes ?? stats.likes,
+              replies: initialNote.replies ?? stats.replies,
+              reposts: initialNote.reposts ?? stats.reposts,
+              liked: initialNote.liked ?? stats.liked,
+              reposted: initialNote.reposted ?? stats.reposted
+            }];
+          } else {
+            profileStore.schemaUserNotes = [];
+          }
           loadCachedNotesForPubkey(targetPk);
           sendSchemaWs(["REQ", `pv_schema_target_${Date.now()}`, { kinds: [0], authors: [targetPk], limit: 1 }]);
           if (profileStore.schemaActiveNotesSubId) {
@@ -238,14 +262,16 @@ if (rootContext && typeof rootContext.addEventListener === "function") {
   rootContext.addEventListener("omni:intent", async (event: any) => {
     const detail = event.detail;
     if (detail && (detail.action === "view_profile" || detail.action === "view-profile")) {
-      const pubkey = detail.data?.pubkey;
+      const rawPubkey = detail.data?.pubkey;
+      const pubkey = rawPubkey ? (rawPubkey.startsWith("npub") ? npubToHex(rawPubkey) : rawPubkey) : "";
       if (pubkey && pubkey !== profileStore.currentProfilePubkey) {
         const next = await handleProfileViewerAction({
           name: "view_profile",
           payload: {
             pubkey,
             isFromIntent: true,
-            isAlreadyActive: Boolean(detail.data?.isAlreadyActive)
+            isAlreadyActive: Boolean(detail.data?.isAlreadyActive),
+            initialNote: detail.data?.initialNote || detail.data?.note
           }
         }, undefined, initSchemaData);
         dispatchProfileSchema(next);
@@ -276,7 +302,8 @@ if (rootContext && typeof rootContext.addEventListener === "function") {
       (state?.pluginState && state.pluginState.tab) ||
       (state?.from as string) ||
       (state === null ? "my-profile" : (profileStore.schemaPreviousTab || "my-profile"));
-    const targetPk = state?.pubkey || (state?.pluginState && state.pluginState.pubkey);
+    const rawTargetPk = state?.pubkey || (state?.pluginState && state.pluginState.pubkey);
+    const targetPk = rawTargetPk ? (rawTargetPk.startsWith("npub") ? npubToHex(rawTargetPk) : rawTargetPk) : "";
     profileStore.schemaPreviousTab = (state?.from as string) || null;
     profileStore.schemaPushedHistory = false;
     if (targetTab === "user-profile" && targetPk) {

@@ -239,13 +239,10 @@ fn request_missing_interactions() -> Unit {
     return
   }
   global_state.is_fetching_interactions = true
-  let (event_ids, remaining) = take_batch(
-    global_state.pending_interaction_reqs,
-    30,
-  )
-  global_state.pending_interaction_reqs = remaining
+  let (event_ids, _) = take_batch(global_state.pending_interaction_reqs, 20)
+  global_state.pending_interaction_reqs = []
   let filters : Json = [
-    { "kinds": [6, 7], "#e": event_ids, "limit": event_ids.length() * 5 },
+    { "kinds": [6, 7], "#e": event_ids, "limit": event_ids.length() * 3 },
   ]
   ignore(@nostr.subscribe(filters.stringify()))
 }
@@ -259,6 +256,7 @@ fn render_author_header(
   primary_variant : String,
   show_secondary_npub : Bool,
   extra_style : String,
+  source_note : Note?,
 ) -> Json {
   let short_npub = truncate_npub(npub)
   let has_named = author_name != "" &&
@@ -292,9 +290,24 @@ fn render_author_header(
     ]
   }
 
+  let profile_payload : Json = match source_note {
+    Some(n) =>
+      {
+        "pubkey": pubkey,
+        "initialNote": {
+          "id": n.id,
+          "pubkey": n.pubkey,
+          "content": n.content,
+          "created_at": n.created_at,
+          "author_name": n.author_name,
+          "npub": n.npub,
+        },
+      }
+    None => { "pubkey": pubkey }
+  }
   let profile_action : Json = {
     "name": "view-profile",
-    "payload": { "pubkey": pubkey },
+    "payload": profile_payload,
   }
   {
     "type": "box",
@@ -423,6 +436,7 @@ fn render_thread_reply_card(n : Note) -> Json {
         "body",
         false,
         "",
+        Some(n),
       ),
       {
         "type": "text",
@@ -449,6 +463,7 @@ fn append_thread_parent_and_replies(
       "caption",
       true,
       " margin-bottom: 8px;",
+      Some(p),
     ),
   )
   children.push({ "type": "text", "content": p.content, "variant": "body" })
@@ -645,6 +660,7 @@ fn render_note_card(n : Note) -> Json {
       "body",
       true,
       "",
+      Some(n),
     ),
   )
   card_children.push({
@@ -1087,11 +1103,8 @@ fn handle_nostr_eose() -> Unit {
   global_state.thread_replies_loaded = true
   global_state.is_syncing = false
   global_state.is_loading_older = false
-  if global_state.pending_interaction_reqs.length() > 0 {
-    request_missing_interactions()
-  } else {
-    global_state.is_fetching_interactions = false
-  }
+  global_state.is_fetching_interactions = false
+  global_state.pending_interaction_reqs = []
   if global_state.pending_profile_reqs.length() > 0 {
     request_missing_profiles()
   } else {
@@ -1362,11 +1375,11 @@ fn handle_nostr_event(payload_str : String) -> Unit {
     _ => ()
   }
   if !global_state.is_fetching_interactions &&
-    global_state.pending_interaction_reqs.length() >= 20 {
+    global_state.pending_interaction_reqs.length() >= 10 {
     request_missing_interactions()
   }
   if !global_state.is_fetching_profiles &&
-    global_state.pending_profile_reqs.length() >= 20 {
+    global_state.pending_profile_reqs.length() > 0 {
     request_missing_profiles()
   }
 }

@@ -6,16 +6,19 @@ import {
   scheduleSchemaUpdate,
   queriedInteractionNoteIds
 } from "../state/profile-store.js";
+import { npubToHex } from "../crypto/bech32.js";
 
-export async function loadCachedNotesForPubkey(pubkey: string): Promise<void> {
-  if (!pubkey) return;
+export async function loadCachedNotesForPubkey(rawPubkey: string): Promise<void> {
+  if (!rawPubkey) return;
+  const pubkey = (rawPubkey.startsWith("npub") ? npubToHex(rawPubkey) : rawPubkey).toLowerCase();
   // 1. Check window.__omni_event_cache for instant 0ms in-memory notes
   if (typeof window !== "undefined") {
     const memCache = (window as any).__omni_event_cache;
     if (memCache && typeof memCache.values === "function") {
       let found = false;
       for (const ev of memCache.values()) {
-        if (ev.pubkey === pubkey && (ev.kind === 1 || (!ev.kind && ev.content !== undefined))) {
+        const evPk = (ev.pubkey ? (ev.pubkey.startsWith("npub") ? npubToHex(ev.pubkey) : ev.pubkey) : "").toLowerCase();
+        if (evPk === pubkey && (ev.kind === 1 || (!ev.kind && ev.content !== undefined))) {
           if (!profileStore.schemaUserNotes.some((n) => n.id === ev.id)) {
             const stats = getOrCreateNoteStats(ev.id);
             profileStore.schemaUserNotes.push({
@@ -70,7 +73,8 @@ export async function loadCachedNotesForPubkey(pubkey: string): Promise<void> {
             return;
           }
           const ev = cursor.value;
-          if (ev && ev.pubkey === pubkey && ev.kind === 1) {
+          const evPk = (ev?.pubkey ? (ev.pubkey.startsWith("npub") ? npubToHex(ev.pubkey) : ev.pubkey) : "").toLowerCase();
+          if (ev && evPk === pubkey && ev.kind === 1) {
             if (!profileStore.schemaUserNotes.some((n) => n.id === ev.id)) {
               const stats = getOrCreateNoteStats(ev.id);
               profileStore.schemaUserNotes.push({
@@ -265,11 +269,13 @@ export function handleSchemaWsMessage(event: any): void {
           } catch (_) {}
         }
 
-        const activePk =
+        const rawActive =
           profileStore.currentSchemaTab === "user-profile"
             ? profileStore.schemaTargetUser?.pubkey
             : (profileStore.currentSchemaTab === "my-profile" ? profileStore.currentProfilePubkey : "");
-        if (activePk && ev.pubkey === activePk) {
+        const activePk = (rawActive ? (rawActive.startsWith("npub") ? npubToHex(rawActive) : rawActive) : "").toLowerCase();
+        const eventPk = (ev.pubkey ? (ev.pubkey.startsWith("npub") ? npubToHex(ev.pubkey) : ev.pubkey) : "").toLowerCase();
+        if (activePk && eventPk === activePk) {
           if (!profileStore.schemaUserNotes.some((n) => n.id === ev.id)) {
             const stats = getOrCreateNoteStats(ev.id);
             profileStore.schemaUserNotes.push({
@@ -294,9 +300,7 @@ export function handleSchemaWsMessage(event: any): void {
           subId.startsWith("pv_s_authors_") ||
           subId.startsWith("pv_schema_prof_") ||
           subId.startsWith("pv_schema_contacts_") ||
-          subId.startsWith("pv_schema_target_") ||
-          subId.startsWith("pv_schema_my_notes_") ||
-          subId.startsWith("pv_schema_target_notes_")
+          subId.startsWith("pv_schema_target_")
         ) {
           try {
             sendSchemaWs(["CLOSE", subId]);

@@ -102,7 +102,7 @@ export class LocalEventStore {
     });
   }
 
-  private putInMemoryCache(event: NostrEvent): void {
+  public putInMemoryCache(event: NostrEvent): void {
     if (this.memoryCache.has(event.id)) {
       this.memoryCache.delete(event.id);
     } else if (this.memoryCache.size >= this.maxMemoryCacheSize) {
@@ -472,17 +472,20 @@ export class LocalEventStore {
       }
 
       let req: IDBRequest<IDBCursorWithValue | null>;
+      let isCreatedOrdered = false;
 
-      if (filter.kinds && filter.kinds.length === 1) {
+      if (filter.authors && filter.authors.length === 1) {
+        const pubkeyIndex = store.index("pubkey");
+        req = pubkeyIndex.openCursor(IDBKeyRange.only(filter.authors[0]), "prev");
+        isCreatedOrdered = false;
+      } else if (filter.kinds && filter.kinds.length === 1) {
         const kind = filter.kinds[0];
         const kindIndex = store.index("kind_created");
         const lowerBound = filter.since !== undefined ? filter.since : 0;
         const upperBound = filter.until !== undefined ? filter.until : Number.MAX_SAFE_INTEGER;
         const range = IDBKeyRange.bound([kind, lowerBound], [kind, upperBound]);
         req = kindIndex.openCursor(range, "prev");
-      } else if (filter.authors && filter.authors.length === 1 && (!filter.kinds || filter.kinds.length === 0)) {
-        const pubkeyIndex = store.index("pubkey");
-        req = pubkeyIndex.openCursor(IDBKeyRange.only(filter.authors[0]), "prev");
+        isCreatedOrdered = true;
       } else {
         const createdIndex = store.index("created_at");
         let range: IDBKeyRange | null = null;
@@ -494,6 +497,7 @@ export class LocalEventStore {
           range = IDBKeyRange.upperBound(filter.until);
         }
         req = createdIndex.openCursor(range, "prev");
+        isCreatedOrdered = true;
       }
 
       req.onsuccess = (event) => {
@@ -518,7 +522,7 @@ export class LocalEventStore {
         const ev = cursor.value as NostrEvent;
         if (this.matchesFilter(ev, filter)) {
           events.push(ev);
-          if (filter.limit && events.length >= filter.limit) {
+          if (filter.limit && events.length >= filter.limit && isCreatedOrdered) {
             resolve(events);
             return;
           }
@@ -533,7 +537,7 @@ export class LocalEventStore {
 
   public matchesFilter(event: NostrEvent, filter: NostrFilter): boolean {
     if (filter.ids && !filter.ids.includes(event.id)) return false;
-    if (filter.authors && !filter.authors.includes(event.pubkey)) return false;
+    if (filter.authors && !filter.authors.some((a) => a.toLowerCase() === event.pubkey.toLowerCase())) return false;
     if (filter.kinds && !filter.kinds.includes(event.kind)) return false;
     if (filter.since && event.created_at < filter.since) return false;
     if (filter.until && event.created_at > filter.until) return false;

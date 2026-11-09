@@ -7,6 +7,7 @@ import {
 } from "../state/profile-store.js";
 import { sendSchemaWs, loadCachedNotesForPubkey } from "../net/relay-sync.js";
 import { getProfileSchema } from "./profile-schema.js";
+import { npubToHex } from "../crypto/bech32.js";
 
 export async function handleProfileViewerAction(
   action: OmniAction,
@@ -192,7 +193,9 @@ export async function handleProfileViewerAction(
       } catch (_) {}
     }
   } else if (actName === "view_profile" || actName === "view-profile") {
-    const targetPk = String(payload?.pubkey || action.payload?.pubkey || "");
+    const rawTargetPk = String(payload?.pubkey || action.payload?.pubkey || "").trim();
+    const targetPk = rawTargetPk.startsWith("npub") ? npubToHex(rawTargetPk) : rawTargetPk;
+    const initialNote: any = payload?.initialNote || action.payload?.initialNote || payload?.note || action.payload?.note;
     const fromPopState = Boolean(payload?.fromPopState || action.payload?.fromPopState);
     const isFromIntent = Boolean(payload?.isFromIntent || action.payload?.isFromIntent);
     if (targetPk) {
@@ -236,7 +239,21 @@ export async function handleProfileViewerAction(
         } catch (_) {}
       }
       profileStore.currentSchemaTab = "user-profile";
-      profileStore.schemaUserNotes = [];
+      if (initialNote && (initialNote.id || initialNote.content)) {
+        const stats = getOrCreateNoteStats(initialNote.id);
+        profileStore.schemaUserNotes = [{
+          ...initialNote,
+          kind: initialNote.kind || 1,
+          pubkey: targetPk,
+          likes: initialNote.likes ?? stats.likes,
+          replies: initialNote.replies ?? stats.replies,
+          reposts: initialNote.reposts ?? stats.reposts,
+          liked: initialNote.liked ?? stats.liked,
+          reposted: initialNote.reposted ?? stats.reposted
+        }];
+      } else {
+        profileStore.schemaUserNotes = [];
+      }
       loadCachedNotesForPubkey(targetPk);
 
       if (!fromPopState) {

@@ -304,6 +304,9 @@ export abstract class BaseShell implements OmniShellHost {
       if (event?.action === "view_profile" && event?.data?.pubkey) {
         try {
           localStorage.setItem("omni_active_profile_pubkey", event.data.pubkey);
+          if (event.data.initialNote || event.data.note) {
+            localStorage.setItem("omni_active_profile_note", JSON.stringify(event.data.initialNote || event.data.note));
+          }
         } catch (_) {}
       } else if (event?.action === "view_note" && (event?.data?.eventId || event?.data?.id)) {
         try {
@@ -350,6 +353,9 @@ export abstract class BaseShell implements OmniShellHost {
               if (action === "view_profile" && data?.pubkey) {
                 try {
                   localStorage.setItem("omni_active_profile_pubkey", data.pubkey);
+                  if (data.initialNote || data.note) {
+                    localStorage.setItem("omni_active_profile_note", JSON.stringify(data.initialNote || data.note));
+                  }
                 } catch (_) {}
               } else if (action === "view_note" && (data?.eventId || data?.id)) {
                 try {

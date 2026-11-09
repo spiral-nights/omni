@@ -18,7 +18,25 @@ describe("MoonBit WebAssembly Feed Plugin (WasmGuestHost + SchemaRenderer + Omni
   let rootContainer: HTMLElement;
   let mainSlot: HTMLElement;
 
+  let localStoreMap = new Map<string, string>();
+
   beforeEach(async () => {
+    localStoreMap = new Map<string, string>();
+    const mockStorage = {
+      getItem: (k: string) => localStoreMap.get(k) ?? null,
+      setItem: (k: string, v: string) => localStoreMap.set(k, String(v)),
+      removeItem: (k: string) => localStoreMap.delete(k),
+      clear: () => localStoreMap.clear(),
+      get length() { return localStoreMap.size; },
+      key: (i: number) => Array.from(localStoreMap.keys())[i] || null
+    };
+    try {
+      Object.defineProperty(window, "localStorage", {
+        value: mockStorage,
+        writable: true,
+        configurable: true
+      });
+    } catch (_) {}
     if ((window as any).happyDOM?.settings) {
       (window as any).happyDOM.settings.enableIframePageLoading = true;
     }
@@ -415,6 +433,56 @@ describe("MoonBit WebAssembly Feed Plugin (WasmGuestHost + SchemaRenderer + Omni
     expect(mainSlot.textContent).toContain("Hello from Alice wonderland!");
     // Author display name should be resolved to Alice in Wonderland
     expect(mainSlot.textContent).toContain("Alice in Wonderland");
+
+    sandbox.destroy();
+  });
+
+  it("resolves author display name instantly from localStorage cache without waiting for relays", async () => {
+    const bobPk = "6666666666666666666666666666666666666666666666666666666666666666";
+    const slotContainers = new Map<string, Element>([["main", mainSlot]]);
+
+    // Store Bob's profile in localStorage omni_profile_viewer_cache_v2 (simulating cached profile)
+    const cachedProfiles: Record<string, any> = {};
+    cachedProfiles[bobPk] = {
+      meta: {
+        name: "bob_builder",
+        display_name: "Bob the Builder"
+      },
+      timestamp: Date.now()
+    };
+    const storage = window.localStorage || (globalThis as any).localStorage;
+    storage.setItem("omni_profile_viewer_cache_v2", JSON.stringify(cachedProfiles));
+
+    // Pre-seed eventStore with a note by Bob (Kind 1 only, no Kind 0 in eventStore)
+    await kernel.eventStore.saveEvent({
+      id: "note_bob_cached_profile",
+      pubkey: bobPk,
+      kind: 1,
+      created_at: 1730000750,
+      tags: [],
+      content: "Can we build it? Yes we can!",
+      sig: "00".repeat(64)
+    } as any);
+
+    const sandbox = await kernel.registerPlugin(
+      {
+        id: "org.omni.plugin.feed",
+        name: "Feed",
+        version: "1.0.0",
+        entry: "feed.wasm",
+        components: [{ id: "main", type: "main", title: "Feed", slot: "main" }],
+        permissions: {},
+        views: [{ id: "main", title: "Feed", path: "", format: "wasm" }]
+      },
+      wasmBytes,
+      slotContainers
+    );
+
+    await wait(120);
+
+    expect(mainSlot.textContent).toContain("Can we build it? Yes we can!");
+    // Bob the Builder display name should be resolved from localStorage cache
+    expect(mainSlot.textContent).toContain("Bob the Builder");
 
     sandbox.destroy();
   });

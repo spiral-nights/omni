@@ -2,8 +2,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   getProfileSchema,
-  handleProfileViewerAction
+  handleProfileViewerAction,
+  hexToNpub
 } from "../src/index.js";
+import { profileStore } from "../src/state/profile-store.js";
 import { OmniCardPrimitive, OmniTabsPrimitive } from "@omni/types";
 
 describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () => {
@@ -514,6 +516,63 @@ describe("@omni/plugin-profile-viewer Declarative Schema & State Machine", () =>
     expect(noPostsBanner).toBeUndefined();
 
     const noteCard = schema.children?.find((c: any) => c.type === "card" && c.action?.payload?.id === "note_cached_999");
+    expect(noteCard).toBeDefined();
+  });
+
+  it("displays initial note immediately with zero latency when clicking from feed", async () => {
+    const friendPubkey = "d".repeat(64);
+    const initialNote = {
+      id: "note_from_feed_123",
+      pubkey: friendPubkey,
+      content: "First-hand note clicked straight from the timeline feed!",
+      kind: 1,
+      created_at: 1710000000,
+      author_name: "Alice"
+    };
+
+    const schema = (await handleProfileViewerAction(
+      {
+        name: "view_profile",
+        payload: {
+          pubkey: friendPubkey,
+          initialNote
+        }
+      }
+    )) as OmniCardPrimitive;
+
+    const noPostsBanner = schema.children?.find((c: any) => c.key === "user-profile-no-posts");
+    expect(noPostsBanner).toBeUndefined();
+
+    const noteCard = schema.children?.find((c: any) => c.type === "card" && c.action?.payload?.id === "note_from_feed_123");
+    expect(noteCard).toBeDefined();
+    expect(profileStore.schemaUserNotes.length).toBeGreaterThanOrEqual(1);
+    expect(profileStore.schemaUserNotes[0].id).toBe("note_from_feed_123");
+  });
+
+  it("normalizes npub target pubkey and loads matching notes without format mismatch", async () => {
+    const hexPk = "e".repeat(64);
+    const npubPk = hexToNpub(hexPk);
+
+    const initialNote = {
+      id: "note_npub_test_456",
+      pubkey: hexPk,
+      content: "Testing npub normalization when navigating to profile",
+      kind: 1,
+      created_at: 1715000000
+    };
+
+    const schema = (await handleProfileViewerAction(
+      {
+        name: "view_profile",
+        payload: {
+          pubkey: npubPk,
+          initialNote
+        }
+      }
+    )) as OmniCardPrimitive;
+
+    expect(profileStore.schemaTargetUser?.pubkey).toBe(hexPk);
+    const noteCard = schema.children?.find((c: any) => c.type === "card" && c.action?.payload?.id === "note_npub_test_456");
     expect(noteCard).toBeDefined();
   });
 });

@@ -12,6 +12,8 @@ import { WebCryptoKeystore } from "../crypto/webcrypto-keystore.js";
 import { RelayPool } from "../nostr/relay-pool.js";
 import { LocalEventStore } from "../nostr/event-store.js";
 
+const wasmBytesCache = new Map<string, Uint8Array>();
+
 function isSchemaView(
   manifest: OmniManifest,
   route?: string,
@@ -688,7 +690,8 @@ export class SandboxInstance {
             ) {
               const pubkey = (payload?.pubkey || action.payload?.pubkey) as string;
               if (pubkey) {
-                this.options.intentBroker.dispatch(this.manifest.id, "view_profile", { pubkey }).catch(() => {});
+                const initialNote = payload?.initialNote || action.payload?.initialNote || payload?.note || action.payload?.note;
+                this.options.intentBroker.dispatch(this.manifest.id, "view_profile", { pubkey, initialNote }).catch(() => {});
               }
             }
             const handlesNote = (this.manifest as any).handledIntents?.includes("view_note") || 
@@ -812,15 +815,20 @@ export class SandboxInstance {
             raw.startsWith("./") ||
             raw.startsWith("blob:")
           ) {
-            try {
-              if (typeof fetch === "function") {
-                const resp = await fetch(raw);
-                if (resp.ok) {
-                  wasmBytes = new Uint8Array(await resp.arrayBuffer());
+            if (wasmBytesCache.has(raw)) {
+              wasmBytes = wasmBytesCache.get(raw)!;
+            } else {
+              try {
+                if (typeof fetch === "function") {
+                  const resp = await fetch(raw);
+                  if (resp.ok) {
+                    wasmBytes = new Uint8Array(await resp.arrayBuffer());
+                    wasmBytesCache.set(raw, wasmBytes as Uint8Array);
+                  }
                 }
+              } catch (err) {
+                console.warn(`[SandboxInstance:${this.manifest.id}] Failed to fetch WASM from URL [${raw}]:`, err);
               }
-            } catch (err) {
-              console.warn(`[SandboxInstance:${this.manifest.id}] Failed to fetch WASM from URL [${raw}]:`, err);
             }
           }
           if (!wasmBytes) {

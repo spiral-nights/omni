@@ -71,16 +71,16 @@ export class SubscriptionCoordinator {
       if (onEose) onEose();
     };
 
-    const allConnected = this.relayPool.getConnectedRelayUrls();
+    const allRelays = this.relayPool.getAllRelays().map((r) => r.url);
     const normalizedTargets = targetRelays && targetRelays.length > 0
       ? new Set(targetRelays.map((u) => u.trim().replace(/\/+$/, "")))
       : null;
-    const expectedRelays = allConnected.filter((u) => !normalizedTargets || normalizedTargets.has(u));
+    const expectedRelays = allRelays.filter((u) => !normalizedTargets || normalizedTargets.has(u.trim().replace(/\/+$/, "")));
 
     if (onEose && expectedRelays.length > 0) {
       eoseFallbackTimer = setTimeout(() => {
         fireEoseOnce();
-      }, 2500);
+      }, 5000);
     }
 
     const unsubscribeRelays = this.relayPool.subscribe(
@@ -117,7 +117,7 @@ export class SubscriptionCoordinator {
       targetRelays
     );
 
-    if ((this.relayPool.getAllRelays().length === 0 || this.relayPool.getConnectedRelayCount() === 0) && onEose) {
+    if (this.relayPool.getAllRelays().length === 0 && onEose) {
       queueMicrotask(() => fireEoseOnce());
     }
 

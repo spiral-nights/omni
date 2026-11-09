@@ -7,6 +7,17 @@ import type { AclEngine } from "../acl/acl-engine.js";
 import { instantiate as instantiateWitComponent } from "./wit-host/omni-component.js";
 import { CORE2_WASM_BYTES, CORE3_WASM_BYTES } from "./wit-host/core-shims.js";
 
+let cachedCore2Module: WebAssembly.Module | null = null;
+let cachedCore3Module: WebAssembly.Module | null = null;
+
+function getSafeStorage(): Storage | null {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) return window.localStorage;
+    if (typeof localStorage !== "undefined" && typeof localStorage.getItem === "function") return localStorage;
+  } catch (_) {}
+  return null;
+}
+
 export interface WasmGuestHostOptions {
   pluginId: string;
   wasmBytes: ArrayBuffer | Uint8Array;
@@ -56,12 +67,13 @@ export class WasmGuestHost {
       const module = await WebAssembly.compile(bytes as BufferSource);
       const isWitComponent = WebAssembly.Module.exports(module).some((e) => e.name === "cabi_realloc");
 
-      // Seed local storage follows and profiles into event store if available so 0ms cache hits immediately
+      // Seed local storage follows and profiles into in-memory cache synchronously (0ms) without blocking boot with disk I/O
       const userPk = this.options.initPayload?.userPubkey;
-      if (typeof localStorage !== "undefined" && this.options.eventStore) {
+      const storage = getSafeStorage();
+      if (storage && this.options.eventStore) {
         try {
           if (userPk) {
-            const raw = localStorage.getItem(`omni_people_follows_${userPk}`);
+            const raw = storage.getItem(`omni_people_follows_${userPk}`);
             if (raw) {
               const tags = JSON.parse(raw);
               if (Array.isArray(tags) && tags.length > 0) {
@@ -73,15 +85,15 @@ export class WasmGuestHost {
                   tags,
                   content: ""
                 };
-                await this.options.eventStore.saveEvent(syntheticEvent as any);
+                this.options.eventStore.putInMemoryCache(syntheticEvent as any);
               }
             }
           }
 
-          // Seed cached profiles from localStorage into event store so kind 0 queries hit 0ms cache immediately
+          // Seed cached profiles from localStorage into in-memory cache in 0ms without disk transactions
           const cacheKeys = ["omni_profile_viewer_cache_v2", "omni_profile_cache_v2"];
           for (const key of cacheKeys) {
-            const raw = localStorage.getItem(key);
+            const raw = storage.getItem(key);
             if (!raw) continue;
             const records = JSON.parse(raw);
             for (const [pk, entry] of Object.entries(records)) {
@@ -95,7 +107,7 @@ export class WasmGuestHost {
                   tags: [],
                   content: JSON.stringify(meta)
                 };
-                await this.options.eventStore.saveEvent(syntheticProfEvent as any);
+                this.options.eventStore.putInMemoryCache(syntheticProfEvent as any);
               }
             }
           }
@@ -103,8 +115,14 @@ export class WasmGuestHost {
       }
 
       if (isWitComponent) {
-        const core2Module = await WebAssembly.compile(CORE2_WASM_BYTES as BufferSource);
-        const core3Module = await WebAssembly.compile(CORE3_WASM_BYTES as BufferSource);
+        if (!cachedCore2Module) {
+          cachedCore2Module = await WebAssembly.compile(CORE2_WASM_BYTES as BufferSource);
+        }
+        if (!cachedCore3Module) {
+          cachedCore3Module = await WebAssembly.compile(CORE3_WASM_BYTES as BufferSource);
+        }
+        const core2Module = cachedCore2Module;
+        const core3Module = cachedCore3Module;
 
         this.witComponent = await instantiateWitComponent(
           (name: string) => {
@@ -437,7 +455,7 @@ export class WasmGuestHost {
     if (filters.length === 0) return "";
 
     const isTimeline = filters.some((f) => f.kinds && f.kinds.includes(1) && !f.until && !f["#e"] && !f.ids);
-    const isOneShot = true;
+    const isOneShot = !isTimeline;
     if (isTimeline && this.activeTimelineUnsub) {
       try {
         this.activeTimelineUnsub();
@@ -446,6 +464,45 @@ export class WasmGuestHost {
     }
 
     const subId = `wasm_sub_${this.options.pluginId.replace(/[^a-zA-Z0-9]/g, "_")}_${Math.random().toString(36).slice(2, 8)}`;
+
+    // Instant 0ms Kind 0 resolution from localStorage profile cache for known authors
+    const kind0Filter = filters.find((f) => f.kinds && f.kinds.includes(0));
+    const storage = getSafeStorage();
+    if (kind0Filter && Array.isArray(kind0Filter.authors) && storage) {
+      try {
+        const cacheKeys = ["omni_profile_viewer_cache_v2", "omni_profile_cache_v2"];
+        const resolvedPks = new Set<string>();
+        for (const key of cacheKeys) {
+          const raw = storage.getItem(key);
+          if (!raw) continue;
+          const records = JSON.parse(raw);
+          for (const pk of kind0Filter.authors) {
+            if (resolvedPks.has(pk)) continue;
+            const entry = records[pk] || records[pk.toLowerCase()];
+            if (entry) {
+              const meta = entry.meta || entry;
+              if (meta && typeof meta === "object") {
+                resolvedPks.add(pk);
+                const profEvent = {
+                  id: `profile_cache_${pk}`,
+                  pubkey: pk,
+                  kind: 0,
+                  created_at: Math.floor(Date.now() / 1000),
+                  tags: [],
+                  content: JSON.stringify(meta)
+                };
+                queueMicrotask(() => {
+                  if (!this.destroyed) {
+                    this.dispatchAction("main", { name: "nostr:event" }, profEvent as unknown as Record<string, unknown>);
+                  }
+                });
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
     if (this.options.subscriptionCoordinator) {
       let subUnsub: (() => void) | null = null;
       let eoseTimer: any = null;
