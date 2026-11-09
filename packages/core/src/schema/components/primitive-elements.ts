@@ -222,6 +222,14 @@ export class OmniCardElement extends BaseElement {
       this.style.cursor = "";
     }
 
+    if (
+      (props.id && props.id.startsWith("note-")) ||
+      (props.key && props.key.startsWith("note-")) ||
+      (props.action && (props.action.name === "view_note" || props.action.name === "view-thread"))
+    ) {
+      this.classList.add("omni-note-card");
+    }
+
     if (props.bannerBackground) {
       this.classList.add("has-banner");
       const bEl = this.ensureBanner();
@@ -954,6 +962,8 @@ export class OmniButtonElement extends BaseElement {
     }
     if (props.icon) {
       this.setAttribute("icon", props.icon);
+      this.btnEl!.setAttribute("icon", props.icon);
+      this.btnEl!.setAttribute("data-icon", props.icon);
     }
 
     let content = "";
@@ -1007,6 +1017,9 @@ export class OmniIconButtonElement extends BaseElement {
 
     this.btnEl!.disabled = Boolean(props.disabled);
     if (props.icon) {
+      this.setAttribute("icon", props.icon);
+      this.btnEl!.setAttribute("icon", props.icon);
+      this.btnEl!.setAttribute("data-icon", props.icon);
       this.btnEl!.innerHTML = renderSvgIcon(props.icon, props.size === "sm" ? 14 : 16);
     }
   }

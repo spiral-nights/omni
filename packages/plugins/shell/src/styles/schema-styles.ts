@@ -63,6 +63,185 @@ omni-card {
   width: 100%;
   transition: border-color 0.15s ease;
 }
+
+/* 2b. Condensed Stream Note Card (Option A - 4 to 6 notes visible) */
+omni-card.omni-note-card,
+omni-card[id^="note-"] {
+  padding: 9px 12px !important;
+  margin-bottom: 5px !important;
+  border-radius: var(--omni-radius-sm, 7px) !important;
+  background: var(--omni-bg-elevated, #22201d);
+  border: 1px solid var(--omni-border-subtle, #272522);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+omni-card.omni-note-card:hover,
+omni-card[id^="note-"]:hover {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: var(--omni-border-strong, #383530);
+}
+
+omni-card.omni-note-card .omni-card-body,
+omni-card[id^="note-"] .omni-card-body {
+  gap: 4px !important;
+}
+
+/* Remove chunky divider from note cards to optimize vertical density */
+omni-card.omni-note-card omni-divider,
+omni-card[id^="note-"] omni-divider {
+  display: none !important;
+}
+
+/* Compact Note Content Text */
+omni-card.omni-note-card omni-text[variant="body"] .omni-text,
+omni-card[id^="note-"] omni-text[variant="body"] .omni-text {
+  font-size: 0.88rem !important;
+  line-height: 1.40 !important;
+  margin: 3px 0 4px 0 !important;
+  word-break: break-word;
+}
+
+/* Compact Action Buttons Inside Note Cards */
+omni-card.omni-note-card omni-button .omni-button,
+omni-card[id^="note-"] omni-button .omni-button,
+omni-card.omni-note-card omni-icon-button .omni-icon-button,
+omni-card[id^="note-"] omni-icon-button .omni-icon-button {
+  padding: 2px 7px !important;
+  font-size: 0.74rem !important;
+  font-family: var(--omni-font-mono, monospace) !important;
+  gap: 5px !important;
+  border-radius: 4px;
+  color: var(--omni-text-muted, #9e988f) !important;
+  transition: all 0.15s ease;
+}
+
+omni-card.omni-note-card omni-button[variant="ghost"] .omni-button,
+omni-card[id^="note-"] omni-button[variant="ghost"] .omni-button,
+omni-card.omni-note-card omni-icon-button[variant="ghost"] .omni-icon-button,
+omni-card[id^="note-"] omni-icon-button[variant="ghost"] .omni-icon-button {
+  border: none !important;
+  background: transparent !important;
+}
+
+omni-card.omni-note-card omni-button .omni-button:hover,
+omni-card[id^="note-"] omni-button .omni-button:hover,
+omni-card.omni-note-card omni-icon-button .omni-icon-button:hover,
+omni-card[id^="note-"] omni-icon-button .omni-icon-button:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Distinct Action Button Colors (Condensed Stream Layout) */
+/* Reply: Warm Slate/Sky Blue (#61afef) */
+omni-card.omni-note-card omni-button[icon="reply"]:hover .omni-button,
+omni-card.omni-note-card omni-button[data-icon="reply"]:hover .omni-button,
+omni-card[id^="note-"] omni-button[icon="reply"]:hover .omni-button,
+omni-card[id^="note-"] omni-button[data-icon="reply"]:hover .omni-button,
+omni-card.omni-note-card omni-icon-button[icon="reply"]:hover .omni-icon-button,
+omni-card.omni-note-card omni-icon-button[data-icon="reply"]:hover .omni-icon-button,
+omni-card[id^="note-"] omni-icon-button[icon="reply"]:hover .omni-icon-button,
+omni-card[id^="note-"] omni-icon-button[data-icon="reply"]:hover .omni-icon-button,
+omni-button[icon="reply"]:hover .omni-button,
+omni-icon-button[icon="reply"]:hover .omni-icon-button {
+  color: var(--omni-reply-active, #61afef) !important;
+}
+
+/* Repost: Warm Sage Green (#98c379) */
+omni-card.omni-note-card omni-button[icon="repeat"]:hover .omni-button,
+omni-card.omni-note-card omni-button[data-icon="repeat"]:hover .omni-button,
+omni-card[id^="note-"] omni-button[icon="repeat"]:hover .omni-button,
+omni-card[id^="note-"] omni-button[data-icon="repeat"]:hover .omni-button,
+omni-card.omni-note-card omni-button[icon="repeat"][variant="secondary"] .omni-button,
+omni-card.omni-note-card omni-button[data-icon="repeat"][variant="secondary"] .omni-button,
+omni-card[id^="note-"] omni-button[icon="repeat"][variant="secondary"] .omni-button,
+omni-card[id^="note-"] omni-button[data-icon="repeat"][variant="secondary"] .omni-button,
+omni-card.omni-note-card omni-icon-button[icon="repeat"]:hover .omni-icon-button,
+omni-card[id^="note-"] omni-icon-button[icon="repeat"]:hover .omni-icon-button,
+omni-card.omni-note-card omni-icon-button[icon="repeat"][variant="secondary"] .omni-icon-button,
+omni-card[id^="note-"] omni-icon-button[icon="repeat"][variant="secondary"] .omni-icon-button,
+omni-button[icon="repeat"]:hover .omni-button,
+omni-icon-button[icon="repeat"]:hover .omni-icon-button,
+omni-button[icon="repeat"][variant="secondary"] .omni-button,
+omni-button[data-icon="repeat"][variant="secondary"] .omni-button,
+omni-icon-button[icon="repeat"][variant="secondary"] .omni-icon-button {
+  color: var(--omni-repost-active, #98c379) !important;
+}
+omni-button[icon="repeat"][variant="secondary"] .omni-button,
+omni-button[data-icon="repeat"][variant="secondary"] .omni-button,
+omni-icon-button[icon="repeat"][variant="secondary"] .omni-icon-button {
+  background: rgba(152, 195, 121, 0.12) !important;
+  border-color: rgba(152, 195, 121, 0.28) !important;
+}
+
+/* Like: Coral/Rose (#e06c75) */
+omni-card.omni-note-card omni-button[icon="heart"]:hover .omni-button,
+omni-card.omni-note-card omni-button[data-icon="heart"]:hover .omni-button,
+omni-card[id^="note-"] omni-button[icon="heart"]:hover .omni-button,
+omni-card[id^="note-"] omni-button[data-icon="heart"]:hover .omni-button,
+omni-card.omni-note-card omni-button[icon="heart"][variant="secondary"] .omni-button,
+omni-card.omni-note-card omni-button[data-icon="heart"][variant="secondary"] .omni-button,
+omni-card[id^="note-"] omni-button[icon="heart"][variant="secondary"] .omni-button,
+omni-card[id^="note-"] omni-button[data-icon="heart"][variant="secondary"] .omni-button,
+omni-card.omni-note-card omni-icon-button[icon="heart"]:hover .omni-icon-button,
+omni-card[id^="note-"] omni-icon-button[icon="heart"]:hover .omni-icon-button,
+omni-card.omni-note-card omni-icon-button[icon="heart"][variant="secondary"] .omni-icon-button,
+omni-card[id^="note-"] omni-icon-button[icon="heart"][variant="secondary"] .omni-icon-button,
+omni-button[icon="heart"]:hover .omni-button,
+omni-icon-button[icon="heart"]:hover .omni-icon-button,
+omni-button[icon="heart"][variant="secondary"] .omni-button,
+omni-button[data-icon="heart"][variant="secondary"] .omni-button,
+omni-icon-button[icon="heart"][variant="secondary"] .omni-icon-button {
+  color: var(--omni-heart-active, #e06c75) !important;
+}
+omni-button[icon="heart"][variant="secondary"] .omni-button,
+omni-button[data-icon="heart"][variant="secondary"] .omni-button,
+omni-icon-button[icon="heart"][variant="secondary"] .omni-icon-button {
+  background: rgba(224, 108, 117, 0.12) !important;
+  border-color: rgba(224, 108, 117, 0.28) !important;
+}
+omni-button[icon="heart"][variant="secondary"] svg,
+omni-button[data-icon="heart"][variant="secondary"] svg,
+omni-icon-button[icon="heart"][variant="secondary"] svg {
+  fill: var(--omni-heart-active, #e06c75) !important;
+}
+
+/* Zap: Gold/Amber (#e5c07b) */
+omni-card.omni-note-card omni-button[icon="zap"]:hover .omni-button,
+omni-card.omni-note-card omni-button[data-icon="zap"]:hover .omni-button,
+omni-card[id^="note-"] omni-button[icon="zap"]:hover .omni-button,
+omni-card[id^="note-"] omni-button[data-icon="zap"]:hover .omni-button,
+omni-card.omni-note-card omni-button[icon="zap"][variant="secondary"] .omni-button,
+omni-card.omni-note-card omni-button[data-icon="zap"][variant="secondary"] .omni-button,
+omni-card[id^="note-"] omni-button[icon="zap"][variant="secondary"] .omni-button,
+omni-card[id^="note-"] omni-button[data-icon="zap"][variant="secondary"] .omni-button,
+omni-card.omni-note-card omni-icon-button[icon="zap"]:hover .omni-icon-button,
+omni-card[id^="note-"] omni-icon-button[icon="zap"]:hover .omni-icon-button,
+omni-card.omni-note-card omni-icon-button[icon="zap"][variant="secondary"] .omni-icon-button,
+omni-card[id^="note-"] omni-icon-button[icon="zap"][variant="secondary"] .omni-icon-button,
+omni-button[icon="zap"]:hover .omni-button,
+omni-icon-button[icon="zap"]:hover .omni-icon-button,
+omni-button[icon="zap"][variant="secondary"] .omni-button,
+omni-button[data-icon="zap"][variant="secondary"] .omni-button,
+omni-icon-button[icon="zap"][variant="secondary"] .omni-icon-button {
+  color: var(--omni-zap-active, #e5c07b) !important;
+}
+omni-button[icon="zap"]:hover svg,
+omni-button[data-icon="zap"]:hover svg,
+omni-button[icon="zap"][variant="secondary"] svg,
+omni-button[data-icon="zap"][variant="secondary"] svg,
+omni-icon-button[icon="zap"]:hover svg,
+omni-icon-button[icon="zap"][variant="secondary"] svg {
+  fill: var(--omni-zap-active, #e5c07b) !important;
+}
+
+@media (max-width: 600px) {
+  omni-card.omni-note-card,
+  omni-card[id^="note-"] {
+    padding: 8px 10px !important;
+    margin-bottom: 4px !important;
+    border-radius: 6px !important;
+  }
+}
 omni-card.has-banner {
   padding-top: 0;
   overflow: hidden;

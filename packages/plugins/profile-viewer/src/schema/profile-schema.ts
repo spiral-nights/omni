@@ -153,6 +153,9 @@ export function getProfileSchema(
 
     return {
       type: "card",
+      id: `note-${note.id}`,
+      key: `note-${note.id}`,
+      style: "padding: 9px 12px; margin-bottom: 5px;",
       action: { name: "view_note", payload: notePayload },
       children: [
         {
@@ -164,7 +167,7 @@ export function getProfileSchema(
             {
               type: "box",
               direction: "row",
-              gap: "sm",
+              gap: "xs",
               align: "center",
               children: [
                 {
@@ -174,23 +177,16 @@ export function getProfileSchema(
                   size: "sm"
                 },
                 {
-                  type: "box",
-                  direction: "column",
-                  gap: "xs",
-                  children: [
-                    {
-                      type: "text",
-                      content: authorName,
-                      variant: "body",
-                      tone: "primary"
-                    },
-                    {
-                      type: "text",
-                      content: npubShort ? `${timeStr} · ${npubShort}` : timeStr,
-                      variant: "caption",
-                      tone: "muted"
-                    }
-                  ]
+                  type: "text",
+                  content: authorName,
+                  variant: "body",
+                  tone: "primary"
+                },
+                {
+                  type: "text",
+                  content: npubShort ? `${timeStr} · ${npubShort}` : timeStr,
+                  variant: "caption",
+                  tone: "muted"
                 }
               ]
             }
@@ -200,16 +196,15 @@ export function getProfileSchema(
           type: "text",
           content: note.content || "",
           variant: "body",
+          style: "margin-top: 3px; margin-bottom: 4px; cursor: pointer;",
           action: { name: "view_note", payload: notePayload }
-        },
-        {
-          type: "divider"
         },
         {
           type: "box",
           direction: "row",
           justify: "between",
           align: "center",
+          style: "margin-top: 2px; max-width: 320px;",
           children: [
             {
               type: "button",

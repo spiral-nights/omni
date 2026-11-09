@@ -311,7 +311,13 @@ fn render_author_header(
         "size": avatar_size,
         "action": profile_action,
       },
-      { "type": "box", "direction": "column", "children": author_texts },
+      {
+        "type": "box",
+        "direction": "row",
+        "gap": "xs",
+        "align": "baseline",
+        "children": author_texts,
+      },
     ],
   }
 }
@@ -567,6 +573,7 @@ fn render_note_actions(n : Note) -> Json {
     "direction": "row",
     "justify": "between",
     "align": "center",
+    "style": "margin-top: 2px; max-width: 320px;",
     "children": [
       {
         "type": "button",
@@ -621,7 +628,7 @@ fn render_note_card(n : Note) -> Json {
       "direction": "row",
       "align": "center",
       "gap": "xs",
-      "style": "margin-bottom: 8px; cursor: pointer;",
+      "style": "margin-bottom: 4px; cursor: pointer;",
       "action": { "name": "view-thread", "payload": { "id": n.reply_to_id } },
       "children": [
         { "type": "badge", "label": get_reply_badge_label(n), "tone": "accent" },
@@ -634,7 +641,7 @@ fn render_note_card(n : Note) -> Json {
       n.pubkey,
       n.author_name,
       n.npub,
-      "md",
+      "sm",
       "body",
       true,
       "",
@@ -644,17 +651,16 @@ fn render_note_card(n : Note) -> Json {
     "type": "text",
     "content": n.content,
     "variant": "body",
-    "style": "margin-top: 8px; margin-bottom: 8px; cursor: pointer;",
+    "style": "margin-top: 3px; margin-bottom: 4px; cursor: pointer;",
     "action": { "name": "view-thread", "payload": { "id": n.id } },
   })
-  card_children.push({ "type": "divider" })
   card_children.push(render_note_actions(n))
 
   {
     "type": "card",
     "key": "note-" + n.id,
     "id": "note-" + n.id,
-    "style": "margin-bottom: 8px;",
+    "style": "padding: 9px 12px; margin-bottom: 5px;",
     "children": card_children,
   }
 }

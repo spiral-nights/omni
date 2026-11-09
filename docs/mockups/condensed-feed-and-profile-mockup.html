@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="en" data-theme-mode="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Omni — Condensed Feed & Profile UI Mockups (Options A, B, C)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400&family=Space+Mono:wght@400;700&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* -------------------------------------------------------------
+       THEME FOUNDATIONS — WARM PAPER DARK / OBSIDIAN & PAPYRUS
+       ------------------------------------------------------------- */
+    :root {
+      --omni-font-serif: "Newsreader", "Charter", "Georgia", serif;
+      --omni-font-mono: "Space Mono", ui-monospace, SFMono-Regular, monospace;
+      --omni-font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+      --omni-accent-primary: #d4a373; /* Warm Sandstone */
+      --omni-accent-hover: #e0b488;
+      --omni-accent-subtle: rgba(212, 163, 115, 0.12);
+      --omni-accent-contrast: #141312;
+      --omni-heart-active: #e06c75;
+      --omni-repost-active: #98c379;
+      --omni-zap-active: #e5c07b;
+    }
+
+    html[data-theme-mode="dark"] {
+      color-scheme: dark;
+      --bg-canvas: #141312;      /* Rich graphite */
+      --bg-surface: #191816;     /* Warm charcoal */
+      --bg-elevated: #22201d;    /* Elevated card */
+      --bg-hover: rgba(255, 255, 255, 0.04);
+      --bg-active: rgba(255, 255, 255, 0.07);
+
+      --text-primary: #ede8df;   /* Warm ivory */
+      --text-secondary: #9e988f; /* Sandstone grey */
+      --text-muted: #6b665f;     /* Subtle muted */
+
+      --border-subtle: #272522;
+      --border-strong: #383530;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+      --phone-border: #383530;
+    }
+
+    html[data-theme-mode="light"] {
+      color-scheme: light;
+      --bg-canvas: #fbfbf9;
+      --bg-surface: #f3f3f0;
+      --bg-elevated: #ffffff;
+      --bg-hover: rgba(0, 0, 0, 0.03);
+      --bg-active: rgba(0, 0, 0, 0.06);
+
+      --text-primary: #141312;
+      --text-secondary: #5a5752;
+      --text-muted: #8c8780;
+
+      --border-subtle: #e6e4df;
+      --border-strong: #d2cfc8;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+      --phone-border: #d2cfc8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      font-family: var(--omni-font-sans);
+      font-size: 14px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* -------------------------------------------------------------
+       TOP CONTROL BAR & MOCKUP TOOLBAR
+       ------------------------------------------------------------- */
+    .mockup-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 10px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      backdrop-filter: blur(12px);
+    }
+
+    .toolbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toolbar-title {
+      font-family: var(--omni-font-serif);
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text-primary);
+    }
+
+    .toolbar-badge {
+      font-family: var(--omni-font-mono);
+      font-size: 0.68rem;
+      background: var(--omni-accent-subtle);
+      color: var(--omni-accent-primary);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(212, 163, 115, 0.25);
+    }
+
+    .toolbar-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .ctrl-label {
+      font-family: var(--omni-font-mono);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      padding: 0 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .ctrl-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-family: var(--omni-font-sans);
+      font-size: 0.78rem;
+      padding: 5px 9px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+
+    .ctrl-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+
+    .ctrl-btn.active {
+      background: var(--bg-elevated);
+      color: var(--omni-accent-primary);
+      font-weight: 600;
+      border: 1px solid var(--border-strong);
+    }
+
+    .ctrl-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.6;
+    }
+
+    /* -------------------------------------------------------------
+       MAIN WORKSPACE & LAYOUT WRAPPERS
+       ------------------------------------------------------------- */
+    .workspace-container {
+      display: flex;
+      justify-content: center;
+      padding: 24px 16px 60px 16px;
+      transition: all 0.25s ease;
+    }
+
+    /* Phone Preview Frame */
+    .viewport-mode-mobile .mockup-viewport-frame {
+      width: 100%;
+      max-width: 410px;
+      height: 790px;
+      border: 10px solid var(--phone-border);
+      border-radius: 36px;
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.4);
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: var(--bg-canvas);
+      position: relative;
+    }
+
+    .viewport-mode-desktop .mockup-viewport-frame {
+      width: 100%;
+      max-width: 680px;
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      background: var(--bg-canvas);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* Density Comparison Banner */
+    .density-stats-banner {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+    }
+
+    .density-metric {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .density-metric-val {
+      font-family: var(--omni-font-mono);
+      font-weight: 700;
+      color: var(--omni-accent-primary);
+    }
+
+    /* -------------------------------------------------------------
+       FEED HEADER, TABS & COMPOSER
+       ------------------------------------------------------------- */
+    .feed-surface-header {
+      padding: 12px 14px 10px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      background: var(--bg-canvas);
+    }
+
+    .feed-nav-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .feed-tabs-row {
+      display: flex;
+      gap: 4px;
+    }
+
+    .feed-tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 0.84rem;
+      font-weight: 500;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .feed-tab-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+
+    .feed-tab-btn.active {
+      color: var(--omni-accent-primary);
+      background: var(--omni-accent-subtle);
+      font-weight: 600;
+    }
+
+    .feed-compact-composer {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+    }
+
+    .composer-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-strong);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--omni-font-mono);
+      font-size: 0.72rem;
+      color: var(--omni-accent-primary);
+      flex-shrink: 0;
+    }
+
+    .composer-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.84rem;
+      outline: none;
+    }
+
+    .composer-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .composer-post-btn {
+      background: var(--omni-accent-primary);
+      color: var(--omni-accent-contrast);
+      border: none;
+      border-radius: 5px;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+    }
+
+    .composer-post-btn:hover {
+      opacity: 0.9;
+    }
+
+    /* -------------------------------------------------------------
+       PROFILE SURFACE HEADER
+       ------------------------------------------------------------- */
+    .profile-surface-header {
+      border-bottom: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+    }
+
+    .profile-compact-banner {
+      height: 64px;
+      background: linear-gradient(135deg, rgba(212, 163, 115, 0.15), rgba(20, 19, 18, 0.9));
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .profile-info-strip {
+      padding: 0 14px 12px 14px;
+      margin-top: -24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .profile-avatar-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+
+    .profile-avatar-large {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--bg-elevated);
+      border: 2px solid var(--bg-canvas);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--omni-font-serif);
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--omni-accent-primary);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .profile-action-pills {
+      display: flex;
+      gap: 6px;
+    }
+
+    .pill-btn {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      padding: 4px 10px;
+      border-radius: 14px;
+      font-size: 0.74rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .pill-btn:hover {
+      border-color: var(--border-strong);
+      background: var(--bg-active);
+    }
+
+    .profile-text-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .profile-name {
+      font-family: var(--omni-font-serif);
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .profile-meta-line {
+      font-family: var(--omni-font-mono);
+      font-size: 0.70rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .profile-bio {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.35;
+      margin-top: 2px;
+    }
+
+    .profile-stats-row {
+      display: flex;
+      gap: 14px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .profile-stats-row strong {
+      color: var(--text-primary);
+      font-weight: 600;
+      font-family: var(--omni-font-mono);
+    }
+
+    /* -------------------------------------------------------------
+       OPTION A: STREAMLINED BORDERED STREAM (RECOMMENDED)
+       Target: 5 to 6 notes visible on mobile screen
+       Average item height: ~95px - 110px
+       ------------------------------------------------------------- */
+    .stream-feed-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stream-note-item {
+      display: flex;
+      gap: 10px;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      transition: background-color 0.12s ease;
+      cursor: pointer;
+    }
+
+    .stream-note-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .stream-avatar-col {
+      flex-shrink: 0;
+      padding-top: 2px;
+    }
+
+    .stream-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--omni-font-mono);
+      font-size: 0.70rem;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .stream-content-col {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .stream-header-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .stream-author-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .stream-author-name {
+      font-weight: 600;
+      font-size: 0.84rem;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .stream-author-npub {
+      font-family: var(--omni-font-mono);
+      font-size: 0.69rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .stream-timestamp {
+      font-family: var(--omni-font-mono);
+      font-size: 0.69rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .stream-body-text {
+      font-size: 0.84rem;
+      line-height: 1.38;
+      color: var(--text-primary);
+      word-break: break-word;
+    }
+
+    .stream-actions-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 260px;
+      margin-top: 2px;
+    }
+
+    .stream-action-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: var(--omni-font-mono);
+      font-size: 0.70rem;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+
+    .stream-action-btn svg {
+      width: 13px;
+      height: 13px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.6;
+    }
+
+    .stream-action-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+
+    .stream-action-btn.btn-like:hover,
+    .stream-action-btn.btn-like.active {
+      color: var(--omni-heart-active);
+    }
+    .stream-action-btn.btn-like.active svg {
+      fill: var(--omni-heart-active);
+    }
+
+    .stream-action-btn.btn-repost:hover,
+    .stream-action-btn.btn-repost.active {
+      color: var(--omni-repost-active);
+    }
+
+    .stream-action-btn.btn-zap:hover {
+      color: var(--omni-zap-active);
+    }
+
+    /* Reply pill badge for inline replies */
+    .stream-reply-badge {
+      font-size: 0.68rem;
+      font-family: var(--omni-font-mono);
+      color: var(--omni-accent-primary);
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      margin-bottom: 2px;
+    }
+
+    /* -------------------------------------------------------------
+       OPTION B: CONDENSED CARD DECK
+       Target: 4 to 5 notes visible on mobile screen
+       Average item height: ~115px - 130px
+       ------------------------------------------------------------- */
+    .deck-feed-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 10px;
+    }
+
+    .deck-note-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 9px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+
+    .deck-note-card:hover {
+      border-color: var(--border-strong);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .deck-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .deck-author-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .deck-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--omni-font-mono);
+      font-size: 0.65rem;
+      color: var(--omni-accent-primary);
+      flex-shrink: 0;
+    }
+
+    .deck-names {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .deck-name {
+      font-weight: 600;
+      font-size: 0.82rem;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .deck-npub {
+      font-family: var(--omni-font-mono);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .deck-time {
+      font-family: var(--omni-font-mono);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .deck-content {
+      font-size: 0.83rem;
+      line-height: 1.36;
+      color: var(--text-primary);
+    }
+
+    .deck-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 4px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      max-width: 280px;
+    }
+
+    /* -------------------------------------------------------------
+       OPTION C: ULTRA-DENSE LEDGER VIEW (MAX DENSITY)
+       Target: 6 to 8 notes visible on mobile screen
+       Average item height: ~70px - 85px
+       ------------------------------------------------------------- */
+    .ledger-feed-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .ledger-note-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border-subtle);
+      cursor: pointer;
+      transition: background-color 0.12s ease;
+    }
+
+    .ledger-note-row:hover {
+      background: var(--bg-hover);
+    }
+
+    .ledger-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.62rem;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .ledger-body {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .ledger-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .ledger-author {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .ledger-time {
+      font-family: var(--omni-font-mono);
+      font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+
+    .ledger-snippet {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      line-height: 1.30;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .ledger-footer {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 2px;
+      font-family: var(--omni-font-mono);
+      font-size: 0.66rem;
+      color: var(--text-muted);
+    }
+
+    .ledger-footer span {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .ledger-footer svg {
+      width: 11px;
+      height: 11px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.6;
+    }
+
+    /* -------------------------------------------------------------
+       BEFORE VS AFTER HIGHLIGHT CALLOUT
+       ------------------------------------------------------------- */
+    .comparison-drawer {
+      max-width: 900px;
+      margin: 32px auto 0 auto;
+      padding: 16px 20px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .comp-title {
+      font-family: var(--omni-font-serif);
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--omni-accent-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .comp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+
+    .comp-card {
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .comp-card-badge {
+      font-family: var(--omni-font-mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .comp-card-badge.before { color: #e06c75; }
+    .comp-card-badge.after { color: #98c379; }
+
+    .comp-card-desc {
+      font-size: 0.80rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body class="viewport-mode-mobile">
+
+  <!-- =============================================================
+       TOP CONTROLS TOOLBAR
+       ============================================================= -->
+  <header class="mockup-toolbar">
+    <div class="toolbar-brand">
+      <div class="toolbar-title">Omni Condensed UI Mockup</div>
+      <span class="toolbar-badge">v2.0 Compact</span>
+    </div>
+
+    <div class="toolbar-controls">
+      <!-- Surface Selector -->
+      <div class="ctrl-group">
+        <span class="ctrl-label">Surface</span>
+        <button class="ctrl-btn active" id="btn-surface-feed" onclick="switchSurface('feed')">
+          <svg viewBox="0 0 24 24"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16M5 20a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>
+          Feed
+        </button>
+        <button class="ctrl-btn" id="btn-surface-profile" onclick="switchSurface('profile')">
+          <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/></svg>
+          Profile
+        </button>
+      </div>
+
+      <!-- Density Layout Option -->
+      <div class="ctrl-group">
+        <span class="ctrl-label">Layout Option</span>
+        <button class="ctrl-btn active" id="btn-layout-a" onclick="switchLayout('a')">
+          A: Stream (Recommended)
+        </button>
+        <button class="ctrl-btn" id="btn-layout-b" onclick="switchLayout('b')">
+          B: Compact Cards
+        </button>
+        <button class="ctrl-btn" id="btn-layout-c" onclick="switchLayout('c')">
+          C: Dense Ledger
+        </button>
+      </div>
+
+      <!-- Viewport Frame Switcher -->
+      <div class="ctrl-group">
+        <span class="ctrl-label">Device</span>
+        <button class="ctrl-btn active" id="btn-view-mobile" onclick="switchViewport('mobile')">
+          <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="3" ry="3"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          Mobile (390px)
+        </button>
+        <button class="ctrl-btn" id="btn-view-desktop" onclick="switchViewport('desktop')">
+          <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          Desktop (680px)
+        </button>
+      </div>
+
+      <!-- Theme Mode -->
+      <div class="ctrl-group">
+        <button class="ctrl-btn" id="btn-theme-toggle" onclick="toggleTheme()">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- =============================================================
+       MOCKUP CONTAINER / DEVICE FRAME
+       ============================================================= -->
+  <main class="workspace-container">
+    <div class="mockup-viewport-frame" id="viewport-frame">
+      
+      <!-- Live Density Stats Metric Bar -->
+      <div class="density-stats-banner">
+        <div class="density-metric">
+          <span>Density:</span>
+          <span class="density-metric-val" id="metric-notes-visible">5 to 6 visible</span>
+        </div>
+        <div class="density-metric">
+          <span>Avg Height:</span>
+          <span class="density-metric-val" id="metric-avg-height">~95px</span>
+        </div>
+        <div class="density-metric">
+          <span>Vertical Gain:</span>
+          <span class="density-metric-val" id="metric-gain">+180% vs before</span>
+        </div>
+      </div>
+
+      <!-- =========================================================
+           SURFACE 1: TIMELINE FEED
+           ========================================================= -->
+      <div id="surface-feed" style="display: block;">
+        <div class="feed-surface-header">
+          <div class="feed-nav-bar">
+            <div class="feed-tabs-row">
+              <button class="feed-tab-btn active" onclick="setFeedTab(this)">Following</button>
+              <button class="feed-tab-btn" onclick="setFeedTab(this)">Global</button>
+            </div>
+            <div style="font-family: var(--omni-font-mono); font-size: 0.70rem; color: var(--text-muted);">
+              40 notes
+            </div>
+          </div>
+
+          <div class="feed-compact-composer">
+            <div class="composer-avatar">me</div>
+            <input class="composer-input" type="text" placeholder="What's happening on Nostr?" />
+            <button class="composer-post-btn">Post</button>
+          </div>
+        </div>
+
+        <!-- Render Target for Feed Notes (populated dynamically based on Layout A, B, or C) -->
+        <div id="feed-notes-container"></div>
+      </div>
+
+      <!-- =========================================================
+           SURFACE 2: USER PROFILE VIEW
+           ========================================================= -->
+      <div id="surface-profile" style="display: none;">
+        <div class="profile-surface-header">
+          <div class="profile-compact-banner"></div>
+          <div class="profile-info-strip">
+            <div class="profile-avatar-row">
+              <div class="profile-avatar-large">SN</div>
+              <div class="profile-action-pills">
+                <button class="pill-btn">Follow</button>
+                <button class="pill-btn">Zap</button>
+                <button class="pill-btn">···</button>
+              </div>
+            </div>
+
+            <div class="profile-text-block">
+              <div class="profile-name">
+                Spiral Nights
+                <svg style="width: 14px; height: 14px; stroke: var(--omni-accent-primary); fill: none; stroke-width: 2;" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="profile-meta-line">
+                <span>npub19x4p...c880</span>
+                <span>·</span>
+                <span>spiral@nostr.me</span>
+              </div>
+              <p class="profile-bio">
+                Building local-first sovereign architectures, MoonBit WASM sandboxes, and minimal e-ink interfaces.
+              </p>
+              <div class="profile-stats-row">
+                <span><strong>142</strong> Following</span>
+                <span><strong>1,894</strong> Followers</span>
+                <span><strong>480</strong> Notes</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Render Target for Profile Notes (populated dynamically) -->
+        <div id="profile-notes-container"></div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- =============================================================
+       ANALYSIS & COMPARISON CARDS
+       ============================================================= -->
+  <section class="comparison-drawer">
+    <div class="comp-title">
+      <svg style="width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      Layout Variations & Vertical Density Breakdown
+    </div>
+    
+    <div class="comp-grid">
+      <div class="comp-card">
+        <span class="comp-card-badge before">Before (Sparse Cards)</span>
+        <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-primary); margin-top: 4px;">~190px - 220px per note</div>
+        <p class="comp-card-desc">
+          Cards with 16px/18px margins, heavy dividers, stacked npub headers, and button padding only fit <strong>~1.8 notes</strong> on an iPhone screen.
+        </p>
+      </div>
+
+      <div class="comp-card">
+        <span class="comp-card-badge after">Option A: Streamlined Stream (Recommended)</span>
+        <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-primary); margin-top: 4px;">~95px - 105px per note (5-6 visible)</div>
+        <p class="comp-card-desc">
+          Continuous borderless card list with hairline divider, single-line header (Name + @npub + time), 32px avatar, and lightweight action counters.
+        </p>
+      </div>
+
+      <div class="comp-card">
+        <span class="comp-card-badge after">Option B: Condensed Card Deck</span>
+        <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-primary); margin-top: 4px;">~115px - 125px per note (4-5 visible)</div>
+        <p class="comp-card-desc">
+          Maintains discrete elevated card borders with 9px/12px padding, 6px gaps, and inline horizontal author headers.
+        </p>
+      </div>
+
+      <div class="comp-card">
+        <span class="comp-card-badge after">Option C: Dense Ledger List</span>
+        <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-primary); margin-top: 4px;">~75px - 85px per note (7-8 visible)</div>
+        <p class="comp-card-desc">
+          Maximum data density with 24px micro-avatar, 2-line clamped content snippet, and compact bottom stat counts.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============================================================
+       SAMPLE DATA & INTERACTIVE RENDERING SCRIPT
+       ============================================================= -->
+  <script>
+    // Sample real Nostr notes data with varied lengths and interactions
+    const SAMPLE_NOTES = [
+      {
+        id: "note1",
+        author: "Jack Dorsey",
+        npub: "npub1sg68...491a",
+        initials: "JD",
+        time: "4m",
+        content: "Open protocols give sovereignty back to the individual. Nostr is proving that simple primitives beat bloated walled gardens every single time.",
+        likes: 42,
+        reposts: 18,
+        replies: 7,
+        zaps: 120,
+        liked: false,
+        reposted: false
+      },
+      {
+        id: "note2",
+        author: "fiatjaf",
+        npub: "npub180cv...583f",
+        initials: "FJ",
+        time: "12m",
+        content: "NIP-07 signing + Blossom blob storage + Declarative Schema Light DOM Custom Elements is all a modern web app needs.",
+        likes: 89,
+        reposts: 34,
+        replies: 15,
+        zaps: 500,
+        liked: true,
+        reposted: false
+      },
+      {
+        id: "note3",
+        author: "Spiral Nights",
+        npub: "npub19x4p...c880",
+        initials: "SN",
+        time: "25m",
+        content: "Condensed the feed note cards: reduced vertical padding from 36px to 10px and unified author npub on a single line. Now viewing 5 notes at once seamlessly.",
+        likes: 19,
+        reposts: 5,
+        replies: 2,
+        zaps: 50,
+        liked: false,
+        reposted: true,
+        replyTo: "note2"
+      },
+      {
+        id: "note4",
+        author: "Lyn Alden",
+        npub: "npub1a2c3...774b",
+        initials: "LA",
+        time: "1h",
+        content: "Decentralized relays with local event caching provide zero-latency reads while maintaining censorship resistance.",
+        likes: 154,
+        reposts: 62,
+        replies: 28,
+        zaps: 840,
+        liked: false,
+        reposted: false
+      },
+      {
+        id: "note5",
+        author: "Damus Relay",
+        npub: "npub1d4m5...091e",
+        initials: "DR",
+        time: "2h",
+        content: "Relay pool healthy: 4 connected endpoints, average EOSE latency 120ms. 0ms local SQLite/IndexedDB hits active.",
+        likes: 27,
+        reposts: 8,
+        replies: 4,
+        zaps: 10,
+        liked: false,
+        reposted: false
+      },
+      {
+        id: "note6",
+        author: "PabloF7z",
+        npub: "npub1pab1...333a",
+        initials: "PF",
+        time: "3h",
+        content: "Micro-frontends as standard nsites without proprietary manifests represent the cleanest architecture for extensible web clients.",
+        likes: 63,
+        reposts: 21,
+        replies: 9,
+        zaps: 250,
+        liked: false,
+        reposted: false
+      },
+      {
+        id: "note7",
+        author: "Kieran",
+        npub: "npub1k1er...992c",
+        initials: "KN",
+        time: "4h",
+        content: "Snort and Omni experiments with warm paper typography (Newsreader + Geist) look gorgeous on high-DPI and e-ink displays alike.",
+        likes: 38,
+        reposts: 12,
+        replies: 3,
+        zaps: 95,
+        liked: false,
+        reposted: false
+      }
+    ];
+
+    let currentLayout = "a";
+    let currentSurface = "feed";
+    let currentViewport = "mobile";
+
+    function renderSvgIcon(name) {
+      if (name === "reply") {
+        return `<svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v2"/></svg>`;
+      }
+      if (name === "repeat") {
+        return `<svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>`;
+      }
+      if (name === "heart") {
+        return `<svg viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`;
+      }
+      if (name === "zap") {
+        return `<svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`;
+      }
+      return "";
+    }
+
+    // Render Option A: Streamlined Bordered Stream (Recommended)
+    function renderOptionA(notes) {
+      return `
+        <div class="stream-feed-list">
+          ${notes.map(n => `
+            <article class="stream-note-item" onclick="toggleNoteActive('${n.id}')">
+              <div class="stream-avatar-col">
+                <div class="stream-avatar">${n.initials}</div>
+              </div>
+              <div class="stream-content-col">
+                ${n.replyTo ? `<div class="stream-reply-badge">↳ Replying to thread</div>` : ""}
+                <div class="stream-header-row">
+                  <div class="stream-author-wrap">
+                    <span class="stream-author-name">${n.author}</span>
+                    <span class="stream-author-npub">${n.npub}</span>
+                  </div>
+                  <span class="stream-timestamp">${n.time}</span>
+                </div>
+                <div class="stream-body-text">${n.content}</div>
+                <div class="stream-actions-row">
+                  <button class="stream-action-btn" title="Reply" onclick="event.stopPropagation()">
+                    ${renderSvgIcon("reply")}
+                    <span>${n.replies}</span>
+                  </button>
+                  <button class="stream-action-btn btn-repost ${n.reposted ? 'active' : ''}" title="Repost" onclick="event.stopPropagation(); toggleRepost('${n.id}')">
+                    ${renderSvgIcon("repeat")}
+                    <span>${n.reposts}</span>
+                  </button>
+                  <button class="stream-action-btn btn-like ${n.liked ? 'active' : ''}" title="Like" onclick="event.stopPropagation(); toggleLike('${n.id}')">
+                    ${renderSvgIcon("heart")}
+                    <span>${n.likes}</span>
+                  </button>
+                  <button class="stream-action-btn btn-zap" title="Zap" onclick="event.stopPropagation()">
+                    ${renderSvgIcon("zap")}
+                    <span>${n.zaps}</span>
+                  </button>
+                </div>
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    // Render Option B: Condensed Card Deck
+    function renderOptionB(notes) {
+      return `
+        <div class="deck-feed-list">
+          ${notes.map(n => `
+            <article class="deck-note-card" onclick="toggleNoteActive('${n.id}')">
+              <div class="deck-header-row">
+                <div class="deck-author-group">
+                  <div class="deck-avatar">${n.initials}</div>
+                  <div class="deck-names">
+                    <span class="deck-name">${n.author}</span>
+                    <span class="deck-npub">${n.npub}</span>
+                  </div>
+                </div>
+                <span class="deck-time">${n.time}</span>
+              </div>
+              <div class="deck-content">${n.content}</div>
+              <div class="deck-actions">
+                <button class="stream-action-btn" onclick="event.stopPropagation()">
+                  ${renderSvgIcon("reply")}
+                  <span>${n.replies}</span>
+                </button>
+                <button class="stream-action-btn btn-repost ${n.reposted ? 'active' : ''}" onclick="event.stopPropagation(); toggleRepost('${n.id}')">
+                  ${renderSvgIcon("repeat")}
+                  <span>${n.reposts}</span>
+                </button>
+                <button class="stream-action-btn btn-like ${n.liked ? 'active' : ''}" onclick="event.stopPropagation(); toggleLike('${n.id}')">
+                  ${renderSvgIcon("heart")}
+                  <span>${n.likes}</span>
+                </button>
+                <button class="stream-action-btn btn-zap" onclick="event.stopPropagation()">
+                  ${renderSvgIcon("zap")}
+                  <span>${n.zaps}</span>
+                </button>
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    // Render Option C: Ultra-Dense Ledger
+    function renderOptionC(notes) {
+      return `
+        <div class="ledger-feed-list">
+          ${notes.map(n => `
+            <div class="ledger-note-row" onclick="toggleNoteActive('${n.id}')">
+              <div class="ledger-avatar">${n.initials}</div>
+              <div class="ledger-body">
+                <div class="ledger-top">
+                  <span class="ledger-author">${n.author}</span>
+                  <span class="ledger-time">${n.time}</span>
+                </div>
+                <div class="ledger-snippet">${n.content}</div>
+                <div class="ledger-footer">
+                  <span>${renderSvgIcon("reply")} ${n.replies}</span>
+                  <span>${renderSvgIcon("repeat")} ${n.reposts}</span>
+                  <span>${renderSvgIcon("heart")} ${n.likes}</span>
+                  <span>${renderSvgIcon("zap")} ${n.zaps}</span>
+                </div>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderCurrentView() {
+      const feedTarget = document.getElementById("feed-notes-container");
+      const profileTarget = document.getElementById("profile-notes-container");
+      
+      let html = "";
+      if (currentLayout === "a") {
+        html = renderOptionA(SAMPLE_NOTES);
+        document.getElementById("metric-notes-visible").textContent = "5 to 6 visible";
+        document.getElementById("metric-avg-height").textContent = "~95px";
+        document.getElementById("metric-gain").textContent = "+180% vs before";
+      } else if (currentLayout === "b") {
+        html = renderOptionB(SAMPLE_NOTES);
+        document.getElementById("metric-notes-visible").textContent = "4 to 5 visible";
+        document.getElementById("metric-avg-height").textContent = "~120px";
+        document.getElementById("metric-gain").textContent = "+140% vs before";
+      } else if (currentLayout === "c") {
+        html = renderOptionC(SAMPLE_NOTES);
+        document.getElementById("metric-notes-visible").textContent = "7 to 8 visible";
+        document.getElementById("metric-avg-height").textContent = "~78px";
+        document.getElementById("metric-gain").textContent = "+240% vs before";
+      }
+
+      if (feedTarget) feedTarget.innerHTML = html;
+      if (profileTarget) profileTarget.innerHTML = html;
+    }
+
+    function switchLayout(layoutKey) {
+      currentLayout = layoutKey;
+      document.querySelectorAll("#btn-layout-a, #btn-layout-b, #btn-layout-c").forEach(b => b.classList.remove("active"));
+      document.getElementById(`btn-layout-${layoutKey}`).classList.add("active");
+      renderCurrentView();
+    }
+
+    function switchSurface(surfaceKey) {
+      currentSurface = surfaceKey;
+      document.querySelectorAll("#btn-surface-feed, #btn-surface-profile").forEach(b => b.classList.remove("active"));
+      document.getElementById(`btn-surface-${surfaceKey}`).classList.add("active");
+
+      document.getElementById("surface-feed").style.display = surfaceKey === "feed" ? "block" : "none";
+      document.getElementById("surface-profile").style.display = surfaceKey === "profile" ? "block" : "none";
+    }
+
+    function switchViewport(viewportKey) {
+      currentViewport = viewportKey;
+      document.body.className = `viewport-mode-${viewportKey}`;
+      document.querySelectorAll("#btn-view-mobile, #btn-view-desktop").forEach(b => b.classList.remove("active"));
+      document.getElementById(`btn-view-${viewportKey}`).classList.add("active");
+    }
+
+    function toggleTheme() {
+      const cur = document.documentElement.getAttribute("data-theme-mode");
+      const next = cur === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme-mode", next);
+    }
+
+    function setFeedTab(el) {
+      document.querySelectorAll(".feed-tab-btn").forEach(b => b.classList.remove("active"));
+      el.classList.add("active");
+    }
+
+    function toggleLike(noteId) {
+      const note = SAMPLE_NOTES.find(n => n.id === noteId);
+      if (note) {
+        note.liked = !note.liked;
+        note.likes += note.liked ? 1 : -1;
+        renderCurrentView();
+      }
+    }
+
+    function toggleRepost(noteId) {
+      const note = SAMPLE_NOTES.find(n => n.id === noteId);
+      if (note) {
+        note.reposted = !note.reposted;
+        note.reposts += note.reposted ? 1 : -1;
+        renderCurrentView();
+      }
+    }
+
+    function toggleNoteActive(noteId) {
+      console.log("Clicked note:", noteId);
+    }
+
+    // Initialize initial render
+    renderCurrentView();
+  </script>
+</body>
+</html>
