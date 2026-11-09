@@ -171,6 +171,36 @@ export class WasmGuestHost {
           this.inGuestCall = false;
           this.drainQueuedActions();
         }
+
+        // Push cached profiles from localStorage directly to WASM guest in 0ms so all known author names are populated immediately
+        try {
+          const storage = getSafeStorage();
+          if (storage) {
+            const cacheKeys = ["omni_profile_viewer_cache_v2", "omni_profile_cache_v2"];
+            const resolvedPks = new Set<string>();
+            for (const key of cacheKeys) {
+              const raw = storage.getItem(key);
+              if (!raw) continue;
+              const records = JSON.parse(raw);
+              for (const [pk, entry] of Object.entries(records)) {
+                if (resolvedPks.has(pk)) continue;
+                const meta = (entry as any)?.meta || entry;
+                if (meta && typeof meta === "object") {
+                  resolvedPks.add(pk);
+                  const profEvent = {
+                    id: `profile_cache_${pk}`,
+                    pubkey: pk,
+                    kind: 0,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [],
+                    content: JSON.stringify(meta)
+                  };
+                  this.dispatchAction("main", { name: "nostr:event" }, profEvent as unknown as Record<string, unknown>);
+                }
+              }
+            }
+          }
+        } catch (_) {}
       } else {
         this.instance = await WebAssembly.instantiate(module, importObject);
 
@@ -491,11 +521,9 @@ export class WasmGuestHost {
                   tags: [],
                   content: JSON.stringify(meta)
                 };
-                queueMicrotask(() => {
-                  if (!this.destroyed) {
-                    this.dispatchAction("main", { name: "nostr:event" }, profEvent as unknown as Record<string, unknown>);
-                  }
-                });
+                if (!this.destroyed) {
+                  this.dispatchAction("main", { name: "nostr:event" }, profEvent as unknown as Record<string, unknown>);
+                }
               }
             }
           }

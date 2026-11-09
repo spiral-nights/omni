@@ -75,6 +75,7 @@ export class OmniBoxElement extends BaseElement {
         ) {
           return;
         }
+        e.stopPropagation();
         this.dispatchEvent(new OmniActionEvent(this.actionData));
       }
     });
@@ -152,6 +153,10 @@ export class OmniCardElement extends BaseElement {
           "button, input, textarea, a, video, audio, img, omni-button, omni-icon-button, omni-avatar, [role='button']"
         )
       ) {
+        return;
+      }
+      const innerActionBox = target.closest("omni-box") as OmniBoxElement | null;
+      if (innerActionBox && innerActionBox !== (this as any) && innerActionBox.actionData) {
         return;
       }
       if (this.actionData) {

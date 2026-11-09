@@ -239,10 +239,10 @@ fn request_missing_interactions() -> Unit {
     return
   }
   global_state.is_fetching_interactions = true
-  let (event_ids, _) = take_batch(global_state.pending_interaction_reqs, 20)
+  let (event_ids, _) = take_batch(global_state.pending_interaction_reqs, 25)
   global_state.pending_interaction_reqs = []
   let filters : Json = [
-    { "kinds": [6, 7], "#e": event_ids, "limit": event_ids.length() * 3 },
+    { "kinds": [1, 6, 7], "#e": event_ids, "limit": event_ids.length() * 5 },
   ]
   ignore(@nostr.subscribe(filters.stringify()))
 }
@@ -314,7 +314,8 @@ fn render_author_header(
     "direction": "row",
     "gap": "sm",
     "align": "center",
-    "style": "cursor: pointer;" + extra_style,
+    "style": "cursor: pointer; align-self: flex-start; width: fit-content; max-width: fit-content; display: inline-flex;" +
+    extra_style,
     "action": profile_action,
     "children": [
       {
@@ -329,6 +330,7 @@ fn render_author_header(
         "direction": "row",
         "gap": "xs",
         "align": "baseline",
+        "style": "width: fit-content; max-width: fit-content;",
         "children": author_texts,
       },
     ],
@@ -557,11 +559,30 @@ fn render_thread_view(state : FeedState) -> String {
   match parent_note {
     Some(p) => append_thread_parent_and_replies(children, state, p)
     None =>
-      children.push({
-        "type": "text",
-        "content": "Note not found or deleted.",
-        "tone": "muted",
-      })
+      if !state.thread_replies_loaded {
+        children.push({
+          "type": "box",
+          "direction": "row",
+          "align": "center",
+          "gap": "sm",
+          "style": "margin-top: 14px; margin-left: 4px;",
+          "children": [
+            { "type": "icon", "name": "spinner", "size": 16 },
+            {
+              "type": "text",
+              "content": "Loading note...",
+              "tone": "muted",
+              "style": "font-style: italic;",
+            },
+          ],
+        })
+      } else {
+        children.push({
+          "type": "text",
+          "content": "Note not found or deleted.",
+          "tone": "muted",
+        })
+      }
   }
 
   let schema : Json = {
@@ -643,7 +664,7 @@ fn render_note_card(n : Note) -> Json {
       "direction": "row",
       "align": "center",
       "gap": "xs",
-      "style": "margin-bottom: 4px; cursor: pointer;",
+      "style": "margin-bottom: 4px; cursor: pointer; align-self: flex-start; width: fit-content; max-width: fit-content; display: inline-flex;",
       "action": { "name": "view-thread", "payload": { "id": n.reply_to_id } },
       "children": [
         { "type": "badge", "label": get_reply_badge_label(n), "tone": "accent" },
@@ -676,7 +697,8 @@ fn render_note_card(n : Note) -> Json {
     "type": "card",
     "key": "note-" + n.id,
     "id": "note-" + n.id,
-    "style": "padding: 9px 12px; margin-bottom: 5px;",
+    "style": "padding: 9px 12px; margin-bottom: 5px; cursor: pointer;",
+    "action": { "name": "view-thread", "payload": { "id": n.id } },
     "children": card_children,
   }
 }
@@ -1103,8 +1125,11 @@ fn handle_nostr_eose() -> Unit {
   global_state.thread_replies_loaded = true
   global_state.is_syncing = false
   global_state.is_loading_older = false
-  global_state.is_fetching_interactions = false
-  global_state.pending_interaction_reqs = []
+  if global_state.pending_interaction_reqs.length() > 0 {
+    request_missing_interactions()
+  } else {
+    global_state.is_fetching_interactions = false
+  }
   if global_state.pending_profile_reqs.length() > 0 {
     request_missing_profiles()
   } else {
@@ -1133,8 +1158,16 @@ fn handle_kind_3(event : @json.Json) -> Unit {
     if push_unique(global_state.follows, pk) {
       new_follows = true
     }
+    if pk.length() >= 16 &&
+      find_profile_name(pk) == "" &&
+      push_unique(global_state.queried_profiles, pk) {
+      ignore(push_unique(global_state.pending_profile_reqs, pk))
+    }
   }
   global_state.follows_loaded = true
+  if global_state.pending_profile_reqs.length() > 0 {
+    request_missing_profiles()
+  }
   if new_follows &&
     !global_state.follows_subscribed &&
     global_state.follows.length() > 0 &&
@@ -1297,15 +1330,6 @@ fn handle_kind_1(event : @json.Json) -> Unit {
     global_state.thread_replies_loaded = true
   }
 
-  let should_display = reply_to == "" ||
-    is_thread_reply ||
-    is_author_in_follows(global_state, pubkey) ||
-    global_state.follows.length() == 0 ||
-    global_state.active_tab == "global"
-  if !should_display {
-    return
-  }
-
   let known_name = find_profile_name(pubkey)
   let author_name = if known_name != "" {
     known_name
@@ -1375,11 +1399,10 @@ fn handle_nostr_event(payload_str : String) -> Unit {
     _ => ()
   }
   if !global_state.is_fetching_interactions &&
-    global_state.pending_interaction_reqs.length() >= 10 {
+    global_state.pending_interaction_reqs.length() >= 5 {
     request_missing_interactions()
   }
-  if !global_state.is_fetching_profiles &&
-    global_state.pending_profile_reqs.length() > 0 {
+  if global_state.pending_profile_reqs.length() >= 5 {
     request_missing_profiles()
   }
 }
@@ -1390,7 +1413,8 @@ pub fn handle_action_impl(action_name : String, payload_str : String) -> Unit {
     "view-profile" | "view_profile" => return
     "set-tab" => handle_set_tab(payload_str)
     "load-more" => handle_load_more()
-    "view-thread" => handle_view_thread(payload_str)
+    "view-thread" | "view_thread" | "view-note" | "view_note" =>
+      handle_view_thread(payload_str)
     "back-to-feed" | "back" => handle_back_to_feed()
     "like-note" => handle_like_note(payload_str)
     "repost-note" => handle_repost_note(payload_str)

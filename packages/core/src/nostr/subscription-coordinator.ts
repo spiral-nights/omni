@@ -80,7 +80,7 @@ export class SubscriptionCoordinator {
     if (onEose && expectedRelays.length > 0) {
       eoseFallbackTimer = setTimeout(() => {
         fireEoseOnce();
-      }, 5000);
+      }, 2500);
     }
 
     const unsubscribeRelays = this.relayPool.subscribe(

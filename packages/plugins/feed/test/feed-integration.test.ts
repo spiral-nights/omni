@@ -761,4 +761,90 @@ describe("MoonBit WebAssembly Feed Plugin (WasmGuestHost + SchemaRenderer + Omni
 
     sandbox.destroy();
   });
+
+  it("loads replies for followed post when clicking into thread when reply arrives during feed view", async () => {
+    const slotContainers = new Map<string, Element>([["main", mainSlot]]);
+    const followedPubkey = "1111111111111111111111111111111111111111111111111111111111111111";
+    const strangerPubkey = "9999999999999999999999999999999999999999999999999999999999999999";
+    const rootNoteId = "root_post_11111111111111111111111111111111111111111111111111111111";
+    const replyNoteId = "reply_post_22222222222222222222222222222222222222222222222222222222";
+
+    // Only pre-save root note, NOT reply note!
+    await kernel.eventStore.saveEvent({
+      id: rootNoteId,
+      pubkey: followedPubkey,
+      kind: 1,
+      created_at: 1730000000,
+      tags: [],
+      content: "This is a followed root note",
+      sig: "00".repeat(64)
+    } as any);
+
+    const sandbox = await kernel.registerPlugin(
+      {
+        id: "org.omni.plugin.feed",
+        name: "Feed",
+        version: "1.0.0",
+        entry: "feed.wasm",
+        components: [{ id: "main", type: "main", title: "Feed", slot: "main" }],
+        permissions: {},
+        views: [{ id: "main", title: "Feed", path: "", format: "wasm" }]
+      },
+      wasmBytes,
+      slotContainers
+    );
+
+    await wait(100);
+    const wasmHost = sandbox.getWasmHost()!;
+
+    // Deliver Kind 3 (follows) containing followedPubkey
+    wasmHost.dispatchAction("main", { name: "nostr:event" }, {
+      id: "kind3_event",
+      pubkey: await kernel.getUserPubkey(),
+      kind: 3,
+      created_at: 1730000005,
+      tags: [["p", followedPubkey]],
+      content: ""
+    });
+
+    await wait(80);
+
+    // Verify root post is displayed on timeline
+    expect(mainSlot.textContent).toContain("This is a followed root note");
+
+    // Deliver the reply event WHILE STILL ON TIMELINE (e.g. from interaction query)
+    wasmHost.dispatchAction("main", { name: "nostr:event" }, {
+      id: replyNoteId,
+      pubkey: strangerPubkey,
+      kind: 1,
+      created_at: 1730000010,
+      tags: [["e", rootNoteId, "", "reply"]],
+      content: "Stranger reply in thread"
+    });
+
+    await wait(80);
+
+    // Verify stranger reply is NOT displayed on the timeline (only followed root note)
+    expect(mainSlot.textContent).toContain("This is a followed root note");
+    expect(mainSlot.textContent).not.toContain("Stranger reply in thread");
+
+    // Click into root post to view thread
+    wasmHost.dispatchAction("main", { name: "view-thread" }, { id: rootNoteId });
+
+    await wait(200);
+
+    // Verify thread view rendered and contains the stranger reply in the thread
+    expect(mainSlot.textContent).toContain("Conversation Thread");
+    expect(mainSlot.textContent).toContain("Stranger reply in thread");
+
+    // Click back to feed
+    wasmHost.dispatchAction("main", { name: "back-to-feed" });
+    await wait(100);
+
+    // Verify we are back on timeline and stranger reply is not shown
+    expect(mainSlot.textContent).toContain("This is a followed root note");
+    expect(mainSlot.textContent).not.toContain("Stranger reply in thread");
+
+    sandbox.destroy();
+  });
 });
