@@ -1,0 +1,614 @@
+import gleam/list
+import gleam/option.{None, Some}
+import gleam/string
+import gleeunit
+import gleeunit/should
+import lustre/attribute
+import lustre/element
+import lustre/element/html
+import omni/protocol/viewport.{Dock, HeaderActions, Main, Sidebar}
+import omni/protocol/workspace
+import omni/shell/layout/dock
+import omni/shell/layout/header_actions
+import omni/shell/layout/main_view
+import omni/shell/layout/viewport_host
+import omni/shell/layout/widgets_grid
+import omni/shell/model.{
+  type InstalledApp, AppStore, InstalledApp, IntentPromptState, Model,
+  PlacementConfig, PrimaryApp, Settings, SyncError, Synced, Syncing, TabPlugins,
+  TabRelays, UpdateModalState, UserProfileSummary, ViewOption, WidgetsDashboard,
+}
+import omni/shell/msg.{
+  AddAppPlacement, ApplyRemoteWorkspace, ConfirmPluginUpdate,
+  DismissIntentPrompt, DismissUpdateModal, FinishPullRefresh, InstallApp,
+  NavigateTo, OpenApp, OpenSettings, RemoveAppPlacement, SelectIntentHandler,
+  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
+  SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetUserProfile,
+  ShowIntentPrompt, ShowUpdateModal, StartPullRefresh, ToggleAppEnabled,
+  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
+  ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp,
+}
+import omni/shell/shell
+import omni/shell/update.{
+  DispatchIntentToPlugin, MountPluginInSlot, PersistAccentColor,
+  PersistWorkspaceLocal, RefreshActiveView, SwitchActiveShell,
+  UnmountPluginFromSlot, UpgradePlugin,
+}
+
+pub fn main() {
+  gleeunit.main()
+}
+
+fn sample_app(
+  id: String,
+  name: String,
+  enabled: Bool,
+  pinned: Bool,
+  placements: List(model.PlacementConfig),
+) -> InstalledApp {
+  InstalledApp(
+    id: id,
+    name: name,
+    display_name: Some(name),
+    description: "Description for " <> name,
+    icon: "apps",
+    enabled: enabled,
+    pinned: pinned,
+    views: [
+      ViewOption(id: "default", title: "Default", path: "/", format: "html"),
+    ],
+    placements: placements,
+    handled_intents: ["view-note"],
+    disabled_intents: [],
+    relays: None,
+    source_url: "https://example.com/" <> id,
+    version: Some("1.0.0"),
+  )
+}
+
+// -----------------------------------------------------------------------------
+// Model Tests
+// -----------------------------------------------------------------------------
+
+pub fn model_init_chooses_first_enabled_app_without_hardcoded_ids_test() {
+  let app1 = sample_app("example.app.alpha", "Alpha", False, True, [])
+  let app2 = sample_app("example.app.beta", "Beta", True, True, [])
+  let m = model.init("editorial", [app1, app2])
+
+  m.active_page
+  |> should.equal(PrimaryApp(plugin_id: "example.app.beta", route: None))
+  m.active_shell_id
+  |> should.equal("editorial")
+  m.accent_color
+  |> should.equal("#d4a373")
+}
+
+pub fn model_init_falls_back_to_widgets_dashboard_when_no_enabled_apps_test() {
+  let app1 = sample_app("example.app.alpha", "Alpha", False, False, [])
+  let m = model.init("classic", [app1])
+
+  m.active_page
+  |> should.equal(WidgetsDashboard)
+}
+
+pub fn model_helpers_filter_dock_sidebar_and_header_actions_test() {
+  let p_dock = PlacementConfig(viewport: Dock, view_id: "dock", route: None)
+  let p_side =
+    PlacementConfig(
+      viewport: Sidebar,
+      view_id: "widget",
+      route: Some("?view=widget"),
+    )
+  let p_hdr =
+    PlacementConfig(
+      viewport: HeaderActions,
+      view_id: "status",
+      route: Some("?view=status"),
+    )
+
+  let app_pinned = sample_app("example.app.alpha", "Alpha", True, True, [])
+  let app_dock_placed =
+    sample_app("example.app.beta", "Beta", True, False, [p_dock, p_side])
+  let app_header =
+    sample_app("example.app.gamma", "Gamma", True, False, [p_hdr])
+  let app_disabled =
+    sample_app("example.app.delta", "Delta", False, True, [p_side, p_hdr])
+
+  let m =
+    model.init("panorama", [
+      app_pinned,
+      app_dock_placed,
+      app_header,
+      app_disabled,
+    ])
+
+  let dock_ids = list.map(model.dock_apps(m), fn(a) { a.id })
+  dock_ids
+  |> should.equal(["example.app.alpha", "example.app.beta"])
+
+  let sidebar_pairs = model.sidebar_widgets(m)
+  list.length(sidebar_pairs)
+  |> should.equal(1)
+  case sidebar_pairs {
+    [#(a, plc)] -> {
+      a.id |> should.equal("example.app.beta")
+      plc.route |> should.equal(Some("?view=widget"))
+    }
+    _ -> should.fail()
+  }
+
+  let header_pairs = model.header_action_apps(m)
+  list.length(header_pairs)
+  |> should.equal(1)
+  case header_pairs {
+    [#(a, plc)] -> {
+      a.id |> should.equal("example.app.gamma")
+      plc.route |> should.equal(Some("?view=status"))
+    }
+    _ -> should.fail()
+  }
+
+  model.find_app(m, "example.app.gamma")
+  |> should.equal(Some(app_header))
+  model.find_app(m, "example.app.nonexistent")
+  |> should.equal(None)
+}
+
+pub fn model_workspace_state_roundtrip_test() {
+  let p_side =
+    PlacementConfig(
+      viewport: Sidebar,
+      view_id: "widget",
+      route: Some("?view=widget"),
+    )
+  let app1 = sample_app("example.app.alpha", "Alpha", True, True, [p_side])
+  let app2 = sample_app("example.app.beta", "Beta", True, False, [])
+  let m0 = model.init("editorial", [app1, app2])
+
+  let ws = model.to_workspace_state(m0, 1_700_000_000)
+  ws.version |> should.equal(workspace.current_version)
+  ws.updated_at |> should.equal(1_700_000_000)
+  ws.active_page |> should.equal(Some("example.app.alpha"))
+  ws.shell_type |> should.equal(Some("editorial"))
+
+  // Modify workspace state as if synced from remote device
+  let remote_ws =
+    workspace.WorkspaceState(
+      ..ws,
+      active_page: Some("example.app.beta"),
+      shell_type: Some("panorama"),
+      auto_sync: Some(False),
+    )
+
+  let m1 = model.apply_workspace_state(m0, remote_ws)
+  m1.active_page
+  |> should.equal(PrimaryApp(plugin_id: "example.app.beta", route: None))
+  m1.active_shell_id
+  |> should.equal("panorama")
+  m1.auto_sync_nip78
+  |> should.equal(False)
+}
+
+// -----------------------------------------------------------------------------
+// Update Tests
+// -----------------------------------------------------------------------------
+
+pub fn update_navigation_and_open_app_test() {
+  let app1 = sample_app("example.app.alpha", "Alpha", True, True, [])
+  let app2 = sample_app("example.app.beta", "Beta", True, False, [])
+  let m0 = Model(..model.init("classic", [app1, app2]), mobile_menu_open: True)
+
+  let #(m1, eff1) =
+    update.update(m0, OpenApp("example.app.beta", Some("?view=compact")))
+  m1.active_page
+  |> should.equal(PrimaryApp(
+    plugin_id: "example.app.beta",
+    route: Some("?view=compact"),
+  ))
+  m1.mobile_menu_open |> should.be_false()
+  should.be_true(list.contains(
+    eff1,
+    MountPluginInSlot("example.app.beta", Main, Some("?view=compact")),
+  ))
+
+  let #(m2, _eff2) = update.update(m1, OpenSettings(TabRelays))
+  m2.active_page |> should.equal(Settings(TabRelays))
+
+  let #(m3, _eff3) = update.update(m2, NavigateTo(AppStore))
+  m3.active_page |> should.equal(AppStore)
+
+  let #(m4, eff4) = update.update(m3, ToggleFullscreen)
+  m4.fullscreen |> should.be_true()
+  eff4 |> should.equal([])
+
+  let #(m5, eff5) = update.update(m4, ToggleMobileMenu)
+  m5.mobile_menu_open |> should.be_true()
+  eff5 |> should.equal([])
+}
+
+pub fn update_toggle_app_enabled_and_placements_test() {
+  let p_side =
+    PlacementConfig(viewport: Sidebar, view_id: "widget", route: None)
+  let app1 = sample_app("example.app.alpha", "Alpha", True, True, [p_side])
+  let app2 = sample_app("example.app.beta", "Beta", True, False, [])
+  let m0 = model.init("classic", [app1, app2])
+
+  // Disabling currently active app falls back to next enabled app and unmounts slots
+  let #(m1, eff1) = update.update(m0, ToggleAppEnabled("example.app.alpha"))
+  m1.active_page
+  |> should.equal(PrimaryApp(plugin_id: "example.app.beta", route: None))
+  should.be_true(list.contains(
+    eff1,
+    UnmountPluginFromSlot("example.app.alpha", Main),
+  ))
+  should.be_true(list.contains(
+    eff1,
+    UnmountPluginFromSlot("example.app.alpha", Sidebar),
+  ))
+
+  // Re-enabling mounts its configured placements
+  let #(m2, eff2) = update.update(m1, ToggleAppEnabled("example.app.alpha"))
+  case model.find_app(m2, "example.app.alpha") {
+    Some(a) -> a.enabled |> should.be_true()
+    None -> should.fail()
+  }
+  should.be_true(list.contains(
+    eff2,
+    MountPluginInSlot("example.app.alpha", Sidebar, None),
+  ))
+
+  // Pinning toggle
+  let #(m3, _eff3) = update.update(m2, ToggleAppPinned("example.app.beta"))
+  case model.find_app(m3, "example.app.beta") {
+    Some(a) -> a.pinned |> should.be_true()
+    None -> should.fail()
+  }
+
+  // Add placement
+  let new_plc =
+    PlacementConfig(
+      viewport: HeaderActions,
+      view_id: "quick",
+      route: Some("?view=quick"),
+    )
+  let #(m4, eff4) =
+    update.update(m3, AddAppPlacement("example.app.beta", new_plc))
+  should.be_true(list.contains(
+    eff4,
+    MountPluginInSlot("example.app.beta", HeaderActions, Some("?view=quick")),
+  ))
+  list.length(model.header_action_apps(m4)) |> should.equal(1)
+
+  // Remove placement
+  let #(m5, eff5) =
+    update.update(m4, RemoveAppPlacement("example.app.beta", HeaderActions))
+  should.be_true(list.contains(
+    eff5,
+    UnmountPluginFromSlot("example.app.beta", HeaderActions),
+  ))
+  list.length(model.header_action_apps(m5)) |> should.equal(0)
+
+  // SetAppPlacements replaces placements and unmounts removed ones
+  let #(m6, eff6) =
+    update.update(m5, SetAppPlacements("example.app.alpha", [new_plc]))
+  should.be_true(list.contains(
+    eff6,
+    UnmountPluginFromSlot("example.app.alpha", Sidebar),
+  ))
+  should.be_true(list.contains(
+    eff6,
+    MountPluginInSlot("example.app.alpha", HeaderActions, Some("?view=quick")),
+  ))
+  list.length(model.sidebar_widgets(m6)) |> should.equal(0)
+}
+
+pub fn update_install_and_uninstall_app_test() {
+  let app1 = sample_app("example.app.alpha", "Alpha", True, True, [])
+  let m0 =
+    Model(
+      ..model.init("classic", [app1]),
+      custom_install_url: "https://example.com/gamma",
+    )
+
+  let app_gamma = sample_app("example.app.gamma", "Gamma", True, False, [])
+  let #(m1, _eff1) = update.update(m0, InstallApp(app_gamma))
+  m1.custom_install_url |> should.equal("")
+  list.length(m1.installed_apps) |> should.equal(2)
+
+  // Uninstalling active app falls back to remaining enabled app
+  let #(m2, eff2) = update.update(m1, UninstallApp("example.app.alpha"))
+  list.length(m2.installed_apps) |> should.equal(1)
+  m2.active_page
+  |> should.equal(PrimaryApp(plugin_id: "example.app.gamma", route: None))
+  should.be_true(list.contains(
+    eff2,
+    UnmountPluginFromSlot("example.app.alpha", Main),
+  ))
+}
+
+pub fn update_intents_relays_theme_sync_and_modals_test() {
+  let app1 = sample_app("example.app.alpha", "Alpha", True, True, [])
+  let m0 = model.init("classic", [app1])
+
+  // Toggle intent disabled
+  let #(m1, _) =
+    update.update(m0, ToggleAppIntent("example.app.alpha", "view-note"))
+  case model.find_app(m1, "example.app.alpha") {
+    Some(a) -> a.disabled_intents |> should.equal(["view-note"])
+    None -> should.fail()
+  }
+
+  // Intent prompt & selection
+  let prompt =
+    IntentPromptState(
+      intent_name: "view-note",
+      candidates: ["example.app.alpha"],
+      payload_json: "{\"id\":\"123\"}",
+    )
+  let #(m2, _) = update.update(m1, ShowIntentPrompt(prompt))
+  m2.intent_prompt |> should.equal(Some(prompt))
+
+  let #(m3, eff3) = update.update(m2, SelectIntentHandler("example.app.alpha"))
+  m3.intent_prompt |> should.equal(None)
+  should.be_true(list.contains(
+    eff3,
+    DispatchIntentToPlugin("example.app.alpha", "view-note", "{\"id\":\"123\"}"),
+  ))
+
+  let #(m3b, _) = update.update(m2, DismissIntentPrompt)
+  m3b.intent_prompt |> should.equal(None)
+
+  // Relay scoping
+  let #(m4, _) =
+    update.update(
+      m3,
+      SetAppRelays("example.app.alpha", Some(["wss://relay.example.com"])),
+    )
+  case model.find_app(m4, "example.app.alpha") {
+    Some(a) -> a.relays |> should.equal(Some(["wss://relay.example.com"]))
+    None -> should.fail()
+  }
+
+  // Shell & accent color
+  let #(m5, eff5) = update.update(m4, SelectShell("editorial"))
+  m5.active_shell_id |> should.equal("editorial")
+  should.be_true(list.contains(eff5, SwitchActiveShell("editorial")))
+
+  let #(m6, eff6) = update.update(m5, SetAccentColor("#cc8844"))
+  m6.accent_color |> should.equal("#cc8844")
+  eff6 |> should.equal([PersistAccentColor("#cc8844")])
+
+  // Profile & Sync
+  let prof =
+    UserProfileSummary(
+      pubkey: "abcd1234",
+      npub: "npub1abcd",
+      display_name: "Alice",
+      picture: None,
+      nip05: Some("alice@example.com"),
+    )
+  let #(m7, _) = update.update(m6, SetUserProfile(prof))
+  m7.user_profile |> should.equal(Some(prof))
+
+  let #(m8, _) = update.update(m7, SetSyncStatus(Synced(12_345)))
+  m8.sync_status |> should.equal(Synced(12_345))
+
+  let #(m9, eff9) = update.update(m8, ToggleAutoSync(False))
+  m9.auto_sync_nip78 |> should.be_false()
+  // When auto_sync is False, only PersistWorkspaceLocal is emitted (not PublishWorkspaceNip78)
+  list.length(eff9) |> should.equal(1)
+
+  let #(m10, eff10) = update.update(m9, TriggerWorkspaceSync)
+  m10.sync_status |> should.equal(Syncing)
+  list.length(eff10) |> should.equal(2)
+
+  // Modals & Pull refresh
+  let upd_modal =
+    UpdateModalState(
+      plugin_id: "example.app.alpha",
+      plugin_name: "Alpha",
+      current_version: "1.0.0",
+      latest_version: "1.1.0",
+      changelog: Some("Bug fixes"),
+    )
+  let #(m11, _) = update.update(m10, ShowUpdateModal(upd_modal))
+  m11.update_modal |> should.equal(Some(upd_modal))
+
+  let #(m12, eff12) =
+    update.update(m11, ConfirmPluginUpdate("example.app.alpha"))
+  m12.update_modal |> should.equal(None)
+  eff12 |> should.equal([UpgradePlugin("example.app.alpha")])
+
+  let #(m12b, _) = update.update(m11, DismissUpdateModal)
+  m12b.update_modal |> should.equal(None)
+
+  let #(m13, eff13) = update.update(m12, StartPullRefresh)
+  m13.pull_refreshing |> should.be_true()
+  eff13 |> should.equal([RefreshActiveView])
+
+  let #(m14, _) = update.update(m13, FinishPullRefresh)
+  m14.pull_refreshing |> should.be_false()
+
+  let #(m15, _) = update.update(m14, SetSearchQuery("notes"))
+  m15.search_query |> should.equal("notes")
+
+  let #(m16, _) = update.update(m15, SetCustomInstallUrl("https://a.b"))
+  m16.custom_install_url |> should.equal("https://a.b")
+
+  let ws = model.to_workspace_state(m16, 999)
+  let #(_m17, eff17) = update.update(m16, ApplyRemoteWorkspace(ws))
+  eff17 |> should.equal([PersistWorkspaceLocal(ws)])
+}
+
+// -----------------------------------------------------------------------------
+// Shell Facade & Avatar Tests
+// -----------------------------------------------------------------------------
+
+pub fn shell_avatar_data_uri_is_deterministic_svg_test() {
+  let uri1 = shell.avatar_data_uri("deadbeef01234567", "alice")
+  let uri2 = shell.avatar_data_uri("deadbeef01234567", "alice")
+  uri1 |> should.equal(uri2)
+  should.be_true(string.starts_with(uri1, "data:image/svg+xml;utf8,%3Csvg"))
+  should.be_true(string.contains(uri1, "%3EA%3C/text%3E"))
+}
+
+// -----------------------------------------------------------------------------
+// Layout & Viewport Host Islands Tests
+// -----------------------------------------------------------------------------
+
+pub fn viewport_host_renders_stable_island_anchor_test() {
+  viewport_host.slot_dom_id(Main, "example.app.alpha")
+  |> should.equal("slot-main-example.app.alpha")
+
+  let html_str =
+    viewport_host.render_slot_anchor(
+      Sidebar,
+      "example.app.alpha",
+      Some("?view=widget"),
+      True,
+    )
+    |> element.to_string
+
+  should.be_true(string.contains(
+    html_str,
+    "class=\"omni-viewport-island omni-component-slot\"",
+  ))
+  should.be_true(string.contains(
+    html_str,
+    "id=\"slot-sidebar-example.app.alpha\"",
+  ))
+  should.be_true(string.contains(html_str, "data-viewport-slot=\"sidebar\""))
+  should.be_true(string.contains(
+    html_str,
+    "data-plugin-slot=\"example.app.alpha\"",
+  ))
+  should.be_true(string.contains(html_str, "data-route=\"?view=widget\""))
+  should.be_true(string.contains(html_str, "data-active=\"true\""))
+}
+
+pub fn dock_renders_standard_dock_item_hierarchy_test() {
+  let app1 = sample_app("example.app.alpha", "Alpha", True, True, [])
+  let m = model.init("classic", [app1])
+  let dock_html = dock.render_dock(m) |> element.to_string
+
+  should.be_true(string.contains(dock_html, "<nav"))
+  should.be_true(string.contains(dock_html, "class=\"omni-dock\""))
+  should.be_true(string.contains(dock_html, "class=\"dock-item active\""))
+  should.be_true(string.contains(dock_html, "<div class=\"dock-icon-wrapper\">"))
+  should.be_true(string.contains(dock_html, "<span>Alpha</span>"))
+  should.be_true(string.contains(dock_html, "<span>Widgets</span>"))
+  should.be_true(string.contains(dock_html, "<span>Apps</span>"))
+  should.be_true(string.contains(dock_html, "<span>Settings</span>"))
+}
+
+pub fn header_actions_renders_sync_fullscreen_and_profile_test() {
+  let p_hdr =
+    PlacementConfig(
+      viewport: HeaderActions,
+      view_id: "quick",
+      route: Some("?view=quick"),
+    )
+  let app1 = sample_app("example.app.alpha", "Alpha", True, True, [p_hdr])
+  let prof =
+    UserProfileSummary(
+      pubkey: "1234abcd",
+      npub: "npub11234",
+      display_name: "Satoshi",
+      picture: Some("https://example.com/avatar.png"),
+      nip05: None,
+    )
+  let m =
+    Model(
+      ..model.init("classic", [app1]),
+      user_profile: Some(prof),
+      sync_status: Synced(1000),
+    )
+
+  let hdr_html = header_actions.render_header_actions(m) |> element.to_string
+  should.be_true(string.contains(hdr_html, "id=\"btn-shell-toggle-fullscreen\""))
+  should.be_true(string.contains(hdr_html, "data-sync-status=\"sync-ok\""))
+  should.be_true(string.contains(
+    hdr_html,
+    "id=\"slot-header-actions-example.app.alpha\"",
+  ))
+  should.be_true(string.contains(hdr_html, "Satoshi"))
+
+  // Also test SyncError and SyncIdle rendering
+  let m_err = Model(..m, sync_status: SyncError("timeout"))
+  let hdr_err_html =
+    header_actions.render_header_actions(m_err) |> element.to_string
+  should.be_true(string.contains(
+    hdr_err_html,
+    "data-sync-status=\"sync-error\"",
+  ))
+}
+
+pub fn widgets_grid_renders_cards_and_empty_state_test() {
+  let app_no_widgets = sample_app("example.app.alpha", "Alpha", True, True, [])
+  let m_empty = model.init("classic", [app_no_widgets])
+  let empty_html =
+    widgets_grid.render_widgets_grid(m_empty) |> element.to_string
+  should.be_true(string.contains(empty_html, "No Workspace Widgets Assigned"))
+  should.be_true(string.contains(empty_html, "Configure Widgets"))
+
+  let p_side =
+    PlacementConfig(
+      viewport: Sidebar,
+      view_id: "widget",
+      route: Some("?view=widget"),
+    )
+  let app_with_widget =
+    sample_app("example.app.beta", "Beta Widget", True, False, [p_side])
+  let m_with = model.init("classic", [app_with_widget])
+  let grid_html = widgets_grid.render_widgets_grid(m_with) |> element.to_string
+  should.be_true(string.contains(grid_html, "class=\"omni-widget-card\""))
+  should.be_true(string.contains(grid_html, "Beta Widget"))
+  should.be_true(string.contains(
+    grid_html,
+    "id=\"slot-sidebar-example.app.beta\"",
+  ))
+}
+
+pub fn main_view_switches_cleanly_across_pages_test() {
+  let app1 = sample_app("example.app.alpha", "Alpha", True, True, [])
+  let m0 = model.init("classic", [app1])
+
+  let dummy_settings = fn(_m, _tab) {
+    html.div([attribute.id("mock-settings")], [element.text("Settings Content")])
+  }
+  let dummy_store = fn(_m) {
+    html.div([attribute.id("mock-store")], [element.text("Store Content")])
+  }
+
+  // 1. PrimaryApp
+  let html_primary =
+    main_view.render_main_viewport(m0, dummy_settings, dummy_store)
+    |> element.to_string
+  should.be_true(string.contains(
+    html_primary,
+    "id=\"slot-main-example.app.alpha\"",
+  ))
+
+  // 2. WidgetsDashboard
+  let m_widgets = Model(..m0, active_page: WidgetsDashboard)
+  let html_widgets =
+    main_view.render_main_viewport(m_widgets, dummy_settings, dummy_store)
+    |> element.to_string
+  should.be_true(string.contains(html_widgets, "omni-widgets-grid"))
+
+  // 3. AppStore
+  let m_store = Model(..m0, active_page: AppStore)
+  let html_store =
+    main_view.render_main_viewport(m_store, dummy_settings, dummy_store)
+    |> element.to_string
+  should.be_true(string.contains(html_store, "id=\"mock-store\""))
+
+  // 4. Settings
+  let m_settings =
+    Model(..m0, active_page: Settings(TabPlugins), fullscreen: True)
+  let html_settings =
+    main_view.render_main_viewport(m_settings, dummy_settings, dummy_store)
+    |> element.to_string
+  should.be_true(string.contains(html_settings, "id=\"mock-settings\""))
+  should.be_true(string.contains(html_settings, "omni-main-fullscreen"))
+}

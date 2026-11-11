@@ -68,18 +68,18 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 5.4 Move CSS to `assets/styles/*.css`
 
 ## Phase 6: Shell
-- [ ] 6.1 Shell core: model, msg, update (pure, unit-tested)
-- [ ] 6.2 Viewport host islands, dock, header actions, widgets grid, main view
-- [ ] 6.3 Settings tabs, placements, permissions, intents, relay scoping, shell manager
-- [ ] 6.4 App store, update modal, pull-to-refresh
+- [x] 6.1 Shell core: model, msg, update (pure, unit-tested)
+- [x] 6.2 Viewport host islands, dock, header actions, widgets grid, main view
+- [x] 6.3 Settings tabs, placements, permissions, intents, relay scoping, shell manager
+- [x] 6.4 App store, update modal, pull-to-refresh
 - [ ] 6.5 Classic theme
 - [ ] 6.6 Panorama theme
 - [ ] 6.7 Editorial theme
 - [ ] 6.8 Shell registry; `omni_web` bootloader replaces `apps/web/src/main.ts`
 
 ## Phase 7: Plugins and bridge
-- [ ] 7.1 `plugin_kit`: typed `window.nostr`, app harness, route, `local_store`, subscribe helper
-- [ ] 7.2 `social` + `social_ui` extracted with golden fixtures for the shared note card
+- [x] 7.1 `plugin_kit`: typed `window.nostr`, app harness, route, `local_store`, subscribe helper
+- [x] 7.2 `social` + `social_ui` extracted with golden fixtures for the shared note card
 - [ ] 7.3 Plugin `checklist`
 - [ ] 7.4 Plugin `timer`
 - [ ] 7.5 Plugin `relays`

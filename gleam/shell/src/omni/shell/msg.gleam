@@ -1,0 +1,60 @@
+//// Shell messages representing user actions, navigation, placements, and system events.
+////
+//// Strictly plugin-agnostic: zero hardcoded plugin IDs.
+
+import gleam/option.{type Option}
+import omni/protocol/viewport.{type Viewport}
+import omni/protocol/workspace.{type WorkspaceState}
+import omni/shell/model.{
+  type InstalledApp, type IntentPromptState, type Page, type PlacementConfig,
+  type SettingsTab, type SyncStatus, type UpdateModalState,
+  type UserProfileSummary,
+}
+
+/// Messages processed by the Omni Shell Elm update loop.
+pub type Msg {
+  // Navigation
+  NavigateTo(Page)
+  OpenApp(plugin_id: String, route: Option(String))
+  OpenSettings(SettingsTab)
+  ToggleFullscreen
+  ToggleMobileMenu
+
+  // App lifecycle & placements
+  ToggleAppEnabled(plugin_id: String)
+  ToggleAppPinned(plugin_id: String)
+  SetAppPlacements(plugin_id: String, placements: List(PlacementConfig))
+  AddAppPlacement(plugin_id: String, placement: PlacementConfig)
+  RemoveAppPlacement(plugin_id: String, viewport: Viewport)
+  InstallApp(InstalledApp)
+  UninstallApp(plugin_id: String)
+  SetCustomInstallUrl(String)
+  SetSearchQuery(String)
+
+  // Intents & permissions
+  ToggleAppIntent(plugin_id: String, intent_name: String)
+  ShowIntentPrompt(IntentPromptState)
+  SelectIntentHandler(plugin_id: String)
+  DismissIntentPrompt
+
+  // Relay scoping
+  SetAppRelays(plugin_id: String, relays: Option(List(String)))
+
+  // Shell & theme
+  SelectShell(shell_id: String)
+  SetAccentColor(String)
+
+  // Profile & sync
+  SetUserProfile(UserProfileSummary)
+  SetSyncStatus(SyncStatus)
+  ToggleAutoSync(Bool)
+  TriggerWorkspaceSync
+  ApplyRemoteWorkspace(WorkspaceState)
+
+  // Modals & gestures
+  ShowUpdateModal(UpdateModalState)
+  ConfirmPluginUpdate(plugin_id: String)
+  DismissUpdateModal
+  StartPullRefresh
+  FinishPullRefresh
+}
