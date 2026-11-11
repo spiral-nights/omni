@@ -1,4 +1,11 @@
-import { start, render, type ShellBoot } from "@omni/gleam-interop/shell_boot";
+import {
+  render,
+  start_with_bridge,
+  type ShellBoot,
+} from "@omni/gleam-interop/shell_boot";
+
+// Bundled Gleam guest runtime injected into every plugin sandbox.
+import guestBridgeScript from "../../../gleam/bridge/dist/guest-runtime.js?raw";
 
 /**
  * Omni host microkernel.
@@ -21,7 +28,7 @@ async function mountShell(): Promise<void> {
   const rootEl = document.getElementById("omni-root");
   if (!rootEl) throw new Error("Missing #omni-root container");
 
-  const result = await start("omni_shell");
+  const result = await start_with_bridge("omni_shell", guestBridgeScript);
 
   if (!result.isOk()) {
     const message = (result as unknown as { 0: string })[0] ?? "unknown error";

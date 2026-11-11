@@ -7,8 +7,9 @@
 //// the host so this shared package needs no DOM FFI.
 
 import gleam/javascript/promise
-import gleam/option.{None}
+import gleam/option.{type Option, None, Some}
 import gleam/string
+
 import lustre/element
 import omni/kernel/kernel.{KernelPorts}
 import omni/platform/clock
@@ -26,6 +27,19 @@ pub type ShellBoot {
 /// Initialize the shell boot state, opening the host IndexedDB database and
 /// resolving the persisted shell selection.
 pub fn start(db_name: String) -> promise.Promise(Result(ShellBoot, String)) {
+  start_with_bridge(db_name, "")
+}
+
+/// Initialize the shell boot state with the bundled Gleam guest bridge script
+/// injected into every plugin sandbox (empty string disables injection).
+pub fn start_with_bridge(
+  db_name: String,
+  bridge_script_source: String,
+) -> promise.Promise(Result(ShellBoot, String)) {
+  let bridge_script = case string.trim(bridge_script_source) {
+    "" -> None
+    source -> Some(source)
+  }
   use db_res <- promise.await(idb.open(db_name, 1, fn(_) { Nil }))
 
   case db_res {
@@ -37,10 +51,36 @@ pub fn start(db_name: String) -> promise.Promise(Result(ShellBoot, String)) {
           clock: clock.system(),
           prompt_handler: None,
         )
-      promise.resolve(Ok(ShellBoot(boot.init(ports))))
+      promise.resolve(
+        Ok(ShellBoot(boot.init_with_bridge(ports, bridge_script))),
+      )
     }
     Error(err) -> promise.resolve(Error(err))
   }
+}
+
+/// Spawn a plugin sandbox and mount its `<iframe>` into the island container
+/// identified by `selector`, using the bootstrapped guest bridge.
+pub fn spawn_plugin(
+  host: ShellBoot,
+  selector: String,
+  plugin_id: String,
+  content: String,
+  route: Option(String),
+) -> Result(ShellBoot, String) {
+  case boot.spawn_sandbox(host.booted, plugin_id, content, route) {
+    Ok(#(next_booted, mount)) -> {
+      mount_island(selector, mount.srcdoc)
+      Ok(ShellBoot(next_booted))
+    }
+    Error(err) -> Error(err)
+  }
+}
+
+/// Terminate a plugin sandbox and remove its mounted island contents.
+pub fn terminate_plugin(host: ShellBoot, selector: String) -> ShellBoot {
+  unmount_island(selector)
+  ShellBoot(host.booted)
 }
 
 /// Render the current shell tree as HTML for the host `#omni-root` container.
@@ -103,6 +143,12 @@ pub fn open_settings_tab(host: ShellBoot, tab_id: String) -> ShellBoot {
   }
   ShellBoot(dispatch(host, OpenSettings(tab)))
 }
+
+@external(javascript, "./shell_boot.ffi.mjs", "mount_island")
+fn mount_island(selector: String, srcdoc: String) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "unmount_island")
+fn unmount_island(selector: String) -> Nil
 
 fn plugin_settings_id(tab_id: String) -> String {
   string.drop_start(tab_id, 7)

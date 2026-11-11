@@ -11,6 +11,7 @@ import omni/kernel/kernel.{type KernelPorts, KernelPorts}
 import omni/platform/clock
 import omni/platform/idb
 import omni/platform/storage
+import omni/sandbox/manager
 import omni/shell/model
 import omni/shell/msg.{NavigateTo, ToggleFullscreen}
 import omni/shell/registry
@@ -137,6 +138,38 @@ pub fn boot_dispatch_updates_model_and_returns_host_effects_test() {
   let #(_, page_effects) =
     boot.dispatch(booted, NavigateTo(model.WidgetsDashboard))
   should.be_true(list.any(page_effects, fn(_) { True }))
+
+  promise.resolve(Nil)
+}
+
+pub fn boot_spawns_sandbox_with_guest_bridge_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+
+  let booted = boot.init_with_bridge(ports, Some("/* omni guest bridge */"))
+  booted.bridge_script |> should.equal(Some("/* omni guest bridge */"))
+
+  let assert Ok(#(next, mount)) =
+    boot.spawn_sandbox(
+      booted,
+      "example.app.alpha",
+      "<h1>hi</h1>",
+      Some("?view=widget"),
+    )
+
+  should.be_true(string.contains(mount.srcdoc, "/* omni guest bridge */"))
+  should.be_true(string.contains(mount.srcdoc, "<h1>hi</h1>"))
+  manager.count(next.sandboxes) |> should.equal(1)
+
+  let terminated = boot.terminate_sandbox(next, "example.app.alpha")
+  manager.count(terminated.sandboxes) |> should.equal(0)
+
+  case boot.spawn_sandbox(booted, "not a plugin id", "", None) {
+    Ok(_) -> should.fail()
+    Error(message) ->
+      should.be_true(string.contains(message, "Invalid plugin ID"))
+  }
 
   promise.resolve(Nil)
 }

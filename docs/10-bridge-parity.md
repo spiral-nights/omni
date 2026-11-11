@@ -39,11 +39,20 @@ completes the handshake with a `MessageChannel`, and asserts a full
 Inject it through `IframeConfig.bridge_script` (or the kernel
 `runtimeScript` option) instead of the legacy file.
 
-## Remaining cutover work
+## Cutover status
 
-1. **Host wiring**: pass the bundle to the sandbox host when `omni_web` mounts
-   plugin islands (the Gleam iframe/worker hosts already accept a
-   `bridge_script` / `runtime_script` string), then make it the default.
+Done. `omni_web/boot` carries a `SandboxManager` and the bridge script;
+`boot.spawn_sandbox` spawns a tracked host and builds the iframe mount
+descriptor with the bundle injected; `omni_interop/shell_boot.spawn_plugin`
+mounts it into the `[data-plugin-slot]` island; `apps/web` boots with
+`start_with_bridge(..., guestBridgeScript)`.
+
+## Remaining follow-ups
+
+1. Load real plugin bundles into islands (the host currently mounts a sandbox
+   for content the caller supplies; plugin fetching/resolution is Phase 8).
+2. Delete `packages/core/src/sandbox/omni-runtime.js` and its TS consumers in
+   Phase 8.
 2. **Dual-run**: for one release, inject both runtimes behind a flag
    (`runtimeScript` env/config) and run the existing sandbox test suites
    (`transparent-api`, `subscription-isolation`, `nip78-workspace`, plugin

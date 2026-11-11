@@ -9,13 +9,19 @@
 //// (`apps/web`), keeping the package free of DOM FFI.
 
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import omni/kernel/kernel.{type KernelPorts, type OmniKernel}
 import omni/kernel/workspace/sync
 import omni/platform/storage
+import omni/protocol/plugin_id
 import omni/protocol/workspace
+import omni/sandbox/iframe_host.{type IframeMount, IframeConfig}
+import omni/sandbox/manager.{
+  type SandboxManager, type SpawnOptions, SpawnOptions,
+}
 import omni/shell/model.{type Model}
 import omni/shell/msg.{type Msg, SelectShell}
 import omni/shell/registry.{type ShellRegistry}
@@ -28,20 +34,42 @@ import omni/web/config
 /// Storage key holding the user's chosen accent color.
 pub const accent_color_storage_key = "omni_accent_color"
 
-/// Fully initialized host boot state: kernel, shell registry, and shell model.
+/// Fully initialized host boot state: kernel, shell registry, shell model,
+/// active sandboxes, and the guest bridge script injected into every sandbox.
 pub type Booted {
-  Booted(registry: ShellRegistry, model: Model, kernel: OmniKernel)
+  Booted(
+    registry: ShellRegistry,
+    model: Model,
+    kernel: OmniKernel,
+    sandboxes: SandboxManager,
+    bridge_script: Option(String),
+  )
 }
 
 /// Initialize the kernel, shell registry, and shell model from injected ports.
 pub fn init(ports: KernelPorts) -> Booted {
+  init_with_bridge(ports, None)
+}
+
+/// Initialize boot state with the bundled Gleam guest bridge injected into
+/// every spawned sandbox.
+pub fn init_with_bridge(
+  ports: KernelPorts,
+  bridge_script: Option(String),
+) -> Booted {
   let kernel =
     kernel.new(ports, config.bootstrap_relays(), config.default_shell_id)
   let registry =
     registry.with_builtin_themes()
     |> registry.load_and_persist_active_id(kernel.storage)
   let model = shell.init(registry.active_id, config.system_apps())
-  Booted(registry: registry, model: model, kernel: kernel)
+  Booted(
+    registry: registry,
+    model: model,
+    kernel: kernel,
+    sandboxes: manager.new(),
+    bridge_script: bridge_script,
+  )
 }
 
 /// Process a shell message: updates the model, applies persistence effects to
@@ -88,7 +116,13 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
     })
 
   #(
-    Booted(registry: next_registry, model: next_model, kernel: booted.kernel),
+    Booted(
+      registry: next_registry,
+      model: next_model,
+      kernel: booted.kernel,
+      sandboxes: booted.sandboxes,
+      bridge_script: booted.bridge_script,
+    ),
     host_effects,
   )
 }
@@ -98,6 +132,67 @@ pub fn select_shell(booted: Booted, shell_id: String) -> Booted {
   booted
   |> dispatch(SelectShell(shell_id))
   |> fn(pair) { pair.0 }
+}
+
+/// Spawn a tracked sandbox for a plugin view and build the `<iframe>` mount
+/// descriptor with CSP, design tokens, and the configured guest bridge script.
+/// The host mounts the returned `srcdoc` into the plugin's island container.
+pub fn spawn_sandbox(
+  booted: Booted,
+  plugin_id_str: String,
+  content: String,
+  route: Option(String),
+) -> Result(#(Booted, IframeMount), String) {
+  case plugin_id.parse(plugin_id_str) {
+    Error(_) -> Error("Invalid plugin ID: " <> plugin_id_str)
+    Ok(id) -> {
+      let options =
+        SpawnOptions(
+          ..manager.default_spawn_options(),
+          format_hint: Some("iframe"),
+          route: route,
+          content: Some(content),
+          runtime_script: booted.bridge_script,
+        )
+
+      let #(next_manager, _host) = manager.spawn(booted.sandboxes, id, options)
+
+      let mount =
+        iframe_host.prepare_mount(IframeConfig(
+          plugin_id: plugin_id_str,
+          content: content,
+          csp: None,
+          tokens: None,
+          bridge_script: booted.bridge_script,
+        ))
+
+      Ok(#(
+        Booted(
+          registry: booted.registry,
+          model: booted.model,
+          kernel: booted.kernel,
+          sandboxes: next_manager,
+          bridge_script: booted.bridge_script,
+        ),
+        mount,
+      ))
+    }
+  }
+}
+
+/// Terminate a plugin's sandbox and release its ports and blob URLs.
+pub fn terminate_sandbox(booted: Booted, plugin_id_str: String) -> Booted {
+  case plugin_id.parse(plugin_id_str) {
+    Error(_) -> booted
+    Ok(id) ->
+      Booted(
+        registry: booted.registry,
+        model: booted.model,
+        kernel: booted.kernel,
+        sandboxes: manager.terminate(booted.sandboxes, id),
+        bridge_script: booted.bridge_script,
+      )
+  }
 }
 
 /// Resolve the registry's active theme.
