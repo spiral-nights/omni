@@ -8,6 +8,7 @@
 //// Mounting the returned element into `#omni-root` is the host page's job
 //// (`apps/web`), keeping the package free of DOM FFI.
 
+import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import lustre/attribute
@@ -17,18 +18,20 @@ import omni/kernel/kernel.{type KernelPorts, type OmniKernel}
 import omni/kernel/workspace/sync
 import omni/platform/storage
 import omni/protocol/plugin_id
+import omni/protocol/schema/node.{type Node}
 import omni/protocol/workspace
 import omni/sandbox/iframe_host.{type IframeMount, IframeConfig}
 import omni/sandbox/manager.{
   type SandboxManager, type SpawnOptions, SpawnOptions,
 }
-import omni/shell/model.{type Model}
+import omni/shell/model.{type Model, Model, PrimaryApp}
 import omni/shell/msg.{type Msg, SelectShell}
 import omni/shell/registry.{type ShellRegistry}
 import omni/shell/shell
 import omni/shell/styles
 import omni/shell/theme.{type Theme}
 import omni/shell/update.{type ShellEffect}
+import omni/web/builtin.{type BuiltinApp}
 import omni/web/config
 
 /// Storage key holding the user's chosen accent color.
@@ -43,6 +46,7 @@ pub type Booted {
     kernel: OmniKernel,
     sandboxes: SandboxManager,
     bridge_script: Option(String),
+    builtins: Dict(String, BuiltinApp),
   )
 }
 
@@ -62,13 +66,27 @@ pub fn init_with_bridge(
   let registry =
     registry.with_builtin_themes()
     |> registry.load_and_persist_active_id(kernel.storage)
-  let model = shell.init(registry.active_id, config.system_apps())
+  let builtins =
+    builtin.apps()
+    |> list.fold(dict.new(), fn(acc, pair) { dict.insert(acc, pair.0, pair.1) })
+  let seeded =
+    dict.fold(
+      builtins,
+      shell.init(registry.active_id, config.system_apps()),
+      fn(m, id, app) {
+        Model(
+          ..m,
+          embedded_views: dict.insert(m.embedded_views, id, app.render()),
+        )
+      },
+    )
   Booted(
     registry: registry,
-    model: model,
+    model: seeded,
     kernel: kernel,
     sandboxes: manager.new(),
     bridge_script: bridge_script,
+    builtins: builtins,
   )
 }
 
@@ -104,13 +122,49 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
       }
     })
 
+  // Forward schema actions to the in-process built-in apps.
+  let _ =
+    list.each(effects, fn(effect) {
+      case effect {
+        update.DispatchHostedAction(plugin_id, action) ->
+          case dict.get(booted.builtins, plugin_id) {
+            Ok(app) -> {
+              let _ = app.handle_action(action)
+              Nil
+            }
+            Error(Nil) -> Nil
+          }
+        _ -> Nil
+      }
+    })
+
+  // Follow the active app's route, then refresh every embedded view so the
+  // rendered tree reflects the latest plugin state.
+  let _ = case next_model.active_page {
+    PrimaryApp(plugin_id, route) ->
+      case dict.get(booted.builtins, plugin_id) {
+        Ok(app) -> app.navigate(option.unwrap(route, ""))
+        Error(Nil) -> Nil
+      }
+    _ -> Nil
+  }
+
+  let refreshed =
+    dict.fold(booted.builtins, next_model, fn(m, id, app) {
+      Model(
+        ..m,
+        embedded_views: dict.insert(m.embedded_views, id, app.render()),
+      )
+    })
+
   let host_effects =
     effects
     |> list.filter(fn(effect) {
       case effect {
         update.SwitchActiveShell(_)
         | update.PersistWorkspaceLocal(_)
-        | update.PersistAccentColor(_) -> False
+        | update.PersistAccentColor(_)
+        | update.DispatchHostedAction(_, _) -> False
         _ -> True
       }
     })
@@ -118,10 +172,11 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
   #(
     Booted(
       registry: next_registry,
-      model: next_model,
+      model: refreshed,
       kernel: booted.kernel,
       sandboxes: booted.sandboxes,
       bridge_script: booted.bridge_script,
+      builtins: booted.builtins,
     ),
     host_effects,
   )
@@ -173,6 +228,7 @@ pub fn spawn_sandbox(
           kernel: booted.kernel,
           sandboxes: next_manager,
           bridge_script: booted.bridge_script,
+          builtins: booted.builtins,
         ),
         mount,
       ))
@@ -191,6 +247,7 @@ pub fn terminate_sandbox(booted: Booted, plugin_id_str: String) -> Booted {
         kernel: booted.kernel,
         sandboxes: manager.terminate(booted.sandboxes, id),
         bridge_script: booted.bridge_script,
+        builtins: booted.builtins,
       )
   }
 }

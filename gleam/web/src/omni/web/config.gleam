@@ -77,7 +77,7 @@ pub fn system_apps() -> List(InstalledApp) {
       handled_intents: ["view-note", "create-note", "view-profile"],
       disabled_intents: [],
       relays: None,
-      source_url: "https://feed.omni.example/",
+      source_url: "https://nsite.example/reader.html",
       version: Some("1.0.0"),
     ),
     InstalledApp(
@@ -113,7 +113,7 @@ pub fn system_apps() -> List(InstalledApp) {
       handled_intents: [],
       disabled_intents: [],
       relays: None,
-      source_url: "https://checklist.omni.example/",
+      source_url: "https://nsite.example/tasks.html",
       version: Some("1.0.0"),
     ),
     InstalledApp(
@@ -143,7 +143,7 @@ pub fn system_apps() -> List(InstalledApp) {
       handled_intents: [],
       disabled_intents: [],
       relays: None,
-      source_url: "https://timer.omni.example/",
+      source_url: "https://nsite.example/timer.html",
       version: Some("1.0.0"),
     ),
     InstalledApp(
@@ -167,7 +167,7 @@ pub fn system_apps() -> List(InstalledApp) {
       handled_intents: [],
       disabled_intents: [],
       relays: None,
-      source_url: "https://notes.omni.example/",
+      source_url: "https://nsite.example/notes.html",
       version: Some("1.0.0"),
     ),
     InstalledApp(
@@ -191,7 +191,7 @@ pub fn system_apps() -> List(InstalledApp) {
       handled_intents: [],
       disabled_intents: [],
       relays: None,
-      source_url: "https://relays.omni.example/",
+      source_url: "https://nsite.example/relays.html",
       version: Some("1.0.0"),
     ),
     InstalledApp(
@@ -215,7 +215,7 @@ pub fn system_apps() -> List(InstalledApp) {
       handled_intents: ["view-profile"],
       disabled_intents: [],
       relays: None,
-      source_url: "https://profiles.omni.example/",
+      source_url: "https://nsite.example/profiles.html",
       version: Some("1.0.0"),
     ),
     InstalledApp(
@@ -239,7 +239,7 @@ pub fn system_apps() -> List(InstalledApp) {
       handled_intents: [],
       disabled_intents: [],
       relays: None,
-      source_url: "https://publisher.omni.example/",
+      source_url: "https://nsite.example/studio.html",
       version: Some("1.0.0"),
     ),
   ]

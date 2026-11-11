@@ -2,8 +2,10 @@
 ////
 //// Strictly plugin-agnostic: zero hardcoded plugin IDs.
 
+import gleam/dict
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import omni/protocol/schema/action.{type Action}
 import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace.{type WorkspaceState}
 import omni/shell/model.{
@@ -11,14 +13,15 @@ import omni/shell/model.{
   Settings, Syncing, WidgetsDashboard,
 }
 import omni/shell/msg.{
-  type Msg, AddAppPlacement, ApplyRemoteWorkspace, ConfirmPluginUpdate,
-  DismissIntentPrompt, DismissUpdateModal, FinishPullRefresh, InstallApp,
-  NavigateTo, OpenApp, OpenSettings, RemoveAppPlacement, SelectIntentHandler,
-  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
-  SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetUserProfile,
-  ShowIntentPrompt, ShowUpdateModal, StartPullRefresh, ToggleAppEnabled,
-  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
-  ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp,
+  type Msg, AddAppPlacement, ApplyRemoteWorkspace, ClearEmbeddedSchema,
+  ConfirmPluginUpdate, DismissIntentPrompt, DismissUpdateModal, EmbedSchema,
+  FinishPullRefresh, HostedSchemaAction, InstallApp, NavigateTo, OpenApp,
+  OpenSettings, RemoveAppPlacement, SelectIntentHandler, SelectShell,
+  SetAccentColor, SetAppPlacements, SetAppRelays, SetCustomInstallUrl,
+  SetSearchQuery, SetSyncStatus, SetUserProfile, ShowIntentPrompt,
+  ShowUpdateModal, StartPullRefresh, ToggleAppEnabled, ToggleAppIntent,
+  ToggleAppPinned, ToggleAutoSync, ToggleFullscreen, ToggleMobileMenu,
+  TriggerWorkspaceSync, UninstallApp,
 }
 
 /// Side-effect commands emitted by the pure shell `update` function.
@@ -40,6 +43,7 @@ pub type ShellEffect {
   )
   UpgradePlugin(plugin_id: String)
   RefreshActiveView
+  DispatchHostedAction(plugin_id: String, action: Action)
 }
 
 /// Pure, exhaustive, deterministic state transition for `Model`.
@@ -364,6 +368,26 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       let next_model = Model(..model, installed_apps: updated_apps)
       #(next_model, workspace_persistence_effects(next_model))
     }
+
+    EmbedSchema(plugin_id, node) -> #(
+      Model(
+        ..model,
+        embedded_views: dict.insert(model.embedded_views, plugin_id, node),
+      ),
+      [],
+    )
+
+    ClearEmbeddedSchema(plugin_id) -> #(
+      Model(
+        ..model,
+        embedded_views: dict.delete(model.embedded_views, plugin_id),
+      ),
+      [],
+    )
+
+    HostedSchemaAction(plugin_id, action) -> #(model, [
+      DispatchHostedAction(plugin_id, action),
+    ])
 
     SelectShell(shell_id) -> {
       let next_model = Model(..model, active_shell_id: shell_id)

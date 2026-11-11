@@ -11,7 +11,6 @@ import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
-import omni/protocol/viewport.{Main}
 import omni/shell/app_store
 import omni/shell/gestures/pull_to_refresh.{PullIdle}
 import omni/shell/layout/viewport_host
@@ -253,7 +252,7 @@ fn render_active_section(model: Model) -> Element(Msg) {
           html.div([attribute.class("panorama-section-title-bar")], [
             html.h2([], [element.text(title)]),
           ]),
-          viewport_host.render_slot_anchor(Main, plugin_id, route, True),
+          viewport_host.render_embedded_or_island(model, plugin_id, route),
         ],
       )
     }

@@ -253,10 +253,21 @@ pub fn render_app_store(
 }
 
 fn render_catalog_card(model: Model, entry: CatalogEntry) -> Element(Msg) {
+  // A catalog entry is installed if an app with the same ID or source URL is
+  // already present (built-in apps ship with their own IDs).
   let installed_opt = model.find_app(model, entry.id)
-  let is_installed = option.is_some(installed_opt)
+  let installed_by_source =
+    list.find(model.installed_apps, fn(app) {
+      app.source_url == entry.source_url
+    })
+    |> option.from_result
+  let installed_app = case installed_opt {
+    Some(app) -> Some(app)
+    None -> installed_by_source
+  }
+  let is_installed = option.is_some(installed_app)
 
-  let action_buttons = case installed_opt {
+  let action_buttons = case installed_app {
     Some(_) -> [
       html.span([attribute.class("omni-catalog-installed-badge")], [
         icons.render_icon("check", 12),

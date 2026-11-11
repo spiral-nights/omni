@@ -14,6 +14,14 @@ omni_ui = { path = "../ui" }
 omni_protocol = { path = "../protocol" }
 omni_platform = { path = "../platform" }
 omni_nostr = { path = "../nostr" }
+omni_plugin_kit = { path = "../plugin_kit" }
+plugin_feed = { path = "../plugins/feed" }
+plugin_checklist = { path = "../plugins/checklist" }
+plugin_timer = { path = "../plugins/timer" }
+plugin_notes = { path = "../plugins/notes" }
+plugin_relays = { path = "../plugins/relays" }
+plugin_profiles = { path = "../plugins/profiles" }
+plugin_publisher = { path = "../plugins/publisher" }
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

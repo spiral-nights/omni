@@ -3,6 +3,8 @@
 //// Strictly plugin-agnostic: zero hardcoded plugin IDs.
 
 import gleam/option.{type Option}
+import omni/protocol/schema/action.{type Action}
+import omni/protocol/schema/node.{type Node}
 import omni/protocol/viewport.{type Viewport}
 import omni/protocol/workspace.{type WorkspaceState}
 import omni/shell/model.{
@@ -39,6 +41,11 @@ pub type Msg {
 
   // Relay scoping
   SetAppRelays(plugin_id: String, relays: Option(List(String)))
+
+  // Host-rendered built-in plugin views
+  EmbedSchema(plugin_id: String, node: Node)
+  ClearEmbeddedSchema(plugin_id: String)
+  HostedSchemaAction(plugin_id: String, action: Action)
 
   // Shell & theme
   SelectShell(shell_id: String)

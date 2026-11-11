@@ -4,12 +4,15 @@
 //// anchors so Lustre's virtual DOM never destroys or reloads live `<iframe>`
 //// nodes when switching pages or themes.
 
+import gleam/dict
 import gleam/option.{type Option}
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
-import omni/protocol/viewport.{type Viewport}
-import omni/shell/msg.{type Msg}
+import omni/protocol/viewport.{type Viewport, Main}
+import omni/shell/model.{type Model}
+import omni/shell/msg.{type Msg, HostedSchemaAction}
+import omni/ui/render
 
 /// Compute the deterministic DOM ID for a viewport slot anchor.
 pub fn slot_dom_id(vp: Viewport, plugin_id: String) -> String {
@@ -42,4 +45,22 @@ pub fn render_slot_anchor(
     ],
     [],
   )
+}
+
+/// Render a host-embedded built-in plugin schema when present, otherwise the
+/// stable sandbox island anchor for a guest plugin.
+pub fn render_embedded_or_island(
+  model: Model,
+  plugin_id: String,
+  route: Option(String),
+) -> Element(Msg) {
+  case dict.get(model.embedded_views, plugin_id) {
+    Ok(node) ->
+      html.div([attribute.class("omni-hosted-app")], [
+        element.map(render.render(node), fn(action) {
+          HostedSchemaAction(plugin_id, action)
+        }),
+      ])
+    Error(Nil) -> render_slot_anchor(Main, plugin_id, route, True)
+  }
 }

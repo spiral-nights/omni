@@ -6,7 +6,7 @@ import gleam/string
 import gleeunit/should
 import lustre/element
 import omni/shell/model.{
-  type InstalledApp, AppStore, InstalledApp, Model, Settings, TabProfile,
+  type InstalledApp, AppStore, InstalledApp, Model, TabProfile,
   UserProfileSummary, ViewOption, WidgetsDashboard,
 }
 import omni/shell/msg

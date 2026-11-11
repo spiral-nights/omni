@@ -2,9 +2,10 @@
 ////
 //// Strictly plugin-agnostic: zero hardcoded plugin IDs.
 
-import gleam/dict
+import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import omni/protocol/schema/node.{type Node}
 import omni/protocol/viewport.{type Viewport, Dock, HeaderActions, Sidebar}
 import omni/protocol/workspace.{
   type WorkspaceState, PluginConfig, PluginPlacement, WorkspaceState,
@@ -114,6 +115,7 @@ pub type Model {
     pull_refreshing: Bool,
     search_query: String,
     custom_install_url: String,
+    embedded_views: Dict(String, Node),
   )
 }
 
@@ -140,6 +142,7 @@ pub fn init(active_shell_id: String, apps: List(InstalledApp)) -> Model {
     pull_refreshing: False,
     search_query: "",
     custom_install_url: "",
+    embedded_views: dict.new(),
   )
 }
 

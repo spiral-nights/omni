@@ -6,7 +6,6 @@
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
-import omni/protocol/viewport.{Main}
 import omni/shell/layout/viewport_host
 import omni/shell/layout/widgets_grid
 import omni/shell/model.{
@@ -22,7 +21,7 @@ pub fn render_main_viewport(
 ) -> Element(Msg) {
   let content = case model.active_page {
     PrimaryApp(plugin_id, route) ->
-      viewport_host.render_slot_anchor(Main, plugin_id, route, True)
+      viewport_host.render_embedded_or_island(model, plugin_id, route)
 
     WidgetsDashboard -> widgets_grid.render_widgets_grid(model)
 
