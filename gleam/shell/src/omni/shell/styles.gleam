@@ -13,6 +13,11 @@ pub const tokens_css_path = "assets/styles/tokens.css"
 /// Canonical stylesheet path for the Declarative Schema UI primitives (`assets/styles/schema.css`).
 pub const schema_css_path = "assets/styles/schema.css"
 
+/// Canonical stylesheet path shared by all shell themes for the omni-* classes
+/// emitted by the Gleam shell layout/settings/app-store/widgets modules
+/// (`assets/styles/shell-modules.css`).
+pub const shell_modules_css_path = "assets/styles/shell-modules.css"
+
 /// Canonical stylesheet path for the Omni Classic shell (`assets/styles/classic.css`).
 pub const classic_css_path = "assets/styles/classic.css"
 
@@ -53,11 +58,13 @@ pub fn render_stylesheet_link(id: String, href: String) -> Element(msg) {
   ])
 }
 
-/// Render the core stylesheet `<link>` tags (`tokens.css`, `schema.css`, and the active shell stylesheet).
+/// Render the core stylesheet `<link>` tags (`tokens.css`, `schema.css`, the
+/// shared shell module styles, and the active shell stylesheet).
 pub fn render_shell_stylesheets(shell_id: String) -> List(Element(msg)) {
   [
     render_stylesheet_link("omni-styles-tokens", tokens_css_path),
     render_stylesheet_link("omni-styles-schema", schema_css_path),
+    render_stylesheet_link("omni-styles-shell-modules", shell_modules_css_path),
     render_stylesheet_link(
       "omni-styles-theme-" <> shell_id,
       shell_stylesheet_path(shell_id),

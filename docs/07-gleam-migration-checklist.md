@@ -73,7 +73,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 6.3 Settings tabs, placements, permissions, intents, relay scoping, shell manager
 - [x] 6.4 App store, update modal, pull-to-refresh
 - [x] 6.5 Classic theme
-- [ ] 6.6 Panorama theme
+- [x] 6.6 Panorama theme
 - [ ] 6.7 Editorial theme
 - [ ] 6.8 Shell registry; `omni_web` bootloader replaces `apps/web/src/main.ts`
 
