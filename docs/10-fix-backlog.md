@@ -86,7 +86,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | Q-2 | S1 | open | No acceptance tests per feature row above. | Every fix adds one; CI runs them. |
 | Q-3 | S2 | open | No network e2e smoke in CI. | Optional nightly job against public relays. |
 | Q-4 | S3 | open | Duplicate/legacy helper warnings (e.g. unused feed synthetic helpers). | Remove dead code after REL/PL work. |
-| Q-5 | S2 | open | Fake-relay harness observed the coordinator `on_event` callback not firing for injected EVENT frames, while raw subscribers and EOSE work; cause unconfirmed. | Reproduce and fix before relying on the harness for outbox tests. |
+| Q-5 | S2 | fixed | Fake-relay harness observed the coordinator `on_event` callback not firing for injected EVENT frames, while raw subscribers and EOSE work; cause unconfirmed. | fixed `732d45a`: the harness fixture used a hard-coded `sub1` sub ID; frames now carry the caller's ID and delivery/dedupe/ingest are verified. |
 
 ---
 
