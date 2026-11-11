@@ -85,7 +85,7 @@ Mark items `[x]` in the same commit that completes them.
 - [ ] 7.3 Plugin `checklist`
 - [ ] 7.4 Plugin `timer`
 - [ ] 7.5 Plugin `relays`
-- [ ] 7.6 Plugin `notes`
+- [x] 7.6 Plugin `notes`
 - [ ] 7.7 Plugin `profiles` (opens threads via intent)
 - [ ] 7.8 Plugin `publisher`
 - [x] 7.9 Plugin `feed` (replaces MoonBit); MoonBit version moved to `external-plugins/` example
