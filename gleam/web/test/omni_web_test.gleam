@@ -11,10 +11,12 @@ import lustre/element
 import omni/kernel/crypto/keystore
 import omni/kernel/kernel.{type KernelPorts, KernelPorts}
 import omni/kernel/nostr/event_store
+import omni/kernel/nostr/relay_pool
 import omni/nostr/event.{UnsignedEvent}
 import omni/nostr/event_id
 import omni/nostr/filter.{Filter}
 import omni/nostr/kind
+import omni/nostr/relay_url
 import omni/platform/clock
 import omni/platform/idb
 import omni/platform/nip44
@@ -308,6 +310,39 @@ pub fn encrypted_publish_encrypts_content_test() {
   ))
   let assert Ok(plaintext) = decrypted
   plaintext |> should.equal("top secret plaintext")
+
+  promise.resolve(Nil)
+}
+
+pub fn nip65_relay_list_is_applied_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_bridge(ports, None)
+
+  boot.apply_relay_list(booted, [
+    ["r", "wss://relay.example"],
+    ["r", "wss://readonly.example", "read"],
+    ["r", "wss://writeonly.example", "write"],
+  ])
+
+  let urls =
+    relay_pool.get_configured_relays(booted.kernel.relay_pool)
+    |> list.map(relay_url.to_string)
+  should.be_true(list.contains(urls, "wss://relay.example"))
+  should.be_true(list.contains(urls, "wss://readonly.example"))
+  should.be_true(list.contains(urls, "wss://writeonly.example"))
+
+  let assert Ok(both) = relay_url.parse("wss://relay.example")
+  let assert Ok(read_only) = relay_url.parse("wss://readonly.example")
+  let assert Ok(write_only) = relay_url.parse("wss://writeonly.example")
+
+  relay_pool.relay_scope(booted.kernel.relay_pool, both)
+  |> should.equal(#(True, True))
+  relay_pool.relay_scope(booted.kernel.relay_pool, read_only)
+  |> should.equal(#(True, False))
+  relay_pool.relay_scope(booted.kernel.relay_pool, write_only)
+  |> should.equal(#(False, True))
 
   promise.resolve(Nil)
 }

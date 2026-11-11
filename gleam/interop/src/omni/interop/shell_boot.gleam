@@ -311,6 +311,19 @@ fn push_relay_statuses(
   })
 }
 
+fn relay_list_filter(author_hex: String) -> Filter {
+  Filter(
+    ids: None,
+    authors: Some([author_hex]),
+    kinds: Some([kind.RelayList]),
+    since: None,
+    until: None,
+    limit: Some(1),
+    search: None,
+    tags: dict.new(),
+  )
+}
+
 fn workspace_filter(author_hex: String) -> Filter {
   Filter(
     ids: None,

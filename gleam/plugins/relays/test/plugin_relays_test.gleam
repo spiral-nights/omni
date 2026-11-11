@@ -4,6 +4,8 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
 import gleeunit
+import gleeunit/should
+import omni/nostr/kind as nostr_kind
 import omni/platform/ref
 import omni/plugin_kit/app
 import omni/plugin_kit/schema
@@ -14,8 +16,8 @@ import plugin/relays/model.{
   ViewCompact, ViewMain, ViewWidget,
 }
 import plugin/relays/msg.{
-  AddRelay, DismissError, ReconnectRelay, RemoveRelay, SetDraftUrl, SetViewMode,
-  ToggleRead, ToggleWrite, UpdateRelayState,
+  AddRelay, DismissError, PublishNip65, ReconnectRelay, RemoveRelay, SetDraftUrl,
+  SetViewMode, ToggleRead, ToggleWrite, UpdateRelayState,
 }
 import plugin/relays/update
 import plugin/relays/view
@@ -224,4 +226,24 @@ pub fn start_app_action_round_trip_test() {
       "{\"type\":\"omni:action\",\"action\":\"publish-nip65\"}",
     )
   assert app.current_model(running).syncing_nip65 == True
+}
+
+pub fn publish_nip65_emits_relay_list_event_test() {
+  let m0 = model.init(ViewMain)
+  let #(_, effects) = update.update(m0, PublishNip65)
+  should.be_true(
+    list.any(effects, fn(effect) {
+      case effect {
+        app.Publish(draft) ->
+          draft.kind == nostr_kind.RelayList
+          && list.any(draft.tags, fn(tag) {
+            case tag {
+              ["r", _, ..] -> True
+              _ -> False
+            }
+          })
+        _ -> False
+      }
+    }),
+  )
 }

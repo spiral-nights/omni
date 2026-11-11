@@ -55,6 +55,7 @@ import omni/shell/theme.{type Theme}
 import omni/shell/update.{type ShellEffect}
 import omni/web/builtin.{type BuiltinApp}
 import omni/web/config
+import omni/web/nip65
 
 /// Storage key holding the user's chosen accent color.
 pub const accent_color_storage_key = "omni_accent_color"
@@ -377,6 +378,25 @@ fn ingest_signed(booted: Booted, event: Event) -> Nil {
     case app.ingest {
       Some(ingest) -> ingest(event)
       None -> Nil
+    }
+  })
+}
+
+/// Apply a kind-10002 relay list: add discovered relays and set read/write
+/// scopes so REQ only goes to read relays and publishes only to write relays.
+pub fn apply_relay_list(booted: Booted, tags: List(List(String))) -> Nil {
+  list.each(nip65.parse_tags(tags), fn(hint) {
+    case relay_url.parse(hint.url) {
+      Error(Nil) -> Nil
+      Ok(url) -> {
+        relay_pool.add_relay(booted.kernel.relay_pool, url)
+        relay_pool.set_relay_scope(
+          booted.kernel.relay_pool,
+          url,
+          hint.read,
+          hint.write,
+        )
+      }
     }
   })
 }

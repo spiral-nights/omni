@@ -1,9 +1,12 @@
 import gleam/dict
 import gleam/javascript/promise.{type Promise}
 import gleam/list
+import gleam/option.{None}
+import gleeunit/should
 import omni/kernel/nostr/relay_pool.{
   Connected, Disconnected, add_relay, attach_socket, get_configured_relays,
-  get_statuses, publish, publish_tracked, register_ok, remove_relay, subscribe,
+  get_statuses, publish, publish_tracked, register_ok, relay_scope, remove_relay,
+  set_relay_scope, storage_key_configured_relays, subscribe,
 }
 import omni/nostr/event.{type Event, Event}
 import omni/nostr/event_id
@@ -225,5 +228,72 @@ pub fn relay_pool_publish_tracked_receipts_test() {
   assert accepted
   assert message == "accepted"
   assert list.length(ref.get(sent)) == 1
+  promise.resolve(Nil)
+}
+
+pub fn relay_pool_read_write_scopes_are_honoured_test() {
+  let store =
+    storage.in_memory_from([
+      #(
+        storage_key_configured_relays,
+        "[\"wss://readrelay.example\",\"wss://writrelay.example\"]",
+      ),
+    ])
+  let pool = relay_pool.new(store, [])
+  let assert Ok(read_url) = relay_url.parse("wss://readrelay.example")
+  let assert Ok(write_url) = relay_url.parse("wss://writrelay.example")
+
+  let read_frames = ref.new([])
+  let write_frames = ref.new([])
+  let read_sock =
+    websocket.fake(
+      fn(frame) {
+        ref.update(read_frames, fn(fs) { [frame, ..fs] })
+        Ok(Nil)
+      },
+      fn(_, _) { Nil },
+    )
+  let write_sock =
+    websocket.fake(
+      fn(frame) {
+        ref.update(write_frames, fn(fs) { [frame, ..fs] })
+        Ok(Nil)
+      },
+      fn(_, _) { Nil },
+    )
+  attach_socket(pool, read_url, read_sock, Connected)
+  attach_socket(pool, write_url, write_sock, Connected)
+
+  set_relay_scope(pool, read_url, True, False)
+  set_relay_scope(pool, write_url, False, True)
+
+  relay_scope(pool, read_url) |> should.equal(#(True, False))
+  relay_scope(pool, write_url) |> should.equal(#(False, True))
+
+  let _closer =
+    subscribe(
+      pool,
+      "scope-test",
+      [filter.Filter(None, None, None, None, None, None, None, dict.new())],
+      fn(_, _) { Nil },
+    )
+  // Only the read relay receives the REQ.
+  assert list.length(ref.get(read_frames)) == 1
+  assert list.length(ref.get(write_frames)) == 0
+
+  let event = make_test_event()
+  let waiter = publish_tracked(pool, event, 300)
+  // Only the write relay receives the EVENT.
+  assert list.length(ref.get(write_frames)) == 1
+  assert list.length(ref.get(read_frames)) == 1
+  register_ok(
+    pool,
+    relay_url.to_string(write_url),
+    event_id.to_hex(event.id),
+    True,
+    "ok",
+  )
+  use results <- promise.await(waiter)
+  assert list.length(results) == 1
   promise.resolve(Nil)
 }

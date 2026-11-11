@@ -60,6 +60,7 @@ pub type RelayPool {
     receipts: Ref(Dict(String, PublishReceipt)),
     notice_listeners: Ref(List(fn(String, String) -> Nil)),
     auth_handler: Ref(Option(AuthHandler)),
+    scopes: Ref(Dict(String, #(Bool, Bool))),
   )
 }
 
@@ -108,6 +109,7 @@ pub fn new(storage: Storage, bootstrap_relays: List(RelayUrl)) -> RelayPool {
       receipts: ref.new(dict.new()),
       notice_listeners: ref.new([]),
       auth_handler: ref.new(None),
+      scopes: ref.new(dict.new()),
     )
   list.each(configured, fn(u) { connect(pool, u) })
   pool
@@ -135,7 +137,7 @@ fn begin_connect(pool: RelayPool, url: RelayUrl, url_str: String) -> Nil {
           ref.update(pool.retries, fn(r) { dict.delete(r, url_str) })
           set_status(pool, url_str, Connected)
           case dict.get(ref.get(pool.sockets), url_str) {
-            Ok(sock) -> replay_subscriptions(pool, sock)
+            Ok(sock) -> replay_subscriptions(pool, url_str, sock)
             Error(Nil) -> Nil
           }
         }
@@ -207,16 +209,24 @@ fn notify_status_listeners(pool: RelayPool) -> Nil {
   |> list.each(fn(listener) { listener(snapshot) })
 }
 
-fn replay_subscriptions(pool: RelayPool, sock: WebSocketConnection) -> Nil {
-  dict.each(ref.get(pool.subscribers), fn(sub_id, subscriber) {
-    let req_json =
-      relay_frame.client_frame_to_json(relay_frame.Req(
-        sub_id,
-        subscriber.filters,
-      ))
-    let _ = websocket.send(sock, req_json)
-    Nil
-  })
+fn replay_subscriptions(
+  pool: RelayPool,
+  url_str: String,
+  sock: WebSocketConnection,
+) -> Nil {
+  case read_enabled(pool, url_str) {
+    False -> Nil
+    True ->
+      dict.each(ref.get(pool.subscribers), fn(sub_id, subscriber) {
+        let req_json =
+          relay_frame.client_frame_to_json(relay_frame.Req(
+            sub_id,
+            subscriber.filters,
+          ))
+        let _ = websocket.send(sock, req_json)
+        Nil
+      })
+  }
 }
 
 fn dispatch_frame(
@@ -346,7 +356,9 @@ pub fn publish_tracked(
   let statuses = ref.get(pool.statuses)
 
   let sent =
-    list.filter_map(relays, fn(url) {
+    relays
+    |> list.filter(fn(url) { write_enabled(pool, relay_url.to_string(url)) })
+    |> list.filter_map(fn(url) {
       let url_str = relay_url.to_string(url)
       case dict.get(statuses, url_str), dict.get(sockets, url_str) {
         Ok(Connected), Ok(sock) ->
@@ -441,6 +453,40 @@ pub fn remove_relay(pool: RelayPool, url: RelayUrl) -> Nil {
   set_status(pool, url_str, Disconnected("relay removed"))
 }
 
+/// Set whether a relay is used for reads (REQ) and writes (EVENT).
+pub fn set_relay_scope(
+  pool: RelayPool,
+  url: RelayUrl,
+  read: Bool,
+  write: Bool,
+) -> Nil {
+  ref.update(pool.scopes, fn(scopes) {
+    dict.insert(scopes, relay_url.to_string(url), #(read, write))
+  })
+}
+
+/// Read/write scope for a relay. Defaults to `#(True, True)`.
+pub fn relay_scope(pool: RelayPool, url: RelayUrl) -> #(Bool, Bool) {
+  case dict.get(ref.get(pool.scopes), relay_url.to_string(url)) {
+    Ok(scope) -> scope
+    Error(Nil) -> #(True, True)
+  }
+}
+
+fn read_enabled(pool: RelayPool, url_str: String) -> Bool {
+  case dict.get(ref.get(pool.scopes), url_str) {
+    Ok(#(read, _write)) -> read
+    Error(Nil) -> True
+  }
+}
+
+fn write_enabled(pool: RelayPool, url_str: String) -> Bool {
+  case dict.get(ref.get(pool.scopes), url_str) {
+    Ok(#(_read, write)) -> write
+    Error(Nil) -> True
+  }
+}
+
 /// Returns the list of currently configured relay URLs.
 pub fn get_configured_relays(pool: RelayPool) -> List(RelayUrl) {
   load_relays(pool.storage)
@@ -469,7 +515,10 @@ pub fn publish(
   let sockets = ref.get(pool.sockets)
   let statuses = ref.get(pool.statuses)
   let results =
-    list.map(relays, fn(url) {
+    list.filter(relays, fn(url) {
+      write_enabled(pool, relay_url.to_string(url))
+    })
+    |> list.map(fn(url) {
       let url_str = relay_url.to_string(url)
       let status = dict.get(statuses, url_str)
       case status {
@@ -510,10 +559,14 @@ pub fn subscribe(
   let statuses = ref.get(pool.statuses)
   dict.each(sockets, fn(url_str, sock) {
     case dict.get(statuses, url_str) {
-      Ok(Connected) -> {
-        let _ = websocket.send(sock, req_json)
-        Nil
-      }
+      Ok(Connected) ->
+        case read_enabled(pool, url_str) {
+          True -> {
+            let _ = websocket.send(sock, req_json)
+            Nil
+          }
+          False -> Nil
+        }
       _ -> Nil
     }
   })

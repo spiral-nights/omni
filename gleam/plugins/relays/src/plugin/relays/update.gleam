@@ -3,8 +3,11 @@
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
+import omni/nostr/event.{UnsignedEvent}
+import omni/nostr/kind
 import omni/nostr/relay_url
-import omni/plugin_kit/app.{type Effect}
+import omni/platform/clock
+import omni/plugin_kit/app.{type Effect, Publish}
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import plugin/relays/model.{
@@ -76,10 +79,15 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       #(Model(..model, relays: updated), [])
     }
 
-    PublishNip65 -> #(
-      Model(..model, syncing_nip65: True, error_banner: None),
-      [],
-    )
+    PublishNip65 -> #(Model(..model, syncing_nip65: True, error_banner: None), [
+      Publish(UnsignedEvent(
+        pubkey: None,
+        created_at: clock.system().now_ms() / 1000,
+        kind: kind.RelayList,
+        tags: model.to_nip65_tags(model.relays),
+        content: "",
+      )),
+    ])
 
     DismissError -> #(Model(..model, error_banner: None), [])
 
