@@ -1,0 +1,12 @@
+name = "omni_kernel"
+version = "0.1.0"
+description = "Headless Omni runtime: ACL, relay pool, event store, RPC dispatch. No UI knowledge."
+target = "javascript"
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+omni_protocol = { path = "../protocol" }
+
+[dev_dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
+qcheck = ">= 1.0.5 and < 2.0.0"
