@@ -8,6 +8,7 @@ pub type Viewport {
   Main
   Dock
   Sidebar
+  HeaderStatus
   HeaderActions
 }
 
@@ -17,6 +18,7 @@ pub fn parse(name: String) -> Result(Viewport, Nil) {
     "main" -> Ok(Main)
     "dock" -> Ok(Dock)
     "sidebar" -> Ok(Sidebar)
+    "header-status" -> Ok(HeaderStatus)
     "header-actions" -> Ok(HeaderActions)
     _ -> Error(Nil)
   }
@@ -28,6 +30,7 @@ pub fn to_string(viewport: Viewport) -> String {
     Main -> "main"
     Dock -> "dock"
     Sidebar -> "sidebar"
+    HeaderStatus -> "header-status"
     HeaderActions -> "header-actions"
   }
 }

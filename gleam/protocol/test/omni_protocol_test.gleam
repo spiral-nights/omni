@@ -1,13 +1,13 @@
 import gleeunit
 import omni/platform/clock
-import omni/protocol/viewport.{Dock, HeaderActions, Main, Sidebar}
+import omni/protocol/viewport.{Dock, HeaderActions, HeaderStatus, Main, Sidebar}
 
 pub fn main() -> Nil {
   gleeunit.main()
 }
 
 pub fn viewport_round_trip_test() {
-  [Main, Dock, Sidebar, HeaderActions]
+  [Main, Dock, Sidebar, HeaderStatus, HeaderActions]
   |> list_each(fn(v) {
     assert viewport.parse(viewport.to_string(v)) == Ok(v)
   })
