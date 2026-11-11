@@ -23,8 +23,8 @@ compiled to JavaScript; `apps/web` is the thin host page.
 | [`04-intents-and-permissions.md`](04-intents-and-permissions.md) | Intents, capability grants, kind-level filtering, RPC governance |
 | [`05-sandbox-hosting.md`](05-sandbox-hosting.md) | Iframe/worker/Wasm hosts, CSP, dual-channel IPC, guest bridge shims |
 | [`06-nostr-extensions-and-schema.md`](06-nostr-extensions-and-schema.md) | Extended `window.nostr`, Schema AST/builders/actions, rendering pipeline |
-| [`08-gleam-toolchain.md`](08-gleam-toolchain.md) | Pinned compiler/dependency versions, commands, test harness |
-| [`11-perf-baseline.md`](11-perf-baseline.md) | Bundle-size baseline and how to reproduce it |
+| [`07-toolchain.md`](07-toolchain.md) | Pinned compiler/dependency versions, commands, test harness |
+| [`08-perf-baseline.md`](08-perf-baseline.md) | Bundle-size baseline and how to reproduce it |
 
 ## Ground rules
 

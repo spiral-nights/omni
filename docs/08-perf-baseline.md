@@ -1,6 +1,6 @@
 # Bundle Size Baseline (Phase 8.4)
 
-Measured after Phase 8.1 removed the TypeScript packages. Run
+Measured on the current Gleam build. Run
 `pnpm build && pnpm bundle:report` to reproduce.
 
 | Asset | Raw | gzip |
@@ -17,7 +17,4 @@ Notes:
   UI, plugin kit, web bootloader) because `apps/web` imports one facade.
   Splitting the shell themes and plugin adapters into lazy chunks is the
   obvious first optimization if startup size matters.
-- A like-for-like TypeScript baseline is not recorded: the legacy monorepo
-  shipped per-plugin `dist/` bundles plus a shell bundle whose composition
-  differed, and those sources were deleted in Phase 8.1. The numbers above are
-  the reference point for future regressions.
+- These numbers are the reference point for future regressions.

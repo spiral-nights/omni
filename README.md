@@ -136,7 +136,7 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser. Vite re
 ```bash
 pnpm build && pnpm bundle:report
 ```
-See [`docs/11-perf-baseline.md`](docs/11-perf-baseline.md) for the current baseline.
+See [`docs/08-perf-baseline.md`](docs/08-perf-baseline.md) for the current baseline.
 
 ---
 
