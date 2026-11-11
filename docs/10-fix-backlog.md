@@ -50,11 +50,11 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 
 | ID | Sev | Status | Problem | Fix |
 |---|---|---|---|---|
-| SYNC-1 | S1 | open | Notes publish encrypted NIP-78 docs (`c5cf6ca`) but never restore/decrypt remote notes. | Subscribe `kind:30078` `omni/notes/v1/*`, NIP-44 decrypt, ingest into the notebook. |
+| SYNC-1 | S1 | fixed | Notes publish encrypted NIP-78 docs (`c5cf6ca`) but never restore/decrypt remote notes. | fixed `5407761`: host subscribes omni/notes/v1 docs, NIP-44 decrypts, and the notebook upserts by updated_at without clobbering newer edits. |
 | SYNC-2 | S2 | open | Workspace remote restore applies only when `plugins` is non-empty; no local-first load before merge. | Load local workspace at boot, merge remote by `updated_at`. |
 | SYNC-3 | S2 | open | Workspace publish triggers are limited to effect emission points; no debounce/periodic sync. | Publish on layout mutations with debounce; reconcile conflicts. |
 | SYNC-4 | S2 | open | Checklist NIP-78 doc (`checklist_doc_spec`) is unused; local storage only. | Publish/subscribe checklist doc like notes. |
-| SYNC-5 | S2 | open | Follows (kind 3) are published but not fetched on startup. | Fetch own kind 3 and ingest into Profiles. |
+| SYNC-5 | S2 | fixed | Follows (kind 3) are published but not fetched on startup. | fixed `5407761`: the host fetches the user's own kind-3 contact list and feeds Profiles. |
 | SYNC-6 | S2 | open | Profile metadata fetch is opportunistic (live kind-0 stream only). | Targeted `profile_for` queries with cache TTL. |
 | SYNC-7 | S2 | open | Session/identity not restored from remote (only local keystore). | Restore profile from cache/relays on boot. |
 
