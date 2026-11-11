@@ -29,7 +29,11 @@ export function file_exists(filepath) {
 }
 
 export function is_update_mode() {
-  return process.env.UPDATE_GOLDEN === "1" || process.env.UPDATE_SNAPSHOTS === "1";
+  return (
+    process.env.UPDATE_GOLDEN === "1" ||
+    process.env.OMNI_UPDATE_GOLDEN === "1" ||
+    process.env.UPDATE_SNAPSHOTS === "1"
+  );
 }
 
 export function resolve_path(base_dir, filename) {

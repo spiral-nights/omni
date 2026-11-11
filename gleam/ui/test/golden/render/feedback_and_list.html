@@ -1,0 +1,61 @@
+<div class="omni-box omni-box-column" data-direction="column" data-gap="sm" id="feedback-panel">
+  <div class="omni-banner omni-banner-warning" data-tone="warning" role="alert">
+    <div class="omni-banner-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" class="omni-icon" data-icon="relay" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24" width="18">
+        <rect height="8" rx="2" ry="2" width="20" x="2" y="2"></rect>
+        <rect height="8" rx="2" ry="2" width="20" x="2" y="14"></rect>
+        <line x1="6" x2="6.01" y1="6" y2="6"></line>
+        <line x1="6" x2="6.01" y1="18" y2="18"></line>
+      </svg>
+    </div>
+    <div class="omni-banner-content">
+      <div class="omni-banner-title">
+        Low Relay Redundancy
+      </div>
+      <div class="omni-banner-message">
+        Only 1 write relay is currently active.
+      </div>
+    </div>
+    <button class="omni-banner-action-btn" type="button">
+      Configure
+    </button>
+    <button aria-label="Dismiss" class="omni-banner-dismiss-btn" title="Dismiss" type="button">
+      <svg xmlns="http://www.w3.org/2000/svg" class="omni-icon" data-icon="close" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24" width="14">
+        <line x1="18" x2="6" y1="6" y2="18"></line>
+        <line x1="6" x2="18" y1="6" y2="18"></line>
+      </svg>
+    </button>
+  </div>
+  <div class="omni-status-indicator omni-status-online" data-status="online">
+    <span class="omni-status-dot omni-status-online omni-status-pulse"></span>
+    <span class="omni-status-label">
+      wss://relay.damus.io
+    </span>
+  </div>
+  <div class="omni-progress omni-progress-bar" data-max="100.0" data-value="75.0" data-variant="bar">
+    <div class="omni-progress-label">
+      Cache Index (75%)
+    </div>
+    <div class="omni-progress-track">
+      <div class="omni-progress-fill" style="width:75%;"></div>
+    </div>
+  </div>
+  <div class="omni-list" data-has-more="false" data-loading-more="false" role="list">
+    <div class="omni-list-items">
+      <div class="omni-list-item omni-list-item-checked" data-checked="true" role="listitem">
+        <input checked class="omni-list-item-checkbox" type="checkbox">
+        <div class="omni-list-item-content">
+          <div class="omni-list-item-title">
+            Verify Schnorr signature
+          </div>
+          <div class="omni-list-item-subtitle">
+            NIP-01 compliance
+          </div>
+        </div>
+        <div class="omni-list-item-meta">
+          Done
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

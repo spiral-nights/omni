@@ -133,6 +133,11 @@ pub fn assert_match(filename: String, actual: String) -> Nil {
   assert_match_in("test/golden", filename, actual)
 }
 
+/// Alias for `assert_match`.
+pub fn assert_matches(filename: String, actual: String) -> Nil {
+  assert_match_in("test/golden", filename, actual)
+}
+
 /// Assert that `actual` matches the golden snapshot `<dir>/<filename>`.
 pub fn assert_match_in(dir: String, filename: String, actual: String) -> Nil {
   case check_in(dir, filename, actual) {
