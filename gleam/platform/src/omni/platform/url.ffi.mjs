@@ -15,3 +15,16 @@ export function parse_url(raw, makeUrl, makeSome, makeNone, makeOk, makeErr) {
     return makeErr(String(err && err.message ? err.message : "Invalid URL"));
   }
 }
+
+export function encode_component(value) {
+  return encodeURIComponent(String(value));
+}
+
+export function decode_component(value) {
+  try {
+    return decodeURIComponent(String(value).replace(/\+/g, " "));
+  } catch {
+    return String(value);
+  }
+}
+

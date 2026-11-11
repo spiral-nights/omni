@@ -75,3 +75,12 @@ pub fn to_string(url: Url) -> String {
   }
   url.scheme <> ":" <> authority <> url.path <> query_str <> fragment_str
 }
+
+/// Percent-encodes a URL query parameter component using standard `encodeURIComponent`.
+@external(javascript, "./url.ffi.mjs", "encode_component")
+pub fn encode_component(value: String) -> String
+
+/// Percent-decodes a URL query parameter component using `decodeURIComponent`
+/// (converting `+` to spaces and falling back to the raw string on malformed sequences).
+@external(javascript, "./url.ffi.mjs", "decode_component")
+pub fn decode_component(value: String) -> String
