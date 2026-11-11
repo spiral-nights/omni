@@ -1,6 +1,22 @@
+function memoryBacking() {
+  const data = new Map();
+  return {
+    getItem: (key) => (data.has(key) ? data.get(key) : null),
+    setItem: (key, value) => data.set(key, String(value)),
+    removeItem: (key) => data.delete(key),
+    clear: () => data.clear(),
+    key: (index) => Array.from(data.keys())[index] ?? null,
+    get length() {
+      return data.size;
+    },
+  };
+}
+
+let sharedBacking;
+
 function createShim(pluginId) {
   const prefix = `omni:plugin:${pluginId}:`;
-  const backing = window.localStorage;
+  const backing = sharedBacking;
   return {
     getItem(key) {
       return backing.getItem(prefix + key);
@@ -42,8 +58,15 @@ function createShim(pluginId) {
 
 export function install(pluginId) {
   if (typeof window === "undefined") return;
+  if (!sharedBacking) {
+    const host = window.localStorage;
+    sharedBacking =
+      host && !host.__omniShim ? host : memoryBacking();
+  }
+  const shim = createShim(String(pluginId));
+  shim.__omniShim = true;
   Object.defineProperty(window, "localStorage", {
     configurable: true,
-    value: createShim(String(pluginId)),
+    value: shim,
   });
 }

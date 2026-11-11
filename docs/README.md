@@ -17,7 +17,9 @@ If you are an AI assistant or human developer working on Omni today, **read thes
    *The foundational architectural blueprint for the Gleam rewrite (package boundaries, Lustre Light DOM schema rendering, Elm-style harnesses, and shared `omni_social` design).*
 4. **[`08-gleam-toolchain.md`](08-gleam-toolchain.md)**:  
    *Pinned Gleam compiler & package versions, build commands (`pnpm gleam:check`, `pnpm gleam:test`), and test harness guide.*
-5. **[`../AGENTS.md`](../AGENTS.md)**:  
+5. **[`10-bridge-parity.md`](10-bridge-parity.md)**:  
+   *Dual-run conformance harness and cutover plan for the Gleam guest bridge.*
+6. **[`../AGENTS.md`](../AGENTS.md)**:  
    *Core system mandates: zero proprietary `omni.*` SDKs, pure standard nsites, no emojis, zero hardcoded plugin IDs in shell/styles, Light DOM, warm paper dark theme.*
 
 ---
