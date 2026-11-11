@@ -1,408 +1,72 @@
-> **LEGACY DOCUMENT (TypeScript/MoonBit era).** Concepts and wire formats still apply, but code examples and package paths are historical. The implementation now lives under `gleam/`; start with [`docs/09-gleam-migration-handoff.md`](09-gleam-migration-handoff.md) and [`docs/README.md`](README.md).
+# Omni Architecture
 
-# Omni — System Architecture & Core Runtime
+> Current state, November 2026. Omni is a pure Gleam (JavaScript target)
+> application: `apps/web` hosts a Gleam shell built on a headless Gleam kernel.
+> There is no TypeScript runtime, no MoonBit toolchain, and no proprietary SDK.
 
-> **Authoritative Reference for Developers, System Architects, and AI Agents.**  
-> *Version 2.0 (Consolidated) — October 2026*
-
----
-
-## 1. System Overview & Core Philosophy
-
-Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend runtime.
-
-### The Fundamental Architectural Mandates
-1. **Every Functional Domain is a Standalone Plugin**:
-   - The timeline feed & composer (`@omni/plugin-feed`) is a plugin.
-   - The relay inspector & connection manager (`@omni/plugin-relays`) is a plugin.
-   - The profile editor, key custody, and people browser (`@omni/plugin-profile-viewer`) is a unified "Profiles" plugin.
-   - The task list (`@omni/plugin-checklist`) is a plugin.
-   - The plugin studio & Blossom publisher (`@omni/plugin-publisher`) is a plugin.
-   - The shell UI frame itself (`@omni/plugin-shell`) is a first-class plugin.
-2. **Every Plugin is a 100% Standard Nostr Site (nsite)**:
-   - There are **no proprietary manifests** (`omni.manifest.json` is completely eliminated).
-   - Apps are standard web applications mounting to standard DOM (`document.body`).
-   - If an author creates a companion widget (e.g. countdown timer or mini-card), it is published as its **own independent companion nsite** with its own `naddr`.
-3. **Strict Shell vs. Kernel Separation**:
-   - **Kernel (`@omni/core`) is Headless**: It owns sandboxing (Web Workers & sandboxed iframes), WebCrypto keys, relay pooling, 0ms local event caching, capability security (ACL), and Schema renderers. It has zero awareness of UI layouts, slot semantics (`main`, `sidebar`, `dock`, `header-actions`), or user pages.
-   - **Shell (`@omni/plugin-shell`) Owns All Presentation**: It owns viewports, layout management (`LayoutManager`), the desktop navigation dock, widgets dashboard grid, settings tabs, and NIP-78 workspace serialization. Editorial Shell is the default experience, alongside Panorama Hub.
-4. **Zero Proprietary SDKs (`window.omni` Eliminated from Plugins)**:
-   - Plugins are 100% unaware of Omni. No `omni.registerComponent`, no `omni.storage`, no `omni.profile`, and no `omni.relays`.
-   - Plugins interact via standard Web & Nostr standards or declarative Schema JSON.
-   - Sub-views and routes (`?view=settings`, `?view=widget`) are read via standard `window.location.search`.
-   - Storage uses standard `window.localStorage` (transparently partitioned per plugin ID by the sandbox).
-   - Identity & signing use standard `window.nostr` (NIP-07).
-5. **User-Defined Companion Viewports (Zero Hardcoded Slots)**:
-   - Developers never declare or hardcode layout "slots". Every installed plugin is inherently an application.
-   - The **user** can optionally assign companion viewports and routes in Settings:
-     - **Navigation Dock Shortcut** (`dock`): Quick launcher pinned to the navigation dock.
-     - **Workspace Widget** (`sidebar`): Interactive card inside the multi-column Widgets Dashboard.
-     - **Header Quick Action** (`header-actions`): Compact status icon/pill in top navigation.
-   - *"Full-Page App" is not a viewport assignment option*: all plugins are full applications by default. Viewport assignment is reserved strictly for secondary/companion surfaces (dock shortcuts, dashboard widgets, and header actions).
-
----
-
-## 2. Monorepo Repository Structure
-
-Omni is structured as a `pnpm` monorepo:
+## Layers
 
 ```
-omni/
-├── apps/
-│   └── web/                               # Host Web Shell & Bootloader (~30 lines)
-│       ├── index.html                     # Minimal HTML skeleton (<div id="omni-root">)
-│       └── src/
-│           ├── main.ts                    # Host microkernel bootloader & shell mount
-│           └── style.css                  # Minimal host microkernel skeleton reset (~25 lines)
-│
-├── packages/
-│   ├── types/                             # Canonical TypeScript interfaces
-│   │   └── src/                           # NostrEvent, NostrFilter, OmniWorkspaceState, etc.
-│   │
-│   ├── core/                              # Orchestration & Security Runtime
-│   │   ├── src/
-│   │   │   ├── kernel/omni-kernel.ts      # OmniKernel: storage, ACL, sandboxes, relays
-│   │   │   ├── acl/                       # CapabilityStore & AclEngine (permission governance)
-│   │   │   ├── crypto/                    # WebCryptoKeystore (secp256k1, Schnorr, bech32)
-│   │   │   ├── layout/                    # LayoutManager (viewport slot mapping & reparenting)
-│   │   │   ├── nostr/                     # LocalEventStore (0ms hits), RelayPool, Coordinator
-│   │   │   ├── plugins/                   # NostrPluginResolver (NIP-5A nsites, Blossom, naddr)
-│   │   │   ├── schema/                    # SchemaRenderer & Light DOM custom elements (<omni-*>)
-│   │   │   └── sandbox/                   # SandboxInstance & omni-runtime.js (guest runtime bridge)
-│   │   └── test/                          # Unit & integration tests (vitest + happy-dom)
-│   │
-│   └── plugins/                           # Modular First-Class System Plugins
-│       ├── shell/                         # @omni/plugin-shell (Header, dock, pages, settings)
-│       ├── feed/                          # @omni/plugin-feed (Timeline notes & note composer)
-│       ├── relays/                        # @omni/plugin-relays (Relay inspector & manager)
-│       ├── profile-viewer/                # @omni/plugin-profile-viewer ("Profiles": people, metadata editor & key custody)
-│       ├── checklist/                     # @omni/plugin-checklist (Daily checklist widget)
-│       └── publisher/                     # @omni/plugin-publisher (Plugin Studio & Blossom uploader)
+apps/web (index.html + main.ts)
+        │  imports @omni/gleam-interop (compiled Gleam)
+        ▼
+omni_web          bootloader: config, kernel wiring, dispatch, theme view
+        │
+        ├── omni_shell      Elm loop (model/msg/update), layouts, settings, themes
+        ├── omni_kernel     ACL, keystore, event store, relay pool, RPC, plugins
+        ├── omni_sandbox    guest hosts (iframe/worker/wasm), CSP, tokens, manager
+        ├── omni_ui         icons, tokens, sanitizer, Schema renderer
+        ├── omni_protocol   contracts: Schema AST, RPC, workspace, intents, manifests
+        ├── omni_nostr      events, filters, bech32/NIP-19, relay frames
+        └── omni_platform   FFI quarantine: crypto, IndexedDB, WebSocket, storage, URL
 ```
 
----
+Plugin-facing packages sit beside the shell:
 
-## 3. Microkernel Bootloader & Swappable Shell Architecture
+- `omni_plugin_kit` — Elm harness (`AppSpec`/`RunningApp`), typed `window.nostr`,
+  routes, versioned local storage, schema message codecs.
+- `omni_social` / `omni_social_ui` — shared note/profile domain and the shared
+  note-card Schema view, statically linked into each plugin that uses them.
+- `omni_bridge` — guest-side shims plus the bundled guest runtime.
+- `omni_testkit` — fake ports, generators, golden snapshots (dev only).
 
-Omni enforces a strict architectural boundary between the **headless execution microkernel (`@omni/core`)** and the **presentation shell (`@omni/plugin-shell`)**:
+`omni_interop` is the one deliberately temporary package: a TypeScript-facing
+facade so `apps/web` can call `start_with_bridge`, `render`, `spawn_plugin`, etc.
 
-```
-┌───────────────────────────────────────────────────────────────────────────┐
-│                           Host Browser Window                             │
-│                                                                           │
-│   apps/web/src/main.ts (Bootloader)                                       │
-│   • Instantiates OmniKernel (keystore, relay pool, event cache, ACL)      │
-│   • Instantiates OmniShell (or any custom swappable shell implementation) │
-│   • Bridges Shell callbacks (slotResolver, handleUri, handleShare)        │
-└───────────────────────────────┬───────────────────────────────────────────┘
-                                │ Mounts native UI frame
-                                ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│                    OmniShell Host (Presentation Layer)                    │
-│                                                                           │
-│   • Mounts into #omni-root with direct DOM control                        │
-│   • Renders layout skeleton: Header, Navigation Dock, Pages, Widget Grid  │
-│   • Defines & allocates physical slot containers (main, sidebar, dock...) │
-│   • Manages Settings tabs, viewport dropdowns & route selectors           │
-│   • Serializes workspace state to NIP-78 (kind: 30078, d: omni/workspace) │
-└───────────────────────────────┬───────────────────────────────────────────┘
-                                │ Supplies physical DOM container elements
-                                ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│                  OmniKernel Sandbox Engine (Headless Layer)               │
-│                                                                           │
-│   Projects sandboxed plugins via Schema UI or Direct Iframe into slots:   │
-│   • Timeline Feed     ──> getContainerForPluginSlot(id, "main")           │
-│   • Profile Viewer    ──> getContainerForPluginSlot(id, "main")           │
-│   • Daily Checklist   ──> getContainerForPluginSlot(id, "sidebar")        │
-│   • Relay Manager     ──> getContainerForPluginSlot(id, "main")           │
-│   • Plugin Studio     ──> getContainerForPluginSlot(id, "main")           │
-│   • Third-Party nsite ──> getContainerForPluginSlot(id, userSelectedSlot) │
-└───────────────────────────────────────────────────────────────────────────┘
-```
+## Boot path
 
-### 3.1 What Makes the Shell Unique: Host-Level Runtime Plugin vs. Sandboxed nsite
+1. `apps/web/src/main.ts` imports the interop facade and the bundled guest
+   bridge (`gleam/bridge/dist/guest-runtime.js?raw`).
+2. `shell_boot.start_with_bridge("omni_shell", bridge)` opens IndexedDB,
+   builds `KernelPorts`, and calls `omni_web/boot.init_with_bridge`.
+3. `boot` creates the kernel, loads the persisted shell registry selection,
+   seeds the shell model with the default system apps, and owns a
+   `SandboxManager` plus the guest bridge script.
+4. `boot.view` resolves the active `Theme` and renders stylesheets + the theme
+   view. The host paints it into `#omni-root`.
+5. User messages flow through `boot.dispatch`, which applies persistence
+   effects (workspace, accent, active shell) and returns host effects (mount
+   plugin, intent, update, …). `boot.spawn_sandbox` registers a tracked host and
+   builds the iframe mount descriptor with CSP, tokens, and the guest bridge.
 
-In Omni, there is a fundamental distinction between the Shell and regular plugins:
+## Shell and theme model
 
-| Dimension | Sandboxed Plugin (nsite) | Presentation Shell (`@omni/plugin-shell`) |
-| :--- | :--- | :--- |
-| **Execution Environment** | Web Worker (`WorkerGuestHost`) or Sandboxed `<iframe>` (`sandbox="allow-scripts"`, `null` origin) | Host browser thread (`http://localhost:5173` or host domain) |
-| **DOM Access** | No access to host DOM; mounts to sandbox `document.body` | Direct access to `#omni-root` and window layout |
-| **UI Presentation** | Declarative Schema UI (Light DOM custom elements) or Direct Iframe | Native host containers and Light DOM custom element stylesheets |
-| **Storage Access** | Partitioned per `pluginId` by `PluginStorageManager` | Host origin `localStorage` (`omni_workspace_state`) |
-| **Keystore Access** | NIP-07 `window.nostr` governed by `AclEngine` checks | Access to `kernel.keystore` for workspace backup & restore |
-| **Role in App** | Independent domain app/widget (feed, timer, notes) | System container, layout manager, and user frame |
+`omni_shell` owns one Elm loop shared by every theme. Themes (`classic`,
+`panorama`, `editorial`) implement `theme() -> Theme` and `view(model)`, and are
+selected through the storage-backed `ShellRegistry`. The shell is strictly
+plugin-agnostic: no hard-coded plugin IDs, no layout knowledge of any plugin.
+Shared `omni-*` layout styles live in `assets/styles/shell-modules.css`;
+theme chrome lives in `classic.css`, `panorama.css`, `editorial.css`.
+Design tokens are `tokens.css`; Schema primitives are `schema.css`.
 
-Because regular plugins are 100% standard nsites with no knowledge of the host or proprietary SDKs, **the Shell can be swapped out entirely** without modifying a single line of plugin code.
+## Runtime boundaries
 
----
+- **Kernel is headless** — storage, crypto, relays, ACL, RPC, plugin resolution.
+- **Shell owns presentation** — layouts, dock, widgets, settings, themes.
+- **Plugins are standard nsites** — `window.nostr`, `WebSocket`, `localStorage`,
+  `navigator.share`, protocol links, and Declarative Schema messages. No `omni.*`.
+- **Sandboxes are isolated** — iframe `sandbox="allow-scripts"` with
+  `connect-src 'none'`, or worker/Wasm hosts for non-DOM clients.
 
-### 3.2 The Canonical Shell Contract (`OmniShellHost`)
-
-Any alternative shell (e.g. a mobile bottom-navigation shell, a tiling desktop manager, or a keyboard-driven terminal UI) satisfies the canonical [`OmniShellHost`](file:///home/spiralnights/code/omni/packages/types/src/workspace.ts) contract:
-
-```typescript
-export interface OmniShellHost {
-  /**
-   * Mounts the shell layout and UI frame into the root host DOM element (#omni-root).
-   */
-  mount(): void;
-
-  /**
-   * Resolves physical DOM container elements for plugin viewports.
-   * Called by the Kernel whenever a plugin or widget needs to project its UI.
-   */
-  getContainerForPluginSlot(
-    pluginId: string, 
-    viewport: string, 
-    componentId?: string
-  ): Element | undefined;
-
-  /**
-   * Optional: Handles drawer or slot toggle/open/close requests.
-   */
-  handleSlotAction?(action: "toggle" | "open" | "close", slot: string): void;
-
-  /**
-   * Optional: Handles protocol URIs (nostr:, lightning:, cashu:) intercepted at sandbox boundaries.
-   */
-  handleUri?(uri: string, sourcePluginId?: string): Promise<any>;
-
-  /**
-   * Optional: Handles Web Share API payload delegations.
-   */
-  handleShare?(payload: { title?: string; text?: string; url?: string }, sourcePluginId?: string): Promise<any>;
-
-  /**
-   * Exports the current workspace layout state for NIP-78 and local persistence.
-   */
-  exportWorkspaceState(): OmniWorkspaceState;
-}
-```
-
----
-
-### 3.3 How Viewport Slots & Routing Work
-
-#### 1. The Canonical Slot Definitions (`STANDARD_SLOTS`)
-Omni defines standard layout slots in [`STANDARD_SLOTS`](file:///home/spiralnights/code/omni/packages/core/src/layout/layout-manager.ts):
-
-| Slot ID | Canonical Name | Purpose |
-| :--- | :--- | :--- |
-| `main` | Full-Page App (Center View) | Primary full-width view with dedicated launcher in navigation dock |
-| `sidebar` | Widgets Dashboard Card | Modular card in the multi-column workspace widgets grid |
-| `dock` | Navigation Dock Shortcut | Compact button / companion icon pinned to the dock |
-| `header-actions` | Header Quick Action | Top-right toolbar action or status indicator |
-| `header-status` | Header Status Area | Reserved branding area next to logo |
-
-#### 2. Slot Allocation Lifecycle
-1. When `OmniShell` boots, it builds the physical DOM scaffold:
-   - Header bar with `.header-right`
-   - Navigation dock `<aside id="omni-dock">`
-   - Main page container `<main id="omni-main-viewport">`
-   - Widgets dashboard `<div id="omni-widgets-grid">`
-2. When the user assigns a plugin to a viewport (e.g. Profile to `main`), `OmniShell.getContainerForPluginSlot(pluginId, viewport)` dynamically creates or returns the target element:
-   - For `main`: `<div id="page-app-[safeId]" class="page-view">`
-   - For `sidebar`: `<div class="widget-card">`
-   - For `dock`: `<div class="dock-quick-view">`
-   - For `header-actions`: `<div class="header-action-slot">`
-3. The Kernel's `SandboxInstance` connects to this element and mounts a `RemoteDomHost` into it.
-
-#### 3. How the Settings Page Discovers Available Viewports
-The Settings page is rendered by `OmniShell`. To ensure zero discrepancy between the layout engine and the user interface, `OmniShell` provides:
-```typescript
-public getAvailableViewports(): { id: string; label: string; description: string }[] {
-  return STANDARD_VIEWPORTS
-    .filter((s) => s.id !== "header-status" && s.id !== "main")
-    .map((s) => ({ id: s.id, label: s.name, description: s.description }));
-}
-```
-Both the **Plugins Overview** card and each plugin's **Dedicated Settings Tab** use `getAvailableViewports()` to populate the `<select class="plugin-viewport-select">` menus dynamically with companion viewports (`dock`, `sidebar`, `header-actions`). Full-page application capability is native to every plugin and not selectable as an auxiliary viewport.
-
----
-
-### 3.4 How to Swap Out the Shell
-
-Because the microkernel bootloader (`apps/web/src/main.ts`) is cleanly decoupled from the shell, swapping the shell requires only replacing the shell instantiation:
-
-```typescript
-// apps/web/src/main.ts
-
-import { OmniKernel } from "@omni/core";
-// Replace standard shell with custom mobile or tiling shell:
-import { MyCustomMobileShell } from "@my-org/omni-mobile-shell";
-
-// 1. Initialize Headless Kernel
-const kernel = new OmniKernel({
-  bootstrapRelays: ["wss://relay.damus.io", "wss://relay.ditto.pub"],
-  slotResolver: (pluginId, compId, slot) => shell?.getContainerForPluginSlot(pluginId, slot, compId),
-  onHandleUri: (uri, srcId) => shell?.handleUri(uri, srcId),
-  onHandleShare: (payload, srcId) => shell?.handleShare(payload, srcId)
-});
-
-// 2. Initialize Custom Shell
-const rootEl = document.getElementById("omni-root")!;
-const shell = new MyCustomMobileShell({ root: rootEl, kernel, installedPlugins: initialPlugins });
-
-// 3. Mount UI and Boot Kernel
-shell.mount();
-await kernel.boot();
-```
-
-All existing plugins (`@omni/plugin-feed`, `@omni/plugin-relays`, `@omni/plugin-checklist`, etc.) immediately render inside `MyCustomMobileShell` with zero code modifications.
-
----
-
-### 3.5 Decentralized Workspace Synchronization (NIP-78)
-
-1. **State Persistence**:
-   - Layout configurations, viewport assignments, enabled states, and custom routes serialize to `OmniWorkspaceState` (`kind: 30078`, tag `["d", "omni/workspace/v1"]`).
-   - Backed by 0ms local storage fallback in host `localStorage` (`omni_workspace_state`).
-2. **Security Reservation**:
-   - `AclEngine` and `JsonRpcDispatcher` restrict the `omni/*` NIP-78 namespace to the host Shell. Untrusted guest plugins cannot sign or publish `kind: 30078` events tagged `omni/*`.
-
----
-
-### 3.6 Decoupled Shell Styling & Dynamic Shell Registry
-
-#### 1. Per-Shell Style Ownership
-- The host bootloader (`apps/web/src/style.css`) is strictly a minimal microkernel reset (~25 lines) defining box-sizing, background, and `#omni-root` bounds.
-- The active Shell owns all visual styling, layout rules, typography, and standard design tokens (`--bg-canvas`, `--bg-surface`, `--text-primary`, `--accent-primary`).
-- Each shell encapsulates its own stylesheet self-contained in `packages/plugins/shell/src/styles/`:
-  - `classic-styles.ts` (`CLASSIC_SHELL_CSS`): Warm Paper Dark design system, dock navigation, and multi-viewport workbench.
-  - `panorama-styles.ts` (`PANORAMA_SHELL_CSS`): Windows Phone Metro / People Hub panoramic canvas, flat live tiles, and fluid horizontal swipe.
-  - `editorial-styles.ts` (`EDITORIAL_SHELL_CSS`): Sacred Swiss Editorial & Papyrus Sanctuary aesthetic featuring Newsreader serif typography, Space Mono uppercase metadata tags, tactile broadsheet grain, dual-theme modes (Papyrus Light & Obsidian Sanctuary Dark), calibrated accent illumination (Cobalt, Terra, Saffron, Pine, Bone), mathematically centered 3-column header, and unified card containers.
-- Upon `shell.mount()`, the active shell calls `mountShellStyles(css)` which dynamically injects `<style id="omni-active-shell-style">` into `<head>`. Calling `shell.destroy()` removes it cleanly, preventing style conflicts or cross-contamination.
-
-#### 2. First-Class Swappable Shell Registry (`ShellRegistry`)
-- Shells are registered in `shellRegistry` with metadata (`id`, `name`, `description`, `author`, `version`, `create` factory).
-- Built-in first-class shells include:
-  - **Omni Classic** (`classic`): Multi-viewport workbench with dock navigation and widgets dashboard.
-  - **Panorama Hub** (`panorama`): Windows Phone Metro panoramic canvas with horizontal gestures and live tiles.
-  - **Editorial Shell** (`editorial`): Sacred Swiss editorial aesthetic with dual-theme mode, accent illumination, Apps directory, Companion Cards, and native history synchronization.
-- The bootloader dynamically instantiates the user's active shell via:
-  ```typescript
-  const shell = shellRegistry.create(activeShellType, {
-    root: rootEl,
-    kernel,
-    installedPlugins: initialPlugins
-  });
-  ```
-- The shell selector in Settings automatically enumerates all registered shells from `shellRegistry.list()`, enabling users to install new shell plugins and switch experiences dynamically without code changes.
-
-#### 3. Browser History & Deep Linking Best Practices
-- Shells and plugins synchronize navigation state with the browser's native History API (`window.history.pushState` and `window.addEventListener("popstate")`).
-- Sub-views (such as thread discussions, profile inspection, search, or settings) push state onto the history stack and position a consistent back button in the top-left of the view.
-- Back navigation (`popstate` or clicking the top-left back button) restores the previous page or feed position smoothly without requiring a full page refresh.
-
-#### 4. Pluggable Plugin Settings Panels (`mountPluginSettings`)
-- Shells provide full control over plugin viewports, route assignments, and individual plugin configuration.
-- If a plugin declares a `settings` route (`?view=settings`), the shell dynamically renders that plugin's settings schema or iframe container directly inside the plugin's dedicated configuration card or drawer within Shell Preferences.
-
-#### 5. Smooth App Switching & Auto-Scroll (Editorial Shell)
-- When navigating between apps in the Editorial shell, outgoing views execute a smooth fade-out (`editorialAppFadeOut`), followed by the incoming view fading in with tactile easing (`editorialAppFadeIn`).
-- The shell automatically scrolls to the top (`scrollTop = 0`) of the incoming app page and container, preventing disorienting retained scroll positions when switching views.
-
----
-
-## 4. Sandboxing & Dual-Channel Execution (Workers & Iframes)
-
-Untrusted third-party nsites and background schema plugins run inside isolated environments:
-- **Declarative Schema Plugins**: Run off the main UI thread in dedicated Web Workers (`WorkerGuestHost`), completely air-gapped from direct DOM manipulation, host origin storage, or arbitrary network access.
-- **Standalone Complex nsites**: Run inside isolated `<iframe>` sandboxes (`sandbox="allow-scripts"`, `connect-src 'none'`), fully isolated from the host origin.
-
-### 4.1 Dual-Channel IPC Model
-Communication between host and guest occurs over an HTML5 `MessageChannel`:
-
-```
-┌──────────────────────────────────────┐          ┌──────────────────────────────────────┐
-│           Guest Runtime              │          │              Host Kernel             │
-│   (Web Worker or Sandboxed Iframe)   │          │                                      │
-│                                      │  Port 1  │  SchemaRenderer / IframeAppHost      │
-│  Schema & User Actions               ├─────────►│  (Renders Light DOM custom elements) │
-│  (omni:schema / omni:action)         │          │                                      │
-│                                      │  Port 2  │  Kernel Dispatcher                   │
-│  Capability RPC Bus                  ◄─────────►│  (ACL Engine, RelayPool, Keystore)   │
-│  (JSON-RPC 2.0: nostr, storage, uri) │          │                                      │
-└──────────────────────────────────────┘          └──────────────────────────────────────┘
-```
-
-1. **Port 1 (Declarative Schema & Action Bus)**:
-   - Plugins emit declarative UI schemas (`OmniComponentNode`) representing layout trees (`card`, `box`, `button`, `input`, `list`, `tabs`, `metric`).
-   - The host's `SchemaRenderer` projects these nodes into native Light DOM custom elements (`<omni-card>`, `<omni-box>`, `<omni-button>`, `<omni-input>`, etc.).
-   - User interactions (`click`, `input`, `drop`, `change`) dispatch `omni:action` events back to the guest over Port 1.
-   - **Zero styling leakage**: All custom elements inherit host CSS variables (`--omni-bg-canvas`, `--omni-accent-primary`, etc.) natively with Warm Paper Dark aesthetics.
-2. **Port 2 (Capability JSON-RPC Bus)**:
-   - Routes typed JSON-RPC 2.0 method invocations (`kernel.handleUri`, `kernel.handleShare`, `nostr.subscribe`, `nostr.publish`, `storage.get/set`).
-   - Governed by `CapabilityStore` and `AclEngine`.
-
-### 4.2 Declarative Schema Runtime Invariants
-- **Stateless UI Projections**: The schema is a pure declarative description of the desired UI state. Guest plugins maintain their internal state machines and emit updated schemas on action events.
-- **Port-Based Off-Thread Execution**: Web Workers have zero access to the DOM or unmetered network APIs. All I/O occurs via the governed ports.
-- **Standard DOM Mounting Fallback**: In standalone environments (such as running directly in browser tabs or legacy test harnesses), plugins seamlessly mount to standard DOM elements.
-
----
-
-## 5. Transparent API Virtualization
-
-Developers build regular web applications without custom SDKs. The sandbox runtime (`omni-runtime.js`) transparently provides:
-
-### 5.1 Standard Identity & Signer (`window.nostr` / NIP-07)
-- Injected into the sandbox global scope:
-  - `getPublicKey(): Promise<string>`
-  - `signEvent(draft): Promise<NostrEvent>`
-  - `getRelays(): Promise<Record<string, { read: boolean; write: boolean }>>`
-  - `nip04.encrypt(pubkey, text)` / `nip04.decrypt(pubkey, cipher)`
-  - `nip44.encrypt(pubkey, text)` / `nip44.decrypt(pubkey, cipher)`
-- Calls are validated by the host `AclEngine` before signing via `WebCryptoKeystore`.
-
-### 5.2 Transparent Relay Networking (Virtual `window.WebSocket`)
-- Untrusted sandboxes run with strict CSP (`connect-src 'none'`).
-- The sandbox runtime provides a drop-in virtual `window.WebSocket`:
-  ```javascript
-  // Standard nostr-tools or client library inside sandbox:
-  const ws = new WebSocket("wss://relay.damus.io");
-  ws.send(JSON.stringify(["REQ", "my-sub", { kinds: [1], limit: 20 }]));
-  ```
-- Translates Nostr relay frames (`REQ`, `EVENT`, `CLOSE`) into host IPC messages, routed through Omni's high-performance `RelayPool` and 0ms local event cache.
-
-### 5.3 Transparent Storage (`localStorage` & `indexedDB`)
-- The host transparently isolates local storage per `pluginId`.
-- Standard `localStorage.getItem()` / `setItem()` and IndexedDB instances are scoped, preventing cross-plugin inspection or tampering.
-
-### 5.4 Dual Execution Modes (Schema vs. Direct Iframe)
-- Built-in system plugins execute as lightweight off-thread Web Workers emitting declarative schema rendered by `SchemaRenderer` into Light DOM custom elements.
-- Third-party standalone web applications and nsites mount directly into an isolated sandboxed `<iframe>` (`IframeAppHost`) with design token inheritance.
-
----
-
-## 6. Security, Isolation & Access Control
-
-```mermaid
-flowchart TD
-    Guest["Sandbox Guest (nsite)"]
-    Port2["Port 2 IPC Bus"]
-    ACL{"AclEngine & CapabilityStore"}
-    Keystore["WebCryptoKeystore (secp256k1)"]
-    Store["LocalEventStore (0ms IndexedDB)"]
-    Pool["RelayPool (Live Relays)"]
-
-    Guest -->|RPC Call| Port2
-    Port2 --> ACL
-    ACL -->|Permitted| Keystore
-    ACL -->|Filtered Queries| Store
-    ACL -->|Namespaced Broadcasts| Pool
-    ACL -.->|Deny / Unpermitted| Reject["Reject / Block"]
-```
-
-1. **Privilege Separation**:
-   - **System Plugins** (`org.omni.plugin.*` or `trusted: true`): Run with `sandbox="allow-scripts allow-same-origin"` to allow local resource resolution.
-   - **Third-Party nsites**: Run air-gapped (`sandbox="allow-scripts"`, `connect-src 'none'`), fully isolated from cookies, local origins, and host keys.
-2. **Subscription Namespacing**:
-   - Every subscription opened by a plugin is prefixed with the requesting plugin ID (`${pluginId}:${subId}`).
-   - Incoming relay frames (`EVENT`, `EOSE`) are routed strictly to the requesting plugin's IPC port. Data requested by App A cannot leak into App B.
-3. **ACL-Governed Local Cache Filtering**:
-   - When plugins query the shared `LocalEventStore` (0ms IndexedDB cache), the kernel's `AclEngine` filters the result set:
-     - Public notes (`kind: 1`): Allowed if `nostr:read` is granted.
-     - Encrypted DMs (`kind: 4`, `kind: 1059`): Strictly blocked unless the plugin has explicit user permission for encrypted messaging.
+See `02-protocols-and-storage.md`, `05-sandbox-hosting.md`, and
+`06-nostr-extensions-and-schema.md` for the details.

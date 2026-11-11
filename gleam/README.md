@@ -1,12 +1,14 @@
 # Omni Gleam packages
 
-Gleam (JavaScript target) rewrite of Omni. See `docs/gleam-rewrite-plan.md` for design and
-`docs/07-gleam-migration-checklist.md` for progress.
+All Omni runtime code, compiled to JavaScript. See `docs/README.md` for the
+architecture guides and `docs/01-architecture.md` for the package layering.
 
-Layout: directory `gleam/<name>` → package `omni_<name>` → modules `omni/<name>/...`
-(plugins: `gleam/plugins/<name>` → `plugin_<name>` → `plugin/<name>/...`).
+Layout: directory `gleam/<name>` → package `omni_<name>` → modules
+`omni/<name>/...` (plugins: `gleam/plugins/<name>` → `plugin_<name>` →
+`plugin/<name>/...`).
 
-Dependencies between packages are `path` dependencies. Only `platform` (and later `bridge`; dev-only `testkit`)
-may contain `@external` / `.mjs` files, one `<module>.ffi.mjs` per Gleam module.
+Dependencies between packages are `path` dependencies. FFI (`@external`,
+`.mjs`) is quarantined to `platform`, `bridge`, `testkit`, and `interop`.
 
-Run a package's tests: `cd gleam/<name> && gleam test`.
+Commands: `pnpm build`, `pnpm test`, `pnpm gleam:check` from the repo root, or
+`cd gleam/<name> && gleam test` for one package.

@@ -1,234 +1,160 @@
-# Omni — AI Agent Developer & Architecture Guide
+# Omni — Agent & Developer Guide
 
-> **Preserved Reference for Autonomous Coding Agents, Subagents, and Human Collaborators.**  
-> *Last Updated: November 2026 — implementation is now pure Gleam (see `docs/09-gleam-migration-handoff.md`).*
+> Pure Gleam implementation (JS target, Gleam 1.19.2). Host page: `apps/web`.
+> Start with [`docs/README.md`](docs/README.md) and [`docs/01-architecture.md`](docs/01-architecture.md).
 
----
+## 1. What Omni Is
 
-## 1. System Overview & Core Philosophy
+An extensible, local-first Nostr client and sandboxed micro-frontend runtime for
+100% standard Nostr sites (nsites).
 
-Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend runtime for 100% standard Nostr sites (nsites).
+### Mandates
 
-### The Fundamental Architectural Mandates
-1. **Every Functional Domain is a Standalone Plugin**:
-   - The timeline feed and composer (`@omni/plugin-feed`) is a WebAssembly plugin (compiled from MoonBit with Declarative Schema UI).
-   - The relay pool inspector and manager (`@omni/plugin-relays`) is a plugin.
-   - The profile editor, key custody, and people browser (`@omni/plugin-profile-viewer`) is a unified "Profiles" plugin.
-   - The task list (`@omni/plugin-checklist`) is a plugin.
-   - The plugin studio & Blossom publisher (`@omni/plugin-publisher`) is a plugin.
-   - The host UI frame itself (`@omni/plugin-shell`) is a first-class plugin.
-2. **The Host Bootloader (`apps/web`) is a Minimal Microkernel**:
-   - `apps/web/index.html` is strictly a ~15-line skeleton with `<div id="omni-root"></div>`.
-   - `apps/web/src/main.ts` initializes `OmniKernel`, instantiates `OmniShell`, and mounts the shell UI into `#omni-root`.
-3. **Pure Standalone nsites (Zero Proprietary Manifests or SDKs)**:
-   - There is NO `omni.manifest.json`.
-   - Every app and widget is a 100% standard web app (nsite) mounting to `document.body` or `#root`.
-   - **Zero Proprietary SDKs**: Plugins must NEVER reference `omni.*` (`omni.registerComponent`, `omni.storage`, `omni.profile`, etc.).
-   - Standard Web & Nostr APIs are used exclusively:
-     - Declarative UI via standard Schema postMessage or direct HTML DOM mounting.
-     - View navigation via standard `window.location.search` (`?view=settings`, `?view=widget`).
-     - Persistent storage via standard `window.localStorage` (partitioned per plugin).
-     - Signing & key queries via standard `window.nostr` (NIP-07).
-     - Relay communication via standard `window.WebSocket`.
-   - Sub-views and routes are declared via standard Nostr tags (`["view", "<id>", "<title>", "<path>"]`) or HTML `<link rel="alternate">` / Web Manifest shortcuts.
-4. **Strict Shell vs. Kernel Separation**:
-   - **Kernel (`@omni/core`) is Headless**: Manages sandboxes, WebCrypto keystore, relay pooling, 0ms local event caching, capability store (ACL), Schema renderer, and JSON-RPC dispatchers. It has zero knowledge of UI layouts, slot semantics, or user pages.
-   - **Shell (`@omni/plugin-shell`) Owns Presentation & Styling**: Manages viewport slots (`main`, `dock`, `sidebar`, `header-actions`), layout mapping (`LayoutManager`), desktop/mobile navigation docks, widgets dashboard grid, settings tabs, and NIP-78 workspace synchronization. Each shell bundles its own stylesheet self-contained in `packages/plugins/shell/src/styles/` (`classic-styles.ts`, `panorama-styles.ts`, `editorial-styles.ts`), injected dynamically into the host DOM upon `mount()`.
-   - **User-Swappable Shell Registry (`ShellRegistry`)**: Shells are swappable first-class plugins registered in `shellRegistry`. Users can select between Omni Classic, Panorama Hub, Editorial Shell, or custom installed shells dynamically in Settings.
-5. **User-Defined Companion Viewports & Route Assignment (Zero Hardcoded Slots)**:
-   - Developers never declare or configure "slots". Every installed plugin is an application by default.
-   - Users can optionally assign companion viewports and choose specific routes directly in Settings:
-     - **Navigation Dock Shortcut** (`dock`): Quick launcher pinned to navigation dock.
-     - **Workspace Widget** (`sidebar`): Interactive card inside the multi-column Widgets Dashboard.
-     - **Header Quick Action** (`header-actions`): Compact status icon/pill in top navigation.
-   - *"Full-Page App" is not a viewport assignment*: full-page application presentation is native to every installed plugin. Viewport assignment is used strictly for companion surfaces.
-   - Any declared `settings` route (`?view=settings`) is automatically surfaced in the plugin's dedicated section in the Settings menu.
-6. **Decentralized Workspace Sync (NIP-78)**:
-   - Layout configurations, viewport assignments, route selections, and enabled plugins sync via `kind: 30078`, tag `["d", "omni/workspace/v1"]`, backed by 0ms local storage fallback.
-7. **Strict Shell & Style Plugin Agnosticism (Zero Hard-Coded Plugin Exceptions)**:
-   - Shells (`@omni/plugin-shell`) and shell stylesheets (`classic-styles.ts`, `panorama-styles.ts`, `editorial-styles.ts`) must NEVER contain hard-coded plugin IDs (e.g. `isFeed = pluginId === "org.omni.plugin.feed"`, `:not(.feed-active)`), hard-coded plugin conditional checks, or special casing for specific apps.
-   - All plugins are equal, autonomous citizens.
-   - **Full-Page App Determination**:
-     - Any app mapped or opened in the primary `main` viewport is an active full-page app.
-     - The shell main viewport container provides expansive, responsive bounds (`max-width: 1360px`, `width: 100%`) so broad applications (dashboards, publishers, games, visual tools) have full breathing room.
-     - Content-heavy or reading-focused apps (like feeds or article readers) self-constrain their own reading widths internally (e.g. `.feed-container { max-width: 720px; margin: 0 auto; }`) rather than the shell imposing arbitrary narrow bounds.
-     - Fullscreen presentation (`#btn-*-toggle-fullscreen` or W3C Web App Manifest `"display": "fullscreen"`) is a generic presentation capability offered uniformly to all applications.
-
----
+1. **Every functional domain is a plugin.** Feed, relays, profiles, checklist,
+   notes, timer, and publisher are separate `plugin_*` packages under
+   `gleam/plugins/`. The shell itself is `omni_shell`.
+2. **The host is a microkernel.** `apps/web` paints the shell into
+   `#omni-root`; all behavior lives in Gleam packages.
+3. **Zero proprietary SDKs and manifests.** Plugins use standard `window.nostr`,
+   `window.WebSocket`, `localStorage`, `navigator.share`, protocol links, and
+   Declarative Schema messages. There is no `omni.*` API.
+4. **Kernel is headless; shell owns presentation.** `omni_kernel` handles
+   storage, crypto, relays, ACL, RPC, and plugin resolution. `omni_shell`
+   handles layouts, dock, widgets, settings, and themes.
+5. **Shells are swappable plugins.** `classic`, `panorama`, and `editorial`
+   implement the same `Theme` interface and are chosen through the
+   storage-backed `ShellRegistry`.
+6. **No hard-coded plugin IDs in shell, UI, or styles.** Ever. Tests use
+   generic IDs such as `example.app.alpha`.
+7. **No emojis.** Use monochrome geometric SVG line icons (`omni_ui/icons`).
+8. **No cross-plugin imports.** Shared code is statically linked from
+   `omni_social`, `omni_social_ui`, and `omni_plugin_kit`.
+9. **Workspace sync is decentralized.** NIP-78 `kind: 30078`,
+   `["d", "omni/workspace/v1"]`, with a 0ms local fallback.
 
 ## 2. Repository Structure
 
-Omni is structured as a `pnpm` monorepo whose runtime is written in Gleam
-(JS target). The legacy TypeScript packages were removed in Phase 8.
-
 ```
 omni/
-├── apps/
-│   └── web/                               # Host page: boots the Gleam shell, loads the PWA SW
-│       ├── index.html                     # Minimal skeleton (<div id="omni-root">)
-│       └── src/main.ts                    # Calls @omni/gleam-interop, paints the active theme
-│
-├── gleam/                                 # All runtime code, one package per domain
-│   ├── platform/                          # FFI quarantine: crypto, IDB, WebSocket, storage, URL
-│   ├── nostr/                             # Events, filters, bech32/NIP-19, relay frames
-│   ├── protocol/                          # Schema AST, RPC, workspace, intents, manifests
-│   ├── kernel/                            # Headless kernel: ACL, stores, relays, RPC, plugins
-│   ├── sandbox/                           # Guest hosts, CSP, tokens, srcdoc, manager
-│   ├── ui/                                # Icons, tokens, sanitizer, Schema renderer
-│   ├── shell/                             # Elm shell: model/update, layouts, registry, themes
-│   ├── web/                               # Bootloader config + headless boot/dispatch/view
-│   ├── plugin_kit/                        # Plugin harness, typed window.nostr, routes, stores
-│   ├── social/ + social_ui/               # Shared note/profile domain and note card views
-│   ├── bridge/                            # Guest shims + bundled guest runtime (FFI quarantine)
-│   ├── interop/                           # JS facade for apps/web (temporary)
-│   ├── testkit/                           # Fake ports, generators, golden snapshots
-│   └── plugins/                           # First-party plugins (feed, notes, timer, profiles, ...)
-│
-├── assets/styles/                         # tokens.css, schema.css, shell-modules.css, themes
-├── tests/bridge/                          # Dual-run bridge conformance tests (Vitest)
-├── scripts/                               # Ordered Gleam build/test, lint, bridge bundler
-└── docs/                                  # Architecture, migration status, toolchain
-│
-├── packages/
-│   ├── types/                             # Canonical TypeScript interfaces
-│   │   └── src/                           # NostrEvent, NostrFilter, OmniWorkspaceState, etc.
-│   │
-│   ├── core/                              # Orchestration & Security Runtime
-│   │   ├── src/
-│   │   │   ├── kernel/omni-kernel.ts      # OmniKernel: storage, ACL, sandboxes, relays, NIP-78
-│   │   │   ├── acl/                       # CapabilityStore & AclEngine (permission governance)
-│   │   │   ├── crypto/                    # WebCryptoKeystore (secp256k1, Schnorr, bech32)
-│   │   │   ├── css/                       # CSS scoper utility for plugin styling
-│   │   │   ├── layout/                    # LayoutManager (viewport slot mapping & reparenting)
-│   │   │   ├── nostr/                     # LocalEventStore (0ms hits), RelayPool, Coordinator
-│   │   │   ├── plugins/                   # NostrPluginResolver (NIP-5A nsites, Blossom, naddr)
-│   │   │   ├── schema/                    # SchemaRenderer & native Light DOM custom elements
-│   │   │   └── sandbox/                   # SandboxInstance & omni-runtime.js (guest runtime bridge)
-│   │   └── test/                          # Unit & integration tests (vitest + happy-dom)
-│   │
-│   └── plugins/                           # Modular First-Class System Plugins
-│       ├── shell/                         # @omni/plugin-shell (Header, dock, pages, settings)
-│       ├── feed/                          # @omni/plugin-feed (Timeline feed & composer)
-│       ├── relays/                        # @omni/plugin-relays (Relay status & pool manager)
-│       ├── profile-viewer/                # @omni/plugin-profile-viewer ("Profiles": people, metadata editor & key custody)
-│       ├── checklist/                     # @omni/plugin-checklist (Daily checklist widget)
-│       ├── notes/                         # @omni/plugin-notes (Private encrypted notes app)
-│       ├── timer/                         # @omni/plugin-timer (Focus & visual countdown timer)
-│       └── publisher/                     # @omni/plugin-publisher (Plugin Studio & Blossom uploader)
-│
-└── docs/                                  # Consolidated System Documentation
-    ├── 01-architecture.md                 # System Architecture & Core Runtime
-    ├── 02-protocols-and-storage.md        # Nostr Protocols, Storage & Decentralized Distribution
-    ├── 03-plugin-developer-guide.md       # Plugin & nsite Developer Guide
-    ├── 04-intents-and-permissions.md      # Standardized Intents, Discovery & Kind-Level ACL
-    ├── 05-web-worker-runtime-plan.md      # Off-Thread Web Worker Migration Plan
-    └── 06-nostr-extensions-and-schema.md  # Extended Nostr Client & Declarative Schema Reference
+├── apps/web/                     # Host page: index.html + main.ts (interop calls only)
+├── gleam/
+│   ├── platform/                 # FFI quarantine: crypto, IndexedDB, WebSocket, storage, URL
+│   ├── nostr/                    # Events, filters, bech32/NIP-19, relay frames
+│   ├── protocol/                 # Schema AST, RPC, workspace, intents, capabilities
+│   ├── kernel/                   # ACL, keystore, event store, relay pool, RPC, plugins
+│   ├── sandbox/                  # Guest hosts (iframe/worker/wasm), CSP, tokens, manager
+│   ├── ui/                       # Icons, tokens, sanitizer, Schema renderer
+│   ├── shell/                    # Elm model/update, layouts, settings, registry, themes
+│   ├── web/                      # Bootloader: config, boot/dispatch/view, sandbox spawning
+│   ├── plugin_kit/               # Plugin harness, typed window.nostr, routes, local stores
+│   ├── social/ + social_ui/      # Shared note/profile domain and note card views
+│   ├── bridge/                   # Guest shims + bundled guest runtime (FFI quarantine)
+│   ├── interop/                  # TypeScript-facing facade for apps/web (temporary)
+│   ├── testkit/                  # Fake ports, generators, golden snapshots (dev only)
+│   └── plugins/                  # feed, notes, timer, profiles, checklist, relays, publisher
+├── assets/styles/                # tokens.css, schema.css, shell-modules.css, theme CSS
+├── tests/bridge/                 # Guest-bridge conformance and bundle tests (Vitest)
+├── scripts/                      # Ordered Gleam build/test, architecture lint, bridge bundler
+└── docs/                         # Architecture, protocols, plugin guide, sandboxing, schema
 ```
 
----
+Conventions: directory `gleam/<name>` → package `omni_<name>` → modules
+`omni/<name>/...`; plugins `gleam/plugins/<name>` → `plugin_<name>` → modules
+`plugin/<name>/...`.
 
-## 3. Sandbox Execution & Standard Web APIs
+## 3. Sandbox Execution & Virtual APIs
 
-Plugins execute inside isolated `<iframe>` sandboxes (`sandbox="allow-scripts"`, `connect-src 'none'`), Web Workers (`WorkerGuestHost`), or WebAssembly runtimes (`WasmGuestHost`). Omni virtualizes standard web interfaces:
-- **`window.nostr`**: Full standard NIP-07 signer (`getPublicKey`, `signEvent`, `getRelays`, `nip04`, `nip44`), backed by the host keystore and ACL governance.
-- **Extended `window.nostr` Primitives (Zero Proprietary SDKs)**:
-  - `nostr.fetch(filters, options)`: Aggregates 0ms local event store cache and connected relays with deduplication and newest-first sorting.
-  - `nostr.subscribe(filters, onEvent, onEose)`: Live streaming subscription across local store and relay pool.
-  - `nostr.publish(draftEvent)`: Automatic signing via keystore and broadcast to relays + 0ms local cache commit.
-  - `nostr.doc<T>(dTagOrSpec, options)`: Universal local-first reactive document abstraction with 0ms reads, optimistic mutations, multi-device `onUpdate` synchronization, and transparent encryption (`{ encrypted: true }`) for any replaceable Nostr kind (Kind 30078, 0, 10002, 30000, 30023, etc.).
-- **`window.WebSocket`**: Virtual WebSocket shim that transparently routes `wss://` Nostr relay frames (`REQ`, `EVENT`, `CLOSE`) through the host's `RelayPool` (`wss://relay.damus.io`, `wss://relay.ditto.pub`) and 0ms local event cache for unmodified 3rd-party Nostr clients.
-- **Protocol URIs (NIP-21, Lightning, Cashu)**: Standard `<a href="nostr:...">`, `<a href="lightning:...">`, and `<a href="cashu:...">` links are intercepted at the sandbox boundary and routed to the Shell's "Open With..." chooser.
-- **`navigator.share()`**: Web Share API shim routing note drafts directly into the shell composer.
-- **`localStorage` & `indexedDB`**: Transparently partitioned per `pluginId`.
+Guests run in `<iframe sandbox="allow-scripts">` with `connect-src 'none'`,
+Web Workers, or Wasm hosts. Omni virtualizes standard interfaces:
 
----
+- **`window.nostr`** — NIP-07 (`getPublicKey`, `signEvent`, `getRelays`,
+  `nip04`, `nip44`) plus `fetch`, `subscribe`, `publish`, and `doc` for
+  reactive replaceable documents. Backed by the host keystore and ACL.
+- **`window.WebSocket`** — virtual relay socket translating `REQ`/`CLOSE`/
+  `EVENT` frames to kernel RPC and stream notifications back to the guest.
+- **`localStorage`** — partitioned per plugin (`omni:plugin:<pluginId>:key`).
+- **`navigator.share`** — routed to the shell composer.
+- **Protocol URIs** — `nostr:`, `lightning:`, `cashu:` links become intents
+  handled by the "Open With…" chooser.
 
-## 4. UI Architecture: Declarative Schema & Direct Iframe
+Host side: `omni_sandbox` (CSP, tokens, srcdoc, manager); guest side:
+`omni_bridge`, bundled to `gleam/bridge/dist/guest-runtime.js` by
+`scripts/build-bridge.mjs`. Details: [`docs/05-sandbox-hosting.md`](docs/05-sandbox-hosting.md).
 
-Omni uses a clean, zero-proprietary dual-architecture without nested shadow wrappers or Remote DOM:
+## 4. UI Architecture
 
-### 1. Declarative Schema UI (Light DOM Custom Elements)
-- Used by plugins like `@omni/plugin-feed` and `@omni/plugin-checklist`.
-- The plugin emits declarative JSON schema (`{ type: "box" | "card" | "button" | "input" | ... }`) over standard Web `postMessage` (`{ type: "omni:schema", schema: ... }`) or inline script tags (`<script type="application/json" id="omni-schema">`).
-- `SchemaRenderer` mounts autonomous Light DOM Custom Elements (`<omni-box>`, `<omni-card>`, `<omni-button>`, `<omni-input>`, etc.) natively in the host DOM.
-- User actions (`click`, `input`) dispatch standard `omni:action` events back to the sandbox over Channel 1.
+### Declarative Schema (primary)
 
-### 2. Direct Sandboxed Iframe UI (IframeAppHost)
-- Used by full standalone HTML applications like `@omni/plugin-profile-viewer`, `@omni/plugin-publisher`, `@omni/plugin-relays`.
-- Renders a clean visible `<iframe>` directly into the designated slot container.
-- Design tokens (`--omni-*`) are injected into the iframe root.
-- Standard NIP-07 (`window.nostr`) and protocol links (`nostr:`, `lightning:`, `cashu:`) are transparently bridged to the kernel.
+Plugins emit a Schema tree (`{ type: "omni:schema", schema }`) over Channel 1
+or an inline `<script type="application/json" id="omni-schema">`.
+`omni_ui` mounts plain Lustre Light DOM elements (no Shadow DOM, no custom
+elements), and actions return as `{ type: "omni:action", action }`.
+AST: `omni/protocol/schema/node`; builders: `builder.gleam`;
+renderer: `omni_ui/render/*`. Details:
+[`docs/06-nostr-extensions-and-schema.md`](docs/06-nostr-extensions-and-schema.md).
 
-### 3. WebAssembly Component Model & WIT (WasmGuestHost)
-- Used by compiled WebAssembly plugins (Rust, C/C++, Zig, Go).
-- Built against open standards: W3C WebAssembly Component Model & WIT (`packages/types/wit/omni.wit`).
-- Exports `init()` and `handle-action(action, payload)` and imports `ui.render(view)` and `nostr.*`.
-- Rendered natively in the host DOM through `SchemaRenderer` Light DOM Custom Elements with zero DOM in the guest.
+### Direct sandboxed iframe
 
-### Dock Launcher Hierarchy
-All dock icons follow standard structure:
-```html
-<button class="dock-item" title="...">
-  <div class="dock-icon-wrapper">
-    <svg ...></svg>
-  </div>
-  <span>Label</span>
-</button>
-```
+Full standalone HTML apps mount as visible iframes. Design tokens are injected;
+NIP-07, relay sockets, and protocol links are bridged transparently.
 
----
+### WebAssembly
 
-## 5. Security, Isolation & Storage Architecture
+Components built against the WIT surface export `init()`/`handle-action` and
+render through the same Schema pipeline.
 
-1. **Dual-Channel IPC**:
-   - `channel1` (Port 1): High-speed Schema and action bus (`portSchemaBus`).
-   - `channel2` (Port 2): JSON-RPC 2.0 kernel bus for capability-governed I/O.
-2. **Subscription Namespacing**:
-   - Every subscription is tagged `${pluginId}:${subId}`.
-   - Incoming relay frames are routed strictly to the requesting plugin's virtual socket, preventing cross-plugin leakage.
-3. **ACL-Governed Cache Filtering**:
-   - Sensitive note kinds (Encrypted DMs Kind 4 / 1059) are filtered out of local store queries unless the plugin has explicit user grants.
-4. **Local-First 0ms Cache (`LocalEventStore`)**:
-   - IndexedDB database `omni_event_store` provides instant reads offline.
-5. **NIP-78 Workspace Synchronization**:
-   - `kind: 30078`, tag `["d", "omni/workspace/v1"]` syncs viewport assignments and active page state across devices.
+### Navigation
 
----
+Dock items follow `<button class="dock-item">`, with a
+`<div class="dock-icon-wrapper">` icon and a label span. Themes emit their own
+markup from `omni_shell`.
 
-## 6. Aesthetic & UI Guidelines
+## 5. Security & Storage
 
-- **Palette**: "Warm Paper Dark" / e-ink aesthetic:
-  - Canvas: `#141312` (rich graphite)
-  - Surface: `#191816` (subtle warm charcoal)
-  - Elevated / Cards: `#22201d`
-  - Text Primary: `#ede8df` (warm ivory)
-  - Text Secondary: `#9e988f` (warm sandstone grey)
-  - Text Muted: `#6b665f`
-  - Accent Primary: `#d4a373` (warm sandstone)
-- **Strict Iconography Rule**:
-  - **NEVER use colorful emojis** in UI code.
-  - **Always use geometric monochrome SVG line icons** (1.5px - 1.8px stroke, inheriting `currentColor`).
+- **Dual-channel IPC**: Channel 1 = schema/actions; Channel 2 = JSON-RPC.
+- **Namespaced subscriptions**: `${pluginId}:${subId}`; no cross-plugin leakage.
+- **Kind-level ACL filtering**: sensitive kinds (4, 13, 14, 1059, 1060) require
+  an explicit grant before they reach a plugin's query results.
+- **Capability prompts**: allow/deny/prompt per plugin and capability, stored
+  through the injectable storage port.
+- **0ms cache**: IndexedDB `omni_event_store` with an in-memory index.
+- **NIP-78 workspace state**: cached locally under `omni_workspace_state`.
 
----
+## 6. Aesthetic Guidelines
 
-## 7. Developer & Verification Workflows
+Warm Paper Dark palette (tokens in `assets/styles/tokens.css`):
+
+| Token | Value |
+|---|---|
+| Canvas | `#141312` |
+| Surface | `#191816` |
+| Elevated | `#22201d` |
+| Text primary | `#ede8df` |
+| Text secondary | `#9e988f` |
+| Text muted | `#6b665f` |
+| Accent | `#d4a373` |
+
+Icons: geometric monochrome SVG, 1.5–1.8px stroke, inheriting `currentColor`.
+Never emojis.
+
+## 7. Workflows
 
 ```bash
-# Build all packages and plugins
-pnpm build
-
-# Run comprehensive test suite (264 tests across 19 test suites)
-pnpm test
-
-# Run Vite development server for apps/web
-pnpm dev
-
-# Check git status
-git status
+pnpm install          # JS tooling
+pnpm build            # ordered Gleam build + guest bridge bundle + Vite host build
+pnpm dev              # http://localhost:3000
+pnpm test             # bridge conformance + all Gleam package suites
+pnpm gleam:check      # format --check + type-check + architecture lint
+pnpm bundle:report    # built asset sizes
 ```
 
-Always ensure:
-1. `pnpm build` succeeds (ordered Gleam build, guest bridge bundle, Vite host build).
-2. `pnpm test` passes (bridge conformance Vitest + every Gleam package suite).
-3. `pnpm gleam:check` passes (format, typecheck, architecture lint).
-4. Changes are committed incrementally per issue / enhancement.
+Rules:
+
+1. `pnpm build`, `pnpm test`, and `pnpm gleam:check` must pass before committing.
+2. FFI (`@external`, `.mjs`) only in `platform`, `bridge`, `testkit`, and
+   `interop`; one `<module>.ffi.mjs` per module. Bundler entries may live under
+   `gleam/*/js/`.
+3. Use Gleam record update syntax (`Model(..model, field: value)`).
+4. No comments that restate the code; comment *why*.
+5. Commit incrementally with Conventional Commits (`feat(scope): …`, `fix(…)`,
+   `docs(…)`, `test(…)`, `chore(…)`).

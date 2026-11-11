@@ -1,6 +1,7 @@
-# Gleam Toolchain Decisions
+# Gleam Toolchain
 
 Verified on 2026-11-11 with Gleam 1.19.2 (JavaScript target, Node 26).
+The compiler is the only non-Node toolchain required.
 
 ## Pinned dependencies
 
@@ -25,16 +26,22 @@ pnpm dev            # Vite dev server with Gleam interop rebuild on change
 Each package's tests run with `gleam test` from its directory; the ordered
 runner (`scripts/gleam-build.mjs`) topologically sorts path dependencies.
 
-## D3: test framework (decided)
+## Test framework
 
 - **Runner:** `gleeunit` (`gleam test`, JS target on Node).
 - **Property tests:** `qcheck`, used for bech32, filters, replaceable selection, ACL policy, codecs.
 - **Snapshots:** `birdie` is **not usable**: it requires `gleam_erlang` (Erlang target only). Instead `testkit` provides a small file-based snapshot/golden helper (`testkit/golden`) backed by Node `fs`. `testkit` is a dev-only package and is the one other place besides `platform` and `bridge` allowed to contain `.mjs`.
-- **DOM tests:** `happy-dom` registered from a `testkit` FFI helper (added when Phase 5 needs it).
+- **DOM tests:** `happy-dom`, used by the Vitest bridge conformance suite in `tests/bridge/`.
 - `startest` rejected: dependency conflicts with current `tom` constraints.
 
-## Findings that affect the plan
+## Constraints
 
-- Path dependencies across packages and a shared `omni/` module namespace work (see `gleam/protocol/test`).
-- **Lustre components always use Shadow DOM** (`open_shadow_root` only toggles open/closed). This confirms D1: the schema renderer uses plain Lustre elements, not custom elements.
+- Path dependencies across packages and the shared `omni/` module namespace
+  work (see `gleam/protocol/test`).
+- **Lustre components always use Shadow DOM** (`open_shadow_root` only toggles
+  open/closed). The Schema renderer therefore uses plain Lustre elements, not
+  custom elements.
 - `gleam/**/manifest.toml` is committed for reproducible builds.
+- FFI (`.mjs`, `@external`) is quarantined to `platform`, `bridge`, `testkit`,
+  and `interop`; one `<module>.ffi.mjs` per module. Bundler entries may live
+  under `gleam/*/js/`.

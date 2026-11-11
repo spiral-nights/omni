@@ -1,46 +1,34 @@
-# Omni Documentation Index & Reading Guide
+# Omni Documentation
 
-> **Current Architecture Status (November 2026):**  
-> The application is a pure **Gleam** multi-package workspace under `gleam/` (JS target, `gleam 1.19.2`). The TypeScript packages and MoonBit toolchain were removed in Phase 8; `apps/web` is a thin host that boots the Gleam shell and guest bridge. Build with `pnpm build`, test with `pnpm test`, run with `pnpm dev`.
+Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
+runtime for standard Nostr sites (nsites). The runtime is written in Gleam and
+compiled to JavaScript; `apps/web` is the thin host page.
 
----
+## Start here
 
-## 1. Authoritative Documents (Start Here)
+1. **[`../README.md`](../README.md)** — prerequisites, `pnpm build`, `pnpm test`,
+   `pnpm dev`, and the architecture summary.
+2. **[`01-architecture.md`](01-architecture.md)** — package layers, boot path,
+   shell/theme model, runtime boundaries.
+3. **[`03-plugin-developer-guide.md`](03-plugin-developer-guide.md)** — build a
+   plugin with `omni_plugin_kit` and Declarative Schema.
 
-If you are an AI assistant or human developer working on Omni today, **read these first**:
+## Reference
 
-1. **[`../README.md`](../README.md)**:  
-   *Prerequisites, build/test/run commands, and the current architecture overview.*
-2. **[`09-gleam-migration-handoff.md`](09-gleam-migration-handoff.md)**:  
-   *Post-migration status, package map, critical Gleam FFI constraints, and verification commands.*
-3. **[`07-gleam-migration-checklist.md`](07-gleam-migration-checklist.md)**:  
-   *The migration checklist of migration phases (Phases 0–8). Mark completed items `[x]` as they finish.*
-4. **[`gleam-rewrite-plan.md`](gleam-rewrite-plan.md)**:  
-   *The foundational architectural blueprint for the Gleam rewrite (package boundaries, Lustre Light DOM schema rendering, Elm-style harnesses, and shared `omni_social` design).*
-5. **[`08-gleam-toolchain.md`](08-gleam-toolchain.md)**:  
-   *Pinned Gleam compiler & package versions, build commands (`pnpm gleam:check`, `pnpm gleam:test`), and test harness guide.*
-6. **[`10-bridge-parity.md`](10-bridge-parity.md)**:  
-   *Dual-run conformance harness and cutover notes for the Gleam guest bridge.*
-7. **[`11-perf-baseline.md`](11-perf-baseline.md)**:  
-   *Recorded bundle-size baseline and how to reproduce it (`pnpm bundle:report`).*
-8. **[`../AGENTS.md`](../AGENTS.md)**:  
-   *Core system mandates: zero proprietary `omni.*` SDKs, pure standard nsites, no emojis, zero hardcoded plugin IDs in shell/styles, Light DOM, warm paper dark theme.*
+| Document | What it covers |
+|---|---|
+| [`01-architecture.md`](01-architecture.md) | Package layering, boot sequence, shell/theme registry, boundaries |
+| [`02-protocols-and-storage.md`](02-protocols-and-storage.md) | Nostr events/filters/relay frames, relay pool, 0ms store, NIP-78, distribution |
+| [`03-plugin-developer-guide.md`](03-plugin-developer-guide.md) | Plugin harness, routes, persistence, shared social libraries, package layout |
+| [`04-intents-and-permissions.md`](04-intents-and-permissions.md) | Intents, capability grants, kind-level filtering, RPC governance |
+| [`05-sandbox-hosting.md`](05-sandbox-hosting.md) | Iframe/worker/Wasm hosts, CSP, dual-channel IPC, guest bridge shims |
+| [`06-nostr-extensions-and-schema.md`](06-nostr-extensions-and-schema.md) | Extended `window.nostr`, Schema AST/builders/actions, rendering pipeline |
+| [`08-gleam-toolchain.md`](08-gleam-toolchain.md) | Pinned compiler/dependency versions, commands, test harness |
+| [`11-perf-baseline.md`](11-perf-baseline.md) | Bundle-size baseline and how to reproduce it |
 
----
+## Ground rules
 
-## 2. Legacy / Historical Documents (Read With Caution)
-
-The documents listed below were written for the original TypeScript / MoonBit codebase. While they explain the high-level Nostr protocol concepts and wire schemas, **their code examples and package references are legacy and being replaced**:
-
-| Document | Status | What It Covers | How to Interpret During Gleam Rewrite |
-|---|---|---|---|
-| **[`01-architecture.md`](01-architecture.md)** | *Partially Deprecated* | TS monorepo layout, `@omni/core`, `@omni/plugin-shell` | Architecture concepts remain valid, but implementation is now under `gleam/*`. |
-| **[`02-protocols-and-storage.md`](02-protocols-and-storage.md)** | *Concepts Valid* | Nostr event formats, 0ms caching, NIP-78 sync, Blossom | Pure protocol rules still apply; implementation is now in `omni_nostr` and `omni_kernel`. |
-| **[`03-plugin-developer-guide.md`](03-plugin-developer-guide.md)** | *Partially Deprecated* | TS plugin creation, manifest-free nsites | Guidelines on pure standard nsites remain, but plugins are now authored using `omni_plugin_kit`. |
-| **[`04-intents-and-permissions.md`](04-intents-and-permissions.md)** | *Concepts Valid* | Standard Omni intents (`view_note`, `create_note`, etc.) and kind-level ACL | Wire schemas still apply; now implemented in `omni_protocol/intent.gleam` and `omni_kernel/acl/`. |
-| **[`05-web-worker-runtime-plan.md`](05-web-worker-runtime-plan.md)** | *Historical Design* | Discussion of off-thread Web Worker hosting | Unified `GuestHost` abstraction now implemented in `gleam/sandbox/src/omni/sandbox/host.gleam`. |
-| **[`06-nostr-extensions-and-schema.md`](06-nostr-extensions-and-schema.md)** | *Concepts Valid* | Declarative schema primitives JSON schema and wire format | Wire format is identical; AST is defined in `omni_protocol/schema/node.gleam` and rendered by `omni_ui/render.gleam`. |
-| **[`migration_plan.md`](migration_plan.md)** | *Historical* | Early TS modularization notes | Superseded entirely by `gleam-rewrite-plan.md`. |
-| **[`CODEBASE_REVIEW.md`](CODEBASE_REVIEW.md)** | *Historical* | Code review of earlier TS shell code | Useful historical context only. |
-
-*(Note: During Phase 8.2 of the migration checklist, these older documents will be updated and consolidated).*
+The non-negotiable system mandates (no proprietary `omni.*` SDKs, pure standard
+nsites, no emojis, no hard-coded plugin IDs in shell/UI, Light DOM, warm paper
+dark palette) live in [`../AGENTS.md`](../AGENTS.md). They are enforced by
+`scripts/lint-gleam-architecture.mjs`, which runs as part of `pnpm gleam:check`.
