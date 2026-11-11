@@ -423,38 +423,29 @@ pub fn get_base(node: Node) -> NodeBase {
 /// Set or update the common `NodeBase` on any schema node.
 pub fn set_base(node: Node, base: NodeBase) -> Node {
   case node {
-    Box(_, dir, gap, al, just, wr, pad, act, bg, kids) ->
-      Box(base, dir, gap, al, just, wr, pad, act, bg, kids)
-    Card(_, t, sub, ic, ha, kids, foot, act, bbg) ->
-      Card(base, t, sub, ic, ha, kids, foot, act, bbg)
-    Divider(_, ori) -> Divider(base, ori)
-    Spacer(_, sz) -> Spacer(base, sz)
-    Text(_, c, vr, tn, tr, act, img) -> Text(base, c, vr, tn, tr, act, img)
-    Badge(_, l, tn, vr, dot) -> Badge(base, l, tn, vr, dot)
-    Metric(_, l, v, sub, tr) -> Metric(base, l, v, sub, tr)
-    Icon(_, nm, sz) -> Icon(base, nm, sz)
-    Avatar(_, src, pk, nm, sz, act) -> Avatar(base, src, pk, nm, sz, act)
-    Button(_, l, act, vr, sz, ic, ip, dis, load) ->
-      Button(base, l, act, vr, sz, ic, ip, dis, load)
-    IconButton(_, ic, tip, act, vr, sz, dis) ->
-      IconButton(base, ic, tip, act, vr, sz, dis)
-    Input(_, nm, ph, v, it, acc, clr, pfx, o_ent, o_chg) ->
-      Input(base, nm, ph, v, it, acc, clr, pfx, o_ent, o_chg)
-    Textarea(_, nm, ph, v, rows) -> Textarea(base, nm, ph, v, rows)
-    Toggle(_, nm, lbl, chk, act, dis) -> Toggle(base, nm, lbl, chk, act, dis)
-    Select(_, nm, v, opts, act) -> Select(base, nm, v, opts, act)
-    Tabs(_, tabs, act_tab, act) -> Tabs(base, tabs, act_tab, act)
-    StatusIndicator(_, st, lbl, pulse) -> StatusIndicator(base, st, lbl, pulse)
-    CodeBlock(_, c, lang, cp) -> CodeBlock(base, c, lang, cp)
-    Progress(_, v, mx, lbl, vr, sz, col, ticks, act) ->
-      Progress(base, v, mx, lbl, vr, sz, col, ticks, act)
-    Banner(_, tn, t, msg, ic, act, albl, dis, od) ->
-      Banner(base, tn, t, msg, ic, act, albl, dis, od)
-    List(_, items, scr, hm, lm) -> List(base, items, scr, hm, lm)
-    ListItem(_, t, sub, m, ic, au, ap, chk, ochk, oclk, acts) ->
-      ListItem(base, t, sub, m, ic, au, ap, chk, ochk, oclk, acts)
-    EmptyState(_, ic, t, desc, act, albl) ->
-      EmptyState(base, ic, t, desc, act, albl)
-    VirtualList(_, items, ih, ov, mh) -> VirtualList(base, items, ih, ov, mh)
+    Box(..) as n -> Box(..n, base: base)
+    Card(..) as n -> Card(..n, base: base)
+    Divider(..) as n -> Divider(..n, base: base)
+    Spacer(..) as n -> Spacer(..n, base: base)
+    Text(..) as n -> Text(..n, base: base)
+    Badge(..) as n -> Badge(..n, base: base)
+    Metric(..) as n -> Metric(..n, base: base)
+    Icon(..) as n -> Icon(..n, base: base)
+    Avatar(..) as n -> Avatar(..n, base: base)
+    Button(..) as n -> Button(..n, base: base)
+    IconButton(..) as n -> IconButton(..n, base: base)
+    Input(..) as n -> Input(..n, base: base)
+    Textarea(..) as n -> Textarea(..n, base: base)
+    Toggle(..) as n -> Toggle(..n, base: base)
+    Select(..) as n -> Select(..n, base: base)
+    Tabs(..) as n -> Tabs(..n, base: base)
+    StatusIndicator(..) as n -> StatusIndicator(..n, base: base)
+    CodeBlock(..) as n -> CodeBlock(..n, base: base)
+    Progress(..) as n -> Progress(..n, base: base)
+    Banner(..) as n -> Banner(..n, base: base)
+    List(..) as n -> List(..n, base: base)
+    ListItem(..) as n -> ListItem(..n, base: base)
+    EmptyState(..) as n -> EmptyState(..n, base: base)
+    VirtualList(..) as n -> VirtualList(..n, base: base)
   }
 }

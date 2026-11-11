@@ -357,19 +357,7 @@ pub fn page(n: Node, page_id: String) -> Node {
 /// Set direction to row for Box containers.
 pub fn row(n: Node) -> Node {
   case n {
-    Box(base, _, gap, align, justify, wrap, padding, action, bg, children) ->
-      Box(
-        base,
-        Some(Row),
-        gap,
-        align,
-        justify,
-        wrap,
-        padding,
-        action,
-        bg,
-        children,
-      )
+    Box(..) as b -> Box(..b, direction: Some(Row))
     other -> other
   }
 }
@@ -377,19 +365,7 @@ pub fn row(n: Node) -> Node {
 /// Set direction to column for Box containers.
 pub fn column(n: Node) -> Node {
   case n {
-    Box(base, _, gap, align, justify, wrap, padding, action, bg, children) ->
-      Box(
-        base,
-        Some(Column),
-        gap,
-        align,
-        justify,
-        wrap,
-        padding,
-        action,
-        bg,
-        children,
-      )
+    Box(..) as b -> Box(..b, direction: Some(Column))
     other -> other
   }
 }
@@ -401,8 +377,7 @@ pub fn gap(n: Node, token_str: String) -> Node {
     Error(Nil) -> None
   }
   case n {
-    Box(base, dir, _, align, justify, wrap, padding, action, bg, children) ->
-      Box(base, dir, sz, align, justify, wrap, padding, action, bg, children)
+    Box(..) as b -> Box(..b, gap: sz)
     other -> other
   }
 }
@@ -410,19 +385,7 @@ pub fn gap(n: Node, token_str: String) -> Node {
 /// Set gap on a Box container with a typed `SizeToken`.
 pub fn gap_size(n: Node, sz: SizeToken) -> Node {
   case n {
-    Box(base, dir, _, align, justify, wrap, padding, action, bg, children) ->
-      Box(
-        base,
-        dir,
-        Some(sz),
-        align,
-        justify,
-        wrap,
-        padding,
-        action,
-        bg,
-        children,
-      )
+    Box(..) as b -> Box(..b, gap: Some(sz))
     other -> other
   }
 }
@@ -434,8 +397,7 @@ pub fn padding(n: Node, token_str: String) -> Node {
     Error(Nil) -> None
   }
   case n {
-    Box(base, dir, gap, align, justify, wrap, _, action, bg, children) ->
-      Box(base, dir, gap, align, justify, wrap, sz, action, bg, children)
+    Box(..) as b -> Box(..b, padding: sz)
     other -> other
   }
 }
@@ -443,8 +405,7 @@ pub fn padding(n: Node, token_str: String) -> Node {
 /// Set padding on a Box container with a typed `SizeToken`.
 pub fn padding_size(n: Node, sz: SizeToken) -> Node {
   case n {
-    Box(base, dir, gap, align, justify, wrap, _, action, bg, children) ->
-      Box(base, dir, gap, align, justify, wrap, Some(sz), action, bg, children)
+    Box(..) as b -> Box(..b, padding: Some(sz))
     other -> other
   }
 }
@@ -452,8 +413,7 @@ pub fn padding_size(n: Node, sz: SizeToken) -> Node {
 /// Align items along cross axis.
 pub fn align(n: Node, a: Align) -> Node {
   case n {
-    Box(base, dir, gap, _, justify, wrap, padding, action, bg, children) ->
-      Box(base, dir, gap, Some(a), justify, wrap, padding, action, bg, children)
+    Box(..) as b -> Box(..b, align: Some(a))
     other -> other
   }
 }
@@ -461,8 +421,7 @@ pub fn align(n: Node, a: Align) -> Node {
 /// Justify content along main axis.
 pub fn justify(n: Node, j: Justify) -> Node {
   case n {
-    Box(base, dir, gap, align, _, wrap, padding, action, bg, children) ->
-      Box(base, dir, gap, align, Some(j), wrap, padding, action, bg, children)
+    Box(..) as b -> Box(..b, justify: Some(j))
     other -> other
   }
 }
@@ -470,19 +429,7 @@ pub fn justify(n: Node, j: Justify) -> Node {
 /// Set flex wrapping on a Box.
 pub fn wrap(n: Node, w: Bool) -> Node {
   case n {
-    Box(base, dir, gap, align, justify, _, padding, action, bg, children) ->
-      Box(
-        base,
-        dir,
-        gap,
-        align,
-        justify,
-        Some(w),
-        padding,
-        action,
-        bg,
-        children,
-      )
+    Box(..) as b -> Box(..b, wrap: Some(w))
     other -> other
   }
 }
@@ -490,19 +437,7 @@ pub fn wrap(n: Node, w: Bool) -> Node {
 /// Set background color or token on a Box.
 pub fn background(n: Node, bg: String) -> Node {
   case n {
-    Box(base, dir, gap, align, justify, wrap, padding, action, _, children) ->
-      Box(
-        base,
-        dir,
-        gap,
-        align,
-        justify,
-        wrap,
-        padding,
-        action,
-        Some(bg),
-        children,
-      )
+    Box(..) as b -> Box(..b, background: Some(bg))
     other -> other
   }
 }
@@ -510,21 +445,8 @@ pub fn background(n: Node, bg: String) -> Node {
 /// Append a single child node to Box or Card.
 pub fn child(parent: Node, c: Node) -> Node {
   case parent {
-    Box(base, dir, gap, align, justify, wrap, padding, action, bg, children) ->
-      Box(
-        base,
-        dir,
-        gap,
-        align,
-        justify,
-        wrap,
-        padding,
-        action,
-        bg,
-        list.append(children, [c]),
-      )
-    Card(base, t, sub, ic, ha, children, foot, act, bbg) ->
-      Card(base, t, sub, ic, ha, list.append(children, [c]), foot, act, bbg)
+    Box(..) as b -> Box(..b, children: list.append(b.children, [c]))
+    Card(..) as card -> Card(..card, children: list.append(card.children, [c]))
     other -> other
   }
 }
@@ -532,10 +454,8 @@ pub fn child(parent: Node, c: Node) -> Node {
 /// Replace all children of a Box or Card.
 pub fn children(parent: Node, kids: List(Node)) -> Node {
   case parent {
-    Box(base, dir, gap, align, justify, wrap, padding, action, bg, _) ->
-      Box(base, dir, gap, align, justify, wrap, padding, action, bg, kids)
-    Card(base, t, sub, ic, ha, _, foot, act, bbg) ->
-      Card(base, t, sub, ic, ha, kids, foot, act, bbg)
+    Box(..) as b -> Box(..b, children: kids)
+    Card(..) as card -> Card(..card, children: kids)
     other -> other
   }
 }
@@ -571,8 +491,7 @@ pub fn with_icon(n: Node, icon_name: String) -> Node {
     Banner(..) as banner -> Banner(..banner, icon: Some(icon_name))
     ListItem(..) as item -> ListItem(..item, icon: Some(icon_name))
     EmptyState(..) as empty -> EmptyState(..empty, icon: Some(icon_name))
-    Button(base, l, act, vr, sz, _, ip, dis, load) ->
-      Button(base, l, act, vr, sz, Some(icon_name), ip, dis, load)
+    Button(..) as btn -> Button(..btn, icon: Some(icon_name))
     other -> other
   }
 }
@@ -677,7 +596,7 @@ pub fn text_tone(n: Node, tn: TextTone) -> Node {
 /// Set tone on Badge.
 pub fn badge_tone(n: Node, tn: BadgeTone) -> Node {
   case n {
-    Badge(base, l, _, vr, dot) -> Badge(base, l, Some(tn), vr, dot)
+    Badge(..) as b -> Badge(..b, tone: Some(tn))
     other -> other
   }
 }
@@ -685,8 +604,7 @@ pub fn badge_tone(n: Node, tn: BadgeTone) -> Node {
 /// Set tone on Banner.
 pub fn banner_tone(n: Node, tn: BannerTone) -> Node {
   case n {
-    Banner(base, _, t, msg, ic, act, albl, dis, od) ->
-      Banner(base, Some(tn), t, msg, ic, act, albl, dis, od)
+    Banner(..) as ban -> Banner(..ban, tone: Some(tn))
     other -> other
   }
 }
