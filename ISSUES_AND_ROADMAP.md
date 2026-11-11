@@ -30,7 +30,9 @@
 - [ ] Key import/export + passphrase UI in Settings.
 - [x] Publish effects: feed notes/replies/likes/reposts and profile metadata/
       follows sign and broadcast through the host pipeline.
-- [ ] NIP-78 workspace/doc publish + remote restore.
+- [x] NIP-78 workspace publish + remote restore (apply when non-empty).
+- [x] NIP-44 v2 encryption (ChaCha20/HKDF/HMAC) for encrypted note documents.
+- [ ] Notes remote restore/decrypt + ingest into the notebook.
 
 ### 1. Plugin bundle resolution into sandboxes (P1)
 

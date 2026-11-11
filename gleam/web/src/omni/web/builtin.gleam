@@ -34,6 +34,7 @@ pub type BuiltinApp {
     ingest: Option(fn(Event) -> Nil),
     relay_status: Option(fn(String, Bool) -> Nil),
     take_publishes: fn() -> List(UnsignedEvent),
+    take_encrypted_publishes: fn() -> List(UnsignedEvent),
   )
 }
 
@@ -84,6 +85,7 @@ fn feed_app(store: storage.Storage) -> BuiltinApp {
     }),
     relay_status: None,
     take_publishes: fn() { app.take_publishes(running) },
+    take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
   )
 }
 
@@ -98,6 +100,7 @@ fn profiles_app(store: storage.Storage) -> BuiltinApp {
     }),
     relay_status: None,
     take_publishes: fn() { app.take_publishes(running) },
+    take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
   )
 }
 
@@ -116,6 +119,7 @@ fn relays_app() -> BuiltinApp {
       app.dispatch(running, relays_msg.UpdateRelayState(url, state, None))
     }),
     take_publishes: fn() { app.take_publishes(running) },
+    take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
   )
 }
 
@@ -133,5 +137,6 @@ fn host(
     ingest: ingest,
     relay_status: relay_status,
     take_publishes: fn() { app.take_publishes(running) },
+    take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
   )
 }

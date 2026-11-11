@@ -8,13 +8,16 @@ import gleam/string
 import gleeunit
 import gleeunit/should
 import lustre/element
+import omni/kernel/crypto/keystore
 import omni/kernel/kernel.{type KernelPorts, KernelPorts}
 import omni/kernel/nostr/event_store
 import omni/nostr/event.{UnsignedEvent}
+import omni/nostr/event_id
 import omni/nostr/filter.{Filter}
 import omni/nostr/kind
 import omni/platform/clock
 import omni/platform/idb
+import omni/platform/nip44
 import omni/platform/storage
 import omni/sandbox/manager
 import omni/shell/model
@@ -265,6 +268,46 @@ pub fn publish_pipeline_signs_broadcasts_and_ingests_test() {
     Filter(None, None, Some([kind.Note]), None, None, None, None, dict.new()),
   ))
   should.be_true(count >= 1)
+
+  promise.resolve(Nil)
+}
+
+pub fn encrypted_publish_encrypts_content_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_bridge(ports, None)
+
+  let draft =
+    UnsignedEvent(
+      pubkey: None,
+      created_at: 1_700_000_003,
+      kind: kind.AppData,
+      tags: [["d", "omni/notes/v1/note_1"]],
+      content: "top secret plaintext",
+    )
+
+  use result <- promise.await(boot.publish_encrypted_draft(booted, draft))
+  let assert Ok(event_id_hex) = result
+
+  let assert Ok(eid) = event_id.parse(event_id_hex)
+  use fetched <- promise.await(event_store.get_event_by_id(
+    booted.kernel.event_store,
+    eid,
+  ))
+  let assert Some(event) = fetched
+  should.be_false(string.contains(event.content, "top secret plaintext"))
+  should.be_true(string.length(event.content) > 0)
+
+  // NIP-44 round-trip: only the user's key decrypts the payload.
+  let assert Some(profile) = booted.model.user_profile
+  use decrypted <- promise.await(nip44.nip44_decrypt(
+    keystore.get_private_key(booted.kernel.keystore),
+    profile.pubkey,
+    event.content,
+  ))
+  let assert Ok(plaintext) = decrypted
+  plaintext |> should.equal("top secret plaintext")
 
   promise.resolve(Nil)
 }

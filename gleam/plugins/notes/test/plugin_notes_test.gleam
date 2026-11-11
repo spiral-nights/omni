@@ -7,8 +7,9 @@ import gleam/option.{None, Some}
 import gleam/string
 import gleeunit
 import gleeunit/should
+import omni/nostr/kind
 import omni/platform/storage
-import omni/plugin_kit/app
+import omni/plugin_kit/app.{Publish, PublishEncrypted}
 import omni/plugin_kit/local_store
 import omni/plugin_kit/route
 import omni/plugin_kit/schema
@@ -231,4 +232,37 @@ fn schema_action(name: String, fields: List(#(String, String))) -> Action {
     |> list.map(fn(pair) { #(pair.0, dynamic.string(pair.1)) })
     |> dict.from_list
   action.new(name) |> action.with_payload(payload)
+}
+
+pub fn save_publishes_encrypted_nip78_doc_test() {
+  let m0 = init()
+  let #(m1, _) = update.update(m0, SetDraftContent("<p>secret</p>"))
+  let #(_, effects) = update.update(m1, SaveActiveNote)
+  should.be_true(
+    list.any(effects, fn(effect) {
+      case effect {
+        PublishEncrypted(draft) ->
+          draft.kind == kind.AppData
+          && list.any(draft.tags, fn(tag) {
+            case tag {
+              ["d", ..] -> True
+              _ -> False
+            }
+          })
+        _ -> False
+      }
+    }),
+  )
+
+  // Plain publishing when encrypted sync is disabled.
+  let #(m2, _) = update.update(m1, ToggleEncryptedSync)
+  let #(_, plain_effects) = update.update(m2, SaveActiveNote)
+  should.be_true(
+    list.any(plain_effects, fn(effect) {
+      case effect {
+        Publish(_) -> True
+        _ -> False
+      }
+    }),
+  )
 }

@@ -20,6 +20,8 @@ pub type Effect(msg) {
   Async(fn(fn(msg) -> Nil) -> Nil)
   /// Request the host to sign and broadcast this draft event.
   Publish(UnsignedEvent)
+  /// Request the host to NIP-44 encrypt `content` to the user, sign, and broadcast.
+  PublishEncrypted(UnsignedEvent)
 }
 
 /// Elm-style plugin application specification.
@@ -43,6 +45,7 @@ pub type RunningApp(model, msg) {
     history_ref: Ref(List(String)),
     emit_schema: fn(Node) -> Nil,
     publishes: Ref(List(UnsignedEvent)),
+    encrypted_publishes: Ref(List(UnsignedEvent)),
   )
 }
 
@@ -69,6 +72,7 @@ pub fn start(
       history_ref: ref.new([initial_json]),
       emit_schema: emit_schema,
       publishes: ref.new([]),
+      encrypted_publishes: ref.new([]),
     )
 
   emit_schema(initial_node)
@@ -156,6 +160,8 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
     Batch(items) -> run_effects(app, items)
     Async(task) -> task(fn(m) { dispatch(app, m) })
     Publish(draft) -> ref.update(app.publishes, fn(queue) { [draft, ..queue] })
+    PublishEncrypted(draft) ->
+      ref.update(app.encrypted_publishes, fn(queue) { [draft, ..queue] })
   }
 }
 
@@ -163,5 +169,14 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
 pub fn take_publishes(app: RunningApp(model, msg)) -> List(UnsignedEvent) {
   let pending = ref.get(app.publishes)
   ref.set(app.publishes, [])
+  list.reverse(pending)
+}
+
+/// Drain the drafts whose content must be NIP-44 encrypted to the user first.
+pub fn take_encrypted_publishes(
+  app: RunningApp(model, msg),
+) -> List(UnsignedEvent) {
+  let pending = ref.get(app.encrypted_publishes)
+  ref.set(app.encrypted_publishes, [])
   list.reverse(pending)
 }

@@ -17,6 +17,7 @@ import lustre/element.{type Element}
 import omni/kernel/kernel.{KernelPorts}
 import omni/kernel/nostr/coordinator
 import omni/kernel/nostr/relay_pool
+import omni/nostr/event as nostr_event
 import omni/nostr/filter.{type Filter, Filter}
 import omni/nostr/kind
 import omni/nostr/relay_url
@@ -25,12 +26,16 @@ import omni/platform/idb
 import omni/platform/storage
 import omni/platform/url
 import omni/plugin_kit/route.{type Route}
+import omni/protocol/workspace
 import omni/shell/model.{
   type SettingsTab, AppStore, PrimaryApp, Settings, TabPluginSettings,
   TabPlugins, TabProfile, TabRelays, TabShells, TabWorkspace, WidgetsDashboard,
 }
-import omni/shell/msg.{EmbedSchema, NavigateTo, OpenApp, OpenSettings}
+import omni/shell/msg.{
+  ApplyRemoteWorkspace, EmbedSchema, NavigateTo, OpenApp, OpenSettings,
+}
 import omni/web/boot
+import omni/web/config
 import omni/web/rpc
 
 /// Opaque shell boot state handed back to the host page.
@@ -251,6 +256,29 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
       None,
     )
 
+  let self_pubkey = rpc.public_key_hex(host.booted)
+  let _ =
+    coordinator.subscribe(
+      host.booted.kernel.coordinator,
+      "builtin:workspace",
+      [workspace_filter(self_pubkey)],
+      fn(event) {
+        case nostr_event.get_tag_values(event.tags, "d") {
+          [d_tag, ..] if d_tag == config.workspace_sync_d_tag ->
+            case workspace.decode_json(event.content) {
+              Ok(state) ->
+                case state.plugins {
+                  [] -> Nil
+                  _ -> dispatch_shell_msg(ApplyRemoteWorkspace(state))
+                }
+              Error(_) -> Nil
+            }
+          _ -> Nil
+        }
+      },
+      None,
+    )
+
   relay_pool.get_statuses(host.booted.kernel.relay_pool)
   |> list.each(fn(pair) {
     let #(url, status) = pair
@@ -267,6 +295,19 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
   })
 
   push_views(host)
+}
+
+fn workspace_filter(author_hex: String) -> Filter {
+  Filter(
+    ids: None,
+    authors: Some([author_hex]),
+    kinds: Some([kind.AppData]),
+    since: None,
+    until: None,
+    limit: Some(5),
+    search: None,
+    tags: dict.new(),
+  )
 }
 
 fn public_events_filter() -> Filter {

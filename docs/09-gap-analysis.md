@@ -56,8 +56,8 @@ feature, **S3** = polish.
 | I6 | Publish profile metadata (kind 0) | **fixed:** editor emits a kind-0 `Publish` effect | ok |
 | I7 | Publish/fetch kind 3 follows | **fixed (publish):** follow toggles emit kind-3 events; fetching remote follows still missing | S2 |
 | I8 | NIP-65 relay list publish/fetch | Relays builds tag lists locally; no publish/fetch | S1 |
-| I9 | NIP-78 app data publish (`publishAppData`) | Shell emits `PublishWorkspaceNip78`; **boot ignores it** | S1 |
-| I10 | NIP-44 encrypt/decrypt used by notes/DMs | Bridge + platform implement it; no host path uses it | S2 |
+| I9 | NIP-78 app data publish (`publishAppData`) | **fixed:** workspace effects sign and publish kind 30078 (`d: omni/workspace/v1`); remote state is fetched on startup and applied when non-empty | ok |
+| I10 | NIP-44 encrypt/decrypt used by notes/DMs | **fixed:** NIP-44 v2 implemented in the platform FFI (ChaCha20 + HKDF + HMAC); encrypted note publishing uses it, verified by a decrypt round-trip test | ok |
 | I11 | NIP-17/59 DMs | Never implemented (was roadmap on main too) | S3 |
 
 ### Relay and data plane
@@ -80,7 +80,7 @@ feature, **S3** = polish.
 | P1 | Feed timeline with real notes + profiles | Live event ingestion added; rendering works when events arrive | partial |
 | P2 | Feed composer, replies, threads | Local schema flows work; publishing (I3/I4) missing | S1 |
 | P3 | Feed likes/reposts/zaps with stats | Stats reducer exists; user actions are no-ops | S1 |
-| P4 | Notes: encrypted NIP-78 sync (`omn/notes/v1/<id>`) | Local storage only (`local_store`); no `nostr.doc`, no encryption | S1 |
+| P4 | Notes: encrypted NIP-78 sync (`omni/notes/v1/<id>`) | **publish fixed:** saving a note emits an encrypted kind-30078 doc with a `d` tag; remote restore/decrypt + ingest is still missing | S2 |
 | P5 | Notes editor sanitization | Implemented (`omni_ui/sanitize`) and tested | ok |
 | P6 | Profiles: people directory, metadata edit | In-process model + seeded data + kind-0 ingestion; no publish | S1 |
 | P7 | Profiles: key custody/backup UI | Absent | S1 |
@@ -110,7 +110,7 @@ feature, **S3** = polish.
 | S11 | Plugin settings tabs (embed plugin settings) | Shell renders tab; no plugin settings content host | S2 |
 | S12 | App store custom URL install | Adds descriptor; no fetch/validate | S2 |
 | S13 | PWA/service worker + offline | SW registration kept; no offline shell/assets caching strategy for new bundles | S2 |
-| S14 | NIP-78 workspace restore on boot | Boot loads local state only; no remote fetch/publish | S1 |
+| S14 | NIP-78 workspace restore on boot | **fixed:** remote workspace is fetched after relays connect and applied when it contains plugins; local-first load still absent | S2 |
 | S15 | Signer/profile bootstrap from `localStorage` | Removed with TS host; no session restore | S1 |
 
 ## Root-cause integration gaps (fix once, many features unlock)

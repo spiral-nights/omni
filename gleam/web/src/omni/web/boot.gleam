@@ -23,10 +23,13 @@ import omni/kernel/kernel.{type KernelPorts, type OmniKernel}
 import omni/kernel/nostr/event_store
 import omni/kernel/nostr/relay_pool.{Connected, Connecting, Disconnected}
 import omni/kernel/workspace/sync
-import omni/nostr/event.{type Event, type UnsignedEvent}
+import omni/nostr/event.{type Event, type UnsignedEvent, UnsignedEvent}
+import omni/nostr/event_codec
 import omni/nostr/event_id
+import omni/nostr/kind
 import omni/nostr/pubkey
 import omni/nostr/relay_url
+import omni/platform/nip44
 import omni/platform/promise_ext
 import omni/platform/ref
 import omni/platform/storage
@@ -182,6 +185,18 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
             storage.set(booted.kernel.storage, accent_color_storage_key, color)
           #(reg, Nil)
         }
+        update.PublishWorkspaceNip78(ws) -> {
+          let draft =
+            UnsignedEvent(
+              pubkey: None,
+              created_at: ws.updated_at,
+              kind: kind.AppData,
+              tags: [["d", config.workspace_sync_d_tag]],
+              content: workspace.encode(ws),
+            )
+          let _ = publish_draft(booted, draft)
+          #(reg, Nil)
+        }
         _ -> #(reg, Nil)
       }
     })
@@ -260,12 +275,27 @@ pub fn publish_pending(booted: Booted) -> Promise(List(String)) {
     dict.fold(booted.builtins, [], fn(acc, _id, app) {
       list.append(acc, app.take_publishes())
     })
+  let encrypted =
+    dict.fold(booted.builtins, [], fn(acc, _id, app) {
+      list.append(acc, app.take_encrypted_publishes())
+    })
 
-  case drafts {
+  let pending =
+    list.append(
+      list.map(encrypted, fn(draft) { #(draft, True) }),
+      list.map(drafts, fn(draft) { #(draft, False) }),
+    )
+
+  case pending {
     [] -> promise.resolve([])
-    _ ->
+    pending ->
       promise_ext.all(
-        list.map(drafts, fn(draft) { publish_draft(booted, draft) }),
+        list.map(pending, fn(pair) {
+          case pair.1 {
+            True -> publish_encrypted_draft(booted, pair.0)
+            False -> publish_draft(booted, pair.0)
+          }
+        }),
       )
       |> promise.map(fn(results) {
         list.filter_map(results, fn(result) {
@@ -278,6 +308,26 @@ pub fn publish_pending(booted: Booted) -> Promise(List(String)) {
   }
 }
 
+/// Encrypt a draft's content to the user with NIP-44, then sign and publish it.
+pub fn publish_encrypted_draft(
+  booted: Booted,
+  draft: UnsignedEvent,
+) -> Promise(Result(String, String)) {
+  let private_key = keystore.get_private_key(booted.kernel.keystore)
+  let self_pubkey =
+    pubkey.to_hex(keystore.get_public_key(booted.kernel.keystore))
+  use result <- promise.await(nip44.nip44_encrypt(
+    private_key,
+    self_pubkey,
+    draft.content,
+  ))
+  case result {
+    Error(err) -> promise.resolve(Error(err))
+    Ok(ciphertext) ->
+      publish_draft(booted, UnsignedEvent(..draft, content: ciphertext))
+  }
+}
+
 /// Sign a single unsigned draft and broadcast it. Returns the event ID.
 pub fn publish_draft(
   booted: Booted,
@@ -285,13 +335,18 @@ pub fn publish_draft(
 ) -> Promise(Result(String, String)) {
   case keystore.sign_event(booted.kernel.keystore, draft) {
     Error(err) -> promise.resolve(Error(err))
-    Ok(event) ->
-      relay_pool.publish(booted.kernel.relay_pool, event)
-      |> promise.map(fn(_relays) {
-        let _ = event_store.save_event(booted.kernel.event_store, event)
-        ingest_signed(booted, event)
-        Ok(event_id.to_hex(event.id))
-      })
+    Ok(event) -> {
+      use _relays <- promise.await(relay_pool.publish(
+        booted.kernel.relay_pool,
+        event,
+      ))
+      use _saved <- promise.await(event_store.save_event(
+        booted.kernel.event_store,
+        event,
+      ))
+      ingest_signed(booted, event)
+      promise.resolve(Ok(event_id.to_hex(event.id)))
+    }
   }
 }
 

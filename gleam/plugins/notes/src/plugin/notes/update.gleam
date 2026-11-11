@@ -1,14 +1,20 @@
 //// Pure Elm-style state transitions and action decoder for `plugin_notes`.
 
 import gleam/int
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
-import omni/plugin_kit/app.{type Effect}
+import omni/nostr/event.{UnsignedEvent}
+import omni/nostr/kind
+import omni/plugin_kit/app.{type Effect, Publish, PublishEncrypted}
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/ui/sanitize
-import plugin/notes/model.{type Model, type NoteDoc, Model, NoteDoc}
+import plugin/notes/model.{
+  type Model, type NoteDoc, Model, NoteDoc, active_note, encode_note_doc,
+  notes_d_tag,
+}
 import plugin/notes/msg.{
   type Msg, AddTag, CreateNote, DeleteNote, RemoveTag, SaveActiveNote,
   SelectFolder, SelectNote, SetDraftContent, SetDraftTitle, SetSearchQuery,
@@ -221,7 +227,27 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
 
     SelectFolder(folder) -> #(Model(..model, folder: folder), [])
 
-    SaveActiveNote -> #(save_active_note(model), [])
+    SaveActiveNote -> {
+      let next_model = save_active_note(model)
+      case active_note(next_model) {
+        None -> #(next_model, [])
+        Some(note) -> {
+          let draft =
+            UnsignedEvent(
+              pubkey: None,
+              created_at: note.updated_at + 1,
+              kind: kind.AppData,
+              tags: [["d", notes_d_tag <> "/" <> note.id]],
+              content: encode_note_doc(note) |> json.to_string,
+            )
+          let effect = case next_model.sync_encrypted {
+            True -> PublishEncrypted(draft)
+            False -> Publish(draft)
+          }
+          #(next_model, [effect])
+        }
+      }
+    }
 
     ToggleEncryptedSync -> {
       let next_enc = !model.sync_encrypted
