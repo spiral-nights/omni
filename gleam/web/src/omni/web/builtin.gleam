@@ -17,6 +17,7 @@ import plugin/checklist/main as checklist
 import plugin/feed/main as feed
 import plugin/feed/msg as feed_msg
 import plugin/notes/main as notes
+import plugin/notes/msg as notes_msg
 import plugin/profiles/main as profiles
 import plugin/profiles/msg as profiles_msg
 import plugin/publisher/main as publisher
@@ -35,6 +36,7 @@ pub type BuiltinApp {
     relay_status: Option(fn(String, Bool) -> Nil),
     take_publishes: fn() -> List(UnsignedEvent),
     take_encrypted_publishes: fn() -> List(UnsignedEvent),
+    ingest_doc: Option(fn(String) -> Nil),
   )
 }
 
@@ -57,14 +59,7 @@ pub fn apps() -> List(#(String, BuiltinApp)) {
       "org.omni.plugin.timer",
       host(fn(emit) { timer.start_app("", emit) }, None, None),
     ),
-    #(
-      "org.omni.plugin.notes",
-      host(
-        fn(emit) { notes.start_app_with_storage("", store, emit) },
-        None,
-        None,
-      ),
-    ),
+    #("org.omni.plugin.notes", notes_app(store)),
     #("org.omni.plugin.relays", relays_app()),
     #("org.omni.plugin.profiles", profiles_app(store)),
     #(
@@ -86,6 +81,7 @@ fn feed_app(store: storage.Storage) -> BuiltinApp {
     relay_status: None,
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
+    ingest_doc: None,
   )
 }
 
@@ -101,6 +97,7 @@ fn profiles_app(store: storage.Storage) -> BuiltinApp {
     relay_status: None,
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
+    ingest_doc: None,
   )
 }
 
@@ -120,6 +117,7 @@ fn relays_app() -> BuiltinApp {
     }),
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
+    ingest_doc: None,
   )
 }
 
@@ -138,5 +136,22 @@ fn host(
     relay_status: relay_status,
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
+    ingest_doc: None,
+  )
+}
+
+fn notes_app(store: storage.Storage) -> BuiltinApp {
+  let running = notes.start_app_with_storage("", store, fn(_) { Nil })
+  BuiltinApp(
+    render: fn() { app.current_view(running) },
+    navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
+    handle_action: fn(action) { app.handle_action(running, action) },
+    ingest: None,
+    relay_status: None,
+    take_publishes: fn() { app.take_publishes(running) },
+    take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
+    ingest_doc: Some(fn(raw) {
+      app.dispatch(running, notes_msg.IngestRemoteDoc(raw))
+    }),
   )
 }

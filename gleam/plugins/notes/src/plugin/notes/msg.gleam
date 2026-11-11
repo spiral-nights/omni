@@ -17,4 +17,6 @@ pub type Msg {
   SelectFolder(NotebookFolder)
   SaveActiveNote
   ToggleEncryptedSync
+  /// Decrypted remote document (JSON) received from NIP-78 sync.
+  IngestRemoteDoc(String)
 }

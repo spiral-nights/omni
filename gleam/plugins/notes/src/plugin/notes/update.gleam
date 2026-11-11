@@ -13,12 +13,12 @@ import omni/protocol/schema/action.{type Action}
 import omni/ui/sanitize
 import plugin/notes/model.{
   type Model, type NoteDoc, Model, NoteDoc, active_note, encode_note_doc,
-  notes_d_tag,
+  note_doc_decoder, notes_d_tag,
 }
 import plugin/notes/msg.{
-  type Msg, AddTag, CreateNote, DeleteNote, RemoveTag, SaveActiveNote,
-  SelectFolder, SelectNote, SetDraftContent, SetDraftTitle, SetSearchQuery,
-  ToggleArchive, ToggleEncryptedSync, ToggleStar,
+  type Msg, AddTag, CreateNote, DeleteNote, IngestRemoteDoc, RemoveTag,
+  SaveActiveNote, SelectFolder, SelectNote, SetDraftContent, SetDraftTitle,
+  SetSearchQuery, ToggleArchive, ToggleEncryptedSync, ToggleStar,
 }
 
 /// Apply a `Msg` to `model`, returning the updated `Model` and resulting effects.
@@ -249,6 +249,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       }
     }
 
+    IngestRemoteDoc(raw) ->
+      case json.parse(from: raw, using: note_doc_decoder()) {
+        Ok(note) -> #(upsert_remote_note(model, note), [])
+        Error(_) -> #(model, [])
+      }
+
     ToggleEncryptedSync -> {
       let next_enc = !model.sync_encrypted
       let updated_notes =
@@ -442,4 +448,39 @@ fn extract_folder(act: Action) -> Option(String) {
         _ -> schema.payload_string(act, "value")
       }
   }
+}
+
+fn upsert_remote_note(model: Model, remote: NoteDoc) -> Model {
+  let existing = list.find(model.notes, fn(n) { n.id == remote.id })
+  let notes = case existing {
+    Ok(local) ->
+      case remote.updated_at >= local.updated_at {
+        True ->
+          list.map(model.notes, fn(n) {
+            case n.id == remote.id {
+              True -> remote
+              False -> n
+            }
+          })
+        False -> model.notes
+      }
+    Error(Nil) -> [remote, ..model.notes]
+  }
+  let active = case model.active_note_id {
+    Some(_) -> model.active_note_id
+    None -> Some(remote.id)
+  }
+  Model(
+    ..model,
+    notes: notes,
+    active_note_id: active,
+    draft_title: case model.active_note_id {
+      None -> remote.title
+      Some(_) -> model.draft_title
+    },
+    draft_content: case model.active_note_id {
+      None -> remote.content
+      Some(_) -> model.draft_content
+    },
+  )
 }

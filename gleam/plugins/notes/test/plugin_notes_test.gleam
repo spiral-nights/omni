@@ -21,9 +21,9 @@ import plugin/notes/model.{
   word_count,
 }
 import plugin/notes/msg.{
-  AddTag, CreateNote, DeleteNote, RemoveTag, SaveActiveNote, SelectFolder,
-  SelectNote, SetDraftContent, SetDraftTitle, SetSearchQuery, ToggleArchive,
-  ToggleEncryptedSync, ToggleStar,
+  AddTag, CreateNote, DeleteNote, IngestRemoteDoc, RemoveTag, SaveActiveNote,
+  SelectFolder, SelectNote, SetDraftContent, SetDraftTitle, SetSearchQuery,
+  ToggleArchive, ToggleEncryptedSync, ToggleStar,
 }
 import plugin/notes/update
 import plugin/notes/view
@@ -207,7 +207,7 @@ pub fn storage_backed_spec_persists_notebook_test() {
   let spec = notes_main.app_spec_with_storage(store)
   let #(m0, _) = spec.init(route.parse_search(""))
   let #(m1, _) = spec.update(m0, CreateNote)
-  let #(m2, _) = spec.update(m1, SetDraftTitle("Persisted"))
+  let #(_, _) = spec.update(m1, SetDraftTitle("Persisted"))
 
   let reloaded = notes_main.notebook_store_config()
   let stored = local_store.load(store, notes_main.notebook_store_config())
@@ -265,4 +265,28 @@ pub fn save_publishes_encrypted_nip78_doc_test() {
       }
     }),
   )
+}
+
+pub fn remote_note_ingestion_upserts_by_updated_at_test() {
+  let m0 = init()
+  let remote =
+    "{\"id\":\"note_1\",\"title\":\"Remote welcome\",\"content\":\"<p>synced</p>\",\"tags\":[\"sync\"],\"starred\":false,\"archived\":false,\"encrypted\":true,\"updated_at\":1700009999}"
+  let #(m1, _) = update.update(m0, IngestRemoteDoc(remote))
+  let assert Ok(note) = list.find(m1.notes, fn(n) { n.id == "note_1" })
+  note.title |> should.equal("Remote welcome")
+
+  // Older remote payloads do not overwrite newer local edits.
+  let #(m2, _) = update.update(m1, SetDraftTitle("Local edit"))
+  let #(m3, _) = update.update(m2, SaveActiveNote)
+  let stale =
+    "{\"id\":\"note_1\",\"title\":\"Stale remote\",\"content\":\"old\",\"tags\":[],\"starred\":false,\"archived\":false,\"encrypted\":true,\"updated_at\":1}"
+  let #(m4, _) = update.update(m3, IngestRemoteDoc(stale))
+  let assert Ok(after) = list.find(m4.notes, fn(n) { n.id == "note_1" })
+  after.title |> should.equal("Local edit")
+
+  // Unknown remote notes are added.
+  let other =
+    "{\"id\":\"note_remote\",\"title\":\"Another\",\"content\":\"body\",\"tags\":[],\"starred\":false,\"archived\":false,\"encrypted\":true,\"updated_at\":1700010000}"
+  let #(m5, _) = update.update(m4, IngestRemoteDoc(other))
+  list.length(m5.notes) |> should.equal(2)
 }

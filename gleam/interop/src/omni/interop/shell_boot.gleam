@@ -14,6 +14,7 @@ import gleam/string
 
 import lustre/effect.{type Effect}
 import lustre/element.{type Element}
+import omni/kernel/crypto/keystore
 import omni/kernel/kernel.{KernelPorts}
 import omni/kernel/nostr/coordinator
 import omni/kernel/nostr/relay_pool
@@ -23,6 +24,7 @@ import omni/nostr/kind
 import omni/nostr/relay_url
 import omni/platform/clock
 import omni/platform/idb
+import omni/platform/nip44
 import omni/platform/storage
 import omni/platform/url
 import omni/plugin_kit/route.{type Route}
@@ -279,6 +281,81 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
       None,
     )
 
+  // Notes: decrypt remote NIP-78 docs and hand them to the notebook.
+  let _ =
+    coordinator.subscribe(
+      host.booted.kernel.coordinator,
+      "builtin:notes",
+      [app_data_filter(self_pubkey)],
+      fn(event) {
+        case nostr_event.get_tag_values(event.tags, "d") {
+          [d_tag, ..] ->
+            case string.starts_with(d_tag, "omni/notes/v1/") {
+              False -> Nil
+              True -> {
+                let private_key =
+                  keystore.get_private_key(host.booted.kernel.keystore)
+                let _ =
+                  nip44.nip44_decrypt(private_key, self_pubkey, event.content)
+                  |> promise.map(fn(result) {
+                    case result {
+                      Error(_) -> Nil
+                      Ok(raw_doc) -> {
+                        dict.each(host.booted.builtins, fn(_id, app) {
+                          case app.ingest_doc {
+                            Some(ingest) -> ingest(raw_doc)
+                            None -> Nil
+                          }
+                        })
+                        push_views(host)
+                        Nil
+                      }
+                    }
+                  })
+                Nil
+              }
+            }
+          _ -> Nil
+        }
+      },
+      None,
+    )
+
+  // Follows: fetch the user's own kind-3 contact list into Profiles.
+  let _ =
+    coordinator.subscribe(
+      host.booted.kernel.coordinator,
+      "builtin:follows",
+      [contact_list_filter(self_pubkey)],
+      fn(event) {
+        dict.each(host.booted.builtins, fn(_id, app) {
+          case app.ingest {
+            Some(ingest) -> ingest(event)
+            None -> Nil
+          }
+        })
+        push_views(host)
+      },
+      None,
+    )
+
+  // Relay list: apply NIP-65 read/write scopes and add discovered relays.
+  let _ =
+    coordinator.subscribe(
+      host.booted.kernel.coordinator,
+      "builtin:relay-list",
+      [relay_list_filter(self_pubkey)],
+      fn(event) {
+        boot.apply_relay_list(host.booted, event.tags)
+        push_relay_statuses(
+          host,
+          relay_pool.get_statuses(host.booted.kernel.relay_pool),
+        )
+        push_views(host)
+      },
+      None,
+    )
+
   push_relay_statuses(
     host,
     relay_pool.get_statuses(host.booted.kernel.relay_pool),
@@ -309,6 +386,32 @@ fn push_relay_statuses(
       }
     })
   })
+}
+
+fn app_data_filter(author_hex: String) -> Filter {
+  Filter(
+    ids: None,
+    authors: Some([author_hex]),
+    kinds: Some([kind.AppData]),
+    since: None,
+    until: None,
+    limit: Some(250),
+    search: None,
+    tags: dict.new(),
+  )
+}
+
+fn contact_list_filter(author_hex: String) -> Filter {
+  Filter(
+    ids: None,
+    authors: Some([author_hex]),
+    kinds: Some([kind.ContactList]),
+    since: None,
+    until: None,
+    limit: Some(1),
+    search: None,
+    tags: dict.new(),
+  )
 }
 
 fn relay_list_filter(author_hex: String) -> Filter {
