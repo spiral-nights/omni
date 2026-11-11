@@ -4,6 +4,9 @@
 > application) against the current Gleam tree. This is the authoritative list of
 > what is missing or degraded; it supersedes the optimistic "shipped" summary in
 > the roadmap.
+>
+> **Progress:** the first remediation step (RPC binder + key bootstrap) is
+> implemented; rows marked "fixed" below are updated accordingly.
 
 ## Why the gap exists
 
@@ -45,8 +48,8 @@ feature, **S3** = polish.
 
 | # | Feature (main) | Current state | Sev |
 |---|---|---|---|
-| I1 | Generate/import/export nsec, passphrase storage | Keystore exists (`omni/platform/webcrypto`, `omni/kernel/crypto/keystore`) but **never initialized by the host**; no key UI | S1 |
-| I2 | `window.nostr` RPC served by host (`getPublicKey`, `signEvent`, nip04/44, relays) | Guest bridge sends RPC; **no host dispatcher connected to Channel 2** | S1 |
+| I1 | Generate/import/export nsec, passphrase storage | **fixed (bootstrap):** host generates/persists a key and publishes it into the shell profile; import/export + passphrase UI still missing | S2 |
+| I2 | `window.nostr` RPC served by host (`getPublicKey`, `signEvent`, nip04/44, relays) | **fixed:** `omni/web/rpc` binds the kernel dispatcher, iframe spawn transfers ports and answers Channel 2; default grants installed for bundled apps | ok |
 | I3 | Publish note (kind 1) with tags | Feed synthesizes a fake local note; nothing signs/broadcasts | S1 |
 | I4 | Reply (kind 1 with NIP-10 tags) | Local-only synthetic reply | S1 |
 | I5 | Like (kind 7), repost (kind 6), zap request | `LikeNote`/`RepostNote`/`ZapNote` are no-ops | S1 |
@@ -62,7 +65,7 @@ feature, **S3** = polish.
 | # | Feature (main) | Current state | Sev |
 |---|---|---|---|
 | R1 | Relay pool connects to bootstrap relays | Host now dials sockets and tracks status | fixed |
-| R2 | Subscription REQ/EVENT/EOSE end-to-end | Coordinator+pool exist; host subscribes for feed/profiles, but no re-REQ on reconnect, no per-relay scoping, no lifecycle handling | S1 |
+| R2 | Subscription REQ/EVENT/EOSE end-to-end | Coordinator+pool exist; host subscribes for feed/profiles; **fixed:** socket dialing + status tracking; still no re-REQ on reconnect or per-relay scoping | S2 |
 | R3 | Profile metadata fetch/cache across plugins | Profiles ingests live kind 0 events; no targeted fetch (`profile_for` queries unused) | S2 |
 | R4 | Timeline pagination (`load-more` → older events) | Feed `LoadMore` only grows a local slice; no `until` query | S1 |
 | R5 | Search over relays | Local substring search of ingested notes only | S2 |
@@ -130,6 +133,20 @@ feature, **S3** = polish.
 5. **Query layer.** Use `omni_social/queries` + coordinator for targeted
    fetches (profiles, replies, pagination, search) instead of one firehose
    subscription.
+
+## Fixed in the first remediation pass
+
+- **`omni/web/rpc`**: plugin-scoped `RpcContext` resolution and raw JSON-RPC
+  dispatch through the kernel (`nostr.getPublicKey`, `nostr.signEvent`, fetch,
+  publish, relays, storage, intents). Integration tests cover signing via frame.
+- **Key bootstrap**: the keystore is initialized at boot and surfaced in the
+  shell profile (hex pubkey + npub); the key persists across reloads.
+- **Default capabilities**: bundled first-party apps receive the standard
+  capability set (read/write/sign/encrypt/storage/relays/intents).
+- **Sandbox handshake**: iframe mounts now transfer Channel 1/2 ports and forward
+  RPC frames to the Gleam binder; responses return over the port.
+- Tests: `omni_web` suite now asserts key bootstrap, signing, RPC frames,
+  invalid-plugin rejection, and key persistence.
 
 ## Recommended order (each ends with an acceptance test)
 

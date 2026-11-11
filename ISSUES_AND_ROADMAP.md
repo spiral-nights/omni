@@ -22,6 +22,16 @@
 > [`docs/09-gap-analysis.md`](docs/09-gap-analysis.md). The items below are the
 > summary; the remediation order there takes precedence.
 
+### 0. Finish the data plane (in progress)
+
+- [x] Host RPC binder (kernel dispatcher bound to Channel 2) + default grants.
+- [x] Key bootstrap: generate/persist a key, surface it in the shell profile.
+- [x] Iframe port transfer + RPC forwarding handshake.
+- [ ] Key import/export + passphrase UI in Settings.
+- [ ] Publish effects: plugins request signing/broadcast; host signs via keystore
+      and publishes through the relay pool.
+- [ ] NIP-78 workspace/doc publish + remote restore.
+
 ### 1. Plugin bundle resolution into sandboxes (P1)
 
 The host can spawn a iframe sandbox with the Gleam guest bridge and mount the

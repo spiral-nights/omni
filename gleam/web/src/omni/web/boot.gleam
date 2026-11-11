@@ -12,16 +12,22 @@ import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/string
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
+import omni/kernel/acl/capability_store
+import omni/kernel/crypto/keystore
 import omni/kernel/kernel.{type KernelPorts, type OmniKernel}
 import omni/kernel/nostr/relay_pool.{Connected, Connecting, Disconnected}
 import omni/kernel/workspace/sync
+import omni/nostr/pubkey
 import omni/nostr/relay_url
 import omni/platform/ref
 import omni/platform/storage
 import omni/platform/websocket
+import omni/protocol/capability
+import omni/protocol/grant.{Always}
 import omni/protocol/plugin_id
 import omni/protocol/schema/node.{type Node}
 import omni/protocol/workspace
@@ -29,7 +35,9 @@ import omni/sandbox/iframe_host.{type IframeMount, IframeConfig}
 import omni/sandbox/manager.{
   type SandboxManager, type SpawnOptions, SpawnOptions,
 }
-import omni/shell/model.{type Model, Model, PrimaryApp}
+import omni/shell/model.{
+  type Model, type UserProfileSummary, Model, PrimaryApp, UserProfileSummary,
+}
 import omni/shell/msg.{type Msg, SelectShell}
 import omni/shell/registry.{type ShellRegistry}
 import omni/shell/shell
@@ -85,14 +93,60 @@ pub fn init_with_bridge(
         )
       },
     )
-  Booted(
-    registry: registry,
-    model: seeded,
-    kernel: kernel,
-    sandboxes: manager.new(),
-    bridge_script: bridge_script,
-    builtins: builtins,
+  let booted =
+    Booted(
+      registry: registry,
+      model: Model(..seeded, user_profile: Some(session_profile(kernel))),
+      kernel: kernel,
+      sandboxes: manager.new(),
+      bridge_script: bridge_script,
+      builtins: builtins,
+    )
+  grant_default_capabilities(booted)
+  booted
+}
+
+fn session_profile(kernel: OmniKernel) -> UserProfileSummary {
+  let public_hex = pubkey.to_hex(keystore.get_public_key(kernel.keystore))
+  let npub = keystore.get_npub(kernel.keystore)
+  UserProfileSummary(
+    pubkey: public_hex,
+    npub: npub,
+    display_name: "npub" <> string.drop_start(npub, 5) |> string.slice(0, 8),
+    picture: None,
+    nip05: None,
   )
+}
+
+fn grant_default_capabilities(booted: Booted) -> Nil {
+  config.system_apps()
+  |> list.each(fn(app) {
+    case plugin_id.parse(app.id) {
+      Ok(pid) ->
+        list.each(
+          [
+            capability.NostrRead,
+            capability.NostrWrite,
+            capability.NostrSign,
+            capability.NostrEncrypt,
+            capability.StorageKv,
+            capability.RelaysManage,
+            capability.IntentsDispatch,
+            capability.IntentsHandle,
+          ],
+          fn(cap) {
+            capability_store.set_grant(
+              booted.kernel.capability_store,
+              pid,
+              cap,
+              Always,
+              None,
+            )
+          },
+        )
+      Error(_) -> Nil
+    }
+  })
 }
 
 /// Process a shell message: updates the model, applies persistence effects to

@@ -17,6 +17,7 @@ import omni/shell/msg.{NavigateTo, ToggleFullscreen}
 import omni/shell/registry
 import omni/web/boot
 import omni/web/config
+import omni/web/rpc
 
 pub fn main() {
   gleeunit.main()
@@ -170,6 +171,66 @@ pub fn boot_spawns_sandbox_with_guest_bridge_test() {
     Error(message) ->
       should.be_true(string.contains(message, "Invalid plugin ID"))
   }
+
+  promise.resolve(Nil)
+}
+
+pub fn key_bootstrap_signing_and_rpc_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+
+  let booted = boot.init_with_bridge(ports, None)
+  let assert Some(profile) = booted.model.user_profile
+  string.length(profile.pubkey) |> should.equal(64)
+  should.be_true(string.starts_with(profile.npub, "npub1"))
+
+  // Signing an unsigned draft produces a real NIP-01 event.
+  let draft =
+    "{\"kind\":1,\"content\":\"hello\",\"tags\":[],\"created_at\":1700000000}"
+  let assert Ok(signed) = rpc.sign_draft_json(booted, draft)
+  should.be_true(string.contains(signed, "\"sig\":"))
+  should.be_true(string.contains(signed, profile.pubkey))
+  should.be_true(string.contains(signed, "hello"))
+
+  // The Channel 2 RPC binder answers standard NIP-07 requests.
+  let request =
+    "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"nostr.getPublicKey\",\"params\":{}}"
+  use response <- promise.await(rpc.handle(
+    booted,
+    "org.omni.plugin.feed",
+    request,
+  ))
+  should.be_true(string.contains(response, profile.pubkey))
+
+  // The key persists across boots sharing the same storage.
+  use ports2_res <- promise.await(test_ports(store))
+  let assert Ok(ports2) = ports2_res
+  let rebooted = boot.init_with_bridge(ports2, None)
+  let assert Some(again) = rebooted.model.user_profile
+  again.pubkey |> should.equal(profile.pubkey)
+
+  promise.resolve(Nil)
+}
+
+pub fn rpc_rejects_invalid_plugin_and_signs_via_frame_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_bridge(ports, None)
+
+  use response <- promise.await(rpc.handle(booted, "not a plugin", "{}"))
+  should.be_true(string.contains(response, "Invalid plugin ID"))
+
+  let sign_request =
+    "{\"jsonrpc\":\"2.0\",\"id\":\"7\",\"method\":\"nostr.signEvent\",\"params\":{\"event\":{\"kind\":1,\"content\":\"via rpc\",\"tags\":[],\"created_at\":1700000001}}}"
+  use signed <- promise.await(rpc.handle(
+    booted,
+    "org.omni.plugin.feed",
+    sign_request,
+  ))
+  should.be_true(string.contains(signed, "via rpc"))
+  should.be_true(string.contains(signed, "\"sig\""))
 
   promise.resolve(Nil)
 }

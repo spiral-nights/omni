@@ -31,6 +31,7 @@ import omni/shell/model.{
 }
 import omni/shell/msg.{EmbedSchema, NavigateTo, OpenApp, OpenSettings}
 import omni/web/boot
+import omni/web/rpc
 
 /// Opaque shell boot state handed back to the host page.
 pub type ShellBoot {
@@ -83,11 +84,42 @@ pub fn spawn_plugin(
 ) -> Result(ShellBoot, String) {
   case boot.spawn_sandbox(host.booted, plugin_id, content, route) {
     Ok(#(next_booted, mount)) -> {
-      mount_island(selector, mount.srcdoc)
+      mount_island(selector, mount.srcdoc, plugin_id, fn(raw_request, respond) {
+        let _ =
+          rpc.handle(next_booted, plugin_id, raw_request)
+          |> promise.map(fn(response) { respond(response) })
+        Nil
+      })
       Ok(ShellBoot(next_booted))
     }
     Error(err) -> Error(err)
   }
+}
+
+/// Current user public key (hex) and npub.
+pub fn user_pubkey(host: ShellBoot) -> String {
+  rpc.public_key_hex(host.booted)
+}
+
+pub fn user_npub(host: ShellBoot) -> String {
+  rpc.npub(host.booted)
+}
+
+/// Sign an unsigned-event JSON draft and return the signed event JSON.
+pub fn sign_event(
+  host: ShellBoot,
+  draft_json: String,
+) -> Result(String, String) {
+  rpc.sign_draft_json(host.booted, draft_json)
+}
+
+/// Answer a raw JSON-RPC frame for `plugin_id` (Channel 2 host binding).
+pub fn rpc_frame(
+  host: ShellBoot,
+  plugin_id: String,
+  request_json: String,
+) -> promise.Promise(String) {
+  rpc.handle(host.booted, plugin_id, request_json)
 }
 
 /// Terminate a plugin sandbox and remove its mounted island contents.
@@ -313,7 +345,12 @@ pub fn open_settings_tab(host: ShellBoot, tab_id: String) -> ShellBoot {
 }
 
 @external(javascript, "./shell_boot.ffi.mjs", "mount_island")
-fn mount_island(selector: String, srcdoc: String) -> Nil
+fn mount_island(
+  selector: String,
+  srcdoc: String,
+  plugin_id: String,
+  on_rpc: fn(String, fn(String) -> Nil) -> Nil,
+) -> Nil
 
 @external(javascript, "./shell_boot.ffi.mjs", "unmount_island")
 fn unmount_island(selector: String) -> Nil

@@ -14,7 +14,6 @@ import omni/plugin_kit/route
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
 import plugin/checklist/main as checklist
-import plugin/checklist/msg as checklist_msg
 import plugin/feed/main as feed
 import plugin/feed/msg as feed_msg
 import plugin/notes/main as notes

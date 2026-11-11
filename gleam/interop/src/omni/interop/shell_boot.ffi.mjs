@@ -3,7 +3,7 @@ function resolveHost(selector) {
   return document.querySelector(selector);
 }
 
-export function mount_island(selector, srcdoc) {
+export function mount_island(selector, srcdoc, pluginId, onRpc) {
   const host = resolveHost(selector);
   if (!host) return;
   host.innerHTML = "";
@@ -12,6 +12,41 @@ export function mount_island(selector, srcdoc) {
   iframe.setAttribute("sandbox", "allow-scripts");
   iframe.setAttribute("allow", "clipboard-read; clipboard-write");
   iframe.setAttribute("title", "Omni plugin");
+
+  const schemaChannel = new MessageChannel();
+  const rpcChannel = new MessageChannel();
+
+  rpcChannel.port1.onmessage = (event) => {
+    if (typeof onRpc !== "function") return;
+    let raw;
+    try {
+      raw = JSON.stringify(event.data);
+    } catch {
+      return;
+    }
+    onRpc(raw, (responseJson) => {
+      try {
+        rpcChannel.port1.postMessage(JSON.parse(responseJson));
+      } catch {
+        rpcChannel.port1.postMessage({
+          jsonrpc: "2.0",
+          id: event.data && event.data.id,
+          error: { code: -32603, message: "Invalid response" },
+        });
+      }
+    });
+  };
+
+  iframe.addEventListener("load", () => {
+    const target = iframe.contentWindow;
+    if (!target) return;
+    target.postMessage(
+      { type: "omni:init", payload: { pluginId: String(pluginId) } },
+      "*",
+      [schemaChannel.port2, rpcChannel.port2],
+    );
+  });
+
   iframe.srcdoc = String(srcdoc);
   host.appendChild(iframe);
 }
