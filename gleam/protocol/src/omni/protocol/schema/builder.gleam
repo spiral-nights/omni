@@ -547,14 +547,10 @@ pub fn children(parent: Node, kids: List(Node)) -> Node {
 /// Set title on Card, Banner, ListItem, or EmptyState.
 pub fn title(n: Node, t: String) -> Node {
   case n {
-    Card(base, _, sub, ic, ha, kids, foot, act, bbg) ->
-      Card(base, Some(t), sub, ic, ha, kids, foot, act, bbg)
-    Banner(base, tn, _, msg, ic, act, albl, dis, od) ->
-      Banner(base, tn, Some(t), msg, ic, act, albl, dis, od)
-    ListItem(base, _, sub, m, ic, au, ap, chk, ochk, oclk, acts) ->
-      ListItem(base, t, sub, m, ic, au, ap, chk, ochk, oclk, acts)
-    EmptyState(base, ic, _, desc, act, albl) ->
-      EmptyState(base, ic, t, desc, act, albl)
+    Card(..) as card -> Card(..card, title: Some(t))
+    Banner(..) as banner -> Banner(..banner, title: Some(t))
+    ListItem(..) as item -> ListItem(..item, title: t)
+    EmptyState(..) as empty -> EmptyState(..empty, title: t)
     other -> other
   }
 }
@@ -562,10 +558,8 @@ pub fn title(n: Node, t: String) -> Node {
 /// Set subtitle on Card or ListItem.
 pub fn subtitle(n: Node, s: String) -> Node {
   case n {
-    Card(base, t, _, ic, ha, kids, foot, act, bbg) ->
-      Card(base, t, Some(s), ic, ha, kids, foot, act, bbg)
-    ListItem(base, t, _, m, ic, au, ap, chk, ochk, oclk, acts) ->
-      ListItem(base, t, Some(s), m, ic, au, ap, chk, ochk, oclk, acts)
+    Card(..) as card -> Card(..card, subtitle: Some(s))
+    ListItem(..) as item -> ListItem(..item, subtitle: Some(s))
     other -> other
   }
 }
@@ -573,14 +567,10 @@ pub fn subtitle(n: Node, s: String) -> Node {
 /// Set icon name on Card, Banner, EmptyState, or ListItem.
 pub fn with_icon(n: Node, icon_name: String) -> Node {
   case n {
-    Card(base, t, sub, _, ha, kids, foot, act, bbg) ->
-      Card(base, t, sub, Some(icon_name), ha, kids, foot, act, bbg)
-    Banner(base, tn, t, msg, _, act, albl, dis, od) ->
-      Banner(base, tn, t, msg, Some(icon_name), act, albl, dis, od)
-    ListItem(base, t, sub, m, _, au, ap, chk, ochk, oclk, acts) ->
-      ListItem(base, t, sub, m, Some(icon_name), au, ap, chk, ochk, oclk, acts)
-    EmptyState(base, _, t, desc, act, albl) ->
-      EmptyState(base, Some(icon_name), t, desc, act, albl)
+    Card(..) as card -> Card(..card, icon: Some(icon_name))
+    Banner(..) as banner -> Banner(..banner, icon: Some(icon_name))
+    ListItem(..) as item -> ListItem(..item, icon: Some(icon_name))
+    EmptyState(..) as empty -> EmptyState(..empty, icon: Some(icon_name))
     Button(base, l, act, vr, sz, _, ip, dis, load) ->
       Button(base, l, act, vr, sz, Some(icon_name), ip, dis, load)
     other -> other
@@ -590,28 +580,19 @@ pub fn with_icon(n: Node, icon_name: String) -> Node {
 /// Attach an interactive Action to the node.
 pub fn action(n: Node, act: Action) -> Node {
   case n {
-    Box(base, dir, gap, align, justify, wrap, padding, _, bg, kids) ->
-      Box(base, dir, gap, align, justify, wrap, padding, Some(act), bg, kids)
-    Card(base, t, sub, ic, ha, kids, foot, _, bbg) ->
-      Card(base, t, sub, ic, ha, kids, foot, Some(act), bbg)
-    Text(base, c, vr, tn, tr, _, img) ->
-      Text(base, c, vr, tn, tr, Some(act), img)
-    Avatar(base, src, pk, nm, sz, _) -> Avatar(base, src, pk, nm, sz, Some(act))
-    Button(base, l, _, vr, sz, ic, ip, dis, load) ->
-      Button(base, l, act, vr, sz, ic, ip, dis, load)
-    IconButton(base, ic, tip, _, vr, sz, dis) ->
-      IconButton(base, ic, tip, act, vr, sz, dis)
-    Toggle(base, nm, lbl, chk, _, dis) -> Toggle(base, nm, lbl, chk, act, dis)
-    Select(base, nm, v, opts, _) -> Select(base, nm, v, opts, Some(act))
-    Tabs(base, tabs, act_tab, _) -> Tabs(base, tabs, act_tab, act)
-    Progress(base, v, mx, lbl, vr, sz, col, ticks, _) ->
-      Progress(base, v, mx, lbl, vr, sz, col, ticks, Some(act))
-    Banner(base, tn, t, msg, ic, _, albl, dis, od) ->
-      Banner(base, tn, t, msg, ic, Some(act), albl, dis, od)
-    EmptyState(base, ic, t, desc, _, albl) ->
-      EmptyState(base, ic, t, desc, Some(act), albl)
-    ListItem(base, t, sub, m, ic, au, ap, chk, ochk, _, acts) ->
-      ListItem(base, t, sub, m, ic, au, ap, chk, ochk, Some(act), acts)
+    Box(..) as b -> Box(..b, action: Some(act))
+    Card(..) as c -> Card(..c, action: Some(act))
+    Text(..) as txt -> Text(..txt, action: Some(act))
+    Avatar(..) as av -> Avatar(..av, action: Some(act))
+    Button(..) as btn -> Button(..btn, action: act)
+    IconButton(..) as ib -> IconButton(..ib, action: act)
+    Toggle(..) as tog -> Toggle(..tog, action: act)
+    Select(..) as sel -> Select(..sel, action: Some(act))
+    Tabs(..) as tb -> Tabs(..tb, action: act)
+    Progress(..) as pr -> Progress(..pr, action: Some(act))
+    Banner(..) as ban -> Banner(..ban, action: Some(act))
+    EmptyState(..) as es -> EmptyState(..es, action: Some(act))
+    ListItem(..) as li -> ListItem(..li, on_click_action: Some(act))
     other -> other
   }
 }
@@ -619,12 +600,9 @@ pub fn action(n: Node, act: Action) -> Node {
 /// Set disabled state on Button, IconButton, Toggle.
 pub fn disabled(n: Node, is_disabled: Bool) -> Node {
   case n {
-    Button(base, l, act, vr, sz, ic, ip, _, load) ->
-      Button(base, l, act, vr, sz, ic, ip, Some(is_disabled), load)
-    IconButton(base, ic, tip, act, vr, sz, _) ->
-      IconButton(base, ic, tip, act, vr, sz, Some(is_disabled))
-    Toggle(base, nm, lbl, chk, act, _) ->
-      Toggle(base, nm, lbl, chk, act, Some(is_disabled))
+    Button(..) as btn -> Button(..btn, disabled: Some(is_disabled))
+    IconButton(..) as ib -> IconButton(..ib, disabled: Some(is_disabled))
+    Toggle(..) as tog -> Toggle(..tog, disabled: Some(is_disabled))
     other -> other
   }
 }
@@ -632,8 +610,7 @@ pub fn disabled(n: Node, is_disabled: Bool) -> Node {
 /// Set loading state on Button.
 pub fn loading(n: Node, is_loading: Bool) -> Node {
   case n {
-    Button(base, l, act, vr, sz, ic, ip, dis, _) ->
-      Button(base, l, act, vr, sz, ic, ip, dis, Some(is_loading))
+    Button(..) as btn -> Button(..btn, loading: Some(is_loading))
     other -> other
   }
 }
@@ -641,9 +618,8 @@ pub fn loading(n: Node, is_loading: Bool) -> Node {
 /// Set placeholder on Input or Textarea.
 pub fn placeholder(n: Node, ph: String) -> Node {
   case n {
-    Input(base, nm, _, v, it, acc, clr, pfx, o_ent, o_chg) ->
-      Input(base, nm, Some(ph), v, it, acc, clr, pfx, o_ent, o_chg)
-    Textarea(base, nm, _, v, rows) -> Textarea(base, nm, Some(ph), v, rows)
+    Input(..) as inp -> Input(..inp, placeholder: Some(ph))
+    Textarea(..) as ta -> Textarea(..ta, placeholder: Some(ph))
     other -> other
   }
 }
@@ -651,10 +627,9 @@ pub fn placeholder(n: Node, ph: String) -> Node {
 /// Set initial value on Input, Textarea, or Select.
 pub fn value(n: Node, val: String) -> Node {
   case n {
-    Input(base, nm, ph, _, it, acc, clr, pfx, o_ent, o_chg) ->
-      Input(base, nm, ph, Some(val), it, acc, clr, pfx, o_ent, o_chg)
-    Textarea(base, nm, ph, _, rows) -> Textarea(base, nm, ph, Some(val), rows)
-    Select(base, nm, _, opts, act) -> Select(base, nm, Some(val), opts, act)
+    Input(..) as inp -> Input(..inp, value: Some(val))
+    Textarea(..) as ta -> Textarea(..ta, value: Some(val))
+    Select(..) as sel -> Select(..sel, value: Some(val))
     other -> other
   }
 }
@@ -662,8 +637,7 @@ pub fn value(n: Node, val: String) -> Node {
 /// Set input type on Input primitive.
 pub fn input_type(n: Node, it: InputType) -> Node {
   case n {
-    Input(base, nm, ph, v, _, acc, clr, pfx, o_ent, o_chg) ->
-      Input(base, nm, ph, v, Some(it), acc, clr, pfx, o_ent, o_chg)
+    Input(..) as inp -> Input(..inp, input_type: Some(it))
     other -> other
   }
 }
@@ -671,8 +645,7 @@ pub fn input_type(n: Node, it: InputType) -> Node {
 /// Set footer children on Card.
 pub fn footer(card_node: Node, foot: List(Node)) -> Node {
   case card_node {
-    Card(base, t, sub, ic, ha, kids, _, act, bbg) ->
-      Card(base, t, sub, ic, ha, kids, foot, act, bbg)
+    Card(..) as c -> Card(..c, footer: foot)
     other -> other
   }
 }
@@ -680,8 +653,7 @@ pub fn footer(card_node: Node, foot: List(Node)) -> Node {
 /// Set header action node on Card.
 pub fn header_action(card_node: Node, ha: Node) -> Node {
   case card_node {
-    Card(base, t, sub, ic, _, kids, foot, act, bbg) ->
-      Card(base, t, sub, ic, Some(ha), kids, foot, act, bbg)
+    Card(..) as c -> Card(..c, header_action: Some(ha))
     other -> other
   }
 }
@@ -689,8 +661,7 @@ pub fn header_action(card_node: Node, ha: Node) -> Node {
 /// Set typography variant on Text.
 pub fn text_variant(n: Node, vr: TextVariant) -> Node {
   case n {
-    Text(base, c, _, tn, tr, act, img) ->
-      Text(base, c, Some(vr), tn, tr, act, img)
+    Text(..) as txt -> Text(..txt, variant: Some(vr))
     other -> other
   }
 }
@@ -698,8 +669,7 @@ pub fn text_variant(n: Node, vr: TextVariant) -> Node {
 /// Set color tone on Text.
 pub fn text_tone(n: Node, tn: TextTone) -> Node {
   case n {
-    Text(base, c, vr, _, tr, act, img) ->
-      Text(base, c, vr, Some(tn), tr, act, img)
+    Text(..) as txt -> Text(..txt, tone: Some(tn))
     other -> other
   }
 }
