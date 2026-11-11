@@ -1,5 +1,4 @@
 import {
-  connect_relays,
   mount_shell,
   start_live_data,
   start_with_bridge,
@@ -41,9 +40,8 @@ async function mountShell(): Promise<void> {
   const host = (result as unknown as { 0: ShellBoot })[0];
   rootEl.innerHTML = "";
   mount_shell("#omni-root", host);
-  connect_relays(host);
-  // Give relay sockets a moment to open before sending REQ frames.
-  window.setTimeout(() => start_live_data(host), 1200);
+  // The pool replays subscriptions when sockets open, so this can start now.
+  start_live_data(host);
   rootEl.setAttribute("data-omni-booted", "true");
 }
 

@@ -359,44 +359,6 @@ fn ingest_signed(booted: Booted, event: Event) -> Nil {
   })
 }
 
-/// Dial every configured bootstrap relay and track its connection state in the
-/// kernel relay pool. Safe to call once after boot.
-pub fn connect_relays(booted: Booted) -> Nil {
-  relay_pool.get_configured_relays(booted.kernel.relay_pool)
-  |> list.each(fn(url) {
-    let cell = ref.new(None)
-    let connection =
-      websocket.connect(relay_url.to_string(url), fn(event) {
-        let status = case event {
-          websocket.Open -> Connected
-          websocket.Close(code, reason) ->
-            Disconnected(
-              reason: "closed " <> int.to_string(code) <> " " <> reason,
-            )
-          websocket.Error(message) -> Disconnected(reason: message)
-          websocket.Message(_) -> Connecting
-        }
-        case ref.get(cell) {
-          Some(conn) ->
-            relay_pool.attach_socket(
-              booted.kernel.relay_pool,
-              url,
-              conn,
-              status,
-            )
-          None -> Nil
-        }
-      })
-    ref.update(cell, fn(_) { Some(connection) })
-    relay_pool.attach_socket(
-      booted.kernel.relay_pool,
-      url,
-      connection,
-      Connecting,
-    )
-  })
-}
-
 /// Spawn a tracked sandbox for a plugin view and build the `<iframe>` mount
 /// descriptor with CSP, design tokens, and the configured guest bridge script.
 /// The host mounts the returned `srcdoc` into the plugin's island container.

@@ -118,9 +118,36 @@ pub fn subscribe(
     _, _ -> Nil
   }
 
+  // Track EOSE per relay so a fetch only completes when every configured
+  // relay has answered (or the caller's timeout fires).
+  let eose_relays = ref.new(set.new())
+  let eose_fired = ref.new(False)
+  let expected_relays =
+    list.length(relay_pool.get_configured_relays(coord.relay_pool))
+    |> int.max(1)
+
+  let maybe_fire_eose = fn() {
+    case ref.get(eose_fired) {
+      True -> Nil
+      False -> {
+        let seen = set.size(ref.get(eose_relays))
+        case seen >= expected_relays {
+          True -> {
+            ref.set(eose_fired, True)
+            case on_eose {
+              Some(cb) -> cb()
+              None -> Nil
+            }
+          }
+          False -> Nil
+        }
+      }
+    }
+  }
+
   // 2. Start live multiplexed relay subscription
   let unsubscribe_relays =
-    relay_pool.subscribe(coord.relay_pool, sub_id, filters, fn(frame) {
+    relay_pool.subscribe(coord.relay_pool, sub_id, filters, fn(source, frame) {
       case frame {
         relay_frame.EventFrame(_sid, ev) -> {
           let eid = event_id.to_hex(ev.id)
@@ -153,10 +180,12 @@ pub fn subscribe(
           }
         }
         relay_frame.Eose(_sid) -> {
-          case on_eose {
-            Some(cb) -> cb()
-            None -> Nil
-          }
+          ref.update(eose_relays, fn(s) { set.insert(s, source) })
+          maybe_fire_eose()
+        }
+        relay_frame.Closed(_sid, _reason) -> {
+          ref.update(eose_relays, fn(s) { set.insert(s, source) })
+          maybe_fire_eose()
         }
         _ -> Nil
       }

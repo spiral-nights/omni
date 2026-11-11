@@ -279,8 +279,24 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
       None,
     )
 
-  relay_pool.get_statuses(host.booted.kernel.relay_pool)
-  |> list.each(fn(pair) {
+  push_relay_statuses(
+    host,
+    relay_pool.get_statuses(host.booted.kernel.relay_pool),
+  )
+  let _ =
+    relay_pool.watch_statuses(host.booted.kernel.relay_pool, fn(statuses) {
+      push_relay_statuses(host, statuses)
+      push_views(host)
+    })
+
+  push_views(host)
+}
+
+fn push_relay_statuses(
+  host: ShellBoot,
+  statuses: List(#(relay_url.RelayUrl, relay_pool.RelayStatus)),
+) -> Nil {
+  list.each(statuses, fn(pair) {
     let #(url, status) = pair
     let connected = case status {
       relay_pool.Connected -> True
@@ -293,8 +309,6 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
       }
     })
   })
-
-  push_views(host)
 }
 
 fn workspace_filter(author_hex: String) -> Filter {
@@ -331,11 +345,6 @@ fn push_views(host: ShellBoot) -> Nil {
 
 @external(javascript, "./shell_boot.ffi.mjs", "dispatch_shell_msg")
 fn dispatch_shell_msg(message: msg.Msg) -> Nil
-
-/// Dial the configured relays and begin tracking their connection state.
-pub fn connect_relays(host: ShellBoot) -> Nil {
-  boot.connect_relays(host.booted)
-}
 
 /// The active shell theme ID (`"classic"`, `"panorama"`, `"editorial"`).
 pub fn active_shell_id(host: ShellBoot) -> String {

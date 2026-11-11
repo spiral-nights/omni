@@ -148,7 +148,7 @@ pub fn relay_pool_subscribe_and_dispatch_test() {
   let flt = filter.new() |> filter.with_kinds([kind.Note])
 
   let closer =
-    subscribe(pool, sub_id, [flt], fn(frame) {
+    subscribe(pool, sub_id, [flt], fn(_source, frame) {
       case frame {
         relay_frame.EventFrame(_sid, ev) ->
           ref.update(received_events, fn(evs) { [ev, ..evs] })
@@ -167,7 +167,7 @@ pub fn relay_pool_subscribe_and_dispatch_test() {
   // Dispatch frame via subscribers dict
   let subs = ref.get(pool.subscribers)
   let assert Ok(handler) = dict.get(subs, sub_id)
-  handler(in_frame)
+  handler.handler("wss://relay.example", in_frame)
 
   assert list.length(ref.get(received_events)) == 1
 

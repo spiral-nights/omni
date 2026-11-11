@@ -1,10 +1,12 @@
 //// Relay pool state machine and socket manager.
 ////
 //// Manages WebSocket connections to multiple Nostr relays, coordinates publication
-//// and subscription dispatching, and persists configured relay URLs.
+//// and subscription dispatching, replays subscriptions when a socket opens, and
+//// reconnects with exponential backoff.
 
 import gleam/dict.{type Dict}
 import gleam/dynamic/decode
+import gleam/int
 import gleam/javascript/promise.{type Promise}
 import gleam/json
 import gleam/list
@@ -13,6 +15,7 @@ import omni/nostr/event.{type Event}
 import omni/nostr/filter.{type Filter}
 import omni/nostr/relay_frame.{type RelayFrame}
 import omni/nostr/relay_url.{type RelayUrl}
+import omni/platform/promise_ext
 import omni/platform/ref.{type Ref}
 import omni/platform/storage.{type Storage}
 import omni/platform/websocket.{type WebSocketConnection}
@@ -24,13 +27,21 @@ pub type RelayStatus {
   Disconnected(reason: String)
 }
 
+/// A registered subscription: filters are kept so `REQ` can be replayed every
+/// time a relay socket opens.
+pub type Subscriber {
+  Subscriber(filters: List(Filter), handler: fn(String, RelayFrame) -> Nil)
+}
+
 /// The active relay pool managing socket connections and subscribers.
 pub type RelayPool {
   RelayPool(
     storage: Storage,
     sockets: Ref(Dict(String, WebSocketConnection)),
     statuses: Ref(Dict(String, RelayStatus)),
-    subscribers: Ref(Dict(String, fn(RelayFrame) -> Nil)),
+    subscribers: Ref(Dict(String, Subscriber)),
+    retries: Ref(Dict(String, Int)),
+    status_listeners: Ref(List(fn(List(#(RelayUrl, RelayStatus))) -> Nil)),
   )
 }
 
@@ -74,35 +85,52 @@ pub fn new(storage: Storage, bootstrap_relays: List(RelayUrl)) -> RelayPool {
       sockets: ref.new(dict.new()),
       statuses: ref.new(dict.new()),
       subscribers: ref.new(dict.new()),
+      retries: ref.new(dict.new()),
+      status_listeners: ref.new([]),
     )
-  list.each(configured, fn(u) { connect_relay(pool, u) })
+  list.each(configured, fn(u) { connect(pool, u) })
   pool
 }
 
-fn connect_relay(pool: RelayPool, url: RelayUrl) -> Nil {
+fn connect(pool: RelayPool, url: RelayUrl) -> Nil {
   let url_str = relay_url.to_string(url)
-  ref.update(pool.statuses, fn(st) { dict.insert(st, url_str, Connecting) })
+  // Never open a second socket for a relay that is already connecting or open.
+  case dict.get(ref.get(pool.sockets), url_str) {
+    Ok(_) -> Nil
+    Error(Nil) ->
+      case dict.get(ref.get(pool.statuses), url_str) {
+        Ok(Connecting) -> Nil
+        _ -> begin_connect(pool, url, url_str)
+      }
+  }
+}
+
+fn begin_connect(pool: RelayPool, url: RelayUrl, url_str: String) -> Nil {
+  set_status(pool, url_str, Connecting)
   let conn =
     websocket.connect(url_str, fn(event) {
       case event {
         websocket.Open -> {
-          ref.update(pool.statuses, fn(st) {
-            dict.insert(st, url_str, Connected)
-          })
+          ref.update(pool.retries, fn(r) { dict.delete(r, url_str) })
+          set_status(pool, url_str, Connected)
+          case dict.get(ref.get(pool.sockets), url_str) {
+            Ok(sock) -> replay_subscriptions(pool, sock)
+            Error(Nil) -> Nil
+          }
         }
         websocket.Close(_code, reason) -> {
-          ref.update(pool.statuses, fn(st) {
-            dict.insert(st, url_str, Disconnected(reason))
-          })
+          ref.update(pool.sockets, fn(s) { dict.delete(s, url_str) })
+          set_status(pool, url_str, Disconnected(reason))
+          reconnect(pool, url, url_str)
         }
         websocket.Error(err) -> {
-          ref.update(pool.statuses, fn(st) {
-            dict.insert(st, url_str, Disconnected(err))
-          })
+          ref.update(pool.sockets, fn(s) { dict.delete(s, url_str) })
+          set_status(pool, url_str, Disconnected(err))
+          reconnect(pool, url, url_str)
         }
         websocket.Message(text) -> {
           case relay_frame.parse_relay_frame(text) {
-            Ok(frame) -> dispatch_frame(pool, frame)
+            Ok(frame) -> dispatch_frame(pool, url_str, frame)
             Error(_) -> Nil
           }
         }
@@ -112,18 +140,96 @@ fn connect_relay(pool: RelayPool, url: RelayUrl) -> Nil {
   Nil
 }
 
-fn dispatch_frame(pool: RelayPool, frame: RelayFrame) -> Nil {
+fn reconnect(pool: RelayPool, url: RelayUrl, url_str: String) -> Nil {
+  let still_configured =
+    list.any(load_relays(pool.storage), fn(u) {
+      relay_url.to_string(u) == url_str
+    })
+  case still_configured {
+    False -> Nil
+    True -> {
+      let attempt = case dict.get(ref.get(pool.retries), url_str) {
+        Ok(n) -> n + 1
+        Error(Nil) -> 1
+      }
+      ref.update(pool.retries, fn(r) { dict.insert(r, url_str, attempt) })
+      let exponent = int.min(attempt - 1, 6)
+      let delay_ms = int.min(30_000, 500 * pow2(exponent))
+      let _ =
+        promise_ext.delay(delay_ms, Nil)
+        |> promise.map(fn(_) {
+          case dict.get(ref.get(pool.statuses), url_str) {
+            Ok(Connected) | Ok(Connecting) -> Nil
+            _ -> connect(pool, url)
+          }
+        })
+      Nil
+    }
+  }
+}
+
+fn pow2(n: Int) -> Int {
+  case n <= 0 {
+    True -> 1
+    False -> 2 * pow2(n - 1)
+  }
+}
+
+fn set_status(pool: RelayPool, url_str: String, status: RelayStatus) -> Nil {
+  ref.update(pool.statuses, fn(st) { dict.insert(st, url_str, status) })
+  notify_status_listeners(pool)
+}
+
+fn notify_status_listeners(pool: RelayPool) -> Nil {
+  let snapshot = get_statuses(pool)
+  ref.get(pool.status_listeners)
+  |> list.each(fn(listener) { listener(snapshot) })
+}
+
+fn replay_subscriptions(pool: RelayPool, sock: WebSocketConnection) -> Nil {
+  dict.each(ref.get(pool.subscribers), fn(sub_id, subscriber) {
+    let req_json =
+      relay_frame.client_frame_to_json(relay_frame.Req(
+        sub_id,
+        subscriber.filters,
+      ))
+    let _ = websocket.send(sock, req_json)
+    Nil
+  })
+}
+
+fn dispatch_frame(
+  pool: RelayPool,
+  source_url: String,
+  frame: RelayFrame,
+) -> Nil {
   let subs = ref.get(pool.subscribers)
   case frame {
     relay_frame.EventFrame(sub_id, _)
     | relay_frame.Eose(sub_id)
     | relay_frame.Closed(sub_id, _) -> {
       case dict.get(subs, sub_id) {
-        Ok(handler) -> handler(frame)
+        Ok(subscriber) -> subscriber.handler(source_url, frame)
         Error(Nil) -> Nil
       }
     }
+    relay_frame.Notice(_)
+    | relay_frame.Ok(_, _, _)
+    | relay_frame.AuthChallenge(_) -> Nil
     _ -> Nil
+  }
+}
+
+/// Register a listener for relay status changes. Returns an unsubscribe function.
+pub fn watch_statuses(
+  pool: RelayPool,
+  listener: fn(List(#(RelayUrl, RelayStatus))) -> Nil,
+) -> fn() -> Nil {
+  ref.update(pool.status_listeners, fn(ls) { [listener, ..ls] })
+  fn() {
+    ref.update(pool.status_listeners, fn(ls) {
+      list.filter(ls, fn(l) { l != listener })
+    })
   }
 }
 
@@ -138,8 +244,7 @@ pub fn attach_socket(
 ) -> Nil {
   let url_str = relay_url.to_string(url)
   ref.update(pool.sockets, fn(s) { dict.insert(s, url_str, conn) })
-  ref.update(pool.statuses, fn(st) { dict.insert(st, url_str, status) })
-  Nil
+  set_status(pool, url_str, status)
 }
 
 /// Adds a new relay to the configured pool and establishes a connection.
@@ -153,7 +258,7 @@ pub fn add_relay(pool: RelayPool, url: RelayUrl) -> Nil {
     False -> {
       let updated = list.append(current, [url])
       save_relays(pool.storage, updated)
-      connect_relay(pool, url)
+      connect(pool, url)
     }
   }
 }
@@ -172,9 +277,8 @@ pub fn remove_relay(pool: RelayPool, url: RelayUrl) -> Nil {
     }
     Error(Nil) -> Nil
   }
-  ref.update(pool.statuses, fn(st) {
-    dict.insert(st, url_str, Disconnected("relay removed"))
-  })
+  ref.update(pool.retries, fn(r) { dict.delete(r, url_str) })
+  set_status(pool, url_str, Disconnected("relay removed"))
 }
 
 /// Returns the list of currently configured relay URLs.
@@ -235,9 +339,11 @@ pub fn subscribe(
   pool: RelayPool,
   sub_id: String,
   filters: List(Filter),
-  on_frame: fn(RelayFrame) -> Nil,
+  on_frame: fn(String, RelayFrame) -> Nil,
 ) -> fn() -> Nil {
-  ref.update(pool.subscribers, fn(subs) { dict.insert(subs, sub_id, on_frame) })
+  ref.update(pool.subscribers, fn(subs) {
+    dict.insert(subs, sub_id, Subscriber(filters: filters, handler: on_frame))
+  })
   let req_json =
     relay_frame.client_frame_to_json(relay_frame.Req(sub_id, filters))
   let sockets = ref.get(pool.sockets)

@@ -127,8 +127,8 @@ pub fn coordinator_deduplication_and_relay_ingestion_test() -> Promise(Nil) {
 
   // Simulate duplicate ev1 arriving from relay
   let subs = ref.get(pool.subscribers)
-  let assert Ok(handler) = dict.get(subs, sub_id)
-  handler(relay_frame.EventFrame(sub_id, ev1))
+  let assert Ok(subscriber) = dict.get(subs, sub_id)
+  subscriber.handler("wss://relay.example", relay_frame.EventFrame(sub_id, ev1))
 
   // Should still only have 1 event (duplicate ignored)
   assert list.length(ref.get(received)) == 1
@@ -140,7 +140,7 @@ pub fn coordinator_deduplication_and_relay_ingestion_test() -> Promise(Nil) {
       1,
       "event 2 from relay",
     )
-  handler(relay_frame.EventFrame(sub_id, ev2))
+  subscriber.handler("wss://relay.example", relay_frame.EventFrame(sub_id, ev2))
 
   // ev2 was received
   assert list.length(ref.get(received)) == 2
