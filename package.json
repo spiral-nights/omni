@@ -3,10 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm -r run build",
+    "build": "pnpm -r run build && pnpm gleam:build",
+    "gleam:build": "node scripts/gleam-build.mjs build",
     "build:stale": "node scripts/autobuild.js",
     "dev": "pnpm --filter @omni/web dev",
-    "test": "vitest run",
+    "test": "vitest run && pnpm gleam:test",
+    "gleam:test": "node scripts/gleam-build.mjs test",
+    "gleam:check": "node scripts/gleam-build.mjs check",
     "typecheck": "pnpm -r run typecheck",
     "wit:types": "jco types packages/types/wit/omni.wit -o packages/types/src/wit"
   },
