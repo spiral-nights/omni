@@ -186,24 +186,27 @@ fn subscribe_impl(
             let _ = event_store.save_event(coord.event_store, ev)
 
             case is_new {
-              True -> {
-                case coord.acl_engine, maybe_plugin_id {
-                  Some(engine), Some(pid) -> {
-                    let _ =
-                      promise.map(
-                        acl_engine.can_read_event(engine, pid, ev.kind),
-                        fn(allowed) {
-                          case allowed {
-                            True -> on_event(ev)
-                            False -> Nil
-                          }
-                        },
-                      )
-                    Nil
-                  }
-                  _, _ -> on_event(ev)
+              True ->
+                case coord.acl_engine {
+                  None -> on_event(ev)
+                  Some(engine) ->
+                    case maybe_plugin_id {
+                      None -> on_event(ev)
+                      Some(pid) -> {
+                        let _ =
+                          promise.map(
+                            acl_engine.can_read_event(engine, pid, ev.kind),
+                            fn(allowed) {
+                              case allowed {
+                                True -> on_event(ev)
+                                False -> Nil
+                              }
+                            },
+                          )
+                        Nil
+                      }
+                    }
                 }
-              }
               False -> Nil
             }
           }

@@ -15,12 +15,15 @@ import omni/nostr/kind
 import omni/nostr/relay_frame
 import omni/nostr/relay_url
 import omni/platform/promise_ext
+import omni/platform/promise_ext as pe
 import omni/platform/ref
 import omni/platform/storage
 
-fn note_event_json(content: String) -> String {
-  let hex = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-  "[\"EVENT\",\"sub1\",{\"id\":\""
+fn note_event_json(sub_id: String, id_hex: String, content: String) -> String {
+  let hex = id_hex
+  "[\"EVENT\",\""
+  <> sub_id
+  <> "\",{\"id\":\""
   <> hex
   <> "\",\"pubkey\":\""
   <> "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -29,6 +32,19 @@ fn note_event_json(content: String) -> String {
   <> "\",\"sig\":\""
   <> "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
   <> "\"}]"
+}
+
+pub fn event_frame_json_parses_test() {
+  let raw =
+    note_event_json(
+      "it-sub",
+      "e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3",
+      "parse-check",
+    )
+  should.be_true(case relay_frame.parse_relay_frame(raw) {
+    Ok(_) -> True
+    Error(_) -> False
+  })
 }
 
 pub fn fake_relay_streams_and_dedupes_events_test() {
@@ -44,50 +60,35 @@ pub fn fake_relay_streams_and_dedupes_events_test() {
   let assert Ok(ev_store) = store_res
   let coord = coordinator.new(ev_store, pool, None)
 
+  let received = ref.new([])
   let eose = ref.new(False)
 
   use closer <- promise.await(coordinator.subscribe(
     coord,
     "it-sub",
     [Filter(None, None, Some([kind.Note]), None, None, None, None, dict.new())],
-    fn(_ev) { Nil },
+    fn(ev) { ref.update(received, fn(evs) { [ev, ..evs] }) },
     Some(fn() { ref.set(eose, True) }),
   ))
 
-  // REQ was sent on subscribe (socket already open).
   should.be_true(list.length(fake_relay.sent_frames(relay)) >= 1)
 
-  let parsed = relay_frame.parse_relay_frame(note_event_json("hello"))
-  should.be_true(case parsed {
-    Ok(_) -> True
-    Error(_) -> False
+  let event_id_hex =
+    "e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1"
+  fake_relay.emit(relay, note_event_json("it-sub", event_id_hex, "hello"))
+  fake_relay.emit(relay, note_event_json("it-sub", event_id_hex, "hello"))
+  should.equal(list.length(ref.get(received)), 1)
+
+  let assert Ok(eid) = event_id.parse(event_id_hex)
+  use stored <- promise.await(event_store.get_event_by_id(ev_store, eid))
+  should.be_true(case stored {
+    Some(_) -> True
+    None -> False
   })
 
-  should.be_true(dict.has_key(ref.get(pool.subscribers), "it-sub"))
-
-  // EOSE fires once all configured relays answered.
   fake_relay.emit(relay, "[\"EOSE\",\"it-sub\"]")
   should.be_true(ref.get(eose))
 
   closer()
   promise.resolve(Nil)
-}
-
-pub fn injected_event_frame_reaches_subscriber_test() {
-  let store =
-    storage.in_memory_from([
-      #(relay_pool.storage_key_configured_relays, "[\"wss://fake.example\"]"),
-    ])
-  let pool = relay_pool.new(store, [])
-  let relay = fake_relay.start(pool, "wss://fake.example")
-  let frames = ref.new([])
-  let _closer =
-    relay_pool.subscribe(pool, "raw-sub", [], fn(_source, frame) {
-      ref.update(frames, fn(fs) { [frame, ..fs] })
-    })
-  fake_relay.emit(
-    relay,
-    "[\"EVENT\",\"raw-sub\",{\"id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pubkey\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"created_at\":1000,\"kind\":1,\"tags\":[],\"content\":\"raw\",\"sig\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}]",
-  )
-  should.equal(list.length(ref.get(frames)), 1)
 }
