@@ -13,3 +13,6 @@ packages/core/src/sandbox/wit-host/
 packages/plugins/*/interface/
 packages/plugins/*/world/
 packages/plugins/*/gen/
+
+# Gleam build output
+gleam/**/build/
