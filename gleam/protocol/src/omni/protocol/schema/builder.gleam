@@ -690,3 +690,11 @@ pub fn banner_tone(n: Node, tn: BannerTone) -> Node {
     other -> other
   }
 }
+
+/// Set image source on Avatar.
+pub fn avatar_src(n: Node, url: String) -> Node {
+  case n {
+    Avatar(..) as av -> Avatar(..av, src: Some(url))
+    other -> other
+  }
+}

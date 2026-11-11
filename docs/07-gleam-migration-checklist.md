@@ -42,7 +42,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 2.2 `protocol/rpc`: envelope, error codes, `Request` ADT, decode/encode + golden fixtures
 - [ ] 2.3 `protocol/schema`: `Node` ADT, style, action, codec, builders + golden fixtures
 - [ ] 2.4 `protocol`: `workspace` (versioned codec), `intent`, `manifest`, `blossom`, `wit`
-- [ ] 2.5 Wire-compat tests against recorded TS output
+- [x] 2.5 Wire-compat tests against recorded TS output
 
 ## Phase 3: Kernel
 - [ ] 3.1 `platform`: `idb`, `websocket`, `message_port`, `webcrypto`, `secp256k1`, `nip44`, `zip`, `url`
