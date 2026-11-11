@@ -34,11 +34,13 @@ import omni/shell/model.{
   TabPlugins, TabProfile, TabRelays, TabShells, TabWorkspace, WidgetsDashboard,
 }
 import omni/shell/msg.{
-  ApplyRemoteWorkspace, EmbedSchema, NavigateTo, OpenApp, OpenSettings,
-  ShowPermissionPrompt,
+  ApplyRemoteWorkspace, EmbedSchema, InstallApp, NavigateTo, OpenApp,
+  OpenSettings, ShowPermissionPrompt,
 }
+import omni/shell/update
 import omni/web/boot
 import omni/web/config
+import omni/web/installer
 import omni/web/permission_prompt
 import omni/web/rpc
 
@@ -150,7 +152,16 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
     selector,
     fn(_flags) { #(host, effect.none()) },
     fn(current: ShellBoot, message: msg.Msg) {
-      let #(next, _effects) = boot.dispatch(current.booted, message)
+      let #(next, effects) = boot.dispatch(current.booted, message)
+      list.each(effects, fn(effect) {
+        case effect {
+          update.InstallPluginFromUrl(url, plugin_id) -> {
+            install_bundle(current, url, plugin_id)
+            Nil
+          }
+          _ -> Nil
+        }
+      })
       let _ =
         boot.publish_pending(next)
         |> promise.map(fn(event_ids) {
@@ -239,6 +250,36 @@ fn mount_dom(
   parse_url: fn(String) -> Option(msg.Msg),
   page_url: fn(ShellBoot) -> String,
 ) -> Nil
+
+fn install_bundle(host: ShellBoot, url: String, plugin_id: String) -> Nil {
+  let _ =
+    installer.resolve_url(url, plugin_id)
+    |> promise.map(fn(result) {
+      case result {
+        Error(_) -> Nil
+        Ok(bundle) -> {
+          dispatch_shell_msg(InstallApp(bundle.app))
+          dispatch_shell_msg(OpenApp(plugin_id, None))
+          after_render(fn() {
+            let _ =
+              spawn_plugin(
+                host,
+                "#slot-main-" <> plugin_id,
+                plugin_id,
+                bundle.content,
+                None,
+              )
+            Nil
+          })
+          Nil
+        }
+      }
+    })
+  Nil
+}
+
+@external(javascript, "./shell_boot.ffi.mjs", "after_render")
+fn after_render(callback: fn() -> Nil) -> Nil
 
 /// Show runtime ACL prompts requested by the kernel in the shell modal.
 pub fn watch_permission_prompts(host: ShellBoot) -> Nil {

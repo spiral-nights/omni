@@ -612,3 +612,35 @@ pub fn main_view_switches_cleanly_across_pages_test() {
   should.be_true(string.contains(html_settings, "id=\"mock-settings\""))
   should.be_true(string.contains(html_settings, "omni-main-fullscreen"))
 }
+
+pub fn installing_custom_url_emits_install_effect_test() {
+  let m = model.init("classic", [])
+  let custom =
+    model.InstalledApp(
+      id: "nsite.custom.example",
+      name: "Custom",
+      display_name: Some("Custom"),
+      description: "",
+      icon: "apps",
+      enabled: True,
+      pinned: False,
+      views: [],
+      placements: [],
+      handled_intents: [],
+      disabled_intents: [],
+      relays: None,
+      source_url: "https://example.com/app.html",
+      version: Some("1.0.0"),
+    )
+  let #(_, effects) = update.update(m, InstallApp(custom))
+  should.be_true(
+    list.any(effects, fn(effect) {
+      case effect {
+        update.InstallPluginFromUrl(url, plugin_id) ->
+          url == "https://example.com/app.html"
+          && plugin_id == "nsite.custom.example"
+        _ -> False
+      }
+    }),
+  )
+}

@@ -116,3 +116,10 @@ export function dispatch_shell_msg(message) {
     window.__omniShellDispatch(message);
   }
 }
+
+export function after_render(callback) {
+  if (typeof window === "undefined") return;
+  window.setTimeout(() => {
+    if (typeof callback === "function") callback();
+  }, 60);
+}

@@ -5,6 +5,7 @@
 import gleam/dict
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/string
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace.{type WorkspaceState}
@@ -45,6 +46,7 @@ pub type ShellEffect {
   RefreshActiveView
   DispatchHostedAction(plugin_id: String, action: Action)
   PermissionDecision(prompt_id: Int, allowed: Bool)
+  InstallPluginFromUrl(url: String, plugin_id: String)
 }
 
 /// Pure, exhaustive, deterministic state transition for `Model`.
@@ -266,7 +268,20 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       }
       let next_model =
         Model(..model, installed_apps: updated_apps, custom_install_url: "")
-      #(next_model, workspace_persistence_effects(next_model))
+      let install_effects = case
+        string.starts_with(new_app.id, "nsite.custom.")
+      {
+        True ->
+          case new_app.source_url {
+            "" -> []
+            url -> [InstallPluginFromUrl(url: url, plugin_id: new_app.id)]
+          }
+        False -> []
+      }
+      #(
+        next_model,
+        list.append(workspace_persistence_effects(next_model), install_effects),
+      )
     }
 
     UninstallApp(plugin_id) -> {

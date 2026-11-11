@@ -35,6 +35,7 @@ import omni/shell/msg.{NavigateTo, ToggleFullscreen}
 import omni/shell/registry
 import omni/web/boot
 import omni/web/config
+import omni/web/installer
 import omni/web/permission_prompt
 import omni/web/rpc
 
@@ -437,4 +438,17 @@ pub fn permission_prompt_bridge_resolves_user_choice_test() {
   permission_prompt.resolve(prompts, prompt.id, False)
 
   promise.resolve(Nil)
+}
+
+pub fn installer_builds_app_from_url_test() {
+  let app =
+    installer.app_from(
+      "https://example.com/widgets/app.html",
+      "nsite.custom.example.com.widgets.app.html",
+    )
+  app.id |> should.equal("nsite.custom.example.com.widgets.app.html")
+  app.name |> should.equal("app.html")
+  app.source_url |> should.equal("https://example.com/widgets/app.html")
+  app.enabled |> should.equal(True)
+  list.length(app.views) |> should.equal(1)
 }
