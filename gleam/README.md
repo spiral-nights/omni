@@ -6,7 +6,7 @@ Gleam (JavaScript target) rewrite of Omni. See `docs/gleam-rewrite-plan.md` for 
 Layout: directory `gleam/<name>` → package `omni_<name>` → modules `omni/<name>/...`
 (plugins: `gleam/plugins/<name>` → `plugin_<name>` → `plugin/<name>/...`).
 
-Dependencies between packages are `path` dependencies. Only `platform` (and later `bridge`)
+Dependencies between packages are `path` dependencies. Only `platform` (and later `bridge`; dev-only `testkit`)
 may contain `@external` / `.mjs` files, one `<module>.ffi.mjs` per Gleam module.
 
 Run a package's tests: `cd gleam/<name> && gleam test`.

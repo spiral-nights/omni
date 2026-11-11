@@ -625,7 +625,7 @@ Order matters (each step unlocks the next):
 |---|---|---|
 | D1 | Schema renderer: plain Lustre elements vs Light-DOM custom elements | **Agreed**: plain elements with `omni-*` classes |
 | D2 | First-party `feed` plugin: Gleam→JS vs keep MoonBit/Wasm | **Agreed**: Gleam→JS, MoonBit kept in `external-plugins/` as an example |
-| D3 | Gleam test framework (`gleeunit` and `birdie`/`qcheck` vs others) | Decide in Phase 0 |
+| D3 | Gleam test framework | **Decided**: `gleeunit` + `qcheck`; `birdie` is Erlang-only, so `testkit` provides a file-based golden helper (see `08-gleam-toolchain.md`) |
 | D4 | Browser binding source (`plinth` vs own `omni_platform`) **Agreed**: use `plinth` where possible, wrapped inside `omni_platform` only |
 | D5 | Sandbox bridge in Gleam or keep hand-written JS | Gleam, but last, with a dual-run period |
 

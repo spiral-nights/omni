@@ -1,0 +1,29 @@
+# Gleam Toolchain Decisions
+
+Verified on 2026-11-11 with Gleam 1.19.2 (JavaScript target, Node 26).
+
+## Pinned dependencies
+
+| Package | Constraint | Purpose | Notes |
+|---|---|---|---|
+| `gleam_stdlib` | `>= 1.0.0 and < 2.0.0` | core | resolved 1.0.5 |
+| `gleam_json` | `>= 3.1.0 and < 4.0.0` | JSON codecs | resolved 3.1.0 |
+| `gleam_javascript` | `>= 1.0.1 and < 2.0.0` | `Promise`, arrays, symbols | resolved 1.0.1 |
+| `plinth` | `>= 0.11.0 and < 1.0.0` | browser bindings | 0.x: wrap inside `omni_platform` only. Covers `window`, `document`, `element`, `web_storage`, `indexeddb`, `message_event`, `worker`, `crypto`, `broadcast_channel`, `location`, `clipboard`. |
+| `lustre` | `>= 5.7.1 and < 6.0.0` | UI (shell, schema renderer) | resolved 5.7.1 |
+| `gleeunit` | `>= 1.0.0 and < 2.0.0` | test runner | dev; `assert` supported |
+| `qcheck` | `>= 1.0.5 and < 2.0.0` | property tests | dev; verified on JS target |
+
+## D3: test framework (decided)
+
+- **Runner:** `gleeunit` (`gleam test`, JS target on Node).
+- **Property tests:** `qcheck`, used for bech32, filters, replaceable selection, ACL policy, codecs.
+- **Snapshots:** `birdie` is **not usable**: it requires `gleam_erlang` (Erlang target only). Instead `testkit` provides a small file-based snapshot/golden helper (`testkit/golden`) backed by Node `fs`. `testkit` is a dev-only package and is the one other place besides `platform` and `bridge` allowed to contain `.mjs`.
+- **DOM tests:** `happy-dom` registered from a `testkit` FFI helper (added when Phase 5 needs it).
+- `startest` rejected: dependency conflicts with current `tom` constraints.
+
+## Findings that affect the plan
+
+- Path dependencies across packages and a shared `omni/` module namespace work (see `gleam/protocol/test`).
+- **Lustre components always use Shadow DOM** (`open_shadow_root` only toggles open/closed). This confirms D1: the schema renderer uses plain Lustre elements, not custom elements.
+- `gleam/**/manifest.toml` is committed for reproducible builds.

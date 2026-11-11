@@ -8,19 +8,19 @@ Mark items `[x]` in the same commit that completes them.
 - Branch: `gleam-rewrite`. One commit per checklist item or tightly related group, Conventional Commits (`feat(gleam/nostr): ...`, `test(...)`, `build(...)`, `docs(...)`, `refactor(...)`, `chore(...)`).
 - App stays green at every commit: `pnpm -r run build`, `pnpm test`, and `gleam test` in every touched Gleam package.
 - Port behind golden fixtures from the old implementation; delete the TS module only after fixtures pass.
-- `@external` / `.mjs` only in `gleam/platform` and `gleam/bridge`. One `<module>.ffi.mjs` per module.
+- `@external` / `.mjs` only in `gleam/platform`, `gleam/bridge`, and (dev-only) `gleam/testkit`. One `<module>.ffi.mjs` per module.
 - Package naming: dir `gleam/<name>`, package `omni_<name>`, modules `omni/<name>/...`; plugins `plugin_<name>`.
 - Plugins never import other plugins. No plugin IDs in shell/CSS. No `omni.*` in plugins.
 
 **Decisions (agreed)**: D1 plain Lustre elements (no custom elements) · D2 feed → Gleam, MoonBit moves to `external-plugins/` example · D4 plinth wrapped in `platform` · D5 bridge ported to Gleam, **last**.
-**Open**: D3 test framework (decide in Phase 0).
+**D3 decided**: gleeunit + qcheck; file-based golden helper in `testkit` (birdie is Erlang-only). See `08-gleam-toolchain.md`.
 
 ---
 
 ## Phase 0: Spike and tooling
 - [x] 0.1 Gleam workspace skeleton: `gleam/` dir, `gleam/README.md`, root `.gitignore` entries for `gleam/**/build`
 - [x] 0.2 `omni_platform` and `omni_protocol` skeleton packages; path deps resolve; `gleam test` runs on JS target (Node)
-- [ ] 0.3 Verify and pin dependency versions (`gleam_stdlib`, `gleam_json`, `gleam_javascript`, `lustre`, `plinth`, test libs); record in `docs/08-gleam-toolchain.md`; decide D3
+- [x] 0.3 Verify and pin dependency versions (`gleam_stdlib`, `gleam_json`, `gleam_javascript`, `lustre`, `plinth`, test libs); record in `docs/08-gleam-toolchain.md`; decide D3
 - [x] 0.4 Verify shared `omni/<pkg>/` module namespace works across path-linked packages
 - [ ] 0.5 `scripts/gleam-build.mjs`: build all Gleam packages in dependency order; wire into root `build` / `test` scripts
 - [ ] 0.6 Vite integration: a Gleam module imported by `apps/web`
