@@ -62,7 +62,8 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 
 | ID | Sev | Status | Problem | Fix |
 |---|---|---|---|---|
-| PL-1 | S1 | open | No plugin bundle resolution/loading into sandboxes; built-ins are host-embedded. | Fetch nsite/Blossom bundle, mount with bridge, install/update/uninstall flows. |
+| PL-1 | S1 | fixed (URL install) | No plugin bundle resolution/loading into sandboxes; built-ins are host-embedded. | fixed (URL install) `02abe96`: custom URL -> platform HTTP fetch -> installed app -> sandbox mount with guest bridge. See PL-1b for naddr/Blossom and lifecycle gaps. |
+| PL-1b | S2 | open | Nsite `naddr`/kind-35129 + Blossom-fragment resolution is not wired to the installer; uninstall does not terminate the mounted sandbox; update flow is unused. | Wire resolver strategies + `spawn_plugin` lifecycle (terminate on unmount/uninstall) and the update modal. |
 | PL-2 | S1 | fixed | Intent broker never dispatches runtime intents; chooser is display-only. | fixed `644d92f`: hosted actions route through the intent broker (single handler opens + forwards, multiples prompt), aliases normalized. |
 | PL-3 | S1 | fixed | ACL prompts never fire (no `prompt_handler` on the engine). | fixed `644d92f`: kernel prompt handler bridged to a shell Allow/Deny modal; decisions resolve the grant promise. |
 | PL-4 | S2 | open | Relays app mutations (add/remove/reconnect/read-write/NIP-65) don't call the pool. | Expose pool operations to the app and publish kind 10002. |
