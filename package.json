@@ -7,7 +7,7 @@
     "gleam:build": "node scripts/gleam-build.mjs build",
     "build:stale": "node scripts/autobuild.js",
     "dev": "pnpm --filter @omni/web dev",
-    "test": "vitest run && pnpm gleam:test",
+    "test": "pnpm gleam:build && vitest run && pnpm gleam:test",
     "gleam:test": "node scripts/gleam-build.mjs test",
     "gleam:check": "node scripts/gleam-build.mjs check && node scripts/lint-gleam-architecture.mjs",
     "gleam:lint": "node scripts/lint-gleam-architecture.mjs",

@@ -1,16 +1,16 @@
-// Vite plugin: compiles the Gleam interop package and exposes its output to TS.
+// Vite plugin: keeps the Gleam interop package compiled during `vite` / `vite build`.
 //
-// All TS -> Gleam calls must go through ONE Gleam build directory. Gleam custom
-// types (Ok, Error, List, ...) are JS classes, so importing from two separate
-// build dirs would duplicate gleam_stdlib and break `instanceof` checks.
-//
-// Usage in TS:  import { is_valid } from "@omni/gleam/viewport.mjs";
+// TS reaches Gleam only through the workspace package @omni/gleam-interop
+// (gleam/interop/package.json exports its build output), e.g.
+//   import { decide } from "@omni/gleam-interop/acl";
+// All TS -> Gleam calls must go through that ONE Gleam build directory. Gleam
+// custom types (Ok, Error, List, ...) are JS classes, so importing from two
+// separate build dirs would duplicate gleam_stdlib and break `instanceof`.
 import { spawnSync } from "node:child_process";
 import { join, normalize } from "node:path";
 import { gleamRoot } from "./lib/gleam-packages.mjs";
 
 const interopDir = join(gleamRoot, "interop");
-const outputDir = join(interopDir, "build/dev/javascript/omni_interop/omni/interop");
 
 function buildInterop() {
   const started = Date.now();
@@ -23,7 +23,6 @@ function buildInterop() {
 export function gleamInteropPlugin() {
   return {
     name: "omni-gleam-interop",
-    config: () => ({ resolve: { alias: { "@omni/gleam": outputDir } } }),
     buildStart() {
       buildInterop();
     },

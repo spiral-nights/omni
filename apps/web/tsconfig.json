@@ -3,11 +3,7 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "noEmit": true,
-    "baseUrl": ".",
-    "paths": {
-      "@omni/gleam/*": ["../../gleam/interop/build/dev/javascript/omni_interop/omni/interop/*"]
-    }
+    "noEmit": true
   },
   "include": ["src/**/*"]
 }

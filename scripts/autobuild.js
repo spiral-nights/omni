@@ -180,10 +180,19 @@ export function buildPackage(pkg) {
 }
 
 /**
+ * Compiles the Gleam interop package (and, transitively, every Gleam package it uses).
+ */
+export function buildGleamInterop() {
+  execSync("gleam build", { stdio: "inherit", cwd: path.join(rootDir, "gleam/interop") });
+}
+
+/**
  * Scans all packages, detects stale plugins/packages, and compiles them in order.
  * @returns {{ built: string[]; skipped: string[] }}
  */
 export function buildStalePackages() {
+  // TS packages import compiled Gleam via @omni/gleam-interop, so it must exist first.
+  buildGleamInterop();
   const packages = getAllPackages();
   const built = [];
   const skipped = [];
