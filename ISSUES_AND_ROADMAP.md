@@ -18,6 +18,10 @@
 
 ## Next
 
+> A complete, evidence-based gap list versus the previous working app lives in
+> [`docs/09-gap-analysis.md`](docs/09-gap-analysis.md). The items below are the
+> summary; the remediation order there takes precedence.
+
 ### 1. Plugin bundle resolution into sandboxes (P1)
 
 The host can spawn a iframe sandbox with the Gleam guest bridge and mount the

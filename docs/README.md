@@ -25,6 +25,7 @@ compiled to JavaScript; `apps/web` is the thin host page.
 | [`06-nostr-extensions-and-schema.md`](06-nostr-extensions-and-schema.md) | Extended `window.nostr`, Schema AST/builders/actions, rendering pipeline |
 | [`07-toolchain.md`](07-toolchain.md) | Pinned compiler/dependency versions, commands, test harness |
 | [`08-perf-baseline.md`](08-perf-baseline.md) | Bundle-size baseline and how to reproduce it |
+| [`09-gap-analysis.md`](09-gap-analysis.md) | Feature-by-feature gap analysis versus the previous working app, root causes, and remediation order |
 
 ## Ground rules
 
