@@ -73,6 +73,8 @@ importers:
         specifier: ^6.4.4
         version: 6.4.5(@types/node@22.20.4)
 
+  gleam/interop: {}
+
   packages/core:
     dependencies:
       '@noble/curves':
@@ -81,6 +83,9 @@ importers:
       '@noble/hashes':
         specifier: ^1.4.0
         version: 1.8.0
+      '@omni/gleam-interop':
+        specifier: workspace:*
+        version: link:../../gleam/interop
       '@omni/types':
         specifier: workspace:*
         version: link:../types

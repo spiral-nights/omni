@@ -1,0 +1,17 @@
+{
+  "name": "@omni/gleam-interop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Compiled Gleam facades for TypeScript consumers. Import as @omni/gleam-interop/<module>.",
+  "exports": {
+    "./*": {
+      "types": "./build/dev/javascript/omni_interop/omni/interop/*.d.mts",
+      "default": "./build/dev/javascript/omni_interop/omni/interop/*.mjs"
+    }
+  },
+  "scripts": {
+    "build": "gleam build",
+    "test": "gleam test"
+  }
+}

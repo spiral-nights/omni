@@ -2,6 +2,7 @@ packages:
   - "packages/*"
   - "packages/plugins/*"
   - "apps/*"
+  - "gleam/interop"
 allowBuilds:
   esbuild: true
 overrides:
