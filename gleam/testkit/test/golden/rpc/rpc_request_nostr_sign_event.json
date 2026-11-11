@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":2,"method":"nostr.signEvent","params":{"event":{"pubkey":"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798","created_at":1700000000,"kind":1,"tags":[["t","omni"],["p","79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"]],"content":"Hello from Omni!"}}}

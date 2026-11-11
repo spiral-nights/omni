@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":"fetch-42","method":"nostr.fetch","params":{"filters":[{"kinds":[1,0]}],"localOnly":false,"relays":["wss://relay.damus.io"],"timeoutMs":3000}}

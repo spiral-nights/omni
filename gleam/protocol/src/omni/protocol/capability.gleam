@@ -3,6 +3,9 @@
 //// Replaces the stringly-typed categories ("nostr:sign", "storage:kv", ...)
 //// so that every permission decision is an exhaustive `case`.
 
+import gleam/dynamic/decode
+import gleam/json
+
 /// A capability a plugin may request from the kernel.
 pub type Capability {
   NostrRead
@@ -47,5 +50,19 @@ pub fn to_string(capability: Capability) -> String {
     RelaysManage -> "relays:manage"
     IdentityManageKeys -> "identity:manage_keys"
     SystemGeolocation -> "system:geolocation"
+  }
+}
+
+/// Convert a `Capability` to a `gleam/json.Json` value.
+pub fn to_json(capability: Capability) -> json.Json {
+  json.string(to_string(capability))
+}
+
+/// Dynamic decoder for a valid `Capability`.
+pub fn decoder() -> decode.Decoder(Capability) {
+  use raw <- decode.then(decode.string)
+  case parse(raw) {
+    Ok(cap) -> decode.success(cap)
+    Error(Nil) -> decode.failure(NostrRead, "valid Capability")
   }
 }

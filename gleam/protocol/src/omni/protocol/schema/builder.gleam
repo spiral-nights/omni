@@ -1,0 +1,722 @@
+//// Ergonomic, pipe-friendly builder functions for constructing Omni UI trees.
+////
+//// Example:
+//// ```gleam
+//// box()
+//// |> gap("sm")
+//// |> padding("md")
+//// |> child(text("Hello Omni") |> text_variant(Title))
+//// |> child(button("Click Me", action.new("button_click")))
+//// ```
+
+import gleam/list
+import gleam/option.{None, Some}
+import omni/protocol/schema/action.{type Action}
+import omni/protocol/schema/node.{
+  type Align, type BadgeTone, type BannerTone, type IndicatorStatus,
+  type InputType, type Justify, type MetricValue, type Node, type SelectOption,
+  type TabItem, type TextTone, type TextVariant, Avatar, Badge, BadgeNeutral,
+  BadgeSubtle, Banner, BannerInfo, Body, Box, Button, ButtonPrimary, Card,
+  CodeBlock, Column, Divider, EmptyState, Horizontal, Icon, IconButton,
+  IconButtonGhost, Input, InputText, List, ListItem, Metric, NodeBase,
+  PageDeclaration, Progress, ProgressBar, Row, Select, Spacer, StatusIndicator,
+  Tabs, Text, Textarea, Toggle, Vertical, VirtualList,
+}
+import omni/protocol/schema/style.{type SizeToken, type Style}
+
+// -----------------------------------------------------------------------------
+// Constructors
+// -----------------------------------------------------------------------------
+
+/// Create a new Box container. Defaults to column layout.
+pub fn box() -> Node {
+  Box(
+    base: node.empty_base(),
+    direction: Some(Column),
+    gap: None,
+    align: None,
+    justify: None,
+    wrap: None,
+    padding: None,
+    action: None,
+    background: None,
+    children: [],
+  )
+}
+
+/// Create a new Card container.
+pub fn card() -> Node {
+  Card(
+    base: node.empty_base(),
+    title: None,
+    subtitle: None,
+    icon: None,
+    header_action: None,
+    children: [],
+    footer: [],
+    action: None,
+    banner_background: None,
+  )
+}
+
+/// Create a horizontal divider line.
+pub fn divider() -> Node {
+  Divider(base: node.empty_base(), orientation: Some(Horizontal))
+}
+
+/// Create a vertical divider line.
+pub fn vertical_divider() -> Node {
+  Divider(base: node.empty_base(), orientation: Some(Vertical))
+}
+
+/// Create a blank spacer.
+pub fn spacer() -> Node {
+  Spacer(base: node.empty_base(), size: Some(style.SizeMd))
+}
+
+/// Create a text node.
+pub fn text(content: String) -> Node {
+  Text(
+    base: node.empty_base(),
+    content: content,
+    variant: Some(Body),
+    tone: None,
+    truncate: None,
+    action: None,
+    show_inline_images: None,
+  )
+}
+
+/// Create a badge pill.
+pub fn badge(label: String) -> Node {
+  Badge(
+    base: node.empty_base(),
+    label: label,
+    tone: Some(BadgeNeutral),
+    variant: Some(BadgeSubtle),
+    dot: None,
+  )
+}
+
+/// Create a metric stat card.
+pub fn metric(label: String, val: MetricValue) -> Node {
+  Metric(
+    base: node.empty_base(),
+    label: label,
+    value: val,
+    subtext: None,
+    trend: None,
+  )
+}
+
+/// Create an icon primitive.
+pub fn icon(name: String) -> Node {
+  Icon(base: node.empty_base(), name: name, size: None)
+}
+
+/// Create an avatar primitive.
+pub fn avatar() -> Node {
+  Avatar(
+    base: node.empty_base(),
+    src: None,
+    pubkey: None,
+    name: None,
+    size: Some(style.SizeMd),
+    action: None,
+  )
+}
+
+/// Create an interactive button.
+pub fn button(label: String, act: Action) -> Node {
+  Button(
+    base: node.empty_base(),
+    label: label,
+    action: act,
+    variant: Some(ButtonPrimary),
+    size: Some(style.SizeMd),
+    icon: None,
+    icon_position: None,
+    disabled: None,
+    loading: None,
+  )
+}
+
+/// Create a compact icon button.
+pub fn icon_button(icon_name: String, act: Action) -> Node {
+  IconButton(
+    base: node.empty_base(),
+    icon: icon_name,
+    tooltip: None,
+    action: act,
+    variant: Some(IconButtonGhost),
+    size: Some(style.SizeMd),
+    disabled: None,
+  )
+}
+
+/// Create a single-line input field.
+pub fn input(name: String) -> Node {
+  Input(
+    base: node.empty_base(),
+    name: name,
+    placeholder: None,
+    value: None,
+    input_type: Some(InputText),
+    accept: None,
+    clearable: None,
+    prefix_icon: None,
+    action_on_enter: None,
+    action_on_change: None,
+  )
+}
+
+/// Create a multi-line textarea.
+pub fn textarea(name: String) -> Node {
+  Textarea(
+    base: node.empty_base(),
+    name: name,
+    placeholder: None,
+    value: None,
+    rows: Some(3),
+  )
+}
+
+/// Create a toggle switch.
+pub fn toggle(name: String, checked: Bool, act: Action) -> Node {
+  Toggle(
+    base: node.empty_base(),
+    name: name,
+    label: None,
+    checked: checked,
+    action: act,
+    disabled: None,
+  )
+}
+
+/// Create a select dropdown.
+pub fn select(name: String, options: List(SelectOption)) -> Node {
+  Select(
+    base: node.empty_base(),
+    name: name,
+    value: None,
+    options: options,
+    action: None,
+  )
+}
+
+/// Create a tab bar.
+pub fn tabs(tabs_list: List(TabItem), active: String, act: Action) -> Node {
+  Tabs(
+    base: node.empty_base(),
+    tabs: tabs_list,
+    active_tab: active,
+    action: act,
+  )
+}
+
+/// Create a status indicator pill or dot.
+pub fn status_indicator(status: IndicatorStatus) -> Node {
+  StatusIndicator(
+    base: node.empty_base(),
+    status: status,
+    label: None,
+    pulse: None,
+  )
+}
+
+/// Create a syntax-highlighted code block.
+pub fn code_block(code: String) -> Node {
+  CodeBlock(
+    base: node.empty_base(),
+    code: code,
+    language: None,
+    copyable: Some(True),
+  )
+}
+
+/// Create a progress bar or circle.
+pub fn progress(val: Float) -> Node {
+  Progress(
+    base: node.empty_base(),
+    value: val,
+    max: Some(100.0),
+    label: None,
+    variant: Some(ProgressBar),
+    size: None,
+    color: None,
+    show_ticks: None,
+    action: None,
+  )
+}
+
+/// Create an alert banner.
+pub fn banner(msg: String) -> Node {
+  Banner(
+    base: node.empty_base(),
+    tone: Some(BannerInfo),
+    title: None,
+    message: msg,
+    icon: None,
+    action: None,
+    action_label: None,
+    dismissible: None,
+    on_dismiss_action: None,
+  )
+}
+
+/// Create a list container.
+pub fn list_view(items: List(Node)) -> Node {
+  List(
+    base: node.empty_base(),
+    items: items,
+    on_scroll_end_action: None,
+    has_more: None,
+    loading_more: None,
+  )
+}
+
+/// Create an individual list item.
+pub fn list_item(title_text: String) -> Node {
+  ListItem(
+    base: node.empty_base(),
+    title: title_text,
+    subtitle: None,
+    meta: None,
+    icon: None,
+    avatar_url: None,
+    avatar_pubkey: None,
+    checked: None,
+    on_check_action: None,
+    on_click_action: None,
+    actions: [],
+  )
+}
+
+/// Create an empty state placeholder.
+pub fn empty_state(title_text: String) -> Node {
+  EmptyState(
+    base: node.empty_base(),
+    icon: None,
+    title: title_text,
+    description: None,
+    action: None,
+    action_label: None,
+  )
+}
+
+/// Create a virtualized list container.
+pub fn virtual_list(items: List(Node)) -> Node {
+  VirtualList(
+    base: node.empty_base(),
+    items: items,
+    item_height: Some(48),
+    overscan: Some(5),
+    max_height: None,
+  )
+}
+
+// -----------------------------------------------------------------------------
+// Base Modifiers
+// -----------------------------------------------------------------------------
+
+/// Set the node ID.
+pub fn with_id(n: Node, id_str: String) -> Node {
+  let b = node.get_base(n)
+  node.set_base(n, NodeBase(..b, id: Some(id_str)))
+}
+
+/// Set the key for reconciliation.
+pub fn with_key(n: Node, key_str: String) -> Node {
+  let b = node.get_base(n)
+  node.set_base(n, NodeBase(..b, key: Some(key_str)))
+}
+
+/// Set visibility of the node.
+pub fn visible(n: Node, is_vis: Bool) -> Node {
+  let b = node.get_base(n)
+  node.set_base(n, NodeBase(..b, visible: Some(is_vis)))
+}
+
+/// Attach a style to the node.
+pub fn with_style(n: Node, st: Style) -> Node {
+  let b = node.get_base(n)
+  node.set_base(n, NodeBase(..b, style: Some(st)))
+}
+
+/// Declare a logical page for history and back navigation.
+pub fn page(n: Node, page_id: String) -> Node {
+  let b = node.get_base(n)
+  let p = PageDeclaration(id: page_id, title: None, url: None)
+  node.set_base(n, NodeBase(..b, page: Some(p)))
+}
+
+// -----------------------------------------------------------------------------
+// Layout Modifiers
+// -----------------------------------------------------------------------------
+
+/// Set direction to row for Box containers.
+pub fn row(n: Node) -> Node {
+  case n {
+    Box(base, _, gap, align, justify, wrap, padding, action, bg, children) ->
+      Box(
+        base,
+        Some(Row),
+        gap,
+        align,
+        justify,
+        wrap,
+        padding,
+        action,
+        bg,
+        children,
+      )
+    other -> other
+  }
+}
+
+/// Set direction to column for Box containers.
+pub fn column(n: Node) -> Node {
+  case n {
+    Box(base, _, gap, align, justify, wrap, padding, action, bg, children) ->
+      Box(
+        base,
+        Some(Column),
+        gap,
+        align,
+        justify,
+        wrap,
+        padding,
+        action,
+        bg,
+        children,
+      )
+    other -> other
+  }
+}
+
+/// Set gap on a Box container from a token string (e.g. "xs", "sm", "md", "lg").
+pub fn gap(n: Node, token_str: String) -> Node {
+  let sz = case style.size_from_string(token_str) {
+    Ok(s) -> Some(s)
+    Error(Nil) -> None
+  }
+  case n {
+    Box(base, dir, _, align, justify, wrap, padding, action, bg, children) ->
+      Box(base, dir, sz, align, justify, wrap, padding, action, bg, children)
+    other -> other
+  }
+}
+
+/// Set gap on a Box container with a typed `SizeToken`.
+pub fn gap_size(n: Node, sz: SizeToken) -> Node {
+  case n {
+    Box(base, dir, _, align, justify, wrap, padding, action, bg, children) ->
+      Box(
+        base,
+        dir,
+        Some(sz),
+        align,
+        justify,
+        wrap,
+        padding,
+        action,
+        bg,
+        children,
+      )
+    other -> other
+  }
+}
+
+/// Set padding on a Box container from a token string.
+pub fn padding(n: Node, token_str: String) -> Node {
+  let sz = case style.size_from_string(token_str) {
+    Ok(s) -> Some(s)
+    Error(Nil) -> None
+  }
+  case n {
+    Box(base, dir, gap, align, justify, wrap, _, action, bg, children) ->
+      Box(base, dir, gap, align, justify, wrap, sz, action, bg, children)
+    other -> other
+  }
+}
+
+/// Set padding on a Box container with a typed `SizeToken`.
+pub fn padding_size(n: Node, sz: SizeToken) -> Node {
+  case n {
+    Box(base, dir, gap, align, justify, wrap, _, action, bg, children) ->
+      Box(base, dir, gap, align, justify, wrap, Some(sz), action, bg, children)
+    other -> other
+  }
+}
+
+/// Align items along cross axis.
+pub fn align(n: Node, a: Align) -> Node {
+  case n {
+    Box(base, dir, gap, _, justify, wrap, padding, action, bg, children) ->
+      Box(base, dir, gap, Some(a), justify, wrap, padding, action, bg, children)
+    other -> other
+  }
+}
+
+/// Justify content along main axis.
+pub fn justify(n: Node, j: Justify) -> Node {
+  case n {
+    Box(base, dir, gap, align, _, wrap, padding, action, bg, children) ->
+      Box(base, dir, gap, align, Some(j), wrap, padding, action, bg, children)
+    other -> other
+  }
+}
+
+/// Set flex wrapping on a Box.
+pub fn wrap(n: Node, w: Bool) -> Node {
+  case n {
+    Box(base, dir, gap, align, justify, _, padding, action, bg, children) ->
+      Box(
+        base,
+        dir,
+        gap,
+        align,
+        justify,
+        Some(w),
+        padding,
+        action,
+        bg,
+        children,
+      )
+    other -> other
+  }
+}
+
+/// Set background color or token on a Box.
+pub fn background(n: Node, bg: String) -> Node {
+  case n {
+    Box(base, dir, gap, align, justify, wrap, padding, action, _, children) ->
+      Box(
+        base,
+        dir,
+        gap,
+        align,
+        justify,
+        wrap,
+        padding,
+        action,
+        Some(bg),
+        children,
+      )
+    other -> other
+  }
+}
+
+/// Append a single child node to Box or Card.
+pub fn child(parent: Node, c: Node) -> Node {
+  case parent {
+    Box(base, dir, gap, align, justify, wrap, padding, action, bg, children) ->
+      Box(
+        base,
+        dir,
+        gap,
+        align,
+        justify,
+        wrap,
+        padding,
+        action,
+        bg,
+        list.append(children, [c]),
+      )
+    Card(base, t, sub, ic, ha, children, foot, act, bbg) ->
+      Card(base, t, sub, ic, ha, list.append(children, [c]), foot, act, bbg)
+    other -> other
+  }
+}
+
+/// Replace all children of a Box or Card.
+pub fn children(parent: Node, kids: List(Node)) -> Node {
+  case parent {
+    Box(base, dir, gap, align, justify, wrap, padding, action, bg, _) ->
+      Box(base, dir, gap, align, justify, wrap, padding, action, bg, kids)
+    Card(base, t, sub, ic, ha, _, foot, act, bbg) ->
+      Card(base, t, sub, ic, ha, kids, foot, act, bbg)
+    other -> other
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Component-Specific Modifiers
+// -----------------------------------------------------------------------------
+
+/// Set title on Card, Banner, ListItem, or EmptyState.
+pub fn title(n: Node, t: String) -> Node {
+  case n {
+    Card(base, _, sub, ic, ha, kids, foot, act, bbg) ->
+      Card(base, Some(t), sub, ic, ha, kids, foot, act, bbg)
+    Banner(base, tn, _, msg, ic, act, albl, dis, od) ->
+      Banner(base, tn, Some(t), msg, ic, act, albl, dis, od)
+    ListItem(base, _, sub, m, ic, au, ap, chk, ochk, oclk, acts) ->
+      ListItem(base, t, sub, m, ic, au, ap, chk, ochk, oclk, acts)
+    EmptyState(base, ic, _, desc, act, albl) ->
+      EmptyState(base, ic, t, desc, act, albl)
+    other -> other
+  }
+}
+
+/// Set subtitle on Card or ListItem.
+pub fn subtitle(n: Node, s: String) -> Node {
+  case n {
+    Card(base, t, _, ic, ha, kids, foot, act, bbg) ->
+      Card(base, t, Some(s), ic, ha, kids, foot, act, bbg)
+    ListItem(base, t, _, m, ic, au, ap, chk, ochk, oclk, acts) ->
+      ListItem(base, t, Some(s), m, ic, au, ap, chk, ochk, oclk, acts)
+    other -> other
+  }
+}
+
+/// Set icon name on Card, Banner, EmptyState, or ListItem.
+pub fn with_icon(n: Node, icon_name: String) -> Node {
+  case n {
+    Card(base, t, sub, _, ha, kids, foot, act, bbg) ->
+      Card(base, t, sub, Some(icon_name), ha, kids, foot, act, bbg)
+    Banner(base, tn, t, msg, _, act, albl, dis, od) ->
+      Banner(base, tn, t, msg, Some(icon_name), act, albl, dis, od)
+    ListItem(base, t, sub, m, _, au, ap, chk, ochk, oclk, acts) ->
+      ListItem(base, t, sub, m, Some(icon_name), au, ap, chk, ochk, oclk, acts)
+    EmptyState(base, _, t, desc, act, albl) ->
+      EmptyState(base, Some(icon_name), t, desc, act, albl)
+    Button(base, l, act, vr, sz, _, ip, dis, load) ->
+      Button(base, l, act, vr, sz, Some(icon_name), ip, dis, load)
+    other -> other
+  }
+}
+
+/// Attach an interactive Action to the node.
+pub fn action(n: Node, act: Action) -> Node {
+  case n {
+    Box(base, dir, gap, align, justify, wrap, padding, _, bg, kids) ->
+      Box(base, dir, gap, align, justify, wrap, padding, Some(act), bg, kids)
+    Card(base, t, sub, ic, ha, kids, foot, _, bbg) ->
+      Card(base, t, sub, ic, ha, kids, foot, Some(act), bbg)
+    Text(base, c, vr, tn, tr, _, img) ->
+      Text(base, c, vr, tn, tr, Some(act), img)
+    Avatar(base, src, pk, nm, sz, _) -> Avatar(base, src, pk, nm, sz, Some(act))
+    Button(base, l, _, vr, sz, ic, ip, dis, load) ->
+      Button(base, l, act, vr, sz, ic, ip, dis, load)
+    IconButton(base, ic, tip, _, vr, sz, dis) ->
+      IconButton(base, ic, tip, act, vr, sz, dis)
+    Toggle(base, nm, lbl, chk, _, dis) -> Toggle(base, nm, lbl, chk, act, dis)
+    Select(base, nm, v, opts, _) -> Select(base, nm, v, opts, Some(act))
+    Tabs(base, tabs, act_tab, _) -> Tabs(base, tabs, act_tab, act)
+    Progress(base, v, mx, lbl, vr, sz, col, ticks, _) ->
+      Progress(base, v, mx, lbl, vr, sz, col, ticks, Some(act))
+    Banner(base, tn, t, msg, ic, _, albl, dis, od) ->
+      Banner(base, tn, t, msg, ic, Some(act), albl, dis, od)
+    EmptyState(base, ic, t, desc, _, albl) ->
+      EmptyState(base, ic, t, desc, Some(act), albl)
+    ListItem(base, t, sub, m, ic, au, ap, chk, ochk, _, acts) ->
+      ListItem(base, t, sub, m, ic, au, ap, chk, ochk, Some(act), acts)
+    other -> other
+  }
+}
+
+/// Set disabled state on Button, IconButton, Toggle.
+pub fn disabled(n: Node, is_disabled: Bool) -> Node {
+  case n {
+    Button(base, l, act, vr, sz, ic, ip, _, load) ->
+      Button(base, l, act, vr, sz, ic, ip, Some(is_disabled), load)
+    IconButton(base, ic, tip, act, vr, sz, _) ->
+      IconButton(base, ic, tip, act, vr, sz, Some(is_disabled))
+    Toggle(base, nm, lbl, chk, act, _) ->
+      Toggle(base, nm, lbl, chk, act, Some(is_disabled))
+    other -> other
+  }
+}
+
+/// Set loading state on Button.
+pub fn loading(n: Node, is_loading: Bool) -> Node {
+  case n {
+    Button(base, l, act, vr, sz, ic, ip, dis, _) ->
+      Button(base, l, act, vr, sz, ic, ip, dis, Some(is_loading))
+    other -> other
+  }
+}
+
+/// Set placeholder on Input or Textarea.
+pub fn placeholder(n: Node, ph: String) -> Node {
+  case n {
+    Input(base, nm, _, v, it, acc, clr, pfx, o_ent, o_chg) ->
+      Input(base, nm, Some(ph), v, it, acc, clr, pfx, o_ent, o_chg)
+    Textarea(base, nm, _, v, rows) -> Textarea(base, nm, Some(ph), v, rows)
+    other -> other
+  }
+}
+
+/// Set initial value on Input, Textarea, or Select.
+pub fn value(n: Node, val: String) -> Node {
+  case n {
+    Input(base, nm, ph, _, it, acc, clr, pfx, o_ent, o_chg) ->
+      Input(base, nm, ph, Some(val), it, acc, clr, pfx, o_ent, o_chg)
+    Textarea(base, nm, ph, _, rows) -> Textarea(base, nm, ph, Some(val), rows)
+    Select(base, nm, _, opts, act) -> Select(base, nm, Some(val), opts, act)
+    other -> other
+  }
+}
+
+/// Set input type on Input primitive.
+pub fn input_type(n: Node, it: InputType) -> Node {
+  case n {
+    Input(base, nm, ph, v, _, acc, clr, pfx, o_ent, o_chg) ->
+      Input(base, nm, ph, v, Some(it), acc, clr, pfx, o_ent, o_chg)
+    other -> other
+  }
+}
+
+/// Set footer children on Card.
+pub fn footer(card_node: Node, foot: List(Node)) -> Node {
+  case card_node {
+    Card(base, t, sub, ic, ha, kids, _, act, bbg) ->
+      Card(base, t, sub, ic, ha, kids, foot, act, bbg)
+    other -> other
+  }
+}
+
+/// Set header action node on Card.
+pub fn header_action(card_node: Node, ha: Node) -> Node {
+  case card_node {
+    Card(base, t, sub, ic, _, kids, foot, act, bbg) ->
+      Card(base, t, sub, ic, Some(ha), kids, foot, act, bbg)
+    other -> other
+  }
+}
+
+/// Set typography variant on Text.
+pub fn text_variant(n: Node, vr: TextVariant) -> Node {
+  case n {
+    Text(base, c, _, tn, tr, act, img) ->
+      Text(base, c, Some(vr), tn, tr, act, img)
+    other -> other
+  }
+}
+
+/// Set color tone on Text.
+pub fn text_tone(n: Node, tn: TextTone) -> Node {
+  case n {
+    Text(base, c, vr, _, tr, act, img) ->
+      Text(base, c, vr, Some(tn), tr, act, img)
+    other -> other
+  }
+}
+
+/// Set tone on Badge.
+pub fn badge_tone(n: Node, tn: BadgeTone) -> Node {
+  case n {
+    Badge(base, l, _, vr, dot) -> Badge(base, l, Some(tn), vr, dot)
+    other -> other
+  }
+}
+
+/// Set tone on Banner.
+pub fn banner_tone(n: Node, tn: BannerTone) -> Node {
+  case n {
+    Banner(base, _, t, msg, ic, act, albl, dis, od) ->
+      Banner(base, Some(tn), t, msg, ic, act, albl, dis, od)
+    other -> other
+  }
+}

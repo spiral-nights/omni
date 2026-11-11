@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":2,"error":{"code":-32001,"message":"Permission denied for nostr:sign on kind 4","data":{"requiredKind":4,"pluginId":"org.omni.plugin.test"}}}

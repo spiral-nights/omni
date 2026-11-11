@@ -38,8 +38,8 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 1.6 Remove TS/MoonBit bech32 duplicates (facade to Gleam)
 
 ## Phase 2: Protocol contracts
-- [ ] 2.1 `protocol`: `plugin_id`, `capability`, `grant`, `viewport`
-- [ ] 2.2 `protocol/rpc`: envelope, error codes, `Request` ADT, decode/encode + golden fixtures
+- [x] 2.1 `protocol`: `plugin_id`, `capability`, `grant`, `viewport`
+- [x] 2.2 `protocol/rpc`: envelope, error codes, `Request` ADT, decode/encode + golden fixtures
 - [ ] 2.3 `protocol/schema`: `Node` ADT, style, action, codec, builders + golden fixtures
 - [ ] 2.4 `protocol`: `workspace` (versioned codec), `intent`, `manifest`, `blossom`, `wit`
 - [ ] 2.5 Wire-compat tests against recorded TS output

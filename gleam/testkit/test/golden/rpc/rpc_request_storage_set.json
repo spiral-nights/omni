@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":3,"method":"storage.set","params":{"key":"workspace_theme","value":"warm-paper-dark"}}
