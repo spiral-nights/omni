@@ -34,7 +34,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 1.2 `testkit`: fake ports, generators, fixture loader
 - [x] 1.3 `nostr`: `kind`, `pubkey`, `event_id`, `event` + codec
 - [x] 1.4 `nostr`: `bech32` + `nip19` (property tests vs old TS vectors)
-- [ ] 1.5 `nostr`: `filter` (matching, merge), `relay_url`, `relay_frame` codec, `replaceable`
+- [x] 1.5 `nostr`: `filter` (matching, merge), `relay_url`, `relay_frame` codec, `replaceable`
 - [ ] 1.6 Remove TS/MoonBit bech32 duplicates (facade to Gleam)
 
 ## Phase 2: Protocol contracts
