@@ -1,3 +1,5 @@
+> **LEGACY DOCUMENT (TypeScript/MoonBit era).** Concepts and wire formats still apply, but code examples and package paths are historical. The implementation now lives under `gleam/`; start with [`docs/09-gleam-migration-handoff.md`](09-gleam-migration-handoff.md) and [`docs/README.md`](README.md).
+
 # Omni — System Architecture & Core Runtime
 
 > **Authoritative Reference for Developers, System Architects, and AI Agents.**  

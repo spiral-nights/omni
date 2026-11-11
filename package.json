@@ -3,21 +3,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm -r run build && pnpm gleam:build",
+    "build": "pnpm gleam:build && pnpm --filter @omni/web build",
     "gleam:build": "node scripts/gleam-build.mjs build && node scripts/build-bridge.mjs",
-    "build:stale": "node scripts/autobuild.js",
+    "gleam:bridge": "node scripts/build-bridge.mjs",
     "dev": "pnpm --filter @omni/web dev",
     "test": "pnpm gleam:build && vitest run && pnpm gleam:test",
     "gleam:test": "node scripts/gleam-build.mjs test",
     "gleam:check": "node scripts/gleam-build.mjs check && node scripts/lint-gleam-architecture.mjs",
     "gleam:lint": "node scripts/lint-gleam-architecture.mjs",
-    "typecheck": "pnpm -r run typecheck",
-    "wit:types": "jco types packages/types/wit/omni.wit -o packages/types/src/wit",
-    "gleam:bridge": "node scripts/build-bridge.mjs"
+    "typecheck": "pnpm --filter @omni/web exec tsc --noEmit",
+    "bundle:report": "node scripts/bundle-report.mjs"
   },
   "devDependencies": {
-    "@bytecodealliance/jco": "^1.41.0",
-    "fake-indexeddb": "^6.2.8",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0",
     "esbuild": "^0.25.0"

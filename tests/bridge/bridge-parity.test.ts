@@ -6,15 +6,15 @@
 // the *external contract* every shim must honour so the Gleam bridge
 // (`gleam/bridge`) can be swapped in without changing plugin behaviour.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { install as installStorage } from "../../../gleam/bridge/src/omni/bridge/storage_shim.ffi.mjs";
-import { install as installLinks } from "../../../gleam/bridge/src/omni/bridge/links_shim.ffi.mjs";
-import { install as installShare } from "../../../gleam/bridge/src/omni/bridge/share_shim.ffi.mjs";
-import { install_actions } from "../../../gleam/bridge/src/omni/bridge/schema_bridge.ffi.mjs";
-import { install as installNostr, route_notification as routeNostr } from "../../../gleam/bridge/src/omni/bridge/nostr_shim.ffi.mjs";
+import { install as installStorage } from "../../gleam/bridge/src/omni/bridge/storage_shim.ffi.mjs";
+import { install as installLinks } from "../../gleam/bridge/src/omni/bridge/links_shim.ffi.mjs";
+import { install as installShare } from "../../gleam/bridge/src/omni/bridge/share_shim.ffi.mjs";
+import { install_actions } from "../../gleam/bridge/src/omni/bridge/schema_bridge.ffi.mjs";
+import { install as installNostr, route_notification as routeNostr } from "../../gleam/bridge/src/omni/bridge/nostr_shim.ffi.mjs";
 import {
   install as installWebSocket,
   route_notification as routeSocket,
-} from "../../../gleam/bridge/src/omni/bridge/websocket_shim.ffi.mjs";
+} from "../../gleam/bridge/src/omni/bridge/websocket_shim.ffi.mjs";
 
 describe("bridge parity: storage partition", () => {
   it("isolates plugin keys behind a per-plugin prefix", () => {

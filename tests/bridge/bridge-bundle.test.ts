@@ -6,10 +6,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 
-const bundlePath = join(
-  process.cwd(),
-  "gleam/bridge/dist/guest-runtime.js",
-);
+const bundlePath = join(process.cwd(), "gleam/bridge/dist/guest-runtime.js");
 const hasBundle = existsSync(bundlePath);
 
 describe.skipIf(!hasBundle)("bundled Gleam guest bridge", () => {

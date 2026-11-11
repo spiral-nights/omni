@@ -1,7 +1,7 @@
 # Omni — AI Agent Developer & Architecture Guide
 
 > **Preserved Reference for Autonomous Coding Agents, Subagents, and Human Collaborators.**  
-> *Last Updated: October 2026*
+> *Last Updated: November 2026 — implementation is now pure Gleam (see `docs/09-gleam-migration-handoff.md`).*
 
 ---
 
@@ -58,16 +58,36 @@ Omni is an extensible, local-first Nostr web client and sandboxed micro-frontend
 
 ## 2. Repository Structure
 
-Omni is structured as a `pnpm` monorepo:
+Omni is structured as a `pnpm` monorepo whose runtime is written in Gleam
+(JS target). The legacy TypeScript packages were removed in Phase 8.
 
 ```
 omni/
 ├── apps/
-│   └── web/                               # Host Web Shell & Bootloader (~30 lines)
-│       ├── index.html                     # Minimal HTML skeleton (<div id="omni-root">)
-│       └── src/
-│           ├── main.ts                    # Host microkernel bootloader & shell mount
-│           └── style.css                  # Minimal host microkernel skeleton reset (~25 lines)
+│   └── web/                               # Host page: boots the Gleam shell, loads the PWA SW
+│       ├── index.html                     # Minimal skeleton (<div id="omni-root">)
+│       └── src/main.ts                    # Calls @omni/gleam-interop, paints the active theme
+│
+├── gleam/                                 # All runtime code, one package per domain
+│   ├── platform/                          # FFI quarantine: crypto, IDB, WebSocket, storage, URL
+│   ├── nostr/                             # Events, filters, bech32/NIP-19, relay frames
+│   ├── protocol/                          # Schema AST, RPC, workspace, intents, manifests
+│   ├── kernel/                            # Headless kernel: ACL, stores, relays, RPC, plugins
+│   ├── sandbox/                           # Guest hosts, CSP, tokens, srcdoc, manager
+│   ├── ui/                                # Icons, tokens, sanitizer, Schema renderer
+│   ├── shell/                             # Elm shell: model/update, layouts, registry, themes
+│   ├── web/                               # Bootloader config + headless boot/dispatch/view
+│   ├── plugin_kit/                        # Plugin harness, typed window.nostr, routes, stores
+│   ├── social/ + social_ui/               # Shared note/profile domain and note card views
+│   ├── bridge/                            # Guest shims + bundled guest runtime (FFI quarantine)
+│   ├── interop/                           # JS facade for apps/web (temporary)
+│   ├── testkit/                           # Fake ports, generators, golden snapshots
+│   └── plugins/                           # First-party plugins (feed, notes, timer, profiles, ...)
+│
+├── assets/styles/                         # tokens.css, schema.css, shell-modules.css, themes
+├── tests/bridge/                          # Dual-run bridge conformance tests (Vitest)
+├── scripts/                               # Ordered Gleam build/test, lint, bridge bundler
+└── docs/                                  # Architecture, migration status, toolchain
 │
 ├── packages/
 │   ├── types/                             # Canonical TypeScript interfaces
@@ -195,19 +215,20 @@ All dock icons follow standard structure:
 
 ```bash
 # Build all packages and plugins
-pnpm -r run build
+pnpm build
 
 # Run comprehensive test suite (264 tests across 19 test suites)
 pnpm test
 
 # Run Vite development server for apps/web
-pnpm -C apps/web dev
+pnpm dev
 
 # Check git status
 git status
 ```
 
 Always ensure:
-1. All workspace packages build cleanly (`pnpm -r run build`).
-2. All unit and integration tests pass (`pnpm test`).
-3. Changes are committed incrementally per issue / enhancement.
+1. `pnpm build` succeeds (ordered Gleam build, guest bridge bundle, Vite host build).
+2. `pnpm test` passes (bridge conformance Vitest + every Gleam package suite).
+3. `pnpm gleam:check` passes (format, typecheck, architecture lint).
+4. Changes are committed incrementally per issue / enhancement.

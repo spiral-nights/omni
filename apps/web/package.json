@@ -3,23 +3,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "predev": "node ../../scripts/autobuild.js",
     "dev": "vite",
-    "prebuild": "node ../../scripts/autobuild.js",
     "build": "tsc && vite build && node -e \"const fs=require('fs');fs.copyFileSync('dist/index.html','dist/404.html')\"",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@omni/core": "workspace:*",
-    "@omni/types": "workspace:*",
-    "@omni/plugin-shell": "workspace:*",
-    "@omni/plugin-feed": "workspace:*",
-    "@omni/plugin-relays": "workspace:*",
-    "@omni/plugin-checklist": "workspace:*",
-    "@omni/plugin-profile-viewer": "workspace:*",
-    "@omni/plugin-publisher": "workspace:*",
-    "@omni/plugin-notes": "workspace:*",
-    "@omni/plugin-timer": "workspace:*",
     "@omni/gleam-interop": "workspace:*"
   },
   "devDependencies": {

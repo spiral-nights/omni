@@ -1,5 +1,0 @@
-import {
-  "moonbitlang/core/json",
-  "omni/plugin/interface/omni/plugin/nostr",
-  "omni/plugin/interface/omni/plugin/ui",
-}
