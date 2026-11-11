@@ -23,7 +23,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 0.3 Verify and pin dependency versions (`gleam_stdlib`, `gleam_json`, `gleam_javascript`, `lustre`, `plinth`, test libs); record in `docs/08-gleam-toolchain.md`; decide D3
 - [x] 0.4 Verify shared `omni/<pkg>/` module namespace works across path-linked packages
 - [x] 0.5 `scripts/gleam-build.mjs`: build all Gleam packages in dependency order; wire into root `build` / `test` scripts
-- [ ] 0.6 Vite integration: a Gleam module imported by `apps/web`
+- [x] 0.6 Vite integration: a Gleam module imported by `apps/web`
 - [ ] 0.7 Lint scripts: FFI quarantine, no `plugin_* -> plugin_*` imports, no plugin IDs in shell/CSS, no `omni.*` in plugins, no emoji
 - [ ] 0.8 Spike: ACL policy in Gleam + JS facade, `AclEngine.ts` delegates to it; all existing tests green
 - [ ] 0.9 Spike: Lustre page reparenting a live iframe between containers (state preserved?)

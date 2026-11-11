@@ -5,6 +5,7 @@ import {
   getAllPackages,
   buildPackage
 } from "../../scripts/autobuild.js";
+import { gleamInteropPlugin } from "../../scripts/vite-plugin-gleam.mjs";
 
 function omniAutoBuildPlugin(): Plugin {
   let isBuilding = false;
@@ -83,7 +84,7 @@ function omniAutoBuildPlugin(): Plugin {
 
 export default defineConfig({
   base: "./",
-  plugins: [omniAutoBuildPlugin()],
+  plugins: [omniAutoBuildPlugin(), gleamInteropPlugin()],
   server: {
     host: true,
     port: 3000
