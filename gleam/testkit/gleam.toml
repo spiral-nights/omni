@@ -1,0 +1,14 @@
+name = "omni_testkit"
+version = "0.1.0"
+description = "Test harness, fake platform ports, property generators, and golden snapshot helpers for Omni."
+target = "javascript"
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+omni_platform = { path = "../platform" }
+omni_protocol = { path = "../protocol" }
+omni_nostr = { path = "../nostr" }
+qcheck = ">= 1.0.5 and < 2.0.0"
+
+[dev_dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
