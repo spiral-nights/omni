@@ -1,5 +1,8 @@
 # Functional Gap Analysis: `main` (working TS app) vs `gleam-rewrite`
 
+> **Historical analysis.** The live, canonical fix list is
+> [`10-fix-backlog.md`](10-fix-backlog.md); use it for status and ordering.
+
 > Generated November 2026 by comparing `main` (the previous working
 > application) against the current Gleam tree. This is the authoritative list of
 > what is missing or degraded; it supersedes the optimistic "shipped" summary in
