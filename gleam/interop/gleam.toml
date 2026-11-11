@@ -8,6 +8,7 @@ typescript_declarations = true
 
 [dependencies]
 gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+omni_kernel = { path = "../kernel" }
 omni_protocol = { path = "../protocol" }
 
 [dev_dependencies]
