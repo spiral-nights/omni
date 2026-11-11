@@ -110,6 +110,7 @@ All plugins must be pure standard nsites using `omni_plugin_kit`:
 ### 3. Phase 7.10–7.11: Sandbox Guest Bridge (`omni_bridge`)
 - [ ] Port `packages/core/src/sandbox/omni-runtime.js` to `gleam/bridge` (`omni_bridge`):
   - Guest-side shims: `nostr_shim`, `websocket_shim`, `storage_shim`, `links_shim`, `share_shim`, `schema_bridge`.
+  - Progress: package skeleton plus `storage_shim`, `links_shim`, `share_shim`, and `schema_bridge` are ported and tested (6 tests). Remaining: `nostr_shim` and `websocket_shim`, then the dual-run cutover.
   - Monkey-patching window primitives via `globals.ffi.mjs`.
   - Dual-run old vs new bridge against test suites before final cutover.
 
