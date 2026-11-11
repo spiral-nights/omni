@@ -102,10 +102,10 @@ All plugins must be pure standard nsites using `omni_plugin_kit`:
   - **Important Architectural Rule**: Uses `omni/social_ui/note_card` to show author notes. Clicking a note emits `OpenNoteIntent(note_id)` to let the host intent broker route to a feed/reader plugin (no duplicated thread viewer!). Complete `view`, `main`, tests.
 - [ ] **Phase 7.8: `plugin_publisher`**:
   - Studio draft form, NIP-5A nsite tag generator, Blossom server manager, published nsites list. Complete `view`, `main`, tests.
-- [ ] **Phase 7.9: `plugin_feed`**:
+- [x] **Phase 7.9: `plugin_feed`**:
   - Replace MoonBit feed with Gleam→JS using `omni_social` + `omni_social_ui`.
   - Views: Timeline (Following/Global/Replies), Thread (ancestors + focal + replies), Search, Settings, Widget.
-  - Move legacy MoonBit code to `external-plugins/feed-moonbit/` as an optional Wasm example.
+  - Legacy MoonBit code moved to `external-plugins/feed-moonbit/` as an optional Wasm example.
 
 ### 3. Phase 7.10–7.11: Sandbox Guest Bridge (`omni_bridge`)
 - [ ] Port `packages/core/src/sandbox/omni-runtime.js` to `gleam/bridge` (`omni_bridge`):

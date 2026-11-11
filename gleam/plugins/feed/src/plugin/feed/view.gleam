@@ -14,7 +14,7 @@ import omni/protocol/schema/node.{
   type Node, AlignCenter, Body, Button, ButtonGhost, ButtonPrimary,
   ButtonSecondary, Caption, IconButton, IconButtonGhost, IconButtonSecondary,
   Input, InputSearch, JustifyBetween, JustifyCenter, JustifyEnd, ListItem,
-  NodeBase, PageDeclaration, Subtitle, TabItem, Toggle, ToneMuted, TonePrimary,
+  NodeBase, PageDeclaration, TabItem, Toggle, ToneMuted,
 }
 import omni/protocol/schema/style.{SizeMd, SizeSm, StyleRaw}
 import omni/social/note.{type Note}

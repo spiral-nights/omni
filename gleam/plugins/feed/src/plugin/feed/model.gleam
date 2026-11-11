@@ -3,11 +3,14 @@
 //// Built on `omni_social` (`Note`, `Profile`, `NoteStats`, `Follows`, `ThreadView`).
 
 import gleam/dict.{type Dict}
+import gleam/dynamic/decode.{type Decoder}
 import gleam/int
+import gleam/json.{type Json}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
 import gleam/string
+import omni/plugin_kit/local_store.{type StoreConfig, StoreConfig}
 import omni/plugin_kit/route.{type Route}
 import omni/social/follows.{type Follows}
 import omni/social/note.{type Note}
@@ -208,4 +211,40 @@ fn sort_newest_first(notes: List(Note)) -> List(Note) {
       other -> other
     }
   })
+}
+
+/// Encodes `FeedSettings` to JSON.
+pub fn encode_settings(settings: FeedSettings) -> Json {
+  json.object([
+    #("show_replies", json.bool(settings.show_replies)),
+    #("show_inline_media", json.bool(settings.show_inline_media)),
+    #("page_size", json.int(settings.page_size)),
+  ])
+}
+
+/// Decoder for `FeedSettings`.
+pub fn settings_decoder() -> Decoder(FeedSettings) {
+  use show_replies <- decode.optional_field("show_replies", False, decode.bool)
+  use show_inline_media <- decode.optional_field(
+    "show_inline_media",
+    True,
+    decode.bool,
+  )
+  use page_size <- decode.optional_field("page_size", 20, decode.int)
+  decode.success(FeedSettings(
+    show_replies: show_replies,
+    show_inline_media: show_inline_media,
+    page_size: page_size,
+  ))
+}
+
+/// Versioned `local_store.StoreConfig` for persisting feed settings.
+pub fn settings_store_config() -> StoreConfig(FeedSettings) {
+  StoreConfig(
+    key: "omni:feed:settings",
+    version: 1,
+    encode: encode_settings,
+    decoder: settings_decoder(),
+    default: default_settings,
+  )
 }
