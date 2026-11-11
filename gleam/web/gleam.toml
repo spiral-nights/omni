@@ -5,6 +5,7 @@ target = "javascript"
 [dependencies]
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"
 gleam_json = ">= 3.0.1 and < 4.0.0"
+gleam_javascript = ">= 1.0.1 and < 2.0.0"
 lustre = ">= 5.7.1 and < 6.0.0"
 omni_shell = { path = "../shell" }
 omni_kernel = { path = "../kernel" }
@@ -12,6 +13,7 @@ omni_sandbox = { path = "../sandbox" }
 omni_ui = { path = "../ui" }
 omni_protocol = { path = "../protocol" }
 omni_platform = { path = "../platform" }
+omni_nostr = { path = "../nostr" }
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

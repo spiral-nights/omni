@@ -12,7 +12,7 @@
 The codebase is migrating from TypeScript (~47.6k LOC) and MoonBit (~1.7k LOC) to a clean, idiomatic multi-package Gleam workspace under `gleam/`.
 
 - **Phases 0 through 5 are 100% COMPLETE and committed** to `gleam-rewrite`.
-- **Phase 6 (Shell)** is **~70% implemented**: Core model/msg/update, layout viewports, dock, header actions, widgets dashboard, and settings panels (placements, permissions, intents, relay scoping, shells, tabs, app store, update modal, pull-to-refresh) are written and unit tested.
+- **Phase 6 (Shell)** is **~95% implemented**: Core model/msg/update, layout viewports, dock, header actions, widgets dashboard, settings panels, and all three built-in themes (Classic, Panorama, Editorial) are written and unit tested. The storage-backed `ShellRegistry` and the `omni_web` bootstrap config/bootloader exist and are tested; only wiring `apps/web` to mount the boot tree remains (Phase 6.8).
 - **Phase 7 (Plugin Kit & Social)** is **partially complete**:
   - `omni_plugin_kit`: 100% complete and tested.
   - `omni_social` & `omni_social_ui`: 100% complete and golden snapshot tested.
@@ -74,15 +74,16 @@ The codebase is migrating from TypeScript (~47.6k LOC) and MoonBit (~1.7k LOC) t
 ## 4. What Is Left (By Area / Package)
 
 ### 1. Phase 6: Shell & Web Bootloader
-- [ ] **Phase 6.5, 6.6, 6.7 — Shell Themes (`gleam/shell/src/omni/shell/themes/`)**:
-  - Implement `classic.gleam`, `panorama.gleam`, `editorial.gleam` implementing `pub fn theme() -> Theme` and `pub fn view(model: Model) -> Element(Msg)`.
-  - Reference existing layouts in `packages/plugins/shell/src/{editorial-shell.ts,panorama-shell.ts,base-shell.ts}`.
-- [ ] **Phase 6.8 (A) — Shell Registry (`gleam/shell/src/omni/shell/registry.gleam`)**:
-  - Provide `ShellRegistry` with `new`, `register`, `unregister`, `resolve`, `load_active_id`, `save_active_id` backed by `omni/platform/storage`.
-- [ ] **Phase 6.8 (B) — Web Bootloader (`gleam/web` — `omni_web`)**:
-  - `src/omni/web/config.gleam`: Default bootstrap relays, default system plugin entries (`org.omni.plugin.feed`, `org.omni.plugin.checklist`, etc.).
-  - `src/omni/web/boot.gleam`: Orchestrates `Kernel`, `ShellRegistry`, `Model`, dispatches shell messages, and mounts into `#omni-root`.
-  - Wire into `apps/web/src/main.ts` or replace `apps/web`.
+- [x] **Phase 6.5, 6.6, 6.7 — Shell Themes (`gleam/shell/src/omni/shell/themes/`)**:
+  - `classic.gleam`, `panorama.gleam`, `editorial.gleam` implement `pub fn theme() -> Theme` and `pub fn view(model: Model) -> Element(Msg)`.
+  - Shared shell module styles live in `assets/styles/shell-modules.css` (loaded for every theme).
+- [x] **Phase 6.8 (A) — Shell Registry (`gleam/shell/src/omni/shell/registry.gleam`)**:
+  - `ShellRegistry` with `new`, `with_builtin_themes`, `register`, `unregister`, `resolve`, `active_theme`, `load_active_id`, `save_active_id` backed by `omni/platform/storage`.
+- [x] **Phase 6.8 (B) — Web Bootloader (`gleam/web` — `omni_web`)**:
+  - `src/omni/web/config.gleam`: bootstrap relays, default system plugin entries, default shell ID.
+  - `src/omni/web/boot.gleam`: `init` builds the kernel/registry/model; `dispatch` applies persistence effects; `select_shell`; `view` renders stylesheets + active theme.
+- [ ] **Phase 6.8 (C) — `apps/web` wiring**:
+  - Mount `boot.view` inside `#omni-root` (host-side DOM mount; no FFI in `gleam/web`), replacing the legacy `apps/web/src/main.ts` shell bootstrapping.
 
 ### 2. Phase 7: First-Party Plugins (`gleam/plugins/`)
 All plugins must be pure standard nsites using `omni_plugin_kit`:

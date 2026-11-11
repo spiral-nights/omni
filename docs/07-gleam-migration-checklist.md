@@ -75,7 +75,9 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 6.5 Classic theme
 - [x] 6.6 Panorama theme
 - [x] 6.7 Editorial theme
-- [ ] 6.8 Shell registry; `omni_web` bootloader replaces `apps/web/src/main.ts`
+- [x] 6.8a Shell registry (`omni/shell/registry`) backed by platform storage
+- [x] 6.8b `omni_web` config + bootloader (kernel/registry/model, dispatch, theme view)
+- [ ] 6.8c Mount `boot.view` in `apps/web` and remove legacy shell bootstrapping
 
 ## Phase 7: Plugins and bridge
 - [x] 7.1 `plugin_kit`: typed `window.nostr`, app harness, route, `local_store`, subscribe helper

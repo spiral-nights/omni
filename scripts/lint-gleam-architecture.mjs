@@ -30,7 +30,7 @@ const ALLOWED_DEPS = {
   omni_social: ["omni_nostr", "omni_protocol", "omni_plugin_kit", "omni_platform", "omni_testkit"],
   omni_social_ui: ["omni_social", "omni_protocol", "omni_ui", "omni_nostr", "omni_testkit"],
   omni_shell: ["omni_kernel", "omni_sandbox", "omni_ui", "omni_protocol", "omni_nostr", "omni_platform", "omni_testkit"],
-  omni_web: ["omni_shell", "omni_kernel", "omni_sandbox", "omni_ui", "omni_protocol", "omni_platform", "omni_testkit"],
+  omni_web: ["omni_shell", "omni_kernel", "omni_sandbox", "omni_ui", "omni_protocol", "omni_platform", "omni_nostr", "omni_testkit"],
   omni_interop: ["*"], // temporary TS facade; may depend on anything
   omni_testkit: ["omni_platform", "omni_nostr", "omni_protocol"],
 };
