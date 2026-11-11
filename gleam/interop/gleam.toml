@@ -1,0 +1,14 @@
+name = "omni_interop"
+version = "0.1.0"
+description = "Temporary JS-friendly facades so remaining TypeScript can call Gleam. Removed when TS is gone."
+target = "javascript"
+
+[javascript]
+typescript_declarations = true
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+omni_protocol = { path = "../protocol" }
+
+[dev_dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
