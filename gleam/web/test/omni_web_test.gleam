@@ -1,6 +1,7 @@
 //// Unit tests for the Omni web bootstrap configuration and bootloader.
 
 import gleam/dict
+import gleam/dynamic
 import gleam/javascript/promise
 import gleam/list
 import gleam/option.{None, Some}
@@ -9,6 +10,7 @@ import gleeunit
 import gleeunit/should
 import lustre/element
 import omni/kernel/crypto/keystore
+import omni/kernel/intents/broker as intent_broker
 import omni/kernel/kernel.{type KernelPorts, KernelPorts}
 import omni/kernel/nostr/event_store
 import omni/kernel/nostr/relay_pool
@@ -20,13 +22,20 @@ import omni/nostr/relay_url
 import omni/platform/clock
 import omni/platform/idb
 import omni/platform/nip44
+import omni/platform/ref
 import omni/platform/storage
+import omni/protocol/capability
+import omni/protocol/grant
+import omni/protocol/intent.{IntentHandler}
+import omni/protocol/plugin_id
+import omni/protocol/schema/action as schema_action
 import omni/sandbox/manager
 import omni/shell/model
 import omni/shell/msg.{NavigateTo, ToggleFullscreen}
 import omni/shell/registry
 import omni/web/boot
 import omni/web/config
+import omni/web/permission_prompt
 import omni/web/rpc
 
 pub fn main() {
@@ -343,6 +352,89 @@ pub fn nip65_relay_list_is_applied_test() {
   |> should.equal(#(True, False))
   relay_pool.relay_scope(booted.kernel.relay_pool, write_only)
   |> should.equal(#(False, True))
+
+  promise.resolve(Nil)
+}
+
+pub fn intent_routing_opens_single_handler_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_bridge(ports, None)
+
+  let action =
+    schema_action.new("view_note")
+    |> schema_action.with_payload(
+      dict.from_list([#("id", dynamic.string("abc"))]),
+    )
+  let routed = boot.route_intent(booted, action)
+
+  case routed.model.active_page {
+    model.PrimaryApp("org.omni.plugin.feed", _) -> Nil
+    _ -> should.fail()
+  }
+
+  promise.resolve(Nil)
+}
+
+pub fn intent_routing_disambiguates_multiple_handlers_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_bridge(ports, None)
+
+  // Register a second handler so the broker must ask the user.
+  let _ =
+    ref.update(booted.intent_broker, fn(current) {
+      intent_broker.register_handler(
+        current,
+        IntentHandler(
+          plugin_id: "org.omni.plugin.profiles",
+          action: "view_note",
+          name: Some("Profiles"),
+          icon: Some("users"),
+          description: None,
+          route: None,
+          is_rpc: None,
+        ),
+      )
+    })
+
+  let action =
+    schema_action.new("view_note")
+    |> schema_action.with_payload(
+      dict.from_list([#("id", dynamic.string("abc"))]),
+    )
+  let routed = boot.route_intent(booted, action)
+
+  let assert Some(prompt) = routed.model.intent_prompt
+  prompt.intent_name |> should.equal("view_note")
+  list.length(prompt.candidates) |> should.equal(2)
+
+  promise.resolve(Nil)
+}
+
+pub fn permission_prompt_bridge_resolves_user_choice_test() {
+  let prompts = permission_prompt.new()
+  let seen = ref.new([])
+  let _cancel =
+    permission_prompt.watch(prompts, fn(prompt) { ref.set(seen, [prompt]) })
+
+  let assert Ok(pid) = plugin_id.parse("org.omni.plugin.feed")
+  let waiter =
+    permission_prompt.handler(prompts)(pid, capability.NostrSign, Some(1), None)
+
+  let assert [prompt] = ref.get(seen)
+  prompt.plugin_id |> should.equal("org.omni.plugin.feed")
+  prompt.capability |> should.equal("nostr:sign")
+  prompt.scope |> should.equal(Some("1"))
+
+  permission_prompt.resolve(prompts, prompt.id, True)
+  use grant <- promise.await(waiter)
+  grant |> should.equal(grant.Always)
+
+  // The same prompt cannot be resolved twice.
+  permission_prompt.resolve(prompts, prompt.id, False)
 
   promise.resolve(Nil)
 }

@@ -16,12 +16,12 @@ import omni/shell/msg.{
   type Msg, AddAppPlacement, ApplyRemoteWorkspace, ClearEmbeddedSchema,
   ConfirmPluginUpdate, DismissIntentPrompt, DismissUpdateModal, EmbedSchema,
   FinishPullRefresh, HostedSchemaAction, InstallApp, NavigateTo, OpenApp,
-  OpenSettings, RemoveAppPlacement, SelectIntentHandler, SelectShell,
-  SetAccentColor, SetAppPlacements, SetAppRelays, SetCustomInstallUrl,
-  SetSearchQuery, SetSyncStatus, SetUserProfile, ShowIntentPrompt,
-  ShowUpdateModal, StartPullRefresh, ToggleAppEnabled, ToggleAppIntent,
-  ToggleAppPinned, ToggleAutoSync, ToggleFullscreen, ToggleMobileMenu,
-  TriggerWorkspaceSync, UninstallApp,
+  OpenSettings, RemoveAppPlacement, ResolvePermission, SelectIntentHandler,
+  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
+  SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetUserProfile,
+  ShowIntentPrompt, ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh,
+  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
+  ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp,
 }
 
 /// Side-effect commands emitted by the pure shell `update` function.
@@ -44,6 +44,7 @@ pub type ShellEffect {
   UpgradePlugin(plugin_id: String)
   RefreshActiveView
   DispatchHostedAction(plugin_id: String, action: Action)
+  PermissionDecision(prompt_id: Int, allowed: Bool)
 }
 
 /// Pure, exhaustive, deterministic state transition for `Model`.
@@ -328,6 +329,18 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       let next_model = Model(..model, installed_apps: updated_apps)
       #(next_model, workspace_persistence_effects(next_model))
     }
+
+    ShowPermissionPrompt(prompt) -> #(
+      Model(..model, permission_prompt: Some(prompt)),
+      [],
+    )
+
+    ResolvePermission(prompt_id, allowed) -> #(
+      Model(..model, permission_prompt: None),
+      [
+        PermissionDecision(prompt_id, allowed),
+      ],
+    )
 
     ShowIntentPrompt(prompt) -> {
       #(Model(..model, intent_prompt: Some(prompt)), [])

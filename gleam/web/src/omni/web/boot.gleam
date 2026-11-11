@@ -9,8 +9,8 @@
 //// (`apps/web`), keeping the package free of DOM FFI.
 
 import gleam/dict.{type Dict}
-import gleam/int
 import gleam/javascript/promise.{type Promise}
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
@@ -19,9 +19,10 @@ import lustre/element.{type Element}
 import lustre/element/html
 import omni/kernel/acl/capability_store
 import omni/kernel/crypto/keystore
-import omni/kernel/kernel.{type KernelPorts, type OmniKernel}
+import omni/kernel/intents/broker
+import omni/kernel/kernel.{type KernelPorts, type OmniKernel, KernelPorts}
 import omni/kernel/nostr/event_store
-import omni/kernel/nostr/relay_pool.{Connected, Connecting, Disconnected}
+import omni/kernel/nostr/relay_pool
 import omni/kernel/workspace/sync
 import omni/nostr/event.{type Event, type UnsignedEvent, UnsignedEvent}
 import omni/nostr/event_codec
@@ -37,7 +38,9 @@ import omni/platform/storage
 import omni/platform/websocket
 import omni/protocol/capability
 import omni/protocol/grant.{Always}
+import omni/protocol/intent.{IntentHandler}
 import omni/protocol/plugin_id
+import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
 import omni/protocol/workspace
 import omni/sandbox/iframe_host.{type IframeMount, IframeConfig}
@@ -45,9 +48,13 @@ import omni/sandbox/manager.{
   type SandboxManager, type SpawnOptions, SpawnOptions,
 }
 import omni/shell/model.{
-  type Model, type UserProfileSummary, Model, PrimaryApp, UserProfileSummary,
+  type Model, type UserProfileSummary, IntentPromptState, Model, PrimaryApp,
+  UserProfileSummary,
 }
-import omni/shell/msg.{type Msg, SelectShell}
+import omni/shell/msg.{
+  type Msg, HostedSchemaAction, OpenApp, SelectIntentHandler, SelectShell,
+  ShowIntentPrompt,
+}
 import omni/shell/registry.{type ShellRegistry}
 import omni/shell/shell
 import omni/shell/styles
@@ -56,6 +63,7 @@ import omni/shell/update.{type ShellEffect}
 import omni/web/builtin.{type BuiltinApp}
 import omni/web/config
 import omni/web/nip65
+import omni/web/permission_prompt.{type PermissionPrompts}
 
 /// Storage key holding the user's chosen accent color.
 pub const accent_color_storage_key = "omni_accent_color"
@@ -70,6 +78,8 @@ pub type Booted {
     sandboxes: SandboxManager,
     bridge_script: Option(String),
     builtins: Dict(String, BuiltinApp),
+    intent_broker: ref.Ref(broker.IntentBroker),
+    permission_prompts: PermissionPrompts,
   )
 }
 
@@ -84,6 +94,12 @@ pub fn init_with_bridge(
   ports: KernelPorts,
   bridge_script: Option(String),
 ) -> Booted {
+  let permission_prompts = permission_prompt.new()
+  let ports =
+    KernelPorts(
+      ..ports,
+      prompt_handler: Some(permission_prompt.handler(permission_prompts)),
+    )
   let kernel =
     kernel.new(ports, config.bootstrap_relays(), config.default_shell_id)
   let registry =
@@ -111,10 +127,90 @@ pub fn init_with_bridge(
       sandboxes: manager.new(),
       bridge_script: bridge_script,
       builtins: builtins,
+      intent_broker: ref.new(broker.new()),
+      permission_prompts: permission_prompts,
     )
   grant_default_capabilities(booted)
+  register_intent_handlers(booted)
   install_auth_handler(booted)
   booted
+}
+
+fn register_intent_handlers(booted: Booted) -> Nil {
+  config.system_apps()
+  |> list.each(fn(app) {
+    list.each(app.handled_intents, fn(action_name) {
+      let _ =
+        ref.update(booted.intent_broker, fn(current) {
+          broker.register_handler(
+            current,
+            IntentHandler(
+              plugin_id: app.id,
+              action: action_name,
+              name: Some(app.name),
+              icon: Some(app.icon),
+              description: Some(app.description),
+              route: None,
+              is_rpc: None,
+            ),
+          )
+        })
+      Nil
+    })
+  })
+}
+
+fn refresh_embedded_views(booted: Booted) -> Booted {
+  let model =
+    dict.fold(booted.builtins, booted.model, fn(m, id, app) {
+      Model(
+        ..m,
+        embedded_views: dict.insert(m.embedded_views, id, app.render()),
+      )
+    })
+  Booted(..booted, model: model)
+}
+
+fn forward_action(booted: Booted, plugin_id: String, action: Action) -> Booted {
+  case dict.get(booted.builtins, plugin_id) {
+    Ok(app) -> {
+      let _ = app.handle_action(action)
+      refresh_embedded_views(booted)
+    }
+    Error(Nil) -> booted
+  }
+}
+
+/// Route an unhandled plugin action through the kernel intent broker.
+pub fn route_intent(booted: Booted, action: Action) -> Booted {
+  let request =
+    intent.Intent(
+      action: action.name,
+      data: action.payload,
+      caller_plugin_id: None,
+    )
+  case broker.resolve(ref.get(booted.intent_broker), request) {
+    intent.Resolved(handler, _data) -> {
+      let #(navigated, _) =
+        dispatch(booted, OpenApp(handler.plugin_id, handler.route))
+      forward_action(navigated, handler.plugin_id, action)
+    }
+    intent.Disambiguate(act, candidates, _data) -> {
+      let ids = list.map(candidates, fn(candidate) { candidate.plugin_id })
+      let payload_json = action.to_json(action) |> json.to_string
+      let #(prompted, _) =
+        dispatch(
+          booted,
+          ShowIntentPrompt(IntentPromptState(
+            intent_name: act,
+            candidates: ids,
+            payload_json: payload_json,
+          )),
+        )
+      prompted
+    }
+    _ -> booted
+  }
 }
 
 fn install_auth_handler(booted: Booted) -> Nil {
@@ -183,6 +279,21 @@ fn grant_default_capabilities(booted: Booted) -> Nil {
 /// Process a shell message: updates the model, applies persistence effects to
 /// storage, and returns any host-facing effects (sandbox mounts, intents, ...).
 pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
+  case msg {
+    HostedSchemaAction(plugin_id, action) ->
+      case dict.get(booted.builtins, plugin_id) {
+        Ok(app) ->
+          case app.handle_action(action) {
+            True -> #(refresh_embedded_views(booted), [])
+            False -> #(route_intent(booted, action), [])
+          }
+        Error(Nil) -> #(route_intent(booted, action), [])
+      }
+    _ -> dispatch_normal(booted, msg)
+  }
+}
+
+fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
   let #(next_model, effects) = shell.update(booted.model, msg)
 
   let #(next_registry, _) =
@@ -208,6 +319,35 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
             storage.set(booted.kernel.storage, accent_color_storage_key, color)
           #(reg, Nil)
         }
+        update.DispatchIntentToPlugin(plugin_id, intent_name, payload_json) -> {
+          case action.decode_json(payload_json) {
+            Ok(act) -> {
+              let _ =
+                forward_action(
+                  booted,
+                  plugin_id,
+                  action.with_payload(
+                    action.new(intent_name),
+                    act.payload |> option.unwrap(dict.new()),
+                  ),
+                )
+              Nil
+            }
+            Error(_) -> {
+              let _ = forward_action(booted, plugin_id, action.new(intent_name))
+              Nil
+            }
+          }
+          #(reg, Nil)
+        }
+        update.PermissionDecision(prompt_id, allowed) -> {
+          permission_prompt.resolve(
+            booted.permission_prompts,
+            prompt_id,
+            allowed,
+          )
+          #(reg, Nil)
+        }
         update.PublishWorkspaceNip78(ws) -> {
           let draft =
             UnsignedEvent(
@@ -230,10 +370,14 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
       case effect {
         update.DispatchHostedAction(plugin_id, action) ->
           case dict.get(booted.builtins, plugin_id) {
-            Ok(app) -> {
-              let _ = app.handle_action(action)
-              Nil
-            }
+            Ok(app) ->
+              case app.handle_action(action) {
+                True -> Nil
+                False -> {
+                  let _ = route_intent(booted, action)
+                  Nil
+                }
+              }
             Error(Nil) -> Nil
           }
         _ -> Nil
@@ -266,7 +410,9 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
         update.SwitchActiveShell(_)
         | update.PersistWorkspaceLocal(_)
         | update.PersistAccentColor(_)
-        | update.DispatchHostedAction(_, _) -> False
+        | update.DispatchHostedAction(_, _)
+        | update.DispatchIntentToPlugin(_, _, _)
+        | update.PermissionDecision(_, _) -> False
         _ -> True
       }
     })
@@ -279,6 +425,8 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
       sandboxes: booted.sandboxes,
       bridge_script: booted.bridge_script,
       builtins: booted.builtins,
+      intent_broker: booted.intent_broker,
+      permission_prompts: booted.permission_prompts,
     ),
     host_effects,
   )
@@ -441,6 +589,8 @@ pub fn spawn_sandbox(
           sandboxes: next_manager,
           bridge_script: booted.bridge_script,
           builtins: booted.builtins,
+          intent_broker: booted.intent_broker,
+          permission_prompts: booted.permission_prompts,
         ),
         mount,
       ))
@@ -460,6 +610,8 @@ pub fn terminate_sandbox(booted: Booted, plugin_id_str: String) -> Booted {
         sandboxes: manager.terminate(booted.sandboxes, id),
         bridge_script: booted.bridge_script,
         builtins: booted.builtins,
+        intent_broker: booted.intent_broker,
+        permission_prompts: booted.permission_prompts,
       )
   }
 }

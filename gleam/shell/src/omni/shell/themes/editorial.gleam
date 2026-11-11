@@ -22,6 +22,7 @@ import omni/shell/msg.{
   type Msg, NavigateTo, OpenApp, OpenSettings, ToggleFullscreen,
 }
 import omni/shell/settings/intents
+import omni/shell/settings/permission_prompt
 import omni/shell/settings/tabs
 import omni/shell/shell
 import omni/shell/styles
@@ -347,6 +348,7 @@ fn render_overlays(model: Model) -> Element(Msg) {
   html.div([attribute.class("omni-shell-overlays")], [
     pull_to_refresh.render_indicator(model, PullIdle),
     intents.render_intent_chooser_modal(model),
+    permission_prompt.render_permission_prompt(model),
     update_modal.render_update_modal(model),
   ])
 }

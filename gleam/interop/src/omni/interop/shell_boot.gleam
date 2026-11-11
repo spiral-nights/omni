@@ -35,9 +35,11 @@ import omni/shell/model.{
 }
 import omni/shell/msg.{
   ApplyRemoteWorkspace, EmbedSchema, NavigateTo, OpenApp, OpenSettings,
+  ShowPermissionPrompt,
 }
 import omni/web/boot
 import omni/web/config
+import omni/web/permission_prompt
 import omni/web/rpc
 
 /// Opaque shell boot state handed back to the host page.
@@ -237,6 +239,15 @@ fn mount_dom(
   parse_url: fn(String) -> Option(msg.Msg),
   page_url: fn(ShellBoot) -> String,
 ) -> Nil
+
+/// Show runtime ACL prompts requested by the kernel in the shell modal.
+pub fn watch_permission_prompts(host: ShellBoot) -> Nil {
+  let _ =
+    permission_prompt.watch(host.booted.permission_prompts, fn(prompt) {
+      dispatch_shell_msg(ShowPermissionPrompt(prompt))
+    })
+  Nil
+}
 
 /// Subscribe to public relay events, feed them to built-in apps that consume
 /// events, push live relay statuses, and refresh the embedded Schema views.

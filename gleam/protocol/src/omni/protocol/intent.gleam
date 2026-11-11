@@ -9,6 +9,7 @@ import gleam/dynamic/decode
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/string
 import omni/protocol/schema/action
 
 /// Canonical cross-app intent request.
@@ -52,7 +53,7 @@ pub type IntentResolution {
 
 /// Normalize intent aliases (e.g. compose_note <-> create_note).
 pub fn canonical_action(action_name: String) -> String {
-  case action_name {
+  case string.replace(action_name, "-", "_") {
     "compose_note" -> "create_note"
     other -> other
   }

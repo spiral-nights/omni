@@ -98,6 +98,16 @@ pub type UpdateModalState {
   )
 }
 
+/// A runtime capability request awaiting the user's decision.
+pub type PermissionPromptState {
+  PermissionPromptState(
+    id: Int,
+    plugin_id: String,
+    capability: String,
+    scope: Option(String),
+  )
+}
+
 /// Root state model for the Omni Shell.
 pub type Model {
   Model(
@@ -116,6 +126,7 @@ pub type Model {
     search_query: String,
     custom_install_url: String,
     embedded_views: Dict(String, Node),
+    permission_prompt: Option(PermissionPromptState),
   )
 }
 
@@ -143,6 +154,7 @@ pub fn init(active_shell_id: String, apps: List(InstalledApp)) -> Model {
     search_query: "",
     custom_install_url: "",
     embedded_views: dict.new(),
+    permission_prompt: None,
   )
 }
 

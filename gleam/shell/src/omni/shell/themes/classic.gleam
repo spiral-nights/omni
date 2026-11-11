@@ -17,6 +17,7 @@ import omni/shell/layout/main_view
 import omni/shell/model.{type Model, type SettingsTab}
 import omni/shell/msg.{type Msg, ToggleMobileMenu}
 import omni/shell/settings/intents
+import omni/shell/settings/permission_prompt
 import omni/shell/settings/tabs
 import omni/shell/styles
 import omni/shell/theme.{type Theme, Theme}
@@ -107,6 +108,7 @@ fn render_overlays(model: Model) -> Element(Msg) {
   html.div([attribute.class("omni-shell-overlays")], [
     pull_to_refresh.render_indicator(model, PullIdle),
     intents.render_intent_chooser_modal(model),
+    permission_prompt.render_permission_prompt(model),
     update_modal.render_update_modal(model),
   ])
 }

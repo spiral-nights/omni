@@ -8,9 +8,9 @@ import omni/protocol/schema/node.{type Node}
 import omni/protocol/viewport.{type Viewport}
 import omni/protocol/workspace.{type WorkspaceState}
 import omni/shell/model.{
-  type InstalledApp, type IntentPromptState, type Page, type PlacementConfig,
-  type SettingsTab, type SyncStatus, type UpdateModalState,
-  type UserProfileSummary,
+  type InstalledApp, type IntentPromptState, type Page,
+  type PermissionPromptState, type PlacementConfig, type SettingsTab,
+  type SyncStatus, type UpdateModalState, type UserProfileSummary,
 }
 
 /// Messages processed by the Omni Shell Elm update loop.
@@ -57,6 +57,10 @@ pub type Msg {
   ToggleAutoSync(Bool)
   TriggerWorkspaceSync
   ApplyRemoteWorkspace(WorkspaceState)
+
+  // Permission prompts
+  ShowPermissionPrompt(PermissionPromptState)
+  ResolvePermission(prompt_id: Int, allowed: Bool)
 
   // Modals & gestures
   ShowUpdateModal(UpdateModalState)
