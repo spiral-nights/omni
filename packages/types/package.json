@@ -24,6 +24,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@omni/gleam-interop": "workspace:*",
     "zod": "^3.23.8"
   },
   "devDependencies": {

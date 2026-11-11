@@ -1,3 +1,14 @@
+import {
+  to_bech32,
+  from_bech32,
+  hex_to_npub,
+  npub_to_hex,
+  hex_to_nsec,
+  nsec_to_hex,
+  decode_nostr_entity,
+  encode_naddr
+} from "@omni/gleam-interop/bech32";
+
 export const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
 export function bech32Polymod(values: number[]): number {
@@ -53,34 +64,17 @@ export function bytesToWords(bytes: number[] | Uint8Array): number[] {
 }
 
 export function bech32Encode(hrp: string, data: number[] | Uint8Array): string {
-  const words = data instanceof Uint8Array || (Array.isArray(data) && data.some((v) => v > 31))
-    ? bytesToWords(data)
-    : Array.from(data);
-  const combined = [...expandHrp(hrp), ...words, 0, 0, 0, 0, 0, 0];
-  const mod = bech32Polymod(combined) ^ 1;
-  const ret: number[] = [];
-  for (let p = 0; p < 6; ++p) ret.push((mod >> (5 * (5 - p))) & 31);
-  return hrp + "1" + [...words, ...ret].map((p) => BECH32_CHARSET.charAt(p)).join("");
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  return to_bech32(hrp, bytesToHex(bytes));
 }
 
 export function bech32Decode(str: string): { hrp: string; words: number[] } | null {
   try {
-    const s = str.toLowerCase().trim();
-    const pos = s.lastIndexOf("1");
-    if (pos < 1 || pos + 7 > s.length || s.length > 5000) return null;
-    const hrp = s.slice(0, pos);
-    for (const ch of hrp) {
-      const code = ch.charCodeAt(0);
-      if (code < 33 || code > 126) return null;
-    }
-    const words: number[] = [];
-    for (const ch of s.slice(pos + 1)) {
-      const idx = BECH32_CHARSET.indexOf(ch);
-      if (idx === -1) return null;
-      words.push(idx);
-    }
-    if (bech32Polymod([...expandHrp(hrp), ...words]) !== 1) return null;
-    return { hrp, words: words.slice(0, -6) };
+    const res = from_bech32(str) as { hrp: string; hex: string };
+    if (!res || !res.hrp || res.hex === undefined) return null;
+    const bytes = hexToBytes(res.hex);
+    const words = bytesToWords(bytes);
+    return { hrp: res.hrp, words };
   } catch (_) {
     return null;
   }
@@ -104,34 +98,27 @@ export function hexToBytes(hex: string): Uint8Array {
 }
 
 export function toBech32(hrp: string, hex: string): string {
-  const bytes = Array.from(hexToBytes(hex));
-  const words = convertBits(bytes, 8, 5, true);
-  if (!words) throw new Error("Failed to convert bits for bech32 encoding");
-  return bech32Encode(hrp, words);
+  return to_bech32(hrp, hex);
 }
 
 export function fromBech32(str: string): { hrp: string; hex: string } {
-  const decoded = bech32Decode(str);
-  if (!decoded) throw new Error("Invalid bech32 string");
-  const bytes = convertBits(decoded.words, 5, 8, false);
-  if (!bytes) throw new Error("Failed to convert bits from bech32");
-  return { hrp: decoded.hrp, hex: bytesToHex(bytes) };
+  return from_bech32(str) as { hrp: string; hex: string };
 }
 
 export function hexToNpub(hex: string): string {
-  return toBech32("npub", hex);
+  return hex_to_npub(hex);
 }
 
 export function npubToHex(npub: string): string {
-  return fromBech32(npub).hex;
+  return npub_to_hex(npub);
 }
 
 export function hexToNsec(hex: string): string {
-  return toBech32("nsec", hex);
+  return hex_to_nsec(hex);
 }
 
 export function nsecToHex(nsec: string): string {
-  return fromBech32(nsec).hex;
+  return nsec_to_hex(nsec);
 }
 
 export interface DecodedNostrEntity {
@@ -145,114 +132,12 @@ export interface DecodedNostrEntity {
 }
 
 export function decodeNostrEntity(raw: string): DecodedNostrEntity | null {
-  const s = raw.trim().replace(/^nostr:/i, "").toLowerCase();
-  if (!/^(npub|nprofile|note|nevent|naddr)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+$/.test(s)) return null;
-  const decoded = bech32Decode(s);
-  if (!decoded) return null;
-  const bytes = wordsToBytes(decoded.words);
-  const hex = bytesToHex(bytes);
-
-  switch (decoded.hrp) {
-    case "npub":
-      return bytes.length === 32 ? { type: "npub", hex } : null;
-    case "note":
-      return bytes.length === 32 ? { type: "note", hex } : null;
-    case "nprofile": {
-      let pubkey: string | undefined;
-      const relays: string[] = [];
-      let i = 0;
-      const textDecoder = new TextDecoder();
-      while (i + 2 <= bytes.length) {
-        const tag = bytes[i];
-        const len = bytes[i + 1];
-        const val = bytes.slice(i + 2, i + 2 + len);
-        if (tag === 0 && len === 32) pubkey = bytesToHex(val);
-        else if (tag === 1) relays.push(textDecoder.decode(new Uint8Array(val)));
-        i += 2 + len;
-      }
-      return pubkey ? { type: "nprofile", pubkey, hex: pubkey, relays: relays.length > 0 ? relays : undefined } : null;
-    }
-    case "nevent": {
-      let eventId: string | undefined;
-      let pubkey: string | undefined;
-      const relays: string[] = [];
-      let i = 0;
-      const textDecoder = new TextDecoder();
-      while (i + 2 <= bytes.length) {
-        const tag = bytes[i];
-        const len = bytes[i + 1];
-        const val = bytes.slice(i + 2, i + 2 + len);
-        if (tag === 0 && len === 32) eventId = bytesToHex(val);
-        else if (tag === 1) relays.push(textDecoder.decode(new Uint8Array(val)));
-        else if (tag === 2 && len === 32) pubkey = bytesToHex(val);
-        i += 2 + len;
-      }
-      return eventId ? { type: "nevent", hex: eventId, eventId, pubkey, relays: relays.length > 0 ? relays : undefined } : null;
-    }
-    case "naddr": {
-      let kind: number | undefined;
-      let pubkey: string | undefined;
-      let identifier: string | undefined;
-      const relays: string[] = [];
-      let i = 0;
-      const textDecoder = new TextDecoder();
-      while (i + 2 <= bytes.length) {
-        const tag = bytes[i];
-        const len = bytes[i + 1];
-        const val = bytes.slice(i + 2, i + 2 + len);
-        if (tag === 0) {
-          if (len === 4) kind = (val[0] << 24) | (val[1] << 16) | (val[2] << 8) | val[3];
-          else identifier = textDecoder.decode(new Uint8Array(val));
-        } else if (tag === 1) {
-          if (len === 32) pubkey = bytesToHex(val);
-          else relays.push(textDecoder.decode(new Uint8Array(val)));
-        } else if (tag === 2) {
-          if (len === 32) pubkey = bytesToHex(val);
-          else identifier = textDecoder.decode(new Uint8Array(val));
-        } else if (tag === 3 && len === 4) {
-          kind = (val[0] << 24) | (val[1] << 16) | (val[2] << 8) | val[3];
-        }
-        i += 2 + len;
-      }
-      return kind !== undefined && pubkey ? { type: "naddr", kind, pubkey, identifier, relays: relays.length > 0 ? relays : undefined } : null;
-    }
-    default:
-      return null;
-  }
+  const entity = decode_nostr_entity(raw);
+  return (entity as DecodedNostrEntity) || null;
 }
 
 export function encodeNaddr(params: { identifier: string; pubkey: string; kind: number; relays?: string[] }): string {
-  const chunks: Uint8Array[] = [];
-  const textEncoder = new TextEncoder();
-
-  // Type 0: identifier (d-tag)
-  const dBytes = textEncoder.encode(params.identifier);
-  chunks.push(new Uint8Array([0, dBytes.length]), dBytes);
-
-  // Type 1: relays
-  for (const r of params.relays || []) {
-    const rBytes = textEncoder.encode(r);
-    chunks.push(new Uint8Array([1, rBytes.length]), rBytes);
-  }
-
-  // Type 2: author pubkey (32 bytes)
-  const pubBytes = hexToBytes(params.pubkey);
-  chunks.push(new Uint8Array([2, pubBytes.length]), pubBytes);
-
-  // Type 3: kind (4 bytes big-endian)
-  const kindBuf = new Uint8Array(4);
-  new DataView(kindBuf.buffer).setUint32(0, params.kind, false);
-  chunks.push(new Uint8Array([3, 4]), kindBuf);
-
-  const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
-  const combined = new Uint8Array(totalLen);
-  let offset = 0;
-  for (const c of chunks) {
-    combined.set(c, offset);
-    offset += c.length;
-  }
-
-  return toBech32("naddr", bytesToHex(combined));
+  return encode_naddr(params);
 }
 
 export function decodeNaddr(naddrStr: string): { identifier: string; pubkey: string; kind: number; relays?: string[] } | null {

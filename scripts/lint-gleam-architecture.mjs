@@ -15,7 +15,7 @@ import { gleamRoot, findPackages, readPackage } from "./lib/gleam-packages.mjs";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Packages (by gleam/ directory name) that may contain FFI. */
-const FFI_ALLOWED = new Set(["platform", "bridge", "testkit"]);
+const FFI_ALLOWED = new Set(["platform", "bridge", "testkit", "interop"]);
 
 /** package name -> package names it may depend on (path deps). Unlisted => no gleam deps. */
 const ALLOWED_DEPS = {
