@@ -16,3 +16,6 @@ packages/plugins/*/gen/
 
 # Gleam build output
 gleam/**/build/
+
+# Generated guest bridge bundle
+gleam/bridge/dist/

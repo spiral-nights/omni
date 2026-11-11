@@ -86,7 +86,8 @@ for (const pkg of packages) {
       if (isMjs) fail(file, `.mjs files are only allowed in: ${[...FFI_ALLOWED].join(", ")}`);
       if (isGleam && /@external\s*\(/.test(text)) fail(file, `@external is only allowed in: ${[...FFI_ALLOWED].join(", ")}`);
     }
-    if (isMjs && FFI_ALLOWED.has(top) && !/\.ffi\.mjs$/.test(file)) fail(file, `FFI files must be named <module>.ffi.mjs`);
+    const isBundleEntry = rel.startsWith("js/") && /\.mjs$/.test(file);
+    if (isMjs && FFI_ALLOWED.has(top) && !isBundleEntry && !/\.ffi\.mjs$/.test(file)) fail(file, `FFI files must be named <module>.ffi.mjs`);
 
     if (isGleam) {
       // 3: plugin imports another plugin

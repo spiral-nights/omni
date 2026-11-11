@@ -32,6 +32,9 @@ importers:
       '@bytecodealliance/jco':
         specifier: ^1.41.0
         version: 1.41.0
+      esbuild:
+        specifier: ^0.25.0
+        version: 0.25.12
       fake-indexeddb:
         specifier: ^6.2.8
         version: 6.2.8

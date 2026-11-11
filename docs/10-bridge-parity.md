@@ -21,11 +21,29 @@ injected guest runtime must provide:
 
 Run: `pnpm exec vitest run packages/core/test/bridge-parity.test.ts`.
 
+## Guest bundle
+
+`node scripts/build-bridge.mjs` (also run by `pnpm gleam:build`) compiles
+`gleam/bridge/js/guest-runtime.mjs` into `gleam/bridge/dist/guest-runtime.js`,
+a single IIFE that:
+
+- installs the storage/links/share/schema/nostr/websocket shims,
+- listens for the `omni:init` handshake and captures the schema + RPC ports,
+- forwards JSON-RPC requests over Channel 2 and routes
+  `nostr.stream.event` / `nostr.stream.eose` notifications to the shims.
+
+`packages/core/test/bridge-bundle.test.ts` loads the bundle in happy-dom,
+completes the handshake with a `MessageChannel`, and asserts a full
+`getPublicKey` round-trip.
+
+Inject it through `IframeConfig.bridge_script` (or the kernel
+`runtimeScript` option) instead of the legacy file.
+
 ## Remaining cutover work
 
-1. **Bundle** `omni_bridge` into one standalone guest script string (an entry
-   module that wires `call_rpc` to Channel 2 and the notification routers to the
-   host's stream messages), replacing `runtimeScript` in `apps/web`/`OmniKernel`.
+1. **Host wiring**: pass the bundle to the sandbox host when `omni_web` mounts
+   plugin islands (the Gleam iframe/worker hosts already accept a
+   `bridge_script` / `runtime_script` string), then make it the default.
 2. **Dual-run**: for one release, inject both runtimes behind a flag
    (`runtimeScript` env/config) and run the existing sandbox test suites
    (`transparent-api`, `subscription-isolation`, `nip78-workspace`, plugin
