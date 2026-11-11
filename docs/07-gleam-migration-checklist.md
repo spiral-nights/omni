@@ -45,7 +45,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 2.5 Wire-compat tests against recorded TS output
 
 ## Phase 3: Kernel
-- [ ] 3.1 `platform`: `idb`, `websocket`, `message_port`, `webcrypto`, `secp256k1`, `nip44`, `zip`, `url`
+- [x] 3.1 `platform`: `idb`, `websocket`, `message_port`, `webcrypto`, `secp256k1`, `nip44`, `zip`, `url`
 - [x] 3.2 `kernel/acl`: policy, reserved rules, capability store, read filter, engine
 - [ ] 3.3 `kernel/nostr`: event store + index (benchmark vs TS)
 - [ ] 3.4 `kernel/nostr`: subscription router, relay pool state machine, coordinator, `docs`
