@@ -10,7 +10,8 @@ import gleam/javascript/promise
 import gleam/option.{type Option, None, Some}
 import gleam/string
 
-import lustre/element
+import lustre/effect.{type Effect}
+import lustre/element.{type Element}
 import omni/kernel/kernel.{KernelPorts}
 import omni/platform/clock
 import omni/platform/idb
@@ -83,10 +84,33 @@ pub fn terminate_plugin(host: ShellBoot, selector: String) -> ShellBoot {
   ShellBoot(host.booted)
 }
 
-/// Render the current shell tree as HTML for the host `#omni-root` container.
+/// Render the current shell tree as HTML (static snapshot; no event handlers).
 pub fn render(host: ShellBoot) -> String {
   boot.view(host.booted) |> element.to_string
 }
+
+/// Mount the interactive shell into `selector` using Lustre's client runtime.
+/// Messages are dispatched through the bootloader, so persistence effects apply
+/// and the view re-renders in place with live event handlers.
+pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
+  mount_dom(
+    selector,
+    fn(_flags) { #(host, effect.none()) },
+    fn(current: ShellBoot, message: msg.Msg) {
+      let #(next, _effects) = boot.dispatch(current.booted, message)
+      #(ShellBoot(next), effect.none())
+    },
+    fn(current: ShellBoot) { boot.view(current.booted) },
+  )
+}
+
+@external(javascript, "./shell_boot.ffi.mjs", "mount_dom")
+fn mount_dom(
+  selector: String,
+  init: fn(String) -> #(ShellBoot, Effect(msg.Msg)),
+  update: fn(ShellBoot, msg.Msg) -> #(ShellBoot, Effect(msg.Msg)),
+  view: fn(ShellBoot) -> Element(msg.Msg),
+) -> Nil
 
 /// The active shell theme ID (`"classic"`, `"panorama"`, `"editorial"`).
 pub fn active_shell_id(host: ShellBoot) -> String {

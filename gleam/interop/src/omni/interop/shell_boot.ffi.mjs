@@ -21,3 +21,15 @@ export function unmount_island(selector) {
   if (!host) return;
   host.innerHTML = "";
 }
+
+import { start } from "../../../lustre/lustre/runtime/client/spa.ffi.mjs";
+
+export function mount_dom(selector, init, update, view) {
+  const result = start({ init, update, view }, selector, undefined);
+  if (result && typeof result.isOk === "function" && !result.isOk()) {
+    const error = result[0];
+    throw new Error(
+      error && error.constructor ? error.constructor.name : "mount failed",
+    );
+  }
+}

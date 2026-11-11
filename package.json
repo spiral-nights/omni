@@ -6,7 +6,7 @@
     "build": "pnpm gleam:build && pnpm --filter @omni/web build",
     "gleam:build": "node scripts/gleam-build.mjs build && node scripts/build-bridge.mjs",
     "gleam:bridge": "node scripts/build-bridge.mjs",
-    "dev": "pnpm --filter @omni/web dev",
+    "dev": "node scripts/build-bridge.mjs && pnpm --filter @omni/web dev",
     "test": "pnpm gleam:build && vitest run && pnpm gleam:test",
     "gleam:test": "node scripts/gleam-build.mjs test",
     "gleam:check": "node scripts/gleam-build.mjs check && node scripts/lint-gleam-architecture.mjs",

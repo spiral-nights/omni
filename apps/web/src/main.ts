@@ -1,5 +1,5 @@
 import {
-  render,
+  mount_shell,
   start_with_bridge,
   type ShellBoot,
 } from "@omni/gleam-interop/shell_boot";
@@ -37,7 +37,8 @@ async function mountShell(): Promise<void> {
   }
 
   const host = (result as unknown as { 0: ShellBoot })[0];
-  rootEl.innerHTML = render(host);
+  rootEl.innerHTML = "";
+  mount_shell("#omni-root", host);
   rootEl.setAttribute("data-omni-booted", "true");
 }
 
