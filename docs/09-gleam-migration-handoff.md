@@ -108,9 +108,9 @@ All plugins must be pure standard nsites using `omni_plugin_kit`:
   - Legacy MoonBit code moved to `external-plugins/feed-moonbit/` as an optional Wasm example.
 
 ### 3. Phase 7.10–7.11: Sandbox Guest Bridge (`omni_bridge`)
-- [ ] Port `packages/core/src/sandbox/omni-runtime.js` to `gleam/bridge` (`omni_bridge`):
+- [x] Port `packages/core/src/sandbox/omni-runtime.js` to `gleam/bridge` (`omni_bridge`):
   - Guest-side shims: `nostr_shim`, `websocket_shim`, `storage_shim`, `links_shim`, `share_shim`, `schema_bridge`.
-  - Progress: package skeleton plus `storage_shim`, `links_shim`, `share_shim`, and `schema_bridge` are ported and tested (6 tests). Remaining: `nostr_shim` and `websocket_shim`, then the dual-run cutover.
+  - All six shims are ported: `storage_shim`, `links_shim`, `share_shim`, `schema_bridge`, `nostr_shim` (NIP-07 + fetch/subscribe/publish/doc), and `websocket_shim` (virtual relay socket). 12 tests. Remaining: Phase 7.11 dual-run cutover.
   - Monkey-patching window primitives via `globals.ffi.mjs`.
   - Dual-run old vs new bridge against test suites before final cutover.
 

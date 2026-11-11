@@ -89,7 +89,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 7.7 Plugin `profiles` (opens threads via intent)
 - [x] 7.8 Plugin `publisher`
 - [x] 7.9 Plugin `feed` (replaces MoonBit); MoonBit version moved to `external-plugins/` example
-- [ ] 7.10 `bridge`: port shims one by one (nostr, websocket, storage, links, share, schema bridge)
+- [x] 7.10 `bridge`: port shims one by one (nostr, websocket, storage, links, share, schema bridge)
 - [ ] 7.11 Run old and new bridge side by side against the full plugin suite; cut over
 
 ## Phase 8: Cleanup and hardening

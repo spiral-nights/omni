@@ -2,15 +2,20 @@
 
 import gleam/dict
 import gleam/dynamic
+import gleam/dynamic/decode
 import gleam/json
+import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
 import gleeunit
 import gleeunit/should
 import omni/bridge/links_shim
+import omni/bridge/nostr_shim
 import omni/bridge/schema_bridge
 import omni/bridge/share_shim
 import omni/bridge/storage_shim
+import omni/bridge/websocket_shim
+import omni/platform/ref
 import omni/protocol/schema/action
 import omni/protocol/schema/builder as schema
 import omni/protocol/schema/codec
@@ -102,4 +107,127 @@ pub fn schema_decode_action_round_trip_test() {
 
   schema_bridge.decode_action("not json")
   |> should.equal(Error("invalid action message"))
+}
+
+// --- NIP-07 nostr shim (Phase 7.10) -----------------------------------------
+
+pub fn subscription_ids_are_deterministic_and_distinct_test() {
+  nostr_shim.subscription_id("alpha")
+  |> should.equal(nostr_shim.subscription_id("alpha"))
+  nostr_shim.subscription_id("alpha")
+  |> should.not_equal(nostr_shim.subscription_id("beta"))
+  should.be_true(string.starts_with(nostr_shim.subscription_id("alpha"), "sub_"))
+}
+
+pub fn publish_draft_is_shaped_into_event_test() {
+  let draft =
+    draft_dynamic(
+      "{\"kind\":1,\"content\":\"hello\",\"tags\":[[\"t\",\"gm\"]]}",
+    )
+
+  let assert Ok(raw) =
+    nostr_shim.publish_event_json(draft, "my-pubkey", 1_700_000_000)
+
+  should.be_true(string.contains(raw, "\"kind\":1"))
+  should.be_true(string.contains(raw, "\"content\":\"hello\""))
+  should.be_true(string.contains(raw, "\"pubkey\":\"my-pubkey\""))
+  should.be_true(string.contains(raw, "\"created_at\":1700000000"))
+  should.be_true(string.contains(raw, "[\"t\",\"gm\"]"))
+  should.be_false(string.contains(raw, "\"id\""))
+  should.be_false(string.contains(raw, "\"sig\""))
+
+  // Explicit values win over defaults.
+  let explicit =
+    draft_dynamic(
+      "{\"kind\":30078,\"content\":\"x\",\"pubkey\":\"other\",\"created_at\":5,\"id\":\"abc\",\"sig\":\"def\"}",
+    )
+  let assert Ok(raw_explicit) =
+    nostr_shim.publish_event_json(explicit, "my-pubkey", 1_700_000_000)
+  should.be_true(string.contains(raw_explicit, "\"pubkey\":\"other\""))
+  should.be_true(string.contains(raw_explicit, "\"created_at\":5"))
+  should.be_true(string.contains(raw_explicit, "\"id\":\"abc\""))
+  should.be_true(string.contains(raw_explicit, "\"sig\":\"def\""))
+
+  nostr_shim.publish_event_json(draft_dynamic("{\"content\":\"x\"}"), "pk", 1)
+  |> should.equal(Error("Invalid draft event to publish"))
+}
+
+// --- Virtual WebSocket shim (Phase 7.10) ------------------------------------
+
+pub fn local_relay_urls_are_detected_test() {
+  websocket_shim.is_local_url("wss://local.relay")
+  |> should.equal(True)
+  websocket_shim.is_local_url("wss://offline.local")
+  |> should.equal(True)
+  websocket_shim.is_local_url("wss://relay.damus.io")
+  |> should.equal(False)
+  websocket_shim.state_open |> should.equal(1)
+}
+
+pub fn req_and_close_frames_map_to_rpc_test() {
+  let calls = ref.new([])
+  let record = fn(method: String, params: String) {
+    let _ = ref.update(calls, fn(existing) { [#(method, params), ..existing] })
+  }
+
+  websocket_shim.handle_client_frame(
+    "[\"REQ\",\"sub1\",{\"kinds\":[1]}]",
+    False,
+    record,
+  )
+  |> should.equal(None)
+
+  websocket_shim.handle_client_frame("[\"CLOSE\",\"sub1\"]", False, record)
+  |> should.equal(None)
+
+  let recorded = ref.get(calls)
+  list.length(recorded) |> should.equal(2)
+  let assert Ok(#(close_method, close_params)) = list.first(recorded)
+  close_method |> should.equal("nostr.unsubscribe")
+  should.be_true(string.contains(close_params, "sub1"))
+
+  let assert Ok(#(sub_method, sub_params)) = list.last(recorded)
+  sub_method |> should.equal("nostr.subscribe")
+  should.be_true(string.contains(sub_params, "\"subscriptionId\":\"sub1\""))
+  should.be_true(string.contains(sub_params, "kinds"))
+}
+
+pub fn publish_frame_returns_ok_and_rpc_test() {
+  let calls = ref.new([])
+  let record = fn(method: String, params: String) {
+    let _ = ref.update(calls, fn(existing) { [#(method, params), ..existing] })
+  }
+
+  let event_json =
+    "{\"id\":\""
+    <> string.repeat("a", 64)
+    <> "\",\"pubkey\":\""
+    <> string.repeat("b", 64)
+    <> "\",\"created_at\":1700000000,\"kind\":1,\"tags\":[],\"content\":\"hi\",\"sig\":\""
+    <> string.repeat("c", 128)
+    <> "\"}"
+  let frame = "[\"EVENT\"," <> event_json <> "]"
+
+  let ok = websocket_shim.handle_client_frame(frame, True, record)
+  let assert Some(ok_frame) = ok
+  should.be_true(string.contains(ok_frame, "\"OK\""))
+  should.be_true(string.contains(ok_frame, string.repeat("a", 64)))
+  should.be_true(string.contains(ok_frame, "saved-locally"))
+
+  let assert Ok(#(method, params)) = list.first(ref.get(calls))
+  method |> should.equal("nostr.publish")
+  should.be_true(string.contains(params, "\"localOnly\":true"))
+}
+
+pub fn frame_builders_match_relay_wire_format_test() {
+  websocket_shim.ok_frame("abc", True, "published")
+  |> should.equal("[\"OK\",\"abc\",true,\"published\"]")
+
+  websocket_shim.event_frame("sub1", "{\"id\":\"x\"}")
+  |> should.equal("[\"EVENT\",\"sub1\",\"{\\\"id\\\":\\\"x\\\"}\"]")
+}
+
+fn draft_dynamic(raw: String) -> dynamic.Dynamic {
+  let assert Ok(value) = json.parse(from: raw, using: decode.dynamic)
+  value
 }
