@@ -56,7 +56,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 3.9 `kernel.gleam` composition root; TS `@omni/core` kernel replaced behind facade
 
 ## Phase 4: Sandbox hosting (host side)
-- [ ] 4.1 `sandbox`: `GuestHost` interface, channel, CSP builder, tokens, CSS scoper
+- [x] 4.1 `sandbox`: `GuestHost` interface, channel, CSP builder, tokens, CSS scoper
 - [ ] 4.2 `sandbox`: iframe host, worker host, wasm host (verify with a Wasm plugin)
 - [ ] 4.3 `sandbox`: protocol shims (host side), manager
 - [ ] 4.4 Isolation tests unchanged (CSP, `connect-src 'none'`)
