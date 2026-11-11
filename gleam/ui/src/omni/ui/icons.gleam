@@ -17,6 +17,7 @@ pub fn icon_names() -> List(String) {
     "arrow-down",
     "search",
     "more",
+    "menu",
     "windows",
     "apps",
     "grid",
@@ -211,6 +212,28 @@ fn lookup_icon_children(name: String) -> Result(List(Element(msg)), Nil) {
           attribute("cy", "12"),
           attribute("r", "1.5"),
           attribute("fill", "currentColor"),
+        ]),
+      ])
+
+    "menu" ->
+      Ok([
+        svg.line([
+          attribute("x1", "4"),
+          attribute("y1", "6"),
+          attribute("x2", "20"),
+          attribute("y2", "6"),
+        ]),
+        svg.line([
+          attribute("x1", "4"),
+          attribute("y1", "12"),
+          attribute("x2", "20"),
+          attribute("y2", "12"),
+        ]),
+        svg.line([
+          attribute("x1", "4"),
+          attribute("y1", "18"),
+          attribute("x2", "20"),
+          attribute("y2", "18"),
         ]),
       ])
 
