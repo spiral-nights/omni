@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, gleam-rewrite]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Install Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          gleam-version: "1.19.2"
+          otp-version: "27"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting, types, and architecture
+        run: pnpm gleam:check
+
+      - name: Build Gleam workspace, guest bridge, and web application
+        run: pnpm build
+
+      - name: Gleam package test suites
+        run: pnpm gleam:test
+
+      - name: Bridge conformance tests
+        run: pnpm exec vitest run

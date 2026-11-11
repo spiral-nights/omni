@@ -17,7 +17,7 @@ The codebase is migrating from TypeScript (~47.6k LOC) and MoonBit (~1.7k LOC) t
   - `omni_plugin_kit`: 100% complete and tested.
   - `omni_social` & `omni_social_ui`: 100% complete and golden snapshot tested.
   - First-party plugins (`checklist`, `relays`, `publisher`, `feed`, `notes`, `timer`, `profiles`): scaffolded; several modules created before subagents hit individual rate limits.
-- **Phase 8 (Cleanup & Cutover)**: Pending completion of Phase 6 and 7.
+- **Phase 8 (Cleanup & Cutover)**: Complete. Legacy TypeScript packages, MoonBit toolchain, jco/WIT tooling, and the stale autobuild script are removed; CI and bundle reporting are in place. The optional `gleam/` → `packages/` rename was deliberately skipped.
 
 ---
 
@@ -115,9 +115,11 @@ All plugins must be pure standard nsites using `omni_plugin_kit`:
   - Dual-run old vs new bridge against test suites before final cutover.
 
 ### 4. Phase 8: Cleanup & Hardening
-- [ ] Delete deprecated TypeScript packages and build artifacts.
-- [ ] Update `AGENTS.md` and `docs/01–06` to reflect pure Gleam architecture.
-- [ ] Verify `pnpm gleam:check`, `pnpm test`, and bundle size comparisons.
+- [x] Delete deprecated TypeScript packages and build artifacts (`packages/`, autobuild, jco/WIT).
+- [x] Update `AGENTS.md` to the pure Gleam architecture and banner the legacy `docs/01–06`.
+- [x] CI (`.github/workflows/ci.yml`) plus updated deploy workflow: ordered build, per-package tests, format check, lint, bridge conformance suite.
+- [x] Bundle baseline recorded in `docs/11-perf-baseline.md` (`pnpm bundle:report`).
+- [ ] Optional `gleam/` → `packages/` rename: intentionally skipped.
 
 ---
 

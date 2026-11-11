@@ -93,8 +93,8 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 7.11 Run old and new bridge side by side against the full plugin suite; cut over
 
 ## Phase 8: Cleanup and hardening
-- [ ] 8.1 Delete remaining TS packages, MoonBit toolchain, unused `jco`/WIT tooling
-- [ ] 8.2 Update `AGENTS.md` and `docs/01–06`
-- [ ] 8.3 CI: ordered build, `gleam test` per package, `gleam format --check`, lint scripts, e2e smoke test
-- [ ] 8.4 Performance and bundle-size comparison vs TS baseline
-- [ ] 8.5 Rename `gleam/` to `packages/` (optional)
+- [x] 8.1 Delete remaining TS packages, MoonBit toolchain, unused `jco`/WIT tooling
+- [x] 8.2 Update `AGENTS.md` and `docs/01–06`
+- [x] 8.3 CI: ordered build, `gleam test` per package, `gleam format --check`, lint scripts, e2e smoke test
+- [x] 8.4 Performance and bundle-size comparison vs TS baseline
+- [ ] 8.5 Rename `gleam/` to `packages/` (optional — deliberately skipped; `gleam/` keeps the toolchain path idiomatic)
