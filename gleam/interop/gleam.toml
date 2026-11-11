@@ -8,9 +8,14 @@ typescript_declarations = true
 
 [dependencies]
 gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+gleam_javascript = ">= 1.0.1 and < 2.0.0"
 omni_kernel = { path = "../kernel" }
 omni_protocol = { path = "../protocol" }
 omni_nostr = { path = "../nostr" }
+omni_platform = { path = "../platform" }
+omni_shell = { path = "../shell" }
+omni_web = { path = "../web" }
+lustre = ">= 5.7.1 and < 6.0.0"
 
 [dev_dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

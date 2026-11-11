@@ -19,7 +19,8 @@
     "@omni/plugin-profile-viewer": "workspace:*",
     "@omni/plugin-publisher": "workspace:*",
     "@omni/plugin-notes": "workspace:*",
-    "@omni/plugin-timer": "workspace:*"
+    "@omni/plugin-timer": "workspace:*",
+    "@omni/gleam-interop": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

@@ -47,6 +47,9 @@ importers:
       '@omni/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@omni/gleam-interop':
+        specifier: workspace:*
+        version: link:../../gleam/interop
       '@omni/plugin-checklist':
         specifier: workspace:*
         version: link:../../packages/plugins/checklist

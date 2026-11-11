@@ -12,7 +12,7 @@
 The codebase is migrating from TypeScript (~47.6k LOC) and MoonBit (~1.7k LOC) to a clean, idiomatic multi-package Gleam workspace under `gleam/`.
 
 - **Phases 0 through 5 are 100% COMPLETE and committed** to `gleam-rewrite`.
-- **Phase 6 (Shell)** is **~95% implemented**: Core model/msg/update, layout viewports, dock, header actions, widgets dashboard, settings panels, and all three built-in themes (Classic, Panorama, Editorial) are written and unit tested. The storage-backed `ShellRegistry` and the `omni_web` bootstrap config/bootloader exist and are tested; only wiring `apps/web` to mount the boot tree remains (Phase 6.8).
+- **Phase 6 (Shell)** is **complete**: Core model/msg/update, layout viewports, dock, header actions, widgets dashboard, settings panels, and all three built-in themes (Classic, Panorama, Editorial) are written and unit tested. The storage-backed `ShellRegistry` and the `omni_web` bootstrap config/bootloader exist and are tested; only wiring `apps/web` to mount the boot tree remains (Phase 6.8).
 - **Phase 7 (Plugin Kit & Social)** is **partially complete**:
   - `omni_plugin_kit`: 100% complete and tested.
   - `omni_social` & `omni_social_ui`: 100% complete and golden snapshot tested.
@@ -82,8 +82,10 @@ The codebase is migrating from TypeScript (~47.6k LOC) and MoonBit (~1.7k LOC) t
 - [x] **Phase 6.8 (B) — Web Bootloader (`gleam/web` — `omni_web`)**:
   - `src/omni/web/config.gleam`: bootstrap relays, default system plugin entries, default shell ID.
   - `src/omni/web/boot.gleam`: `init` builds the kernel/registry/model; `dispatch` applies persistence effects; `select_shell`; `view` renders stylesheets + active theme.
-- [ ] **Phase 6.8 (C) — `apps/web` wiring**:
-  - Mount `boot.view` inside `#omni-root` (host-side DOM mount; no FFI in `gleam/web`), replacing the legacy `apps/web/src/main.ts` shell bootstrapping.
+- [x] **Phase 6.8 (C) — `apps/web` wiring**:
+  - `omni_interop/shell_boot` exposes `start`/`render`/`select_shell`/navigation helpers to TypeScript.
+  - `apps/web/src/main.ts` is now a thin host: boots the Gleam kernel + registry, paints the active theme into `#omni-root`, and keeps only the PWA service-worker registration.
+  - Follow-up: interactive event delegation from the painted DOM back into `boot.dispatch` (belongs with the Phase 7.10–7.11 host/bridge work).
 
 ### 2. Phase 7: First-Party Plugins (`gleam/plugins/`)
 All plugins must be pure standard nsites using `omni_plugin_kit`:
