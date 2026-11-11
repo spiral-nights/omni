@@ -10,8 +10,9 @@ import gleam/int
 import gleam/javascript/promise.{type Promise}
 import gleam/json
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
 import omni/nostr/event.{type Event}
+import omni/nostr/event_id
 import omni/nostr/filter.{type Filter}
 import omni/nostr/relay_frame.{type RelayFrame}
 import omni/nostr/relay_url.{type RelayUrl}
@@ -33,6 +34,20 @@ pub type Subscriber {
   Subscriber(filters: List(Filter), handler: fn(String, RelayFrame) -> Nil)
 }
 
+/// In-flight publish waiting for relay `OK` receipts.
+pub type PublishReceipt {
+  PublishReceipt(
+    results: Ref(List(#(RelayUrl, Bool, String))),
+    expected: Int,
+    resolve: fn(List(#(RelayUrl, Bool, String))) -> Nil,
+    done: Ref(Bool),
+  )
+}
+
+/// Handler used to answer a relay NIP-42 AUTH challenge.
+pub type AuthHandler =
+  fn(String, String) -> Option(Event)
+
 /// The active relay pool managing socket connections and subscribers.
 pub type RelayPool {
   RelayPool(
@@ -42,6 +57,9 @@ pub type RelayPool {
     subscribers: Ref(Dict(String, Subscriber)),
     retries: Ref(Dict(String, Int)),
     status_listeners: Ref(List(fn(List(#(RelayUrl, RelayStatus))) -> Nil)),
+    receipts: Ref(Dict(String, PublishReceipt)),
+    notice_listeners: Ref(List(fn(String, String) -> Nil)),
+    auth_handler: Ref(Option(AuthHandler)),
   )
 }
 
@@ -87,6 +105,9 @@ pub fn new(storage: Storage, bootstrap_relays: List(RelayUrl)) -> RelayPool {
       subscribers: ref.new(dict.new()),
       retries: ref.new(dict.new()),
       status_listeners: ref.new([]),
+      receipts: ref.new(dict.new()),
+      notice_listeners: ref.new([]),
+      auth_handler: ref.new(None),
     )
   list.each(configured, fn(u) { connect(pool, u) })
   pool
@@ -213,10 +234,149 @@ fn dispatch_frame(
         Error(Nil) -> Nil
       }
     }
-    relay_frame.Notice(_)
-    | relay_frame.Ok(_, _, _)
-    | relay_frame.AuthChallenge(_) -> Nil
+    relay_frame.Notice(message) -> {
+      ref.get(pool.notice_listeners)
+      |> list.each(fn(listener) { listener(source_url, message) })
+    }
+    relay_frame.Ok(event_id_, accepted, message) -> {
+      register_ok(
+        pool,
+        source_url,
+        event_id.to_hex(event_id_),
+        accepted,
+        message,
+      )
+    }
+    relay_frame.AuthChallenge(challenge) -> {
+      case ref.get(pool.auth_handler) {
+        Some(handler) ->
+          case handler(source_url, challenge) {
+            Some(auth_event) ->
+              case dict.get(ref.get(pool.sockets), source_url) {
+                Ok(sock) -> {
+                  let _ =
+                    websocket.send(
+                      sock,
+                      relay_frame.client_frame_to_json(relay_frame.Auth(
+                        auth_event,
+                      )),
+                    )
+                  Nil
+                }
+                Error(Nil) -> Nil
+              }
+            None -> Nil
+          }
+        None -> Nil
+      }
+    }
     _ -> Nil
+  }
+}
+
+/// Register an `OK` receipt for an in-flight tracked publish.
+pub fn register_ok(
+  pool: RelayPool,
+  source_url: String,
+  event_id_hex: String,
+  accepted: Bool,
+  message: String,
+) -> Nil {
+  case dict.get(ref.get(pool.receipts), event_id_hex) {
+    Error(Nil) -> Nil
+    Ok(receipt) ->
+      case relay_url.parse(source_url) {
+        Error(Nil) -> Nil
+        Ok(relay) -> {
+          ref.update(receipt.results, fn(results) {
+            [#(relay, accepted, message), ..results]
+          })
+          case list.length(ref.get(receipt.results)) >= receipt.expected {
+            True -> complete_receipt(pool, event_id_hex, receipt)
+            False -> Nil
+          }
+        }
+      }
+  }
+}
+
+fn complete_receipt(
+  pool: RelayPool,
+  event_id_hex: String,
+  receipt: PublishReceipt,
+) -> Nil {
+  case ref.get(receipt.done) {
+    True -> Nil
+    False -> {
+      ref.set(receipt.done, True)
+      ref.update(pool.receipts, fn(r) { dict.delete(r, event_id_hex) })
+      receipt.resolve(list.reverse(ref.get(receipt.results)))
+    }
+  }
+}
+
+/// Watch relay NOTICE frames. Returns an unsubscribe function.
+pub fn watch_notices(
+  pool: RelayPool,
+  listener: fn(String, String) -> Nil,
+) -> fn() -> Nil {
+  ref.update(pool.notice_listeners, fn(ls) { [listener, ..ls] })
+  fn() {
+    ref.update(pool.notice_listeners, fn(ls) {
+      list.filter(ls, fn(l) { l != listener })
+    })
+  }
+}
+
+/// Install the handler that answers NIP-42 AUTH challenges.
+pub fn set_auth_handler(pool: RelayPool, handler: AuthHandler) -> Nil {
+  ref.set(pool.auth_handler, Some(handler))
+}
+
+/// Publish an event and wait for relay `OK` receipts (or `timeout_ms`).
+pub fn publish_tracked(
+  pool: RelayPool,
+  event: Event,
+  timeout_ms: Int,
+) -> Promise(List(#(RelayUrl, Bool, String))) {
+  let id_hex = event_id.to_hex(event.id)
+  let frame_json = relay_frame.client_frame_to_json(relay_frame.Event(event))
+  let relays = get_configured_relays(pool)
+  let sockets = ref.get(pool.sockets)
+  let statuses = ref.get(pool.statuses)
+
+  let sent =
+    list.filter_map(relays, fn(url) {
+      let url_str = relay_url.to_string(url)
+      case dict.get(statuses, url_str), dict.get(sockets, url_str) {
+        Ok(Connected), Ok(sock) ->
+          case websocket.send(sock, frame_json) {
+            Ok(Nil) -> Ok(url)
+            Error(Nil) -> Error(Nil)
+          }
+        _, _ -> Error(Nil)
+      }
+    })
+
+  case sent {
+    [] -> promise.resolve([])
+    _ -> {
+      let results = ref.new([])
+      let done = ref.new(False)
+      let #(waiter, resolve) = promise.start()
+      let receipt =
+        PublishReceipt(
+          results: results,
+          expected: list.length(sent),
+          resolve: resolve,
+          done: done,
+        )
+      ref.update(pool.receipts, fn(r) { dict.insert(r, id_hex, receipt) })
+      let _ =
+        promise_ext.delay(int.max(timeout_ms, 100), Nil)
+        |> promise.map(fn(_) { complete_receipt(pool, id_hex, receipt) })
+      waiter
+    }
   }
 }
 

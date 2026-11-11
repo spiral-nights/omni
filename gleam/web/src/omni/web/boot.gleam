@@ -29,6 +29,7 @@ import omni/nostr/event_id
 import omni/nostr/kind
 import omni/nostr/pubkey
 import omni/nostr/relay_url
+import omni/platform/clock
 import omni/platform/nip44
 import omni/platform/promise_ext
 import omni/platform/ref
@@ -111,7 +112,28 @@ pub fn init_with_bridge(
       builtins: builtins,
     )
   grant_default_capabilities(booted)
+  install_auth_handler(booted)
   booted
+}
+
+fn install_auth_handler(booted: Booted) -> Nil {
+  relay_pool.set_auth_handler(
+    booted.kernel.relay_pool,
+    fn(relay_url_str, challenge) {
+      let draft =
+        UnsignedEvent(
+          pubkey: None,
+          created_at: clock.system().now_ms() / 1000,
+          kind: kind.Other(22_242),
+          tags: [["relay", relay_url_str], ["challenge", challenge]],
+          content: "",
+        )
+      case keystore.sign_event(booted.kernel.keystore, draft) {
+        Ok(event) -> Some(event)
+        Error(_) -> None
+      }
+    },
+  )
 }
 
 fn session_profile(kernel: OmniKernel) -> UserProfileSummary {

@@ -3,7 +3,7 @@ import gleam/javascript/promise.{type Promise}
 import gleam/list
 import omni/kernel/nostr/relay_pool.{
   Connected, Disconnected, add_relay, attach_socket, get_configured_relays,
-  get_statuses, publish, remove_relay, subscribe,
+  get_statuses, publish, publish_tracked, register_ok, remove_relay, subscribe,
 }
 import omni/nostr/event.{type Event, Event}
 import omni/nostr/event_id
@@ -192,4 +192,38 @@ pub fn relay_pool_statuses_test() {
 
   let statuses = get_statuses(pool)
   assert statuses == [#(url1, Connected)]
+}
+
+pub fn relay_pool_publish_tracked_receipts_test() {
+  let store = storage.in_memory()
+  let assert Ok(url) = relay_url.parse("wss://relay.example")
+  let pool = relay_pool.new(store, [url])
+  let sent = ref.new([])
+  let sock =
+    websocket.fake(
+      fn(frame) {
+        ref.update(sent, fn(frames) { [frame, ..frames] })
+        Ok(Nil)
+      },
+      fn(_code, _reason) { Nil },
+    )
+  attach_socket(pool, url, sock, Connected)
+
+  let event = make_test_event()
+  let waiter = publish_tracked(pool, event, 500)
+  register_ok(
+    pool,
+    relay_url.to_string(url),
+    event_id.to_hex(event.id),
+    True,
+    "accepted",
+  )
+
+  use results <- promise.await(waiter)
+  assert list.length(results) == 1
+  let assert Ok(#(_relay, accepted, message)) = list.first(results)
+  assert accepted
+  assert message == "accepted"
+  assert list.length(ref.get(sent)) == 1
+  promise.resolve(Nil)
 }
