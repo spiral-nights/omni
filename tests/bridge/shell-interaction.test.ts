@@ -60,6 +60,12 @@ describe("interactive shell mount", () => {
     expect(root.innerHTML).toContain("omni-settings-view");
     expect(window.location.search).toContain("view=settings");
 
+    // Hosted Schema actions round-trip: open the Apps page, then back to feed.
+    history.back();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    expect(root.innerHTML).toContain("Following");
+
     // Apps page: built-ins are already installed (matched by source URL).
     (document.querySelector("#btn-editorial-dock-apps") as HTMLElement).dispatchEvent(
       new MouseEvent("click", { bubbles: true, cancelable: true }),

@@ -1,20 +1,29 @@
 //// Host-rendered built-in plugin views.
 ////
 //// First-party plugins are Gleam packages. Until their bundles are resolved
-//// into sandboxes, the host starts them in-process and hands their Schema
-//// trees to the shell, which renders them and routes actions back here.
-//// Plugin IDs live only in `config`/`builtin`, never in the shell or UI.
+//// into sandboxes, the host starts them in-process, persists their state in
+//// partitioned local storage, feeds them relay events, and hands their Schema
+//// trees to the shell for rendering. Plugin IDs live only in `config`/`builtin`,
+//// never in the shell or UI.
 
+import gleam/option.{type Option, None, Some}
+import omni/nostr/event.{type Event}
+import omni/platform/storage
 import omni/plugin_kit/app.{type RunningApp}
 import omni/plugin_kit/route
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
 import plugin/checklist/main as checklist
+import plugin/checklist/msg as checklist_msg
 import plugin/feed/main as feed
+import plugin/feed/msg as feed_msg
 import plugin/notes/main as notes
 import plugin/profiles/main as profiles
+import plugin/profiles/msg as profiles_msg
 import plugin/publisher/main as publisher
 import plugin/relays/main as relays
+import plugin/relays/model.{StateConnected, StateDisconnected}
+import plugin/relays/msg as relays_msg
 import plugin/timer/main as timer
 
 /// A built-in plugin running in-process in the host.
@@ -23,39 +32,102 @@ pub type BuiltinApp {
     render: fn() -> Node,
     navigate: fn(String) -> Nil,
     handle_action: fn(Action) -> Bool,
+    ingest: Option(fn(Event) -> Nil),
+    relay_status: Option(fn(String, Bool) -> Nil),
   )
 }
 
-/// The first-party applications bundled with the host.
+/// The first-party applications bundled with the host, backed by the local
+/// storage port so their state survives reloads.
 pub fn apps() -> List(#(String, BuiltinApp)) {
+  let store = storage.local_or_in_memory()
+
   [
-    #("org.omni.plugin.feed", host(fn(emit) { feed.start_app("", emit) })),
+    #("org.omni.plugin.feed", feed_app(store)),
     #(
       "org.omni.plugin.checklist",
-      host(fn(emit) { checklist.start_app("", emit) }),
+      host(
+        fn(emit) { checklist.start_app_with_storage("", store, emit) },
+        None,
+        None,
+      ),
     ),
-    #("org.omni.plugin.timer", host(fn(emit) { timer.start_app("", emit) })),
-    #("org.omni.plugin.notes", host(fn(emit) { notes.start_app("", emit) })),
-    #("org.omni.plugin.relays", host(fn(emit) { relays.start_app("", emit) })),
     #(
-      "org.omni.plugin.profiles",
-      host(fn(emit) { profiles.start_app("", emit) }),
+      "org.omni.plugin.timer",
+      host(fn(emit) { timer.start_app("", emit) }, None, None),
     ),
+    #(
+      "org.omni.plugin.notes",
+      host(
+        fn(emit) { notes.start_app_with_storage("", store, emit) },
+        None,
+        None,
+      ),
+    ),
+    #("org.omni.plugin.relays", relays_app()),
+    #("org.omni.plugin.profiles", profiles_app(store)),
     #(
       "org.omni.plugin.publisher",
-      host(fn(emit) { publisher.start_app("", emit) }),
+      host(fn(emit) { publisher.start_app("", emit) }, None, None),
     ),
   ]
 }
 
-fn host(start: fn(fn(Node) -> Nil) -> RunningApp(a, b)) -> BuiltinApp {
+fn feed_app(store: storage.Storage) -> BuiltinApp {
+  let running = feed.start_app_with_storage("", store, fn(_) { Nil })
+  BuiltinApp(
+    render: fn() { app.current_view(running) },
+    navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
+    handle_action: fn(action) { app.handle_action(running, action) },
+    ingest: Some(fn(event) {
+      app.dispatch(running, feed_msg.IngestEvent(event))
+    }),
+    relay_status: None,
+  )
+}
+
+fn profiles_app(store: storage.Storage) -> BuiltinApp {
+  let running = profiles.start_app_with_storage("", store, fn(_) { Nil })
+  BuiltinApp(
+    render: fn() { app.current_view(running) },
+    navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
+    handle_action: fn(action) { app.handle_action(running, action) },
+    ingest: Some(fn(event) {
+      app.dispatch(running, profiles_msg.IngestEvent(event))
+    }),
+    relay_status: None,
+  )
+}
+
+fn relays_app() -> BuiltinApp {
+  let running = relays.start_app("", fn(_) { Nil })
+  BuiltinApp(
+    render: fn() { app.current_view(running) },
+    navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
+    handle_action: fn(action) { app.handle_action(running, action) },
+    ingest: None,
+    relay_status: Some(fn(url, connected) {
+      let state = case connected {
+        True -> StateConnected
+        False -> StateDisconnected
+      }
+      app.dispatch(running, relays_msg.UpdateRelayState(url, state, None))
+    }),
+  )
+}
+
+fn host(
+  start: fn(fn(Node) -> Nil) -> RunningApp(a, b),
+  ingest: Option(fn(Event) -> Nil),
+  relay_status: Option(fn(String, Bool) -> Nil),
+) -> BuiltinApp {
   let running = start(fn(_node) { Nil })
 
   BuiltinApp(
     render: fn() { app.current_view(running) },
-    navigate: fn(raw_route) {
-      app.navigate(running, route.parse_search(raw_route))
-    },
+    navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
+    ingest: ingest,
+    relay_status: relay_status,
   )
 }

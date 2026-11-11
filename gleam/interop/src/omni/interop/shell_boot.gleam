@@ -6,13 +6,20 @@
 //// through the exposed message helpers. DOM mounting and event wiring stay in
 //// the host so this shared package needs no DOM FFI.
 
+import gleam/dict
 import gleam/javascript/promise
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 
 import lustre/effect.{type Effect}
 import lustre/element.{type Element}
 import omni/kernel/kernel.{KernelPorts}
+import omni/kernel/nostr/coordinator
+import omni/kernel/nostr/relay_pool
+import omni/nostr/filter.{type Filter, Filter}
+import omni/nostr/kind
+import omni/nostr/relay_url
 import omni/platform/clock
 import omni/platform/idb
 import omni/platform/storage
@@ -22,7 +29,7 @@ import omni/shell/model.{
   type SettingsTab, AppStore, PrimaryApp, Settings, TabPluginSettings,
   TabPlugins, TabProfile, TabRelays, TabShells, TabWorkspace, WidgetsDashboard,
 }
-import omni/shell/msg.{NavigateTo, OpenApp, OpenSettings}
+import omni/shell/msg.{EmbedSchema, NavigateTo, OpenApp, OpenSettings}
 import omni/web/boot
 
 /// Opaque shell boot state handed back to the host page.
@@ -183,6 +190,66 @@ fn mount_dom(
   parse_url: fn(String) -> Option(msg.Msg),
   page_url: fn(ShellBoot) -> String,
 ) -> Nil
+
+/// Subscribe to public relay events, feed them to built-in apps that consume
+/// events, push live relay statuses, and refresh the embedded Schema views.
+pub fn start_live_data(host: ShellBoot) -> Nil {
+  let _ =
+    coordinator.subscribe(
+      host.booted.kernel.coordinator,
+      "builtin:feed",
+      [public_events_filter()],
+      fn(event) {
+        dict.each(host.booted.builtins, fn(_id, app) {
+          case app.ingest {
+            Some(ingest) -> ingest(event)
+            None -> Nil
+          }
+        })
+        push_views(host)
+      },
+      None,
+    )
+
+  relay_pool.get_statuses(host.booted.kernel.relay_pool)
+  |> list.each(fn(pair) {
+    let #(url, status) = pair
+    let connected = case status {
+      relay_pool.Connected -> True
+      _ -> False
+    }
+    dict.each(host.booted.builtins, fn(_id, app) {
+      case app.relay_status {
+        Some(update) -> update(relay_url.to_string(url), connected)
+        None -> Nil
+      }
+    })
+  })
+
+  push_views(host)
+}
+
+fn public_events_filter() -> Filter {
+  Filter(
+    ids: None,
+    authors: None,
+    kinds: Some([kind.Note, kind.Metadata, kind.Repost, kind.Reaction]),
+    since: None,
+    until: None,
+    limit: Some(80),
+    search: None,
+    tags: dict.new(),
+  )
+}
+
+fn push_views(host: ShellBoot) -> Nil {
+  dict.each(host.booted.builtins, fn(plugin_id, app) {
+    dispatch_shell_msg(EmbedSchema(plugin_id, app.render()))
+  })
+}
+
+@external(javascript, "./shell_boot.ffi.mjs", "dispatch_shell_msg")
+fn dispatch_shell_msg(message: msg.Msg) -> Nil
 
 /// Dial the configured relays and begin tracking their connection state.
 pub fn connect_relays(host: ShellBoot) -> Nil {

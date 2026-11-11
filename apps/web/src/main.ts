@@ -1,6 +1,7 @@
 import {
   connect_relays,
   mount_shell,
+  start_live_data,
   start_with_bridge,
   type ShellBoot,
 } from "@omni/gleam-interop/shell_boot";
@@ -41,6 +42,8 @@ async function mountShell(): Promise<void> {
   rootEl.innerHTML = "";
   mount_shell("#omni-root", host);
   connect_relays(host);
+  // Give relay sockets a moment to open before sending REQ frames.
+  window.setTimeout(() => start_live_data(host), 1200);
   rootEl.setAttribute("data-omni-booted", "true");
 }
 

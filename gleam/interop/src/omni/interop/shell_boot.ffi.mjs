@@ -62,6 +62,7 @@ export function mount_dom(selector, init, update, view, parse_url, page_url) {
   }
 
   const spa = result && result.isOk ? result[0] : null;
+  if (spa) window.__omniShellDispatch = (message) => spa.dispatch(message);
 
   window.addEventListener("popstate", () => {
     if (!spa) return;
@@ -72,4 +73,11 @@ export function mount_dom(selector, init, update, view, parse_url, page_url) {
       spa.dispatch(message[0]);
     }
   });
+}
+
+
+export function dispatch_shell_msg(message) {
+  if (typeof window !== "undefined" && typeof window.__omniShellDispatch === "function") {
+    window.__omniShellDispatch(message);
+  }
 }
