@@ -57,8 +57,8 @@ Mark items `[x]` in the same commit that completes them.
 
 ## Phase 4: Sandbox hosting (host side)
 - [x] 4.1 `sandbox`: `GuestHost` interface, channel, CSP builder, tokens, CSS scoper
-- [ ] 4.2 `sandbox`: iframe host, worker host, wasm host (verify with a Wasm plugin)
-- [ ] 4.3 `sandbox`: protocol shims (host side), manager
+- [x] 4.2 `sandbox`: iframe host, worker host, wasm host (verify with a Wasm plugin)
+- [x] 4.3 `sandbox`: protocol shims (host side), manager
 - [ ] 4.4 Isolation tests unchanged (CSP, `connect-src 'none'`)
 
 ## Phase 5: UI layer
