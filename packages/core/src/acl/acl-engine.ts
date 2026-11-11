@@ -1,5 +1,6 @@
 import { CapabilityStore, GrantLevel } from "./capability-store.js";
 import { OmniManifest } from "@omni/types";
+import { decide, decide_read } from "@omni/gleam-interop/acl";
 
 export type PermissionPromptHandler = (
   pluginId: string,
@@ -27,28 +28,11 @@ export class AclEngine {
     category: string,
     details?: any
   ): Promise<boolean> {
-    // Defense against NIP-78 host workspace tampering:
-    // Any kind 30078 event with d-tag starting with 'omni/' or 'omni:' is reserved for the host shell.
-    if (
-      (category === "nostr:sign" || category === "nostr:write") &&
-      details?.kind === 30078 &&
-      Array.isArray(details?.tags)
-    ) {
-      const dTag = details.tags.find((t: any) => Array.isArray(t) && t[0] === "d")?.[1];
-      if (typeof dTag === "string" && (dTag === "omni" || dTag.startsWith("omni/") || dTag.startsWith("omni:"))) {
-        return false;
-      }
-    }
-
+    // Policy (reserved NIP-78 identifiers, stored grants) lives in Gleam: omni_kernel's acl/policy.
     const scope = details?.kind !== undefined ? String(details.kind) : undefined;
-    const existing = this.store.getGrant(pluginId, category, scope);
-
-    if (existing === "always" || existing === "session") {
-      return true;
-    }
-    if (existing === "deny") {
-      return false;
-    }
+    const verdict = decide(category, details, this.store.getGrant(pluginId, category, scope));
+    if (verdict === "allow") return true;
+    if (verdict === "deny") return false;
 
     // If no existing grant, trigger prompt handler if available
     if (this.promptHandler) {
@@ -62,20 +46,14 @@ export class AclEngine {
   }
 
   async canReadEvent(pluginId: string, event: { kind: number }): Promise<boolean> {
-    const SENSITIVE_KINDS = [4, 1059, 14];
-    if (SENSITIVE_KINDS.includes(event.kind)) {
-      const encryptGrant = this.store.getGrant(pluginId, "nostr:encrypt");
-      if (encryptGrant === "always" || encryptGrant === "session") {
-        return true;
-      }
-      const specificKindGrant = this.store.getGrant(pluginId, "nostr:read", String(event.kind), false);
-      if (specificKindGrant === "always" || specificKindGrant === "session") {
-        return true;
-      }
-      return false;
-    }
-
+    // Sensitive-kind filtering lives in Gleam: omni_kernel's acl/read_filter.
+    const verdict = decide_read(
+      event.kind,
+      this.store.getGrant(pluginId, "nostr:encrypt"),
+      this.store.getGrant(pluginId, "nostr:read", String(event.kind), false)
+    );
+    if (verdict === "allow") return true;
+    if (verdict === "deny") return false;
     return this.checkPermission(pluginId, "nostr:read", { kind: event.kind });
   }
 }
-
