@@ -16,7 +16,12 @@ import omni/kernel/kernel.{KernelPorts}
 import omni/platform/clock
 import omni/platform/idb
 import omni/platform/storage
-import omni/shell/model.{AppStore, TabProfile, WidgetsDashboard}
+import omni/platform/url
+import omni/plugin_kit/route.{type Route}
+import omni/shell/model.{
+  type SettingsTab, AppStore, PrimaryApp, Settings, TabPluginSettings,
+  TabPlugins, TabProfile, TabRelays, TabShells, TabWorkspace, WidgetsDashboard,
+}
 import omni/shell/msg.{NavigateTo, OpenApp, OpenSettings}
 import omni/web/boot
 
@@ -101,7 +106,72 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
       #(ShellBoot(next), effect.none())
     },
     fn(current: ShellBoot) { boot.view(current.booted) },
+    msg_from_url,
+    page_url,
   )
+}
+
+/// URL for the shell's current page, used for `history.pushState`.
+pub fn page_url(host: ShellBoot) -> String {
+  case host.booted.model.active_page {
+    PrimaryApp(plugin_id, _route) -> "?app=" <> url.encode_component(plugin_id)
+    WidgetsDashboard -> "?view=widgets"
+    AppStore -> "?view=apps"
+    Settings(tab) -> "?view=settings&tab=" <> settings_tab_slug(tab)
+  }
+}
+
+fn settings_tab_slug(tab: SettingsTab) -> String {
+  case tab {
+    TabProfile -> "profile"
+    TabRelays -> "relays"
+    TabPlugins -> "plugins"
+    TabWorkspace -> "workspace"
+    TabShells -> "shells"
+    TabPluginSettings(plugin_id) -> "plugin:" <> plugin_id
+  }
+}
+
+/// Decode a browser URL (`path?search`) into a shell message for back/forward.
+pub fn msg_from_url(raw: String) -> Option(msg.Msg) {
+  let search = case string.split_once(raw, "?") {
+    Ok(#(_path, query)) -> "?" <> query
+    Error(Nil) -> raw
+  }
+  let parsed = route.parse_search(search)
+
+  case route.get_param(parsed, "app") {
+    Some(plugin_id) if plugin_id != "" -> Some(msg.OpenApp(plugin_id, None))
+    _ ->
+      case route.get_param(parsed, "view") {
+        Some(view) ->
+          case string.lowercase(view) {
+            "widgets" -> Some(msg.NavigateTo(WidgetsDashboard))
+            "apps" -> Some(msg.NavigateTo(AppStore))
+            "settings" -> Some(msg.OpenSettings(tab_from_slug(parsed)))
+            _ -> None
+          }
+        None -> None
+      }
+  }
+}
+
+fn tab_from_slug(parsed: Route) -> SettingsTab {
+  case route.get_param(parsed, "tab") {
+    Some(raw) ->
+      case raw {
+        "relays" -> TabRelays
+        "plugins" -> TabPlugins
+        "workspace" -> TabWorkspace
+        "shells" -> TabShells
+        _ ->
+          case string.starts_with(raw, "plugin:") {
+            True -> TabPluginSettings(string.drop_start(raw, 7))
+            False -> TabProfile
+          }
+      }
+    None -> TabProfile
+  }
 }
 
 @external(javascript, "./shell_boot.ffi.mjs", "mount_dom")
@@ -110,7 +180,14 @@ fn mount_dom(
   init: fn(String) -> #(ShellBoot, Effect(msg.Msg)),
   update: fn(ShellBoot, msg.Msg) -> #(ShellBoot, Effect(msg.Msg)),
   view: fn(ShellBoot) -> Element(msg.Msg),
+  parse_url: fn(String) -> Option(msg.Msg),
+  page_url: fn(ShellBoot) -> String,
 ) -> Nil
+
+/// Dial the configured relays and begin tracking their connection state.
+pub fn connect_relays(host: ShellBoot) -> Nil {
+  boot.connect_relays(host.booted)
+}
 
 /// The active shell theme ID (`"classic"`, `"panorama"`, `"editorial"`).
 pub fn active_shell_id(host: ShellBoot) -> String {
@@ -155,13 +232,13 @@ fn dispatch(host: ShellBoot, message: msg.Msg) -> boot.Booted {
 /// `"workspace"`, `"shells"`, or `"plugin:<id>"` for a plugin settings tab.
 pub fn open_settings_tab(host: ShellBoot, tab_id: String) -> ShellBoot {
   let tab = case tab_id {
-    "relays" -> model.TabRelays
-    "plugins" -> model.TabPlugins
-    "workspace" -> model.TabWorkspace
-    "shells" -> model.TabShells
+    "relays" -> TabRelays
+    "plugins" -> TabPlugins
+    "workspace" -> TabWorkspace
+    "shells" -> TabShells
     _ ->
       case string.starts_with(tab_id, "plugin:") {
-        True -> model.TabPluginSettings(plugin_settings_id(tab_id))
+        True -> TabPluginSettings(plugin_settings_id(tab_id))
         False -> TabProfile
       }
   }

@@ -1,4 +1,5 @@
 import {
+  connect_relays,
   mount_shell,
   start_with_bridge,
   type ShellBoot,
@@ -39,6 +40,7 @@ async function mountShell(): Promise<void> {
   const host = (result as unknown as { 0: ShellBoot })[0];
   rootEl.innerHTML = "";
   mount_shell("#omni-root", host);
+  connect_relays(host);
   rootEl.setAttribute("data-omni-booted", "true");
 }
 

@@ -42,6 +42,7 @@ describe("interactive shell mount", () => {
     const root = document.getElementById("omni-root")!;
     expect(root.innerHTML).toContain("editorial-shell-root");
     expect(root.innerHTML).toContain("editorial-dock-inner");
+    expect(window.location.search).toBe("?app=org.omni.plugin.feed");
     // Built-in apps render their Schema in the host, not a blank sandbox island.
     expect(root.innerHTML).toContain("omni-hosted-app");
     expect(root.innerHTML).toContain("Following");
@@ -57,6 +58,7 @@ describe("interactive shell mount", () => {
     await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
 
     expect(root.innerHTML).toContain("omni-settings-view");
+    expect(window.location.search).toContain("view=settings");
 
     // Apps page: built-ins are already installed (matched by source URL).
     (document.querySelector("#btn-editorial-dock-apps") as HTMLElement).dispatchEvent(

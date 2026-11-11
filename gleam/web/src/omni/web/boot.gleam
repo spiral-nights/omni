@@ -9,14 +9,19 @@
 //// (`apps/web`), keeping the package free of DOM FFI.
 
 import gleam/dict.{type Dict}
+import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import omni/kernel/kernel.{type KernelPorts, type OmniKernel}
+import omni/kernel/nostr/relay_pool.{Connected, Connecting, Disconnected}
 import omni/kernel/workspace/sync
+import omni/nostr/relay_url
+import omni/platform/ref
 import omni/platform/storage
+import omni/platform/websocket
 import omni/protocol/plugin_id
 import omni/protocol/schema/node.{type Node}
 import omni/protocol/workspace
@@ -187,6 +192,44 @@ pub fn select_shell(booted: Booted, shell_id: String) -> Booted {
   booted
   |> dispatch(SelectShell(shell_id))
   |> fn(pair) { pair.0 }
+}
+
+/// Dial every configured bootstrap relay and track its connection state in the
+/// kernel relay pool. Safe to call once after boot.
+pub fn connect_relays(booted: Booted) -> Nil {
+  relay_pool.get_configured_relays(booted.kernel.relay_pool)
+  |> list.each(fn(url) {
+    let cell = ref.new(None)
+    let connection =
+      websocket.connect(relay_url.to_string(url), fn(event) {
+        let status = case event {
+          websocket.Open -> Connected
+          websocket.Close(code, reason) ->
+            Disconnected(
+              reason: "closed " <> int.to_string(code) <> " " <> reason,
+            )
+          websocket.Error(message) -> Disconnected(reason: message)
+          websocket.Message(_) -> Connecting
+        }
+        case ref.get(cell) {
+          Some(conn) ->
+            relay_pool.attach_socket(
+              booted.kernel.relay_pool,
+              url,
+              conn,
+              status,
+            )
+          None -> Nil
+        }
+      })
+    ref.update(cell, fn(_) { Some(connection) })
+    relay_pool.attach_socket(
+      booted.kernel.relay_pool,
+      url,
+      connection,
+      Connecting,
+    )
+  })
 }
 
 /// Spawn a tracked sandbox for a plugin view and build the `<iframe>` mount

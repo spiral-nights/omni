@@ -45,6 +45,7 @@ lustre = { version = ">= 5.7.1 and < 6.0.0" }
 omni_kernel = { path = "../kernel" }
 omni_nostr = { path = "../nostr" }
 omni_platform = { path = "../platform" }
+omni_plugin_kit = { path = "../plugin_kit" }
 omni_protocol = { path = "../protocol" }
 omni_shell = { path = "../shell" }
 omni_web = { path = "../web" }

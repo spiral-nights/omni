@@ -1,7 +1,7 @@
 //// Tests for the JS-facing shell boot facade.
 
 import gleam/javascript/promise
-import gleam/option.{None}
+import gleam/option.{None, Some}
 import gleam/string
 import gleeunit/should
 import omni/interop/shell_boot
@@ -9,6 +9,10 @@ import omni/kernel/kernel.{KernelPorts}
 import omni/platform/clock
 import omni/platform/idb
 import omni/platform/storage
+import omni/shell/model.{
+  AppStore, TabPluginSettings, TabShells, WidgetsDashboard,
+}
+import omni/shell/msg.{NavigateTo, OpenApp, OpenSettings}
 import omni/web/boot
 
 pub fn shell_boot_render_and_navigation_test() {
@@ -50,4 +54,22 @@ pub fn shell_boot_render_and_navigation_test() {
   |> should.equal(True)
 
   promise.resolve(Nil)
+}
+
+pub fn url_parsing_maps_to_shell_messages_test() {
+  case shell_boot.msg_from_url("/?app=example.app.alpha") {
+    Some(OpenApp("example.app.alpha", _)) -> Nil
+    _ -> should.fail()
+  }
+
+  shell_boot.msg_from_url("/?view=widgets")
+  |> should.equal(Some(NavigateTo(WidgetsDashboard)))
+  shell_boot.msg_from_url("/?view=apps")
+  |> should.equal(Some(NavigateTo(AppStore)))
+  shell_boot.msg_from_url("http://host/?view=settings&tab=shells")
+  |> should.equal(Some(OpenSettings(TabShells)))
+  shell_boot.msg_from_url("/?view=settings&tab=plugin:example.app.alpha")
+  |> should.equal(Some(OpenSettings(TabPluginSettings("example.app.alpha"))))
+  shell_boot.msg_from_url("/?view=unknown") |> should.equal(None)
+  shell_boot.msg_from_url("/") |> should.equal(None)
 }
