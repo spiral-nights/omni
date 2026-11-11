@@ -1,0 +1,15 @@
+name = "plugin_relays"
+version = "0.1.0"
+target = "javascript"
+
+[dependencies]
+gleam_stdlib = ">= 0.44.0 and < 2.0.0"
+gleam_json = ">= 3.0.1 and < 4.0.0"
+omni_plugin_kit = { path = "../../plugin_kit" }
+omni_protocol = { path = "../../protocol" }
+omni_nostr = { path = "../../nostr" }
+omni_platform = { path = "../../platform" }
+
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
+omni_testkit = { path = "../../testkit" }
