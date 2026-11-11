@@ -53,7 +53,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 3.6 `kernel/rpc`: rate limit, quota, dispatcher + handlers (nostr, signer, storage, intents, navigation, share)
 - [x] 3.7 `kernel/plugins`: resolver chain, bundler, registry, updates
 - [x] 3.8 `kernel`: navigation, intent broker, layout model
-- [ ] 3.9 `kernel.gleam` composition root; TS `@omni/core` kernel replaced behind facade
+- [x] 3.9 `kernel.gleam` composition root; TS `@omni/core` kernel replaced behind facade
 
 ## Phase 4: Sandbox hosting (host side)
 - [ ] 4.1 `sandbox`: `GuestHost` interface, channel, CSP builder, tokens, CSS scoper
