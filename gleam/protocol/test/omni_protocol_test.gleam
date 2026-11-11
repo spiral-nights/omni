@@ -8,7 +8,9 @@ pub fn main() -> Nil {
 
 pub fn viewport_round_trip_test() {
   [Main, Dock, Sidebar, HeaderActions]
-  |> list_each(fn(v) { assert viewport.parse(viewport.to_string(v)) == Ok(v) })
+  |> list_each(fn(v) {
+    assert viewport.parse(viewport.to_string(v)) == Ok(v)
+  })
 }
 
 pub fn viewport_rejects_unknown_test() {
