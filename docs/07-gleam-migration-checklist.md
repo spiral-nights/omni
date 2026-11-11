@@ -24,7 +24,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 0.4 Verify shared `omni/<pkg>/` module namespace works across path-linked packages
 - [x] 0.5 `scripts/gleam-build.mjs`: build all Gleam packages in dependency order; wire into root `build` / `test` scripts
 - [x] 0.6 Vite integration: a Gleam module imported by `apps/web`
-- [ ] 0.7 Lint scripts: FFI quarantine, no `plugin_* -> plugin_*` imports, no plugin IDs in shell/CSS, no `omni.*` in plugins, no emoji
+- [x] 0.7 Lint scripts: FFI quarantine, no `plugin_* -> plugin_*` imports, no plugin IDs in shell/CSS, no `omni.*` in plugins, no emoji
 - [ ] 0.8 Spike: ACL policy in Gleam + JS facade, `AclEngine.ts` delegates to it; all existing tests green
 - [ ] 0.9 Spike: Lustre page reparenting a live iframe between containers (state preserved?)
 - [ ] 0.10 Go/no-go review; write spike findings; resolve open risks

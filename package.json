@@ -9,7 +9,8 @@
     "dev": "pnpm --filter @omni/web dev",
     "test": "vitest run && pnpm gleam:test",
     "gleam:test": "node scripts/gleam-build.mjs test",
-    "gleam:check": "node scripts/gleam-build.mjs check",
+    "gleam:check": "node scripts/gleam-build.mjs check && node scripts/lint-gleam-architecture.mjs",
+    "gleam:lint": "node scripts/lint-gleam-architecture.mjs",
     "typecheck": "pnpm -r run typecheck",
     "wit:types": "jco types packages/types/wit/omni.wit -o packages/types/src/wit"
   },
