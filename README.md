@@ -10,8 +10,8 @@ Omni combines a **high-performance, local-first Nostr web client** with a **sand
 
 | Subsystem | Architectural Approach | Key Technologies |
 | :--- | :--- | :--- |
-| **Shell UI & Navigation** | Swappable Shell Registry | `@omni/plugin-shell` with Editorial Shell as default + Panorama Hub |
-| **Host Bootloader** | Minimal Microkernel (~30 lines) | `apps/web` boots `OmniKernel` and passes container root to shell |
+| **Shell UI & Navigation** | Swappable Shell Registry | `omni_shell` (Gleam) with Editorial as default plus Classic and Panorama themes |
+| **Host Bootloader** | Minimal Microkernel | `apps/web` boots the Gleam kernel/shell bundle and paints `#omni-root` |
 | **App Model** | Pure Standalone nsites (Zero Manifests) | Standard HTML/JS apps mounting to `document.body` or `#root` |
 | **UI Presentation** | Dual-Runtime: Schema UI & Direct Iframe | Native Light DOM Custom Elements (`<omni-*>`) + Sandboxed `<iframe sandbox>` |
 | **User Viewports** | User-Configured Layout Containers | Dock Shortcut (`dock`), Widget Card (`sidebar`), Header Action (`header-actions`) |
@@ -31,10 +31,11 @@ Omni combines a **high-performance, local-first Nostr web client** with a **sand
 │                                   OMNI WEB APPLICATION                                 │
 │                                                                                        │
 │  apps/web/src/main.ts (Host Microkernel Bootloader)                                    │
-│  ├── OmniKernel (Keystore, RelayPool, LocalEventStore, AclEngine)                      │
-│  └── Mounts @omni/plugin-shell into <div id="omni-root">                               │
+│  ├── omni_web (Gleam): kernel + shell registry + boot/dispatch/view                    │
+│  ├── omni_kernel: keystore, relay pool, local event store, ACL engine                  │
+│  └── Paints the active theme into <div id="omni-root">                                 │
 │                                                                                        │
-│  @omni/plugin-shell (Swappable Shell Experiences via ShellRegistry)                   │
+│  omni_shell (Gleam; Swappable Shell Experiences via ShellRegistry)                     │
 │  ├── Editorial (Default: Sacred Swiss typography, Papyrus/Obsidian modes, accents)     │
 │  ├── Panorama Hub (Windows Phone Metro panoramic canvas, live tiles, fluid swipe)      │
 │  └── Pluggable Settings (Profile & keys custody, relay manager, plugins & viewports)   │
@@ -73,7 +74,7 @@ Comprehensive architecture guides and specifications are consolidated in the [`d
 
 1. **[01. System Architecture & Core Runtime](docs/01-architecture.md)**
    * System philosophy, package structure, and microkernel bootloader.
-   * Decoupled shell plugin (`@omni/plugin-shell`) and page-centric navigation.
+   * Decoupled shell package (`omni_shell`) and page-centric navigation.
    * Dual-channel sandboxing & Web Worker / Schema execution.
    * Transparent API virtualization (Virtual `window.WebSocket`, `window.nostr`, Declarative Schema).
    * Subscription namespacing and ACL-governed cache isolation.
@@ -97,26 +98,45 @@ Comprehensive architecture guides and specifications are consolidated in the [`d
 ## Developer Quickstart
 
 ### 1. Prerequisites
-- **Node.js** >= 20.0.0
-- **pnpm** >= 9.0.0
+- **Node.js** >= 20 (Node 26 tested)
+- **pnpm** >= 9
+- **Gleam** 1.19.2 (JS target; the compiler is the only non-Node toolchain)
 
-### 2. Install & Build Monorepo
 ```bash
-pnpm install
-pnpm -r run build
+# install Gleam (macOS/Linux)
+curl -fsSL https://gleam.run/install.sh | sh
+gleam --version   # expect 1.19.2 or newer within the 1.x line
 ```
 
-### 3. Run Test Suite
-Omni includes 365 automated unit and integration tests across 29 test suites covering crypto, 0ms IndexedDB storage, ACL engine, NIP-78 workspace sync, NIP-5A resolver, shells, Web Worker execution, and Schema UI:
+### 2. Install & Build
 ```bash
-pnpm test
+pnpm install          # JS tooling (Vite, esbuild, Vitest)
+pnpm build            # ordered Gleam build, guest bridge bundle, Vite host build -> apps/web/dist
 ```
 
-### 4. Start Local Development Server
+`pnpm build` runs, in order:
+1. `node scripts/gleam-build.mjs build` — every package under `gleam/` in dependency order
+2. `node scripts/build-bridge.mjs` — bundles the guest runtime to `gleam/bridge/dist/guest-runtime.js`
+3. `vite build` in `apps/web` — the deployable host page
+
+### 3. Run the Test Suite
 ```bash
-pnpm -C apps/web dev
+pnpm test             # guest bridge bundle + bridge conformance tests + all Gleam suites
+pnpm gleam:test       # Gleam package tests only
+pnpm gleam:check      # gleam format --check + architecture linter
 ```
-Open **[http://localhost:3000](http://localhost:3000)** in your browser.
+
+### 4. Start the Development Server
+```bash
+pnpm dev
+```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser. Vite rebuilds the Gleam interop package on change and the dev page paints the active shell theme.
+
+### 5. Bundle Size Report
+```bash
+pnpm build && pnpm bundle:report
+```
+See [`docs/11-perf-baseline.md`](docs/11-perf-baseline.md) for the current baseline.
 
 ---
 

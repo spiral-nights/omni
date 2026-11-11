@@ -1,7 +1,7 @@
 # Omni Documentation Index & Reading Guide
 
 > **Current Architecture Status (November 2026):**  
-> The codebase is actively migrating from legacy TypeScript (`packages/*`) and MoonBit (`packages/plugins/feed/feed.mbt`) to a clean, idiomatic **Gleam** multi-package architecture under `gleam/` (JS target via `gleam 1.19.2`).
+> The application is a pure **Gleam** multi-package workspace under `gleam/` (JS target, `gleam 1.19.2`). The TypeScript packages and MoonBit toolchain were removed in Phase 8; `apps/web` is a thin host that boots the Gleam shell and guest bridge. Build with `pnpm build`, test with `pnpm test`, run with `pnpm dev`.
 
 ---
 
@@ -9,17 +9,21 @@
 
 If you are an AI assistant or human developer working on Omni today, **read these first**:
 
-1. **[`09-gleam-migration-handoff.md`](09-gleam-migration-handoff.md)**:  
-   *Current status, package-by-package progress, exact list of remaining tasks, critical Gleam FFI constraints, and how to verify.*
-2. **[`07-gleam-migration-checklist.md`](07-gleam-migration-checklist.md)**:  
-   *The living checklist of migration phases (Phases 0–8). Mark completed items `[x]` as they finish.*
-3. **[`gleam-rewrite-plan.md`](gleam-rewrite-plan.md)**:  
+1. **[`../README.md`](../README.md)**:  
+   *Prerequisites, build/test/run commands, and the current architecture overview.*
+2. **[`09-gleam-migration-handoff.md`](09-gleam-migration-handoff.md)**:  
+   *Post-migration status, package map, critical Gleam FFI constraints, and verification commands.*
+3. **[`07-gleam-migration-checklist.md`](07-gleam-migration-checklist.md)**:  
+   *The migration checklist of migration phases (Phases 0–8). Mark completed items `[x]` as they finish.*
+4. **[`gleam-rewrite-plan.md`](gleam-rewrite-plan.md)**:  
    *The foundational architectural blueprint for the Gleam rewrite (package boundaries, Lustre Light DOM schema rendering, Elm-style harnesses, and shared `omni_social` design).*
-4. **[`08-gleam-toolchain.md`](08-gleam-toolchain.md)**:  
+5. **[`08-gleam-toolchain.md`](08-gleam-toolchain.md)**:  
    *Pinned Gleam compiler & package versions, build commands (`pnpm gleam:check`, `pnpm gleam:test`), and test harness guide.*
-5. **[`10-bridge-parity.md`](10-bridge-parity.md)**:  
-   *Dual-run conformance harness and cutover plan for the Gleam guest bridge.*
-6. **[`../AGENTS.md`](../AGENTS.md)**:  
+6. **[`10-bridge-parity.md`](10-bridge-parity.md)**:  
+   *Dual-run conformance harness and cutover notes for the Gleam guest bridge.*
+7. **[`11-perf-baseline.md`](11-perf-baseline.md)**:  
+   *Recorded bundle-size baseline and how to reproduce it (`pnpm bundle:report`).*
+8. **[`../AGENTS.md`](../AGENTS.md)**:  
    *Core system mandates: zero proprietary `omni.*` SDKs, pure standard nsites, no emojis, zero hardcoded plugin IDs in shell/styles, Light DOM, warm paper dark theme.*
 
 ---

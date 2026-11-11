@@ -9,10 +9,21 @@ Verified on 2026-11-11 with Gleam 1.19.2 (JavaScript target, Node 26).
 | `gleam_stdlib` | `>= 1.0.0 and < 2.0.0` | core | resolved 1.0.5 |
 | `gleam_json` | `>= 3.1.0 and < 4.0.0` | JSON codecs | resolved 3.1.0 |
 | `gleam_javascript` | `>= 1.0.1 and < 2.0.0` | `Promise`, arrays, symbols | resolved 1.0.1 |
-| `plinth` | `>= 0.11.0 and < 1.0.0` | browser bindings | 0.x: wrap inside `omni_platform` only. Covers `window`, `document`, `element`, `web_storage`, `indexeddb`, `message_event`, `worker`, `crypto`, `broadcast_channel`, `location`, `clipboard`. |
 | `lustre` | `>= 5.7.1 and < 6.0.0` | UI (shell, schema renderer) | resolved 5.7.1 |
 | `gleeunit` | `>= 1.0.0 and < 2.0.0` | test runner | dev; `assert` supported |
 | `qcheck` | `>= 1.0.5 and < 2.0.0` | property tests | dev; verified on JS target |
+
+## Build & run
+
+```bash
+pnpm build          # ordered Gleam build + guest bridge bundle + Vite host build
+pnpm test           # bridge conformance (Vitest) + every Gleam package suite
+pnpm gleam:check    # format --check + type-check + architecture lint
+pnpm dev            # Vite dev server with Gleam interop rebuild on change
+```
+
+Each package's tests run with `gleam test` from its directory; the ordered
+runner (`scripts/gleam-build.mjs`) topologically sorts path dependencies.
 
 ## D3: test framework (decided)
 
