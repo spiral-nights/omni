@@ -1,0 +1,11 @@
+name = "omni_protocol"
+version = "0.1.0"
+description = "Shared wire and domain contracts: capabilities, RPC, schema, workspace."
+target = "javascript"
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+omni_platform = { path = "../platform" }
+
+[dev_dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"

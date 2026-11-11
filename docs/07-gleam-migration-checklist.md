@@ -21,7 +21,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 0.1 Gleam workspace skeleton: `gleam/` dir, `gleam/README.md`, root `.gitignore` entries for `gleam/**/build`
 - [ ] 0.2 `omni_platform` and `omni_protocol` skeleton packages; path deps resolve; `gleam test` runs on JS target (Node)
 - [ ] 0.3 Verify and pin dependency versions (`gleam_stdlib`, `gleam_json`, `gleam_javascript`, `lustre`, `plinth`, test libs); record in `docs/08-gleam-toolchain.md`; decide D3
-- [ ] 0.4 Verify shared `omni/<pkg>/` module namespace works across path-linked packages
+- [x] 0.4 Verify shared `omni/<pkg>/` module namespace works across path-linked packages
 - [ ] 0.5 `scripts/gleam-build.mjs`: build all Gleam packages in dependency order; wire into root `build` / `test` scripts
 - [ ] 0.6 Vite integration: a Gleam module imported by `apps/web`
 - [ ] 0.7 Lint scripts: FFI quarantine, no `plugin_* -> plugin_*` imports, no plugin IDs in shell/CSS, no `omni.*` in plugins, no emoji
