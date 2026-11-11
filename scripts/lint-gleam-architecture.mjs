@@ -25,7 +25,7 @@ const ALLOWED_DEPS = {
   omni_kernel: ["omni_protocol", "omni_nostr", "omni_platform"],
   omni_sandbox: ["omni_kernel", "omni_protocol", "omni_nostr", "omni_platform"],
   omni_bridge: ["omni_protocol", "omni_nostr", "omni_platform"],
-  omni_ui: ["omni_protocol", "omni_platform"],
+  omni_ui: ["omni_protocol", "omni_platform", "omni_testkit"],
   omni_plugin_kit: ["omni_protocol", "omni_nostr", "omni_platform"],
   omni_social: ["omni_nostr", "omni_protocol", "omni_plugin_kit", "omni_platform"],
   omni_social_ui: ["omni_social", "omni_protocol", "omni_ui", "omni_nostr"],
