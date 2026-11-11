@@ -1,0 +1,13 @@
+name = "omni_nostr"
+version = "0.1.0"
+description = "Pure Nostr protocol types, codecs, bech32, and NIP-19."
+target = "javascript"
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+gleam_json = ">= 3.1.0 and < 4.0.0"
+omni_platform = { path = "../platform" }
+
+[dev_dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
+qcheck = ">= 1.0.5 and < 2.0.0"

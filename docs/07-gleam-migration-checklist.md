@@ -32,8 +32,8 @@ Mark items `[x]` in the same commit that completes them.
 ## Phase 1: Foundations
 - [x] 1.1 `platform`: `ref`, `promise_ext`, `clock`, `json` (+ ffi), `storage` (+ in-memory fake)
 - [ ] 1.2 `testkit`: fake ports, generators, fixture loader
-- [ ] 1.3 `nostr`: `kind`, `pubkey`, `event_id`, `event` + codec
-- [ ] 1.4 `nostr`: `bech32` + `nip19` (property tests vs old TS vectors)
+- [x] 1.3 `nostr`: `kind`, `pubkey`, `event_id`, `event` + codec
+- [x] 1.4 `nostr`: `bech32` + `nip19` (property tests vs old TS vectors)
 - [ ] 1.5 `nostr`: `filter` (matching, merge), `relay_url`, `relay_frame` codec, `replaceable`
 - [ ] 1.6 Remove TS/MoonBit bech32 duplicates (facade to Gleam)
 
