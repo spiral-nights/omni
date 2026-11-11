@@ -50,11 +50,11 @@ feature, **S3** = polish.
 |---|---|---|---|
 | I1 | Generate/import/export nsec, passphrase storage | **fixed (bootstrap):** host generates/persists a key and publishes it into the shell profile; import/export + passphrase UI still missing | S2 |
 | I2 | `window.nostr` RPC served by host (`getPublicKey`, `signEvent`, nip04/44, relays) | **fixed:** `omni/web/rpc` binds the kernel dispatcher, iframe spawn transfers ports and answers Channel 2; default grants installed for bundled apps | ok |
-| I3 | Publish note (kind 1) with tags | Feed synthesizes a fake local note; nothing signs/broadcasts | S1 |
-| I4 | Reply (kind 1 with NIP-10 tags) | Local-only synthetic reply | S1 |
-| I5 | Like (kind 7), repost (kind 6), zap request | `LikeNote`/`RepostNote`/`ZapNote` are no-ops | S1 |
-| I6 | Publish profile metadata (kind 0) | Profiles editor mutates local dict only | S1 |
-| I7 | Publish/fetch kind 3 follows | Toggles local follows only; never fetched | S1 |
+| I3 | Publish note (kind 1) with tags | **fixed:** feed emits a `Publish` effect; host signs via keystore, broadcasts via relay pool, stores and ingests the signed event | ok |
+| I4 | Reply (kind 1 with NIP-10 tags) | **fixed:** reply drafts publish with root/reply `e` and `p` tags through the host pipeline | ok |
+| I5 | Like (kind 7), repost (kind 6), zap request | **fixed** for like/repost (signed events); zap requests still local-only | S2 |
+| I6 | Publish profile metadata (kind 0) | **fixed:** editor emits a kind-0 `Publish` effect | ok |
+| I7 | Publish/fetch kind 3 follows | **fixed (publish):** follow toggles emit kind-3 events; fetching remote follows still missing | S2 |
 | I8 | NIP-65 relay list publish/fetch | Relays builds tag lists locally; no publish/fetch | S1 |
 | I9 | NIP-78 app data publish (`publishAppData`) | Shell emits `PublishWorkspaceNip78`; **boot ignores it** | S1 |
 | I10 | NIP-44 encrypt/decrypt used by notes/DMs | Bridge + platform implement it; no host path uses it | S2 |
@@ -133,6 +133,19 @@ feature, **S3** = polish.
 5. **Query layer.** Use `omni_social/queries` + coordinator for targeted
    fetches (profiles, replies, pagination, search) instead of one firehose
    subscription.
+
+## Fixed in the publish pass
+
+- New `Publish(UnsignedEvent)` effect in `omni_plugin_kit/app`; `RunningApp`
+  queues drafts and exposes `take_publishes`.
+- Feed emits publish effects for notes, replies (NIP-10 marked tags), likes
+  (kind 7) and reposts (kind 6); it no longer fabricates local-only notes.
+- Profiles emits kind 0 on save and kind 3 on follow toggle.
+- `omni_web/boot` signs queued drafts, broadcasts via the relay pool, saves them
+  to the local store, and feeds them back into the embedded apps; the interop
+  layer runs this after every action and refreshes the Schema views.
+- Tests: feed publish effects, profiles kind 0/3 effects, and a host pipeline
+  test that asserts a signed 64-hex event ID and a local-store entry.
 
 ## Fixed in the first remediation pass
 

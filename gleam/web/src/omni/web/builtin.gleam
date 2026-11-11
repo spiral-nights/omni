@@ -7,7 +7,7 @@
 //// never in the shell or UI.
 
 import gleam/option.{type Option, None, Some}
-import omni/nostr/event.{type Event}
+import omni/nostr/event.{type Event, type UnsignedEvent}
 import omni/platform/storage
 import omni/plugin_kit/app.{type RunningApp}
 import omni/plugin_kit/route
@@ -33,6 +33,7 @@ pub type BuiltinApp {
     handle_action: fn(Action) -> Bool,
     ingest: Option(fn(Event) -> Nil),
     relay_status: Option(fn(String, Bool) -> Nil),
+    take_publishes: fn() -> List(UnsignedEvent),
   )
 }
 
@@ -82,6 +83,7 @@ fn feed_app(store: storage.Storage) -> BuiltinApp {
       app.dispatch(running, feed_msg.IngestEvent(event))
     }),
     relay_status: None,
+    take_publishes: fn() { app.take_publishes(running) },
   )
 }
 
@@ -95,6 +97,7 @@ fn profiles_app(store: storage.Storage) -> BuiltinApp {
       app.dispatch(running, profiles_msg.IngestEvent(event))
     }),
     relay_status: None,
+    take_publishes: fn() { app.take_publishes(running) },
   )
 }
 
@@ -112,6 +115,7 @@ fn relays_app() -> BuiltinApp {
       }
       app.dispatch(running, relays_msg.UpdateRelayState(url, state, None))
     }),
+    take_publishes: fn() { app.take_publishes(running) },
   )
 }
 
@@ -128,5 +132,6 @@ fn host(
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: ingest,
     relay_status: relay_status,
+    take_publishes: fn() { app.take_publishes(running) },
   )
 }

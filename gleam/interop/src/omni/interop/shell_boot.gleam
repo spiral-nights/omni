@@ -142,6 +142,14 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
     fn(_flags) { #(host, effect.none()) },
     fn(current: ShellBoot, message: msg.Msg) {
       let #(next, _effects) = boot.dispatch(current.booted, message)
+      let _ =
+        boot.publish_pending(next)
+        |> promise.map(fn(event_ids) {
+          case event_ids {
+            [] -> Nil
+            _ -> push_views(ShellBoot(next))
+          }
+        })
       #(ShellBoot(next), effect.none())
     },
     fn(current: ShellBoot) { boot.view(current.booted) },

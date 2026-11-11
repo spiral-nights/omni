@@ -11,7 +11,7 @@ import omni/nostr/event.{type Event, Event}
 import omni/nostr/event_id
 import omni/nostr/kind.{type Kind, ContactList, Metadata, Note as KindNote}
 import omni/nostr/pubkey
-import omni/plugin_kit/app
+import omni/plugin_kit/app.{Publish}
 import omni/plugin_kit/local_store
 import omni/plugin_kit/route
 import omni/plugin_kit/schema
@@ -425,4 +425,28 @@ fn schema_action(name: String, fields: List(#(String, String))) -> Action {
     |> list.map(fn(pair) { #(pair.0, dynamic.string(pair.1)) })
     |> dict.from_list
   action.new(name) |> action.with_payload(payload)
+}
+
+pub fn follow_and_metadata_emits_publish_effects_test() {
+  let m0 = model.init(route.main())
+  let #(_, follow_effects) = update.update(m0, ToggleFollow(bob_pubkey_hex))
+  should.be_true(
+    list.any(follow_effects, fn(effect) {
+      case effect {
+        Publish(draft) -> draft.kind == ContactList
+        _ -> False
+      }
+    }),
+  )
+
+  let #(m1, _) = update.update(m0, SetMetadataName("Alice"))
+  let #(_, meta_effects) = update.update(m1, SaveMetadata)
+  should.be_true(
+    list.any(meta_effects, fn(effect) {
+      case effect {
+        Publish(draft) -> draft.kind == Metadata
+        _ -> False
+      }
+    }),
+  )
 }

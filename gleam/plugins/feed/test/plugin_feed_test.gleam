@@ -12,7 +12,7 @@ import omni/nostr/event_id
 import omni/nostr/kind.{type Kind, Note}
 import omni/nostr/pubkey
 import omni/platform/storage
-import omni/plugin_kit/app
+import omni/plugin_kit/app.{Publish}
 import omni/plugin_kit/local_store
 import omni/plugin_kit/route
 import omni/plugin_kit/schema
@@ -155,14 +155,32 @@ pub fn composer_publish_and_draft_clearing_test() {
   let #(m1, _) = update.update(m0, SetComposerDraft("  first post  "))
   m1.composer_draft |> should.equal("  first post  ")
 
-  let #(m2, _) = update.update(m1, PublishNote)
+  let #(m2, effects) = update.update(m1, PublishNote)
   m2.composer_draft |> should.equal("")
-  dict.size(m2.notes) |> should.equal(1)
+  // Publishing asks the host to sign/broadcast; it does not fake a local note.
+  dict.size(m2.notes) |> should.equal(0)
+  should.be_true(
+    list.any(effects, fn(effect) {
+      case effect {
+        Publish(draft) -> draft.content == "first post"
+        _ -> False
+      }
+    }),
+  )
 
   // Inline-text publish path sets the draft and publishes in one message.
-  let #(m3, _) = update.update(m0, SetComposerDraftAndPublish("quick post"))
+  let #(m3, inline_effects) =
+    update.update(m0, SetComposerDraftAndPublish("quick post"))
   m3.composer_draft |> should.equal("")
-  dict.size(m3.notes) |> should.equal(1)
+  dict.size(m3.notes) |> should.equal(0)
+  should.be_true(
+    list.any(inline_effects, fn(effect) {
+      case effect {
+        Publish(draft) -> draft.content == "quick post"
+        _ -> False
+      }
+    }),
+  )
 }
 
 pub fn reply_flow_test() {
@@ -183,9 +201,20 @@ pub fn reply_flow_test() {
   m4.replying_to |> should.equal(Some(parent.id))
 
   let #(m5, _) = update.update(m4, SetReplyDraft("nice note"))
-  let #(m6, _) = update.update(m5, PublishReply(parent.id))
+  let #(m6, reply_effects) = update.update(m5, PublishReply(parent.id))
   m6.reply_draft |> should.equal("")
-  dict.size(m6.notes) |> should.equal(2)
+  should.be_true(
+    list.any(reply_effects, fn(effect) {
+      case effect {
+        Publish(draft) ->
+          draft.content == "nice note"
+          && list.any(draft.tags, fn(tag) {
+            tag == ["e", parent.id, "", "reply"]
+          })
+        _ -> False
+      }
+    }),
+  )
 }
 
 pub fn search_and_load_more_test() {

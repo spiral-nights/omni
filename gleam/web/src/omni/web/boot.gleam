@@ -10,6 +10,7 @@
 
 import gleam/dict.{type Dict}
 import gleam/int
+import gleam/javascript/promise.{type Promise}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
@@ -19,10 +20,14 @@ import lustre/element/html
 import omni/kernel/acl/capability_store
 import omni/kernel/crypto/keystore
 import omni/kernel/kernel.{type KernelPorts, type OmniKernel}
+import omni/kernel/nostr/event_store
 import omni/kernel/nostr/relay_pool.{Connected, Connecting, Disconnected}
 import omni/kernel/workspace/sync
+import omni/nostr/event.{type Event, type UnsignedEvent}
+import omni/nostr/event_id
 import omni/nostr/pubkey
 import omni/nostr/relay_url
+import omni/platform/promise_ext
 import omni/platform/ref
 import omni/platform/storage
 import omni/platform/websocket
@@ -246,6 +251,57 @@ pub fn select_shell(booted: Booted, shell_id: String) -> Booted {
   booted
   |> dispatch(SelectShell(shell_id))
   |> fn(pair) { pair.0 }
+}
+
+/// Sign and broadcast drafts queued by built-in apps, then feed the signed
+/// events back into the apps and the local event store.
+pub fn publish_pending(booted: Booted) -> Promise(List(String)) {
+  let drafts =
+    dict.fold(booted.builtins, [], fn(acc, _id, app) {
+      list.append(acc, app.take_publishes())
+    })
+
+  case drafts {
+    [] -> promise.resolve([])
+    _ ->
+      promise_ext.all(
+        list.map(drafts, fn(draft) { publish_draft(booted, draft) }),
+      )
+      |> promise.map(fn(results) {
+        list.filter_map(results, fn(result) {
+          case result {
+            Ok(id) -> Ok(id)
+            Error(_) -> Error(Nil)
+          }
+        })
+      })
+  }
+}
+
+/// Sign a single unsigned draft and broadcast it. Returns the event ID.
+pub fn publish_draft(
+  booted: Booted,
+  draft: UnsignedEvent,
+) -> Promise(Result(String, String)) {
+  case keystore.sign_event(booted.kernel.keystore, draft) {
+    Error(err) -> promise.resolve(Error(err))
+    Ok(event) ->
+      relay_pool.publish(booted.kernel.relay_pool, event)
+      |> promise.map(fn(_relays) {
+        let _ = event_store.save_event(booted.kernel.event_store, event)
+        ingest_signed(booted, event)
+        Ok(event_id.to_hex(event.id))
+      })
+  }
+}
+
+fn ingest_signed(booted: Booted, event: Event) -> Nil {
+  dict.each(booted.builtins, fn(_id, app) {
+    case app.ingest {
+      Some(ingest) -> ingest(event)
+      None -> Nil
+    }
+  })
 }
 
 /// Dial every configured bootstrap relay and track its connection state in the

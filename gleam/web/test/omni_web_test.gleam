@@ -1,5 +1,6 @@
 //// Unit tests for the Omni web bootstrap configuration and bootloader.
 
+import gleam/dict
 import gleam/javascript/promise
 import gleam/list
 import gleam/option.{None, Some}
@@ -8,6 +9,10 @@ import gleeunit
 import gleeunit/should
 import lustre/element
 import omni/kernel/kernel.{type KernelPorts, KernelPorts}
+import omni/kernel/nostr/event_store
+import omni/nostr/event.{UnsignedEvent}
+import omni/nostr/filter.{Filter}
+import omni/nostr/kind
 import omni/platform/clock
 import omni/platform/idb
 import omni/platform/storage
@@ -231,6 +236,35 @@ pub fn rpc_rejects_invalid_plugin_and_signs_via_frame_test() {
   ))
   should.be_true(string.contains(signed, "via rpc"))
   should.be_true(string.contains(signed, "\"sig\""))
+
+  promise.resolve(Nil)
+}
+
+pub fn publish_pipeline_signs_broadcasts_and_ingests_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_bridge(ports, None)
+
+  let draft =
+    UnsignedEvent(
+      pubkey: None,
+      created_at: 1_700_000_002,
+      kind: kind.Note,
+      tags: [["t", "gleam"]],
+      content: "published through the host",
+    )
+
+  use result <- promise.await(boot.publish_draft(booted, draft))
+  let assert Ok(event_id_hex) = result
+  string.length(event_id_hex) |> should.equal(64)
+
+  // The signed event is stored locally for 0ms reads.
+  use count <- promise.await(event_store.count_events(
+    booted.kernel.event_store,
+    Filter(None, None, Some([kind.Note]), None, None, None, None, dict.new()),
+  ))
+  should.be_true(count >= 1)
 
   promise.resolve(Nil)
 }

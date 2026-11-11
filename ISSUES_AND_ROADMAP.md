@@ -28,8 +28,8 @@
 - [x] Key bootstrap: generate/persist a key, surface it in the shell profile.
 - [x] Iframe port transfer + RPC forwarding handshake.
 - [ ] Key import/export + passphrase UI in Settings.
-- [ ] Publish effects: plugins request signing/broadcast; host signs via keystore
-      and publishes through the relay pool.
+- [x] Publish effects: feed notes/replies/likes/reposts and profile metadata/
+      follows sign and broadcast through the host pipeline.
 - [ ] NIP-78 workspace/doc publish + remote restore.
 
 ### 1. Plugin bundle resolution into sandboxes (P1)

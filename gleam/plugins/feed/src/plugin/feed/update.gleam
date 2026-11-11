@@ -6,10 +6,10 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
-import omni/nostr/event.{type Event}
+import omni/nostr/event.{type Event, UnsignedEvent}
 import omni/nostr/kind
 import omni/nostr/pubkey
-import omni/plugin_kit/app.{type Effect}
+import omni/plugin_kit/app.{type Effect, Publish}
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/social/follows
@@ -60,12 +60,9 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
 
     SetComposerDraft(draft) -> #(Model(..model, composer_draft: draft), [])
 
-    SetComposerDraftAndPublish(text) -> #(
-      publish_new_note(Model(..model, composer_draft: text)),
-      [],
-    )
+    SetComposerDraftAndPublish(text) -> publish_note_effect(model, text)
 
-    PublishNote -> #(publish_new_note(model), [])
+    PublishNote -> publish_note_effect(model, model.composer_draft)
 
     StartReply(note_id) -> {
       let cleaned = string.trim(note_id)
@@ -84,11 +81,17 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
 
     SetReplyDraft(draft) -> #(Model(..model, reply_draft: draft), [])
 
-    PublishReply(parent_id) -> #(publish_reply_note(model, parent_id), [])
+    PublishReply(parent_id) -> publish_reply_effect(model, parent_id)
 
-    LikeNote(note_id) -> #(toggle_like(model, note_id), [])
+    LikeNote(note_id) -> #(
+      model,
+      reaction_effect(model, note_id, kind.Reaction, "+"),
+    )
 
-    RepostNote(note_id) -> #(toggle_repost(model, note_id), [])
+    RepostNote(note_id) -> #(
+      model,
+      reaction_effect(model, note_id, kind.Repost, ""),
+    )
 
     ZapNote(note_id) -> #(increment_zap(model, note_id), [])
 
@@ -553,4 +556,84 @@ fn extract_string(act: Action, keys: List(String)) -> Option(String) {
     }
   })
   |> option.from_result
+}
+
+fn publish_note_effect(
+  model: Model,
+  raw: String,
+) -> #(Model, List(Effect(Msg))) {
+  let content = string.trim(raw)
+  case content {
+    "" -> #(model, [])
+    _ -> #(Model(..model, composer_draft: ""), [
+      Publish(UnsignedEvent(
+        pubkey: None,
+        created_at: model.now_sec + 1,
+        kind: kind.Note,
+        tags: [],
+        content: content,
+      )),
+    ])
+  }
+}
+
+fn publish_reply_effect(
+  model: Model,
+  parent_id: String,
+) -> #(Model, List(Effect(Msg))) {
+  let parent = string.trim(parent_id)
+  let content = string.trim(model.reply_draft)
+  case parent == "" || content == "" {
+    True -> #(model, [])
+    False ->
+      case dict.get(model.notes, parent) {
+        Error(Nil) -> #(model, [])
+        Ok(parent_note) -> {
+          let root = case parent_note.root_id {
+            Some(r) -> r
+            None -> parent_note.id
+          }
+          #(Model(..model, reply_draft: ""), [
+            Publish(UnsignedEvent(
+              pubkey: None,
+              created_at: model.now_sec + 1,
+              kind: kind.Note,
+              tags: [
+                ["e", root, "", "root"],
+                ["e", parent_note.id, "", "reply"],
+                ["p", parent_note.pubkey],
+              ],
+              content: content,
+            )),
+          ])
+        }
+      }
+  }
+}
+
+fn reaction_effect(
+  model: Model,
+  note_id: String,
+  reaction_kind: kind.Kind,
+  content: String,
+) -> List(Effect(Msg)) {
+  let id = string.trim(note_id)
+  case id {
+    "" -> []
+    _ -> {
+      let author_tags = case dict.get(model.notes, id) {
+        Ok(note) -> [["p", note.pubkey]]
+        Error(Nil) -> []
+      }
+      [
+        Publish(UnsignedEvent(
+          pubkey: None,
+          created_at: model.now_sec + 1,
+          kind: reaction_kind,
+          tags: [["e", id], ..author_tags],
+          content: content,
+        )),
+      ]
+    }
+  }
 }

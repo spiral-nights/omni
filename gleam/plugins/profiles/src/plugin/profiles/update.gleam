@@ -1,10 +1,13 @@
 //// Pure state reducer and Channel 1 `Action -> Option(Msg)` mapper for `plugin_profiles`.
 
 import gleam/dict
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
-import omni/plugin_kit/app.{type Effect}
+import omni/nostr/event.{UnsignedEvent}
+import omni/nostr/kind
+import omni/plugin_kit/app.{type Effect, Publish}
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/social/follows
@@ -39,17 +42,29 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       let cleaned = string.trim(pubkey)
       case cleaned {
         "" -> #(model, [])
-        _ -> #(
-          Model(
-            ..model,
-            follows: follows.toggle_follow(
-              model.follows,
-              cleaned,
-              model.now_sec,
-            ),
-          ),
-          [],
-        )
+        _ -> {
+          let next_model =
+            Model(
+              ..model,
+              follows: follows.toggle_follow(
+                model.follows,
+                cleaned,
+                model.now_sec,
+              ),
+            )
+          let tags =
+            next_model.follows.followed_pubkeys
+            |> list.map(fn(pk) { ["p", pk] })
+          #(next_model, [
+            Publish(UnsignedEvent(
+              pubkey: None,
+              created_at: model.now_sec + 1,
+              kind: kind.ContactList,
+              tags: tags,
+              content: "",
+            )),
+          ])
+        }
       }
     }
 
@@ -80,7 +95,34 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       [],
     )
 
-    SaveMetadata -> #(save_metadata(model), [])
+    SaveMetadata -> {
+      let draft = model.metadata_draft
+      let fields = [
+        text_field("name", draft.name),
+        text_field("about", draft.about),
+        text_field("picture", draft.picture),
+      ]
+      let content =
+        json.object(
+          fields
+          |> list.filter_map(fn(item) {
+            case item {
+              Some(field) -> Ok(field)
+              None -> Error(Nil)
+            }
+          }),
+        )
+        |> json.to_string
+      #(save_metadata(model), [
+        Publish(UnsignedEvent(
+          pubkey: None,
+          created_at: model.now_sec + 1,
+          kind: kind.Metadata,
+          tags: [],
+          content: content,
+        )),
+      ])
+    }
 
     RefreshSigner -> #(refresh_signer(model), [])
 
@@ -310,4 +352,11 @@ fn extract_string(act: Action, keys: List(String)) -> Option(String) {
     }
   })
   |> option.from_result
+}
+
+fn text_field(key: String, raw: String) -> Option(#(String, json.Json)) {
+  case optional_text(raw) {
+    Some(value) -> Some(#(key, json.string(value)))
+    None -> None
+  }
 }

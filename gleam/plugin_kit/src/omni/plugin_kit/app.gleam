@@ -5,6 +5,7 @@
 
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import omni/nostr/event.{type UnsignedEvent}
 import omni/platform/ref.{type Ref}
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema
@@ -17,6 +18,8 @@ pub type Effect(msg) {
   Dispatch(msg)
   Batch(List(Effect(msg)))
   Async(fn(fn(msg) -> Nil) -> Nil)
+  /// Request the host to sign and broadcast this draft event.
+  Publish(UnsignedEvent)
 }
 
 /// Elm-style plugin application specification.
@@ -39,6 +42,7 @@ pub type RunningApp(model, msg) {
     route_ref: Ref(Route),
     history_ref: Ref(List(String)),
     emit_schema: fn(Node) -> Nil,
+    publishes: Ref(List(UnsignedEvent)),
   )
 }
 
@@ -64,6 +68,7 @@ pub fn start(
       route_ref: ref.new(initial_route),
       history_ref: ref.new([initial_json]),
       emit_schema: emit_schema,
+      publishes: ref.new([]),
     )
 
   emit_schema(initial_node)
@@ -150,5 +155,13 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
     Dispatch(m) -> dispatch(app, m)
     Batch(items) -> run_effects(app, items)
     Async(task) -> task(fn(m) { dispatch(app, m) })
+    Publish(draft) -> ref.update(app.publishes, fn(queue) { [draft, ..queue] })
   }
+}
+
+/// Drain the drafts the app asked the host to sign and broadcast.
+pub fn take_publishes(app: RunningApp(model, msg)) -> List(UnsignedEvent) {
+  let pending = ref.get(app.publishes)
+  ref.set(app.publishes, [])
+  list.reverse(pending)
 }
