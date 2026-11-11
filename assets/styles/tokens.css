@@ -1,0 +1,144 @@
+/* ==========================================================================
+   Omni Design Tokens & Base Reset — "Warm Paper Dark" Design System
+   ========================================================================== */
+
+:root {
+  /* Surface & Canvas Palette */
+  --omni-bg-canvas: #141312;
+  --omni-bg-surface: #191816;
+  --omni-bg-elevated: #22201d;
+  --omni-bg-card: #22201d;
+  --omni-bg-subtle: #2a2824;
+
+  /* Text & Ink Hierarchy */
+  --omni-text-primary: #ede8df;
+  --omni-text-secondary: #9e988f;
+  --omni-text-muted: #6b665f;
+
+  /* Borders & Hairlines */
+  --omni-border-subtle: #272522;
+  --omni-border-strong: #383530;
+  --omni-border-active: #3d3a35;
+  --omni-border-focus: #c89666;
+
+  /* Accent & Interactive */
+  --omni-accent-primary: #d4a373;
+  --omni-accent-hover: #c89666;
+  --omni-accent-contrast: #141312;
+
+  /* Status & Action Semantics */
+  --omni-status-online: #98c379;
+  --omni-status-warning: #e5c07b;
+  --omni-status-error: #e06c75;
+  --omni-status-badge: #d4a373;
+  --omni-reply-active: #61afef;
+  --omni-repost-active: #98c379;
+  --omni-heart-active: #e06c75;
+  --omni-zap-active: #e5c07b;
+
+  /* Typography */
+  --omni-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --omni-font-serif: "Newsreader", "Charter", "Georgia", serif;
+  --omni-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --omni-font-headline: var(--omni-font-serif);
+
+  /* Spacing Scale */
+  --omni-space-xs: 4px;
+  --omni-space-sm: 8px;
+  --omni-space-md: 16px;
+  --omni-space-lg: 24px;
+  --omni-space-xl: 36px;
+
+  /* Border Radii */
+  --omni-radius-sm: 6px;
+  --omni-radius-md: 10px;
+  --omni-radius-lg: 16px;
+  --omni-radius-pill: 9999px;
+
+  /* Elevation Shadows */
+  --omni-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --omni-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --omni-shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.5);
+
+  /* Motion & Transitions */
+  --omni-transition-fast: 0.12s ease;
+  --omni-transition-base: 0.15s ease;
+  --omni-transition-smooth: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Generic Standard Theme Tokens for Standalone Plugins & Nsites */
+  --bg-canvas: var(--omni-bg-canvas);
+  --bg-surface: var(--omni-bg-surface);
+  --bg-elevated: var(--omni-bg-elevated);
+  --bg-subtle: var(--omni-bg-subtle);
+
+  --text-primary: var(--omni-text-primary);
+  --text-secondary: var(--omni-text-secondary);
+  --text-muted: var(--omni-text-muted);
+
+  --border-subtle: var(--omni-border-subtle);
+  --border-strong: var(--omni-border-strong);
+  --border-focus: var(--omni-border-focus);
+
+  --accent-primary: var(--omni-accent-primary);
+  --accent-hover: var(--omni-accent-hover);
+  --accent-contrast: var(--omni-accent-contrast);
+
+  --status-online: var(--omni-status-online);
+  --status-badge: var(--omni-status-badge);
+
+  --font-sans: var(--omni-font-sans);
+  --font-serif: var(--omni-font-serif);
+  --font-mono: var(--omni-font-mono);
+
+  --radius-sm: var(--omni-radius-sm);
+  --radius-md: var(--omni-radius-md);
+  --radius-lg: var(--omni-radius-lg);
+  --radius-pill: var(--omni-radius-pill);
+}
+
+/* Base Microkernel Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior-y: contain;
+  background-color: var(--omni-bg-canvas);
+  color: var(--omni-text-primary);
+  font-family: var(--omni-font-sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#omni-root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior-y: contain;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Guarantee non-visual elements are never displayed in host DOM */
+style,
+script,
+head,
+title,
+meta,
+link,
+.omni-component-slot style,
+.editorial-app-container style,
+.omni-slot style {
+  display: none !important;
+}

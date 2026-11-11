@@ -62,10 +62,10 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 4.4 Isolation tests unchanged (CSP, `connect-src 'none'`)
 
 ## Phase 5: UI layer
-- [ ] 5.1 `ui`: icons, tokens, sanitize
-- [ ] 5.2 `ui/render`: one pure function per schema node (snapshot tests)
-- [ ] 5.3 `ui`: host mount + `omni:action` round trip
-- [ ] 5.4 Move CSS to `assets/styles/*.css`
+- [x] 5.1 `ui`: icons, tokens, sanitize
+- [x] 5.2 `ui/render`: one pure function per schema node (snapshot tests)
+- [x] 5.3 `ui`: host mount + `omni:action` round trip
+- [x] 5.4 Move CSS to `assets/styles/*.css`
 
 ## Phase 6: Shell
 - [ ] 6.1 Shell core: model, msg, update (pure, unit-tested)
