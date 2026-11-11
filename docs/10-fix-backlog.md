@@ -18,12 +18,12 @@ Last updated: 2026-11-11.
 
 | ID | Sev | Status | Problem | Fix |
 |---|---|---|---|---|
-| REL-1 | S1 | open | Two sockets per relay: `relay_pool.new` dials (`relay_pool.gleam:78`) and `boot.connect_relays` dials again (`boot.gleam:364`), then `attach_socket` overwrites the parsed connection with a status-only one. Publish/REQ use the unparsed socket. | Pick one owner (pool) and delete the duplicate dial; status updates come from the pool. |
-| REL-2 | S1 | open | `REQ` is only sent to sockets already `Connected` (`relay_pool.gleam:247`); no replay on open/reconnect. Host works around it with a 1.2 s delay (`main.ts:46`). | Store filters per subscriber; flush `REQ` on `Open` and after reconnect; delete the delay. |
-| REL-3 | S1 | open | No reconnect, backoff, or health checks; close/error only sets `Disconnected` (`relay_pool.gleam:90`). | Reconnect loop with exponential backoff, CLOSE cleanup, latency sampling. |
+| REL-1 | S1 | fixed | Two sockets per relay: `relay_pool.new` dials (`relay_pool.gleam:78`) and `boot.connect_relays` dials again (`boot.gleam:364`), then `attach_socket` overwrites the parsed connection with a status-only one. Publish/REQ use the unparsed socket. | fixed `aacdb20`: pool is the only dialer; duplicate boot connection removed. |
+| REL-2 | S1 | fixed | `REQ` is only sent to sockets already `Connected` (`relay_pool.gleam:247`); no replay on open/reconnect. Host works around it with a 1.2 s delay (`main.ts:46`). | fixed `aacdb20`: subscribers store filters and REQ is replayed on every socket open; 1.2 s delay removed. |
+| REL-3 | S1 | fixed | No reconnect, backoff, or health checks; close/error only sets `Disconnected` (`relay_pool.gleam:90`). | fixed `aacdb20`: exponential backoff reconnect (500 ms..30 s), retries reset on open, stopped when relay removed. |
 | REL-4 | S1 | open | `dispatch_frame` ignores `OK`, `NOTICE`, `CLOSED` reasons, and `AUTH` (`relay_pool.gleam:113`). Publish reports "sent", not accepted. | Route all frames; track publish receipts per event id; support NIP-42 challenge/response. |
-| REL-5 | S2 | open | EOSE fires per relay; `fetch` resolves on the first EOSE (`coordinator.gleam:155`, `278`), missing slower relays. | Track EOSE per connected relay; resolve when all are done or timeout. |
-| REL-6 | S2 | open | Relay plugin receives a one-shot status snapshot before sockets open; never updates. | Subscribe the Relays app to pool status changes (and remove the one-shot push). |
+| REL-5 | S2 | fixed | EOSE fires per relay; `fetch` resolves on the first EOSE (`coordinator.gleam:155`, `278`), missing slower relays. | fixed `aacdb20`: EOSE tracked per relay, fires when all configured relays answered or timeout. |
+| REL-6 | S2 | fixed | Relay plugin receives a one-shot status snapshot before sockets open; never updates. | fixed `aacdb20`: `watch_statuses` pushes pool status changes to the Relays app. |
 | REL-7 | S2 | open | Read/write scoping is UI-only; every relay gets the same REQ/publish. | Honour `RelayEntry.read/write` in subscribe/publish; per-plugin relay scope. |
 | REL-8 | S2 | open | No NIP-65: no kind-10002 fetch, no outbox routing, relay-list publish not wired from the Relays app. | Fetch/store 10002 per author; route REQ/publish; publish own list. |
 | REL-9 | S2 | open | Feed pagination/search are local slices; no `until` or targeted queries. | `LoadMore` sends a new REQ with `until=oldest`; use `omni_social/queries` for profiles/replies/search. |
