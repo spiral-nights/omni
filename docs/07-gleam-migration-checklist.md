@@ -30,7 +30,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 0.10 Go/no-go review; write spike findings; resolve open risks
 
 ## Phase 1: Foundations
-- [ ] 1.1 `platform`: `ref`, `promise_ext`, `clock`, `json` (+ ffi), `storage` (+ in-memory fake)
+- [x] 1.1 `platform`: `ref`, `promise_ext`, `clock`, `json` (+ ffi), `storage` (+ in-memory fake)
 - [ ] 1.2 `testkit`: fake ports, generators, fixture loader
 - [ ] 1.3 `nostr`: `kind`, `pubkey`, `event_id`, `event` + codec
 - [ ] 1.4 `nostr`: `bech32` + `nip19` (property tests vs old TS vectors)
