@@ -89,18 +89,18 @@ The codebase is migrating from TypeScript (~47.6k LOC) and MoonBit (~1.7k LOC) t
 
 ### 2. Phase 7: First-Party Plugins (`gleam/plugins/`)
 All plugins must be pure standard nsites using `omni_plugin_kit`:
-- [ ] **Phase 7.3: `plugin_checklist`**:
+- [x] **Phase 7.3: `plugin_checklist`**:
   - Tasks data model, filter tabs (All/Active/Completed), progress metric, view modes (`main`, `compact`, `widget`, `settings`). Complete `update.gleam`, `view.gleam`, `main.gleam`, and `plugin_checklist_test.gleam`.
 - [ ] **Phase 7.4: `plugin_timer`**:
   - Focus countdown timer, presets (25m, 5m, 15m, custom), status (Idle/Running/Paused/Completed), progress ring/disk, compact widget view. Complete `model`, `update`, `view`, `main`, tests.
-- [ ] **Phase 7.5: `plugin_relays`**:
+- [x] **Phase 7.5: `plugin_relays`**:
   - Relay connection states, read/write toggles, pool metrics, NIP-65 tag generation and publishing, add/remove relay inputs. Complete `view`, `main`, tests.
 - [ ] **Phase 7.6: `plugin_notes`**:
   - Encrypted personal notebook (NIP-78 `omni/notes/v1` + NIP-44), folders/tags, search, markdown editing with `sanitize.strip_unsafe_html`. Complete `view`, `main`, tests.
 - [x] **Phase 7.7: `plugin_profiles`**:
   - Profiles directory, Kind 0 metadata editor, Kind 3 follow toggles, key custody view.
   - **Important Architectural Rule**: Uses `omni/social_ui/note_card` to show author notes. Clicking a note emits `OpenNoteIntent(note_id)` to let the host intent broker route to a feed/reader plugin (no duplicated thread viewer!). Complete `view`, `main`, tests.
-- [ ] **Phase 7.8: `plugin_publisher`**:
+- [x] **Phase 7.8: `plugin_publisher`**:
   - Studio draft form, NIP-5A nsite tag generator, Blossom server manager, published nsites list. Complete `view`, `main`, tests.
 - [x] **Phase 7.9: `plugin_feed`**:
   - Replace MoonBit feed with Gleam→JS using `omni_social` + `omni_social_ui`.

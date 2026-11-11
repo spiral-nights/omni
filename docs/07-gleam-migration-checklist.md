@@ -82,12 +82,12 @@ Mark items `[x]` in the same commit that completes them.
 ## Phase 7: Plugins and bridge
 - [x] 7.1 `plugin_kit`: typed `window.nostr`, app harness, route, `local_store`, subscribe helper
 - [x] 7.2 `social` + `social_ui` extracted with golden fixtures for the shared note card
-- [ ] 7.3 Plugin `checklist`
+- [x] 7.3 Plugin `checklist`
 - [x] 7.4 Plugin `timer`
-- [ ] 7.5 Plugin `relays`
+- [x] 7.5 Plugin `relays`
 - [x] 7.6 Plugin `notes`
 - [x] 7.7 Plugin `profiles` (opens threads via intent)
-- [ ] 7.8 Plugin `publisher`
+- [x] 7.8 Plugin `publisher`
 - [x] 7.9 Plugin `feed` (replaces MoonBit); MoonBit version moved to `external-plugins/` example
 - [ ] 7.10 `bridge`: port shims one by one (nostr, websocket, storage, links, share, schema bridge)
 - [ ] 7.11 Run old and new bridge side by side against the full plugin suite; cut over
