@@ -6,6 +6,8 @@
 //// - Granular ACL read filtering per requesting plugin ID.
 //// - Global event deduplication and automatic background ingestion into the local store.
 
+import gleam/dict
+import gleam/int
 import gleam/javascript/promise.{type Promise}
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -13,6 +15,7 @@ import gleam/set
 import gleam/string
 import omni/kernel/acl/engine.{type AclEngine} as acl_engine
 import omni/kernel/nostr/event_store.{type LocalEventStore}
+import omni/kernel/nostr/event_store_index
 import omni/kernel/nostr/relay_pool.{type RelayPool}
 import omni/nostr/event.{type Event}
 import omni/nostr/event_id
@@ -21,6 +24,7 @@ import omni/nostr/relay_frame
 import omni/platform/promise_ext
 import omni/platform/ref
 import omni/protocol/plugin_id
+import omni/protocol/rpc/method.{type FetchOptions}
 
 /// The coordinator mediating subscriptions between local storage, relays, and ACL policies.
 pub type SubscriptionCoordinator {
@@ -165,4 +169,110 @@ pub fn subscribe(
   }
 
   promise.resolve(closer)
+}
+
+/// Fetches events matching `filters` once across local event store and relay pool.
+///
+/// If `options.local_only` is `Some(True)`, queries `LocalEventStore` exclusively.
+/// Otherwise, queries local cache immediately and streams from `RelayPool` until
+/// `EOSE` is received or `timeout_ms` expires.
+pub fn fetch(
+  coord: SubscriptionCoordinator,
+  sub_id: String,
+  filters: List(Filter),
+  options: Option(FetchOptions),
+) -> Promise(List(Event)) {
+  let is_local_only = case options {
+    Some(opts) -> option.unwrap(opts.local_only, False)
+    None -> False
+  }
+  let timeout_ms = case options {
+    Some(opts) ->
+      option.unwrap(opts.timeout_ms, 3000)
+      |> int.clamp(100, 15_000)
+    None -> 3000
+  }
+
+  case is_local_only {
+    True -> {
+      let query_promises =
+        list.map(filters, fn(filter) {
+          event_store.get_events(coord.event_store, filter)
+        })
+      use results_list <- promise.await(promise_ext.all(query_promises))
+      let cached_events =
+        list.flatten(results_list)
+        |> event_store_index.deduplicate_by_id
+
+      let maybe_plugin_id = case string.split_once(sub_id, ":") {
+        Ok(#(prefix, _)) -> plugin_id.parse(prefix) |> option.from_result
+        Error(Nil) -> None
+      }
+
+      use filtered_events <- promise.map(
+        case coord.acl_engine, maybe_plugin_id {
+          Some(engine), Some(pid) -> {
+            let check_promises =
+              list.map(cached_events, fn(ev) {
+                use allowed <- promise.map(acl_engine.can_read_event(
+                  engine,
+                  pid,
+                  ev.kind,
+                ))
+                case allowed {
+                  True -> Some(ev)
+                  False -> None
+                }
+              })
+            use checked_opts <- promise.map(promise_ext.all(check_promises))
+            option.values(checked_opts)
+          }
+          _, _ -> promise.resolve(cached_events)
+        },
+      )
+
+      list.sort(filtered_events, fn(a, b) {
+        int.compare(b.created_at, a.created_at)
+      })
+    }
+    False -> {
+      let events_map = ref.new(dict.new())
+      let is_done = ref.new(False)
+      let #(done_promise, resolve_done) = promise.start()
+
+      let finish = fn() {
+        case ref.get(is_done) {
+          True -> Nil
+          False -> {
+            ref.set(is_done, True)
+            let evs =
+              dict.values(ref.get(events_map))
+              |> list.sort(fn(a: Event, b: Event) {
+                int.compare(b.created_at, a.created_at)
+              })
+            resolve_done(evs)
+          }
+        }
+      }
+
+      use unsub <- promise.await(subscribe(
+        coord,
+        sub_id,
+        filters,
+        fn(ev) {
+          let id_str = event_id.to_hex(ev.id)
+          ref.update(events_map, fn(m) { dict.insert(m, id_str, ev) })
+        },
+        Some(fn() { finish() }),
+      ))
+
+      // Race against timeout
+      let _ =
+        promise.map(promise_ext.delay(timeout_ms, Nil), fn(_) { finish() })
+
+      use results <- promise.map(done_promise)
+      unsub()
+      results
+    }
+  }
 }
