@@ -86,7 +86,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 7.4 Plugin `timer`
 - [ ] 7.5 Plugin `relays`
 - [x] 7.6 Plugin `notes`
-- [ ] 7.7 Plugin `profiles` (opens threads via intent)
+- [x] 7.7 Plugin `profiles` (opens threads via intent)
 - [ ] 7.8 Plugin `publisher`
 - [x] 7.9 Plugin `feed` (replaces MoonBit); MoonBit version moved to `external-plugins/` example
 - [ ] 7.10 `bridge`: port shims one by one (nostr, websocket, storage, links, share, schema bridge)

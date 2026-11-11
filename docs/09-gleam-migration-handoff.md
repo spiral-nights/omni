@@ -97,7 +97,7 @@ All plugins must be pure standard nsites using `omni_plugin_kit`:
   - Relay connection states, read/write toggles, pool metrics, NIP-65 tag generation and publishing, add/remove relay inputs. Complete `view`, `main`, tests.
 - [ ] **Phase 7.6: `plugin_notes`**:
   - Encrypted personal notebook (NIP-78 `omni/notes/v1` + NIP-44), folders/tags, search, markdown editing with `sanitize.strip_unsafe_html`. Complete `view`, `main`, tests.
-- [ ] **Phase 7.7: `plugin_profiles`**:
+- [x] **Phase 7.7: `plugin_profiles`**:
   - Profiles directory, Kind 0 metadata editor, Kind 3 follow toggles, key custody view.
   - **Important Architectural Rule**: Uses `omni/social_ui/note_card` to show author notes. Clicking a note emits `OpenNoteIntent(note_id)` to let the host intent broker route to a feed/reader plugin (no duplicated thread viewer!). Complete `view`, `main`, tests.
 - [ ] **Phase 7.8: `plugin_publisher`**:
