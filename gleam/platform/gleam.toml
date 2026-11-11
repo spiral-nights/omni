@@ -1,0 +1,10 @@
+name = "omni_platform"
+version = "0.1.0"
+description = "Typed ports over browser APIs. The only package (with bridge) allowed to contain FFI."
+target = "javascript"
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+
+[dev_dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
