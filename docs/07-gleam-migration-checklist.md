@@ -83,7 +83,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 7.1 `plugin_kit`: typed `window.nostr`, app harness, route, `local_store`, subscribe helper
 - [x] 7.2 `social` + `social_ui` extracted with golden fixtures for the shared note card
 - [ ] 7.3 Plugin `checklist`
-- [ ] 7.4 Plugin `timer`
+- [x] 7.4 Plugin `timer`
 - [ ] 7.5 Plugin `relays`
 - [x] 7.6 Plugin `notes`
 - [ ] 7.7 Plugin `profiles` (opens threads via intent)
