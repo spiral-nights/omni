@@ -74,7 +74,7 @@ Mark items `[x]` in the same commit that completes them.
 - [x] 6.4 App store, update modal, pull-to-refresh
 - [x] 6.5 Classic theme
 - [x] 6.6 Panorama theme
-- [ ] 6.7 Editorial theme
+- [x] 6.7 Editorial theme
 - [ ] 6.8 Shell registry; `omni_web` bootloader replaces `apps/web/src/main.ts`
 
 ## Phase 7: Plugins and bridge
