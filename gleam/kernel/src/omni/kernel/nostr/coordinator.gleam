@@ -62,6 +62,29 @@ pub fn subscribe(
   on_event: fn(Event) -> Nil,
   on_eose: Option(fn() -> Nil),
 ) -> Promise(fn() -> Nil) {
+  subscribe_impl(coord, sub_id, filters, None, on_event, on_eose)
+}
+
+/// Subscribe but route `REQ` only to the given relays (NIP-65 outbox routing).
+pub fn subscribe_targeted(
+  coord: SubscriptionCoordinator,
+  sub_id: String,
+  filters: List(Filter),
+  targets: List(String),
+  on_event: fn(Event) -> Nil,
+  on_eose: Option(fn() -> Nil),
+) -> Promise(fn() -> Nil) {
+  subscribe_impl(coord, sub_id, filters, Some(targets), on_event, on_eose)
+}
+
+fn subscribe_impl(
+  coord: SubscriptionCoordinator,
+  sub_id: String,
+  filters: List(Filter),
+  targets: Option(List(String)),
+  on_event: fn(Event) -> Nil,
+  on_eose: Option(fn() -> Nil),
+) -> Promise(fn() -> Nil) {
   let seen_ids = ref.new(set.new())
   let maybe_plugin_id = case string.split_once(sub_id, ":") {
     Ok(#(prefix, _)) -> plugin_id.parse(prefix) |> option.from_result
@@ -147,49 +170,55 @@ pub fn subscribe(
 
   // 2. Start live multiplexed relay subscription
   let unsubscribe_relays =
-    relay_pool.subscribe(coord.relay_pool, sub_id, filters, fn(source, frame) {
-      case frame {
-        relay_frame.EventFrame(_sid, ev) -> {
-          let eid = event_id.to_hex(ev.id)
-          let is_new = !set.contains(ref.get(seen_ids), eid)
-          ref.update(seen_ids, fn(s) { set.insert(s, eid) })
+    relay_pool.subscribe_targeted(
+      coord.relay_pool,
+      sub_id,
+      filters,
+      targets,
+      fn(source, frame) {
+        case frame {
+          relay_frame.EventFrame(_sid, ev) -> {
+            let eid = event_id.to_hex(ev.id)
+            let is_new = !set.contains(ref.get(seen_ids), eid)
+            ref.update(seen_ids, fn(s) { set.insert(s, eid) })
 
-          // Ingest into local store in background
-          let _ = event_store.save_event(coord.event_store, ev)
+            // Ingest into local store after notifying the subscriber.
+            let _ = event_store.save_event(coord.event_store, ev)
 
-          case is_new {
-            True -> {
-              case coord.acl_engine, maybe_plugin_id {
-                Some(engine), Some(pid) -> {
-                  let _ =
-                    promise.map(
-                      acl_engine.can_read_event(engine, pid, ev.kind),
-                      fn(allowed) {
-                        case allowed {
-                          True -> on_event(ev)
-                          False -> Nil
-                        }
-                      },
-                    )
-                  Nil
+            case is_new {
+              True -> {
+                case coord.acl_engine, maybe_plugin_id {
+                  Some(engine), Some(pid) -> {
+                    let _ =
+                      promise.map(
+                        acl_engine.can_read_event(engine, pid, ev.kind),
+                        fn(allowed) {
+                          case allowed {
+                            True -> on_event(ev)
+                            False -> Nil
+                          }
+                        },
+                      )
+                    Nil
+                  }
+                  _, _ -> on_event(ev)
                 }
-                _, _ -> on_event(ev)
               }
+              False -> Nil
             }
-            False -> Nil
           }
+          relay_frame.Eose(_sid) -> {
+            ref.update(eose_relays, fn(s) { set.insert(s, source) })
+            maybe_fire_eose()
+          }
+          relay_frame.Closed(_sid, _reason) -> {
+            ref.update(eose_relays, fn(s) { set.insert(s, source) })
+            maybe_fire_eose()
+          }
+          _ -> Nil
         }
-        relay_frame.Eose(_sid) -> {
-          ref.update(eose_relays, fn(s) { set.insert(s, source) })
-          maybe_fire_eose()
-        }
-        relay_frame.Closed(_sid, _reason) -> {
-          ref.update(eose_relays, fn(s) { set.insert(s, source) })
-          maybe_fire_eose()
-        }
-        _ -> Nil
-      }
-    })
+      },
+    )
 
   let closer = fn() {
     unsubscribe_relays()

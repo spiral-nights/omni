@@ -31,7 +31,11 @@ pub type RelayStatus {
 /// A registered subscription: filters are kept so `REQ` can be replayed every
 /// time a relay socket opens.
 pub type Subscriber {
-  Subscriber(filters: List(Filter), handler: fn(String, RelayFrame) -> Nil)
+  Subscriber(
+    filters: List(Filter),
+    handler: fn(String, RelayFrame) -> Nil,
+    targets: Option(List(String)),
+  )
 }
 
 /// In-flight publish waiting for relay `OK` receipts.
@@ -218,14 +222,26 @@ fn replay_subscriptions(
     False -> Nil
     True ->
       dict.each(ref.get(pool.subscribers), fn(sub_id, subscriber) {
-        let req_json =
-          relay_frame.client_frame_to_json(relay_frame.Req(
-            sub_id,
-            subscriber.filters,
-          ))
-        let _ = websocket.send(sock, req_json)
-        Nil
+        case subscriber_allows(subscriber, url_str) {
+          False -> Nil
+          True -> {
+            let req_json =
+              relay_frame.client_frame_to_json(relay_frame.Req(
+                sub_id,
+                subscriber.filters,
+              ))
+            let _ = websocket.send(sock, req_json)
+            Nil
+          }
+        }
       })
+  }
+}
+
+fn subscriber_allows(subscriber: Subscriber, url_str: String) -> Bool {
+  case subscriber.targets {
+    None -> True
+    Some(targets) -> list.contains(targets, url_str)
   }
 }
 
@@ -281,6 +297,18 @@ fn dispatch_frame(
       }
     }
     _ -> Nil
+  }
+}
+
+/// Inject a raw relay frame (used by tests and non-WebSocket transports).
+pub fn handle_incoming(
+  pool: RelayPool,
+  source_url: String,
+  raw_json: String,
+) -> Nil {
+  case relay_frame.parse_relay_frame(raw_json) {
+    Ok(frame) -> dispatch_frame(pool, source_url, frame)
+    Error(_) -> Nil
   }
 }
 
@@ -550,17 +578,36 @@ pub fn subscribe(
   filters: List(Filter),
   on_frame: fn(String, RelayFrame) -> Nil,
 ) -> fn() -> Nil {
+  subscribe_targeted(pool, sub_id, filters, None, on_frame)
+}
+
+/// Subscribe but only send REQ to the given relay URLs (NIP-65 outbox routing).
+pub fn subscribe_targeted(
+  pool: RelayPool,
+  sub_id: String,
+  filters: List(Filter),
+  targets: Option(List(String)),
+  on_frame: fn(String, RelayFrame) -> Nil,
+) -> fn() -> Nil {
   ref.update(pool.subscribers, fn(subs) {
-    dict.insert(subs, sub_id, Subscriber(filters: filters, handler: on_frame))
+    dict.insert(
+      subs,
+      sub_id,
+      Subscriber(filters: filters, handler: on_frame, targets: targets),
+    )
   })
   let req_json =
     relay_frame.client_frame_to_json(relay_frame.Req(sub_id, filters))
   let sockets = ref.get(pool.sockets)
   let statuses = ref.get(pool.statuses)
+  let subscriber =
+    Subscriber(filters: filters, handler: on_frame, targets: targets)
   dict.each(sockets, fn(url_str, sock) {
     case dict.get(statuses, url_str) {
       Ok(Connected) ->
-        case read_enabled(pool, url_str) {
+        case
+          read_enabled(pool, url_str) && subscriber_allows(subscriber, url_str)
+        {
           True -> {
             let _ = websocket.send(sock, req_json)
             Nil
