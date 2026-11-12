@@ -836,3 +836,24 @@ pub fn account_switch_emits_effect_and_status_test() {
   let #(next, _) = update.update(m, AccountSwitchResult(Ok(Nil)))
   next.key_message |> should.equal(Some("Switched account."))
 }
+
+pub fn app_default_route_resolves_declared_primary_view_test() {
+  let app =
+    sample_app("example.app.views", "Views", True, True, [])
+    |> fn(a) {
+      model.InstalledApp(..a, views: [
+        model.ViewOption(
+          id: "widget",
+          title: "Widget",
+          path: "/?view=widget",
+          format: "html",
+        ),
+        model.ViewOption(id: "main", title: "Main", path: "/", format: "html"),
+      ])
+    }
+
+  // The declared main view is the bare root, so no route is needed.
+  model.app_default_route(app) |> should.equal(None)
+  model.app_view_route(app, "widget") |> should.equal(Some("?view=widget"))
+  model.app_view_route(app, "missing") |> should.equal(None)
+}

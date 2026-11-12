@@ -203,6 +203,42 @@ pub fn find_app(model: Model, plugin_id: String) -> Option(InstalledApp) {
   }
 }
 
+/// The route an app should open with: its declared primary view path as a
+/// search string (`?view=...`), or `None` when that view is the bare root.
+pub fn app_default_route(app: InstalledApp) -> Option(String) {
+  let preferred =
+    list.find(app.views, fn(v) {
+      v.id == "default" || v.id == "main" || v.id == "home"
+    })
+  let view = case preferred {
+    Ok(found) -> Some(found)
+    Error(Nil) -> option.from_result(list.first(app.views))
+  }
+  case view {
+    Some(v) -> view_path_route(v.path)
+    None -> None
+  }
+}
+
+/// The route for a named view declared by an app (e.g. `"widget"`).
+pub fn app_view_route(app: InstalledApp, view_id: String) -> Option(String) {
+  case list.find(app.views, fn(v) { v.id == view_id }) {
+    Ok(found) -> view_path_route(found.path)
+    Error(Nil) -> None
+  }
+}
+
+fn view_path_route(path: String) -> Option(String) {
+  case string.split(path, "?") {
+    [_, query] ->
+      case string.trim(query) {
+        "" -> None
+        q -> Some("?" <> q)
+      }
+    _ -> None
+  }
+}
+
 /// Whether an app declares a dedicated settings view (`?view=settings`).
 pub fn app_has_settings_view(app: InstalledApp) -> Bool {
   app.enabled

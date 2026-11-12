@@ -79,7 +79,7 @@ fn render_app_dock_item(model: Model, app: InstalledApp) -> Element(Msg) {
     label: label,
     icon_name: app.icon,
     active: is_active,
-    on_click_msg: OpenApp(app.id, None),
+    on_click_msg: OpenApp(app.id, model.app_default_route(app)),
   )
 }
 

@@ -54,7 +54,7 @@ fn render_widget_card(
             attribute.type_("button"),
             attribute.class("omni-widget-open-btn"),
             attribute.title("Open " <> title),
-            event.on_click(OpenApp(app.id, None)),
+            event.on_click(OpenApp(app.id, model.app_view_route(app, "widget"))),
           ],
           [
             html.span([], [element.text("Open App")]),
