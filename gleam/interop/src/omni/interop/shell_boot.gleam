@@ -37,11 +37,13 @@ import omni/shell/model.{
   InstalledApp, PrimaryApp, Settings, TabPluginSettings, TabPlugins, TabProfile,
   TabRelays, TabShells, TabWorkspace, UpdateModalState, WidgetsDashboard,
 }
+import omni/shell/model as omni_shell_model
 import omni/shell/msg.{
   ApplyRemoteWorkspace, EmbedSchema, InstallApp, NavigateTo, OpenApp,
-  OpenSettings, ShowPermissionPrompt, ShowUpdateModal,
+  OpenSettings, SetUserProfile, ShowPermissionPrompt, ShowUpdateModal,
 }
 import omni/shell/update
+import omni/social/profile as social_profile
 import omni/web/boot
 import omni/web/config
 import omni/web/installer
@@ -544,6 +546,24 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
       None,
     )
 
+  // Own profile: restore display name, avatar, and NIP-05 from relays.
+  let _ =
+    coordinator.subscribe(
+      host.booted.kernel.coordinator,
+      "omni_internal_profile",
+      [profile_filter(self_pubkey)],
+      fn(event) {
+        case social_profile.from_event(event) {
+          Ok(profile) ->
+            dispatch_shell_msg(
+              SetUserProfile(profile_summary_for(user_npub(host), profile)),
+            )
+          Error(_) -> Nil
+        }
+      },
+      None,
+    )
+
   // Relay list: apply NIP-65 read/write scopes and add discovered relays.
   let _ =
     coordinator.subscribe(
@@ -591,6 +611,41 @@ fn push_relay_statuses(
       }
     })
   })
+}
+
+fn profile_filter(author_hex: String) -> Filter {
+  Filter(
+    ids: None,
+    authors: Some([author_hex]),
+    kinds: Some([kind.Metadata]),
+    since: None,
+    until: None,
+    limit: Some(1),
+    search: None,
+    tags: dict.new(),
+  )
+}
+
+pub fn profile_summary_for(
+  npub: String,
+  profile: social_profile.Profile,
+) -> omni_shell_model.UserProfileSummary {
+  let fallback = "npub" <> string.drop_start(npub, 5) |> string.slice(0, 8)
+  let display_name = case profile.display_name {
+    Some(name) if name != "" -> name
+    _ ->
+      case profile.name {
+        Some(name) if name != "" -> name
+        _ -> fallback
+      }
+  }
+  omni_shell_model.UserProfileSummary(
+    pubkey: profile.pubkey,
+    npub: npub,
+    display_name: display_name,
+    picture: profile.picture,
+    nip05: profile.nip05,
+  )
 }
 
 fn app_data_filter(author_hex: String) -> Filter {

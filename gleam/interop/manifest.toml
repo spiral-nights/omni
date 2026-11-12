@@ -48,4 +48,5 @@ omni_platform = { path = "../platform" }
 omni_plugin_kit = { path = "../plugin_kit" }
 omni_protocol = { path = "../protocol" }
 omni_shell = { path = "../shell" }
+omni_social = { path = "../social" }
 omni_web = { path = "../web" }
