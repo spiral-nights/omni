@@ -57,7 +57,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | SYNC-3 | S2 | fixed | Workspace publish triggers are limited to effect emission points; no debounce/periodic sync. | fixed `1fe4f8d`: layout mutations stamp the current time and coalesce into one kind-30078 publish after an 800 ms quiet period. |
 | SYNC-4 | S2 | fixed | Checklist NIP-78 doc (`checklist_doc_spec`) is unused; local storage only. | fixed `1fe4f8d`: task mutations publish the kind-30078 checklist doc when sync is enabled, and the host restores remote checklist docs on boot. |
 | SYNC-5 | S2 | fixed | Follows (kind 3) are published but not fetched on startup. | fixed `5407761`: the host fetches the user's own kind-3 contact list and feeds Profiles. |
-| SYNC-6 | S2 | fixed | Profile metadata fetch is opportunistic (live kind-0 stream only). | fixed `PENDING`: seeing a note requests missing/stale author profiles with a 1 h TTL, fetching kind-0 in one targeted query and caching the results. |
+| SYNC-6 | S2 | fixed | Profile metadata fetch is opportunistic (live kind-0 stream only). | fixed `ad12824`: seeing a note requests missing/stale author profiles with a 1 h TTL, fetching kind-0 in one targeted query and caching the results. |
 | SYNC-7 | S2 | fixed | Session/identity not restored from remote (only local keystore). | fixed `6a504cf`: boot subscribes to the user's own kind-0 metadata and updates the session profile (name, avatar, NIP-05) from relays. |
 
 ## D. Plugins & shell features
