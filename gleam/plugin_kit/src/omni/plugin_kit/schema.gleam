@@ -327,6 +327,8 @@ pub const loading = builder.loading
 
 pub const action_on_change = builder.action_on_change
 
+pub const banner_background = builder.banner_background
+
 /// Set placeholder text on an Input or Textarea.
 pub const placeholder = builder.placeholder
 

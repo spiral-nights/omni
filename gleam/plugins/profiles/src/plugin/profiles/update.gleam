@@ -11,7 +11,7 @@ import omni/plugin_kit/app.{type Effect, Publish}
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/social/follows
-import omni/social/profile.{Profile}
+import omni/social/profile.{type Profile, Profile}
 import plugin/profiles/model.{
   type Model, type ProfilesView, MetadataDraft, Model, SignerMissing,
   SignerReady, ViewDirectory, ViewKeys, ViewMetadata, ViewProfile, draft_for,
@@ -20,7 +20,7 @@ import plugin/profiles/model.{
 import plugin/profiles/msg.{
   type Msg, IngestEvent, IngestEvents, RefreshSigner, SaveMetadata,
   SelectProfile, SelectView, SetMetadataAbout, SetMetadataName,
-  SetMetadataPicture, SetSearchQuery, ToggleFollow,
+  SetMetadataPicture, SetPubkey, SetSearchQuery, ToggleFollow,
 }
 
 /// Apply a `Msg` to `Model`, returning the updated `Model` and any side `Effect`s.
@@ -96,24 +96,16 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
     )
 
     SaveMetadata -> {
-      let draft = model.metadata_draft
-      let fields = [
-        text_field("name", draft.name),
-        text_field("about", draft.about),
-        text_field("picture", draft.picture),
-      ]
-      let content =
-        json.object(
-          fields
-          |> list.filter_map(fn(item) {
-            case item {
-              Some(field) -> Ok(field)
-              None -> Error(Nil)
-            }
-          }),
-        )
-        |> json.to_string
-      #(save_metadata(model), [
+      let next_model = save_metadata(model)
+      let content = case metadata_pubkey(model) {
+        Some(pubkey) ->
+          case dict.get(next_model.profiles, pubkey) {
+            Ok(saved) -> profile_metadata_json(saved)
+            Error(Nil) -> "{}"
+          }
+        None -> "{}"
+      }
+      #(next_model, [
         Publish(UnsignedEvent(
           pubkey: None,
           created_at: model.now_sec + 1,
@@ -125,6 +117,21 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
     }
 
     RefreshSigner -> #(refresh_signer(model), [])
+
+    SetPubkey(pubkey) -> {
+      let cleaned = string.trim(pubkey)
+      case cleaned {
+        "" -> #(model, [])
+        _ -> #(
+          Model(
+            ..model,
+            my_pubkey: Some(cleaned),
+            follows: follows.empty(cleaned),
+          ),
+          [],
+        )
+      }
+    }
 
     IngestEvent(ev) -> #(ingest_event(model, ev), [])
 
@@ -352,6 +359,28 @@ fn extract_string(act: Action, keys: List(String)) -> Option(String) {
     }
   })
   |> option.from_result
+}
+
+fn profile_metadata_json(p: Profile) -> String {
+  let fields = [
+    text_field("name", option.unwrap(p.name, "")),
+    text_field("about", option.unwrap(p.about, "")),
+    text_field("picture", option.unwrap(p.picture, "")),
+    text_field("banner", option.unwrap(p.banner, "")),
+    text_field("nip05", option.unwrap(p.nip05, "")),
+    text_field("lud16", option.unwrap(p.lud16, "")),
+    text_field("website", option.unwrap(p.website, "")),
+  ]
+  json.object(
+    fields
+    |> list.filter_map(fn(item) {
+      case item {
+        Some(field) -> Ok(field)
+        None -> Error(Nil)
+      }
+    }),
+  )
+  |> json.to_string
 }
 
 fn text_field(key: String, raw: String) -> Option(#(String, json.Json)) {

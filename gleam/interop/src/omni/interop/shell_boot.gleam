@@ -175,6 +175,23 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
       let _ = drain_fetches(host)
       let _ = drain_relay_commands(host)
       let _ = drain_chimes(host)
+      let _ = drain_urls(host)
+      let _ =
+        boot.process_zap_invoices(host.booted)
+        |> promise.map(fn(did_work) {
+          case did_work {
+            True -> push_views(host)
+            False -> Nil
+          }
+        })
+      let _ =
+        boot.process_searches(host.booted)
+        |> promise.map(fn(did_work) {
+          case did_work {
+            True -> push_views(host)
+            False -> Nil
+          }
+        })
       let _ =
         boot.publish_pending(host.booted)
         |> promise.map(fn(event_ids) {

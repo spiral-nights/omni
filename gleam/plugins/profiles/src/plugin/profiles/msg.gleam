@@ -14,6 +14,7 @@ pub type Msg {
   SetMetadataPicture(String)
   SaveMetadata
   RefreshSigner
+  SetPubkey(String)
   IngestEvent(Event)
   IngestEvents(List(Event))
 }

@@ -727,7 +727,7 @@ fn query_join(base: String, params: List(#(String, String))) -> String {
 
 /// Request Lightning invoices for queued zap requests, broadcasting the 9734
 /// request to relays and calling the LNURL-pay callback.
-pub fn process_zap_invoices(booted: Booted) -> Promise(Nil) {
+pub fn process_zap_invoices(booted: Booted) -> Promise(Bool) {
   process_zap_invoices_with(booted, http.fetch_text)
 }
 
@@ -735,7 +735,7 @@ pub fn process_zap_invoices(booted: Booted) -> Promise(Nil) {
 pub fn process_zap_invoices_with(
   booted: Booted,
   fetch_text: fn(String) -> Promise(Result(String, String)),
-) -> Promise(Nil) {
+) -> Promise(Bool) {
   let requests =
     dict.fold(booted.builtins, [], fn(acc, _id, app) {
       let callback = app.zap_invoice_result
@@ -752,7 +752,7 @@ pub fn process_zap_invoices_with(
       }),
     ),
   )
-  promise.resolve(Nil)
+  promise.resolve(requests != [])
 }
 
 fn process_zap_invoice(
@@ -866,7 +866,7 @@ fn notify_zap(
 }
 
 /// Run queued NIP-50 relay searches and feed results into built-in apps.
-pub fn process_searches(booted: Booted) -> Promise(Nil) {
+pub fn process_searches(booted: Booted) -> Promise(Bool) {
   let queries =
     dict.fold(booted.builtins, [], fn(acc, _id, app) {
       list.append(acc, app.take_searches())
@@ -901,7 +901,7 @@ pub fn process_searches(booted: Booted) -> Promise(Nil) {
       }),
     ),
   )
-  promise.resolve(Nil)
+  promise.resolve(queries != [])
 }
 
 /// Debounce workspace publishes so rapid layout changes coalesce into one

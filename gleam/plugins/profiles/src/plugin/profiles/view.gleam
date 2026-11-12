@@ -22,6 +22,7 @@ import omni/social/note.{type Note}
 import omni/social/profile
 import omni/social/stats
 import omni/social_ui/note_card.{type NoteCardConfig, NoteCardConfig}
+import omni/ui/avatar as generated_avatar
 import plugin/profiles/model.{
   type Model, SignerLocked, SignerMissing, SignerReady, ViewDirectory, ViewKeys,
   ViewMetadata, ViewProfile,
@@ -186,11 +187,33 @@ fn render_profile(model: Model, pubkey: String) -> Node {
     |> schema.text_variant(Body)
     |> schema.text_tone(ToneMuted)
 
+  let lud16_nodes = case person.lud16 {
+    Some(address) -> [
+      schema.text("⚡ " <> address),
+    ]
+    None -> []
+  }
+
+  let website_nodes = case person.website {
+    Some(url) -> [
+      schema.text(url),
+    ]
+    None -> []
+  }
+
   let identity_column =
     schema.box()
     |> schema.column
     |> schema.gap("xs")
-    |> schema.children(list.flatten([[name_node], nip05_nodes, [about_node]]))
+    |> schema.children(
+      list.flatten([
+        [name_node],
+        nip05_nodes,
+        [about_node],
+        lud16_nodes,
+        website_nodes,
+      ]),
+    )
 
   let header =
     schema.box()
@@ -275,6 +298,7 @@ fn render_profile(model: Model, pubkey: String) -> Node {
 
   schema.card()
   |> schema.with_id("profile-" <> pubkey)
+  |> schema.banner_background(generated_avatar.banner_gradient(pubkey))
   |> schema.title("Profile")
   |> schema.with_icon("user")
   |> schema.page("profile")

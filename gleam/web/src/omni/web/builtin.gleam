@@ -66,7 +66,7 @@ pub fn apps(pubkey_hex: String) -> List(#(String, BuiltinApp)) {
     ),
     #("org.omni.plugin.notes", notes_app(store)),
     #("org.omni.plugin.relays", relays_app()),
-    #("org.omni.plugin.profiles", profiles_app(store)),
+    #("org.omni.plugin.profiles", profiles_app(store, pubkey_hex)),
     #("org.omni.plugin.publisher", publisher_app(pubkey_hex)),
   ]
 }
@@ -97,8 +97,9 @@ fn feed_app(store: storage.Storage) -> BuiltinApp {
   )
 }
 
-fn profiles_app(store: storage.Storage) -> BuiltinApp {
+fn profiles_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
   let running = profiles.start_app_with_storage("", store, fn(_) { Nil })
+  app.dispatch(running, profiles_msg.SetPubkey(pubkey_hex))
   BuiltinApp(
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },

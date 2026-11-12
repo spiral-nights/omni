@@ -535,6 +535,14 @@ pub fn loading(n: Node, is_loading: Bool) -> Node {
   }
 }
 
+/// Set a CSS background for the card's banner strip.
+pub fn banner_background(n: Node, background: String) -> Node {
+  case n {
+    Card(..) as card -> Card(..card, banner_background: Some(background))
+    other -> other
+  }
+}
+
 /// Set the change action on a Textarea.
 pub fn action_on_change(n: Node, act: Action) -> Node {
   case n {
