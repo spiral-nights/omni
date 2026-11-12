@@ -38,7 +38,7 @@ Last updated: 2026-11-11.
 | ID | Sev | Status | Problem | Fix |
 |---|---|---|---|---|
 | ID-1 | S2 | fixed | Key bootstrap: host generates/persists a key and shows it in the profile (`boot.session_profile`, commit `4587455`). | Done. |
-| ID-2 | S2 | fixed | No import/export/backup UI, no passphrase-encrypted storage. | fixed `PENDING` (UI): Settings imports nsec/hex keys by switching identities and exports the active nsec; at-rest passphrase encryption split out as ID-2b. |
+| ID-2 | S2 | fixed | No import/export/backup UI, no passphrase-encrypted storage. | fixed `18fdcb6` (UI): Settings imports nsec/hex keys by switching identities and exports the active nsec; at-rest passphrase encryption split out as ID-2b. |
 | ID-2b | S2 | open | Private keys are stored in plain storage; no passphrase encryption. | Derive a key from a passphrase, encrypt the stored key, and require unlock on boot. |
 | ID-3 | S2 | open | Zap requests not implemented (like/repost publish). | Kind 9734 with `amount`/`lnurl` and receipt tracking. |
 | ID-4 | S3 | open | Multi-account support absent. | Account switcher + per-account cache/settings. |
@@ -69,7 +69,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | PL-3 | S1 | fixed | ACL prompts never fire (no `prompt_handler` on the engine). | fixed `644d92f`: kernel prompt handler bridged to a shell Allow/Deny modal; decisions resolve the grant promise. |
 | PL-4 | S2 | open | Relays app mutations (add/remove/reconnect/read-write/NIP-65) don't call the pool. | Expose pool operations to the app and publish kind 10002. |
 | PL-5 | S2 | open | Publisher has no zip, Blossom upload, or nsite publish. | Port zip engine + upload + kind publish. |
-| PL-6 | S2 | fixed | Profiles key custody/backup UI missing. | fixed `PENDING`: Settings Identity panel hosts the shared import/export custody card backed by the keystore. |
+| PL-6 | S2 | fixed | Profiles key custody/backup UI missing. | fixed `18fdcb6`: Settings Identity panel hosts the shared import/export custody card backed by the keystore. |
 | PL-7 | S2 | open | Timer completion has no chime. | Add audio asset + play on `Completed`. |
 | PL-8 | S2 | fixed | App store custom install only records a descriptor. | fixed `d2deef6`: installation resolves/fetches the bundle first and rolls the optimistic install back if validation fails. |
 | PL-9 | S2 | open | Plugin settings tabs render a placeholder; plugin settings content isn't hosted. | Mount plugin settings view in the tab. |
