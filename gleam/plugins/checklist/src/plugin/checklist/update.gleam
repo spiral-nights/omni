@@ -8,7 +8,7 @@ import gleam/string
 import omni/nostr/event.{UnsignedEvent}
 import omni/nostr/kind
 import omni/platform/clock
-import omni/plugin_kit/app.{type Effect, Dispatch, Publish}
+import omni/plugin_kit/app.{type Effect, Publish}
 import omni/plugin_kit/schema.{type Action}
 import plugin/checklist/model.{
   type Model, type TaskItem, ChecklistSettings, Model, TaskItem, checklist_d_tag,

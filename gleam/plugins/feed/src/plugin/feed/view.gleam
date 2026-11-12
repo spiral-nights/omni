@@ -12,11 +12,11 @@ import gleam/string
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{
-  type Node, AlignCenter, Body, Button, ButtonGhost, ButtonPrimary,
-  ButtonSecondary, Caption, CodeBlock, IconButton, IconButtonGhost,
-  IconButtonSecondary, Input, InputNumber, InputSearch, JustifyBetween,
-  JustifyCenter, JustifyEnd, ListItem, NodeBase, PageDeclaration,
-  StatusConnecting, StatusIndicator, TabItem, Toggle, ToneMuted,
+  type Node, AlignCenter, Button, ButtonGhost, ButtonPrimary, ButtonSecondary,
+  Caption, CodeBlock, IconButton, IconButtonGhost, IconButtonSecondary, Input,
+  InputNumber, InputSearch, JustifyBetween, JustifyCenter, JustifyEnd, ListItem,
+  NodeBase, PageDeclaration, StatusConnecting, StatusIndicator, TabItem, Toggle,
+  ToneMuted,
 }
 import omni/protocol/schema/style.{SizeMd, SizeSm, StyleRaw}
 import omni/social/note.{type Note}

@@ -4,7 +4,7 @@ import gleam/dict.{type Dict}
 import gleam/int
 import gleam/javascript/promise.{type Promise}
 import gleam/list
-import gleam/option.{type Option, None, Some}
+import gleam/option.{None, Some}
 import omni/kernel/acl/engine
 import omni/platform/ref.{type Ref}
 import omni/protocol/capability

@@ -6,7 +6,6 @@ import gleam/int
 import gleam/json
 import gleam/list
 import gleam/option.{None, Some}
-import gleam/string
 import omni/plugin_kit/schema
 import omni/protocol/blossom
 import omni/protocol/schema/action.{type Action}

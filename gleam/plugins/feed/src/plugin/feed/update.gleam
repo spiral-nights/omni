@@ -1,6 +1,5 @@
 //// Pure state reducer and Channel 1 `Action -> Option(Msg)` mapper for `plugin_feed`.
 
-import gleam/bit_array
 import gleam/dict
 import gleam/int
 import gleam/list
@@ -20,9 +19,9 @@ import omni/social/note.{type Note, Note}
 import omni/social/profile.{type Profile}
 import omni/social/stats.{type NoteStats, NoteStats}
 import plugin/feed/model.{
-  type FeedSettings, type FeedTab, type FeedView, type Model, FeedSettings,
-  Model, TabFollowing, TabGlobal, TabReplies, ViewSearch, ViewSettings,
-  ViewThread, ViewTimeline, ViewWidget,
+  type FeedTab, type FeedView, type Model, FeedSettings, Model, TabFollowing,
+  TabGlobal, TabReplies, ViewSearch, ViewSettings, ViewThread, ViewTimeline,
+  ViewWidget,
 }
 import plugin/feed/msg.{
   type Msg, CancelZap, IngestEvent, IngestEvents, LikeNote, LoadMore,
@@ -32,9 +31,6 @@ import plugin/feed/msg.{
   StartZap, SubmitSearch, ToggleInlineMedia, ToggleShowReplies, ZapInvoiceResult,
 }
 import plugin/feed/zap
-
-const default_author_hex =
-  "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
 
 /// Apply a `Msg` to `Model`, returning the updated `Model` and any side `Effect`s.
 pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
@@ -373,148 +369,6 @@ fn enrich_reply_pubkey(n: Note, known_notes: dict.Dict(String, Note)) -> Note {
   }
 }
 
-fn publish_new_note(model: Model) -> Model {
-  let content = string.trim(model.composer_draft)
-  case content {
-    "" -> model
-    _ -> {
-      let author_pk = case model.my_pubkey {
-        Some(pk) if pk != "" -> pk
-        _ -> default_author_hex
-      }
-      let created_at = model.now_sec + 1
-      let seq = dict.size(model.notes) + 1
-      let note_id = synthetic_note_id(seq, created_at, author_pk, content)
-      let new_note =
-        Note(
-          id: note_id,
-          pubkey: author_pk,
-          content: content,
-          created_at: created_at,
-          reply_to_id: None,
-          root_id: None,
-          reply_to_pubkey: None,
-          mentioned_pubkeys: [],
-          hashtags: extract_inline_hashtags(content),
-        )
-      Model(
-        ..model,
-        notes: dict.insert(model.notes, note_id, new_note),
-        composer_draft: "",
-        now_sec: created_at,
-      )
-    }
-  }
-}
-
-fn publish_reply_note(model: Model, parent_id: String) -> Model {
-  let clean_parent = string.trim(parent_id)
-  let content = string.trim(model.reply_draft)
-  case clean_parent == "" || content == "" {
-    True -> model
-    False -> {
-      let author_pk = case model.my_pubkey {
-        Some(pk) if pk != "" -> pk
-        _ -> default_author_hex
-      }
-      let created_at = model.now_sec + 1
-      let seq = dict.size(model.notes) + 1
-      let note_id = synthetic_note_id(seq, created_at, author_pk, content)
-
-      let #(root_id, parent_pubkey, mentioned) = case
-        dict.get(model.notes, clean_parent)
-      {
-        Ok(parent_note) -> {
-          let resolved_root = case parent_note.root_id {
-            Some(r) -> r
-            None -> parent_note.id
-          }
-          #(
-            resolved_root,
-            Some(parent_note.pubkey),
-            list.unique([parent_note.pubkey, ..parent_note.mentioned_pubkeys]),
-          )
-        }
-        Error(Nil) -> #(clean_parent, None, [])
-      }
-
-      let reply_note =
-        Note(
-          id: note_id,
-          pubkey: author_pk,
-          content: content,
-          created_at: created_at,
-          reply_to_id: Some(clean_parent),
-          root_id: Some(root_id),
-          reply_to_pubkey: parent_pubkey,
-          mentioned_pubkeys: mentioned,
-          hashtags: extract_inline_hashtags(content),
-        )
-
-      let current_parent_stats = get_or_empty_stats(model.stats, clean_parent)
-      let updated_parent_stats =
-        NoteStats(
-          ..current_parent_stats,
-          replies: current_parent_stats.replies + 1,
-        )
-
-      Model(
-        ..model,
-        notes: dict.insert(model.notes, note_id, reply_note),
-        stats: dict.insert(model.stats, clean_parent, updated_parent_stats),
-        reply_draft: "",
-        now_sec: created_at,
-      )
-    }
-  }
-}
-
-fn toggle_like(model: Model, note_id: String) -> Model {
-  let clean_id = string.trim(note_id)
-  case clean_id {
-    "" -> model
-    _ -> {
-      let current = get_or_empty_stats(model.stats, clean_id)
-      let next_stats = case current.liked_by_me {
-        True ->
-          NoteStats(
-            ..current,
-            likes: int.max(0, current.likes - 1),
-            liked_by_me: False,
-          )
-        False ->
-          NoteStats(..current, likes: current.likes + 1, liked_by_me: True)
-      }
-      Model(..model, stats: dict.insert(model.stats, clean_id, next_stats))
-    }
-  }
-}
-
-fn toggle_repost(model: Model, note_id: String) -> Model {
-  let clean_id = string.trim(note_id)
-  case clean_id {
-    "" -> model
-    _ -> {
-      let current = get_or_empty_stats(model.stats, clean_id)
-      let next_stats = case current.reposted_by_me {
-        True ->
-          NoteStats(
-            ..current,
-            reposts: int.max(0, current.reposts - 1),
-            reposted_by_me: False,
-          )
-        False ->
-          NoteStats(
-            ..current,
-            reposts: current.reposts + 1,
-            reposted_by_me: True,
-          )
-      }
-      Model(..model, stats: dict.insert(model.stats, clean_id, next_stats))
-    }
-  }
-}
-
 fn start_zap(model: Model, note_id: String) -> Model {
   let clean_id = string.trim(note_id)
   case clean_id {
@@ -657,39 +511,6 @@ fn get_or_empty_stats(
     Ok(s) -> s
     Error(Nil) -> stats.empty_stats(note_id)
   }
-}
-
-fn synthetic_note_id(
-  seq: Int,
-  created_at: Int,
-  pubkey_hex: String,
-  content: String,
-) -> String {
-  let seed =
-    "note_"
-    <> int.to_string(seq)
-    <> "_"
-    <> int.to_string(created_at)
-    <> "_"
-    <> pubkey_hex
-    <> "_"
-    <> content
-  let hex =
-    string.lowercase(bit_array.base16_encode(bit_array.from_string(seed)))
-  let padded = string.pad_end(hex, to: 64, with: "0")
-  string.slice(padded, at_index: 0, length: 64)
-}
-
-fn extract_inline_hashtags(content: String) -> List(String) {
-  string.split(content, " ")
-  |> list.filter_map(fn(word) {
-    let trimmed = string.trim(word)
-    case string.starts_with(trimmed, "#") && string.length(trimmed) > 1 {
-      True -> Ok(string.lowercase(string.drop_start(trimmed, 1)))
-      False -> Error(Nil)
-    }
-  })
-  |> list.unique
 }
 
 fn parse_tab(raw: String) -> FeedTab {

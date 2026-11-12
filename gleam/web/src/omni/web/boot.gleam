@@ -46,7 +46,6 @@ import omni/platform/promise_ext
 import omni/platform/ref
 import omni/platform/storage
 import omni/platform/url
-import omni/platform/websocket
 import omni/plugin_kit/zap
 import omni/protocol/blossom
 import omni/protocol/capability
@@ -55,19 +54,17 @@ import omni/protocol/intent.{IntentHandler}
 import omni/protocol/plugin_id
 import omni/protocol/rpc/method.{type FetchOptions, FetchOptions}
 import omni/protocol/schema/action.{type Action}
-import omni/protocol/schema/node.{type Node}
+import omni/protocol/schema/node
 import omni/protocol/workspace
 import omni/sandbox/iframe_host.{type IframeMount, IframeConfig}
-import omni/sandbox/manager.{
-  type SandboxManager, type SpawnOptions, SpawnOptions,
-}
+import omni/sandbox/manager.{type SandboxManager, SpawnOptions}
 import omni/shell/model.{
   type Model, type UserProfileSummary, IntentPromptState, Model, PrimaryApp,
   UserProfileSummary,
 }
 import omni/shell/msg.{
-  type Msg, HostedSchemaAction, InstallApp, OpenApp, SelectIntentHandler,
-  SelectShell, ShowIntentPrompt,
+  type Msg, HostedSchemaAction, InstallApp, OpenApp, SelectShell,
+  ShowIntentPrompt,
 }
 import omni/shell/registry.{type ShellRegistry}
 import omni/shell/shell

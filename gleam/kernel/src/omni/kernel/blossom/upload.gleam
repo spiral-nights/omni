@@ -1,7 +1,6 @@
 //// Blossom blob upload with BUD-06 authorization.
 
 import gleam/javascript/promise.{type Promise}
-import gleam/list
 import gleam/option.{Some}
 import omni/kernel/crypto/keystore.{type Keystore}
 import omni/protocol/blossom

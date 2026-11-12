@@ -316,7 +316,6 @@ fn dispatch_frame(
         None -> Nil
       }
     }
-    _ -> Nil
   }
 }
 

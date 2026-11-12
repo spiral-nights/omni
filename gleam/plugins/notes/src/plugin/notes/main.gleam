@@ -1,6 +1,6 @@
 //// Application specification and entrypoint for the Notes plugin (`plugin_notes`).
 
-import gleam/option.{type Option, None, Some}
+import gleam/option.{None, Some}
 import omni/platform/storage.{type Storage}
 import omni/plugin_kit/app.{type AppSpec, type RunningApp, AppSpec}
 import omni/plugin_kit/local_store.{type StoreConfig, StoreConfig}

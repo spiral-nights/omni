@@ -42,9 +42,9 @@ import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace
 import omni/shell/layout/viewport_host
 import omni/shell/model.{
-  type InstalledApp, type SettingsTab, type UpdateModalState, AppStore,
-  InstalledApp, PrimaryApp, Settings, TabPluginSettings, TabPlugins, TabProfile,
-  TabRelays, TabShells, TabWorkspace, UpdateModalState, WidgetsDashboard,
+  type InstalledApp, type SettingsTab, AppStore, InstalledApp, PrimaryApp,
+  Settings, TabPluginSettings, TabPlugins, TabProfile, TabRelays, TabShells,
+  TabWorkspace, UpdateModalState, WidgetsDashboard,
 }
 import omni/shell/msg.{
   AccountSwitchResult, ApplyRemoteWorkspace, EmbedSchema, FinishPullRefresh,

@@ -6,18 +6,16 @@ import gleam/int
 import gleam/javascript/promise.{type Promise}
 import gleam/list
 import gleam/option.{None, Some}
-import gleam/result
 import gleam/string
 import omni/kernel/kernel.{type OmniKernel}
 import omni/kernel/nostr/coordinator
 import omni/kernel/plugins/resolver
-import omni/nostr/event
 import omni/nostr/filter
 import omni/nostr/kind.{type Kind, from_int}
 import omni/nostr/pubkey
 import omni/platform/http
 import omni/platform/promise_ext
-import omni/protocol/rpc/method.{type FetchOptions, FetchOptions}
+import omni/protocol/rpc/method.{FetchOptions}
 import omni/shell/model.{type InstalledApp, InstalledApp, ViewOption}
 
 /// A fetched bundle ready to be mounted in a sandbox.
