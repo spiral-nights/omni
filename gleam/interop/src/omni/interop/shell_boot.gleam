@@ -164,6 +164,7 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
     fn(current: ShellBoot, message: msg.Msg) {
       let #(next, effects) = boot.dispatch(current.booted, message)
       let host = apply_effects(ShellBoot(next), effects)
+      let _ = drain_fetches(host)
       let _ =
         boot.publish_pending(host.booted)
         |> promise.map(fn(event_ids) {
@@ -312,6 +313,49 @@ fn apply_effects(
       _ -> acc
     }
   })
+}
+
+fn drain_fetches(host: ShellBoot) -> Nil {
+  let untils =
+    dict.fold(host.booted.builtins, [], fn(acc, _id, app) {
+      list.append(acc, app.take_fetches())
+    })
+  list.each(untils, fn(until) { fetch_older(host, until) })
+  Nil
+}
+
+fn fetch_older(host: ShellBoot, until: Int) -> Nil {
+  let filter =
+    Filter(
+      ids: None,
+      authors: None,
+      kinds: Some([kind.Note, kind.Repost, kind.Reaction]),
+      since: None,
+      until: Some(until),
+      limit: Some(40),
+      search: None,
+      tags: dict.new(),
+    )
+  let _ =
+    coordinator.fetch(
+      host.booted.kernel.coordinator,
+      "omni_internal_older",
+      [filter],
+      Some(FetchOptions(timeout_ms: Some(4000), relays: None, local_only: None)),
+    )
+    |> promise.map(fn(events) {
+      list.each(events, fn(event) {
+        dict.each(host.booted.builtins, fn(_id, app) {
+          case app.ingest {
+            Some(ingest) -> ingest(event)
+            None -> Nil
+          }
+        })
+      })
+      push_views(host)
+      Nil
+    })
+  Nil
 }
 
 fn refresh_public_feed(host: ShellBoot) -> Nil {

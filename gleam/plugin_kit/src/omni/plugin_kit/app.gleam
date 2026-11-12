@@ -22,6 +22,8 @@ pub type Effect(msg) {
   Publish(UnsignedEvent)
   /// Request the host to NIP-44 encrypt `content` to the user, sign, and broadcast.
   PublishEncrypted(UnsignedEvent)
+  /// Request the host to fetch older events with `until` (timestamp).
+  FetchUntil(Int)
 }
 
 /// Elm-style plugin application specification.
@@ -46,6 +48,7 @@ pub type RunningApp(model, msg) {
     emit_schema: fn(Node) -> Nil,
     publishes: Ref(List(UnsignedEvent)),
     encrypted_publishes: Ref(List(UnsignedEvent)),
+    fetches: Ref(List(Int)),
   )
 }
 
@@ -73,6 +76,7 @@ pub fn start(
       emit_schema: emit_schema,
       publishes: ref.new([]),
       encrypted_publishes: ref.new([]),
+      fetches: ref.new([]),
     )
 
   emit_schema(initial_node)
@@ -162,6 +166,7 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
     Publish(draft) -> ref.update(app.publishes, fn(queue) { [draft, ..queue] })
     PublishEncrypted(draft) ->
       ref.update(app.encrypted_publishes, fn(queue) { [draft, ..queue] })
+    FetchUntil(until) -> ref.update(app.fetches, fn(queue) { [until, ..queue] })
   }
 }
 
@@ -169,6 +174,13 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
 pub fn take_publishes(app: RunningApp(model, msg)) -> List(UnsignedEvent) {
   let pending = ref.get(app.publishes)
   ref.set(app.publishes, [])
+  list.reverse(pending)
+}
+
+/// Drain older-page fetch requests (`until` timestamps).
+pub fn take_fetches(app: RunningApp(model, msg)) -> List(Int) {
+  let pending = ref.get(app.fetches)
+  ref.set(app.fetches, [])
   list.reverse(pending)
 }
 

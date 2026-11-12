@@ -12,7 +12,7 @@ import omni/nostr/event_id
 import omni/nostr/kind.{type Kind, Note}
 import omni/nostr/pubkey
 import omni/platform/storage
-import omni/plugin_kit/app.{Publish}
+import omni/plugin_kit/app.{FetchUntil, Publish}
 import omni/plugin_kit/local_store
 import omni/plugin_kit/route
 import omni/plugin_kit/schema
@@ -243,8 +243,16 @@ pub fn search_and_load_more_test() {
   let m_small = Model(..m2, visible_limit: 1)
   list.length(model.visible_timeline_notes(m_small)) |> should.equal(1)
   model.has_more_timeline_notes(m_small) |> should.equal(True)
-  let #(m_more, _) = update.update(m_small, LoadMore)
+  let #(m_more, load_effects) = update.update(m_small, LoadMore)
   should.be_true(m_more.visible_limit > 1)
+  should.be_true(
+    list.any(load_effects, fn(effect) {
+      case effect {
+        FetchUntil(until) -> until >= 0
+        _ -> False
+      }
+    }),
+  )
 }
 
 pub fn engagement_and_toggles_are_noops_or_state_updates_test() {

@@ -9,7 +9,7 @@ import gleam/string
 import omni/nostr/event.{type Event, UnsignedEvent}
 import omni/nostr/kind
 import omni/nostr/pubkey
-import omni/plugin_kit/app.{type Effect, Publish}
+import omni/plugin_kit/app.{type Effect, FetchUntil, Publish}
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/social/follows
@@ -100,13 +100,17 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       [],
     )
 
-    LoadMore -> #(
-      Model(
-        ..model,
-        visible_limit: model.visible_limit + model.settings.page_size,
-      ),
-      [],
-    )
+    LoadMore -> {
+      let next_model =
+        Model(
+          ..model,
+          visible_limit: model.visible_limit + model.settings.page_size,
+        )
+      case oldest_note_time(model) {
+        Some(until) -> #(next_model, [FetchUntil(until - 1)])
+        None -> #(next_model, [])
+      }
+    }
 
     ToggleShowReplies -> {
       let current = model.settings
@@ -275,6 +279,17 @@ fn ingest_single_event(model: Model, ev: Event) -> Model {
 
     _ -> Model(..model, stats: updated_stats, now_sec: next_now)
   }
+}
+
+fn oldest_note_time(model: Model) -> Option(Int) {
+  model.notes
+  |> dict.values
+  |> list.fold(None, fn(acc, note) {
+    case acc {
+      None -> Some(note.created_at)
+      Some(ts) -> Some(int.min(ts, note.created_at))
+    }
+  })
 }
 
 fn upsert_profile(

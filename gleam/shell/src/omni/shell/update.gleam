@@ -13,7 +13,7 @@ import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace.{type WorkspaceState}
 import omni/shell/model.{
   type InstalledApp, type Model, type Page, InstalledApp, Model, PrimaryApp,
-  Settings, Syncing, WidgetsDashboard,
+  Settings, Syncing, TabPluginSettings, WidgetsDashboard,
 }
 import omni/shell/msg.{
   type Msg, AddAppPlacement, ApplyRemoteWorkspace, ClearEmbeddedSchema,
@@ -104,7 +104,20 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
           back_stack: push_back(model, page),
           mobile_menu_open: False,
         )
-      #(next_model, workspace_persistence_effects(next_model))
+      let mount_effects = case tab {
+        TabPluginSettings(plugin_id) -> [
+          MountPluginInSlot(
+            plugin_id: plugin_id,
+            viewport: Main,
+            route: Some("?view=settings"),
+          ),
+        ]
+        _ -> []
+      }
+      #(
+        next_model,
+        list.append(mount_effects, workspace_persistence_effects(next_model)),
+      )
     }
 
     NavigateBack -> {

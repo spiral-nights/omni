@@ -759,3 +759,18 @@ pub fn key_import_and_export_emit_effects_test() {
   let #(with_nsec, _) = update.update(m, SetExportedNsec(Ok("nsec1abc")))
   with_nsec.exported_nsec |> should.equal(Some("nsec1abc"))
 }
+
+pub fn plugin_settings_tab_mounts_plugin_view_test() {
+  let m = model.init("classic", [])
+  let #(_, effects) =
+    update.update(m, OpenSettings(model.TabPluginSettings("example.app.alpha")))
+  should.be_true(
+    list.any(effects, fn(effect) {
+      case effect {
+        update.MountPluginInSlot(id, Main, Some("?view=settings")) ->
+          id == "example.app.alpha"
+        _ -> False
+      }
+    }),
+  )
+}
