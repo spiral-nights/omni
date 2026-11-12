@@ -18,6 +18,7 @@ pub type Msg {
   SetDraftServerUrl(String)
   SetBundleUrl(String)
   LoadBundle
+  ChooseLocalZip
   BundleLoaded(Result(String, String))
   DismissBanner
 }

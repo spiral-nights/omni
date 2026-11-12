@@ -193,11 +193,15 @@ fn render_studio_tab(model: Model) -> List(Node) {
     schema.button("Load Bundle", schema.new_action("load-bundle"))
     |> schema.with_icon("download")
 
+  let choose_zip_btn =
+    schema.button("Choose .zip", schema.new_action("choose-local-zip"))
+    |> schema.with_icon("upload")
+
   let bundle_row =
     schema.box()
     |> schema.row()
     |> schema.gap("sm")
-    |> schema.children([bundle_url_input, load_bundle_btn])
+    |> schema.children([bundle_url_input, load_bundle_btn, choose_zip_btn])
 
   let publish_btn =
     schema.button(

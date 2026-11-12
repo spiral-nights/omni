@@ -19,9 +19,9 @@ import plugin/publisher/model.{
   TabServers, TabStudio, TabWidget,
 }
 import plugin/publisher/msg.{
-  AddServer, DismissBanner, PublishPackage, RemoveServer, SelectTab,
-  SetBundleMetadata, SetDraftDescription, SetDraftIcon, SetDraftId, SetDraftName,
-  SetDraftServerUrl, SetDraftVersion, ToggleServer,
+  AddServer, ChooseLocalZip, DismissBanner, PublishPackage, RemoveServer,
+  SelectTab, SetBundleMetadata, SetDraftDescription, SetDraftIcon, SetDraftId,
+  SetDraftName, SetDraftServerUrl, SetDraftVersion, ToggleServer,
 }
 import plugin/publisher/update
 import plugin/publisher/view
@@ -259,4 +259,54 @@ pub fn publish_without_bundle_is_rejected_test() {
   let #(next, effects) = update.update(m, PublishPackage)
   assert next.error_message != None
   effects |> should.equal([])
+}
+
+pub fn choose_local_zip_emits_picker_effect_test() {
+  let m = model.init(TabStudio)
+  let assert Ok(action) =
+    schema.decode_action_message(
+      "{\"type\":\"omni:action\",\"action\":\"choose-local-zip\"}",
+    )
+  let assert Some(ChooseLocalZip) = update.action_to_msg(action)
+  let #(next, effects) = update.update(m, ChooseLocalZip)
+  assert next.publishing
+  assert list.length(effects) == 1
+  assert list.any(effects, fn(effect) {
+    case effect {
+      app.Async(_) -> True
+      _ -> False
+    }
+  })
+}
+
+pub fn local_zip_action_populates_bundle_test() {
+  let emitted_ref = ref.new([])
+  let running =
+    main.start_app("?view=main", fn(n) {
+      ref.update(emitted_ref, fn(prev) { list.append(prev, [n]) })
+    })
+
+  let archive =
+    zip.zip([#("index.html", <<"<html><body>local</body></html>":utf8>>)])
+    |> bit_array.base64_encode(True)
+  let assert Ok(True) =
+    app.handle_action_json(
+      running,
+      "{\"type\":\"omni:action\",\"action\":\"set-bundle-zip\",\"payload\":{\"zip\":\""
+        <> archive
+        <> "\"}}",
+    )
+
+  let model = app.current_model(running)
+  let assert Some(parsed) = model.bundle
+  parsed.entry |> should.equal("index.html")
+  assert model.status_message == Some("Bundle loaded.")
+  let assert Ok(entry) = publisher_bundle.entry_file(parsed)
+  entry.path |> should.equal("index.html")
+  assert model.draft.bundle_size_bytes == entry.size
+  assert model.draft.bundle_sha256 == entry.sha256
+  assert string.contains(
+    schema.encode_schema_message(view.view(model)),
+    "Choose .zip",
+  )
 }

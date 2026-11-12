@@ -11,6 +11,7 @@ import omni/nostr/kind
 import omni/nostr/nip19
 import omni/nostr/pubkey
 import omni/platform/clock
+import omni/platform/file_picker
 import omni/platform/http
 import omni/plugin_kit/app.{type Effect, Async, Publish, UploadBlob}
 import omni/plugin_kit/schema
@@ -23,10 +24,10 @@ import plugin/publisher/model.{
   TabStudio, TabWidget,
 }
 import plugin/publisher/msg.{
-  type Msg, AddServer, BundleLoaded, DismissBanner, LoadBundle, PublishPackage,
-  RemoveServer, SelectTab, SetBundleMetadata, SetBundleUrl, SetDraftDescription,
-  SetDraftIcon, SetDraftId, SetDraftName, SetDraftServerUrl, SetDraftVersion,
-  ToggleServer,
+  type Msg, AddServer, BundleLoaded, ChooseLocalZip, DismissBanner, LoadBundle,
+  PublishPackage, RemoveServer, SelectTab, SetBundleMetadata, SetBundleUrl,
+  SetDraftDescription, SetDraftIcon, SetDraftId, SetDraftName, SetDraftServerUrl,
+  SetDraftVersion, ToggleServer,
 }
 
 /// Pure Elm-style state update function for `plugin_publisher`.
@@ -106,6 +107,18 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
           }
       }
     }
+
+    ChooseLocalZip -> #(Model(..model, publishing: True, error_message: None), [
+      Async(fn(dispatch) {
+        let _ =
+          file_picker.pick_zip_base64()
+          |> promise.map(fn(result) {
+            dispatch(BundleLoaded(result))
+            Nil
+          })
+        Nil
+      }),
+    ])
 
     BundleLoaded(result) -> {
       case result {
@@ -495,6 +508,9 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
       Some(SetBundleUrl(extract_text(act, ["url", "bundleUrl", "value"])))
 
     "load-bundle" | "load_bundle" -> Some(LoadBundle)
+
+    "choose-local-zip" | "choose_local_zip" | "pick-local-zip" ->
+      Some(ChooseLocalZip)
 
     "set-bundle-zip" | "set_bundle_zip" ->
       Some(BundleLoaded(Ok(extract_text(act, ["zip", "data", "value"]))))
