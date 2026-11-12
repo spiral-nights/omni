@@ -774,3 +774,43 @@ pub fn plugin_settings_tab_mounts_plugin_view_test() {
     }),
   )
 }
+
+pub fn widgets_dashboard_mounts_companion_placements_test() {
+  let alpha =
+    model.InstalledApp(
+      id: "example.app.alpha",
+      name: "Alpha",
+      display_name: Some("Alpha"),
+      description: "",
+      icon: "apps",
+      enabled: True,
+      pinned: True,
+      views: [],
+      placements: [
+        model.PlacementConfig(
+          viewport: Sidebar,
+          view_id: "widget",
+          route: Some("?view=widget"),
+        ),
+      ],
+      handled_intents: [],
+      disabled_intents: [],
+      relays: None,
+      source_url: "https://example.com/app.html",
+      version: Some("1.0.0"),
+    )
+  let m = model.init("classic", [alpha])
+  let #(_, effects) = update.update(m, NavigateTo(model.WidgetsDashboard))
+  should.be_true(
+    list.any(effects, fn(effect) {
+      case effect {
+        update.MountPluginInSlot(
+          "example.app.alpha",
+          Sidebar,
+          Some("?view=widget"),
+        ) -> True
+        _ -> False
+      }
+    }),
+  )
+}

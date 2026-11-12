@@ -71,6 +71,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
         PrimaryApp(plugin_id, route) -> [
           MountPluginInSlot(plugin_id: plugin_id, viewport: Main, route: route),
         ]
+        WidgetsDashboard -> widget_mount_effects(model)
         _ -> []
       }
       #(
@@ -577,6 +578,20 @@ fn fallback_page_for_apps(apps: List(InstalledApp)) -> Page {
     Some(app) -> PrimaryApp(plugin_id: app.id, route: None)
     None -> WidgetsDashboard
   }
+}
+
+fn widget_mount_effects(model: Model) -> List(ShellEffect) {
+  model.installed_apps
+  |> list.filter(fn(app) { app.enabled })
+  |> list.flat_map(fn(app) {
+    list.map(app.placements, fn(placement) {
+      MountPluginInSlot(
+        plugin_id: app.id,
+        viewport: placement.viewport,
+        route: placement.route,
+      )
+    })
+  })
 }
 
 fn push_back(model: Model, next: Page) -> List(Page) {

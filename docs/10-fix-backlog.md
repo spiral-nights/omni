@@ -78,7 +78,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | PL-11 | S2 | fixed | In-app back buttons missing; only browser history works. | fixed `3da7d55`: shell keeps a per-view back stack, all three theme headers render a back button when history exists, and `NavigateBack` pops it. |
 | PL-12 | S2 | fixed | Pull-to-refresh has no touch listeners. | fixed `d2deef6`: touch listeners dispatch the refresh at the 72 px threshold, the host re-fetches public events, and `FinishPullRefresh` clears the indicator after the fetch settles. |
 | PL-13 | S2 | fixed | PWA offline shell/assets caching not implemented. | fixed: `apps/web/public/sw.js` precaches the shell, uses network-first with cache fallback, and serves an offline navigation fallback. |
-| PL-14 | S3 | open | Widget/compact routes not rendered for hosted apps. | Route-aware hosted views (widget mode). |
+| PL-14 | S3 | fixed | Widget/compact routes not rendered for hosted apps. | fixed `PENDING`: opening the widgets dashboard mounts each enabled companion placement with its own route into its viewport island. |
 | PL-15 | S3 | open | Mobile menu/gestures unverified. | Add mobile e2e checks. |
 
 ## E. Quality & verification
