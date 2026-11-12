@@ -22,8 +22,8 @@ import plugin/notes/model.{
 }
 import plugin/notes/msg.{
   AddTag, CreateNote, DeleteNote, IngestRemoteDoc, RemoveTag, SaveActiveNote,
-  SelectFolder, SelectNote, SetDraftContent, SetDraftTitle, SetSearchQuery,
-  ToggleArchive, ToggleEncryptedSync, ToggleStar,
+  SelectFolder, SelectNote, SetDraftContent, SetDraftTitle, SetPubkey,
+  SetSearchQuery, ToggleArchive, ToggleEncryptedSync, ToggleStar,
 }
 import plugin/notes/update
 import plugin/notes/view
@@ -289,4 +289,47 @@ pub fn remote_note_ingestion_upserts_by_updated_at_test() {
     "{\"id\":\"note_remote\",\"title\":\"Another\",\"content\":\"body\",\"tags\":[],\"starred\":false,\"archived\":false,\"encrypted\":true,\"updated_at\":1700010000}"
   let #(m5, _) = update.update(m4, IngestRemoteDoc(other))
   list.length(m5.notes) |> should.equal(2)
+}
+
+pub fn edits_and_state_changes_publish_documents_test() {
+  // Creating a note publishes it immediately.
+  let #(m1, create_effects) = update.update(init(), CreateNote)
+  create_effects |> list.length |> should.equal(1)
+
+  // Starring and archiving publish the changed document.
+  let #(_, star_effects) = update.update(m1, ToggleStar("note_2"))
+  star_effects |> list.length |> should.equal(1)
+
+  let #(_, archive_effects) = update.update(m1, ToggleArchive("note_2"))
+  archive_effects |> list.length |> should.equal(1)
+
+  // Switching notes commits and publishes the note being left.
+  let #(m2, _) = update.update(m1, SetDraftContent("edited"))
+  let #(_, switch_effects) = update.update(m2, SelectNote("note_1"))
+  switch_effects |> list.length |> should.equal(1)
+
+  case list.first(switch_effects) {
+    Ok(PublishEncrypted(_)) -> Nil
+    Ok(Publish(_)) -> Nil
+    _ -> should.fail()
+  }
+}
+
+pub fn deleting_a_note_publishes_a_tombstone_test() {
+  let pubkey =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  let #(m1, _) = update.update(init(), SetPubkey(pubkey))
+  let #(_, effects) = update.update(m1, DeleteNote("note_1"))
+
+  case list.first(effects) {
+    Ok(Publish(draft)) -> {
+      kind.to_int(draft.kind) |> should.equal(5)
+      list.contains(draft.tags, [
+        "a",
+        "30078:" <> pubkey <> ":omni/notes/v1/note_1",
+      ])
+      |> should.equal(True)
+    }
+    _ -> should.fail()
+  }
 }

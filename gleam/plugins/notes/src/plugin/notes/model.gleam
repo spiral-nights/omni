@@ -45,6 +45,7 @@ pub type Model {
     sync_encrypted: Bool,
     dirty: Bool,
     next_id: Int,
+    my_pubkey: Option(String),
   )
 }
 
@@ -76,6 +77,7 @@ pub fn init() -> Model {
     sync_encrypted: True,
     dirty: False,
     next_id: 2,
+    my_pubkey: None,
   )
 }
 
@@ -94,6 +96,7 @@ pub fn init_with_notes(notes: List(NoteDoc)) -> Model {
         sync_encrypted: True,
         dirty: False,
         next_id: 1,
+        my_pubkey: None,
       )
     [first, ..] ->
       Model(
@@ -107,6 +110,7 @@ pub fn init_with_notes(notes: List(NoteDoc)) -> Model {
         sync_encrypted: first.encrypted,
         dirty: False,
         next_id: list.length(notes) + 1,
+        my_pubkey: None,
       )
   }
 }
@@ -366,6 +370,7 @@ pub fn notebook_decoder() -> Decoder(Model) {
     sync_encrypted: sync_encrypted,
     dirty: False,
     next_id: computed_next_id,
+    my_pubkey: None,
   ))
 }
 

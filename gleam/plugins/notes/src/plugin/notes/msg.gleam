@@ -19,4 +19,6 @@ pub type Msg {
   ToggleEncryptedSync
   /// Decrypted remote document (JSON) received from NIP-78 sync.
   IngestRemoteDoc(String)
+  /// The signed-in account's public key (used for deletion tombstones).
+  SetPubkey(String)
 }

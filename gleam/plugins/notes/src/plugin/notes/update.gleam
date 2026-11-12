@@ -18,7 +18,7 @@ import plugin/notes/model.{
 import plugin/notes/msg.{
   type Msg, AddTag, CreateNote, DeleteNote, IngestRemoteDoc, RemoveTag,
   SaveActiveNote, SelectFolder, SelectNote, SetDraftContent, SetDraftTitle,
-  SetSearchQuery, ToggleArchive, ToggleEncryptedSync, ToggleStar,
+  SetPubkey, SetSearchQuery, ToggleArchive, ToggleEncryptedSync, ToggleStar,
 }
 
 /// Apply a `Msg` to `model`, returning the updated `Model` and resulting effects.
@@ -52,7 +52,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
         model.FolderArchive -> model.FolderAll
         other -> other
       }
-      #(
+      let next_model =
         Model(
           ..synced_model,
           notes: [new_note, ..synced_model.notes],
@@ -63,13 +63,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
           draft_tag: "",
           dirty: False,
           next_id: synced_model.next_id + 1,
-        ),
-        [],
-      )
+        )
+      #(next_model, publish_note(next_model, new_note))
     }
 
     SelectNote(target_id) -> {
-      let synced_model = commit_dirty_active_note(model)
+      let #(synced_model, commit_effects) = commit_dirty_and_publish(model)
       case list.find(synced_model.notes, fn(n) { n.id == target_id }) {
         Ok(found) -> #(
           Model(
@@ -80,16 +79,17 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
             draft_tag: "",
             dirty: False,
           ),
-          [],
+          commit_effects,
         )
-        Error(Nil) -> #(synced_model, [])
+        Error(Nil) -> #(synced_model, commit_effects)
       }
     }
 
     DeleteNote(target_id) -> {
+      let tombstone = tombstone_effects(model, target_id)
       let remaining = list.filter(model.notes, fn(n) { n.id != target_id })
       case model.active_note_id == Some(target_id) {
-        False -> #(Model(..model, notes: remaining), [])
+        False -> #(Model(..model, notes: remaining), tombstone)
         True -> {
           let next_active = case remaining {
             [first, ..] -> Some(first)
@@ -106,7 +106,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
                 draft_tag: "",
                 dirty: False,
               ),
-              [],
+              tombstone,
             )
             None -> #(
               Model(
@@ -118,7 +118,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
                 draft_tag: "",
                 dirty: False,
               ),
-              [],
+              tombstone,
             )
           }
         }
@@ -134,7 +134,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
             False -> n
           }
         })
-      #(Model(..model, notes: updated_notes), [])
+      publish_updated_note(model, updated_notes, target_id)
     }
 
     ToggleArchive(target_id) -> {
@@ -146,7 +146,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
             False -> n
           }
         })
-      #(Model(..model, notes: updated_notes), [])
+      publish_updated_note(model, updated_notes, target_id)
     }
 
     SetDraftTitle(title) -> #(
@@ -188,7 +188,9 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
                       }
                   }
                 })
-              #(Model(..model, notes: updated_notes, draft_tag: ""), [])
+              let next_model =
+                Model(..model, notes: updated_notes, draft_tag: "")
+              publish_updated_note(next_model, updated_notes, active_id)
             }
           }
       }
@@ -218,7 +220,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
                   )
               }
             })
-          #(Model(..model, notes: updated_notes), [])
+          publish_updated_note(model, updated_notes, active_id)
         }
       }
     }
@@ -226,6 +228,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
     SetSearchQuery(query) -> #(Model(..model, search_query: query), [])
 
     SelectFolder(folder) -> #(Model(..model, folder: folder), [])
+
+    SetPubkey(pubkey) -> {
+      let cleaned = string.trim(pubkey)
+      case cleaned {
+        "" -> #(model, [])
+        _ -> #(Model(..model, my_pubkey: Some(cleaned)), [])
+      }
+    }
 
     SaveActiveNote -> {
       let next_model = save_active_note(model)
@@ -261,6 +271,63 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
         list.map(model.notes, fn(n) { NoteDoc(..n, encrypted: next_enc) })
       #(Model(..model, sync_encrypted: next_enc, notes: updated_notes), [])
     }
+  }
+}
+
+/// Publish a single note document (encrypted when the notebook syncs encrypted).
+fn publish_note(model: Model, note: NoteDoc) -> List(Effect(Msg)) {
+  let draft =
+    UnsignedEvent(
+      pubkey: None,
+      created_at: note.updated_at + 1,
+      kind: kind.AppData,
+      tags: [["d", notes_d_tag <> "/" <> note.id]],
+      content: encode_note_doc(note) |> json.to_string,
+    )
+  case model.sync_encrypted {
+    True -> [PublishEncrypted(draft)]
+    False -> [Publish(draft)]
+  }
+}
+
+fn publish_updated_note(
+  model: Model,
+  updated_notes: List(NoteDoc),
+  target_id: String,
+) -> #(Model, List(Effect(Msg))) {
+  let next_model = Model(..model, notes: updated_notes)
+  let effects = case list.find(updated_notes, fn(n) { n.id == target_id }) {
+    Ok(note) -> publish_note(next_model, note)
+    Error(Nil) -> []
+  }
+  #(next_model, effects)
+}
+
+fn commit_dirty_and_publish(model: Model) -> #(Model, List(Effect(Msg))) {
+  let saved = commit_dirty_active_note(model)
+  let effects = case model.dirty, active_note(saved) {
+    True, Some(note) -> publish_note(saved, note)
+    _, _ -> []
+  }
+  #(saved, effects)
+}
+
+/// NIP-09 deletion tombstone for an addressable note document.
+fn tombstone_effects(model: Model, note_id: String) -> List(Effect(Msg)) {
+  case model.my_pubkey {
+    None -> []
+    Some(pubkey) -> [
+      Publish(UnsignedEvent(
+        pubkey: None,
+        created_at: next_timestamp(model),
+        kind: kind.Other(5),
+        tags: [
+          ["a", "30078:" <> pubkey <> ":" <> notes_d_tag <> "/" <> note_id],
+          ["k", "30078"],
+        ],
+        content: "",
+      )),
+    ]
   }
 }
 
