@@ -40,7 +40,7 @@ Last updated: 2026-11-11.
 |---|---|---|---|---|
 | ID-1 | S2 | fixed | Key bootstrap: host generates/persists a key and shows it in the profile (`boot.session_profile`, commit `4587455`). | Done. |
 | ID-2 | S2 | fixed | No import/export/backup UI, no passphrase-encrypted storage. | fixed `18fdcb6` (UI): Settings imports nsec/hex keys by switching identities and exports the active nsec; at-rest passphrase encryption split out as ID-2b. |
-| ID-2b | S2 | fixed | Private keys are stored in plain storage; no passphrase encryption. | fixed `PENDING`: Settings can encrypt the stored key with a passphrase (NIP-44 to a passphrase-derived key); reloads start locked, signing waits for unlock, and the passphrase can be removed. |
+| ID-2b | S2 | fixed | Private keys are stored in plain storage; no passphrase encryption. | fixed `14c8cd2`: Settings can encrypt the stored key with a passphrase (NIP-44 to a passphrase-derived key); reloads start locked, signing waits for unlock, and the passphrase can be removed. |
 | ID-3 | S2 | open | Zap requests not implemented (like/repost publish). | Kind 9734 with `amount`/`lnurl` and receipt tracking. |
 | ID-4 | S3 | open | Multi-account support absent. | Account switcher + per-account cache/settings. |
 | ID-5 | S3 | deferred | NIP-17/59 DMs. | Gift-wrap pipeline + DMs plugin. |
