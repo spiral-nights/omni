@@ -17,7 +17,11 @@ pub type Msg {
   PublishReply(parent_id: String)
   LikeNote(note_id: String)
   RepostNote(note_id: String)
-  ZapNote(note_id: String)
+  StartZap(note_id: String)
+  SetZapAmount(String)
+  SetZapComment(String)
+  SendZap
+  CancelZap
   SetSearchQuery(String)
   LoadMore
   ToggleShowReplies

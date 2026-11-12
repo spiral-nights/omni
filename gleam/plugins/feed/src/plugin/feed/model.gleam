@@ -56,6 +56,11 @@ pub type Model {
     settings: FeedSettings,
     visible_limit: Int,
     now_sec: Int,
+    zap_target: Option(String),
+    zap_amount: String,
+    zap_comment: String,
+    zap_recipient_lud16: Option(String),
+    zap_lnurl: Option(String),
   )
 }
 
@@ -106,6 +111,11 @@ pub fn init(initial_route: Route) -> Model {
     settings: settings,
     visible_limit: settings.page_size,
     now_sec: 1_700_000_000,
+    zap_target: None,
+    zap_amount: "21",
+    zap_comment: "",
+    zap_recipient_lud16: None,
+    zap_lnurl: None,
   )
 }
 

@@ -22,11 +22,13 @@ import plugin/feed/model.{
   ViewThread, ViewTimeline, ViewWidget,
 }
 import plugin/feed/msg.{
-  type Msg, IngestEvent, IngestEvents, LikeNote, LoadMore, NavigateBack,
-  OpenThread, PublishNote, PublishReply, RepostNote, SelectTab, SelectView,
-  SetComposerDraft, SetComposerDraftAndPublish, SetReplyDraft, SetSearchQuery,
-  StartReply, ToggleInlineMedia, ToggleShowReplies, ZapNote,
+  type Msg, CancelZap, IngestEvent, IngestEvents, LikeNote, LoadMore,
+  NavigateBack, OpenThread, PublishNote, PublishReply, RepostNote, SelectTab,
+  SelectView, SendZap, SetComposerDraft, SetComposerDraftAndPublish,
+  SetReplyDraft, SetSearchQuery, SetZapAmount, SetZapComment, StartReply,
+  StartZap, ToggleInlineMedia, ToggleShowReplies,
 }
+import plugin/feed/zap
 
 const default_author_hex =
   "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
@@ -93,7 +95,15 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       reaction_effect(model, note_id, kind.Repost, ""),
     )
 
-    ZapNote(note_id) -> #(increment_zap(model, note_id), [])
+    StartZap(note_id) -> #(start_zap(model, note_id), [])
+
+    SetZapAmount(amount) -> #(Model(..model, zap_amount: amount), [])
+
+    SetZapComment(comment) -> #(Model(..model, zap_comment: comment), [])
+
+    SendZap -> send_zap(model)
+
+    CancelZap -> #(clear_zap(model), [])
 
     SetSearchQuery(query) -> #(
       Model(..model, view: ViewSearch, search_query: query),
@@ -202,9 +212,27 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
 
     "zap-note" | "zap_note" ->
       case extract_string(act, ["id", "noteId", "note_id"]) {
-        Some(id) if id != "" -> Some(ZapNote(id))
+        Some(id) if id != "" -> Some(StartZap(id))
         _ -> None
       }
+
+    "set-zap-amount" | "set_zap_amount" | "zap-preset" | "zap_preset" ->
+      case extract_string(act, ["amount", "value", "zapAmount", "zap_amount"]) {
+        Some(amount) -> Some(SetZapAmount(amount))
+        None -> None
+      }
+
+    "set-zap-comment" | "set_zap_comment" | "zap-comment" | "zap_comment" ->
+      case
+        extract_string(act, ["comment", "value", "zapComment", "zap_comment"])
+      {
+        Some(comment) -> Some(SetZapComment(comment))
+        None -> Some(SetZapComment(""))
+      }
+
+    "send-zap" | "send_zap" -> Some(SendZap)
+
+    "cancel-zap" | "cancel_zap" -> Some(CancelZap)
 
     "search" | "set-search-query" | "set_search_query" ->
       case extract_string(act, ["query", "q", "value", "searchQuery"]) {
@@ -459,7 +487,80 @@ fn toggle_repost(model: Model, note_id: String) -> Model {
   }
 }
 
-fn increment_zap(model: Model, note_id: String) -> Model {
+fn start_zap(model: Model, note_id: String) -> Model {
+  let clean_id = string.trim(note_id)
+  case clean_id {
+    "" -> model
+    _ -> {
+      let lud16 = case dict.get(model.notes, clean_id) {
+        Ok(target) ->
+          case dict.get(model.profiles, target.pubkey) {
+            Ok(profile) -> profile.lud16
+            Error(Nil) -> None
+          }
+        Error(Nil) -> None
+      }
+      let lnurl = case lud16 {
+        Some(address) ->
+          case zap.lud16_to_lnurl(address) {
+            Ok(encoded) -> Some(encoded)
+            Error(Nil) -> None
+          }
+        None -> None
+      }
+      Model(
+        ..model,
+        zap_target: Some(clean_id),
+        zap_amount: "21",
+        zap_comment: "",
+        zap_recipient_lud16: lud16,
+        zap_lnurl: lnurl,
+      )
+    }
+  }
+}
+
+fn clear_zap(model: Model) -> Model {
+  Model(
+    ..model,
+    zap_target: None,
+    zap_amount: "21",
+    zap_comment: "",
+    zap_recipient_lud16: None,
+    zap_lnurl: None,
+  )
+}
+
+fn send_zap(model: Model) -> #(Model, List(Effect(Msg))) {
+  case model.zap_target {
+    None -> #(model, [])
+    Some(note_id) ->
+      case dict.get(model.notes, note_id) {
+        Error(Nil) -> #(model, [])
+        Ok(target) ->
+          case zap.parse_amount(model.zap_amount) {
+            Error(_) -> #(model, [])
+            Ok(sats) -> {
+              let draft: zap.ZapRequestDraft =
+                zap.ZapRequestDraft(
+                  note_id: target.id,
+                  recipient_pubkey: target.pubkey,
+                  amount_sats: sats,
+                  comment: model.zap_comment,
+                  relays: zap.default_relay_urls,
+                  lnurl: model.zap_lnurl,
+                )
+              let unsigned = zap.request_event(draft, model.now_sec + 1)
+              #(increment_zap(clear_zap(model), target.id, sats), [
+                Publish(unsigned),
+              ])
+            }
+          }
+      }
+  }
+}
+
+fn increment_zap(model: Model, note_id: String, sats: Int) -> Model {
   let clean_id = string.trim(note_id)
   case clean_id {
     "" -> model
@@ -469,7 +570,7 @@ fn increment_zap(model: Model, note_id: String) -> Model {
         NoteStats(
           ..current,
           zaps: current.zaps + 1,
-          zap_sats: current.zap_sats + 21,
+          zap_sats: current.zap_sats + sats,
         )
       Model(..model, stats: dict.insert(model.stats, clean_id, next_stats))
     }

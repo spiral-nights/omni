@@ -8,13 +8,14 @@ import gleam/dynamic
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/string
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{
   type Node, AlignCenter, Body, Button, ButtonGhost, ButtonPrimary,
   ButtonSecondary, Caption, IconButton, IconButtonGhost, IconButtonSecondary,
-  Input, InputSearch, JustifyBetween, JustifyCenter, JustifyEnd, ListItem,
-  NodeBase, PageDeclaration, TabItem, Toggle, ToneMuted,
+  Input, InputNumber, InputSearch, JustifyBetween, JustifyCenter, JustifyEnd,
+  ListItem, NodeBase, PageDeclaration, TabItem, Toggle, ToneMuted,
 }
 import omni/protocol/schema/style.{SizeMd, SizeSm, StyleRaw}
 import omni/social/note.{type Note}
@@ -25,6 +26,7 @@ import plugin/feed/model.{
   type FeedTab, type Model, TabFollowing, TabGlobal, TabReplies, ViewSearch,
   ViewSettings, ViewThread, ViewTimeline, ViewWidget,
 }
+import plugin/feed/zap
 
 /// Render the top-level declarative Schema `Node` for `model`.
 pub fn view(model: Model) -> Node {
@@ -65,7 +67,12 @@ fn render_timeline_view(model: Model) -> Node {
     }
   }
 
-  let children = list.flatten([[composer_node, tabs_node], timeline_content])
+  let children =
+    list.flatten([
+      [composer_node, tabs_node],
+      render_zap_panel(model),
+      timeline_content,
+    ])
 
   schema.card()
   |> schema.with_id("feed-timeline")
@@ -238,6 +245,8 @@ fn render_thread_view(model: Model, note_id: String) -> Node {
 
   let cfg = feed_note_card_config(model.now_sec)
 
+  let zap_panel = render_zap_panel(model)
+
   let body_nodes = case model.active_thread(model) {
     None -> [
       note_card.render_empty_timeline(
@@ -280,7 +289,9 @@ fn render_thread_view(model: Model, note_id: String) -> Node {
     |> schema.with_style(StyleRaw(
       "max-width: 720px; margin: 0 auto; width: 100%;",
     ))
-    |> schema.children(list.flatten([[back_btn, schema.divider()], body_nodes]))
+    |> schema.children(
+      list.flatten([[back_btn, schema.divider()], zap_panel, body_nodes]),
+    )
 
   let b = node.get_base(card_base)
   let page_decl =
@@ -373,7 +384,11 @@ fn render_search_view(model: Model) -> Node {
     "max-width: 720px; margin: 0 auto; width: 100%;",
   ))
   |> schema.children(
-    list.flatten([[search_input, schema.divider()], result_nodes]),
+    list.flatten([
+      [search_input, schema.divider()],
+      render_zap_panel(model),
+      result_nodes,
+    ]),
   )
 }
 
@@ -518,6 +533,160 @@ fn render_widget_view(model: Model) -> Node {
   |> schema.title("Recent Notes")
   |> schema.with_icon("message")
   |> schema.children([quick_composer, schema.list_view(list_items)])
+}
+
+// -----------------------------------------------------------------------------
+// Zap dialog
+// -----------------------------------------------------------------------------
+
+fn render_zap_panel(model: Model) -> List(Node) {
+  case model.zap_target {
+    None -> []
+    Some(note_id) -> {
+      let target = dict.get(model.notes, note_id) |> option.from_result
+
+      let author_name = case target {
+        Some(n) -> {
+          let author_opt =
+            dict.get(model.profiles, n.pubkey) |> option.from_result
+          profile.best_display_name(author_opt, n.pubkey)
+        }
+        None -> "this note"
+      }
+
+      let recipient_line = case model.zap_recipient_lud16 {
+        Some(lud16) -> "Zapping " <> author_name <> " (" <> lud16 <> ")"
+        None -> "Zapping " <> author_name
+      }
+
+      let amount_status = case zap.parse_amount(model.zap_amount) {
+        Ok(sats) -> "Amount: " <> int.to_string(sats) <> " sats"
+        Error(_) -> "Enter a whole number of sats greater than zero."
+      }
+
+      let can_send = case target, zap.parse_amount(model.zap_amount) {
+        Some(_), Ok(_) -> True
+        _, _ -> False
+      }
+
+      let preset_row =
+        schema.box()
+        |> schema.row
+        |> schema.gap("xs")
+        |> schema.children([
+          zap_preset_button(21, model.zap_amount),
+          zap_preset_button(100, model.zap_amount),
+          zap_preset_button(1000, model.zap_amount),
+        ])
+
+      let amount_input =
+        Input(
+          base: node.empty_base(),
+          name: "zapAmount",
+          placeholder: Some("Amount in sats"),
+          value: Some(model.zap_amount),
+          input_type: Some(InputNumber),
+          accept: None,
+          clearable: None,
+          prefix_icon: Some("zap"),
+          action_on_enter: Some(action.new("send-zap")),
+          action_on_change: Some(action.new("set-zap-amount")),
+        )
+
+      let comment_input =
+        Input(
+          base: node.empty_base(),
+          name: "zapComment",
+          placeholder: Some("Optional zap comment"),
+          value: Some(model.zap_comment),
+          input_type: None,
+          accept: None,
+          clearable: Some(True),
+          prefix_icon: None,
+          action_on_enter: Some(action.new("send-zap")),
+          action_on_change: Some(action.new("set-zap-comment")),
+        )
+
+      let send_btn =
+        Button(
+          base: node.empty_base(),
+          label: "Send Zap",
+          action: action.new("send-zap"),
+          variant: Some(ButtonPrimary),
+          size: Some(SizeSm),
+          icon: Some("zap"),
+          icon_position: None,
+          disabled: Some(!can_send),
+          loading: None,
+        )
+
+      let cancel_btn =
+        Button(
+          base: node.empty_base(),
+          label: "Cancel",
+          action: action.new("cancel-zap"),
+          variant: Some(ButtonGhost),
+          size: Some(SizeSm),
+          icon: None,
+          icon_position: None,
+          disabled: None,
+          loading: None,
+        )
+
+      let button_row =
+        schema.box()
+        |> schema.row
+        |> schema.justify(JustifyEnd)
+        |> schema.gap("xs")
+        |> schema.children([cancel_btn, send_btn])
+
+      [
+        schema.card()
+        |> schema.with_id("zap-dialog")
+        |> schema.title("Zap note")
+        |> schema.subtitle(recipient_line)
+        |> schema.with_icon("zap")
+        |> schema.with_style(StyleRaw(
+          "margin-bottom: 12px; border: 1px solid rgba(229, 192, 123, 0.35);",
+        ))
+        |> schema.children([
+          preset_row,
+          amount_input,
+          schema.text(amount_status)
+            |> schema.text_variant(Caption)
+            |> schema.text_tone(ToneMuted),
+          comment_input,
+          button_row,
+        ]),
+      ]
+    }
+  }
+}
+
+fn zap_preset_button(amount: Int, current_amount: String) -> Node {
+  let amount_text = int.to_string(amount)
+  let is_selected = string.trim(current_amount) == amount_text
+  let variant = case is_selected {
+    True -> ButtonSecondary
+    False -> ButtonGhost
+  }
+  let act =
+    action.new("set-zap-amount")
+    |> action.with_payload(
+      dict.from_list([#("amount", dynamic.string(amount_text))]),
+    )
+
+  Button(
+    base: node.empty_base(),
+    label: amount_text <> " sats",
+    action: act,
+    variant: Some(variant),
+    size: Some(SizeSm),
+    icon: None,
+    icon_position: None,
+    disabled: None,
+    loading: None,
+  )
 }
 
 // -----------------------------------------------------------------------------

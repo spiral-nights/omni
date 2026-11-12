@@ -9,7 +9,7 @@ import gleeunit
 import gleeunit/should
 import omni/nostr/event.{type Event, Event}
 import omni/nostr/event_id
-import omni/nostr/kind.{type Kind, Note}
+import omni/nostr/kind.{type Kind, Metadata, Note, ZapRequest}
 import omni/nostr/pubkey
 import omni/platform/storage
 import omni/plugin_kit/app.{FetchUntil, Publish}
@@ -23,13 +23,14 @@ import plugin/feed/model.{
   ViewThread, ViewTimeline, ViewWidget,
 }
 import plugin/feed/msg.{
-  IngestEvent, LikeNote, LoadMore, NavigateBack, OpenThread, PublishNote,
-  PublishReply, SelectTab, SelectView, SetComposerDraft,
-  SetComposerDraftAndPublish, SetReplyDraft, SetSearchQuery, StartReply,
-  ToggleInlineMedia, ToggleShowReplies,
+  CancelZap, IngestEvent, LikeNote, LoadMore, NavigateBack, OpenThread,
+  PublishNote, PublishReply, SelectTab, SelectView, SendZap, SetComposerDraft,
+  SetComposerDraftAndPublish, SetReplyDraft, SetSearchQuery, SetZapAmount,
+  SetZapComment, StartReply, StartZap, ToggleInlineMedia, ToggleShowReplies,
 }
 import plugin/feed/update
 import plugin/feed/view
+import plugin/feed/zap
 
 pub fn main() -> Nil {
   gleeunit.main()
@@ -343,6 +344,170 @@ pub fn running_app_emits_schema_test() {
   let running = feed_main.start_app("?view=timeline", fn(_node) { Nil })
   let wire = running |> app.current_view |> schema.encode_schema_message
   should.be_true(string.length(wire) > 0)
+}
+
+pub fn zap_amount_parsing_and_tags_test() {
+  zap.parse_amount(" 21 ") |> should.equal(Ok(21))
+  zap.parse_amount("100") |> should.equal(Ok(100))
+  zap.parse_amount("") |> should.equal(Error(zap.EmptyAmount))
+  zap.parse_amount("   ") |> should.equal(Error(zap.EmptyAmount))
+  zap.parse_amount("abc") |> should.equal(Error(zap.InvalidAmount))
+  zap.parse_amount("0") |> should.equal(Error(zap.NonPositiveAmount))
+  zap.parse_amount("-5") |> should.equal(Error(zap.NonPositiveAmount))
+
+  let draft =
+    zap.ZapRequestDraft(
+      note_id: note1_hex,
+      recipient_pubkey: alice_hex,
+      amount_sats: 21,
+      comment: "  nice post  ",
+      relays: ["wss://relay.example", "wss://relay2.example"],
+      lnurl: Some("lnurl1example"),
+    )
+  let tags = zap.request_tags(draft)
+
+  list.contains(tags, ["p", alice_hex]) |> should.be_true
+  list.contains(tags, ["e", note1_hex]) |> should.be_true
+  list.contains(tags, [
+    "relays",
+    "wss://relay.example",
+    "wss://relay2.example",
+  ])
+  |> should.be_true
+  list.contains(tags, ["amount", "21000"]) |> should.be_true
+  list.contains(tags, ["lnurl", "lnurl1example"]) |> should.be_true
+
+  let unsigned = zap.request_event(draft, 1_700_000_123)
+  unsigned.kind |> should.equal(ZapRequest)
+  unsigned.created_at |> should.equal(1_700_000_123)
+  unsigned.content |> should.equal("nice post")
+  unsigned.pubkey |> should.equal(None)
+
+  // Lightning addresses deterministically become bech32 lnurl values.
+  let assert Ok(lnurl) = zap.lud16_to_lnurl("alice@getalby.com")
+  should.be_true(string.starts_with(lnurl, "lnurl1"))
+  zap.lud16_to_lnurl("not-an-address") |> should.equal(Error(Nil))
+}
+
+pub fn zap_flow_publishes_kind_9734_test() {
+  let m0 = model.init(route.main())
+  let profile_event =
+    make_event(
+      "3333333333333333333333333333333333333333333333333333333333333333",
+      alice_hex,
+      1_700_000_050,
+      Metadata,
+      [],
+      "{\"lud16\":\"alice@getalby.com\"}",
+    )
+  let #(m1, _) = update.update(m0, IngestEvent(profile_event))
+  let #(m2, _) =
+    update.update(m1, IngestEvent(note_event(note1_hex, alice_hex, "zap me")))
+
+  let #(m3, start_effects) = update.update(m2, StartZap(note1_hex))
+  start_effects |> should.equal([])
+  m3.zap_target |> should.equal(Some(note1_hex))
+  m3.zap_amount |> should.equal("21")
+  m3.zap_comment |> should.equal("")
+  m3.zap_recipient_lud16 |> should.equal(Some("alice@getalby.com"))
+  let assert Some(lnurl) = m3.zap_lnurl
+  should.be_true(string.starts_with(lnurl, "lnurl1"))
+
+  let #(m4, _) = update.update(m3, SetZapAmount("100"))
+  let #(m5, _) = update.update(m4, SetZapComment("great post"))
+  m5.zap_amount |> should.equal("100")
+  m5.zap_comment |> should.equal("great post")
+
+  let #(m6, effects) = update.update(m5, SendZap)
+  m6.zap_target |> should.equal(None)
+  m6.zap_amount |> should.equal("21")
+  m6.zap_comment |> should.equal("")
+  m6.zap_recipient_lud16 |> should.equal(None)
+  m6.zap_lnurl |> should.equal(None)
+
+  let assert Ok(parsed_stats) = dict.get(m6.stats, note1_hex)
+  parsed_stats.zaps |> should.equal(1)
+  parsed_stats.zap_sats |> should.equal(100)
+
+  let assert Ok(draft) =
+    list.find_map(effects, fn(effect) {
+      case effect {
+        Publish(unsigned) -> Ok(unsigned)
+        _ -> Error(Nil)
+      }
+    })
+  draft.kind |> should.equal(ZapRequest)
+  draft.content |> should.equal("great post")
+  draft.pubkey |> should.equal(None)
+  list.contains(draft.tags, ["p", alice_hex]) |> should.be_true
+  list.contains(draft.tags, ["e", note1_hex]) |> should.be_true
+  list.contains(draft.tags, ["amount", "100000"]) |> should.be_true
+  list.contains(draft.tags, ["lnurl", lnurl]) |> should.be_true
+  list.contains(draft.tags, ["relays", ..zap.default_relay_urls])
+  |> should.be_true
+}
+
+pub fn zap_invalid_amount_and_cancel_test() {
+  let m0 = model.init(route.main())
+  let #(m1, _) =
+    update.update(m0, IngestEvent(note_event(note1_hex, alice_hex, "zap me")))
+  let #(m2, _) = update.update(m1, StartZap(note1_hex))
+
+  let #(m3, _) = update.update(m2, SetZapAmount("0"))
+  let #(m4, invalid_effects) = update.update(m3, SendZap)
+  invalid_effects |> should.equal([])
+  m4.zap_target |> should.equal(Some(note1_hex))
+  m4.zap_amount |> should.equal("0")
+  dict.get(m4.stats, note1_hex) |> should.equal(Error(Nil))
+
+  let #(m5, _) = update.update(m4, SetZapAmount("not a number"))
+  let #(m6, still_invalid) = update.update(m5, SendZap)
+  still_invalid |> should.equal([])
+  m6.zap_target |> should.equal(Some(note1_hex))
+
+  let #(m7, _) = update.update(m6, SetZapComment("hello"))
+  let #(m8, cancel_effects) = update.update(m7, CancelZap)
+  cancel_effects |> should.equal([])
+  m8.zap_target |> should.equal(None)
+  m8.zap_amount |> should.equal("21")
+  m8.zap_comment |> should.equal("")
+}
+
+pub fn zap_action_mapping_test() {
+  update.action_to_msg(schema_action("zap-note", [#("id", note1_hex)]))
+  |> should.equal(Some(StartZap(note1_hex)))
+
+  update.action_to_msg(schema_action("set-zap-amount", [#("amount", "100")]))
+  |> should.equal(Some(SetZapAmount("100")))
+
+  update.action_to_msg(schema_action("zap-preset", [#("amount", "21")]))
+  |> should.equal(Some(SetZapAmount("21")))
+
+  update.action_to_msg(schema_action("set-zap-comment", [#("comment", "gm")]))
+  |> should.equal(Some(SetZapComment("gm")))
+
+  update.action_to_msg(schema_action("send-zap", []))
+  |> should.equal(Some(SendZap))
+
+  update.action_to_msg(schema_action("cancel-zap", []))
+  |> should.equal(Some(CancelZap))
+}
+
+pub fn zap_dialog_renders_when_active_test() {
+  let m0 = model.init(route.main())
+  let #(m1, _) =
+    update.update(m0, IngestEvent(note_event(note1_hex, alice_hex, "zap me")))
+  let #(m2, _) = update.update(m1, StartZap(note1_hex))
+  let wire = schema.encode_schema_message(view.view(m2))
+
+  should.be_true(string.contains(wire, "zap-dialog"))
+  should.be_true(string.contains(wire, "Zap note"))
+  should.be_true(string.contains(wire, "Send Zap"))
+  should.be_true(string.contains(wire, "21 sats"))
+  should.be_true(string.contains(wire, "100 sats"))
+  should.be_true(string.contains(wire, "1000 sats"))
+  should.be_true(string.contains(wire, "set-zap-amount"))
+  should.be_true(string.contains(wire, "cancel-zap"))
 }
 
 // Test-only helpers -----------------------------------------------------------

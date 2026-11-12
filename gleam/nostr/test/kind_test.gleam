@@ -1,7 +1,7 @@
 import gleam/list
 import omni/nostr/kind.{
   AppData, Bookmark, ContactList, DirectMessage, GiftWrap, Longform, Metadata,
-  Note, Other, Reaction, RelayList, Repost, Seal, Zap,
+  Note, Other, Reaction, RelayList, Repost, Seal, Zap, ZapRequest,
 }
 
 pub fn standard_kinds_round_trip_test() {
@@ -15,6 +15,7 @@ pub fn standard_kinds_round_trip_test() {
     #(Seal, 14),
     #(GiftWrap, 1059),
     #(Zap, 9735),
+    #(ZapRequest, 9734),
     #(RelayList, 10_002),
     #(Bookmark, 30_000),
     #(Longform, 30_023),

@@ -14,6 +14,7 @@ pub type Kind {
   Seal
   GiftWrap
   Zap
+  ZapRequest
   RelayList
   Bookmark
   Longform
@@ -33,6 +34,7 @@ pub fn to_int(kind: Kind) -> Int {
     Seal -> 14
     GiftWrap -> 1059
     Zap -> 9735
+    ZapRequest -> 9734
     RelayList -> 10_002
     Bookmark -> 30_000
     Longform -> 30_023
@@ -53,6 +55,7 @@ pub fn from_int(code: Int) -> Kind {
     14 -> Seal
     1059 -> GiftWrap
     9735 -> Zap
+    9734 -> ZapRequest
     10_002 -> RelayList
     30_000 -> Bookmark
     30_023 -> Longform
