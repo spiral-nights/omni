@@ -43,7 +43,9 @@ import omni/protocol/schema/codec as schema_codec
 import omni/protocol/workspace
 import omni/sandbox/manager
 import omni/shell/model
-import omni/shell/msg.{HostedSchemaAction, NavigateTo, ToggleFullscreen}
+import omni/shell/msg.{
+  EmbedSchema, HostedSchemaAction, NavigateTo, ToggleFullscreen,
+}
 import omni/shell/registry
 import omni/web/boot
 import omni/web/config
@@ -1108,5 +1110,51 @@ pub fn zap_invoice_flow_broadcasts_request_and_returns_invoice_test() -> promise
   string.contains(rendered, "lnbc1testinvoice") |> should.equal(True)
 
   list.length(ref.get(calls)) |> should.equal(2)
+  promise.resolve(Nil)
+}
+
+pub fn feed_note_click_opens_thread_view_test() -> promise.Promise(Nil) {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+  let assert Ok(feed) = dict.get(booted.builtins, "org.omni.plugin.feed")
+  let assert Some(ingest) = feed.ingest
+
+  let author =
+    "7777777777777777777777777777777777777777777777777777777777777777"
+  let note_id =
+    "8888888888888888888888888888888888888888888888888888888888888888"
+  ingest(feed_event(note_id, author, 1, [], "clickable note", 1_700_000_001))
+
+  let open_thread =
+    schema_action.new("open-thread")
+    |> schema_action.with_payload(
+      dict.from_list([#("id", dynamic.string(note_id))]),
+    )
+  let #(opened, _) =
+    boot.dispatch(
+      booted,
+      HostedSchemaAction("org.omni.plugin.feed", open_thread),
+    )
+
+  let assert Ok(feed_after) = dict.get(opened.builtins, "org.omni.plugin.feed")
+  let rendered = feed_after.render() |> schema_codec.encode_node
+  string.contains(rendered, "Conversation Thread") |> should.equal(True)
+  string.contains(rendered, "clickable note") |> should.equal(True)
+
+  // A streamed schema refresh (emitted whenever relay events arrive) must not
+  // bounce the plugin back to its list view.
+  let #(refreshed, _) =
+    boot.dispatch(
+      opened,
+      EmbedSchema("org.omni.plugin.feed", feed_after.render()),
+    )
+  let assert Ok(feed_refreshed) =
+    dict.get(refreshed.builtins, "org.omni.plugin.feed")
+  feed_refreshed.render()
+  |> schema_codec.encode_node
+  |> string.contains("Conversation Thread")
+  |> should.equal(True)
   promise.resolve(Nil)
 }

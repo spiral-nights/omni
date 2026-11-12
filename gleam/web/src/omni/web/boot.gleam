@@ -430,15 +430,21 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
       }
     })
 
-  // Follow the active app's route, then refresh every embedded view so the
-  // rendered tree reflects the latest plugin state.
-  let _ = case next_model.active_page {
-    PrimaryApp(plugin_id, route) ->
+  // Follow the active app's route only when the page actually changes. Plugin
+  // internal navigation (thread views, profile details) must survive unrelated
+  // shell messages such as streamed schema refreshes or ingested relay events.
+  let page_changed = next_model.active_page != booted.model.active_page
+  let explicit_open = case msg {
+    OpenApp(_, _) | msg.NavigateTo(_) -> True
+    _ -> False
+  }
+  let _ = case page_changed || explicit_open, next_model.active_page {
+    True, PrimaryApp(plugin_id, route) ->
       case dict.get(booted.builtins, plugin_id) {
         Ok(app) -> app.navigate(option.unwrap(route, ""))
         Error(Nil) -> Nil
       }
-    _ -> Nil
+    _, _ -> Nil
   }
 
   let refreshed =
