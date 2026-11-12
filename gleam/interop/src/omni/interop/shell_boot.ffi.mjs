@@ -65,7 +65,7 @@ export function unmount_island(selector) {
 import { start } from "../../../lustre/lustre/runtime/client/spa.ffi.mjs";
 import { Some } from "../../../gleam_stdlib/gleam/option.mjs";
 
-export function mount_dom(selector, init, update, view, parse_url, page_url) {
+export function mount_dom(selector, init, update, view, parse_url, page_url, pull_start) {
   let lastUrl = null;
 
   const syncHistory = (model, replace) => {
@@ -103,6 +103,37 @@ export function mount_dom(selector, init, update, view, parse_url, page_url) {
 
   const spa = result && result.isOk ? result[0] : null;
   if (spa) window.__omniShellDispatch = (message) => spa.dispatch(message);
+
+  if (spa) {
+    let startY = null;
+    let fired = false;
+    const reset = () => {
+      startY = null;
+      fired = false;
+    };
+    document.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!e.touches || e.touches.length !== 1) return;
+        startY = (window.scrollY || 0) <= 1 ? e.touches[0].clientY : null;
+        fired = false;
+      },
+      { passive: true },
+    );
+    document.addEventListener(
+      "touchmove",
+      (e) => {
+        if (startY === null || fired || !e.touches || !e.touches.length) return;
+        if (e.touches[0].clientY - startY >= 72) {
+          fired = true;
+          spa.dispatch(pull_start);
+        }
+      },
+      { passive: true },
+    );
+    document.addEventListener("touchend", reset, { passive: true });
+    document.addEventListener("touchcancel", reset, { passive: true });
+  }
 
   window.addEventListener("popstate", () => {
     if (!spa) return;

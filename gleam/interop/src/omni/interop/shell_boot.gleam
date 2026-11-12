@@ -29,6 +29,7 @@ import omni/platform/nip44
 import omni/platform/storage
 import omni/platform/url
 import omni/plugin_kit/route.{type Route}
+import omni/protocol/rpc/method.{FetchOptions}
 import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace
 import omni/shell/layout/viewport_host
@@ -39,8 +40,9 @@ import omni/shell/model.{
 }
 import omni/shell/model as omni_shell_model
 import omni/shell/msg.{
-  ApplyRemoteWorkspace, EmbedSchema, InstallApp, NavigateTo, OpenApp,
-  OpenSettings, SetUserProfile, ShowPermissionPrompt, ShowUpdateModal,
+  ApplyRemoteWorkspace, EmbedSchema, FinishPullRefresh, InstallApp, NavigateTo,
+  OpenApp, OpenSettings, SetUserProfile, ShowPermissionPrompt, ShowUpdateModal,
+  StartPullRefresh, UninstallApp,
 }
 import omni/shell/update
 import omni/social/profile as social_profile
@@ -173,6 +175,7 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
     fn(current: ShellBoot) { boot.view(current.booted) },
     msg_from_url,
     page_url,
+    StartPullRefresh,
   )
 }
 
@@ -247,6 +250,7 @@ fn mount_dom(
   view: fn(ShellBoot) -> Element(msg.Msg),
   parse_url: fn(String) -> Option(msg.Msg),
   page_url: fn(ShellBoot) -> String,
+  pull_start: msg.Msg,
 ) -> Nil
 
 /// Apply the shell's side effects: sandbox mounts/unmounts, plugin teardown,
@@ -277,9 +281,38 @@ fn apply_effects(
         acc
       }
 
+      update.RefreshActiveView -> {
+        refresh_public_feed(acc)
+        acc
+      }
+
       _ -> acc
     }
   })
+}
+
+fn refresh_public_feed(host: ShellBoot) -> Nil {
+  let _ =
+    coordinator.fetch(
+      host.booted.kernel.coordinator,
+      "omni_internal_refresh",
+      [public_events_filter()],
+      Some(FetchOptions(timeout_ms: Some(3000), relays: None, local_only: None)),
+    )
+    |> promise.map(fn(events) {
+      list.each(events, fn(event) {
+        dict.each(host.booted.builtins, fn(_id, app) {
+          case app.ingest {
+            Some(ingest) -> ingest(event)
+            None -> Nil
+          }
+        })
+      })
+      push_views(host)
+      dispatch_shell_msg(FinishPullRefresh)
+      Nil
+    })
+  Nil
 }
 
 fn slot_selector(viewport: Viewport, plugin_id: String) -> String {
@@ -298,7 +331,11 @@ fn install_bundle(host: ShellBoot, target: String, plugin_id: String) -> Nil {
     installer.resolve(host.booted.kernel, target, plugin_id)
     |> promise.map(fn(result) {
       case result {
-        Error(_) -> Nil
+        Error(_) -> {
+          // Validation failed: roll the optimistic install back out.
+          dispatch_shell_msg(UninstallApp(plugin_id))
+          Nil
+        }
         Ok(bundle) -> {
           dispatch_shell_msg(InstallApp(bundle.app))
           dispatch_shell_msg(OpenApp(plugin_id, None))
