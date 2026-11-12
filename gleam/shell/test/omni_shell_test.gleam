@@ -644,3 +644,35 @@ pub fn installing_custom_url_emits_install_effect_test() {
     }),
   )
 }
+
+pub fn reinstalling_resolved_custom_app_does_not_refetch_test() {
+  let custom =
+    model.InstalledApp(
+      id: "nsite.custom.example",
+      name: "Custom",
+      display_name: Some("Custom"),
+      description: "",
+      icon: "apps",
+      enabled: True,
+      pinned: False,
+      views: [],
+      placements: [],
+      handled_intents: [],
+      disabled_intents: [],
+      relays: None,
+      source_url: "https://example.com/app.html",
+      version: Some("1.0.0"),
+    )
+  let m = model.init("classic", [custom])
+  let resolved =
+    model.InstalledApp(..custom, name: "Custom Renamed", version: Some("2.0.0"))
+  let #(_, effects) = update.update(m, InstallApp(resolved))
+  should.be_false(
+    list.any(effects, fn(effect) {
+      case effect {
+        update.InstallPluginFromUrl(_, _) -> True
+        _ -> False
+      }
+    }),
+  )
+}

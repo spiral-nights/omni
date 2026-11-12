@@ -85,7 +85,7 @@ pub type Booted {
 
 /// Initialize the kernel, shell registry, and shell model from injected ports.
 pub fn init(ports: KernelPorts) -> Booted {
-  init_with_bridge(ports, None)
+  init_with_relays(ports, config.bootstrap_relays(), None)
 }
 
 /// Initialize boot state with the bundled Gleam guest bridge injected into
@@ -94,14 +94,23 @@ pub fn init_with_bridge(
   ports: KernelPorts,
   bridge_script: Option(String),
 ) -> Booted {
+  init_with_relays(ports, config.bootstrap_relays(), bridge_script)
+}
+
+/// Initialize boot state against an explicit bootstrap relay set. Tests pass
+/// `[]` so no real sockets are dialed, then attach fake relays.
+pub fn init_with_relays(
+  ports: KernelPorts,
+  bootstrap_relays: List(relay_url.RelayUrl),
+  bridge_script: Option(String),
+) -> Booted {
   let permission_prompts = permission_prompt.new()
   let ports =
     KernelPorts(
       ..ports,
       prompt_handler: Some(permission_prompt.handler(permission_prompts)),
     )
-  let kernel =
-    kernel.new(ports, config.bootstrap_relays(), config.default_shell_id)
+  let kernel = kernel.new(ports, bootstrap_relays, config.default_shell_id)
   let registry =
     registry.with_builtin_themes()
     |> registry.load_and_persist_active_id(kernel.storage)

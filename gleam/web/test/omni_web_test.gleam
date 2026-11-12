@@ -14,10 +14,11 @@ import omni/kernel/intents/broker as intent_broker
 import omni/kernel/kernel.{type KernelPorts, KernelPorts}
 import omni/kernel/nostr/event_store
 import omni/kernel/nostr/relay_pool
-import omni/nostr/event.{UnsignedEvent}
+import omni/nostr/event.{type Event, Event, UnsignedEvent}
 import omni/nostr/event_id
 import omni/nostr/filter.{Filter}
 import omni/nostr/kind
+import omni/nostr/pubkey
 import omni/nostr/relay_url
 import omni/platform/clock
 import omni/platform/idb
@@ -92,7 +93,7 @@ pub fn boot_init_seeds_model_from_registry_and_config_test() {
   use ports_res <- promise.await(test_ports(store))
   let assert Ok(ports) = ports_res
 
-  let booted = boot.init(ports)
+  let booted = boot.init_with_relays(ports, [], None)
 
   booted.model.active_shell_id |> should.equal("editorial")
   booted.registry.active_id |> should.equal("editorial")
@@ -114,7 +115,8 @@ pub fn boot_view_renders_active_theme_and_stylesheets_test() {
   use ports_res <- promise.await(test_ports(store))
   let assert Ok(ports) = ports_res
 
-  let html_str = boot.view(boot.init(ports)) |> element.to_string
+  let html_str =
+    boot.view(boot.init_with_relays(ports, [], None)) |> element.to_string
 
   should.be_true(string.contains(html_str, "id=\"omni-boot-root\""))
   should.be_true(string.contains(html_str, "data-active-shell=\"editorial\""))
@@ -132,7 +134,8 @@ pub fn boot_select_shell_persists_and_rerenders_test() {
   use ports_res <- promise.await(test_ports(store))
   let assert Ok(ports) = ports_res
 
-  let booted = boot.select_shell(boot.init(ports), "classic")
+  let booted =
+    boot.select_shell(boot.init_with_relays(ports, [], None), "classic")
 
   booted.model.active_shell_id |> should.equal("classic")
   booted.registry.active_id |> should.equal("classic")
@@ -151,7 +154,8 @@ pub fn boot_dispatch_updates_model_and_returns_host_effects_test() {
   use ports_res <- promise.await(test_ports(store))
   let assert Ok(ports) = ports_res
 
-  let #(booted, effects) = boot.dispatch(boot.init(ports), ToggleFullscreen)
+  let #(booted, effects) =
+    boot.dispatch(boot.init_with_relays(ports, [], None), ToggleFullscreen)
 
   booted.model.fullscreen |> should.equal(True)
   effects |> should.equal([])
@@ -200,7 +204,7 @@ pub fn key_bootstrap_signing_and_rpc_test() {
   use ports_res <- promise.await(test_ports(store))
   let assert Ok(ports) = ports_res
 
-  let booted = boot.init_with_bridge(ports, None)
+  let booted = boot.init_with_relays(ports, [], None)
   let assert Some(profile) = booted.model.user_profile
   string.length(profile.pubkey) |> should.equal(64)
   should.be_true(string.starts_with(profile.npub, "npub1"))
@@ -226,7 +230,7 @@ pub fn key_bootstrap_signing_and_rpc_test() {
   // The key persists across boots sharing the same storage.
   use ports2_res <- promise.await(test_ports(store))
   let assert Ok(ports2) = ports2_res
-  let rebooted = boot.init_with_bridge(ports2, None)
+  let rebooted = boot.init_with_relays(ports2, [], None)
   let assert Some(again) = rebooted.model.user_profile
   again.pubkey |> should.equal(profile.pubkey)
 
@@ -237,7 +241,7 @@ pub fn rpc_rejects_invalid_plugin_and_signs_via_frame_test() {
   let store = storage.in_memory()
   use ports_res <- promise.await(test_ports(store))
   let assert Ok(ports) = ports_res
-  let booted = boot.init_with_bridge(ports, None)
+  let booted = boot.init_with_relays(ports, [], None)
 
   use response <- promise.await(rpc.handle(booted, "not a plugin", "{}"))
   should.be_true(string.contains(response, "Invalid plugin ID"))
@@ -259,7 +263,7 @@ pub fn publish_pipeline_signs_broadcasts_and_ingests_test() {
   let store = storage.in_memory()
   use ports_res <- promise.await(test_ports(store))
   let assert Ok(ports) = ports_res
-  let booted = boot.init_with_bridge(ports, None)
+  let booted = boot.init_with_relays(ports, [], None)
 
   let draft =
     UnsignedEvent(
@@ -288,7 +292,7 @@ pub fn encrypted_publish_encrypts_content_test() {
   let store = storage.in_memory()
   use ports_res <- promise.await(test_ports(store))
   let assert Ok(ports) = ports_res
-  let booted = boot.init_with_bridge(ports, None)
+  let booted = boot.init_with_relays(ports, [], None)
 
   let draft =
     UnsignedEvent(
@@ -328,7 +332,7 @@ pub fn nip65_relay_list_is_applied_test() {
   let store = storage.in_memory()
   use ports_res <- promise.await(test_ports(store))
   let assert Ok(ports) = ports_res
-  let booted = boot.init_with_bridge(ports, None)
+  let booted = boot.init_with_relays(ports, [], None)
 
   boot.apply_relay_list(booted, [
     ["r", "wss://relay.example"],
@@ -361,7 +365,7 @@ pub fn intent_routing_opens_single_handler_test() {
   let store = storage.in_memory()
   use ports_res <- promise.await(test_ports(store))
   let assert Ok(ports) = ports_res
-  let booted = boot.init_with_bridge(ports, None)
+  let booted = boot.init_with_relays(ports, [], None)
 
   let action =
     schema_action.new("view_note")
@@ -382,7 +386,7 @@ pub fn intent_routing_disambiguates_multiple_handlers_test() {
   let store = storage.in_memory()
   use ports_res <- promise.await(test_ports(store))
   let assert Ok(ports) = ports_res
-  let booted = boot.init_with_bridge(ports, None)
+  let booted = boot.init_with_relays(ports, [], None)
 
   // Register a second handler so the broker must ask the user.
   let _ =
@@ -451,4 +455,168 @@ pub fn installer_builds_app_from_url_test() {
   app.source_url |> should.equal("https://example.com/widgets/app.html")
   app.enabled |> should.equal(True)
   list.length(app.views) |> should.equal(1)
+}
+
+fn manifest_event(content: String, tags: List(List(String))) -> Event {
+  let assert Ok(eid) =
+    event_id.parse(
+      "4444444444444444444444444444444444444444444444444444444444444444",
+    )
+  let assert Ok(pk) =
+    pubkey.parse(
+      "5555555555555555555555555555555555555555555555555555555555555555",
+    )
+  Event(
+    id: eid,
+    pubkey: pk,
+    created_at: 1_700_000_000,
+    kind: kind.from_int(35_129),
+    tags: tags,
+    content: content,
+    sig: "sig",
+  )
+}
+
+fn no_fetch(_url: String) -> promise.Promise(Result(String, String)) {
+  promise.resolve(Error("unexpected fetch"))
+}
+
+pub fn installer_url_resolution_uses_fetcher_test() -> promise.Promise(Nil) {
+  let app =
+    installer.app_from(
+      "https://example.com/nsite/app.html",
+      "nsite.custom.example.com.nsite.app.html",
+    )
+  app.id |> should.equal("nsite.custom.example.com.nsite.app.html")
+
+  use result <- promise.await(
+    installer.resolve_url_with(
+      "https://example.com/app.html",
+      "nsite.custom.example.com.app.html",
+      fn(url) {
+        url |> should.equal("https://example.com/app.html")
+        promise.resolve(Ok("<html><body>hi</body></html>"))
+      },
+    ),
+  )
+
+  case result {
+    Ok(bundle) -> {
+      bundle.content |> should.equal("<html><body>hi</body></html>")
+      bundle.app.source_url |> should.equal("https://example.com/app.html")
+    }
+    Error(err) -> panic as err
+  }
+  promise.resolve(Nil)
+}
+
+pub fn installer_coordinate_resolves_cached_manifest_test() -> promise.Promise(
+  Nil,
+) {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+
+  let cur_event =
+    manifest_event("<html><body><h1>Nsite</h1></body></html>", [
+      ["d", "my-app"],
+      ["name", "My App"],
+      ["version", "2.1.0"],
+    ])
+  use _ <- promise.await(event_store.save_event(
+    booted.kernel.event_store,
+    cur_event,
+  ))
+
+  let target =
+    "35129:5555555555555555555555555555555555555555555555555555555555555555:my-app"
+  use result <- promise.await(installer.resolve_with(
+    booted.kernel,
+    target,
+    "nsite.custom.my-app",
+    no_fetch,
+  ))
+
+  case result {
+    Ok(bundle) -> {
+      bundle.app.name |> should.equal("My App")
+      bundle.app.version |> should.equal(Some("2.1.0"))
+      bundle.app.source_url |> should.equal(target)
+      bundle.content |> should.equal("<html><body><h1>Nsite</h1></body></html>")
+    }
+    Error(err) -> panic as err
+  }
+  promise.resolve(Nil)
+}
+
+pub fn installer_blossom_manifest_inlines_assets_test() -> promise.Promise(Nil) {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+
+  let cur_event =
+    manifest_event("", [
+      ["d", "blossom-app"],
+      ["f", "index.html", "hash-html"],
+      ["f", "app.js", "hash-js"],
+      ["f", "app.css", "hash-css"],
+      ["server", "https://blossom.test"],
+    ])
+  use _ <- promise.await(event_store.save_event(
+    booted.kernel.event_store,
+    cur_event,
+  ))
+
+  use result <- promise.await(
+    installer.resolve_with(
+      booted.kernel,
+      "35129:5555555555555555555555555555555555555555555555555555555555555555:blossom-app",
+      "nsite.custom.blossom-app",
+      fn(url) {
+        case url {
+          "https://blossom.test/hash-html" ->
+            promise.resolve(Ok(
+              "<html><head></head><body><div id=\"app\"></div></body></html>",
+            ))
+          "https://blossom.test/hash-js" ->
+            promise.resolve(Ok("console.log('omni')"))
+          "https://blossom.test/hash-css" ->
+            promise.resolve(Ok("body{margin:0}"))
+          _ -> promise.resolve(Error("404"))
+        }
+      },
+    ),
+  )
+
+  case result {
+    Ok(bundle) -> {
+      should.be_true(string.contains(bundle.content, "console.log('omni')"))
+      should.be_true(string.contains(bundle.content, "body{margin:0}"))
+      should.be_true(string.contains(
+        bundle.content,
+        "data-omni-asset=\"app.js\"",
+      ))
+      should.be_true(string.contains(
+        bundle.content,
+        "data-omni-asset=\"app.css\"",
+      ))
+    }
+    Error(err) -> panic as err
+  }
+  promise.resolve(Nil)
+}
+
+pub fn installer_inline_assets_pure_test() {
+  let html = "<html><head></head><body></body></html>"
+  let out =
+    installer.inline_manifest_assets(html, [
+      #("app.css", "a{color:red}"),
+      #("app.js", "run()"),
+    ])
+  string.contains(out, "<style data-omni-asset=\"app.css\">")
+  |> should.equal(True)
+  string.contains(out, "<script data-omni-asset=\"app.js\">")
+  |> should.equal(True)
 }

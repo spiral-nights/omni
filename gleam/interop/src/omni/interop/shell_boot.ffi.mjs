@@ -51,6 +51,11 @@ export function mount_island(selector, srcdoc, pluginId, onRpc) {
   host.appendChild(iframe);
 }
 
+export function island_mounted(selector) {
+  const host = resolveHost(selector);
+  return Boolean(host && host.querySelector("iframe.omni-sandbox-iframe"));
+}
+
 export function unmount_island(selector) {
   const host = resolveHost(selector);
   if (!host) return;

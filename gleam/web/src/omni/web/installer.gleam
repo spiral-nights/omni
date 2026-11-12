@@ -1,10 +1,23 @@
-//// Nsite bundle installation: fetch a URL and build an installed app entry.
+//// Nsite bundle installation: resolve URLs, naddr coordinates, and Blossom
+//// manifests into a mountable installed-app entry.
 
+import gleam/dict
+import gleam/int
 import gleam/javascript/promise.{type Promise}
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/result
 import gleam/string
+import omni/kernel/kernel.{type OmniKernel}
+import omni/kernel/nostr/coordinator
+import omni/kernel/plugins/resolver
+import omni/nostr/event
+import omni/nostr/filter
+import omni/nostr/kind.{type Kind, from_int}
+import omni/nostr/pubkey
 import omni/platform/http
+import omni/platform/promise_ext
+import omni/protocol/rpc/method.{type FetchOptions, FetchOptions}
 import omni/shell/model.{type InstalledApp, InstalledApp, ViewOption}
 
 /// A fetched bundle ready to be mounted in a sandbox.
@@ -12,17 +25,321 @@ pub type InstalledBundle {
   InstalledBundle(app: InstalledApp, content: String)
 }
 
+/// Injectable text fetcher (HTTP or Blossom); production uses `http.fetch_text`.
+pub type Fetcher =
+  fn(String) -> Promise(Result(String, String))
+
 /// Fetch `url` as a self-contained nsite document and describe it.
 pub fn resolve_url(
   url: String,
   plugin_id: String,
 ) -> Promise(Result(InstalledBundle, String)) {
-  use result <- promise.await(http.fetch_text(url))
+  resolve_url_with(url, plugin_id, http.fetch_text)
+}
+
+/// Fetch `url` using an injected fetcher (used by tests).
+pub fn resolve_url_with(
+  url: String,
+  plugin_id: String,
+  fetch: Fetcher,
+) -> Promise(Result(InstalledBundle, String)) {
+  use result <- promise.await(fetch(url))
   promise.resolve(case result {
     Error(err) -> Error(err)
     Ok(content) ->
       Ok(InstalledBundle(app: app_from(url, plugin_id), content: content))
   })
+}
+
+/// Resolve any supported install target (`https://...`, `naddr1...`, or
+/// `kind:pubkey:d`) into an installable bundle.
+pub fn resolve(
+  kernel: OmniKernel,
+  raw: String,
+  plugin_id: String,
+) -> Promise(Result(InstalledBundle, String)) {
+  resolve_with(kernel, raw, plugin_id, http.fetch_text)
+}
+
+/// Resolve an install target using an injected fetcher (used by tests).
+pub fn resolve_with(
+  kernel: OmniKernel,
+  raw: String,
+  plugin_id: String,
+  fetch: Fetcher,
+) -> Promise(Result(InstalledBundle, String)) {
+  case resolver.parse_target(raw) {
+    Error(err) -> promise.resolve(Error(resolve_error(err)))
+    Ok(resolver.UrlTarget(url)) -> resolve_url_with(url, plugin_id, fetch)
+    Ok(resolver.NaddrTarget(_naddr, addr)) ->
+      resolve_nostr(
+        kernel,
+        raw,
+        plugin_id,
+        addr.kind,
+        pubkey.to_hex(addr.pubkey),
+        addr.identifier,
+        fetch,
+      )
+    Ok(resolver.CoordinateTarget(kind, pubkey_hex, identifier)) ->
+      resolve_nostr(
+        kernel,
+        raw,
+        plugin_id,
+        from_int(kind),
+        pubkey_hex,
+        identifier,
+        fetch,
+      )
+    Ok(resolver.EventTarget(event)) ->
+      bundle_from_resolved(
+        raw,
+        plugin_id,
+        resolver.resolve_event(event, None),
+        resolver.default_blossom_servers,
+        fetch,
+      )
+  }
+}
+
+fn resolve_nostr(
+  kernel: OmniKernel,
+  raw: String,
+  plugin_id: String,
+  kind: Kind,
+  pubkey_hex: String,
+  identifier: String,
+  fetch: Fetcher,
+) -> Promise(Result(InstalledBundle, String)) {
+  let event_filter =
+    filter.new()
+    |> filter.with_kinds([kind])
+    |> filter.with_authors([pubkey_hex])
+    |> filter.with_tag("d", [identifier])
+    |> filter.with_limit(1)
+
+  // Local-first: resolve instantly from the 0ms store, then fall back to the
+  // relay pool when the manifest has not been cached yet.
+  use cached_events <- promise.await(coordinator.fetch(
+    kernel.coordinator,
+    "installer_fetch",
+    [event_filter],
+    Some(FetchOptions(
+      timeout_ms: Some(250),
+      relays: None,
+      local_only: Some(True),
+    )),
+  ))
+
+  use events <- promise.await(case cached_events {
+    [] ->
+      coordinator.fetch(
+        kernel.coordinator,
+        "installer_fetch",
+        [event_filter],
+        Some(FetchOptions(
+          timeout_ms: Some(2000),
+          relays: None,
+          local_only: None,
+        )),
+      )
+    events -> promise.resolve(events)
+  })
+
+  case list.sort(events, fn(a, b) { int.compare(b.created_at, a.created_at) }) {
+    [event, ..] ->
+      bundle_from_resolved(
+        raw,
+        plugin_id,
+        resolver.resolve_event(event, Some(raw)),
+        resolver.default_blossom_servers,
+        fetch,
+      )
+    [] -> promise.resolve(Error("Event not found: " <> raw))
+  }
+}
+
+fn bundle_from_resolved(
+  raw: String,
+  plugin_id: String,
+  resolved: Result(resolver.ResolvedPlugin, resolver.ResolveError),
+  servers: List(String),
+  fetch: Fetcher,
+) -> Promise(Result(InstalledBundle, String)) {
+  case resolved {
+    Error(err) -> promise.resolve(Error(resolve_error(err)))
+    Ok(plugin) -> {
+      let app = app_from_resolved(raw, plugin_id, plugin)
+      case string.trim(plugin.content) {
+        "" ->
+          case dict.size(plugin.blossom_hashes) > 0 {
+            True -> {
+              use result <- promise.await(fetch_manifest(plugin, servers, fetch))
+              promise.resolve(case result {
+                Ok(content) -> Ok(InstalledBundle(app: app, content: content))
+                Error(err) -> Error(err)
+              })
+            }
+            False -> promise.resolve(Error("No executable content in " <> raw))
+          }
+        content ->
+          promise.resolve(Ok(InstalledBundle(app: app, content: content)))
+      }
+    }
+  }
+}
+
+fn fetch_manifest(
+  plugin: resolver.ResolvedPlugin,
+  fallback_servers: List(String),
+  fetch: Fetcher,
+) -> Promise(Result(String, String)) {
+  let servers = case plugin.blossom_servers {
+    [] -> fallback_servers
+    list -> list
+  }
+
+  let fetches =
+    plugin.blossom_hashes
+    |> dict.to_list
+    |> list.map(fn(entry) {
+      let #(name, hash) = entry
+      use result <- promise.map(fetch_blob(servers, hash, fetch))
+      case result {
+        Ok(content) -> #(name, content)
+        Error(_) -> #(name, "")
+      }
+    })
+
+  use assets <- promise.map(promise_ext.all(fetches))
+  let fetched = list.filter(assets, fn(asset) { asset.1 != "" })
+  let by_name = dict.from_list(fetched)
+
+  case dict.get(by_name, "index.html") {
+    Ok(html) -> Ok(inline_manifest_assets(html, fetched))
+    Error(Nil) ->
+      case dict.get(by_name, "index.js") {
+        Ok(js) ->
+          Ok(
+            inline_manifest_assets(
+              "<!DOCTYPE html>\n<html><head></head><body><div id=\"app\"></div></body></html>",
+              [#("index.js", js)],
+            ),
+          )
+        Error(Nil) -> Error("Blossom manifest has no index.html or index.js")
+      }
+  }
+}
+
+fn fetch_blob(
+  servers: List(String),
+  hash: String,
+  fetch: Fetcher,
+) -> Promise(Result(String, String)) {
+  case servers {
+    [] -> promise.resolve(Error("No Blossom server available for " <> hash))
+    [server, ..rest] -> {
+      let base = case string.ends_with(server, "/") {
+        True -> string.drop_end(server, 1)
+        False -> server
+      }
+      let blob_hash = case string.starts_with(hash, "/") {
+        True -> string.drop_start(hash, 1)
+        False -> hash
+      }
+      let url = base <> "/" <> blob_hash
+      use result <- promise.await(fetch(url))
+      case result {
+        Ok(content) -> promise.resolve(Ok(content))
+        Error(_) -> fetch_blob(rest, hash, fetch)
+      }
+    }
+  }
+}
+
+/// Inline fetched Blossom CSS and JS assets into the HTML document. The strict
+/// sandbox CSP blocks external script/style origins, so assets must ship inline.
+pub fn inline_manifest_assets(
+  html: String,
+  assets: List(#(String, String)),
+) -> String {
+  let css =
+    list.filter_map(assets, fn(asset) {
+      case asset {
+        #(name, content) ->
+          case string.ends_with(name, ".css") {
+            True ->
+              Ok(
+                "<style data-omni-asset=\""
+                <> name
+                <> "\">\n"
+                <> content
+                <> "\n</style>",
+              )
+            False -> Error(Nil)
+          }
+      }
+    })
+    |> string.join("\n")
+
+  let js =
+    list.filter_map(assets, fn(asset) {
+      case asset {
+        #(name, content) ->
+          case string.ends_with(name, ".js") {
+            True ->
+              Ok(
+                "<script data-omni-asset=\""
+                <> name
+                <> "\">\n"
+                <> content
+                <> "\n</script>",
+              )
+            False -> Error(Nil)
+          }
+      }
+    })
+    |> string.join("\n")
+
+  let with_css = case css {
+    "" -> html
+    _ -> insert_before(html, "</head>", css)
+  }
+
+  case js {
+    "" -> with_css
+    _ -> insert_before(with_css, "</body>", js)
+  }
+}
+
+fn insert_before(
+  haystack: String,
+  needle: String,
+  insertion: String,
+) -> String {
+  case string.contains(haystack, needle) {
+    True ->
+      case string.split_once(haystack, needle) {
+        Ok(#(before, after)) -> before <> insertion <> "\n" <> needle <> after
+        Error(Nil) -> haystack <> insertion
+      }
+    False -> haystack <> insertion
+  }
+}
+
+fn resolve_error(err: resolver.ResolveError) -> String {
+  case err {
+    resolver.TargetParseError(reason) -> reason
+    resolver.EventNotFound(reason) -> "Event not found: " <> reason
+    resolver.InvalidSignature(reason) -> "Invalid signature: " <> reason
+    resolver.MissingManifest(reason) -> "Missing manifest: " <> reason
+    resolver.NoExecutableContent(reason) -> "No executable content: " <> reason
+    resolver.BlossomFetchFailed(hash, reason) ->
+      "Blossom fetch failed for " <> hash <> ": " <> reason
+    resolver.HttpFetchFailed(url, reason) ->
+      "HTTP fetch failed for " <> url <> ": " <> reason
+    resolver.StrategyExhausted -> "No resolver strategy succeeded"
+  }
 }
 
 /// Build the installed-app descriptor for a fetched URL bundle.
@@ -48,5 +365,35 @@ pub fn app_from(url: String, plugin_id: String) -> InstalledApp {
     relays: None,
     source_url: url,
     version: Some("1.0.0"),
+  )
+}
+
+/// Build the installed-app descriptor from a resolved NIP-5A plugin, keeping
+/// the original install target in `source_url` so the app can be re-resolved.
+pub fn app_from_resolved(
+  raw: String,
+  plugin_id: String,
+  plugin: resolver.ResolvedPlugin,
+) -> InstalledApp {
+  InstalledApp(
+    id: plugin_id,
+    name: plugin.name,
+    display_name: plugin.display_name,
+    description: plugin.description,
+    icon: case plugin.icon {
+      Some(icon) if icon != "" -> icon
+      _ -> "apps"
+    },
+    enabled: True,
+    pinned: True,
+    views: [
+      ViewOption(id: "default", title: "Default", path: "/", format: "html"),
+    ],
+    placements: [],
+    handled_intents: plugin.handled_intents,
+    disabled_intents: [],
+    relays: None,
+    source_url: raw,
+    version: Some(plugin.version),
   )
 }

@@ -268,15 +268,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       }
       let next_model =
         Model(..model, installed_apps: updated_apps, custom_install_url: "")
-      let install_effects = case
-        string.starts_with(new_app.id, "nsite.custom.")
-      {
-        True ->
-          case new_app.source_url {
-            "" -> []
-            url -> [InstallPluginFromUrl(url: url, plugin_id: new_app.id)]
-          }
-        False -> []
+      // Only a first install triggers resolution; later `InstallApp` messages
+      // carry already-resolved metadata (e.g. updates) and must not re-fetch.
+      let is_custom_nsite = string.starts_with(new_app.id, "nsite.custom.")
+      let install_effects = case exists, new_app.source_url {
+        False, url if url != "" && is_custom_nsite -> [
+          InstallPluginFromUrl(url: url, plugin_id: new_app.id),
+        ]
+        _, _ -> []
       }
       #(
         next_model,

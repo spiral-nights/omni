@@ -18,6 +18,7 @@ import omni/kernel/crypto/keystore
 import omni/kernel/kernel.{KernelPorts}
 import omni/kernel/nostr/coordinator
 import omni/kernel/nostr/relay_pool
+import omni/kernel/plugins/updates
 import omni/nostr/event as nostr_event
 import omni/nostr/filter.{type Filter, Filter}
 import omni/nostr/kind
@@ -28,14 +29,17 @@ import omni/platform/nip44
 import omni/platform/storage
 import omni/platform/url
 import omni/plugin_kit/route.{type Route}
+import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace
+import omni/shell/layout/viewport_host
 import omni/shell/model.{
-  type SettingsTab, AppStore, PrimaryApp, Settings, TabPluginSettings,
-  TabPlugins, TabProfile, TabRelays, TabShells, TabWorkspace, WidgetsDashboard,
+  type InstalledApp, type SettingsTab, type UpdateModalState, AppStore,
+  InstalledApp, PrimaryApp, Settings, TabPluginSettings, TabPlugins, TabProfile,
+  TabRelays, TabShells, TabWorkspace, UpdateModalState, WidgetsDashboard,
 }
 import omni/shell/msg.{
   ApplyRemoteWorkspace, EmbedSchema, InstallApp, NavigateTo, OpenApp,
-  OpenSettings, ShowPermissionPrompt,
+  OpenSettings, ShowPermissionPrompt, ShowUpdateModal,
 }
 import omni/shell/update
 import omni/web/boot
@@ -153,24 +157,16 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
     fn(_flags) { #(host, effect.none()) },
     fn(current: ShellBoot, message: msg.Msg) {
       let #(next, effects) = boot.dispatch(current.booted, message)
-      list.each(effects, fn(effect) {
-        case effect {
-          update.InstallPluginFromUrl(url, plugin_id) -> {
-            install_bundle(current, url, plugin_id)
-            Nil
-          }
-          _ -> Nil
-        }
-      })
+      let host = apply_effects(ShellBoot(next), effects)
       let _ =
-        boot.publish_pending(next)
+        boot.publish_pending(host.booted)
         |> promise.map(fn(event_ids) {
           case event_ids {
             [] -> Nil
-            _ -> push_views(ShellBoot(next))
+            _ -> push_views(host)
           }
         })
-      #(ShellBoot(next), effect.none())
+      #(host, effect.none())
     },
     fn(current: ShellBoot) { boot.view(current.booted) },
     msg_from_url,
@@ -251,32 +247,176 @@ fn mount_dom(
   page_url: fn(ShellBoot) -> String,
 ) -> Nil
 
-fn install_bundle(host: ShellBoot, url: String, plugin_id: String) -> Nil {
+/// Apply the shell's side effects: sandbox mounts/unmounts, plugin teardown,
+/// first-time installs, and confirmed upgrades.
+fn apply_effects(
+  host: ShellBoot,
+  effects: List(update.ShellEffect),
+) -> ShellBoot {
+  list.fold(effects, host, fn(acc, effect) {
+    case effect {
+      update.UnmountPluginFromSlot(plugin_id, viewport) -> {
+        unmount_island(slot_selector(viewport, plugin_id))
+        ShellBoot(boot.terminate_sandbox(acc.booted, plugin_id))
+      }
+
+      update.MountPluginInSlot(plugin_id, viewport, route) -> {
+        mount_installed(acc, plugin_id, viewport, route)
+        acc
+      }
+
+      update.InstallPluginFromUrl(target, plugin_id) -> {
+        install_bundle(acc, target, plugin_id)
+        acc
+      }
+
+      update.UpgradePlugin(plugin_id) -> {
+        upgrade_plugin(acc, plugin_id)
+        acc
+      }
+
+      _ -> acc
+    }
+  })
+}
+
+fn slot_selector(viewport: Viewport, plugin_id: String) -> String {
+  "#" <> viewport_host.slot_dom_id(viewport, plugin_id)
+}
+
+fn find_installed(
+  host: ShellBoot,
+  plugin_id: String,
+) -> Result(InstalledApp, Nil) {
+  list.find(host.booted.model.installed_apps, fn(app) { app.id == plugin_id })
+}
+
+fn install_bundle(host: ShellBoot, target: String, plugin_id: String) -> Nil {
   let _ =
-    installer.resolve_url(url, plugin_id)
+    installer.resolve(host.booted.kernel, target, plugin_id)
     |> promise.map(fn(result) {
       case result {
         Error(_) -> Nil
         Ok(bundle) -> {
           dispatch_shell_msg(InstallApp(bundle.app))
           dispatch_shell_msg(OpenApp(plugin_id, None))
-          after_render(fn() {
-            let _ =
-              spawn_plugin(
-                host,
-                "#slot-main-" <> plugin_id,
-                plugin_id,
-                bundle.content,
-                None,
-              )
-            Nil
-          })
           Nil
         }
       }
     })
   Nil
 }
+
+/// Re-spawn an installed custom app when it is opened. Built-ins render from
+/// the host-embedded schema and have no `source_url`, so they are skipped.
+fn mount_installed(
+  host: ShellBoot,
+  plugin_id: String,
+  viewport: Viewport,
+  route: Option(String),
+) -> Nil {
+  case find_installed(host, plugin_id) {
+    Error(Nil) -> Nil
+    Ok(app) -> {
+      case app.source_url, island_mounted(slot_selector(viewport, plugin_id)) {
+        "", _ -> Nil
+        _, True -> Nil
+        target, False -> {
+          let _ =
+            installer.resolve(host.booted.kernel, target, plugin_id)
+            |> promise.map(fn(result) {
+              case result {
+                Error(_) -> Nil
+                Ok(bundle) -> {
+                  offer_update(host, app, bundle.app)
+                  after_render(fn() {
+                    let _ =
+                      spawn_plugin(
+                        host,
+                        slot_selector(viewport, plugin_id),
+                        plugin_id,
+                        bundle.content,
+                        route,
+                      )
+                    Nil
+                  })
+                  Nil
+                }
+              }
+            })
+          Nil
+        }
+      }
+    }
+  }
+}
+
+/// Show the update modal once per session when a resolved app is newer.
+fn offer_update(
+  host: ShellBoot,
+  current: InstalledApp,
+  latest: InstalledApp,
+) -> Nil {
+  case current.version, latest.version {
+    Some(current_version), Some(latest_version) -> {
+      case
+        updates.is_newer(latest_version, current_version),
+        host.booted.model.update_modal
+      {
+        True, None ->
+          dispatch_shell_msg(
+            ShowUpdateModal(UpdateModalState(
+              plugin_id: current.id,
+              plugin_name: latest.name,
+              current_version: current_version,
+              latest_version: latest_version,
+              changelog: None,
+            )),
+          )
+        _, _ -> Nil
+      }
+    }
+    _, _ -> Nil
+  }
+}
+
+/// Re-resolve and re-spawn a plugin after the user confirms an update,
+/// preserving companion placements, pinning, and enablement.
+fn upgrade_plugin(host: ShellBoot, plugin_id: String) -> Nil {
+  case find_installed(host, plugin_id) {
+    Error(Nil) -> Nil
+    Ok(app) ->
+      case app.source_url {
+        "" -> Nil
+        target -> {
+          let _ =
+            installer.resolve(host.booted.kernel, target, plugin_id)
+            |> promise.map(fn(result) {
+              case result {
+                Error(_) -> Nil
+                Ok(bundle) -> {
+                  unmount_island(slot_selector(Main, plugin_id))
+                  let merged =
+                    InstalledApp(
+                      ..bundle.app,
+                      placements: app.placements,
+                      pinned: app.pinned,
+                      enabled: app.enabled,
+                    )
+                  dispatch_shell_msg(InstallApp(merged))
+                  dispatch_shell_msg(OpenApp(plugin_id, None))
+                  Nil
+                }
+              }
+            })
+          Nil
+        }
+      }
+  }
+}
+
+@external(javascript, "./shell_boot.ffi.mjs", "island_mounted")
+fn island_mounted(selector: String) -> Bool
 
 @external(javascript, "./shell_boot.ffi.mjs", "after_render")
 fn after_render(callback: fn() -> Nil) -> Nil
@@ -296,7 +436,7 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
   let _ =
     coordinator.subscribe(
       host.booted.kernel.coordinator,
-      "builtin:feed",
+      "omni_internal_feed",
       [public_events_filter()],
       fn(event) {
         dict.each(host.booted.builtins, fn(_id, app) {
@@ -314,7 +454,7 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
   let _ =
     coordinator.subscribe(
       host.booted.kernel.coordinator,
-      "builtin:workspace",
+      "omni_internal_workspace",
       [workspace_filter(self_pubkey)],
       fn(event) {
         case nostr_event.get_tag_values(event.tags, "d") {
@@ -337,7 +477,7 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
   let _ =
     coordinator.subscribe(
       host.booted.kernel.coordinator,
-      "builtin:notes",
+      "omni_internal_notes",
       [app_data_filter(self_pubkey)],
       fn(event) {
         case nostr_event.get_tag_values(event.tags, "d") {
@@ -377,7 +517,7 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
   let _ =
     coordinator.subscribe(
       host.booted.kernel.coordinator,
-      "builtin:follows",
+      "omni_internal_follows",
       [contact_list_filter(self_pubkey)],
       fn(event) {
         dict.each(host.booted.builtins, fn(_id, app) {
@@ -395,7 +535,7 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
   let _ =
     coordinator.subscribe(
       host.booted.kernel.coordinator,
-      "builtin:relay-list",
+      "omni_internal_relay_list",
       [relay_list_filter(self_pubkey)],
       fn(event) {
         boot.apply_relay_list(host.booted, event.tags)

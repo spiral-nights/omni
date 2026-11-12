@@ -28,7 +28,7 @@ Last updated: 2026-11-11.
 | REL-8 | S2 | fixed | No NIP-65: no kind-10002 fetch, no outbox routing, relay-list publish not wired from the Relays app. | fixed (own list) `285b663`: kind-10002 fetch applies relays/scopes; Relays app publishes its list. Outbox routing tracked as REL-8b. |
 | REL-8b | S2 | in progress | No outbox/gossip routing: a subscription still sends the same REQ to every read relay instead of routing by each author's 10002 relays. | primitive in `4d90bde`: `subscribe_targeted` routes REQ to chosen relays; still needs per-author relay-hint cache and wiring into author-scoped queries. |
 | REL-9 | S2 | open | Feed pagination/search are local slices; no `until` or targeted queries. | `LoadMore` sends a new REQ with `until=oldest`; use `omni_social/queries` for profiles/replies/search. |
-| REL-10 | S3 | open | Host subscriptions bypass ACL by using a non-parsing `"builtin:feed"` sub id (`coordinator.gleam:66`). | Explicit internal-subscription API with a trusted flag. |
+| REL-10 | S3 | fixed | Host subscriptions bypass ACL by using a non-parsing `"builtin:feed"` sub id (`coordinator.gleam:66`). | fixed `6d8347f`: internal host subscriptions use non-namespaced ids (`omni_internal_*`) so they no longer parse as a plugin ID and never trigger ACL prompts. |
 | REL-11 | S3 | open | `subscribers` is keyed only by `sub_id`; collisions overwrite handlers. | Namespace internally: `consumerId:subId`. |
 | REL-12 | S3 | open | Cache events are emitted before the live subscription registers; events can slip through. | Subscribe first, buffer, then flush cache. |
 | REL-13 | S3 | open | `seen_ids` grows unbounded per long-lived subscription. | Bounded/LRU set or clear on EOSE for one-shot fetches. |
@@ -63,7 +63,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | ID | Sev | Status | Problem | Fix |
 |---|---|---|---|---|
 | PL-1 | S1 | fixed (URL install) | No plugin bundle resolution/loading into sandboxes; built-ins are host-embedded. | fixed (URL install) `02abe96`: custom URL -> platform HTTP fetch -> installed app -> sandbox mount with guest bridge. See PL-1b for naddr/Blossom and lifecycle gaps. |
-| PL-1b | S2 | open | Nsite `naddr`/kind-35129 + Blossom-fragment resolution is not wired to the installer; uninstall does not terminate the mounted sandbox; update flow is unused. | Wire resolver strategies + `spawn_plugin` lifecycle (terminate on unmount/uninstall) and the update modal. |
+| PL-1b | S2 | fixed | Nsite `naddr`/kind-35129 + Blossom-fragment resolution is not wired to the installer; uninstall does not terminate the mounted sandbox; update flow is unused. | fixed `6d8347f`: installer resolves URL/naddr/coordinates local-first, inlines Blossom CSS/JS assets, mounts cached apps on open, terminates sandboxes on unmount/uninstall, and shows/apply the update modal. |
 | PL-2 | S1 | fixed | Intent broker never dispatches runtime intents; chooser is display-only. | fixed `644d92f`: hosted actions route through the intent broker (single handler opens + forwards, multiples prompt), aliases normalized. |
 | PL-3 | S1 | fixed | ACL prompts never fire (no `prompt_handler` on the engine). | fixed `644d92f`: kernel prompt handler bridged to a shell Allow/Deny modal; decisions resolve the grant promise. |
 | PL-4 | S2 | open | Relays app mutations (add/remove/reconnect/read-write/NIP-65) don't call the pool. | Expose pool operations to the app and publish kind 10002. |
