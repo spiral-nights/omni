@@ -73,7 +73,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | PL-6 | S2 | fixed | Profiles key custody/backup UI missing. | fixed `18fdcb6`: Settings Identity panel hosts the shared import/export custody card backed by the keystore. |
 | PL-7 | S2 | open | Timer completion has no chime. | Add audio asset + play on `Completed`. |
 | PL-8 | S2 | fixed | App store custom install only records a descriptor. | fixed `d2deef6`: installation resolves/fetches the bundle first and rolls the optimistic install back if validation fails. |
-| PL-9 | S2 | open | Plugin settings tabs render a placeholder; plugin settings content isn't hosted. | Mount plugin settings view in the tab. |
+| PL-9 | S2 | fixed | Plugin settings tabs render a placeholder; plugin settings content isn't hosted. | fixed `PENDING`: opening a plugin settings tab emits a mount for its `?view=settings` route into the stable island container. |
 | PL-10 | S2 | fixed | Theme mode (light/dark) absent; Editorial hardcodes dark. | fixed `a514568`: shell model stores a persisted appearance mode, all themes emit `data-theme-mode`, Settings exposes a Dark/Light toggle, and tokens provide a warm-paper light palette. |
 | PL-11 | S2 | fixed | In-app back buttons missing; only browser history works. | fixed `3da7d55`: shell keeps a per-view back stack, all three theme headers render a back button when history exists, and `NavigateBack` pops it. |
 | PL-12 | S2 | fixed | Pull-to-refresh has no touch listeners. | fixed `d2deef6`: touch listeners dispatch the refresh at the 72 px threshold, the host re-fetches public events, and `FinishPullRefresh` clears the indicator after the fetch settles. |
