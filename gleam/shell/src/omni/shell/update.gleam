@@ -18,10 +18,11 @@ import omni/shell/model.{
 import omni/shell/msg.{
   type Msg, AddAppPlacement, ApplyRemoteWorkspace, ClearEmbeddedSchema,
   ConfirmPluginUpdate, DismissIntentPrompt, DismissUpdateModal, EmbedSchema,
-  FinishPullRefresh, HostedSchemaAction, InstallApp, NavigateBack, NavigateTo,
-  OpenApp, OpenSettings, RemoveAppPlacement, ResolvePermission,
-  SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
-  SetAppRelays, SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetThemeMode,
+  ExportKey, FinishPullRefresh, HostedSchemaAction, ImportKey, InstallApp,
+  KeyImportResult, NavigateBack, NavigateTo, OpenApp, OpenSettings,
+  RemoveAppPlacement, ResolvePermission, SelectIntentHandler, SelectShell,
+  SetAccentColor, SetAppPlacements, SetAppRelays, SetCustomInstallUrl,
+  SetExportedNsec, SetKeyInput, SetSearchQuery, SetSyncStatus, SetThemeMode,
   SetUserProfile, ShowIntentPrompt, ShowPermissionPrompt, ShowUpdateModal,
   StartPullRefresh, ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned,
   ToggleAutoSync, ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync,
@@ -41,6 +42,8 @@ pub type ShellEffect {
   SwitchActiveShell(shell_id: String)
   PersistAccentColor(String)
   PersistThemeMode(String)
+  ImportKeyEffect(String)
+  ExportKeyEffect
   DispatchIntentToPlugin(
     plugin_id: String,
     intent_name: String,
@@ -467,6 +470,41 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
         _ -> "dark"
       }
       #(Model(..model, theme_mode: normalized), [PersistThemeMode(normalized)])
+    }
+
+    SetKeyInput(raw) -> #(Model(..model, key_input: raw), [])
+
+    ImportKey -> {
+      case string.trim(model.key_input) {
+        "" -> #(
+          Model(..model, key_message: Some("Enter an nsec or hex key")),
+          [],
+        )
+        raw -> #(model, [ImportKeyEffect(raw)])
+      }
+    }
+
+    ExportKey -> #(model, [ExportKeyEffect])
+
+    KeyImportResult(result) -> {
+      let message = case result {
+        Ok(_) -> "Key imported. Signing as the new identity."
+        Error(err) -> err
+      }
+      #(
+        Model(..model, key_input: "", key_message: Some(message)),
+        workspace_persistence_effects(model),
+      )
+    }
+
+    SetExportedNsec(result) -> {
+      case result {
+        Ok(nsec) -> #(
+          Model(..model, exported_nsec: Some(nsec), key_message: None),
+          [],
+        )
+        Error(err) -> #(Model(..model, key_message: Some(err)), [])
+      }
     }
 
     SetUserProfile(profile) -> {

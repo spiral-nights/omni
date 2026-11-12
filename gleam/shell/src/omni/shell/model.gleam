@@ -129,6 +129,9 @@ pub type Model {
     custom_install_url: String,
     embedded_views: Dict(String, Node),
     permission_prompt: Option(PermissionPromptState),
+    key_input: String,
+    key_message: Option(String),
+    exported_nsec: Option(String),
   )
 }
 
@@ -159,6 +162,9 @@ pub fn init(active_shell_id: String, apps: List(InstalledApp)) -> Model {
     custom_install_url: "",
     embedded_views: dict.new(),
     permission_prompt: None,
+    key_input: "",
+    key_message: None,
+    exported_nsec: None,
   )
 }
 

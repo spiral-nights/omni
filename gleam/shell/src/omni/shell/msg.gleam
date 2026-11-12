@@ -52,6 +52,11 @@ pub type Msg {
   SelectShell(shell_id: String)
   SetAccentColor(String)
   SetThemeMode(String)
+  SetKeyInput(String)
+  ImportKey
+  ExportKey
+  KeyImportResult(Result(Nil, String))
+  SetExportedNsec(Result(String, String))
 
   // Profile & sync
   SetUserProfile(UserProfileSummary)

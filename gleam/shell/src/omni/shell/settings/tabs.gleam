@@ -21,7 +21,8 @@ import omni/shell/model.{
   TabProfile, TabRelays, TabShells, TabWorkspace,
 }
 import omni/shell/msg.{
-  type Msg, OpenSettings, ToggleAutoSync, TriggerWorkspaceSync,
+  type Msg, ExportKey, ImportKey, OpenSettings, SetKeyInput, ToggleAutoSync,
+  TriggerWorkspaceSync,
 }
 import omni/shell/settings/intents
 import omni/shell/settings/permissions
@@ -246,6 +247,87 @@ fn render_profile_tab(model: Model) -> Element(Msg) {
         ]),
       ]),
       profile_card,
+      key_custody_card(model),
+    ],
+  )
+}
+
+fn key_custody_card(model: Model) -> Element(Msg) {
+  let message_el = case model.key_message {
+    Some(message) ->
+      html.p(
+        [
+          attribute.class("omni-settings-section-desc"),
+          attribute.id("key-custody-message"),
+        ],
+        [element.text(message)],
+      )
+    None -> element.none()
+  }
+
+  let exported_el = case model.exported_nsec {
+    Some(nsec) ->
+      html.div([attribute.class("omni-key-export-box")], [
+        html.code(
+          [attribute.id("exported-nsec"), attribute.class("omni-key-secret")],
+          [
+            element.text(nsec),
+          ],
+        ),
+      ])
+    None -> element.none()
+  }
+
+  html.section(
+    [
+      attribute.class("omni-settings-card omni-key-custody-card"),
+      attribute.id("settings-key-custody-section"),
+    ],
+    [
+      html.div([attribute.class("omni-settings-card-header")], [
+        html.div([attribute.class("omni-settings-title-group")], [
+          icons.render_icon("lock", 18),
+          html.strong([attribute.class("omni-settings-app-name")], [
+            element.text("Import or Export Key"),
+          ]),
+        ]),
+      ]),
+      html.p([attribute.class("omni-settings-section-desc")], [
+        element.text(
+          "Paste an nsec1... or 64-character hex private key to sign in as another identity. Your key stays in local browser storage and never leaves the device unsigned.",
+        ),
+      ]),
+      html.div([attribute.class("omni-custom-installer-row")], [
+        html.input([
+          attribute.type_("password"),
+          attribute.id("input-import-key"),
+          attribute.class("omni-input"),
+          attribute.placeholder("nsec1... or hex private key"),
+          attribute.value(model.key_input),
+          event.on_input(SetKeyInput),
+        ]),
+        html.button(
+          [
+            attribute.type_("button"),
+            attribute.id("btn-import-key"),
+            attribute.class("omni-button omni-button-primary"),
+            attribute.disabled(model.key_input == ""),
+            event.on_click(ImportKey),
+          ],
+          [element.text("Import Key")],
+        ),
+        html.button(
+          [
+            attribute.type_("button"),
+            attribute.id("btn-export-key"),
+            attribute.class("omni-button omni-button-secondary"),
+            event.on_click(ExportKey),
+          ],
+          [element.text("Export nsec")],
+        ),
+      ]),
+      message_el,
+      exported_el,
     ],
   )
 }

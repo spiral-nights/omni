@@ -20,13 +20,14 @@ import omni/shell/model.{
 }
 import omni/shell/msg.{
   AddAppPlacement, ApplyRemoteWorkspace, ConfirmPluginUpdate,
-  DismissIntentPrompt, DismissUpdateModal, FinishPullRefresh, InstallApp,
-  NavigateBack, NavigateTo, OpenApp, OpenSettings, RemoveAppPlacement,
-  SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
-  SetAppRelays, SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetThemeMode,
-  SetUserProfile, ShowIntentPrompt, ShowUpdateModal, StartPullRefresh,
-  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
-  ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp,
+  DismissIntentPrompt, DismissUpdateModal, ExportKey, FinishPullRefresh,
+  ImportKey, InstallApp, NavigateBack, NavigateTo, OpenApp, OpenSettings,
+  RemoveAppPlacement, SelectIntentHandler, SelectShell, SetAccentColor,
+  SetAppPlacements, SetAppRelays, SetCustomInstallUrl, SetExportedNsec,
+  SetKeyInput, SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile,
+  ShowIntentPrompt, ShowUpdateModal, StartPullRefresh, ToggleAppEnabled,
+  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
+  ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp,
 }
 import omni/shell/shell
 import omni/shell/themes/classic as classic_theme
@@ -744,4 +745,17 @@ pub fn theme_renders_back_button_only_with_history_test() {
   let #(next, _) = update.update(m, NavigateTo(model.AppStore))
   let html1 = classic_theme.view(next) |> element.to_string
   string.contains(html1, "btn-shell-back") |> should.be_true()
+}
+
+pub fn key_import_and_export_emit_effects_test() {
+  let m = model.init("classic", [])
+  let #(typed, _) = update.update(m, SetKeyInput("nsec1example"))
+  let #(_, import_effects) = update.update(typed, ImportKey)
+  import_effects |> should.equal([update.ImportKeyEffect("nsec1example")])
+
+  let #(_, export_effects) = update.update(m, ExportKey)
+  export_effects |> should.equal([update.ExportKeyEffect])
+
+  let #(with_nsec, _) = update.update(m, SetExportedNsec(Ok("nsec1abc")))
+  with_nsec.exported_nsec |> should.equal(Some("nsec1abc"))
 }

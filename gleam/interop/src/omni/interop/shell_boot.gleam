@@ -22,6 +22,7 @@ import omni/kernel/plugins/updates
 import omni/nostr/event as nostr_event
 import omni/nostr/filter.{type Filter, Filter}
 import omni/nostr/kind
+import omni/nostr/pubkey
 import omni/nostr/relay_url
 import omni/platform/clock
 import omni/platform/idb
@@ -40,9 +41,10 @@ import omni/shell/model.{
 }
 import omni/shell/model as omni_shell_model
 import omni/shell/msg.{
-  ApplyRemoteWorkspace, EmbedSchema, FinishPullRefresh, InstallApp, NavigateTo,
-  OpenApp, OpenSettings, SetUserProfile, ShowPermissionPrompt, ShowUpdateModal,
-  StartPullRefresh, UninstallApp,
+  ApplyRemoteWorkspace, EmbedSchema, FinishPullRefresh, InstallApp,
+  KeyImportResult, NavigateTo, OpenApp, OpenSettings, SetExportedNsec,
+  SetUserProfile, ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh,
+  UninstallApp,
 }
 import omni/shell/update
 import omni/social/profile as social_profile
@@ -283,6 +285,27 @@ fn apply_effects(
 
       update.RefreshActiveView -> {
         refresh_public_feed(acc)
+        acc
+      }
+
+      update.ImportKeyEffect(raw) -> {
+        case boot.import_key(acc.booted, raw) {
+          Ok(next) -> {
+            dispatch_shell_msg(KeyImportResult(Ok(Nil)))
+            dispatch_shell_msg(
+              SetUserProfile(profile_summary_for(
+                user_npub(ShellBoot(next)),
+                empty_profile(keystore.get_public_key(next.kernel.keystore)),
+              )),
+            )
+          }
+          Error(err) -> dispatch_shell_msg(KeyImportResult(Error(err)))
+        }
+        acc
+      }
+
+      update.ExportKeyEffect -> {
+        dispatch_shell_msg(SetExportedNsec(boot.export_key_nsec(acc.booted)))
         acc
       }
 
@@ -661,6 +684,10 @@ fn profile_filter(author_hex: String) -> Filter {
     search: None,
     tags: dict.new(),
   )
+}
+
+fn empty_profile(pubkey: pubkey.Pubkey) -> social_profile.Profile {
+  social_profile.empty(pubkey.to_hex(pubkey))
 }
 
 pub fn profile_summary_for(

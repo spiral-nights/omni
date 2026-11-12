@@ -770,3 +770,35 @@ pub fn workspace_publish_is_debounced_test() -> promise.Promise(Nil) {
   count |> should.equal(1)
   promise.resolve(Nil)
 }
+
+pub fn key_import_switches_identity_and_export_returns_nsec_test() -> promise.Promise(
+  Nil,
+) {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+  let original = booted.model.user_profile
+  let assert Some(original_profile) = original
+
+  let private_hex =
+    "0000000000000000000000000000000000000000000000000000000000000001"
+  use imported <- promise.await(
+    promise.resolve(boot.import_key(booted, private_hex)),
+  )
+  case imported {
+    Ok(next) -> {
+      let assert Some(profile) = next.model.user_profile
+      should.not_equal(profile.pubkey, original_profile.pubkey)
+      let assert Ok(nsec) = boot.export_key_nsec(next)
+      string.starts_with(nsec, "nsec1") |> should.equal(True)
+    }
+    Error(err) -> panic as err
+  }
+
+  case boot.import_key(booted, "not-a-key") {
+    Error(_) -> Nil
+    Ok(_) -> should.fail()
+  }
+  promise.resolve(Nil)
+}

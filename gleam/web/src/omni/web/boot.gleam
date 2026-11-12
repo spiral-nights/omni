@@ -460,6 +460,28 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
   )
 }
 
+/// Import a hex or nsec private key and refresh the session profile.
+pub fn import_key(booted: Booted, raw: String) -> Result(Booted, String) {
+  case keystore.switch_key(booted.kernel.keystore, raw) {
+    Error(err) -> Error(err)
+    Ok(_pubkey) ->
+      Ok(
+        Booted(
+          ..booted,
+          model: Model(
+            ..booted.model,
+            user_profile: Some(session_profile(booted.kernel)),
+          ),
+        ),
+      )
+  }
+}
+
+/// Export the active private key as an nsec string.
+pub fn export_key_nsec(booted: Booted) -> Result(String, String) {
+  keystore.get_nsec(booted.kernel.keystore)
+}
+
 /// Convenience: switch the active shell theme and persist the choice.
 pub fn select_shell(booted: Booted, shell_id: String) -> Booted {
   booted
