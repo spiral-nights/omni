@@ -82,6 +82,7 @@ fn render_header(model: Model) -> Element(Msg) {
         ],
         [icons.render_icon("menu", 18)],
       ),
+      header_actions.render_back_button(model),
       html.span([attribute.class("brand-logo")], [element.text("Omni")]),
       html.span(
         [

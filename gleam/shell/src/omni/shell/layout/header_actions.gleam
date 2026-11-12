@@ -15,11 +15,31 @@ import omni/shell/model.{
   SyncError, SyncIdle, Synced, Syncing, TabProfile,
 }
 import omni/shell/msg.{
-  type Msg, OpenApp, OpenSettings, ToggleFullscreen, TriggerWorkspaceSync,
+  type Msg, NavigateBack, OpenApp, OpenSettings, ToggleFullscreen,
+  TriggerWorkspaceSync,
 }
 import omni/shell/shell
 import omni/ui/icons
 import omni/ui/sanitize
+
+/// Render an in-app back button when there is navigation history.
+pub fn render_back_button(model: Model) -> Element(Msg) {
+  case model.back_stack {
+    [] -> element.none()
+    _ ->
+      html.button(
+        [
+          attribute.type_("button"),
+          attribute.id("btn-shell-back"),
+          attribute.class("omni-header-action-btn omni-back-btn"),
+          attribute.title("Back"),
+          attribute.attribute("aria-label", "Back"),
+          event.on_click(NavigateBack),
+        ],
+        [icons.render_icon("arrow-left", 18)],
+      )
+  }
+}
 
 /// Render the header quick-actions toolbar (`<div class="omni-header-actions">`).
 pub fn render_header_actions(model: Model) -> Element(Msg) {

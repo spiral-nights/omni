@@ -13,6 +13,7 @@ import lustre/element/html
 import lustre/event
 import omni/shell/app_store
 import omni/shell/gestures/pull_to_refresh.{PullIdle}
+import omni/shell/layout/header_actions
 import omni/shell/layout/viewport_host
 import omni/shell/layout/widgets_grid
 import omni/shell/model.{
@@ -88,6 +89,7 @@ fn render_header(model: Model) -> Element(Msg) {
   html.header([attribute.class("editorial-header")], [
     html.div([attribute.class("editorial-header-inner")], [
       html.div([attribute.class("editorial-header-left")], [
+        header_actions.render_back_button(model),
         html.button(
           [
             attribute.type_("button"),

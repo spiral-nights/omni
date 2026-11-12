@@ -13,6 +13,7 @@ import lustre/element/html
 import lustre/event
 import omni/shell/app_store
 import omni/shell/gestures/pull_to_refresh.{PullIdle}
+import omni/shell/layout/header_actions
 import omni/shell/layout/viewport_host
 import omni/shell/layout/widgets_grid
 import omni/shell/model.{
@@ -73,6 +74,7 @@ fn render_header(model: Model) -> Element(Msg) {
     ],
     [
       html.div([attribute.class("panorama-header-content")], [
+        header_actions.render_back_button(model),
         render_pivot_nav(model),
         html.div([attribute.class("panorama-header-profile-wrap")], [
           render_profile_tile(model),

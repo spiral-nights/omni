@@ -21,14 +21,15 @@ import omni/shell/model.{
 import omni/shell/msg.{
   AddAppPlacement, ApplyRemoteWorkspace, ConfirmPluginUpdate,
   DismissIntentPrompt, DismissUpdateModal, FinishPullRefresh, InstallApp,
-  NavigateTo, OpenApp, OpenSettings, RemoveAppPlacement, SelectIntentHandler,
-  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
-  SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetThemeMode,
+  NavigateBack, NavigateTo, OpenApp, OpenSettings, RemoveAppPlacement,
+  SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
+  SetAppRelays, SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetThemeMode,
   SetUserProfile, ShowIntentPrompt, ShowUpdateModal, StartPullRefresh,
   ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
   ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp,
 }
 import omni/shell/shell
+import omni/shell/themes/classic as classic_theme
 import omni/shell/update.{
   DispatchIntentToPlugin, MountPluginInSlot, PersistAccentColor,
   PersistWorkspaceLocal, RefreshActiveView, SwitchActiveShell,
@@ -714,4 +715,33 @@ pub fn theme_mode_switch_persists_and_normalizes_test() {
 
   let #(fallback, _) = update.update(light, SetThemeMode("sepia"))
   fallback.theme_mode |> should.equal("dark")
+}
+
+pub fn in_app_back_navigation_pops_history_test() {
+  let m = model.init("classic", [])
+  let #(apps, _) = update.update(m, NavigateTo(model.AppStore))
+  let #(widgets, _) = update.update(apps, NavigateTo(model.WidgetsDashboard))
+  list.length(widgets.back_stack) |> should.equal(2)
+
+  let #(back1, _) = update.update(widgets, NavigateBack)
+  case back1.active_page {
+    model.AppStore -> Nil
+    _ -> should.fail()
+  }
+  let #(back2, _) = update.update(back1, NavigateBack)
+  case back2.active_page {
+    model.WidgetsDashboard -> Nil
+    _ -> should.fail()
+  }
+  back2.back_stack |> should.equal([])
+}
+
+pub fn theme_renders_back_button_only_with_history_test() {
+  let m = model.init("classic", [])
+  let html0 = classic_theme.view(m) |> element.to_string
+  string.contains(html0, "btn-shell-back") |> should.be_false()
+
+  let #(next, _) = update.update(m, NavigateTo(model.AppStore))
+  let html1 = classic_theme.view(next) |> element.to_string
+  string.contains(html1, "btn-shell-back") |> should.be_true()
 }

@@ -18,10 +18,10 @@ import omni/shell/model.{
 import omni/shell/msg.{
   type Msg, AddAppPlacement, ApplyRemoteWorkspace, ClearEmbeddedSchema,
   ConfirmPluginUpdate, DismissIntentPrompt, DismissUpdateModal, EmbedSchema,
-  FinishPullRefresh, HostedSchemaAction, InstallApp, NavigateTo, OpenApp,
-  OpenSettings, RemoveAppPlacement, ResolvePermission, SelectIntentHandler,
-  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
-  SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetThemeMode,
+  FinishPullRefresh, HostedSchemaAction, InstallApp, NavigateBack, NavigateTo,
+  OpenApp, OpenSettings, RemoveAppPlacement, ResolvePermission,
+  SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
+  SetAppRelays, SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetThemeMode,
   SetUserProfile, ShowIntentPrompt, ShowPermissionPrompt, ShowUpdateModal,
   StartPullRefresh, ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned,
   ToggleAutoSync, ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync,
@@ -58,7 +58,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
   case msg {
     NavigateTo(page) -> {
       let next_model =
-        Model(..model, active_page: page, mobile_menu_open: False)
+        Model(
+          ..model,
+          active_page: page,
+          back_stack: push_back(model, page),
+          mobile_menu_open: False,
+        )
       let mount_effects = case page {
         PrimaryApp(plugin_id, route) -> [
           MountPluginInSlot(plugin_id: plugin_id, viewport: Main, route: route),
@@ -74,7 +79,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     OpenApp(plugin_id, route) -> {
       let page = PrimaryApp(plugin_id: plugin_id, route: route)
       let next_model =
-        Model(..model, active_page: page, mobile_menu_open: False)
+        Model(
+          ..model,
+          active_page: page,
+          back_stack: push_back(model, page),
+          mobile_menu_open: False,
+        )
       let effects = [
         MountPluginInSlot(plugin_id: plugin_id, viewport: Main, route: route),
         ..workspace_persistence_effects(next_model)
@@ -83,9 +93,26 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     }
 
     OpenSettings(tab) -> {
+      let page = Settings(tab: tab)
       let next_model =
-        Model(..model, active_page: Settings(tab: tab), mobile_menu_open: False)
+        Model(
+          ..model,
+          active_page: page,
+          back_stack: push_back(model, page),
+          mobile_menu_open: False,
+        )
       #(next_model, workspace_persistence_effects(next_model))
+    }
+
+    NavigateBack -> {
+      case model.back_stack {
+        [previous, ..rest] -> {
+          let next_model =
+            Model(..model, active_page: previous, back_stack: rest)
+          #(next_model, workspace_persistence_effects(next_model))
+        }
+        [] -> #(model, [])
+      }
     }
 
     ToggleFullscreen -> {
@@ -498,6 +525,13 @@ fn fallback_page_for_apps(apps: List(InstalledApp)) -> Page {
   case model.first_enabled_app(apps) {
     Some(app) -> PrimaryApp(plugin_id: app.id, route: None)
     None -> WidgetsDashboard
+  }
+}
+
+fn push_back(model: Model, next: Page) -> List(Page) {
+  case model.active_page == next {
+    True -> model.back_stack
+    False -> [model.active_page, ..model.back_stack]
   }
 }
 

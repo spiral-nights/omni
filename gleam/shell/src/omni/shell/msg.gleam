@@ -17,6 +17,7 @@ import omni/shell/model.{
 pub type Msg {
   // Navigation
   NavigateTo(Page)
+  NavigateBack
   OpenApp(plugin_id: String, route: Option(String))
   OpenSettings(SettingsTab)
   ToggleFullscreen

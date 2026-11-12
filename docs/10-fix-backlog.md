@@ -73,7 +73,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | PL-8 | S2 | open | App store custom install only records a descriptor. | Validate/fetch the URL before install. |
 | PL-9 | S2 | open | Plugin settings tabs render a placeholder; plugin settings content isn't hosted. | Mount plugin settings view in the tab. |
 | PL-10 | S2 | fixed | Theme mode (light/dark) absent; Editorial hardcodes dark. | fixed `a514568`: shell model stores a persisted appearance mode, all themes emit `data-theme-mode`, Settings exposes a Dark/Light toggle, and tokens provide a warm-paper light palette. |
-| PL-11 | S2 | open | In-app back buttons missing; only browser history works. | Theme header back with per-view stack. |
+| PL-11 | S2 | fixed | In-app back buttons missing; only browser history works. | fixed `PENDING`: shell keeps a per-view back stack, all three theme headers render a back button when history exists, and `NavigateBack` pops it. |
 | PL-12 | S2 | open | Pull-to-refresh has no touch listeners. | Wire gesture stream to the indicator + feed refresh. |
 | PL-13 | S2 | open | PWA offline shell/assets caching not implemented. | Workbox/manual service worker precache. |
 | PL-14 | S3 | open | Widget/compact routes not rendered for hosted apps. | Route-aware hosted views (widget mode). |
