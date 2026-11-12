@@ -48,7 +48,6 @@ import omni/sandbox/iframe_host.{type IframeMount, IframeConfig}
 import omni/sandbox/manager.{
   type SandboxManager, type SpawnOptions, SpawnOptions,
 }
-import omni/shell/model as shell_model
 import omni/shell/model.{
   type Model, type UserProfileSummary, IntentPromptState, Model, PrimaryApp,
   UserProfileSummary,
@@ -144,7 +143,7 @@ pub fn init_with_relays(
     storage.get(kernel.storage, sync.storage_key_workspace)
   {
     Some(_) ->
-      shell_model.apply_workspace_state(seeded_model, sync.load(kernel.storage))
+      model.apply_workspace_state(seeded_model, sync.load(kernel.storage))
     None -> seeded_model
   }
   let booted =

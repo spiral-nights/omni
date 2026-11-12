@@ -43,7 +43,6 @@ import omni/shell/model.{
   InstalledApp, PrimaryApp, Settings, TabPluginSettings, TabPlugins, TabProfile,
   TabRelays, TabShells, TabWorkspace, UpdateModalState, WidgetsDashboard,
 }
-import omni/shell/model as omni_shell_model
 import omni/shell/msg.{
   ApplyRemoteWorkspace, EmbedSchema, FinishPullRefresh, InstallApp,
   KeyImportResult, NavigateTo, OpenApp, OpenSettings, SetExportedNsec,
@@ -777,7 +776,7 @@ fn empty_profile(pubkey: pubkey.Pubkey) -> social_profile.Profile {
 pub fn profile_summary_for(
   npub: String,
   profile: social_profile.Profile,
-) -> omni_shell_model.UserProfileSummary {
+) -> model.UserProfileSummary {
   let fallback = "npub" <> string.drop_start(npub, 5) |> string.slice(0, 8)
   let display_name = case profile.display_name {
     Some(name) if name != "" -> name
@@ -787,7 +786,7 @@ pub fn profile_summary_for(
         _ -> fallback
       }
   }
-  omni_shell_model.UserProfileSummary(
+  model.UserProfileSummary(
     pubkey: profile.pubkey,
     npub: npub,
     display_name: display_name,
