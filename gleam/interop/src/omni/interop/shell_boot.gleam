@@ -46,9 +46,9 @@ import omni/shell/model.{
   TabRelays, TabShells, TabWorkspace, UpdateModalState, WidgetsDashboard,
 }
 import omni/shell/msg.{
-  ApplyRemoteWorkspace, EmbedSchema, FinishPullRefresh, InstallApp,
-  KeyImportResult, KeySecurityResult, KeySecurityStatus, NavigateTo, OpenApp,
-  OpenSettings, SetExportedNsec, SetUserProfile, ShowPermissionPrompt,
+  AccountSwitchResult, ApplyRemoteWorkspace, EmbedSchema, FinishPullRefresh,
+  InstallApp, KeyImportResult, KeySecurityResult, KeySecurityStatus, NavigateTo,
+  OpenApp, OpenSettings, SetExportedNsec, SetUserProfile, ShowPermissionPrompt,
   ShowUpdateModal, StartPullRefresh, UninstallApp,
 }
 import omni/shell/update
@@ -339,6 +339,22 @@ fn apply_effects(
         case boot.disable_passphrase(acc.booted) {
           Ok(_) -> dispatch_shell_msg(KeySecurityStatus(False, False))
           Error(_) -> Nil
+        }
+        acc
+      }
+
+      update.SwitchAccountEffect(pubkey_hex) -> {
+        case boot.switch_account(acc.booted, pubkey_hex) {
+          Ok(next) -> {
+            dispatch_shell_msg(AccountSwitchResult(Ok(Nil)))
+            dispatch_shell_msg(
+              SetUserProfile(profile_summary_for(
+                user_npub(ShellBoot(next)),
+                empty_profile(keystore.get_public_key(next.kernel.keystore)),
+              )),
+            )
+          }
+          Error(err) -> dispatch_shell_msg(AccountSwitchResult(Error(err)))
         }
         acc
       }

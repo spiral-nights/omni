@@ -19,16 +19,17 @@ import omni/shell/model.{
   TabRelays, UpdateModalState, UserProfileSummary, ViewOption, WidgetsDashboard,
 }
 import omni/shell/msg.{
-  AddAppPlacement, ApplyRemoteWorkspace, ConfirmPluginUpdate, DisablePassphrase,
-  DismissIntentPrompt, DismissUpdateModal, EnablePassphrase, ExportKey,
-  FinishPullRefresh, ImportKey, InstallApp, KeySecurityStatus, NavigateBack,
-  NavigateTo, OpenApp, OpenSettings, RemoveAppPlacement, SelectIntentHandler,
-  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
-  SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
-  SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShowIntentPrompt,
-  ShowUpdateModal, StartPullRefresh, ToggleAppEnabled, ToggleAppIntent,
-  ToggleAppPinned, ToggleAutoSync, ToggleFullscreen, ToggleMobileMenu,
-  TriggerWorkspaceSync, UninstallApp, UnlockKey,
+  AccountSwitchResult, AddAppPlacement, ApplyRemoteWorkspace,
+  ConfirmPluginUpdate, DisablePassphrase, DismissIntentPrompt,
+  DismissUpdateModal, EnablePassphrase, ExportKey, FinishPullRefresh, ImportKey,
+  InstallApp, KeySecurityStatus, NavigateBack, NavigateTo, OpenApp, OpenSettings,
+  RemoveAppPlacement, SelectIntentHandler, SelectShell, SetAccentColor,
+  SetAppPlacements, SetAppRelays, SetCustomInstallUrl, SetExportedNsec,
+  SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
+  SetUserProfile, ShowIntentPrompt, ShowUpdateModal, StartPullRefresh,
+  SwitchAccount, ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned,
+  ToggleAutoSync, ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync,
+  UninstallApp, UnlockKey,
 }
 import omni/shell/shell
 import omni/shell/themes/classic as classic_theme
@@ -830,4 +831,13 @@ pub fn passphrase_controls_emit_effects_and_status_test() {
   unlocked.key_encrypted |> should.equal(True)
   unlocked.key_locked |> should.equal(False)
   unlocked.passphrase |> should.equal("")
+}
+
+pub fn account_switch_emits_effect_and_status_test() {
+  let m = model.init("classic", [])
+  let #(_, effects) = update.update(m, SwitchAccount("abc123"))
+  effects |> should.equal([update.SwitchAccountEffect("abc123")])
+
+  let #(next, _) = update.update(m, AccountSwitchResult(Ok(Nil)))
+  next.key_message |> should.equal(Some("Switched account."))
 }

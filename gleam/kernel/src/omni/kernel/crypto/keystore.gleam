@@ -4,7 +4,9 @@
 //// BIP-340 Schnorr signatures, and persists credentials in `Storage`.
 
 import gleam/bit_array
+import gleam/dynamic/decode
 import gleam/javascript/promise.{type Promise}
+import gleam/json
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
@@ -29,6 +31,14 @@ pub const storage_key_key_salt = "omni_privkey_salt"
 
 /// Storage key for the public key, kept available while locked.
 pub const storage_key_public_key = "omni_privkey_pub"
+
+/// Storage key for the known account public-key list.
+pub const storage_key_accounts = "omni_accounts"
+
+/// Storage key holding a specific account's plaintext private key.
+pub fn account_key_storage_key(pubkey_hex: String) -> String {
+  "omni_account_key:" <> string.lowercase(pubkey_hex)
+}
 
 /// Key custody manager storing the active secret key and notifying subscribers.
 pub type Keystore {
@@ -79,6 +89,98 @@ fn locked_or_stored_pubkey(store: Storage) -> Pubkey {
   }
 }
 
+fn load_accounts(store: Storage) -> List(String) {
+  case store.get(storage_key_accounts) {
+    None -> []
+    Some(raw) ->
+      case json.parse(from: raw, using: decode.list(of: decode.string)) {
+        Ok(accounts) -> accounts
+        Error(_) -> []
+      }
+  }
+}
+
+fn save_accounts(store: Storage, accounts: List(String)) -> Nil {
+  let encoded =
+    accounts
+    |> list.unique
+    |> list.map(json.string)
+    |> json.array(fn(value) { value })
+    |> json.to_string
+  let _ = store.set(storage_key_accounts, encoded)
+  Nil
+}
+
+fn remember_account(
+  store: Storage,
+  pubkey_hex: String,
+  private_hex: String,
+) -> Nil {
+  let clean_pub = string.lowercase(pubkey_hex)
+  let _ = store.set(account_key_storage_key(clean_pub), private_hex)
+  save_accounts(store, [clean_pub, ..load_accounts(store)])
+}
+
+/// Known account public keys, active account first when known.
+pub fn accounts(keystore: Keystore) -> List(String) {
+  let active = pubkey.to_hex(get_public_key(keystore))
+  let known = load_accounts(keystore.storage)
+  let with_active = case list.contains(known, active) {
+    True -> known
+    False -> [active, ..known]
+  }
+  [active, ..list.filter(with_active, fn(pk) { pk != active })]
+}
+
+/// Switch to a previously imported account (plaintext accounts only).
+pub fn switch_account(
+  keystore: Keystore,
+  pubkey_hex: String,
+) -> Result(Pubkey, String) {
+  case ref.get(keystore.locked) {
+    True -> Error("Unlock the keystore before switching accounts")
+    False -> {
+      let target = string.lowercase(string.trim(pubkey_hex))
+      let current = pubkey.to_hex(get_public_key(keystore))
+      case target == current {
+        True -> Ok(get_public_key(keystore))
+        False ->
+          case storage.get(keystore.storage, account_key_storage_key(target)) {
+            None -> Error("Unknown account: " <> target)
+            Some(hex) ->
+              case secp256k1.get_public_key(hex) {
+                Error(_) -> Error("Stored account key is invalid")
+                Ok(pk_hex) ->
+                  case pubkey.parse(pk_hex) {
+                    Error(Nil) -> Error("Stored account key is invalid")
+                    Ok(pk) -> {
+                      ref.set(keystore.private_key, hex)
+                      ref.set(keystore.public_key, pk)
+                      let _ =
+                        storage.set(
+                          keystore.storage,
+                          storage_key_private_key,
+                          hex,
+                        )
+                      let _ =
+                        storage.set(
+                          keystore.storage,
+                          storage_key_public_key,
+                          pk_hex,
+                        )
+                      remember_account(keystore.storage, pk_hex, hex)
+                      let listeners = ref.get(keystore.listeners)
+                      list.each(listeners, fn(listener) { listener(pk) })
+                      Ok(pk)
+                    }
+                  }
+              }
+          }
+      }
+    }
+  }
+}
+
 pub fn new(store: Storage) -> Keystore {
   let encrypted_blob = store.get(storage_key_encrypted_key)
   let existing_key = case store.get(storage_key_private_key) {
@@ -125,6 +227,12 @@ pub fn new(store: Storage) -> Keystore {
   let encrypted = case encrypted_blob {
     Some(_) -> True
     None -> False
+  }
+
+  let _ = case locked {
+    False -> remember_account(store, pubkey.to_hex(pubkey), privkey)
+    True ->
+      save_accounts(store, [pubkey.to_hex(pubkey), ..load_accounts(store)])
   }
 
   Keystore(
@@ -361,6 +469,7 @@ pub fn switch_key(
           ref.set(keystore.encrypted, False)
           let _ = storage.set(keystore.storage, storage_key_private_key, hex)
           let _ = storage.set(keystore.storage, storage_key_public_key, pub_hex)
+          remember_account(keystore.storage, pub_hex, hex)
           let _ = storage.remove(keystore.storage, storage_key_encrypted_key)
           let _ = storage.remove(keystore.storage, storage_key_key_salt)
           let listeners = ref.get(keystore.listeners)

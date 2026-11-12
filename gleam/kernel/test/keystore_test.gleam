@@ -1,11 +1,12 @@
 import gleam/javascript/promise
+import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
 import omni/kernel/crypto/keystore.{
-  disable_passphrase, enable_passphrase, get_npub, get_nsec, get_private_key,
-  get_public_key, is_encrypted, is_locked, on_key_change, sign_event,
-  storage_key_private_key, switch_key, unlock,
+  accounts, disable_passphrase, enable_passphrase, get_npub, get_nsec,
+  get_private_key, get_public_key, is_encrypted, is_locked, on_key_change,
+  sign_event, storage_key_private_key, switch_account, switch_key, unlock,
 }
 import omni/nostr/event.{UnsignedEvent}
 import omni/nostr/event_id
@@ -163,4 +164,27 @@ pub fn keystore_passphrase_encryption_roundtrip_test() -> promise.Promise(Nil) {
   assert is_encrypted(reloaded) == False
   assert storage.get(store, storage_key_private_key) == Some(original_priv)
   promise.resolve(Nil)
+}
+
+pub fn keystore_multi_account_switch_test() {
+  let store = storage.in_memory()
+  let ks = keystore.new(store)
+  let first = get_public_key(ks)
+
+  let second_priv = secp256k1.generate_private_key()
+  let assert Ok(second_pub_hex) = secp256k1.get_public_key(second_priv)
+  let assert Ok(second) = switch_key(ks, second_priv)
+  assert accounts(ks) |> list.length == 2
+
+  // Reloading remembers both accounts and starts on the active one.
+  let reloaded = keystore.new(store)
+  assert accounts(reloaded) |> list.length == 2
+  assert get_public_key(reloaded) == second
+
+  let assert Ok(switched) = switch_account(reloaded, pubkey.to_hex(first))
+  assert switched == first
+  assert get_public_key(reloaded) == first
+  assert switch_account(reloaded, "not-a-pubkey") |> result.is_error
+  assert second == keystore.get_public_key(ks)
+  let _ = second_pub_hex
 }

@@ -16,18 +16,19 @@ import omni/shell/model.{
   Settings, Syncing, TabPluginSettings, WidgetsDashboard,
 }
 import omni/shell/msg.{
-  type Msg, AddAppPlacement, ApplyRemoteWorkspace, ClearEmbeddedSchema,
-  ConfirmPluginUpdate, DisablePassphrase, DismissIntentPrompt,
-  DismissUpdateModal, EmbedSchema, EnablePassphrase, ExportKey,
-  FinishPullRefresh, HostedSchemaAction, ImportKey, InstallApp, KeyImportResult,
-  KeySecurityResult, KeySecurityStatus, NavigateBack, NavigateTo, OpenApp,
-  OpenSettings, RemoveAppPlacement, ResolvePermission, SelectIntentHandler,
-  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
-  SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
+  type Msg, AccountSwitchResult, AddAppPlacement, ApplyRemoteWorkspace,
+  ClearEmbeddedSchema, ConfirmPluginUpdate, DisablePassphrase,
+  DismissIntentPrompt, DismissUpdateModal, EmbedSchema, EnablePassphrase,
+  ExportKey, FinishPullRefresh, HostedSchemaAction, ImportKey, InstallApp,
+  KeyImportResult, KeySecurityResult, KeySecurityStatus, NavigateBack,
+  NavigateTo, OpenApp, OpenSettings, RemoveAppPlacement, ResolvePermission,
+  SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
+  SetAppRelays, SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
   SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShowIntentPrompt,
-  ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh, ToggleAppEnabled,
-  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
-  ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp, UnlockKey,
+  ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh, SwitchAccount,
+  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
+  ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp,
+  UnlockKey,
 }
 
 /// Side-effect commands emitted by the pure shell `update` function.
@@ -48,6 +49,7 @@ pub type ShellEffect {
   EnablePassphraseEffect(String)
   DisablePassphraseEffect
   UnlockKeyEffect(String)
+  SwitchAccountEffect(String)
   DispatchIntentToPlugin(
     plugin_id: String,
     intent_name: String,
@@ -542,6 +544,16 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       ),
       [],
     )
+
+    SwitchAccount(pubkey_hex) -> #(model, [SwitchAccountEffect(pubkey_hex)])
+
+    AccountSwitchResult(result) -> {
+      let message = case result {
+        Ok(Nil) -> "Switched account."
+        Error(err) -> err
+      }
+      #(Model(..model, key_message: Some(message)), [])
+    }
 
     KeySecurityResult(result) -> {
       let message = case result {

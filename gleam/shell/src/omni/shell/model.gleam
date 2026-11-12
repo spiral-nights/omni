@@ -135,6 +135,7 @@ pub type Model {
     passphrase: String,
     key_encrypted: Bool,
     key_locked: Bool,
+    accounts: List(String),
   )
 }
 
@@ -171,6 +172,7 @@ pub fn init(active_shell_id: String, apps: List(InstalledApp)) -> Model {
     passphrase: "",
     key_encrypted: False,
     key_locked: False,
+    accounts: [],
   )
 }
 

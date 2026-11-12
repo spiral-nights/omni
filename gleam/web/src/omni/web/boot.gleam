@@ -148,6 +148,7 @@ pub fn init_with_relays(
       theme_mode: theme_mode,
       key_encrypted: keystore.is_encrypted(kernel.keystore),
       key_locked: keystore.is_locked(kernel.keystore),
+      accounts: keystore.accounts(kernel.keystore),
     )
   // Restore the persisted workspace before the first remote merge, but only
   // when the user actually has one (an absent state must not override the
@@ -483,6 +484,7 @@ pub fn import_key(booted: Booted, raw: String) -> Result(Booted, String) {
           model: Model(
             ..booted.model,
             user_profile: Some(session_profile(booted.kernel)),
+            accounts: keystore.accounts(booted.kernel.keystore),
           ),
         ),
       )
@@ -547,6 +549,27 @@ pub fn unlock_key(
       )
     Error(err) -> Error(err)
   })
+}
+
+/// Switch to another imported account and refresh the session profile.
+pub fn switch_account(
+  booted: Booted,
+  pubkey_hex: String,
+) -> Result(Booted, String) {
+  case keystore.switch_account(booted.kernel.keystore, pubkey_hex) {
+    Error(err) -> Error(err)
+    Ok(_) ->
+      Ok(
+        Booted(
+          ..booted,
+          model: Model(
+            ..booted.model,
+            user_profile: Some(session_profile(booted.kernel)),
+            accounts: keystore.accounts(booted.kernel.keystore),
+          ),
+        ),
+      )
+  }
 }
 
 /// Export the active private key as an nsec string.

@@ -941,3 +941,28 @@ pub fn publisher_publish_uploads_and_broadcasts_nip5a_test() -> promise.Promise(
   )
   promise.resolve(Nil)
 }
+
+pub fn imported_account_can_be_switched_back_test() -> promise.Promise(Nil) {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+  let assert Some(original) = booted.model.user_profile
+
+  use imported <- promise.await(
+    promise.resolve(boot.import_key(
+      booted,
+      "0000000000000000000000000000000000000000000000000000000000000001",
+    )),
+  )
+  let assert Ok(with_second) = imported
+  let assert Some(second) = with_second.model.user_profile
+  should.not_equal(second.pubkey, original.pubkey)
+  list.length(with_second.model.accounts) |> should.equal(2)
+
+  let assert Ok(switched) = boot.switch_account(with_second, original.pubkey)
+  let assert Some(back) = switched.model.user_profile
+  back.pubkey |> should.equal(original.pubkey)
+  list.length(switched.model.accounts) |> should.equal(2)
+  promise.resolve(Nil)
+}

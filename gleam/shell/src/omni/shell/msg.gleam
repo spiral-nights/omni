@@ -63,6 +63,8 @@ pub type Msg {
   UnlockKey
   KeySecurityStatus(encrypted: Bool, locked: Bool)
   KeySecurityResult(Result(Nil, String))
+  SwitchAccount(String)
+  AccountSwitchResult(Result(Nil, String))
 
   // Profile & sync
   SetUserProfile(UserProfileSummary)

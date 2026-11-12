@@ -22,8 +22,8 @@ import omni/shell/model.{
 }
 import omni/shell/msg.{
   type Msg, DisablePassphrase, EnablePassphrase, ExportKey, ImportKey,
-  OpenSettings, SetKeyInput, SetPassphrase, ToggleAutoSync, TriggerWorkspaceSync,
-  UnlockKey,
+  OpenSettings, SetKeyInput, SetPassphrase, SwitchAccount, ToggleAutoSync,
+  TriggerWorkspaceSync, UnlockKey,
 }
 import omni/shell/settings/intents
 import omni/shell/settings/permissions
@@ -328,10 +328,64 @@ fn key_custody_card(model: Model) -> Element(Msg) {
         ),
       ]),
       passphrase_section(model),
+      account_list(model),
       message_el,
       exported_el,
     ],
   )
+}
+
+fn account_list(model: Model) -> Element(Msg) {
+  case model.accounts {
+    [] -> element.none()
+    accounts -> {
+      let active = case model.user_profile {
+        Some(profile) -> profile.pubkey
+        None -> ""
+      }
+      html.div([attribute.class("omni-account-list-section")], [
+        html.h4([attribute.class("omni-settings-subsection-title")], [
+          element.text("Accounts"),
+        ]),
+        html.div(
+          [attribute.class("omni-account-list")],
+          list.map(accounts, fn(pubkey) {
+            let is_active = pubkey == active
+            let short =
+              string.slice(pubkey, 0, 12)
+              <> "…"
+              <> string.slice(pubkey, string.length(pubkey) - 6, 6)
+            html.div(
+              [
+                attribute.class("omni-account-row"),
+                attribute.attribute("data-account", pubkey),
+              ],
+              [
+                html.code([attribute.class("omni-account-key")], [
+                  element.text(short),
+                ]),
+                case is_active {
+                  True ->
+                    html.span([attribute.class("omni-shell-badge active")], [
+                      element.text("Active"),
+                    ])
+                  False ->
+                    html.button(
+                      [
+                        attribute.type_("button"),
+                        attribute.class("omni-button omni-button-secondary"),
+                        event.on_click(SwitchAccount(pubkey)),
+                      ],
+                      [element.text("Switch")],
+                    )
+                },
+              ],
+            )
+          }),
+        ),
+      ])
+    }
+  }
 }
 
 fn passphrase_section(model: Model) -> Element(Msg) {
