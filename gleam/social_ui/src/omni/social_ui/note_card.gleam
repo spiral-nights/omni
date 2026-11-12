@@ -295,6 +295,7 @@ pub fn render_note_card(
   let body_base =
     builder.text(n.content)
     |> builder.text_variant(Body)
+    |> builder.with_inline_images(True)
     |> builder.with_style(StyleRaw(
       "margin-top: 3px; margin-bottom: 4px; cursor: pointer;",
     ))

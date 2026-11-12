@@ -23,6 +23,7 @@ import omni/protocol/schema/node.{
 import omni/protocol/schema/style.{type SizeToken, SizeMd}
 import omni/ui/avatar as generated_avatar
 import omni/ui/icons
+import omni/ui/rich_text
 import omni/ui/sanitize
 
 /// Renders a `Text` typography primitive.
@@ -82,8 +83,13 @@ pub fn render_text(
       },
     ])
 
+  let allow_media = case show_inline_images {
+    Some(True) -> True
+    _ -> False
+  }
+
   let attrs = list.flatten([[class_attr], base_attrs, extra_attrs])
-  html.div(attrs, [element.text(content)])
+  html.div(attrs, rich_text.render(content, allow_media))
 }
 
 /// Renders a `Badge` status pill primitive.

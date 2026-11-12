@@ -512,6 +512,49 @@ omni-text a:hover,
   text-decoration-thickness: 1.5px;
 }
 
+/* Rich note content */
+.omni-rich-link {
+  color: var(--omni-accent-primary, #d4a373);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  word-break: break-all;
+}
+
+.omni-rich-link:hover {
+  filter: brightness(1.2);
+}
+
+.omni-inline-entity {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--omni-radius-pill, 9999px);
+  background: var(--omni-bg-surface, #191816);
+  border: 1px solid var(--omni-border-subtle, #272522);
+  color: var(--omni-accent-primary, #d4a373);
+  font-family: var(--omni-font-mono, monospace);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+.omni-inline-image {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  margin: 8px 0;
+  border-radius: var(--omni-radius-md, 10px);
+  border: 1px solid var(--omni-border-subtle, #272522);
+  object-fit: cover;
+}
+
+.omni-inline-video {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  margin: 8px 0;
+  border-radius: var(--omni-radius-md, 10px);
+  background: #000;
+}
+
 .feed-media-callout {
   display: inline-flex;
   align-items: center;

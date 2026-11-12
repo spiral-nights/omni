@@ -911,3 +911,84 @@ pub fn golden_virtual_list_window_test() {
     lustre_el.to_readable_string(windowed_el),
   )
 }
+
+pub fn rich_text_linkifies_and_chips_entities_test() {
+  let node =
+    Text(
+      base: empty_base(),
+      content: "Read https://example.com/post and ping npub1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+      variant: Some(Body),
+      tone: None,
+      truncate: None,
+      action: None,
+      show_inline_images: None,
+    )
+  let html_str = render.render_to_string(node)
+  should.be_true(string.contains(html_str, "class=\"omni-rich-link\""))
+  should.be_true(string.contains(html_str, "href=\"https://example.com/post\""))
+  should.be_true(string.contains(html_str, "class=\"omni-inline-entity\""))
+  should.be_true(string.contains(html_str, "Read "))
+}
+
+pub fn rich_text_embeds_media_when_enabled_test() {
+  let image =
+    Text(
+      base: empty_base(),
+      content: "look https://example.com/cat.png",
+      variant: Some(Body),
+      tone: None,
+      truncate: None,
+      action: None,
+      show_inline_images: Some(True),
+    )
+  let with_media = render.render_to_string(image)
+  should.be_true(string.contains(with_media, "class=\"omni-inline-image\""))
+  should.be_true(string.contains(
+    with_media,
+    "src=\"https://example.com/cat.png\"",
+  ))
+
+  let link_only =
+    Text(
+      base: empty_base(),
+      content: "look https://example.com/cat.png",
+      variant: Some(Body),
+      tone: None,
+      truncate: None,
+      action: None,
+      show_inline_images: Some(False),
+    )
+  let without_media = render.render_to_string(link_only)
+  should.be_false(string.contains(without_media, "omni-inline-image"))
+  should.be_true(string.contains(without_media, "class=\"omni-rich-link\""))
+}
+
+pub fn rich_text_supports_markdown_links_and_leaves_plain_text_alone_test() {
+  let md =
+    Text(
+      base: empty_base(),
+      content: "see [docs](https://example.com/docs) now",
+      variant: Some(Body),
+      tone: None,
+      truncate: None,
+      action: None,
+      show_inline_images: None,
+    )
+  let md_html = render.render_to_string(md)
+  should.be_true(string.contains(md_html, ">docs</a>"))
+  should.be_true(string.contains(md_html, "href=\"https://example.com/docs\""))
+
+  let plain =
+    Text(
+      base: empty_base(),
+      content: "just some words",
+      variant: Some(Body),
+      tone: None,
+      truncate: None,
+      action: None,
+      show_inline_images: None,
+    )
+  render.render_to_string(plain)
+  |> string.contains("<span class=\"omni-rich-text\">")
+  |> should.be_false()
+}

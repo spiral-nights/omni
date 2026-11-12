@@ -535,6 +535,14 @@ pub fn loading(n: Node, is_loading: Bool) -> Node {
   }
 }
 
+/// Toggle inline media rendering on a Text node.
+pub fn with_inline_images(n: Node, enabled: Bool) -> Node {
+  case n {
+    Text(..) as txt -> Text(..txt, show_inline_images: Some(enabled))
+    other -> other
+  }
+}
+
 /// Set a CSS background for the card's banner strip.
 pub fn banner_background(n: Node, background: String) -> Node {
   case n {

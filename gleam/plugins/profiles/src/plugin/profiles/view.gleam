@@ -189,7 +189,7 @@ fn render_profile(model: Model, pubkey: String) -> Node {
 
   let lud16_nodes = case person.lud16 {
     Some(address) -> [
-      schema.text("⚡ " <> address),
+      schema.text(address),
     ]
     None -> []
   }
