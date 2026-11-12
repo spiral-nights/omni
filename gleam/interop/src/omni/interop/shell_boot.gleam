@@ -25,6 +25,7 @@ import omni/nostr/filter.{type Filter, Filter}
 import omni/nostr/kind
 import omni/nostr/pubkey
 import omni/nostr/relay_url
+import omni/platform/audio
 import omni/platform/clock
 import omni/platform/idb
 import omni/platform/nip44
@@ -172,6 +173,7 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
       let host = apply_effects(ShellBoot(next), effects)
       let _ = drain_fetches(host)
       let _ = drain_relay_commands(host)
+      let _ = drain_chimes(host)
       let _ =
         boot.publish_pending(host.booted)
         |> promise.map(fn(event_ids) {
@@ -437,6 +439,18 @@ fn request_missing_profiles(host: ShellBoot, authors: List(String)) -> Nil {
       Nil
     }
   }
+}
+
+fn drain_chimes(host: ShellBoot) -> Nil {
+  let pending =
+    dict.fold(host.booted.builtins, 0, fn(total, _id, app) {
+      total + app.take_chimes()
+    })
+  case pending > 0 {
+    True -> audio.play_chime()
+    False -> Nil
+  }
+  Nil
 }
 
 fn drain_relay_commands(host: ShellBoot) -> Nil {

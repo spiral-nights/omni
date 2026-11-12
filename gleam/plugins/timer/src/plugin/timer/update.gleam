@@ -2,7 +2,7 @@
 
 import gleam/int
 import gleam/option.{type Option, None, Some}
-import omni/plugin_kit/app.{type Effect}
+import omni/plugin_kit/app.{type Effect, PlayChime}
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import plugin/timer/model.{
@@ -48,7 +48,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
                 remaining_sec: 0,
                 completed_sessions: model.completed_sessions + 1,
               ),
-              [],
+              [PlayChime],
             )
             False -> #(
               Model(..model, remaining_sec: model.remaining_sec - 1),
@@ -68,7 +68,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
             remaining_sec: 0,
             completed_sessions: model.completed_sessions + 1,
           ),
-          [],
+          [PlayChime],
         )
       }
 

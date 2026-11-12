@@ -40,6 +40,7 @@ pub type BuiltinApp {
     take_encrypted_publishes: fn() -> List(UnsignedEvent),
     take_fetches: fn() -> List(Int),
     take_relay_commands: fn() -> List(RelayCommand),
+    take_chimes: fn() -> Int,
     ingest_doc: Option(fn(String) -> Nil),
   )
 }
@@ -80,6 +81,7 @@ fn feed_app(store: storage.Storage) -> BuiltinApp {
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     take_fetches: fn() { app.take_fetches(running) },
     take_relay_commands: fn() { app.take_relay_commands(running) },
+    take_chimes: fn() { app.take_chimes(running) },
     ingest_doc: None,
   )
 }
@@ -98,6 +100,7 @@ fn profiles_app(store: storage.Storage) -> BuiltinApp {
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     take_fetches: fn() { app.take_fetches(running) },
     take_relay_commands: fn() { app.take_relay_commands(running) },
+    take_chimes: fn() { app.take_chimes(running) },
     ingest_doc: None,
   )
 }
@@ -120,6 +123,7 @@ fn relays_app() -> BuiltinApp {
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     take_fetches: fn() { app.take_fetches(running) },
     take_relay_commands: fn() { app.take_relay_commands(running) },
+    take_chimes: fn() { app.take_chimes(running) },
     ingest_doc: None,
   )
 }
@@ -141,6 +145,7 @@ fn host(
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     take_fetches: fn() { app.take_fetches(running) },
     take_relay_commands: fn() { app.take_relay_commands(running) },
+    take_chimes: fn() { app.take_chimes(running) },
     ingest_doc: None,
   )
 }
@@ -157,6 +162,7 @@ fn checklist_app(store: storage.Storage) -> BuiltinApp {
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     take_fetches: fn() { app.take_fetches(running) },
     take_relay_commands: fn() { app.take_relay_commands(running) },
+    take_chimes: fn() { app.take_chimes(running) },
     ingest_doc: Some(fn(raw) {
       app.dispatch(running, checklist_msg.IngestRemoteDoc(raw))
     }),
@@ -175,6 +181,7 @@ fn notes_app(store: storage.Storage) -> BuiltinApp {
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     take_fetches: fn() { app.take_fetches(running) },
     take_relay_commands: fn() { app.take_relay_commands(running) },
+    take_chimes: fn() { app.take_chimes(running) },
     ingest_doc: Some(fn(raw) {
       app.dispatch(running, notes_msg.IngestRemoteDoc(raw))
     }),

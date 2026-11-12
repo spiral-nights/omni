@@ -221,3 +221,18 @@ fn schema_action(name: String, fields: List(#(String, String))) -> Action {
     |> dict.from_list
   action.new(name) |> action.with_payload(payload)
 }
+
+pub fn completion_emits_chime_effect_test() {
+  let m = model.init()
+  let m = model.Model(..m, status: model.Running, remaining_sec: 1)
+  let #(done, effects) = update.update(m, Tick)
+  done.status |> should.equal(model.Completed)
+  should.be_true(
+    list.any(effects, fn(effect) {
+      case effect {
+        app.PlayChime -> True
+        _ -> False
+      }
+    }),
+  )
+}

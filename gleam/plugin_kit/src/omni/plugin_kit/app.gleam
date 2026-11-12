@@ -27,6 +27,8 @@ pub type Effect(msg) {
   FetchUntil(Int)
   /// Request a relay-pool mutation (add/remove/scope/reconnect).
   Relay(RelayCommand)
+  /// Request the host play the completion chime.
+  PlayChime
 }
 
 /// Elm-style plugin application specification.
@@ -53,6 +55,7 @@ pub type RunningApp(model, msg) {
     encrypted_publishes: Ref(List(UnsignedEvent)),
     fetches: Ref(List(Int)),
     relay_commands: Ref(List(RelayCommand)),
+    chimes: Ref(Int),
   )
 }
 
@@ -82,6 +85,7 @@ pub fn start(
       encrypted_publishes: ref.new([]),
       fetches: ref.new([]),
       relay_commands: ref.new([]),
+      chimes: ref.new(0),
     )
 
   emit_schema(initial_node)
@@ -174,6 +178,7 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
     FetchUntil(until) -> ref.update(app.fetches, fn(queue) { [until, ..queue] })
     Relay(command) ->
       ref.update(app.relay_commands, fn(queue) { [command, ..queue] })
+    PlayChime -> ref.update(app.chimes, fn(count) { count + 1 })
   }
 }
 
@@ -182,6 +187,13 @@ pub fn take_publishes(app: RunningApp(model, msg)) -> List(UnsignedEvent) {
   let pending = ref.get(app.publishes)
   ref.set(app.publishes, [])
   list.reverse(pending)
+}
+
+/// Drain pending completion chimes.
+pub fn take_chimes(app: RunningApp(model, msg)) -> Int {
+  let pending = ref.get(app.chimes)
+  ref.set(app.chimes, 0)
+  pending
 }
 
 /// Drain relay-pool mutations requested by the app.
