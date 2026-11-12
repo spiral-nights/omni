@@ -91,7 +91,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | Q-1 | S1 | fixed | No integration harness with a fake relay; unit-only tests hid the gaps. | fixed `4d90bde`: `kernel/test/fake_relay.gleam` records client frames and injects server frames through pool dispatch; integration tests cover REQ, EOSE, raw delivery. |
 | Q-2 | S1 | fixed | No acceptance tests per feature row above. | fixed `aa735aa`: install and publish acceptance tests now exercise the real path (injected fetcher, sandbox spawn, fake relay EVENT/OK, local store, plugin ingest) in `omni_web`; new fixes continue to add one. |
 | Q-3 | S2 | fixed | No network e2e smoke in CI. | fixed `8c7dedb`: nightly relay-smoke workflow probes public relays for a recent note without blocking PR CI. |
-| Q-4 | S3 | open | Duplicate/legacy helper warnings (e.g. unused feed synthetic helpers). | Remove dead code after REL/PL work. |
+| Q-4 | S3 | fixed | Duplicate/legacy helper warnings (e.g. unused feed synthetic helpers). | fixed `78457c5`: removed unreferenced feed helpers, empty modules, an unreachable relay-pool arm, and unused imports across the workspace. |
 | Q-5 | S2 | fixed | Fake-relay harness observed the coordinator `on_event` callback not firing for injected EVENT frames, while raw subscribers and EOSE work; cause unconfirmed. | fixed `732d45a`: the harness fixture used a hard-coded `sub1` sub ID; frames now carry the caller's ID and delivery/dedupe/ingest are verified. |
 
 ---
