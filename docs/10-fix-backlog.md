@@ -41,8 +41,10 @@ Last updated: 2026-11-11.
 | ID-1 | S2 | fixed | Key bootstrap: host generates/persists a key and shows it in the profile (`boot.session_profile`, commit `4587455`). | Done. |
 | ID-2 | S2 | fixed | No import/export/backup UI, no passphrase-encrypted storage. | fixed `18fdcb6` (UI): Settings imports nsec/hex keys by switching identities and exports the active nsec; at-rest passphrase encryption split out as ID-2b. |
 | ID-2b | S2 | fixed | Private keys are stored in plain storage; no passphrase encryption. | fixed `14c8cd2`: Settings can encrypt the stored key with a passphrase (NIP-44 to a passphrase-derived key); reloads start locked, signing waits for unlock, and the passphrase can be removed. |
-| ID-3 | S2 | open | Zap requests not implemented (like/repost publish). | Kind 9734 with `amount`/`lnurl` and receipt tracking. |
-| ID-4 | S3 | open | Multi-account support absent. | Account switcher + per-account cache/settings. |
+| ID-3 | S2 | fixed | Zap requests not implemented (like/repost publish). | fixed `4999c60`: feed zap dialog builds and publishes kind-9734 requests with `p`/`e`/`relays`/`amount`/`lnurl` tags and optimistic stats. Invoice/payment and receipt tracking split to ID-3b. |
+| ID-3b | S2 | open | Zap requests are broadcast but no LNURL invoice is fetched, paid, or receipt-tracked. | Host effect to POST the signed request to the lud16 LNURL callback, return the invoice, and watch for kind-9735 receipts. |
+| ID-4 | S3 | fixed | Multi-account support absent. | fixed `d9750db`: imported keys are registered per account, the Identity panel lists and switches them, and the active key/profile updates in place. Encrypted multi-account split to ID-4b. |
+| ID-4b | S3 | open | Passphrase encryption covers the active key only; account switching is blocked while locked. | Encrypt/decrypt per-account secrets with the same unlock session. |
 | ID-5 | S3 | deferred | NIP-17/59 DMs. | Gift-wrap pipeline + DMs plugin. |
 
 Publishing itself is wired (commit `7acb942`): feed notes/replies/likes/reposts and
@@ -70,7 +72,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | PL-3 | S1 | fixed | ACL prompts never fire (no `prompt_handler` on the engine). | fixed `644d92f`: kernel prompt handler bridged to a shell Allow/Deny modal; decisions resolve the grant promise. |
 | PL-4 | S2 | fixed | Relays app mutations (add/remove/reconnect/read-write/NIP-65) don't call the pool. | fixed `ac190f8`: relay mutations emit typed pool commands (add/remove/scope/force-reconnect) that the host applies to the live pool; NIP-65 publishing was already wired. |
 | PL-5 | S2 | fixed | Publisher has no zip, Blossom upload, or nsite publish. | fixed `59e5d6d`: the publisher loads zip bundles (URL or base64 action), hashes/detects MIME per file, emits Blossom uploads plus a real kind-35129 event with `f`/`server` tags and a valid naddr, and the host uploads blobs before broadcasting. |
-| PL-5b | S3 | open | Publisher loads bundles by URL/action; no native file picker for local zips. | Add a platform file-read port and a Schema file input path that returns bytes. |
+| PL-5b | S3 | fixed | Publisher loads bundles by URL/action; no native file picker for local zips. | fixed `88222e8`: a quarantined platform file-picker port loads local zip bytes into the publisher bundle pipeline. |
 | PL-6 | S2 | fixed | Profiles key custody/backup UI missing. | fixed `18fdcb6`: Settings Identity panel hosts the shared import/export custody card backed by the keystore. |
 | PL-7 | S2 | fixed | Timer completion has no chime. | fixed `0f3f1dd`: completing a session emits a chime effect and the host plays a synthesized two-tone signal via the audio port. |
 | PL-8 | S2 | fixed | App store custom install only records a descriptor. | fixed `d2deef6`: installation resolves/fetches the bundle first and rolls the optimistic install back if validation fails. |
@@ -88,7 +90,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 |---|---|---|---|---|
 | Q-1 | S1 | fixed | No integration harness with a fake relay; unit-only tests hid the gaps. | fixed `4d90bde`: `kernel/test/fake_relay.gleam` records client frames and injects server frames through pool dispatch; integration tests cover REQ, EOSE, raw delivery. |
 | Q-2 | S1 | fixed | No acceptance tests per feature row above. | fixed `aa735aa`: install and publish acceptance tests now exercise the real path (injected fetcher, sandbox spawn, fake relay EVENT/OK, local store, plugin ingest) in `omni_web`; new fixes continue to add one. |
-| Q-3 | S2 | open | No network e2e smoke in CI. | Optional nightly job against public relays. |
+| Q-3 | S2 | fixed | No network e2e smoke in CI. | fixed `8c7dedb`: nightly relay-smoke workflow probes public relays for a recent note without blocking PR CI. |
 | Q-4 | S3 | open | Duplicate/legacy helper warnings (e.g. unused feed synthetic helpers). | Remove dead code after REL/PL work. |
 | Q-5 | S2 | fixed | Fake-relay harness observed the coordinator `on_event` callback not firing for injected EVENT frames, while raw subscribers and EOSE work; cause unconfirmed. | fixed `732d45a`: the harness fixture used a hard-coded `sub1` sub ID; frames now carry the caller's ID and delivery/dedupe/ingest are verified. |
 
