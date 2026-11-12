@@ -32,7 +32,7 @@ Last updated: 2026-11-11.
 | REL-10 | S3 | fixed | Host subscriptions bypass ACL by using a non-parsing `"builtin:feed"` sub id (`coordinator.gleam:66`). | fixed `a195f45`: internal host subscriptions use non-namespaced ids (`omni_internal_*`) so they no longer parse as a plugin ID and never trigger ACL prompts. |
 | REL-11 | S3 | open | `subscribers` is keyed only by `sub_id`; collisions overwrite handlers. | Namespace internally: `consumerId:subId`. |
 | REL-12 | S3 | open | Cache events are emitted before the live subscription registers; events can slip through. | Subscribe first, buffer, then flush cache. |
-| REL-13 | S3 | open | `seen_ids` grows unbounded per long-lived subscription. | Bounded/LRU set or clear on EOSE for one-shot fetches. |
+| REL-13 | S3 | fixed | `seen_ids` grows unbounded per long-lived subscription. | fixed `PENDING`: the dedupe set resets once it reaches 5,000 ids. |
 
 ## B. Identity & publishing
 

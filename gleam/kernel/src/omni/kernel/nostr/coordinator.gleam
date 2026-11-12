@@ -128,6 +128,17 @@ pub fn subscribe_targeted(
   )
 }
 
+const max_seen_ids = 5000
+
+fn remember_seen(seen_ids: ref.Ref(set.Set(String)), eid: String) -> Nil {
+  ref.update(seen_ids, fn(seen) {
+    case set.size(seen) >= max_seen_ids {
+      True -> set.new() |> set.insert(eid)
+      False -> set.insert(seen, eid)
+    }
+  })
+}
+
 fn resolve_targets(
   coord: SubscriptionCoordinator,
   filters: List(Filter),
@@ -267,7 +278,7 @@ fn subscribe_impl(
         case set.contains(ref.get(seen_ids), eid) {
           True -> promise.resolve(Nil)
           False -> {
-            ref.update(seen_ids, fn(s) { set.insert(s, eid) })
+            remember_seen(seen_ids, eid)
             case coord.acl_engine, maybe_plugin_id {
               Some(engine), Some(pid) -> {
                 use allowed <- promise.map(acl_engine.can_read_event(
@@ -347,7 +358,7 @@ fn subscribe_impl(
             relay_hints.seed_from_event(coord.relay_hints, ev)
             let eid = event_id.to_hex(ev.id)
             let is_new = !set.contains(ref.get(seen_ids), eid)
-            ref.update(seen_ids, fn(s) { set.insert(s, eid) })
+            remember_seen(seen_ids, eid)
 
             // Ingest into local store after notifying the subscriber.
             let _ = event_store.save_event(coord.event_store, ev)
