@@ -32,6 +32,7 @@ pub type RelayStatus {
 /// time a relay socket opens.
 pub type Subscriber {
   Subscriber(
+    key: String,
     filters: List(Filter),
     handler: fn(String, RelayFrame) -> Nil,
     targets: Option(List(String)),
@@ -58,7 +59,8 @@ pub type RelayPool {
     storage: Storage,
     sockets: Ref(Dict(String, WebSocketConnection)),
     statuses: Ref(Dict(String, RelayStatus)),
-    subscribers: Ref(Dict(String, Subscriber)),
+    subscribers: Ref(Dict(String, List(Subscriber))),
+    subscriber_seq: Ref(Int),
     retries: Ref(Dict(String, Int)),
     status_listeners: Ref(List(fn(List(#(RelayUrl, RelayStatus))) -> Nil)),
     receipts: Ref(Dict(String, PublishReceipt)),
@@ -108,6 +110,7 @@ pub fn new(storage: Storage, bootstrap_relays: List(RelayUrl)) -> RelayPool {
       sockets: ref.new(dict.new()),
       statuses: ref.new(dict.new()),
       subscribers: ref.new(dict.new()),
+      subscriber_seq: ref.new(0),
       retries: ref.new(dict.new()),
       status_listeners: ref.new([]),
       receipts: ref.new(dict.new()),
@@ -233,19 +236,21 @@ fn replay_subscriptions(
   case read_enabled(pool, url_str) {
     False -> Nil
     True ->
-      dict.each(ref.get(pool.subscribers), fn(sub_id, subscriber) {
-        case subscriber_allows(subscriber, url_str) {
-          False -> Nil
-          True -> {
-            let req_json =
-              relay_frame.client_frame_to_json(relay_frame.Req(
-                sub_id,
-                subscriber.filters,
-              ))
-            let _ = websocket.send(sock, req_json)
-            Nil
+      dict.each(ref.get(pool.subscribers), fn(sub_id, subscribers) {
+        list.each(subscribers, fn(subscriber) {
+          case subscriber_allows(subscriber, url_str) {
+            False -> Nil
+            True -> {
+              let req_json =
+                relay_frame.client_frame_to_json(relay_frame.Req(
+                  sub_id,
+                  subscriber.filters,
+                ))
+              let _ = websocket.send(sock, req_json)
+              Nil
+            }
           }
-        }
+        })
       })
   }
 }
@@ -268,7 +273,10 @@ fn dispatch_frame(
     | relay_frame.Eose(sub_id)
     | relay_frame.Closed(sub_id, _) -> {
       case dict.get(subs, sub_id) {
-        Ok(subscriber) -> subscriber.handler(source_url, frame)
+        Ok(subscribers) ->
+          list.each(subscribers, fn(subscriber) {
+            subscriber.handler(source_url, frame)
+          })
         Error(Nil) -> Nil
       }
     }
@@ -601,19 +609,22 @@ pub fn subscribe_targeted(
   targets: Option(List(String)),
   on_frame: fn(String, RelayFrame) -> Nil,
 ) -> fn() -> Nil {
+  let seq = ref.get(pool.subscriber_seq) + 1
+  ref.set(pool.subscriber_seq, seq)
+  let key = sub_id <> "#" <> int.to_string(seq)
+  let subscriber =
+    Subscriber(key: key, filters: filters, handler: on_frame, targets: targets)
   ref.update(pool.subscribers, fn(subs) {
-    dict.insert(
-      subs,
-      sub_id,
-      Subscriber(filters: filters, handler: on_frame, targets: targets),
-    )
+    let existing = case dict.get(subs, sub_id) {
+      Ok(subscribers) -> subscribers
+      Error(Nil) -> []
+    }
+    dict.insert(subs, sub_id, list.append(existing, [subscriber]))
   })
   let req_json =
     relay_frame.client_frame_to_json(relay_frame.Req(sub_id, filters))
   let sockets = ref.get(pool.sockets)
   let statuses = ref.get(pool.statuses)
-  let subscriber =
-    Subscriber(filters: filters, handler: on_frame, targets: targets)
   dict.each(sockets, fn(url_str, sock) {
     case dict.get(statuses, url_str) {
       Ok(Connected) ->
@@ -630,19 +641,43 @@ pub fn subscribe_targeted(
     }
   })
   fn() {
-    ref.update(pool.subscribers, fn(subs) { dict.delete(subs, sub_id) })
-    let close_json = relay_frame.client_frame_to_json(relay_frame.Close(sub_id))
-    let cur_sockets = ref.get(pool.sockets)
-    let cur_statuses = ref.get(pool.statuses)
-    dict.each(cur_sockets, fn(url_str, sock) {
-      case dict.get(cur_statuses, url_str) {
-        Ok(Connected) -> {
-          let _ = websocket.send(sock, close_json)
-          Nil
+    ref.update(pool.subscribers, fn(subs) {
+      case dict.get(subs, sub_id) {
+        Error(Nil) -> subs
+        Ok(subscribers) -> {
+          let remaining =
+            list.filter(subscribers, fn(existing) {
+              existing.key != subscriber.key
+            })
+          case remaining {
+            [] -> dict.delete(subs, sub_id)
+            remaining -> dict.insert(subs, sub_id, remaining)
+          }
         }
-        _ -> Nil
       }
     })
-    Nil
+    let still_subscribed = case dict.get(ref.get(pool.subscribers), sub_id) {
+      Ok(_) -> True
+      Error(Nil) -> False
+    }
+    case still_subscribed {
+      True -> Nil
+      False -> {
+        let close_json =
+          relay_frame.client_frame_to_json(relay_frame.Close(sub_id))
+        let cur_sockets = ref.get(pool.sockets)
+        let cur_statuses = ref.get(pool.statuses)
+        dict.each(cur_sockets, fn(url_str, sock) {
+          case dict.get(cur_statuses, url_str) {
+            Ok(Connected) -> {
+              let _ = websocket.send(sock, close_json)
+              Nil
+            }
+            _ -> Nil
+          }
+        })
+        Nil
+      }
+    }
   }
 }

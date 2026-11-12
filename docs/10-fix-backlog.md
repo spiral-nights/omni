@@ -30,8 +30,8 @@ Last updated: 2026-11-11.
 | REL-9 | S2 | fixed | Feed pagination/search are local slices; no `until` or targeted queries. | fixed `c247838`: `LoadMore` asks the host for older events with `until=oldest`, which fetches, ingests, and re-renders. Network search split to REL-9b. |
 | REL-9b | S3 | open | Feed search is a local slice of already-loaded notes. | Issue a NIP-50 search REQ when the relay supports it, falling back to local. |
 | REL-10 | S3 | fixed | Host subscriptions bypass ACL by using a non-parsing `"builtin:feed"` sub id (`coordinator.gleam:66`). | fixed `a195f45`: internal host subscriptions use non-namespaced ids (`omni_internal_*`) so they no longer parse as a plugin ID and never trigger ACL prompts. |
-| REL-11 | S3 | open | `subscribers` is keyed only by `sub_id`; collisions overwrite handlers. | Namespace internally: `consumerId:subId`. |
-| REL-12 | S3 | open | Cache events are emitted before the live subscription registers; events can slip through. | Subscribe first, buffer, then flush cache. |
+| REL-11 | S3 | fixed | `subscribers` is keyed only by `sub_id`; collisions overwrite handlers. | fixed `PENDING`: each registration gets a unique internal key, same-id subscribers coexist, and CLOSE is sent only when the last one unsubscribes. |
+| REL-12 | S3 | fixed | Cache events are emitted before the live subscription registers; events can slip through. | fixed `PENDING`: after relay registration a second cache sweep delivers events that landed during the handoff, deduped by event id. |
 | REL-13 | S3 | fixed | `seen_ids` grows unbounded per long-lived subscription. | fixed `c45f685`: the dedupe set resets once it reaches 5,000 ids. |
 
 ## B. Identity & publishing

@@ -240,28 +240,13 @@ fn refresh_hints(coord: SubscriptionCoordinator, authors: List(String)) -> Nil {
   Nil
 }
 
-fn subscribe_impl(
+fn dispatch_cached(
   coord: SubscriptionCoordinator,
-  sub_id: String,
   filters: List(Filter),
-  targets: Option(List(String)),
-  route_hints: Bool,
+  maybe_plugin_id: Option(plugin_id.PluginId),
+  seen_ids: ref.Ref(set.Set(String)),
   on_event: fn(Event) -> Nil,
-  on_eose: Option(fn() -> Nil),
-) -> Promise(fn() -> Nil) {
-  use targets <- promise.await(resolve_targets(
-    coord,
-    filters,
-    targets,
-    route_hints,
-  ))
-  let seen_ids = ref.new(set.new())
-  let maybe_plugin_id = case string.split_once(sub_id, ":") {
-    Ok(#(prefix, _)) -> plugin_id.parse(prefix) |> option.from_result
-    Error(Nil) -> None
-  }
-
-  // 1. Immediate 0ms local event store query for each filter
+) -> Promise(Nil) {
   let query_promises =
     list.map(filters, fn(filter) {
       event_store.get_events(coord.event_store, filter)
@@ -270,7 +255,6 @@ fn subscribe_impl(
   use results_list <- promise.await(promise_ext.all(query_promises))
   let cached_events = list.flatten(results_list)
 
-  // Dispatch cached events with ACL check
   use _ <- promise.await(
     promise_ext.all(
       list.map(cached_events, fn(ev) {
@@ -301,6 +285,38 @@ fn subscribe_impl(
       }),
     ),
   )
+
+  promise.resolve(Nil)
+}
+
+fn subscribe_impl(
+  coord: SubscriptionCoordinator,
+  sub_id: String,
+  filters: List(Filter),
+  targets: Option(List(String)),
+  route_hints: Bool,
+  on_event: fn(Event) -> Nil,
+  on_eose: Option(fn() -> Nil),
+) -> Promise(fn() -> Nil) {
+  use targets <- promise.await(resolve_targets(
+    coord,
+    filters,
+    targets,
+    route_hints,
+  ))
+  let seen_ids = ref.new(set.new())
+  let maybe_plugin_id = case string.split_once(sub_id, ":") {
+    Ok(#(prefix, _)) -> plugin_id.parse(prefix) |> option.from_result
+    Error(Nil) -> None
+  }
+
+  use _ <- promise.await(dispatch_cached(
+    coord,
+    filters,
+    maybe_plugin_id,
+    seen_ids,
+    on_event,
+  ))
 
   // If there are no configured relays, fire on_eose immediately
   case
@@ -400,6 +416,10 @@ fn subscribe_impl(
         }
       },
     )
+
+  // 2b. Close the cache/live race: events that landed in the local store
+  // between the first query and relay registration are swept once more.
+  let _ = dispatch_cached(coord, filters, maybe_plugin_id, seen_ids, on_event)
 
   let closer = fn() {
     unsubscribe_relays()

@@ -169,7 +169,8 @@ pub fn relay_pool_subscribe_and_dispatch_test() {
 
   // Dispatch frame via subscribers dict
   let subs = ref.get(pool.subscribers)
-  let assert Ok(handler) = dict.get(subs, sub_id)
+  let assert Ok(handlers) = dict.get(subs, sub_id)
+  let assert [handler, ..] = handlers
   handler.handler("wss://relay.example", in_frame)
 
   assert list.length(ref.get(received_events)) == 1
@@ -296,4 +297,53 @@ pub fn relay_pool_read_write_scopes_are_honoured_test() {
   use results <- promise.await(waiter)
   assert list.length(results) == 1
   promise.resolve(Nil)
+}
+
+pub fn duplicate_sub_ids_do_not_overwrite_handlers_test() {
+  let store = storage.in_memory()
+  let assert Ok(url1) = relay_url.parse("wss://relay.damus.io")
+  let pool = relay_pool.new(store, [url1])
+
+  let fake_sock = websocket.fake(fn(_) { Ok(Nil) }, fn(_c, _r) { Nil })
+  attach_socket(pool, url1, fake_sock, Connected)
+
+  let received_a = ref.new(0)
+  let received_b = ref.new(0)
+  let flt = filter.new() |> filter.with_kinds([kind.Note])
+  let sub_id = "collision"
+
+  let closer_a =
+    subscribe(pool, sub_id, [flt], fn(_s, _f) {
+      ref.update(received_a, fn(n) { n + 1 })
+    })
+  let closer_b =
+    subscribe(pool, sub_id, [flt], fn(_s, _f) {
+      ref.update(received_b, fn(n) { n + 1 })
+    })
+
+  let subs = ref.get(pool.subscribers)
+  let assert Ok(handlers) = dict.get(subs, sub_id)
+  assert list.length(handlers) == 2
+
+  let ev = make_test_event()
+  let frame = relay_frame.EventFrame(sub_id, ev)
+  list.each(handlers, fn(handler) {
+    handler.handler("wss://relay.example", frame)
+  })
+  assert ref.get(received_a) == 1
+  assert ref.get(received_b) == 1
+
+  // Closing one subscriber keeps the other alive and sends no CLOSE.
+  closer_a()
+  let subs_after = ref.get(pool.subscribers)
+  let assert Ok(remaining) = dict.get(subs_after, sub_id)
+  assert list.length(remaining) == 1
+
+  list.each(remaining, fn(handler) {
+    handler.handler("wss://relay.example", frame)
+  })
+  assert ref.get(received_b) == 2
+
+  closer_b()
+  assert dict.has_key(ref.get(pool.subscribers), sub_id) == False
 }

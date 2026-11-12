@@ -14,6 +14,7 @@ import omni/nostr/kind
 import omni/nostr/pubkey
 import omni/nostr/relay_frame
 import omni/nostr/relay_url
+import omni/platform/promise_ext as omni_promise_ext
 import omni/platform/ref
 import omni/platform/storage
 import omni/platform/websocket
@@ -127,7 +128,8 @@ pub fn coordinator_deduplication_and_relay_ingestion_test() -> Promise(Nil) {
 
   // Simulate duplicate ev1 arriving from relay
   let subs = ref.get(pool.subscribers)
-  let assert Ok(subscriber) = dict.get(subs, sub_id)
+  let assert Ok(subscribers) = dict.get(subs, sub_id)
+  let assert [subscriber, ..] = subscribers
   subscriber.handler("wss://relay.example", relay_frame.EventFrame(sub_id, ev1))
 
   // Should still only have 1 event (duplicate ignored)
@@ -214,6 +216,47 @@ pub fn coordinator_acl_filtering_test() -> Promise(Nil) {
   assert list.length(events) == 1
   assert list.map(events, fn(ev) { ev.id }) == [ev1.id]
 
+  closer()
+  promise.resolve(Nil)
+}
+
+pub fn cache_live_race_sweep_delivers_late_cached_event_test() -> Promise(Nil) {
+  let opts =
+    event_store.LocalEventStoreOptions(
+      db_name: Some("test_coord_race"),
+      max_notes: Some(100),
+      max_memory_cache_size: Some(100),
+      user_pubkey: None,
+    )
+  use store_res <- promise.await(event_store.open_in_memory(opts))
+  let assert Ok(store) = store_res
+
+  let pool = relay_pool.new(storage.in_memory(), [])
+  let coord = coordinator.new(store, pool, None)
+  let received = ref.new([])
+  let flt = filter.new() |> filter.with_kinds([kind.Note])
+
+  let subscription =
+    coordinator.subscribe(
+      coord,
+      "race_sub",
+      [flt],
+      fn(ev) { ref.update(received, fn(evs) { [ev, ..evs] }) },
+      None,
+    )
+
+  // Insert after the subscription starts but before its cache sweep settles.
+  let late =
+    make_event(
+      "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      1,
+      "late cached note",
+    )
+  use _ <- promise.await(event_store.save_event(store, late))
+  use closer <- promise.await(subscription)
+  use _ <- promise.await(omni_promise_ext.delay(10, Nil))
+
+  assert list.any(ref.get(received), fn(ev) { ev.id == late.id })
   closer()
   promise.resolve(Nil)
 }
