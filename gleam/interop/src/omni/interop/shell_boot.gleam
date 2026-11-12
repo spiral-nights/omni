@@ -51,6 +51,8 @@ import omni/shell/msg.{
 }
 import omni/shell/update
 import omni/social/profile as social_profile
+import omni/social/profile_cache as social_profile_cache
+import omni/social/queries as social_queries
 import omni/web/boot
 import omni/web/config
 import omni/web/installer
@@ -319,6 +321,83 @@ fn apply_effects(
   })
 }
 
+fn ingest_public_event(host: ShellBoot, event: nostr_event.Event) -> Nil {
+  dict.each(host.booted.builtins, fn(_id, app) {
+    case app.ingest {
+      Some(ingest) -> ingest(event)
+      None -> Nil
+    }
+  })
+
+  case social_profile.from_event(event) {
+    Ok(profile) -> {
+      let _ = social_profile_cache.upsert(host.booted.kernel.storage, profile)
+      Nil
+    }
+    Error(_) -> Nil
+  }
+
+  let author = pubkey.to_hex(event.pubkey)
+  request_missing_profiles(host, [author])
+  push_views(host)
+}
+
+fn request_missing_profiles(host: ShellBoot, authors: List(String)) -> Nil {
+  let store = host.booted.kernel.storage
+  let now = host.booted.kernel.clock.now_ms()
+  let missing =
+    authors
+    |> list.filter(fn(author) { string.length(author) == 64 })
+    |> list.unique
+    |> list.filter(fn(author) {
+      social_profile_cache.needs_fetch(
+        store,
+        author,
+        now,
+        social_profile_cache.default_ttl_ms,
+      )
+    })
+
+  case missing {
+    [] -> Nil
+    missing -> {
+      list.each(missing, fn(author) {
+        social_profile_cache.mark_fetched(store, author, now)
+      })
+      let _ =
+        coordinator.fetch(
+          host.booted.kernel.coordinator,
+          "omni_internal_profile_fetch",
+          [social_queries.profiles_for(missing)],
+          Some(FetchOptions(
+            timeout_ms: Some(3000),
+            relays: None,
+            local_only: None,
+          )),
+        )
+        |> promise.map(fn(events) {
+          list.each(events, fn(event) {
+            case social_profile.from_event(event) {
+              Ok(profile) -> {
+                let _ = social_profile_cache.upsert(store, profile)
+                dict.each(host.booted.builtins, fn(_id, app) {
+                  case app.ingest {
+                    Some(ingest) -> ingest(event)
+                    None -> Nil
+                  }
+                })
+              }
+              Error(_) -> Nil
+            }
+          })
+          push_views(host)
+          Nil
+        })
+      Nil
+    }
+  }
+}
+
 fn drain_relay_commands(host: ShellBoot) -> Nil {
   let commands =
     dict.fold(host.booted.builtins, [], fn(acc, _id, app) {
@@ -583,15 +662,7 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
       host.booted.kernel.coordinator,
       "omni_internal_feed",
       [public_events_filter()],
-      fn(event) {
-        dict.each(host.booted.builtins, fn(_id, app) {
-          case app.ingest {
-            Some(ingest) -> ingest(event)
-            None -> Nil
-          }
-        })
-        push_views(host)
-      },
+      fn(event) { ingest_public_event(host, event) },
       None,
     )
 

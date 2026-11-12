@@ -473,3 +473,27 @@ pub fn queries_and_profile_cache_test() {
   profile_cache.clear(store)
   profile_cache.get_profile(store, alice_hex) |> should.equal(None)
 }
+
+pub fn profile_cache_ttl_gates_fetches_test() {
+  let store = storage.in_memory()
+  let alice_hex =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  let alice_prof =
+    Profile(..profile.empty(alice_hex), name: Some("alice"), created_at: 100)
+
+  // No profile yet: must fetch.
+  profile_cache.needs_fetch(store, alice_hex, 1000, 500) |> should.be_true()
+
+  let _ = profile_cache.upsert(store, alice_prof)
+  profile_cache.mark_fetched(store, alice_hex, 1000)
+
+  // Fresh enough: skip.
+  profile_cache.needs_fetch(store, alice_hex, 1200, 500)
+  |> should.be_false()
+
+  // Expired: fetch again.
+  profile_cache.needs_fetch(store, alice_hex, 1800, 500) |> should.be_true()
+  profile_cache.stale_pubkeys(store, 1800, 500)
+  |> should.equal([alice_hex])
+  profile_cache.stale_pubkeys(store, 1200, 500) |> should.equal([])
+}
