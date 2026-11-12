@@ -52,8 +52,8 @@ import omni/shell/model.{
   UserProfileSummary,
 }
 import omni/shell/msg.{
-  type Msg, HostedSchemaAction, OpenApp, SelectIntentHandler, SelectShell,
-  ShowIntentPrompt,
+  type Msg, HostedSchemaAction, InstallApp, OpenApp, SelectIntentHandler,
+  SelectShell, ShowIntentPrompt,
 }
 import omni/shell/registry.{type ShellRegistry}
 import omni/shell/shell
@@ -62,6 +62,7 @@ import omni/shell/theme.{type Theme}
 import omni/shell/update.{type ShellEffect}
 import omni/web/builtin.{type BuiltinApp}
 import omni/web/config
+import omni/web/installer
 import omni/web/nip65
 import omni/web/permission_prompt.{type PermissionPrompts}
 
@@ -556,6 +557,35 @@ pub fn apply_relay_list(booted: Booted, tags: List(List(String))) -> Nil {
       }
     }
   })
+}
+
+/// Resolve an install target, record the installed app, and spawn its sandbox.
+///
+/// This is the shared seam used by the host (with `http.fetch_text`) and by
+/// acceptance tests (with an injected fetcher).
+pub fn install_from_target(
+  booted: Booted,
+  fetch: installer.Fetcher,
+  target: String,
+  plugin_id_str: String,
+) -> Promise(Result(#(Booted, IframeMount), String)) {
+  use resolved <- promise.await(installer.resolve_with(
+    booted.kernel,
+    target,
+    plugin_id_str,
+    fetch,
+  ))
+
+  case resolved {
+    Error(err) -> promise.resolve(Error(err))
+    Ok(bundle) -> {
+      let #(installed, _effects) = dispatch(booted, InstallApp(bundle.app))
+      case spawn_sandbox(installed, plugin_id_str, bundle.content, None) {
+        Error(err) -> promise.resolve(Error(err))
+        Ok(#(next, mount)) -> promise.resolve(Ok(#(next, mount)))
+      }
+    }
+  }
 }
 
 /// Spawn a tracked sandbox for a plugin view and build the `<iframe>` mount

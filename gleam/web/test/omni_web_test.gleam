@@ -1,5 +1,6 @@
 //// Unit tests for the Omni web bootstrap configuration and bootloader.
 
+import fake_relay
 import gleam/dict
 import gleam/dynamic
 import gleam/javascript/promise
@@ -19,6 +20,7 @@ import omni/nostr/event_id
 import omni/nostr/filter.{Filter}
 import omni/nostr/kind
 import omni/nostr/pubkey
+import omni/nostr/relay_frame
 import omni/nostr/relay_url
 import omni/platform/clock
 import omni/platform/idb
@@ -30,9 +32,10 @@ import omni/protocol/grant
 import omni/protocol/intent.{IntentHandler}
 import omni/protocol/plugin_id
 import omni/protocol/schema/action as schema_action
+import omni/protocol/schema/codec as schema_codec
 import omni/sandbox/manager
 import omni/shell/model
-import omni/shell/msg.{NavigateTo, ToggleFullscreen}
+import omni/shell/msg.{HostedSchemaAction, NavigateTo, ToggleFullscreen}
 import omni/shell/registry
 import omni/web/boot
 import omni/web/config
@@ -619,4 +622,97 @@ pub fn installer_inline_assets_pure_test() {
   |> should.equal(True)
   string.contains(out, "<script data-omni-asset=\"app.js\">")
   |> should.equal(True)
+}
+
+pub fn install_flow_fetches_and_spawns_sandbox_test() -> promise.Promise(Nil) {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], Some("<script>bridge</script>"))
+
+  use result <- promise.await(boot.install_from_target(
+    booted,
+    fn(url) {
+      url |> should.equal("https://example.com/app.html")
+      promise.resolve(Ok("<html><body>installed nsite</body></html>"))
+    },
+    "https://example.com/app.html",
+    "nsite.custom.example.com.app.html",
+  ))
+
+  case result {
+    Ok(#(next, mount)) -> {
+      string.contains(mount.srcdoc, "installed nsite") |> should.equal(True)
+      string.contains(mount.srcdoc, "<script>bridge</script>")
+      |> should.equal(True)
+      manager.count(next.sandboxes) |> should.equal(1)
+      list.any(next.model.installed_apps, fn(app) {
+        app.source_url == "https://example.com/app.html"
+      })
+      |> should.equal(True)
+    }
+    Error(err) -> panic as err
+  }
+
+  // Failed fetch must not install or spawn.
+  use failed <- promise.await(boot.install_from_target(
+    booted,
+    fn(_url) { promise.resolve(Error("HTTP 404")) },
+    "https://example.com/missing.html",
+    "nsite.custom.example.com.missing.html",
+  ))
+  failed |> should.equal(Error("HTTP 404"))
+  manager.count(booted.sandboxes) |> should.equal(0)
+
+  promise.resolve(Nil)
+}
+
+pub fn publish_flow_broadcasts_to_fake_relay_and_ingests_test() -> promise.Promise(
+  Nil,
+) {
+  let store =
+    storage.in_memory_from([
+      #(relay_pool.storage_key_configured_relays, "[\"wss://fake.example\"]"),
+    ])
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+
+  let relay = fake_relay.start(booted.kernel.relay_pool, "wss://fake.example")
+
+  let action =
+    schema_action.new("publish-note")
+    |> schema_action.with_payload(
+      dict.from_list([
+        #("composerText", dynamic.string("acceptance relay note")),
+      ]),
+    )
+  let #(after_action, _effects) =
+    boot.dispatch(booted, HostedSchemaAction("org.omni.plugin.feed", action))
+
+  use ids <- promise.await(boot.publish_pending(after_action))
+  let assert [id_hex] = ids
+  let assert Ok(eid) = event_id.parse(id_hex)
+
+  use maybe_signed <- promise.await(event_store.get_event_by_id(
+    after_action.kernel.event_store,
+    eid,
+  ))
+  let assert Some(signed) = maybe_signed
+  signed.content |> should.equal("acceptance relay note")
+
+  let expected = relay_frame.client_frame_to_json(relay_frame.Event(signed))
+  list.contains(fake_relay.sent_frames(relay), expected)
+  |> should.equal(True)
+
+  fake_relay.emit(
+    relay,
+    relay_frame.relay_frame_to_json(relay_frame.Ok(eid, True, "accepted")),
+  )
+
+  let assert Ok(feed) = dict.get(after_action.builtins, "org.omni.plugin.feed")
+  let rendered = feed.render() |> schema_codec.encode_node
+  string.contains(rendered, "acceptance relay note") |> should.equal(True)
+
+  promise.resolve(Nil)
 }
