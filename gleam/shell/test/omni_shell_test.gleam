@@ -19,15 +19,16 @@ import omni/shell/model.{
   TabRelays, UpdateModalState, UserProfileSummary, ViewOption, WidgetsDashboard,
 }
 import omni/shell/msg.{
-  AddAppPlacement, ApplyRemoteWorkspace, ConfirmPluginUpdate,
-  DismissIntentPrompt, DismissUpdateModal, ExportKey, FinishPullRefresh,
-  ImportKey, InstallApp, NavigateBack, NavigateTo, OpenApp, OpenSettings,
-  RemoveAppPlacement, SelectIntentHandler, SelectShell, SetAccentColor,
-  SetAppPlacements, SetAppRelays, SetCustomInstallUrl, SetExportedNsec,
-  SetKeyInput, SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile,
-  ShowIntentPrompt, ShowUpdateModal, StartPullRefresh, ToggleAppEnabled,
-  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
-  ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp,
+  AddAppPlacement, ApplyRemoteWorkspace, ConfirmPluginUpdate, DisablePassphrase,
+  DismissIntentPrompt, DismissUpdateModal, EnablePassphrase, ExportKey,
+  FinishPullRefresh, ImportKey, InstallApp, KeySecurityStatus, NavigateBack,
+  NavigateTo, OpenApp, OpenSettings, RemoveAppPlacement, SelectIntentHandler,
+  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
+  SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
+  SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShowIntentPrompt,
+  ShowUpdateModal, StartPullRefresh, ToggleAppEnabled, ToggleAppIntent,
+  ToggleAppPinned, ToggleAutoSync, ToggleFullscreen, ToggleMobileMenu,
+  TriggerWorkspaceSync, UninstallApp, UnlockKey,
 }
 import omni/shell/shell
 import omni/shell/themes/classic as classic_theme
@@ -813,4 +814,20 @@ pub fn widgets_dashboard_mounts_companion_placements_test() {
       }
     }),
   )
+}
+
+pub fn passphrase_controls_emit_effects_and_status_test() {
+  let m = model.init("classic", [])
+  let #(typed, _) = update.update(m, SetPassphrase("secret"))
+  let #(_, enable_effects) = update.update(typed, EnablePassphrase)
+  enable_effects |> should.equal([update.EnablePassphraseEffect("secret")])
+
+  let #(_, unlock_effects) = update.update(typed, UnlockKey)
+  unlock_effects |> should.equal([update.UnlockKeyEffect("secret")])
+
+  let #(unlocked, _) =
+    update.update(m, KeySecurityStatus(encrypted: True, locked: False))
+  unlocked.key_encrypted |> should.equal(True)
+  unlocked.key_locked |> should.equal(False)
+  unlocked.passphrase |> should.equal("")
 }

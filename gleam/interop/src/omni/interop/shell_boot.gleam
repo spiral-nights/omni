@@ -10,6 +10,7 @@ import gleam/dict
 import gleam/javascript/promise
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
 
 import lustre/effect.{type Effect}
@@ -45,9 +46,9 @@ import omni/shell/model.{
 }
 import omni/shell/msg.{
   ApplyRemoteWorkspace, EmbedSchema, FinishPullRefresh, InstallApp,
-  KeyImportResult, NavigateTo, OpenApp, OpenSettings, SetExportedNsec,
-  SetUserProfile, ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh,
-  UninstallApp,
+  KeyImportResult, KeySecurityResult, KeySecurityStatus, NavigateTo, OpenApp,
+  OpenSettings, SetExportedNsec, SetUserProfile, ShowPermissionPrompt,
+  ShowUpdateModal, StartPullRefresh, UninstallApp,
 }
 import omni/shell/update
 import omni/social/profile as social_profile
@@ -313,6 +314,46 @@ fn apply_effects(
 
       update.ExportKeyEffect -> {
         dispatch_shell_msg(SetExportedNsec(boot.export_key_nsec(acc.booted)))
+        acc
+      }
+
+      update.EnablePassphraseEffect(passphrase) -> {
+        let _ =
+          boot.enable_passphrase(acc.booted, passphrase)
+          |> promise.map(fn(result) {
+            dispatch_shell_msg(KeySecurityResult(
+              result |> result.map(fn(_) { Nil }),
+            ))
+            case result {
+              Ok(_) -> dispatch_shell_msg(KeySecurityStatus(True, False))
+              Error(_) -> Nil
+            }
+            Nil
+          })
+        acc
+      }
+
+      update.DisablePassphraseEffect -> {
+        case boot.disable_passphrase(acc.booted) {
+          Ok(_) -> dispatch_shell_msg(KeySecurityStatus(False, False))
+          Error(_) -> Nil
+        }
+        acc
+      }
+
+      update.UnlockKeyEffect(passphrase) -> {
+        let _ =
+          boot.unlock_key(acc.booted, passphrase)
+          |> promise.map(fn(result) {
+            dispatch_shell_msg(KeySecurityResult(
+              result |> result.map(fn(_) { Nil }),
+            ))
+            case result {
+              Ok(_) -> dispatch_shell_msg(KeySecurityStatus(True, False))
+              Error(_) -> Nil
+            }
+            Nil
+          })
         acc
       }
 

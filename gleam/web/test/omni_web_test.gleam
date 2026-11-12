@@ -802,3 +802,46 @@ pub fn key_import_switches_identity_and_export_returns_nsec_test() -> promise.Pr
   }
   promise.resolve(Nil)
 }
+
+pub fn passphrase_lock_unlock_and_disable_test() -> promise.Promise(Nil) {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+
+  use enabled <- promise.await(boot.enable_passphrase(booted, "s3cret"))
+  let assert Ok(next) = enabled
+  next.model.key_encrypted |> should.equal(True)
+  next.model.key_locked |> should.equal(False)
+
+  // Reloading from the same storage yields a locked keystore.
+  use ports2_res <- promise.await(test_ports(store))
+  let assert Ok(ports2) = ports2_res
+  let reloaded = boot.init_with_relays(ports2, [], None)
+  reloaded.model.key_encrypted |> should.equal(True)
+  reloaded.model.key_locked |> should.equal(True)
+
+  let draft =
+    "{\"kind\":1,\"content\":\"locked\",\"tags\":[],\"created_at\":1700000000}"
+  rpc.sign_draft_json(reloaded, draft) |> should.be_error
+
+  use unlocked <- promise.await(boot.unlock_key(reloaded, "s3cret"))
+  let assert Ok(unlocked_boot) = unlocked
+  unlocked_boot.model.key_locked |> should.equal(False)
+  should.be_ok(rpc.sign_draft_json(unlocked_boot, draft))
+
+  let assert Ok(plain) = boot.disable_passphrase(unlocked_boot)
+  plain.model.key_encrypted |> should.equal(False)
+  let assert Some(_) = storage.get(store, keystore.storage_key_private_key)
+  promise.resolve(Nil)
+}
+
+pub fn boot_restores_persisted_theme_mode_test() -> promise.Promise(Nil) {
+  let store = storage.in_memory()
+  let _ = storage.set(store, boot.theme_mode_storage_key, "light")
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+  booted.model.theme_mode |> should.equal("light")
+  promise.resolve(Nil)
+}

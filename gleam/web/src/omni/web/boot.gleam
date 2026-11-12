@@ -134,8 +134,18 @@ pub fn init_with_relays(
         )
       },
     )
+  let theme_mode = case storage.get(kernel.storage, theme_mode_storage_key) {
+    Some("light") -> "light"
+    _ -> "dark"
+  }
   let seeded_model =
-    Model(..seeded, user_profile: Some(session_profile(kernel)))
+    Model(
+      ..seeded,
+      user_profile: Some(session_profile(kernel)),
+      theme_mode: theme_mode,
+      key_encrypted: keystore.is_encrypted(kernel.keystore),
+      key_locked: keystore.is_locked(kernel.keystore),
+    )
   // Restore the persisted workspace before the first remote merge, but only
   // when the user actually has one (an absent state must not override the
   // registry's selected shell).
@@ -474,6 +484,66 @@ pub fn import_key(booted: Booted, raw: String) -> Result(Booted, String) {
         ),
       )
   }
+}
+
+/// Encrypt the active key at rest with a passphrase.
+pub fn enable_passphrase(
+  booted: Booted,
+  passphrase: String,
+) -> Promise(Result(Booted, String)) {
+  use result <- promise.await(keystore.enable_passphrase(
+    booted.kernel.keystore,
+    passphrase,
+  ))
+  promise.resolve(case result {
+    Ok(_) ->
+      Ok(
+        Booted(
+          ..booted,
+          model: Model(..booted.model, key_encrypted: True, key_locked: False),
+        ),
+      )
+    Error(err) -> Error(err)
+  })
+}
+
+/// Remove passphrase encryption from the stored key.
+pub fn disable_passphrase(booted: Booted) -> Result(Booted, String) {
+  case keystore.disable_passphrase(booted.kernel.keystore) {
+    Ok(_) ->
+      Ok(
+        Booted(
+          ..booted,
+          model: Model(..booted.model, key_encrypted: False, key_locked: False),
+        ),
+      )
+    Error(err) -> Error(err)
+  }
+}
+
+/// Unlock a passphrase-encrypted key and refresh the session profile.
+pub fn unlock_key(
+  booted: Booted,
+  passphrase: String,
+) -> Promise(Result(Booted, String)) {
+  use result <- promise.await(keystore.unlock(
+    booted.kernel.keystore,
+    passphrase,
+  ))
+  promise.resolve(case result {
+    Ok(_) ->
+      Ok(
+        Booted(
+          ..booted,
+          model: Model(
+            ..booted.model,
+            key_locked: False,
+            user_profile: Some(session_profile(booted.kernel)),
+          ),
+        ),
+      )
+    Error(err) -> Error(err)
+  })
 }
 
 /// Export the active private key as an nsec string.

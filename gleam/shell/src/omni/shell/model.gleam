@@ -132,6 +132,9 @@ pub type Model {
     key_input: String,
     key_message: Option(String),
     exported_nsec: Option(String),
+    passphrase: String,
+    key_encrypted: Bool,
+    key_locked: Bool,
   )
 }
 
@@ -165,6 +168,9 @@ pub fn init(active_shell_id: String, apps: List(InstalledApp)) -> Model {
     key_input: "",
     key_message: None,
     exported_nsec: None,
+    passphrase: "",
+    key_encrypted: False,
+    key_locked: False,
   )
 }
 

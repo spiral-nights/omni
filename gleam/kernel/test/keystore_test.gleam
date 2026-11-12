@@ -1,8 +1,11 @@
-import gleam/option.{Some}
+import gleam/javascript/promise
+import gleam/option.{None, Some}
+import gleam/result
 import gleam/string
 import omni/kernel/crypto/keystore.{
-  get_npub, get_nsec, get_private_key, get_public_key, on_key_change, sign_event,
-  switch_key,
+  disable_passphrase, enable_passphrase, get_npub, get_nsec, get_private_key,
+  get_public_key, is_encrypted, is_locked, on_key_change, sign_event,
+  storage_key_private_key, switch_key, unlock,
 }
 import omni/nostr/event.{UnsignedEvent}
 import omni/nostr/event_id
@@ -87,8 +90,7 @@ pub fn keystore_switch_key_hex_and_nsec_test() {
   assert ref.get(listener_calls) == [expected_pk]
 
   // Storage was updated
-  assert storage.get(store, keystore.storage_key_private_key)
-    == Some(new_priv_hex)
+  assert storage.get(store, storage_key_private_key) == Some(new_priv_hex)
 
   // 2. Switch with nsec1...
   let third_priv_hex = secp256k1.generate_private_key()
@@ -120,4 +122,45 @@ pub fn keystore_switch_invalid_key_test() {
 
   // Current key remains unchanged
   assert get_public_key(ks) == pk_before
+}
+
+pub fn keystore_passphrase_encryption_roundtrip_test() -> promise.Promise(Nil) {
+  let store = storage.in_memory()
+  let ks = keystore.new(store)
+  let original_pub = get_public_key(ks)
+  let original_priv = get_private_key(ks)
+
+  use result <- promise.await(enable_passphrase(ks, "correct horse"))
+  let assert Ok(Nil) = result
+  assert is_encrypted(ks) == True
+  assert storage.get(store, storage_key_private_key) == None
+
+  // Reload: locked, public key still known, signing refused.
+  let reloaded = keystore.new(store)
+  assert is_locked(reloaded) == True
+  assert get_public_key(reloaded) == original_pub
+  let draft =
+    UnsignedEvent(
+      pubkey: None,
+      created_at: 1_700_000_000,
+      kind: kind.Note,
+      tags: [],
+      content: "locked",
+    )
+  assert sign_event(reloaded, draft) |> result.is_error
+
+  use wrong <- promise.await(unlock(reloaded, "wrong"))
+  assert wrong == Error("Incorrect passphrase")
+
+  use unlocked <- promise.await(unlock(reloaded, "correct horse"))
+  let assert Ok(unlocked_pub) = unlocked
+  assert unlocked_pub == original_pub
+  assert is_locked(reloaded) == False
+  assert get_private_key(reloaded) == original_priv
+  assert sign_event(reloaded, draft) |> result.is_ok
+
+  let assert Ok(Nil) = disable_passphrase(reloaded)
+  assert is_encrypted(reloaded) == False
+  assert storage.get(store, storage_key_private_key) == Some(original_priv)
+  promise.resolve(Nil)
 }

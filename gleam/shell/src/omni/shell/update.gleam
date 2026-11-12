@@ -17,16 +17,17 @@ import omni/shell/model.{
 }
 import omni/shell/msg.{
   type Msg, AddAppPlacement, ApplyRemoteWorkspace, ClearEmbeddedSchema,
-  ConfirmPluginUpdate, DismissIntentPrompt, DismissUpdateModal, EmbedSchema,
-  ExportKey, FinishPullRefresh, HostedSchemaAction, ImportKey, InstallApp,
-  KeyImportResult, NavigateBack, NavigateTo, OpenApp, OpenSettings,
-  RemoveAppPlacement, ResolvePermission, SelectIntentHandler, SelectShell,
-  SetAccentColor, SetAppPlacements, SetAppRelays, SetCustomInstallUrl,
-  SetExportedNsec, SetKeyInput, SetSearchQuery, SetSyncStatus, SetThemeMode,
-  SetUserProfile, ShowIntentPrompt, ShowPermissionPrompt, ShowUpdateModal,
-  StartPullRefresh, ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned,
-  ToggleAutoSync, ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync,
-  UninstallApp,
+  ConfirmPluginUpdate, DisablePassphrase, DismissIntentPrompt,
+  DismissUpdateModal, EmbedSchema, EnablePassphrase, ExportKey,
+  FinishPullRefresh, HostedSchemaAction, ImportKey, InstallApp, KeyImportResult,
+  KeySecurityResult, KeySecurityStatus, NavigateBack, NavigateTo, OpenApp,
+  OpenSettings, RemoveAppPlacement, ResolvePermission, SelectIntentHandler,
+  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
+  SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
+  SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShowIntentPrompt,
+  ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh, ToggleAppEnabled,
+  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
+  ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp, UnlockKey,
 }
 
 /// Side-effect commands emitted by the pure shell `update` function.
@@ -44,6 +45,9 @@ pub type ShellEffect {
   PersistThemeMode(String)
   ImportKeyEffect(String)
   ExportKeyEffect
+  EnablePassphraseEffect(String)
+  DisablePassphraseEffect
+  UnlockKeyEffect(String)
   DispatchIntentToPlugin(
     plugin_id: String,
     intent_name: String,
@@ -509,6 +513,42 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
         Model(..model, key_input: "", key_message: Some(message)),
         workspace_persistence_effects(model),
       )
+    }
+
+    SetPassphrase(value) -> #(Model(..model, passphrase: value), [])
+
+    EnablePassphrase -> {
+      case string.trim(model.passphrase) {
+        "" -> #(Model(..model, key_message: Some("Enter a passphrase")), [])
+        passphrase -> #(model, [EnablePassphraseEffect(passphrase)])
+      }
+    }
+
+    DisablePassphrase -> #(model, [DisablePassphraseEffect])
+
+    UnlockKey -> {
+      case string.trim(model.passphrase) {
+        "" -> #(Model(..model, key_message: Some("Enter your passphrase")), [])
+        passphrase -> #(model, [UnlockKeyEffect(passphrase)])
+      }
+    }
+
+    KeySecurityStatus(encrypted, locked) -> #(
+      Model(
+        ..model,
+        key_encrypted: encrypted,
+        key_locked: locked,
+        passphrase: "",
+      ),
+      [],
+    )
+
+    KeySecurityResult(result) -> {
+      let message = case result {
+        Ok(Nil) -> None
+        Error(err) -> Some(err)
+      }
+      #(Model(..model, key_message: message), [])
     }
 
     SetExportedNsec(result) -> {

@@ -21,8 +21,9 @@ import omni/shell/model.{
   TabProfile, TabRelays, TabShells, TabWorkspace,
 }
 import omni/shell/msg.{
-  type Msg, ExportKey, ImportKey, OpenSettings, SetKeyInput, ToggleAutoSync,
-  TriggerWorkspaceSync,
+  type Msg, DisablePassphrase, EnablePassphrase, ExportKey, ImportKey,
+  OpenSettings, SetKeyInput, SetPassphrase, ToggleAutoSync, TriggerWorkspaceSync,
+  UnlockKey,
 }
 import omni/shell/settings/intents
 import omni/shell/settings/permissions
@@ -326,10 +327,105 @@ fn key_custody_card(model: Model) -> Element(Msg) {
           [element.text("Export nsec")],
         ),
       ]),
+      passphrase_section(model),
       message_el,
       exported_el,
     ],
   )
+}
+
+fn passphrase_section(model: Model) -> Element(Msg) {
+  let status_el = case model.key_encrypted, model.key_locked {
+    True, True ->
+      html.p([attribute.class("omni-settings-section-desc")], [
+        element.text(
+          "Key is encrypted at rest and locked. Enter your passphrase to sign again.",
+        ),
+      ])
+    True, False ->
+      html.p([attribute.class("omni-settings-section-desc")], [
+        element.text(
+          "Key is encrypted at rest and currently unlocked for this session.",
+        ),
+      ])
+    False, _ ->
+      html.p([attribute.class("omni-settings-section-desc")], [
+        element.text(
+          "Protect the stored key with a passphrase. You will be asked to unlock it after each reload.",
+        ),
+      ])
+  }
+
+  let input_el = case model.key_locked, model.key_encrypted {
+    False, False ->
+      html.input([
+        attribute.type_("password"),
+        attribute.id("input-key-passphrase"),
+        attribute.class("omni-input"),
+        attribute.placeholder("Passphrase"),
+        attribute.value(model.passphrase),
+        event.on_input(SetPassphrase),
+      ])
+    True, _ ->
+      html.input([
+        attribute.type_("password"),
+        attribute.id("input-key-passphrase"),
+        attribute.class("omni-input"),
+        attribute.placeholder("Unlock passphrase"),
+        attribute.value(model.passphrase),
+        event.on_input(SetPassphrase),
+      ])
+    False, True -> element.none()
+  }
+
+  let actions = case model.key_locked, model.key_encrypted {
+    True, _ -> [
+      html.button(
+        [
+          attribute.type_("button"),
+          attribute.id("btn-unlock-key"),
+          attribute.class("omni-button omni-button-primary"),
+          attribute.disabled(model.passphrase == ""),
+          event.on_click(UnlockKey),
+        ],
+        [element.text("Unlock Key")],
+      ),
+    ]
+    False, True -> [
+      html.button(
+        [
+          attribute.type_("button"),
+          attribute.id("btn-disable-passphrase"),
+          attribute.class("omni-button omni-button-secondary"),
+          event.on_click(DisablePassphrase),
+        ],
+        [element.text("Remove Passphrase")],
+      ),
+    ]
+    False, False -> [
+      html.button(
+        [
+          attribute.type_("button"),
+          attribute.id("btn-enable-passphrase"),
+          attribute.class("omni-button omni-button-primary"),
+          attribute.disabled(model.passphrase == ""),
+          event.on_click(EnablePassphrase),
+        ],
+        [element.text("Enable Passphrase")],
+      ),
+    ]
+  }
+
+  html.div([attribute.class("omni-key-passphrase-section")], [
+    html.h4([attribute.class("omni-settings-subsection-title")], [
+      element.text("Passphrase Protection"),
+    ]),
+    status_el,
+    html.div([attribute.class("omni-custom-installer-row")], [
+      input_el,
+      ..actions
+    ]),
+  ])
 }
 
 fn render_workspace_tab(model: Model) -> Element(Msg) {

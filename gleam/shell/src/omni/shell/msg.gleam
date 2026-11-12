@@ -57,6 +57,12 @@ pub type Msg {
   ExportKey
   KeyImportResult(Result(Nil, String))
   SetExportedNsec(Result(String, String))
+  SetPassphrase(String)
+  EnablePassphrase
+  DisablePassphrase
+  UnlockKey
+  KeySecurityStatus(encrypted: Bool, locked: Bool)
+  KeySecurityResult(Result(Nil, String))
 
   // Profile & sync
   SetUserProfile(UserProfileSummary)
