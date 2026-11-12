@@ -1,18 +1,23 @@
 //// Pure Elm-style state transitions and action mapping for the Checklist plugin.
 
 import gleam/int
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
-import omni/plugin_kit/app.{type Effect, Dispatch}
+import omni/nostr/event.{UnsignedEvent}
+import omni/nostr/kind
+import omni/platform/clock
+import omni/plugin_kit/app.{type Effect, Dispatch, Publish}
 import omni/plugin_kit/schema.{type Action}
 import plugin/checklist/model.{
-  type Model, type TaskItem, ChecklistSettings, Model, TaskItem,
+  type Model, type TaskItem, ChecklistSettings, Model, TaskItem, checklist_d_tag,
+  encode_tasks, tasks_decoder,
 }
 import plugin/checklist/msg.{
-  type Msg, AddTask, ClearCompleted, DeleteTask, LoadTasks, SetDefaultPriority,
-  SetDraftTitle, SetFilter, SetViewMode, ToggleShowCompleted, ToggleSyncNostr,
-  ToggleTask,
+  type Msg, AddTask, ClearCompleted, DeleteTask, IngestRemoteDoc, LoadTasks,
+  SetDefaultPriority, SetDraftTitle, SetFilter, SetViewMode, ToggleShowCompleted,
+  ToggleSyncNostr, ToggleTask,
 }
 
 /// Applies `msg` to `model` and returns the updated `Model` and resulting `Effect`s.
@@ -33,15 +38,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
               priority: model.settings.default_priority,
             )
           let next_tasks = list.append(model.tasks, [new_item])
-          #(
+          let next_model =
             Model(
               ..model,
               tasks: next_tasks,
               draft_title: "",
               next_id: model.next_id + 1,
-            ),
-            [],
-          )
+            )
+          #(next_model, tasks_publish_effects(next_model))
         }
       }
     }
@@ -54,18 +58,21 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
             False -> item
           }
         })
-      #(Model(..model, tasks: next_tasks), [])
+      let next_model = Model(..model, tasks: next_tasks)
+      #(next_model, tasks_publish_effects(next_model))
     }
 
     DeleteTask(target_id) -> {
       let next_tasks =
         list.filter(model.tasks, fn(item) { item.id != target_id })
-      #(Model(..model, tasks: next_tasks), [])
+      let next_model = Model(..model, tasks: next_tasks)
+      #(next_model, tasks_publish_effects(next_model))
     }
 
     ClearCompleted -> {
       let next_tasks = list.filter(model.tasks, fn(item) { !item.completed })
-      #(Model(..model, tasks: next_tasks), [])
+      let next_model = Model(..model, tasks: next_tasks)
+      #(next_model, tasks_publish_effects(next_model))
     }
 
     SetDraftTitle(text) -> #(Model(..model, draft_title: text), [])
@@ -106,6 +113,39 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
         Model(..model, tasks: loaded, next_id: int.max(model.next_id, next_seq)),
         [],
       )
+    }
+
+    IngestRemoteDoc(raw) ->
+      case json.parse(from: raw, using: tasks_decoder()) {
+        Ok(tasks) -> {
+          let next_seq = list.length(tasks) + 1
+          #(
+            Model(
+              ..model,
+              tasks: tasks,
+              next_id: int.max(model.next_id, next_seq),
+            ),
+            [],
+          )
+        }
+        Error(_) -> #(model, [])
+      }
+  }
+}
+
+fn tasks_publish_effects(model: Model) -> List(Effect(Msg)) {
+  case model.settings.sync_nostr {
+    False -> []
+    True -> {
+      let draft =
+        UnsignedEvent(
+          pubkey: None,
+          created_at: clock.system().now_ms() / 1000,
+          kind: kind.AppData,
+          tags: [["d", checklist_d_tag]],
+          content: encode_tasks(model.tasks) |> json.to_string,
+        )
+      [Publish(draft)]
     }
   }
 }

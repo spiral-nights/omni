@@ -15,6 +15,7 @@ import omni/kernel/intents/broker as intent_broker
 import omni/kernel/kernel.{type KernelPorts, KernelPorts}
 import omni/kernel/nostr/event_store
 import omni/kernel/nostr/relay_pool
+import omni/kernel/workspace/sync as workspace_sync
 import omni/nostr/event.{type Event, Event, UnsignedEvent}
 import omni/nostr/event_id
 import omni/nostr/filter.{Filter}
@@ -25,6 +26,7 @@ import omni/nostr/relay_url
 import omni/platform/clock
 import omni/platform/idb
 import omni/platform/nip44
+import omni/platform/promise_ext as omni_promise_ext
 import omni/platform/ref
 import omni/platform/storage
 import omni/protocol/capability
@@ -33,6 +35,7 @@ import omni/protocol/intent.{IntentHandler}
 import omni/protocol/plugin_id
 import omni/protocol/schema/action as schema_action
 import omni/protocol/schema/codec as schema_codec
+import omni/protocol/workspace
 import omni/sandbox/manager
 import omni/shell/model
 import omni/shell/msg.{HostedSchemaAction, NavigateTo, ToggleFullscreen}
@@ -714,5 +717,56 @@ pub fn publish_flow_broadcasts_to_fake_relay_and_ingests_test() -> promise.Promi
   let rendered = feed.render() |> schema_codec.encode_node
   string.contains(rendered, "acceptance relay note") |> should.equal(True)
 
+  promise.resolve(Nil)
+}
+
+pub fn boot_restores_local_workspace_before_remote_merge_test() -> promise.Promise(
+  Nil,
+) {
+  let store = storage.in_memory()
+  let ws =
+    workspace.WorkspaceState(
+      version: workspace.current_version,
+      updated_at: 5000,
+      active_page: Some("apps"),
+      auto_sync: Some(True),
+      shell_type: Some("panorama"),
+      default_intents: dict.new(),
+      plugins: [],
+    )
+  let _ =
+    storage.set(
+      store,
+      workspace_sync.storage_key_workspace,
+      workspace.encode(ws),
+    )
+
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+
+  booted.model.active_shell_id |> should.equal("panorama")
+  case booted.model.active_page {
+    model.AppStore -> Nil
+    _ -> should.fail()
+  }
+  promise.resolve(Nil)
+}
+
+pub fn workspace_publish_is_debounced_test() -> promise.Promise(Nil) {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+
+  let #(after, _) = boot.dispatch(booted, NavigateTo(model.AppStore))
+  let #(after, _) = boot.dispatch(after, NavigateTo(model.WidgetsDashboard))
+
+  use _ <- promise.await(omni_promise_ext.delay(1000, Nil))
+  use count <- promise.await(event_store.count_events(
+    after.kernel.event_store,
+    Filter(None, None, Some([kind.AppData]), None, None, None, None, dict.new()),
+  ))
+  count |> should.equal(1)
   promise.resolve(Nil)
 }

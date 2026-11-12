@@ -437,7 +437,14 @@ pub fn update_intents_relays_theme_sync_and_modals_test() {
 
   let ws = model.to_workspace_state(m16, 999)
   let #(_m17, eff17) = update.update(m16, ApplyRemoteWorkspace(ws))
-  eff17 |> should.equal([PersistWorkspaceLocal(ws)])
+  should.be_true(
+    list.any(eff17, fn(effect) {
+      case effect {
+        update.PersistWorkspaceLocal(_) -> True
+        _ -> False
+      }
+    }),
+  )
 }
 
 // -----------------------------------------------------------------------------
@@ -671,6 +678,28 @@ pub fn reinstalling_resolved_custom_app_does_not_refetch_test() {
     list.any(effects, fn(effect) {
       case effect {
         update.InstallPluginFromUrl(_, _) -> True
+        _ -> False
+      }
+    }),
+  )
+}
+
+pub fn apply_remote_workspace_merges_newer_updated_at_test() {
+  let m0 = model.init("classic", [])
+  let local = model.to_workspace_state(m0, 2000)
+  let remote =
+    workspace.WorkspaceState(
+      ..local,
+      updated_at: 1000,
+      shell_type: Some("panorama"),
+    )
+  let #(next, effects) = update.update(m0, ApplyRemoteWorkspace(remote))
+  // Local state is newer, so its shell choice wins; the payload is persisted.
+  next.active_shell_id |> should.equal("classic")
+  should.be_true(
+    list.any(effects, fn(effect) {
+      case effect {
+        update.PersistWorkspaceLocal(_) -> True
         _ -> False
       }
     }),

@@ -48,6 +48,7 @@ import omni/sandbox/iframe_host.{type IframeMount, IframeConfig}
 import omni/sandbox/manager.{
   type SandboxManager, type SpawnOptions, SpawnOptions,
 }
+import omni/shell/model as shell_model
 import omni/shell/model.{
   type Model, type UserProfileSummary, IntentPromptState, Model, PrimaryApp,
   UserProfileSummary,
@@ -82,6 +83,7 @@ pub type Booted {
     builtins: Dict(String, BuiltinApp),
     intent_broker: ref.Ref(broker.IntentBroker),
     permission_prompts: PermissionPrompts,
+    workspace_sync_seq: ref.Ref(Int),
   )
 }
 
@@ -130,16 +132,29 @@ pub fn init_with_relays(
         )
       },
     )
+  let seeded_model =
+    Model(..seeded, user_profile: Some(session_profile(kernel)))
+  // Restore the persisted workspace before the first remote merge, but only
+  // when the user actually has one (an absent state must not override the
+  // registry's selected shell).
+  let seeded_model = case
+    storage.get(kernel.storage, sync.storage_key_workspace)
+  {
+    Some(_) ->
+      shell_model.apply_workspace_state(seeded_model, sync.load(kernel.storage))
+    None -> seeded_model
+  }
   let booted =
     Booted(
       registry: registry,
-      model: Model(..seeded, user_profile: Some(session_profile(kernel))),
+      model: seeded_model,
       kernel: kernel,
       sandboxes: manager.new(),
       bridge_script: bridge_script,
       builtins: builtins,
       intent_broker: ref.new(broker.new()),
       permission_prompts: permission_prompts,
+      workspace_sync_seq: ref.new(0),
     )
   grant_default_capabilities(booted)
   register_intent_handlers(booted)
@@ -360,15 +375,7 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
           #(reg, Nil)
         }
         update.PublishWorkspaceNip78(ws) -> {
-          let draft =
-            UnsignedEvent(
-              pubkey: None,
-              created_at: ws.updated_at,
-              kind: kind.AppData,
-              tags: [["d", config.workspace_sync_d_tag]],
-              content: workspace.encode(ws),
-            )
-          let _ = publish_draft(booted, draft)
+          schedule_workspace_publish(booted, ws)
           #(reg, Nil)
         }
         _ -> #(reg, Nil)
@@ -438,6 +445,7 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
       builtins: booted.builtins,
       intent_broker: booted.intent_broker,
       permission_prompts: booted.permission_prompts,
+      workspace_sync_seq: booted.workspace_sync_seq,
     ),
     host_effects,
   )
@@ -488,6 +496,36 @@ pub fn publish_pending(booted: Booted) -> Promise(List(String)) {
         })
       })
   }
+}
+
+/// Debounce workspace publishes so rapid layout changes coalesce into one
+/// kind-30078 event.
+fn schedule_workspace_publish(
+  booted: Booted,
+  ws: workspace.WorkspaceState,
+) -> Nil {
+  let seq = ref.get(booted.workspace_sync_seq) + 1
+  ref.set(booted.workspace_sync_seq, seq)
+  let _ =
+    promise_ext.delay(800, Nil)
+    |> promise.map(fn(_) {
+      case ref.get(booted.workspace_sync_seq) == seq {
+        True -> {
+          let draft =
+            UnsignedEvent(
+              pubkey: None,
+              created_at: ws.updated_at,
+              kind: kind.AppData,
+              tags: [["d", config.workspace_sync_d_tag]],
+              content: workspace.encode(ws),
+            )
+          let _ = publish_draft(booted, draft)
+          Nil
+        }
+        False -> Nil
+      }
+    })
+  Nil
 }
 
 /// Encrypt a draft's content to the user with NIP-44, then sign and publish it.
@@ -636,6 +674,7 @@ pub fn spawn_sandbox(
           builtins: booted.builtins,
           intent_broker: booted.intent_broker,
           permission_prompts: booted.permission_prompts,
+          workspace_sync_seq: booted.workspace_sync_seq,
         ),
         mount,
       ))
@@ -657,6 +696,7 @@ pub fn terminate_sandbox(booted: Booted, plugin_id_str: String) -> Booted {
         builtins: booted.builtins,
         intent_broker: booted.intent_broker,
         permission_prompts: booted.permission_prompts,
+        workspace_sync_seq: booted.workspace_sync_seq,
       )
   }
 }

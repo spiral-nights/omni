@@ -460,11 +460,7 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
         case nostr_event.get_tag_values(event.tags, "d") {
           [d_tag, ..] if d_tag == config.workspace_sync_d_tag ->
             case workspace.decode_json(event.content) {
-              Ok(state) ->
-                case state.plugins {
-                  [] -> Nil
-                  _ -> dispatch_shell_msg(ApplyRemoteWorkspace(state))
-                }
+              Ok(state) -> dispatch_shell_msg(ApplyRemoteWorkspace(state))
               Error(_) -> Nil
             }
           _ -> Nil
@@ -482,29 +478,46 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
       fn(event) {
         case nostr_event.get_tag_values(event.tags, "d") {
           [d_tag, ..] ->
-            case string.starts_with(d_tag, "omni/notes/v1/") {
-              False -> Nil
+            case d_tag == "omni/checklist/v1" {
               True -> {
-                let private_key =
-                  keystore.get_private_key(host.booted.kernel.keystore)
-                let _ =
-                  nip44.nip44_decrypt(private_key, self_pubkey, event.content)
-                  |> promise.map(fn(result) {
-                    case result {
-                      Error(_) -> Nil
-                      Ok(raw_doc) -> {
-                        dict.each(host.booted.builtins, fn(_id, app) {
-                          case app.ingest_doc {
-                            Some(ingest) -> ingest(raw_doc)
-                            None -> Nil
+                dict.each(host.booted.builtins, fn(_id, app) {
+                  case app.ingest_doc {
+                    Some(ingest) -> ingest(event.content)
+                    None -> Nil
+                  }
+                })
+                push_views(host)
+              }
+              False -> {
+                case string.starts_with(d_tag, "omni/notes/v1/") {
+                  False -> Nil
+                  True -> {
+                    let private_key =
+                      keystore.get_private_key(host.booted.kernel.keystore)
+                    let _ =
+                      nip44.nip44_decrypt(
+                        private_key,
+                        self_pubkey,
+                        event.content,
+                      )
+                      |> promise.map(fn(result) {
+                        case result {
+                          Error(_) -> Nil
+                          Ok(raw_doc) -> {
+                            dict.each(host.booted.builtins, fn(_id, app) {
+                              case app.ingest_doc {
+                                Some(ingest) -> ingest(raw_doc)
+                                None -> Nil
+                              }
+                            })
+                            push_views(host)
+                            Nil
                           }
-                        })
-                        push_views(host)
-                        Nil
-                      }
-                    }
-                  })
-                Nil
+                        }
+                      })
+                    Nil
+                  }
+                }
               }
             }
           _ -> Nil

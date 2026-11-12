@@ -14,6 +14,7 @@ import omni/plugin_kit/route
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
 import plugin/checklist/main as checklist
+import plugin/checklist/msg as checklist_msg
 import plugin/feed/main as feed
 import plugin/feed/msg as feed_msg
 import plugin/notes/main as notes
@@ -47,14 +48,7 @@ pub fn apps() -> List(#(String, BuiltinApp)) {
 
   [
     #("org.omni.plugin.feed", feed_app(store)),
-    #(
-      "org.omni.plugin.checklist",
-      host(
-        fn(emit) { checklist.start_app_with_storage("", store, emit) },
-        None,
-        None,
-      ),
-    ),
+    #("org.omni.plugin.checklist", checklist_app(store)),
     #(
       "org.omni.plugin.timer",
       host(fn(emit) { timer.start_app("", emit) }, None, None),
@@ -137,6 +131,22 @@ fn host(
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     ingest_doc: None,
+  )
+}
+
+fn checklist_app(store: storage.Storage) -> BuiltinApp {
+  let running = checklist.start_app_with_storage("", store, fn(_) { Nil })
+  BuiltinApp(
+    render: fn() { app.current_view(running) },
+    navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
+    handle_action: fn(action) { app.handle_action(running, action) },
+    ingest: None,
+    relay_status: None,
+    take_publishes: fn() { app.take_publishes(running) },
+    take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
+    ingest_doc: Some(fn(raw) {
+      app.dispatch(running, checklist_msg.IngestRemoteDoc(raw))
+    }),
   )
 }
 

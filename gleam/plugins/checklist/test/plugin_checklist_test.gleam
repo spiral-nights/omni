@@ -5,6 +5,7 @@ import gleam/option.{None, Some}
 import gleam/string
 import gleeunit
 import gleeunit/should
+import omni/nostr/kind as omni_kind
 import omni/nostr/pubkey
 import omni/platform/ref
 import omni/platform/storage
@@ -21,9 +22,9 @@ import plugin/checklist/model.{
   ViewMain, ViewSettings, ViewWidget,
 }
 import plugin/checklist/msg.{
-  AddTask, ClearCompleted, DeleteTask, LoadTasks, SetDefaultPriority,
-  SetDraftTitle, SetFilter, SetViewMode, ToggleShowCompleted, ToggleSyncNostr,
-  ToggleTask,
+  AddTask, ClearCompleted, DeleteTask, IngestRemoteDoc, LoadTasks,
+  SetDefaultPriority, SetDraftTitle, SetFilter, SetViewMode, ToggleShowCompleted,
+  ToggleSyncNostr, ToggleTask,
 }
 import plugin/checklist/update
 import plugin/checklist/view
@@ -228,4 +229,24 @@ pub fn start_app_action_round_trip_test() {
   let latest_wire = schema.encode_schema_message(app.current_view(running))
   string.contains(latest_wire, "0%") |> should.be_true()
   { list.length(ref.get(emitted)) >= 4 } |> should.be_true()
+}
+
+pub fn sync_publishes_and_ingests_nip78_document_test() {
+  let m1 = model.init(route.main())
+  m1.settings.sync_nostr |> should.equal(True)
+
+  let #(_m2, effects) = update.update(m1, ToggleTask("task-1"))
+  let assert [app.Publish(draft)] = effects
+  draft.kind |> should.equal(omni_kind.AppData)
+  draft.tags |> should.equal([["d", "omni/checklist/v1"]])
+  string.contains(draft.content, "task-1") |> should.be_true()
+
+  let remote =
+    "[{\"id\":\"remote-1\",\"title\":\"Synced task\",\"completed\":true,\"created_at\":1700000100,\"priority\":\"high\"}]"
+  let #(m3, _) = update.update(m1, IngestRemoteDoc(remote))
+  list.length(m3.tasks) |> should.equal(1)
+  let assert [task] = m3.tasks
+  task.title |> should.equal("Synced task")
+  task.completed |> should.be_true()
+  m3.next_id |> should.equal(4)
 }

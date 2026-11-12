@@ -6,6 +6,8 @@ import gleam/dict
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
+import omni/kernel/workspace/sync as workspace_sync
+import omni/platform/clock
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace.{type WorkspaceState}
@@ -444,7 +446,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     }
 
     TriggerWorkspaceSync -> {
-      let ws = model.to_workspace_state(model, 0)
+      let ws = model.to_workspace_state(model, clock.system().now_ms())
       let next_model = Model(..model, sync_status: Syncing)
       #(next_model, [
         PersistWorkspaceLocal(ws),
@@ -452,9 +454,11 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       ])
     }
 
-    ApplyRemoteWorkspace(ws) -> {
-      let next_model = model.apply_workspace_state(model, ws)
-      #(next_model, [PersistWorkspaceLocal(ws)])
+    ApplyRemoteWorkspace(remote) -> {
+      let local = model.to_workspace_state(model, clock.system().now_ms())
+      let merged = workspace_sync.merge(local, remote)
+      let next_model = model.apply_workspace_state(model, merged)
+      #(next_model, [PersistWorkspaceLocal(merged)])
     }
 
     ShowUpdateModal(modal) -> {
@@ -488,7 +492,7 @@ fn fallback_page_for_apps(apps: List(InstalledApp)) -> Page {
 }
 
 fn workspace_persistence_effects(model: Model) -> List(ShellEffect) {
-  let ws = model.to_workspace_state(model, 0)
+  let ws = model.to_workspace_state(model, clock.system().now_ms())
   case model.auto_sync_nip78 {
     True -> [PersistWorkspaceLocal(ws), PublishWorkspaceNip78(ws)]
     False -> [PersistWorkspaceLocal(ws)]

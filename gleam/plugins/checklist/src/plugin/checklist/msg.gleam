@@ -15,4 +15,5 @@ pub type Msg {
   ToggleShowCompleted
   SetDefaultPriority(String)
   LoadTasks(List(TaskItem))
+  IngestRemoteDoc(String)
 }
