@@ -281,8 +281,7 @@ pub fn strip_unsafe_html_test() {
     cleaned,
     "<a href=\"nostr:npub1xyz\">good link</a>",
   ))
-  should.be_true(string.contains(
-    cleaned,
-    "<img src=\"https://example.com/a.png\" />",
-  ))
+  // Images are not part of the notebook formatting allowlist.
+  should.be_false(string.contains(cleaned, "<img"))
+  should.be_false(string.contains(cleaned, "https://example.com/a.png"))
 }

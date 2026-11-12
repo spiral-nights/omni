@@ -339,13 +339,13 @@ fn sanitize_single_tag(tag_inner: String) -> String {
             split_tag_name_and_attrs(content_no_slash)
           let tag_lower = string.lowercase(raw_tag_name)
 
-          case is_disallowed_tag(tag_lower) {
-            True -> ""
-            False ->
+          case is_allowed_tag(tag_lower) {
+            False -> ""
+            True ->
               case is_closing {
                 True -> "</" <> tag_lower <> ">"
                 False -> {
-                  let safe_attrs = sanitize_tag_attributes(raw_attrs)
+                  let safe_attrs = sanitize_tag_attributes(tag_lower, raw_attrs)
                   let attr_suffix = case safe_attrs {
                     "" -> ""
                     _ -> " " <> safe_attrs
@@ -364,18 +364,36 @@ fn sanitize_single_tag(tag_inner: String) -> String {
   }
 }
 
-fn is_disallowed_tag(tag_lower: String) -> Bool {
+/// Formatting tags a notebook document may contain. Anything else is dropped,
+/// matching the allowlist used by the previous notes editor.
+fn is_allowed_tag(tag_lower: String) -> Bool {
   case tag_lower {
-    "script"
-    | "iframe"
-    | "object"
-    | "embed"
-    | "style"
-    | "applet"
-    | "meta"
-    | "link"
-    | "base"
-    | "form" -> True
+    "b"
+    | "strong"
+    | "i"
+    | "em"
+    | "u"
+    | "s"
+    | "strike"
+    | "del"
+    | "h1"
+    | "h2"
+    | "h3"
+    | "h4"
+    | "h5"
+    | "h6"
+    | "p"
+    | "div"
+    | "span"
+    | "br"
+    | "hr"
+    | "ul"
+    | "ol"
+    | "li"
+    | "blockquote"
+    | "pre"
+    | "code"
+    | "a" -> True
     _ -> False
   }
 }
@@ -405,63 +423,42 @@ fn split_at_whitespace(
   }
 }
 
-fn sanitize_tag_attributes(raw_attrs: String) -> String {
+fn sanitize_tag_attributes(tag_lower: String, raw_attrs: String) -> String {
   parse_attributes(string.to_utf_codepoints(raw_attrs), [])
   |> list.filter_map(fn(pair) {
     let #(name, val) = pair
     let lower_name = string.lowercase(name)
-    case is_safe_attribute_name(lower_name) {
+    case attribute_allowed(tag_lower, lower_name) {
       False -> Error(Nil)
       True ->
-        case lower_name {
-          "href"
-          | "src"
-          | "action"
-          | "Cite"
-          | "cite"
-          | "poster"
-          | "background" ->
-            case sanitize_url(val) {
-              Some(safe_url) ->
-                Ok(lower_name <> "=\"" <> escape_html(safe_url) <> "\"")
-              None -> Error(Nil)
-            }
-          "style" ->
-            case is_safe_inline_style(val) {
-              True -> Ok("style=\"" <> escape_html(val) <> "\"")
-              False -> Error(Nil)
-            }
-          _ -> {
-            let lower_val =
-              val
-              |> strip_whitespace_and_control()
-              |> string.lowercase()
-            case
-              string.contains(lower_val, "javascript:")
-              || string.contains(lower_val, "vbscript:")
-              || string.contains(lower_val, "data:text/html")
-            {
-              True -> Error(Nil)
-              False -> Ok(lower_name <> "=\"" <> escape_html(val) <> "\"")
-            }
-          }
+        case is_safe_attribute_name(lower_name) {
+          False -> Error(Nil)
+          True -> sanitize_attribute(lower_name, val)
         }
     }
   })
   |> string.join(" ")
 }
 
-fn is_safe_inline_style(style_val: String) -> Bool {
-  let lower =
-    style_val
-    |> strip_whitespace_and_control()
-    |> string.lowercase()
-  !string.contains(lower, "expression(")
-  && !string.contains(lower, "javascript:")
-  && !string.contains(lower, "vbscript:")
-  && !string.contains(lower, "url(")
-  && !string.contains(lower, "-moz-binding")
-  && !string.contains(lower, "behavior:")
+fn attribute_allowed(tag_lower: String, name: String) -> Bool {
+  case tag_lower, name {
+    "a", "href" -> True
+    "a", "title" -> True
+    _, "class" -> True
+    _, _ -> False
+  }
+}
+
+fn sanitize_attribute(lower_name: String, val: String) -> Result(String, Nil) {
+  case lower_name {
+    "href" -> {
+      case sanitize_url(val) {
+        Some(safe_url) -> Ok("href=\"" <> escape_html(safe_url) <> "\"")
+        None -> Error(Nil)
+      }
+    }
+    _ -> Ok(lower_name <> "=\"" <> escape_html(val) <> "\"")
+  }
 }
 
 fn parse_attributes(
