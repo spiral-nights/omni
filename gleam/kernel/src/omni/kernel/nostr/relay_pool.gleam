@@ -167,6 +167,18 @@ fn begin_connect(pool: RelayPool, url: RelayUrl, url_str: String) -> Nil {
   Nil
 }
 
+/// Drop an existing socket and dial the relay again (manual reconnect).
+pub fn force_reconnect(pool: RelayPool, url: RelayUrl) -> Nil {
+  let url_str = relay_url.to_string(url)
+  case dict.get(ref.get(pool.sockets), url_str) {
+    Ok(sock) -> websocket.close(sock, 1000, "reconnect")
+    Error(Nil) -> Nil
+  }
+  ref.update(pool.sockets, fn(sockets) { dict.delete(sockets, url_str) })
+  set_status(pool, url_str, Disconnected("manual reconnect"))
+  begin_connect(pool, url, url_str)
+}
+
 fn reconnect(pool: RelayPool, url: RelayUrl, url_str: String) -> Nil {
   let still_configured =
     list.any(load_relays(pool.storage), fn(u) {

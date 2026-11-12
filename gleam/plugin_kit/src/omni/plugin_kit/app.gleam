@@ -9,6 +9,7 @@ import omni/nostr/event.{type UnsignedEvent}
 import omni/platform/ref.{type Ref}
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema
+import omni/protocol/relay_command.{type RelayCommand}
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
 
@@ -24,6 +25,8 @@ pub type Effect(msg) {
   PublishEncrypted(UnsignedEvent)
   /// Request the host to fetch older events with `until` (timestamp).
   FetchUntil(Int)
+  /// Request a relay-pool mutation (add/remove/scope/reconnect).
+  Relay(RelayCommand)
 }
 
 /// Elm-style plugin application specification.
@@ -49,6 +52,7 @@ pub type RunningApp(model, msg) {
     publishes: Ref(List(UnsignedEvent)),
     encrypted_publishes: Ref(List(UnsignedEvent)),
     fetches: Ref(List(Int)),
+    relay_commands: Ref(List(RelayCommand)),
   )
 }
 
@@ -77,6 +81,7 @@ pub fn start(
       publishes: ref.new([]),
       encrypted_publishes: ref.new([]),
       fetches: ref.new([]),
+      relay_commands: ref.new([]),
     )
 
   emit_schema(initial_node)
@@ -167,6 +172,8 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
     PublishEncrypted(draft) ->
       ref.update(app.encrypted_publishes, fn(queue) { [draft, ..queue] })
     FetchUntil(until) -> ref.update(app.fetches, fn(queue) { [until, ..queue] })
+    Relay(command) ->
+      ref.update(app.relay_commands, fn(queue) { [command, ..queue] })
   }
 }
 
@@ -174,6 +181,13 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
 pub fn take_publishes(app: RunningApp(model, msg)) -> List(UnsignedEvent) {
   let pending = ref.get(app.publishes)
   ref.set(app.publishes, [])
+  list.reverse(pending)
+}
+
+/// Drain relay-pool mutations requested by the app.
+pub fn take_relay_commands(app: RunningApp(model, msg)) -> List(RelayCommand) {
+  let pending = ref.get(app.relay_commands)
+  ref.set(app.relay_commands, [])
   list.reverse(pending)
 }
 

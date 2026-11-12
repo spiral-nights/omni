@@ -30,6 +30,10 @@ import omni/platform/nip44
 import omni/platform/storage
 import omni/platform/url
 import omni/plugin_kit/route.{type Route}
+import omni/protocol/relay_command.{
+  type RelayCommand, AddRelay as RelayAdd, ReconnectRelay as RelayReconnect,
+  RemoveRelay as RelayRemove, SetRelayScope as RelaySetScope,
+}
 import omni/protocol/rpc/method.{FetchOptions}
 import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace
@@ -165,6 +169,7 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
       let #(next, effects) = boot.dispatch(current.booted, message)
       let host = apply_effects(ShellBoot(next), effects)
       let _ = drain_fetches(host)
+      let _ = drain_relay_commands(host)
       let _ =
         boot.publish_pending(host.booted)
         |> promise.map(fn(event_ids) {
@@ -313,6 +318,41 @@ fn apply_effects(
       _ -> acc
     }
   })
+}
+
+fn drain_relay_commands(host: ShellBoot) -> Nil {
+  let commands =
+    dict.fold(host.booted.builtins, [], fn(acc, _id, app) {
+      list.append(acc, app.take_relay_commands())
+    })
+  list.each(commands, fn(command) { apply_relay_command(host, command) })
+  Nil
+}
+
+fn apply_relay_command(host: ShellBoot, command: RelayCommand) -> Nil {
+  let pool = host.booted.kernel.relay_pool
+  case command {
+    RelayAdd(url) ->
+      case relay_url.parse(url) {
+        Ok(parsed) -> relay_pool.add_relay(pool, parsed)
+        Error(Nil) -> Nil
+      }
+    RelayRemove(url) ->
+      case relay_url.parse(url) {
+        Ok(parsed) -> relay_pool.remove_relay(pool, parsed)
+        Error(Nil) -> Nil
+      }
+    RelaySetScope(url, read, write) ->
+      case relay_url.parse(url) {
+        Ok(parsed) -> relay_pool.set_relay_scope(pool, parsed, read, write)
+        Error(Nil) -> Nil
+      }
+    RelayReconnect(url) ->
+      case relay_url.parse(url) {
+        Ok(parsed) -> relay_pool.force_reconnect(pool, parsed)
+        Error(Nil) -> Nil
+      }
+  }
 }
 
 fn drain_fetches(host: ShellBoot) -> Nil {

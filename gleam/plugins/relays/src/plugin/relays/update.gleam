@@ -7,13 +7,14 @@ import omni/nostr/event.{UnsignedEvent}
 import omni/nostr/kind
 import omni/nostr/relay_url
 import omni/platform/clock
-import omni/plugin_kit/app.{type Effect, Publish}
+import omni/plugin_kit/app.{type Effect, Publish, Relay}
 import omni/plugin_kit/schema
+import omni/protocol/relay_command as rc
 import omni/protocol/schema/action.{type Action}
 import plugin/relays/model.{
-  type Model, type RelayConnectionState, type ViewMode, Model, RelayEntry,
-  StateConnected, StateConnecting, StateDisconnected, StateError, ViewCompact,
-  ViewMain, ViewWidget,
+  type Model, type RelayConnectionState, type RelayEntry, type ViewMode, Model,
+  RelayEntry, StateConnected, StateConnecting, StateDisconnected, StateError,
+  ViewCompact, ViewMain, ViewWidget,
 }
 import plugin/relays/msg.{
   type Msg, AddRelay, DismissError, PublishNip65, ReconnectRelay, RemoveRelay,
@@ -32,7 +33,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
 
     RemoveRelay(url) -> {
       let filtered = list.filter(model.relays, fn(r) { r.url != url })
-      #(Model(..model, relays: filtered), [])
+      #(Model(..model, relays: filtered), [Relay(rc.RemoveRelay(url))])
     }
 
     ToggleRead(url) -> {
@@ -43,7 +44,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
             False -> r
           }
         })
-      #(Model(..model, relays: updated), [])
+      #(Model(..model, relays: updated), scope_effects(updated, url))
     }
 
     ToggleWrite(url) -> {
@@ -54,7 +55,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
             False -> r
           }
         })
-      #(Model(..model, relays: updated), [])
+      #(Model(..model, relays: updated), scope_effects(updated, url))
     }
 
     ReconnectRelay(url) -> {
@@ -65,7 +66,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
             False -> r
           }
         })
-      #(Model(..model, relays: updated), [])
+      #(Model(..model, relays: updated), [Relay(rc.ReconnectRelay(url))])
     }
 
     UpdateRelayState(url, next_state, latency) -> {
@@ -92,6 +93,13 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
     DismissError -> #(Model(..model, error_banner: None), [])
 
     SetViewMode(mode) -> #(Model(..model, view_mode: mode), [])
+  }
+}
+
+fn scope_effects(relays: List(RelayEntry), url: String) -> List(Effect(Msg)) {
+  case list.find(relays, fn(r) { r.url == url }) {
+    Ok(entry) -> [Relay(rc.SetRelayScope(url, entry.read, entry.write))]
+    Error(Nil) -> []
   }
 }
 
@@ -127,7 +135,7 @@ fn handle_add_relay(model: Model) -> #(Model, List(Effect(Msg))) {
               draft_url: "",
               error_banner: None,
             ),
-            [],
+            [Relay(rc.AddRelay(norm))],
           )
         }
       }

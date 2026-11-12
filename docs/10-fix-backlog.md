@@ -68,7 +68,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | PL-1b | S2 | fixed | Nsite `naddr`/kind-35129 + Blossom-fragment resolution is not wired to the installer; uninstall does not terminate the mounted sandbox; update flow is unused. | fixed `a195f45`: installer resolves URL/naddr/coordinates local-first, inlines Blossom CSS/JS assets, mounts cached apps on open, terminates sandboxes on unmount/uninstall, and shows/apply the update modal. |
 | PL-2 | S1 | fixed | Intent broker never dispatches runtime intents; chooser is display-only. | fixed `644d92f`: hosted actions route through the intent broker (single handler opens + forwards, multiples prompt), aliases normalized. |
 | PL-3 | S1 | fixed | ACL prompts never fire (no `prompt_handler` on the engine). | fixed `644d92f`: kernel prompt handler bridged to a shell Allow/Deny modal; decisions resolve the grant promise. |
-| PL-4 | S2 | open | Relays app mutations (add/remove/reconnect/read-write/NIP-65) don't call the pool. | Expose pool operations to the app and publish kind 10002. |
+| PL-4 | S2 | fixed | Relays app mutations (add/remove/reconnect/read-write/NIP-65) don't call the pool. | fixed `PENDING`: relay mutations emit typed pool commands (add/remove/scope/force-reconnect) that the host applies to the live pool; NIP-65 publishing was already wired. |
 | PL-5 | S2 | open | Publisher has no zip, Blossom upload, or nsite publish. | Port zip engine + upload + kind publish. |
 | PL-6 | S2 | fixed | Profiles key custody/backup UI missing. | fixed `18fdcb6`: Settings Identity panel hosts the shared import/export custody card backed by the keystore. |
 | PL-7 | S2 | open | Timer completion has no chime. | Add audio asset + play on `Completed`. |

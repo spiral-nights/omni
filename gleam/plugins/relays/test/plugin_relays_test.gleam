@@ -8,7 +8,9 @@ import gleeunit/should
 import omni/nostr/kind as nostr_kind
 import omni/platform/ref
 import omni/plugin_kit/app
+import omni/plugin_kit/route
 import omni/plugin_kit/schema
+import omni/protocol/relay_command as rc
 import omni/protocol/schema/node
 import plugin/relays/main
 import plugin/relays/model.{
@@ -242,6 +244,31 @@ pub fn publish_nip65_emits_relay_list_event_test() {
               _ -> False
             }
           })
+        _ -> False
+      }
+    }),
+  )
+}
+
+pub fn relay_mutations_emit_pool_commands_test() {
+  let m = model.init(model.ViewMain)
+  let assert Ok(first) = list.first(m.relays)
+
+  let #(_, remove_effects) = update.update(m, RemoveRelay(first.url))
+  should.be_true(
+    list.any(remove_effects, fn(effect) {
+      case effect {
+        app.Relay(rc.RemoveRelay(url)) -> url == first.url
+        _ -> False
+      }
+    }),
+  )
+
+  let #(_, toggle_effects) = update.update(m, ToggleRead(first.url))
+  should.be_true(
+    list.any(toggle_effects, fn(effect) {
+      case effect {
+        app.Relay(rc.SetRelayScope(url, _, _)) -> url == first.url
         _ -> False
       }
     }),
