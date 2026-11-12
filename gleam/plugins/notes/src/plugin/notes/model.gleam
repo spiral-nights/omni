@@ -274,22 +274,29 @@ pub fn encode_note_doc(note: NoteDoc) -> Json {
 pub fn note_doc_decoder() -> Decoder(NoteDoc) {
   use id <- decode.field("id", decode.string)
   use title <- decode.optional_field("title", "", decode.string)
-  use content <- decode.optional_field("content", "", decode.string)
+  use content <- decode.optional_field(
+    "content",
+    None,
+    decode.optional(decode.string),
+  )
+  // Documents written by the previous app used `html` for the body.
+  use legacy_html <- decode.optional_field("html", "", decode.string)
   use tags <- decode.optional_field("tags", [], decode.list(decode.string))
   use starred <- decode.optional_field("starred", False, decode.bool)
   use archived <- decode.optional_field("archived", False, decode.bool)
   use encrypted <- decode.optional_field("encrypted", True, decode.bool)
   use updated_at <- decode.optional_field("updated_at", 0, decode.int)
+  use legacy_updated <- decode.optional_field("updatedAt", 0, decode.int)
 
   decode.success(NoteDoc(
     id: id,
     title: title,
-    content: content,
+    content: option.unwrap(content, legacy_html),
     tags: tags,
     starred: starred,
     archived: archived,
     encrypted: encrypted,
-    updated_at: updated_at,
+    updated_at: int.max(updated_at, legacy_updated),
   ))
 }
 

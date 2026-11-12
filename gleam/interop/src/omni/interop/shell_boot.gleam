@@ -569,6 +569,16 @@ fn drain_fetches(host: ShellBoot) -> Nil {
   Nil
 }
 
+fn deliver_doc(host: ShellBoot, raw: String) -> Nil {
+  dict.each(host.booted.builtins, fn(_id, app) {
+    case app.ingest_doc {
+      Some(ingest) -> ingest(raw)
+      None -> Nil
+    }
+  })
+  push_views(host)
+}
+
 fn drain_thread_fetches(host: ShellBoot) -> Nil {
   let ids =
     dict.fold(host.booted.builtins, [], fn(acc, _id, app) {
@@ -890,30 +900,32 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
                 case string.starts_with(d_tag, "omni/notes/v1/") {
                   False -> Nil
                   True -> {
-                    let private_key =
-                      keystore.get_private_key(host.booted.kernel.keystore)
-                    let _ =
-                      nip44.nip44_decrypt(
-                        private_key,
-                        self_pubkey,
-                        event.content,
-                      )
-                      |> promise.map(fn(result) {
-                        case result {
-                          Error(_) -> Nil
-                          Ok(raw_doc) -> {
-                            dict.each(host.booted.builtins, fn(_id, app) {
-                              case app.ingest_doc {
-                                Some(ingest) -> ingest(raw_doc)
-                                None -> Nil
+                    let content = string.trim(event.content)
+                    case string.starts_with(content, "{") {
+                      // Plaintext (unencrypted sync) documents are ingested
+                      // directly instead of being treated as ciphertext.
+                      True -> deliver_doc(host, content)
+                      False -> {
+                        let private_key =
+                          keystore.get_private_key(host.booted.kernel.keystore)
+                        let _ =
+                          nip44.nip44_decrypt(
+                            private_key,
+                            self_pubkey,
+                            event.content,
+                          )
+                          |> promise.map(fn(result) {
+                            case result {
+                              Error(_) -> Nil
+                              Ok(raw_doc) -> {
+                                deliver_doc(host, raw_doc)
+                                Nil
                               }
-                            })
-                            push_views(host)
-                            Nil
-                          }
-                        }
-                      })
-                    Nil
+                            }
+                          })
+                        Nil
+                      }
+                    }
                   }
                 }
               }

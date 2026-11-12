@@ -2,6 +2,7 @@
 
 import gleam/dict
 import gleam/dynamic
+import gleam/json
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
@@ -17,8 +18,8 @@ import omni/protocol/schema/action.{type Action}
 import plugin/notes/main as notes_main
 import plugin/notes/model.{
   FolderAll, FolderArchive, FolderStarred, FolderTag, Model, NoteDoc,
-  content_snippet, from_json_string, init, init_with_notes, to_json_string,
-  word_count,
+  content_snippet, from_json_string, init, init_with_notes, note_doc_decoder,
+  to_json_string, word_count,
 }
 import plugin/notes/msg.{
   AddTag, CreateNote, DeleteNote, IngestRemoteDoc, RemoveTag, SaveActiveNote,
@@ -332,4 +333,15 @@ pub fn deleting_a_note_publishes_a_tombstone_test() {
     }
     _ -> should.fail()
   }
+}
+
+pub fn legacy_note_document_decodes_test() {
+  let raw =
+    "{\"id\":\"note_9\",\"title\":\"Old Note\",\"html\":\"<p>body</p>\",\"updatedAt\":123,\"tags\":[\"x\"],\"starred\":true}"
+  let assert Ok(note) = json.parse(from: raw, using: note_doc_decoder())
+  note.id |> should.equal("note_9")
+  note.title |> should.equal("Old Note")
+  note.content |> should.equal("<p>body</p>")
+  note.updated_at |> should.equal(123)
+  note.starred |> should.equal(True)
 }
