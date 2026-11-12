@@ -9,7 +9,7 @@ import omni/nostr/event.{type Event, UnsignedEvent}
 import omni/nostr/kind
 import omni/nostr/pubkey
 import omni/plugin_kit/app.{
-  type Effect, FetchUntil, OpenUrl, Publish, Search, ZapInvoice,
+  type Effect, FetchThread, FetchUntil, OpenUrl, Publish, Search, ZapInvoice,
 }
 import omni/plugin_kit/schema
 import omni/plugin_kit/zap as kit_zap
@@ -52,7 +52,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
             view: ViewThread(note_id: cleaned),
             replying_to: Some(cleaned),
           ),
-          [],
+          [FetchThread(cleaned)],
         )
       }
     }
@@ -84,15 +84,23 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
 
     PublishReply(parent_id) -> publish_reply_effect(model, parent_id)
 
-    LikeNote(note_id) -> #(
-      model,
-      reaction_effect(model, note_id, kind.Reaction, "+"),
-    )
+    LikeNote(note_id) ->
+      case stats_for(model, note_id).liked_by_me {
+        True -> #(model, [])
+        False -> #(
+          Model(..model, stats: stats.mark_liked(model.stats, note_id)),
+          reaction_effect(model, note_id, kind.Reaction, "+"),
+        )
+      }
 
-    RepostNote(note_id) -> #(
-      model,
-      reaction_effect(model, note_id, kind.Repost, ""),
-    )
+    RepostNote(note_id) ->
+      case stats_for(model, note_id).reposted_by_me {
+        True -> #(model, [])
+        False -> #(
+          Model(..model, stats: stats.mark_reposted(model.stats, note_id)),
+          reaction_effect(model, note_id, kind.Repost, ""),
+        )
+      }
 
     StartZap(note_id) -> #(start_zap(model, note_id), [])
 
@@ -617,6 +625,23 @@ fn publish_reply_effect(
           ])
         }
       }
+  }
+}
+
+fn stats_for(model: Model, note_id: String) -> NoteStats {
+  case dict.get(model.stats, note_id) {
+    Ok(s) -> s
+    Error(Nil) ->
+      NoteStats(
+        note_id: note_id,
+        likes: 0,
+        reposts: 0,
+        replies: 0,
+        zaps: 0,
+        zap_sats: 0,
+        liked_by_me: False,
+        reposted_by_me: False,
+      )
   }
 }
 

@@ -173,6 +173,7 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
       let #(next, effects) = boot.dispatch(current.booted, message)
       let host = apply_effects(ShellBoot(next), effects)
       let _ = drain_fetches(host)
+      let _ = drain_thread_fetches(host)
       let _ = drain_relay_commands(host)
       let _ = drain_chimes(host)
       let _ = drain_urls(host)
@@ -565,6 +566,61 @@ fn drain_fetches(host: ShellBoot) -> Nil {
       list.append(acc, app.take_fetches())
     })
   list.each(untils, fn(until) { fetch_older(host, until) })
+  Nil
+}
+
+fn drain_thread_fetches(host: ShellBoot) -> Nil {
+  let ids =
+    dict.fold(host.booted.builtins, [], fn(acc, _id, app) {
+      list.append(acc, app.take_thread_fetches())
+    })
+  list.each(ids, fn(note_id) { fetch_thread(host, note_id) })
+  Nil
+}
+
+/// Fetch a note and its direct conversation replies, then refresh the views.
+fn fetch_thread(host: ShellBoot, note_id: String) -> Nil {
+  let focal =
+    Filter(
+      ids: Some([note_id]),
+      authors: None,
+      kinds: None,
+      since: None,
+      until: None,
+      limit: Some(1),
+      search: None,
+      tags: dict.new(),
+    )
+  let replies =
+    Filter(
+      ids: None,
+      authors: None,
+      kinds: Some([kind.Note]),
+      since: None,
+      until: None,
+      limit: Some(100),
+      search: None,
+      tags: dict.from_list([#("e", [note_id])]),
+    )
+  let _ =
+    coordinator.fetch(
+      host.booted.kernel.coordinator,
+      "omni_internal_thread",
+      [focal, replies],
+      Some(FetchOptions(timeout_ms: Some(4000), relays: None, local_only: None)),
+    )
+    |> promise.map(fn(events) {
+      list.each(events, fn(event) {
+        dict.each(host.booted.builtins, fn(_id, app) {
+          case app.ingest {
+            Some(ingest) -> ingest(event)
+            None -> Nil
+          }
+        })
+      })
+      push_views(host)
+      Nil
+    })
   Nil
 }
 

@@ -12,7 +12,9 @@ import omni/nostr/event_id
 import omni/nostr/kind.{type Kind, Metadata, Note, ZapRequest}
 import omni/nostr/pubkey
 import omni/platform/storage
-import omni/plugin_kit/app.{FetchUntil, Publish, ZapInvoice as ZapInvoiceEffect}
+import omni/plugin_kit/app.{
+  FetchThread, FetchUntil, Publish, ZapInvoice as ZapInvoiceEffect,
+}
 import omni/plugin_kit/local_store
 import omni/plugin_kit/route
 import omni/plugin_kit/schema
@@ -690,4 +692,35 @@ pub fn pay_invoice_action_emits_open_url_test() {
       }
     }),
   )
+}
+
+pub fn opening_a_thread_requests_the_conversation_test() {
+  let m0 = model.init(route.main())
+  let #(m1, _) =
+    update.update(m0, IngestEvent(note_event(note1_hex, alice_hex, "root")))
+  let assert Ok(parent) = list.first(dict.values(m1.notes))
+
+  let #(_, effects) = update.update(m1, OpenThread(parent.id))
+  list.any(effects, fn(effect) {
+    case effect {
+      FetchThread(id) -> id == parent.id
+      _ -> False
+    }
+  })
+  |> should.equal(True)
+}
+
+pub fn liking_twice_publishes_once_test() {
+  let m0 = model.init(route.main())
+  let #(m1, _) =
+    update.update(m0, IngestEvent(note_event(note1_hex, alice_hex, "root")))
+  let assert Ok(parent) = list.first(dict.values(m1.notes))
+
+  let #(m2, first_effects) = update.update(m1, LikeNote(parent.id))
+  list.length(first_effects) |> should.equal(1)
+
+  // Once the reaction is known to the plugin a second click must not publish.
+  let #(m3, second_effects) = update.update(m2, LikeNote(parent.id))
+  list.length(second_effects) |> should.equal(0)
+  m3 |> should.equal(m2)
 }

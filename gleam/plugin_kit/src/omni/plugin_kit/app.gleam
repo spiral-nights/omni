@@ -35,6 +35,8 @@ pub type Effect(msg) {
   PublishEncrypted(UnsignedEvent)
   /// Request the host to fetch older events with `until` (timestamp).
   FetchUntil(Int)
+  /// Request the host to fetch a note and its conversation replies.
+  FetchThread(String)
   /// Request a relay-pool mutation (add/remove/scope/reconnect).
   Relay(RelayCommand)
   /// Request the host play the completion chime.
@@ -72,6 +74,7 @@ pub type RunningApp(model, msg) {
     publishes: Ref(List(UnsignedEvent)),
     encrypted_publishes: Ref(List(UnsignedEvent)),
     fetches: Ref(List(Int)),
+    thread_fetches: Ref(List(String)),
     relay_commands: Ref(List(RelayCommand)),
     chimes: Ref(Int),
     uploads: Ref(List(BlobUpload)),
@@ -106,6 +109,7 @@ pub fn start(
       publishes: ref.new([]),
       encrypted_publishes: ref.new([]),
       fetches: ref.new([]),
+      thread_fetches: ref.new([]),
       relay_commands: ref.new([]),
       chimes: ref.new(0),
       uploads: ref.new([]),
@@ -202,6 +206,8 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
     PublishEncrypted(draft) ->
       ref.update(app.encrypted_publishes, fn(queue) { [draft, ..queue] })
     FetchUntil(until) -> ref.update(app.fetches, fn(queue) { [until, ..queue] })
+    FetchThread(note_id) ->
+      ref.update(app.thread_fetches, fn(queue) { [note_id, ..queue] })
     Relay(command) ->
       ref.update(app.relay_commands, fn(queue) { [command, ..queue] })
     PlayChime -> ref.update(app.chimes, fn(count) { count + 1 })
@@ -213,6 +219,13 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
     ZapInvoice(invoice) ->
       ref.update(app.zap_invoices, fn(queue) { [invoice, ..queue] })
   }
+}
+
+/// Drain the thread ids the app wants fetched with their replies.
+pub fn take_thread_fetches(app: RunningApp(model, msg)) -> List(String) {
+  let pending = ref.get(app.thread_fetches)
+  ref.set(app.thread_fetches, [])
+  list.reverse(pending)
 }
 
 /// Drain the drafts the app asked the host to sign and broadcast.

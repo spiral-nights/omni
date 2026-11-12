@@ -122,6 +122,31 @@ pub fn apply_event(
   }
 }
 
+/// Mark a note as liked by the current user without changing the count.
+/// The real reaction event supplies the count when it is ingested.
+pub fn mark_liked(
+  stats_map: Dict(String, NoteStats),
+  note_id: String,
+) -> Dict(String, NoteStats) {
+  let current = case dict.get(stats_map, note_id) {
+    Ok(existing) -> existing
+    Error(Nil) -> empty_stats(note_id)
+  }
+  dict.insert(stats_map, note_id, NoteStats(..current, liked_by_me: True))
+}
+
+/// Mark a note as reposted by the current user without changing the count.
+pub fn mark_reposted(
+  stats_map: Dict(String, NoteStats),
+  note_id: String,
+) -> Dict(String, NoteStats) {
+  let current = case dict.get(stats_map, note_id) {
+    Ok(existing) -> existing
+    Error(Nil) -> empty_stats(note_id)
+  }
+  dict.insert(stats_map, note_id, NoteStats(..current, reposted_by_me: True))
+}
+
 /// Apply a list of `Event` values to produce an aggregated `Dict(String, NoteStats)`.
 pub fn apply_events(
   events: List(Event),
