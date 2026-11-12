@@ -21,6 +21,7 @@ import omni/kernel/acl/capability_store
 import omni/kernel/crypto/keystore
 import omni/kernel/intents/broker
 import omni/kernel/kernel.{type KernelPorts, type OmniKernel, KernelPorts}
+import omni/kernel/nostr/coordinator as subscription_coordinator
 import omni/kernel/nostr/event_store
 import omni/kernel/nostr/relay_pool
 import omni/kernel/workspace/sync
@@ -543,6 +544,11 @@ fn ingest_signed(booted: Booted, event: Event) -> Nil {
 /// Apply a kind-10002 relay list: add discovered relays and set read/write
 /// scopes so REQ only goes to read relays and publishes only to write relays.
 pub fn apply_relay_list(booted: Booted, tags: List(List(String))) -> Nil {
+  subscription_coordinator.seed_relay_list(
+    booted.kernel.coordinator,
+    pubkey.to_hex(keystore.get_public_key(booted.kernel.keystore)),
+    tags,
+  )
   list.each(nip65.parse_tags(tags), fn(hint) {
     case relay_url.parse(hint.url) {
       Error(Nil) -> Nil
