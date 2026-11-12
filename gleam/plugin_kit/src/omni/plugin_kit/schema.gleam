@@ -325,6 +325,9 @@ pub const disabled = builder.disabled
 
 pub const loading = builder.loading
 
+pub const action_on_change = builder.action_on_change
+
+/// Set placeholder text on an Input or Textarea.
 pub const placeholder = builder.placeholder
 
 pub const value = builder.value

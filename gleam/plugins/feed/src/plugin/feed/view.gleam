@@ -92,6 +92,7 @@ fn render_composer_card(model: Model) -> Node {
     |> schema.with_id("composer-textarea")
     |> schema.placeholder("What's on your mind? Broadcast to Nostr...")
     |> schema.value(model.composer_draft)
+    |> schema.action_on_change(action.new("set-composer-draft"))
 
   let post_btn =
     Button(
@@ -284,6 +285,7 @@ fn render_reply_composer(model: Model, parent_id: String) -> Node {
     |> schema.with_id("reply-textarea")
     |> schema.placeholder("Write a reply...")
     |> schema.value(model.reply_draft)
+    |> schema.action_on_change(action.new("set-reply-draft"))
 
   let reply_btn =
     Button(

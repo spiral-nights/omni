@@ -105,9 +105,13 @@ pub fn render_button(
     attribute.attribute("data-variant", vr_str),
     attribute.attribute("data-size", sz_str),
     attribute.attribute("data-action", btn_action.name),
+    case icon {
+      Some(ic) -> attribute.attribute("data-icon", ic)
+      None -> attribute.attribute("data-icon", "")
+    },
     case is_disabled {
       True -> attribute.disabled(True)
-      False -> event.on_click(btn_action)
+      False -> event.stop_propagation(event.on_click(btn_action))
     },
   ]
 
@@ -158,6 +162,7 @@ pub fn render_icon_button(
         attribute.attribute("data-variant", vr_str),
         attribute.attribute("data-size", sz_str),
         attribute.attribute("data-action", btn_action.name),
+        attribute.attribute("data-icon", icon),
         attribute.attribute("aria-label", aria_label),
       ],
       case tooltip {
@@ -166,7 +171,7 @@ pub fn render_icon_button(
       },
       case is_disabled {
         True -> [attribute.disabled(True)]
-        False -> [event.on_click(btn_action)]
+        False -> [event.stop_propagation(event.on_click(btn_action))]
       },
     ])
 
@@ -270,6 +275,7 @@ pub fn render_textarea(
   placeholder: Option(String),
   value: Option(String),
   rows: Option(Int),
+  action_on_change: Option(Action),
 ) -> Element(Action) {
   let class_attr = attribute.class("omni-textarea")
   let extra_attrs =
@@ -281,6 +287,18 @@ pub fn render_textarea(
       },
       case rows {
         Some(r) -> [attribute.attribute("rows", int.to_string(r))]
+        None -> []
+      },
+      case action_on_change {
+        Some(act) -> [
+          event.on_input(fn(val) {
+            merge_action_payload(act, [
+              #("value", dynamic.string(val)),
+              #("name", dynamic.string(name)),
+              #(name, dynamic.string(val)),
+            ])
+          }),
+        ]
         None -> []
       },
     ])
@@ -358,7 +376,7 @@ pub fn render_toggle(
 
   let click_attr = case is_disabled {
     True -> []
-    False -> [event.on_click(dispatched_action)]
+    False -> [event.stop_propagation(event.on_click(dispatched_action))]
   }
 
   let attrs = list.flatten([[class_attr], base_attrs, click_attr])
@@ -422,14 +440,14 @@ pub fn render_tabs(
   active_tab: String,
   tab_action: Action,
 ) -> Element(Action) {
-  let class_attr = attribute.class("omni-tabs")
+  let class_attr = attribute.class("omni-tabs omni-tabs-nav")
   let role_attr = attribute.role("tablist")
 
   let tab_buttons =
     list.map(tabs, fn(tab) {
       let is_active = tab.id == active_tab
       let active_class = case is_active {
-        True -> " omni-tab-active"
+        True -> " active"
         False -> ""
       }
       let btn_action =
@@ -465,14 +483,14 @@ pub fn render_tabs(
       html.button(
         [
           attribute.type_("button"),
-          attribute.class("omni-tab" <> active_class),
+          attribute.class("omni-tab-btn" <> active_class),
           attribute.role("tab"),
           attribute.attribute("aria-selected", case is_active {
             True -> "true"
             False -> "false"
           }),
           attribute.attribute("data-tab-id", tab.id),
-          event.on_click(btn_action),
+          event.stop_propagation(event.on_click(btn_action)),
         ],
         list.flatten([icon_el, label_el, badge_el]),
       )

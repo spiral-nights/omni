@@ -188,8 +188,15 @@ pub fn render(n: Node) -> Element(Action) {
             action_on_change,
           )
 
-        Textarea(_, name, placeholder, value, rows) ->
-          input.render_textarea(b_attrs, name, placeholder, value, rows)
+        Textarea(_, name, placeholder, value, rows, on_change) ->
+          input.render_textarea(
+            b_attrs,
+            name,
+            placeholder,
+            value,
+            rows,
+            on_change,
+          )
 
         Toggle(_, name, label, checked, act, disabled) ->
           input.render_toggle(b_attrs, name, label, checked, act, disabled)

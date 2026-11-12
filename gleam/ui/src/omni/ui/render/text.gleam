@@ -77,7 +77,7 @@ pub fn render_text(
         None -> []
       },
       case action {
-        Some(act) -> [event.on_click(act)]
+        Some(act) -> [event.stop_propagation(event.on_click(act))]
         None -> []
       },
     ])
@@ -232,7 +232,7 @@ pub fn render_avatar(
         None -> []
       },
       case action {
-        Some(act) -> [event.on_click(act)]
+        Some(act) -> [event.stop_propagation(event.on_click(act))]
         None -> []
       },
     ])

@@ -272,6 +272,7 @@ pub type Node {
     placeholder: Option(String),
     value: Option(String),
     rows: Option(Int),
+    action_on_change: Option(Action),
   )
   Toggle(
     base: NodeBase,

@@ -104,7 +104,7 @@ pub fn render_progress(
         attribute.attribute("data-max", float.to_string(max_val)),
       ],
       case action {
-        Some(act) -> [event.on_click(act)]
+        Some(act) -> [event.stop_propagation(event.on_click(act))]
         None -> []
       },
     ])
@@ -278,7 +278,7 @@ pub fn render_banner(
         [
           attribute.type_("button"),
           attribute.class("omni-banner-action-btn"),
-          event.on_click(act),
+          event.stop_propagation(event.on_click(act)),
         ],
         [element.text(lbl)],
       ),
@@ -289,7 +289,7 @@ pub fn render_banner(
   let dismiss_btn_el = case dismissible {
     Some(True) -> {
       let click_attr = case on_dismiss_action {
-        Some(act) -> [event.on_click(act)]
+        Some(act) -> [event.stop_propagation(event.on_click(act))]
         None -> []
       }
       [
@@ -369,7 +369,7 @@ pub fn render_empty_state(
           attribute.class(
             "omni-button omni-button-secondary omni-button-md omni-empty-state-action",
           ),
-          event.on_click(act),
+          event.stop_propagation(event.on_click(act)),
         ],
         [
           html.span([attribute.class("omni-button-label")], [

@@ -470,7 +470,7 @@ body {
 }
 
 .feed-search-input:focus {
-  border-color: var(--omni-accent, #d4a373);
+  border-color: var(--omni-accent-primary, #d4a373);
 }
 
 .feed-search-input::placeholder {
@@ -478,7 +478,7 @@ body {
 }
 
 .btn-do-search {
-  background: var(--omni-accent, #d4a373);
+  background: var(--omni-accent-primary, #d4a373);
   border: none;
   color: var(--omni-accent-contrast, #141312);
   font-size: 0.78rem;
@@ -646,7 +646,7 @@ body {
 }
 
 .thread-focused-note {
-  border-left: 3px solid var(--omni-accent, #d4a373);
+  border-left: 3px solid var(--omni-accent-primary, #d4a373);
   background: var(--omni-bg-surface, #191816);
   border-radius: var(--omni-radius-sm, 6px);
   margin: 6px 0;

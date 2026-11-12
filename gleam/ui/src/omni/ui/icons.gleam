@@ -76,6 +76,17 @@ pub fn icon_names() -> List(String) {
     "bell",
     "spinner",
     "loader",
+    "lock",
+    "globe",
+    "user-check",
+    "user-plus",
+    "package",
+    "file",
+    "code",
+    "edit",
+    "send",
+    "image",
+    "save",
   ]
 }
 
@@ -943,6 +954,180 @@ fn lookup_icon_children(name: String) -> Result(List(Element(msg)), Nil) {
           attribute("stroke-opacity", "0.2"),
         ]),
         svg.path([attribute("d", "M21 12a9 9 0 0 0-9-9")]),
+      ])
+
+    "lock" ->
+      Ok([
+        svg.rect([
+          attribute("x", "3"),
+          attribute("y", "11"),
+          attribute("width", "18"),
+          attribute("height", "11"),
+          attribute("rx", "2"),
+        ]),
+        svg.path([
+          attribute("d", "M7 11V7a5 5 0 0 1 10 0v4"),
+        ]),
+      ])
+
+    "globe" ->
+      Ok([
+        svg.circle([
+          attribute("cx", "12"),
+          attribute("cy", "12"),
+          attribute("r", "10"),
+        ]),
+        svg.line([
+          attribute("x1", "2"),
+          attribute("y1", "12"),
+          attribute("x2", "22"),
+          attribute("y2", "12"),
+        ]),
+        svg.path([
+          attribute(
+            "d",
+            "M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z",
+          ),
+        ]),
+      ])
+
+    "user-check" ->
+      Ok([
+        svg.path([
+          attribute("d", "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"),
+        ]),
+        svg.circle([
+          attribute("cx", "9"),
+          attribute("cy", "7"),
+          attribute("r", "4"),
+        ]),
+        svg.polyline([
+          attribute("points", "17 11 19 13 23 9"),
+        ]),
+      ])
+
+    "user-plus" ->
+      Ok([
+        svg.path([
+          attribute("d", "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"),
+        ]),
+        svg.circle([
+          attribute("cx", "9"),
+          attribute("cy", "7"),
+          attribute("r", "4"),
+        ]),
+        svg.line([
+          attribute("x1", "20"),
+          attribute("y1", "8"),
+          attribute("x2", "20"),
+          attribute("y2", "14"),
+        ]),
+        svg.line([
+          attribute("x1", "17"),
+          attribute("y1", "11"),
+          attribute("x2", "23"),
+          attribute("y2", "11"),
+        ]),
+      ])
+
+    "package" ->
+      Ok([
+        svg.path([
+          attribute(
+            "d",
+            "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z",
+          ),
+        ]),
+        svg.polyline([
+          attribute("points", "3.27 6.96 12 12.01 20.73 6.96"),
+        ]),
+        svg.line([
+          attribute("x1", "12"),
+          attribute("y1", "22.08"),
+          attribute("x2", "12"),
+          attribute("y2", "12"),
+        ]),
+      ])
+
+    "file" ->
+      Ok([
+        svg.path([
+          attribute(
+            "d",
+            "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z",
+          ),
+        ]),
+        svg.polyline([
+          attribute("points", "14 2 14 8 20 8"),
+        ]),
+      ])
+
+    "code" ->
+      Ok([
+        svg.polyline([
+          attribute("points", "16 18 22 12 16 6"),
+        ]),
+        svg.polyline([
+          attribute("points", "8 6 2 12 8 18"),
+        ]),
+      ])
+
+    "edit" ->
+      Ok([
+        svg.path([
+          attribute("d", "M12 20h9"),
+        ]),
+        svg.path([
+          attribute("d", "M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"),
+        ]),
+      ])
+
+    "send" ->
+      Ok([
+        svg.line([
+          attribute("x1", "22"),
+          attribute("y1", "2"),
+          attribute("x2", "11"),
+          attribute("y2", "13"),
+        ]),
+        svg.polygon([
+          attribute("points", "22 2 15 22 11 13 2 9"),
+        ]),
+      ])
+
+    "image" ->
+      Ok([
+        svg.rect([
+          attribute("x", "3"),
+          attribute("y", "3"),
+          attribute("width", "18"),
+          attribute("height", "18"),
+          attribute("rx", "2"),
+        ]),
+        svg.circle([
+          attribute("cx", "8.5"),
+          attribute("cy", "8.5"),
+          attribute("r", "1.5"),
+        ]),
+        svg.polyline([
+          attribute("points", "21 15 16 10 5 21"),
+        ]),
+      ])
+
+    "save" ->
+      Ok([
+        svg.path([
+          attribute(
+            "d",
+            "M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z",
+          ),
+        ]),
+        svg.polyline([
+          attribute("points", "17 21 17 13 7 13 7 21"),
+        ]),
+        svg.polyline([
+          attribute("points", "7 3 7 8 15 8"),
+        ]),
       ])
 
     _ -> Error(Nil)

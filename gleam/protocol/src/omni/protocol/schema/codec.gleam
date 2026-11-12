@@ -1043,6 +1043,11 @@ fn decode_textarea(base: NodeBase) -> decode.Decoder(Node) {
     decode.optional(decode.string),
   )
   use rows <- decode.optional_field("rows", None, decode.optional(decode.int))
+  use change <- decode.optional_field(
+    "actionOnChange",
+    None,
+    decode.optional(action.decoder()),
+  )
 
   decode.success(Textarea(
     base: base,
@@ -1050,6 +1055,7 @@ fn decode_textarea(base: NodeBase) -> decode.Decoder(Node) {
     placeholder: ph,
     value: val,
     rows: rows,
+    action_on_change: change,
   ))
 }
 
@@ -1780,7 +1786,7 @@ pub fn node_to_json(n: Node) -> json.Json {
       json.object(add_base_fields(fields, base))
     }
 
-    Textarea(base, name, ph, val, rows) -> {
+    Textarea(base, name, ph, val, rows, on_change) -> {
       let fields = [
         #("type", json.string("textarea")),
         #("name", json.string(name)),
@@ -1795,6 +1801,10 @@ pub fn node_to_json(n: Node) -> json.Json {
       }
       let fields = case rows {
         Some(r) -> [#("rows", json.int(r)), ..fields]
+        None -> fields
+      }
+      let fields = case on_change {
+        Some(a) -> [#("actionOnChange", action.to_json(a)), ..fields]
         None -> fields
       }
       json.object(add_base_fields(fields, base))

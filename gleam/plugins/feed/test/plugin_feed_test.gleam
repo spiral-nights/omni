@@ -305,6 +305,10 @@ pub fn view_renders_all_modes_test() {
 
   let timeline_wire = schema.encode_schema_message(view.view(m1))
   should.be_true(string.contains(timeline_wire, "hello world"))
+  // The composer must report typing back to the plugin, otherwise publishing
+  // sends an empty draft.
+  should.be_true(string.contains(timeline_wire, "actionOnChange"))
+  should.be_true(string.contains(timeline_wire, "set-composer-draft"))
 
   let thread_wire =
     schema.encode_schema_message(view.view(

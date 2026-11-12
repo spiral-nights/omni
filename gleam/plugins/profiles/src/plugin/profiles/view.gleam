@@ -329,6 +329,7 @@ fn render_metadata_editor(model: Model) -> Node {
       placeholder: Some("Tell people about yourself"),
       value: Some(draft.about),
       rows: Some(4),
+      action_on_change: Some(action.new("set-metadata-about")),
     )
 
   let picture_input =

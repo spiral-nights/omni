@@ -218,6 +218,7 @@ fn render_editor(model: Model) -> Node {
       placeholder: Some("Write in Markdown or HTML..."),
       value: Some(model.draft_content),
       rows: Some(12),
+      action_on_change: Some(action.new("set-draft-content")),
     )
 
   let tag_row =

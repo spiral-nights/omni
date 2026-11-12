@@ -100,7 +100,7 @@ pub fn render_list_item(
         None -> []
       },
       case on_click_action {
-        Some(act) -> [event.on_click(act)]
+        Some(act) -> [event.stop_propagation(event.on_click(act))]
         None -> []
       },
     ])

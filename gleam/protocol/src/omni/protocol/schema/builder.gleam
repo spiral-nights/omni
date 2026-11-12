@@ -178,6 +178,7 @@ pub fn textarea(name: String) -> Node {
     placeholder: None,
     value: None,
     rows: Some(3),
+    action_on_change: None,
   )
 }
 
@@ -530,6 +531,14 @@ pub fn disabled(n: Node, is_disabled: Bool) -> Node {
 pub fn loading(n: Node, is_loading: Bool) -> Node {
   case n {
     Button(..) as btn -> Button(..btn, loading: Some(is_loading))
+    other -> other
+  }
+}
+
+/// Set the change action on a Textarea.
+pub fn action_on_change(n: Node, act: Action) -> Node {
+  case n {
+    Textarea(..) as ta -> Textarea(..ta, action_on_change: Some(act))
     other -> other
   }
 }

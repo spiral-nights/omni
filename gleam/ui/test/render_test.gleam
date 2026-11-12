@@ -360,6 +360,7 @@ pub fn render_buttons_and_inputs_test() {
       placeholder: Some("About you"),
       value: Some("Builder on Nostr"),
       rows: Some(4),
+      action_on_change: None,
     )
   let tas = render.render_to_string(ta)
   should.be_true(string.contains(tas, "<textarea class=\"omni-textarea\""))
@@ -419,7 +420,7 @@ pub fn render_buttons_and_inputs_test() {
     )
   let tbss = render.render_to_string(tbs)
   should.be_true(string.contains(tbss, "role=\"tablist\""))
-  should.be_true(string.contains(tbss, "class=\"omni-tab omni-tab-active\""))
+  should.be_true(string.contains(tbss, "class=\"omni-tab-btn active\""))
   should.be_true(string.contains(tbss, "data-tab-id=\"global\""))
   should.be_true(string.contains(tbss, "omni-tab-badge"))
 }
@@ -762,6 +763,7 @@ pub fn golden_form_controls_test() {
           placeholder: Some("Bio"),
           value: Some("Local-first enthusiast"),
           rows: Some(3),
+          action_on_change: None,
         ),
         Select(
           base: empty_base(),

@@ -31,6 +31,12 @@
   --omni-status-warning: #e5c07b;
   --omni-status-error: #e06c75;
   --omni-status-badge: #d4a373;
+
+  /* Semantic aliases used by schema primitives */
+  --omni-success: var(--omni-status-online);
+  --omni-warning: var(--omni-status-warning);
+  --omni-error: var(--omni-status-error);
+  --omni-border-default: var(--omni-border-subtle);
   --omni-reply-active: #61afef;
   --omni-repost-active: #98c379;
   --omni-heart-active: #e06c75;
@@ -168,4 +174,21 @@ link,
 .editorial-app-container style,
 .omni-slot style {
   display: none !important;
+}
+
+/* Keyboard focus affordance across every shell and schema primitive. */
+:where(button, a[href], [tabindex], .omni-button, .omni-tab-btn, .omni-input,
+  .omni-select, .omni-textarea, .omni-icon-button):focus-visible {
+  outline: 2px solid var(--omni-accent-primary, #d4a373);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
