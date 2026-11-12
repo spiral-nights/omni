@@ -13,6 +13,7 @@ import lustre/element/html
 import lustre/event
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
+import omni/ui/avatar as generated_avatar
 import omni/ui/icons
 import omni/ui/render/input
 import omni/ui/sanitize
@@ -169,11 +170,7 @@ pub fn render_list_item(
                     attribute.class("omni-list-item-icon omni-list-item-avatar"),
                     attribute.attribute("data-pubkey", pk),
                   ],
-                  [
-                    html.span([attribute.class("omni-avatar-fallback")], [
-                      element.text(fallback),
-                    ]),
-                  ],
+                  [generated_avatar.render(pk, fallback)],
                 ),
               ]
             }

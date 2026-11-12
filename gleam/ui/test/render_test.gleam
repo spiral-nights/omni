@@ -268,10 +268,8 @@ pub fn render_avatar_sanitization_and_fallback_test() {
   let s_unsafe = render.render_to_string(av_unsafe)
   should.be_false(string.contains(s_unsafe, "javascript:"))
   should.be_false(string.contains(s_unsafe, "<img"))
-  should.be_true(string.contains(
-    s_unsafe,
-    "<span class=\"omni-avatar-fallback\">B</span>",
-  ))
+  should.be_true(string.contains(s_unsafe, "data-avatar-seed"))
+  should.be_true(string.contains(s_unsafe, ">B</text>"))
 }
 
 pub fn render_code_block_test() {

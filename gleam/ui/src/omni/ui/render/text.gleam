@@ -21,6 +21,7 @@ import omni/protocol/schema/node.{
   MetricInt, MetricString, TonePrimary,
 }
 import omni/protocol/schema/style.{type SizeToken, SizeMd}
+import omni/ui/avatar as generated_avatar
 import omni/ui/icons
 import omni/ui/sanitize
 
@@ -260,11 +261,15 @@ pub fn render_avatar(
     ]
     None -> {
       let initials = derive_initials(name, pubkey)
-      [
-        html.span([attribute.class("omni-avatar-fallback")], [
-          element.text(initials),
-        ]),
-      ]
+      let seed_key = case pubkey {
+        Some(pk) -> pk
+        None ->
+          case name {
+            Some(n) -> n
+            None -> "?"
+          }
+      }
+      [generated_avatar.render(seed_key, initials)]
     }
   }
 
