@@ -28,7 +28,7 @@ Last updated: 2026-11-11.
 | REL-8 | S2 | fixed | No NIP-65: no kind-10002 fetch, no outbox routing, relay-list publish not wired from the Relays app. | fixed (own list) `285b663`: kind-10002 fetch applies relays/scopes; Relays app publishes its list. Outbox routing tracked as REL-8b. |
 | REL-8b | S2 | fixed | No outbox/gossip routing: a subscription still sends the same REQ to every read relay instead of routing by each author's 10002 relays. | fixed `64328f5`: coordinator caches per-author NIP-65 read relays (TTL + negative entries), refreshes missing hints via kind-10002 subscriptions, routes fully-hinted author filters to the union of hint relays, falls back to fan-out otherwise, and honors `FetchOptions.relays`. Targeted EOSE now counts only targeted relays. |
 | REL-9 | S2 | fixed | Feed pagination/search are local slices; no `until` or targeted queries. | fixed `c247838`: `LoadMore` asks the host for older events with `until=oldest`, which fetches, ingests, and re-renders. Network search split to REL-9b. |
-| REL-9b | S3 | open | Feed search is a local slice of already-loaded notes. | Issue a NIP-50 search REQ when the relay supports it, falling back to local. |
+| REL-9b | S3 | fixed | Feed search is a local slice of already-loaded notes. | fixed `9a6654f`: the search view has a "Search Relays" action that emits NIP-50 filters for the host to fetch and ingest, while local results still render. |
 | REL-10 | S3 | fixed | Host subscriptions bypass ACL by using a non-parsing `"builtin:feed"` sub id (`coordinator.gleam:66`). | fixed `a195f45`: internal host subscriptions use non-namespaced ids (`omni_internal_*`) so they no longer parse as a plugin ID and never trigger ACL prompts. |
 | REL-11 | S3 | fixed | `subscribers` is keyed only by `sub_id`; collisions overwrite handlers. | fixed `b229afe`: each registration gets a unique internal key, same-id subscribers coexist, and CLOSE is sent only when the last one unsubscribes. |
 | REL-12 | S3 | fixed | Cache events are emitted before the live subscription registers; events can slip through. | fixed `b229afe`: after relay registration a second cache sweep delivers events that landed during the handoff, deduped by event id. |
@@ -42,9 +42,9 @@ Last updated: 2026-11-11.
 | ID-2 | S2 | fixed | No import/export/backup UI, no passphrase-encrypted storage. | fixed `18fdcb6` (UI): Settings imports nsec/hex keys by switching identities and exports the active nsec; at-rest passphrase encryption split out as ID-2b. |
 | ID-2b | S2 | fixed | Private keys are stored in plain storage; no passphrase encryption. | fixed `14c8cd2`: Settings can encrypt the stored key with a passphrase (NIP-44 to a passphrase-derived key); reloads start locked, signing waits for unlock, and the passphrase can be removed. |
 | ID-3 | S2 | fixed | Zap requests not implemented (like/repost publish). | fixed `4999c60`: feed zap dialog builds and publishes kind-9734 requests with `p`/`e`/`relays`/`amount`/`lnurl` tags and optimistic stats. Invoice/payment and receipt tracking split to ID-3b. |
-| ID-3b | S2 | open | Zap requests are broadcast but no LNURL invoice is fetched, paid, or receipt-tracked. | Host effect to POST the signed request to the lud16 LNURL callback, return the invoice, and watch for kind-9735 receipts. |
+| ID-3b | S2 | fixed | Zap requests are broadcast but no LNURL invoice is fetched, paid, or receipt-tracked. | fixed `9a6654f`: the host signs/broadcasts the 9734 request, resolves the LNURL pay endpoint, fetches the invoice, feeds it back to the dialog, and opens `lightning:` on Pay; receipts still ingest via kind 9735. |
 | ID-4 | S3 | fixed | Multi-account support absent. | fixed `d9750db`: imported keys are registered per account, the Identity panel lists and switches them, and the active key/profile updates in place. Encrypted multi-account split to ID-4b. |
-| ID-4b | S3 | open | Passphrase encryption covers the active key only; account switching is blocked while locked. | Encrypt/decrypt per-account secrets with the same unlock session. |
+| ID-4b | S3 | fixed | Passphrase encryption covers the active key only; account switching is blocked while locked. | fixed `9a6654f`: every account is encrypted with the passphrase key, unlock caches the session key, and switching decrypts other accounts without re-prompting. |
 | ID-5 | S3 | deferred | NIP-17/59 DMs. | Gift-wrap pipeline + DMs plugin. |
 
 Publishing itself is wired (commit `7acb942`): feed notes/replies/likes/reposts and
@@ -82,7 +82,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | PL-12 | S2 | fixed | Pull-to-refresh has no touch listeners. | fixed `d2deef6`: touch listeners dispatch the refresh at the 72 px threshold, the host re-fetches public events, and `FinishPullRefresh` clears the indicator after the fetch settles. |
 | PL-13 | S2 | fixed | PWA offline shell/assets caching not implemented. | fixed: `apps/web/public/sw.js` precaches the shell, uses network-first with cache fallback, and serves an offline navigation fallback. |
 | PL-14 | S3 | fixed | Widget/compact routes not rendered for hosted apps. | fixed `ddb3802`: opening the widgets dashboard mounts each enabled companion placement with its own route into its viewport island. |
-| PL-15 | S3 | open | Mobile menu/gestures unverified. | Add mobile e2e checks. |
+| PL-15 | S3 | fixed | Mobile menu/gestures unverified. | fixed `9a6654f`: mobile viewport tests cover the menu toggle, visible navigation panel, and pull-to-refresh gesture state, and the classic theme now renders a real mobile menu panel. |
 
 ## E. Quality & verification
 
