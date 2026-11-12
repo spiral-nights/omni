@@ -1213,3 +1213,21 @@
 .omni-hosted-app .omni-schema-host {
   width: 100%;
 }
+
+/* Appearance mode toggle */
+.omni-theme-mode-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.omni-theme-mode-row {
+  display: flex;
+  gap: 10px;
+}
+
+.omni-theme-mode-btn.active {
+  outline: 2px solid var(--omni-accent-primary);
+  outline-offset: 1px;
+}

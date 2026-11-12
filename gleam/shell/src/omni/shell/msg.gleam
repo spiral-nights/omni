@@ -50,6 +50,7 @@ pub type Msg {
   // Shell & theme
   SelectShell(shell_id: String)
   SetAccentColor(String)
+  SetThemeMode(String)
 
   // Profile & sync
   SetUserProfile(UserProfileSummary)

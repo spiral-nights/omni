@@ -46,6 +46,7 @@ pub fn view(model: Model) -> Element(Msg) {
       attribute.class("omni-shell omni-shell-classic"),
       attribute.id("omni-shell-root"),
       attribute.attribute("data-shell", "classic"),
+      attribute.attribute("data-theme-mode", model.theme_mode),
       attribute.attribute("data-mobile-menu", case model.mobile_menu_open {
         True -> "open"
         False -> "closed"

@@ -25,6 +25,7 @@ pub fn icon_names() -> List(String) {
     "help-circle",
     "cloud",
     "sun",
+    "moon",
     "weather",
     "refresh",
     "upload",
@@ -314,6 +315,13 @@ fn lookup_icon_children(name: String) -> Result(List(Element(msg)), Nil) {
       Ok([
         svg.path([
           attribute("d", "M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"),
+        ]),
+      ])
+
+    "moon" ->
+      Ok([
+        svg.path([
+          attribute("d", "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"),
         ]),
       ])
 

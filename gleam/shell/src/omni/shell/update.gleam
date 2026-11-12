@@ -21,10 +21,11 @@ import omni/shell/msg.{
   FinishPullRefresh, HostedSchemaAction, InstallApp, NavigateTo, OpenApp,
   OpenSettings, RemoveAppPlacement, ResolvePermission, SelectIntentHandler,
   SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
-  SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetUserProfile,
-  ShowIntentPrompt, ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh,
-  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
-  ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp,
+  SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetThemeMode,
+  SetUserProfile, ShowIntentPrompt, ShowPermissionPrompt, ShowUpdateModal,
+  StartPullRefresh, ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned,
+  ToggleAutoSync, ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync,
+  UninstallApp,
 }
 
 /// Side-effect commands emitted by the pure shell `update` function.
@@ -39,6 +40,7 @@ pub type ShellEffect {
   PublishWorkspaceNip78(WorkspaceState)
   SwitchActiveShell(shell_id: String)
   PersistAccentColor(String)
+  PersistThemeMode(String)
   DispatchIntentToPlugin(
     plugin_id: String,
     intent_name: String,
@@ -430,6 +432,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     SetAccentColor(color) -> {
       let next_model = Model(..model, accent_color: color)
       #(next_model, [PersistAccentColor(color)])
+    }
+
+    SetThemeMode(mode) -> {
+      let normalized = case string.lowercase(string.trim(mode)) {
+        "light" -> "light"
+        _ -> "dark"
+      }
+      #(Model(..model, theme_mode: normalized), [PersistThemeMode(normalized)])
     }
 
     SetUserProfile(profile) -> {

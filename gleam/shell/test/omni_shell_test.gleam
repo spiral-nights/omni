@@ -23,10 +23,10 @@ import omni/shell/msg.{
   DismissIntentPrompt, DismissUpdateModal, FinishPullRefresh, InstallApp,
   NavigateTo, OpenApp, OpenSettings, RemoveAppPlacement, SelectIntentHandler,
   SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
-  SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetUserProfile,
-  ShowIntentPrompt, ShowUpdateModal, StartPullRefresh, ToggleAppEnabled,
-  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
-  ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp,
+  SetCustomInstallUrl, SetSearchQuery, SetSyncStatus, SetThemeMode,
+  SetUserProfile, ShowIntentPrompt, ShowUpdateModal, StartPullRefresh,
+  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
+  ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp,
 }
 import omni/shell/shell
 import omni/shell/update.{
@@ -704,4 +704,14 @@ pub fn apply_remote_workspace_merges_newer_updated_at_test() {
       }
     }),
   )
+}
+
+pub fn theme_mode_switch_persists_and_normalizes_test() {
+  let m = model.init("classic", [])
+  let #(light, effects) = update.update(m, SetThemeMode("light"))
+  light.theme_mode |> should.equal("light")
+  effects |> should.equal([update.PersistThemeMode("light")])
+
+  let #(fallback, _) = update.update(light, SetThemeMode("sepia"))
+  fallback.theme_mode |> should.equal("dark")
 }

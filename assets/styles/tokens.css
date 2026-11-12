@@ -96,6 +96,33 @@
   --radius-pill: var(--omni-radius-pill);
 }
 
+
+/* Warm Paper Light appearance mode. */
+[data-theme-mode="light"] {
+  --omni-bg-canvas: #f3efe6;
+  --omni-bg-surface: #faf7f0;
+  --omni-bg-elevated: #ffffff;
+  --omni-bg-card: #ffffff;
+  --omni-bg-subtle: #ece6da;
+
+  --omni-text-primary: #24221e;
+  --omni-text-secondary: #5f5a52;
+  --omni-text-muted: #8a847a;
+
+  --omni-border-subtle: #e2dccf;
+  --omni-border-strong: #cfc7b8;
+  --omni-border-active: #bdb4a4;
+  --omni-border-focus: #b08050;
+
+  --omni-accent-primary: #a9743f;
+  --omni-accent-hover: #8f5f31;
+  --omni-accent-contrast: #fffaf2;
+
+  --omni-shadow-sm: 0 1px 3px rgba(60, 50, 35, 0.12);
+  --omni-shadow-md: 0 4px 16px rgba(60, 50, 35, 0.16);
+  --omni-shadow-lg: 0 12px 36px rgba(60, 50, 35, 0.22);
+}
+
 /* Base Microkernel Reset */
 *,
 *::before,

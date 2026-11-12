@@ -9,7 +9,7 @@ import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
 import omni/shell/model.{type Model}
-import omni/shell/msg.{type Msg, SelectShell, SetAccentColor}
+import omni/shell/msg.{type Msg, SelectShell, SetAccentColor, SetThemeMode}
 import omni/ui/icons
 
 /// Metadata describing an installed or built-in user-swappable shell.
@@ -169,6 +169,15 @@ pub fn render_shells_panel(
         ],
         shell_cards,
       ),
+      html.div([attribute.class("omni-theme-mode-section")], [
+        html.h4([attribute.class("omni-settings-subsection-title")], [
+          element.text("Appearance Mode"),
+        ]),
+        html.div([attribute.class("omni-theme-mode-row")], [
+          theme_mode_button(model.theme_mode, "dark", "Dark", "moon"),
+          theme_mode_button(model.theme_mode, "light", "Light", "sun"),
+        ]),
+      ]),
       html.div([attribute.class("omni-accent-color-section")], [
         html.h4([attribute.class("omni-settings-subsection-title")], [
           element.text("Accent Color Palette"),
@@ -187,6 +196,30 @@ pub fn render_shells_panel(
           ]),
         ]),
       ]),
+    ],
+  )
+}
+
+fn theme_mode_button(
+  active: String,
+  mode: String,
+  label: String,
+  icon: String,
+) -> Element(Msg) {
+  let is_active = active == mode
+  html.button(
+    [
+      attribute.type_("button"),
+      attribute.class(case is_active {
+        True -> "omni-button omni-button-primary omni-theme-mode-btn active"
+        False -> "omni-button omni-button-secondary omni-theme-mode-btn"
+      }),
+      attribute.attribute("data-theme-mode-option", mode),
+      event.on_click(SetThemeMode(mode)),
+    ],
+    [
+      icons.render_icon(icon, 15),
+      html.span([], [element.text(label)]),
     ],
   )
 }

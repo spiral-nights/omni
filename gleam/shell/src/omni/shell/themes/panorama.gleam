@@ -51,6 +51,7 @@ pub fn view(model: Model) -> Element(Msg) {
       attribute.class("omni-shell panorama-shell-root"),
       attribute.id("panorama-shell-root"),
       attribute.attribute("data-shell", "panorama"),
+      attribute.attribute("data-theme-mode", model.theme_mode),
       attribute.style("--omni-accent-primary", model.accent_color),
     ],
     [

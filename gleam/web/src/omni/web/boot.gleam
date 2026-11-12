@@ -71,6 +71,9 @@ import omni/web/permission_prompt.{type PermissionPrompts}
 /// Storage key holding the user's chosen accent color.
 pub const accent_color_storage_key = "omni_accent_color"
 
+/// Storage key holding the selected light/dark appearance mode.
+pub const theme_mode_storage_key = "omni_theme_mode"
+
 /// Fully initialized host boot state: kernel, shell registry, shell model,
 /// active sandboxes, and the guest bridge script injected into every sandbox.
 pub type Booted {
@@ -345,6 +348,11 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
             storage.set(booted.kernel.storage, accent_color_storage_key, color)
           #(reg, Nil)
         }
+        update.PersistThemeMode(mode) -> {
+          let _ =
+            storage.set(booted.kernel.storage, theme_mode_storage_key, mode)
+          #(reg, Nil)
+        }
         update.DispatchIntentToPlugin(plugin_id, intent_name, payload_json) -> {
           case action.decode_json(payload_json) {
             Ok(act) -> {
@@ -428,6 +436,7 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
         update.SwitchActiveShell(_)
         | update.PersistWorkspaceLocal(_)
         | update.PersistAccentColor(_)
+        | update.PersistThemeMode(_)
         | update.DispatchHostedAction(_, _)
         | update.DispatchIntentToPlugin(_, _, _)
         | update.PermissionDecision(_, _) -> False
