@@ -136,44 +136,12 @@ fn render_feed_tabs(active_tab: FeedTab) -> Node {
 
   let tabs_primitive = schema.tabs(items, active_id, action.new("select-tab"))
 
-  let tab_buttons =
-    schema.box()
-    |> schema.row
-    |> schema.gap("xs")
-    |> schema.children([
-      tab_button("Following", "following", active_tab == TabFollowing),
-      tab_button("Global", "global", active_tab == TabGlobal),
-      tab_button("Replies", "replies", active_tab == TabReplies),
-    ])
-
   schema.box()
   |> schema.row
   |> schema.justify(JustifyBetween)
   |> schema.align(AlignCenter)
   |> schema.with_style(StyleRaw("margin-bottom: 10px;"))
-  |> schema.children([tab_buttons, tabs_primitive])
-}
-
-fn tab_button(label: String, tab_id: String, is_active: Bool) -> Node {
-  let variant = case is_active {
-    True -> ButtonPrimary
-    False -> ButtonGhost
-  }
-  let act =
-    action.new("select-tab")
-    |> action.with_payload(dict.from_list([#("tab", dynamic.string(tab_id))]))
-
-  Button(
-    base: node.empty_base(),
-    label: label,
-    action: act,
-    variant: Some(variant),
-    size: Some(SizeSm),
-    icon: None,
-    icon_position: None,
-    disabled: None,
-    loading: None,
-  )
+  |> schema.children([tabs_primitive])
 }
 
 fn tab_to_id(tab: FeedTab) -> String {
