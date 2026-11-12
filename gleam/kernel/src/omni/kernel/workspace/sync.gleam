@@ -23,7 +23,7 @@ pub fn default_state() -> WorkspaceState {
     updated_at: 0,
     active_page: None,
     auto_sync: Some(True),
-    shell_type: Some("classic"),
+    shell_type: Some("editorial"),
     default_intents: dict.new(),
     plugins: [],
   )

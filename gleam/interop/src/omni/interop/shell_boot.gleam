@@ -1051,7 +1051,7 @@ fn push_views(host: ShellBoot) -> Nil {
 @external(javascript, "./shell_boot.ffi.mjs", "dispatch_shell_msg")
 fn dispatch_shell_msg(message: msg.Msg) -> Nil
 
-/// The active shell theme ID (`"classic"`, `"panorama"`, `"editorial"`).
+/// The active shell theme ID (`"panorama"`, `"editorial"`).
 pub fn active_shell_id(host: ShellBoot) -> String {
   host.booted.registry.active_id
 }

@@ -7,15 +7,6 @@
    ========================================================================== */
 
 /* --- Shell root skeleton --- */
-.omni-shell.omni-shell-classic {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100%;
-  overflow: hidden;
-  background: var(--omni-bg-canvas, #141312);
-}
-
 .omni-shell-overlays {
   pointer-events: none;
 }
@@ -31,22 +22,6 @@
   padding: 2px 6px;
   border-radius: var(--omni-radius-pill, 9999px);
   white-space: nowrap;
-}
-
-.omni-mobile-menu-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--omni-text-secondary, #9e988f);
-  padding: 4px;
-  border-radius: var(--omni-radius-sm, 6px);
-  cursor: pointer;
-}
-
-.omni-mobile-menu-btn:hover {
-  color: var(--omni-text-primary, #ede8df);
 }
 
 /* --- Header quick actions toolbar --- */
@@ -188,10 +163,6 @@
     z-index: 40;
     overflow-y: auto;
     overflow-x: hidden;
-  }
-
-  .omni-mobile-menu-btn {
-    display: none;
   }
 
   .brand-tag {
@@ -1262,27 +1233,3 @@
   color: var(--omni-text-secondary);
 }
 
-/* Mobile navigation panel */
-.omni-mobile-menu-panel {
-  position: fixed;
-  inset: 56px 0 auto 0;
-  z-index: 60;
-  display: none;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  background: var(--omni-bg-surface);
-  border-bottom: 1px solid var(--omni-border-strong);
-  box-shadow: var(--omni-shadow-lg);
-}
-
-@media (max-width: 760px) {
-  .omni-mobile-menu-panel {
-    display: flex;
-  }
-
-  .omni-mobile-menu-item {
-    width: 100%;
-    justify-content: flex-start;
-  }
-}

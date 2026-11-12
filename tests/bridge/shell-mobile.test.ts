@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 //
-// Mobile shell coverage (backlog PL-15): verifies the Classic shell's mobile
-// navigation toggle and the pull-to-refresh touch gesture. happy-dom has no
-// layout engine, so visual overflow is covered as a stylesheet contract rather
-// than by measuring scrollWidth.
+// Mobile shell coverage: verifies the Editorial shell mounts at phone width,
+// keeps its navigation dock reachable, avoids fixed pixel overflow, and that
+// the pull-to-refresh gesture works. happy-dom has no layout engine, so visual
+// overflow is covered as a stylesheet contract rather than by measuring
+// scrollWidth.
 import "fake-indexeddb/auto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -53,7 +54,7 @@ function touchEvent(type: string, clientY: number): Event {
 }
 
 function shellRoot(): HTMLElement {
-  const root = document.getElementById("omni-shell-root");
+  const root = document.querySelector("#omni-root [data-shell]");
   if (!root) throw new Error("shell root not mounted");
   return root as HTMLElement;
 }
@@ -62,7 +63,7 @@ function pullIndicator(): HTMLElement | null {
   return document.querySelector("#omni-pull-to-refresh");
 }
 
-describe("mobile shell: viewport, menu toggle, and dock", () => {
+describe("mobile shell: viewport, dock, and stylesheet contracts", () => {
   beforeAll(async () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
@@ -83,70 +84,30 @@ describe("mobile shell: viewport, menu toggle, and dock", () => {
       Option$None$const,
     );
 
-    // Classic is the theme that exposes the mobile menu toggle and dock.
     const booted = boot.select_shell(
       boot.init_with_bridge(ports, Option$None$const),
-      "classic",
+      "editorial",
     );
     shellBoot.mount_shell("#omni-root", new shellBoot.ShellBoot(booted));
     await nextFrame();
   });
 
-  it("renders the mobile toggle in the closed state", () => {
+  it("mounts the Editorial shell at phone width", () => {
     expect(window.innerWidth).toBe(MOBILE_VIEWPORT_PX);
     const root = shellRoot();
-    expect(root.getAttribute("data-shell")).toBe("classic");
-    expect(root.getAttribute("data-mobile-menu")).toBe("closed");
-
-    const toggle = document.querySelector(
-      "#btn-shell-mobile-menu",
-    ) as HTMLButtonElement | null;
-    expect(toggle).not.toBeNull();
-    expect(toggle!.tagName).toBe("BUTTON");
-    expect(toggle!.getAttribute("aria-expanded")).toBe("false");
-    expect(toggle!.getAttribute("aria-label")).toBe("Toggle Navigation Menu");
+    expect(root.getAttribute("data-shell")).toBe("editorial");
+    expect(document.getElementById("editorial-shell-root")).not.toBeNull();
   });
 
-  it("opens and closes the mobile menu through the live update loop", async () => {
-    const root = shellRoot();
-    const toggle = document.querySelector(
-      "#btn-shell-mobile-menu",
-    ) as HTMLButtonElement;
-
-    toggle.dispatchEvent(
-      new MouseEvent("click", { bubbles: true, cancelable: true }),
-    );
-    await nextFrame();
-
-    expect(root.getAttribute("data-mobile-menu")).toBe("open");
-    expect(
-      document
-        .querySelector("#btn-shell-mobile-menu")!
-        .getAttribute("aria-expanded"),
-    ).toBe("true");
-
-    // A second click (re-queried: Lustre replaces the node on re-render).
-    (document.querySelector("#btn-shell-mobile-menu") as HTMLButtonElement)
-      .dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true }),
-      );
-    await nextFrame();
-
-    expect(root.getAttribute("data-mobile-menu")).toBe("closed");
-    expect(
-      document
-        .querySelector("#btn-shell-mobile-menu")!
-        .getAttribute("aria-expanded"),
-    ).toBe("false");
-  });
-
-  it("keeps the bottom navigation dock available on mobile", () => {
-    const dock = document.querySelector("nav.omni-dock") as HTMLElement | null;
+  it("keeps the navigation dock reachable on mobile", () => {
+    const dock = document.querySelector("nav.editorial-dock") as
+      | HTMLElement
+      | null;
     expect(dock).not.toBeNull();
     expect(dock!.getAttribute("aria-label")).toBe("Primary Navigation");
-    expect(document.querySelector("#nav-widgets")).not.toBeNull();
-    expect(document.querySelector("#nav-apps")).not.toBeNull();
-    expect(document.querySelector("#nav-settings")).not.toBeNull();
+    expect(document.querySelector("#btn-editorial-dock-apps")).not.toBeNull();
+    expect(document.querySelector("#btn-editorial-dock-widgets")).not.toBeNull();
+    expect(document.querySelector("#btn-editorial-dock-prefs")).not.toBeNull();
   });
 
   it("does not rely on inline widths that would overflow a 390px viewport", () => {
@@ -165,29 +126,21 @@ describe("mobile shell: viewport, menu toggle, and dock", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("uses mobile-first dock/header rules in the shared stylesheet", () => {
+  it("uses viewport-safe rules for the dock and main viewport", () => {
     const css = readFileSync(
+      join(process.cwd(), "assets/styles/editorial.css"),
+      "utf8",
+    );
+    expect(css).toMatch(
+      /\.editorial-dock\s*\{[^}]*position:\s*fixed;[^}]*left:\s*0;[^}]*right:\s*0;/s,
+    );
+    expect(css).not.toMatch(/\.omni-shell\.omni-shell-classic/);
+
+    const modules = readFileSync(
       join(process.cwd(), "assets/styles/shell-modules.css"),
       "utf8",
     );
-
-    // Dock is a bottom bar on mobile, left rail only from 768px up.
-    expect(css).toMatch(
-      /\.omni-dock\s*\{[^}]*position:\s*fixed;[^}]*left:\s*0;[^}]*right:\s*0;/s,
-    );
-    expect(css).toMatch(
-      /@media\s*\(min-width:\s*768px\)\s*\{[^@]*\.omni-dock\s*\{[^}]*width:\s*64px;/s,
-    );
-    // Toggle is visible by default and hidden on desktop.
-    expect(css).toMatch(/\.omni-mobile-menu-btn\s*\{/);
-    expect(css).toMatch(
-      /@media\s*\(min-width:\s*768px\)\s*\{[^@]*\.omni-mobile-menu-btn\s*\{[^}]*display:\s*none;/s,
-    );
-    // The shell root pins itself to the viewport instead of growing sideways.
-    expect(css).toMatch(
-      /\.omni-shell\.omni-shell-classic\s*\{[^}]*width:\s*100%;[^}]*overflow:\s*hidden;/s,
-    );
-    expect(css).toMatch(
+    expect(modules).toMatch(
       /\.omni-main-viewport\s*\{[^}]*overflow-x:\s*hidden;/s,
     );
   });

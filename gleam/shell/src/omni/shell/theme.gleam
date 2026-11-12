@@ -1,6 +1,6 @@
 //// Strategy type for user-swappable Omni Shell themes.
 ////
-//// All shell themes (`classic`, `panorama`, `editorial`, and custom installed shells)
+//// All shell themes (`panorama`, `editorial`, and custom installed shells)
 //// share a single pure Elm `Model`/`Msg`/`update` loop and differ only by their
 //// `Theme` descriptor and view rendering function.
 

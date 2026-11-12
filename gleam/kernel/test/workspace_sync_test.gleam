@@ -83,7 +83,7 @@ pub fn workspace_merge_favors_newer_timestamp_test() {
       updated_at: 100,
       active_page: Some("page_local"),
       auto_sync: Some(False),
-      shell_type: Some("classic"),
+      shell_type: Some("editorial"),
       default_intents: dict.from_list([#("intentA", "pluginA")]),
       plugins: [],
     )
@@ -128,7 +128,7 @@ pub fn workspace_merge_merges_placements_and_plugins_test() {
       updated_at: 100,
       active_page: Some("feed"),
       auto_sync: Some(True),
-      shell_type: Some("classic"),
+      shell_type: Some("editorial"),
       default_intents: dict.new(),
       plugins: [p_feed_local, p_notes_local],
     )

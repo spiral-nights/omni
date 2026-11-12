@@ -148,16 +148,16 @@ pub fn boot_select_shell_persists_and_rerenders_test() {
   let assert Ok(ports) = ports_res
 
   let booted =
-    boot.select_shell(boot.init_with_relays(ports, [], None), "classic")
+    boot.select_shell(boot.init_with_relays(ports, [], None), "panorama")
 
-  booted.model.active_shell_id |> should.equal("classic")
-  booted.registry.active_id |> should.equal("classic")
+  booted.model.active_shell_id |> should.equal("panorama")
+  booted.registry.active_id |> should.equal("panorama")
   storage.get(store, registry.active_shell_storage_key)
-  |> should.equal(Some("classic"))
+  |> should.equal(Some("panorama"))
 
   let html_str = boot.view(booted) |> element.to_string
-  should.be_true(string.contains(html_str, "assets/styles/classic.css"))
-  should.be_true(string.contains(html_str, "omni-shell omni-shell-classic"))
+  should.be_true(string.contains(html_str, "assets/styles/panorama.css"))
+  should.be_true(string.contains(html_str, "omni-shell panorama-shell-root"))
 
   promise.resolve(Nil)
 }

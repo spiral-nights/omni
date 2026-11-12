@@ -391,7 +391,7 @@ pub fn render_buttons_and_inputs_test() {
       name: "shell",
       value: Some("panorama"),
       options: [
-        SelectOption(label: "Classic", value: "classic"),
+        SelectOption(label: "Editorial", value: "editorial"),
         SelectOption(label: "Panorama", value: "panorama"),
       ],
       action: Some(action.new("select-shell")),
@@ -768,9 +768,9 @@ pub fn golden_form_controls_test() {
         Select(
           base: empty_base(),
           name: "theme_shell",
-          value: Some("classic"),
+          value: Some("editorial"),
           options: [
-            SelectOption(label: "Omni Classic", value: "classic"),
+            SelectOption(label: "Omni Editorial", value: "editorial"),
             SelectOption(label: "Panorama Hub", value: "panorama"),
             SelectOption(label: "Editorial Shell", value: "editorial"),
           ],

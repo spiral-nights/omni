@@ -10,7 +10,6 @@ import gleam/option.{type Option, None, Some}
 import gleam/string
 import omni/platform/storage.{type Storage, type StorageError}
 import omni/shell/theme.{type Theme}
-import omni/shell/themes/classic
 import omni/shell/themes/editorial
 import omni/shell/themes/panorama
 
@@ -32,7 +31,7 @@ pub fn new() -> ShellRegistry {
 
 /// The built-in first-party shell themes bundled with Omni.
 pub fn builtin_themes() -> List(Theme) {
-  [editorial.theme(), panorama.theme(), classic.theme()]
+  [editorial.theme(), panorama.theme()]
 }
 
 /// Initialize a registry pre-populated with the built-in shell themes.

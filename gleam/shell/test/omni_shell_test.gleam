@@ -28,11 +28,11 @@ import omni/shell/msg.{
   SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
   SetUserProfile, ShowIntentPrompt, ShowUpdateModal, StartPullRefresh,
   SwitchAccount, ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned,
-  ToggleAutoSync, ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync,
-  UninstallApp, UnlockKey,
+  ToggleAutoSync, ToggleFullscreen, TriggerWorkspaceSync, UninstallApp,
+  UnlockKey,
 }
 import omni/shell/shell
-import omni/shell/themes/classic as classic_theme
+import omni/shell/themes/editorial as editorial_theme
 import omni/shell/update.{
   DispatchIntentToPlugin, MountPluginInSlot, PersistAccentColor,
   PersistWorkspaceLocal, RefreshActiveView, SwitchActiveShell,
@@ -89,7 +89,7 @@ pub fn model_init_chooses_first_enabled_app_without_hardcoded_ids_test() {
 
 pub fn model_init_falls_back_to_widgets_dashboard_when_no_enabled_apps_test() {
   let app1 = sample_app("example.app.alpha", "Alpha", False, False, [])
-  let m = model.init("classic", [app1])
+  let m = model.init("editorial", [app1])
 
   m.active_page
   |> should.equal(WidgetsDashboard)
@@ -200,7 +200,7 @@ pub fn model_workspace_state_roundtrip_test() {
 pub fn update_navigation_and_open_app_test() {
   let app1 = sample_app("example.app.alpha", "Alpha", True, True, [])
   let app2 = sample_app("example.app.beta", "Beta", True, False, [])
-  let m0 = Model(..model.init("classic", [app1, app2]), mobile_menu_open: True)
+  let m0 = model.init("editorial", [app1, app2])
 
   let #(m1, eff1) =
     update.update(m0, OpenApp("example.app.beta", Some("?view=compact")))
@@ -209,7 +209,6 @@ pub fn update_navigation_and_open_app_test() {
     plugin_id: "example.app.beta",
     route: Some("?view=compact"),
   ))
-  m1.mobile_menu_open |> should.be_false()
   should.be_true(list.contains(
     eff1,
     MountPluginInSlot("example.app.beta", Main, Some("?view=compact")),
@@ -224,10 +223,6 @@ pub fn update_navigation_and_open_app_test() {
   let #(m4, eff4) = update.update(m3, ToggleFullscreen)
   m4.fullscreen |> should.be_true()
   eff4 |> should.equal([])
-
-  let #(m5, eff5) = update.update(m4, ToggleMobileMenu)
-  m5.mobile_menu_open |> should.be_true()
-  eff5 |> should.equal([])
 }
 
 pub fn update_toggle_app_enabled_and_placements_test() {
@@ -235,7 +230,7 @@ pub fn update_toggle_app_enabled_and_placements_test() {
     PlacementConfig(viewport: Sidebar, view_id: "widget", route: None)
   let app1 = sample_app("example.app.alpha", "Alpha", True, True, [p_side])
   let app2 = sample_app("example.app.beta", "Beta", True, False, [])
-  let m0 = model.init("classic", [app1, app2])
+  let m0 = model.init("editorial", [app1, app2])
 
   // Disabling currently active app falls back to next enabled app and unmounts slots
   let #(m1, eff1) = update.update(m0, ToggleAppEnabled("example.app.alpha"))
@@ -310,7 +305,7 @@ pub fn update_install_and_uninstall_app_test() {
   let app1 = sample_app("example.app.alpha", "Alpha", True, True, [])
   let m0 =
     Model(
-      ..model.init("classic", [app1]),
+      ..model.init("editorial", [app1]),
       custom_install_url: "https://example.com/gamma",
     )
 
@@ -332,7 +327,7 @@ pub fn update_install_and_uninstall_app_test() {
 
 pub fn update_intents_relays_theme_sync_and_modals_test() {
   let app1 = sample_app("example.app.alpha", "Alpha", True, True, [])
-  let m0 = model.init("classic", [app1])
+  let m0 = model.init("editorial", [app1])
 
   // Toggle intent disabled
   let #(m1, _) =
@@ -499,7 +494,7 @@ pub fn viewport_host_renders_stable_island_anchor_test() {
 
 pub fn dock_renders_standard_dock_item_hierarchy_test() {
   let app1 = sample_app("example.app.alpha", "Alpha", True, True, [])
-  let m = model.init("classic", [app1])
+  let m = model.init("editorial", [app1])
   let dock_html = dock.render_dock(m) |> element.to_string
 
   should.be_true(string.contains(dock_html, "<nav"))
@@ -530,7 +525,7 @@ pub fn header_actions_renders_sync_fullscreen_and_profile_test() {
     )
   let m =
     Model(
-      ..model.init("classic", [app1]),
+      ..model.init("editorial", [app1]),
       user_profile: Some(prof),
       sync_status: Synced(1000),
     )
@@ -556,7 +551,7 @@ pub fn header_actions_renders_sync_fullscreen_and_profile_test() {
 
 pub fn widgets_grid_renders_cards_and_empty_state_test() {
   let app_no_widgets = sample_app("example.app.alpha", "Alpha", True, True, [])
-  let m_empty = model.init("classic", [app_no_widgets])
+  let m_empty = model.init("editorial", [app_no_widgets])
   let empty_html =
     widgets_grid.render_widgets_grid(m_empty) |> element.to_string
   should.be_true(string.contains(empty_html, "No Workspace Widgets Assigned"))
@@ -570,7 +565,7 @@ pub fn widgets_grid_renders_cards_and_empty_state_test() {
     )
   let app_with_widget =
     sample_app("example.app.beta", "Beta Widget", True, False, [p_side])
-  let m_with = model.init("classic", [app_with_widget])
+  let m_with = model.init("editorial", [app_with_widget])
   let grid_html = widgets_grid.render_widgets_grid(m_with) |> element.to_string
   should.be_true(string.contains(grid_html, "class=\"omni-widget-card\""))
   should.be_true(string.contains(grid_html, "Beta Widget"))
@@ -582,7 +577,7 @@ pub fn widgets_grid_renders_cards_and_empty_state_test() {
 
 pub fn main_view_switches_cleanly_across_pages_test() {
   let app1 = sample_app("example.app.alpha", "Alpha", True, True, [])
-  let m0 = model.init("classic", [app1])
+  let m0 = model.init("editorial", [app1])
 
   let dummy_settings = fn(_m, _tab) {
     html.div([attribute.id("mock-settings")], [element.text("Settings Content")])
@@ -625,7 +620,7 @@ pub fn main_view_switches_cleanly_across_pages_test() {
 }
 
 pub fn installing_custom_url_emits_install_effect_test() {
-  let m = model.init("classic", [])
+  let m = model.init("editorial", [])
   let custom =
     model.InstalledApp(
       id: "nsite.custom.example",
@@ -674,7 +669,7 @@ pub fn reinstalling_resolved_custom_app_does_not_refetch_test() {
       source_url: "https://example.com/app.html",
       version: Some("1.0.0"),
     )
-  let m = model.init("classic", [custom])
+  let m = model.init("editorial", [custom])
   let resolved =
     model.InstalledApp(..custom, name: "Custom Renamed", version: Some("2.0.0"))
   let #(_, effects) = update.update(m, InstallApp(resolved))
@@ -689,7 +684,7 @@ pub fn reinstalling_resolved_custom_app_does_not_refetch_test() {
 }
 
 pub fn apply_remote_workspace_merges_newer_updated_at_test() {
-  let m0 = model.init("classic", [])
+  let m0 = model.init("editorial", [])
   let local = model.to_workspace_state(m0, 2000)
   let remote =
     workspace.WorkspaceState(
@@ -699,7 +694,7 @@ pub fn apply_remote_workspace_merges_newer_updated_at_test() {
     )
   let #(next, effects) = update.update(m0, ApplyRemoteWorkspace(remote))
   // Local state is newer, so its shell choice wins; the payload is persisted.
-  next.active_shell_id |> should.equal("classic")
+  next.active_shell_id |> should.equal("editorial")
   should.be_true(
     list.any(effects, fn(effect) {
       case effect {
@@ -711,7 +706,7 @@ pub fn apply_remote_workspace_merges_newer_updated_at_test() {
 }
 
 pub fn theme_mode_switch_persists_and_normalizes_test() {
-  let m = model.init("classic", [])
+  let m = model.init("editorial", [])
   let #(light, effects) = update.update(m, SetThemeMode("light"))
   light.theme_mode |> should.equal("light")
   effects |> should.equal([update.PersistThemeMode("light")])
@@ -721,7 +716,7 @@ pub fn theme_mode_switch_persists_and_normalizes_test() {
 }
 
 pub fn in_app_back_navigation_pops_history_test() {
-  let m = model.init("classic", [])
+  let m = model.init("editorial", [])
   let #(apps, _) = update.update(m, NavigateTo(model.AppStore))
   let #(widgets, _) = update.update(apps, NavigateTo(model.WidgetsDashboard))
   list.length(widgets.back_stack) |> should.equal(2)
@@ -740,17 +735,17 @@ pub fn in_app_back_navigation_pops_history_test() {
 }
 
 pub fn theme_renders_back_button_only_with_history_test() {
-  let m = model.init("classic", [])
-  let html0 = classic_theme.view(m) |> element.to_string
+  let m = model.init("editorial", [])
+  let html0 = editorial_theme.view(m) |> element.to_string
   string.contains(html0, "btn-shell-back") |> should.be_false()
 
   let #(next, _) = update.update(m, NavigateTo(model.AppStore))
-  let html1 = classic_theme.view(next) |> element.to_string
+  let html1 = editorial_theme.view(next) |> element.to_string
   string.contains(html1, "btn-shell-back") |> should.be_true()
 }
 
 pub fn key_import_and_export_emit_effects_test() {
-  let m = model.init("classic", [])
+  let m = model.init("editorial", [])
   let #(typed, _) = update.update(m, SetKeyInput("nsec1example"))
   let #(_, import_effects) = update.update(typed, ImportKey)
   import_effects |> should.equal([update.ImportKeyEffect("nsec1example")])
@@ -763,7 +758,7 @@ pub fn key_import_and_export_emit_effects_test() {
 }
 
 pub fn plugin_settings_tab_mounts_plugin_view_test() {
-  let m = model.init("classic", [])
+  let m = model.init("editorial", [])
   let #(_, effects) =
     update.update(m, OpenSettings(model.TabPluginSettings("example.app.alpha")))
   should.be_true(
@@ -801,7 +796,7 @@ pub fn widgets_dashboard_mounts_companion_placements_test() {
       source_url: "https://example.com/app.html",
       version: Some("1.0.0"),
     )
-  let m = model.init("classic", [alpha])
+  let m = model.init("editorial", [alpha])
   let #(_, effects) = update.update(m, NavigateTo(model.WidgetsDashboard))
   should.be_true(
     list.any(effects, fn(effect) {
@@ -818,7 +813,7 @@ pub fn widgets_dashboard_mounts_companion_placements_test() {
 }
 
 pub fn passphrase_controls_emit_effects_and_status_test() {
-  let m = model.init("classic", [])
+  let m = model.init("editorial", [])
   let #(typed, _) = update.update(m, SetPassphrase("secret"))
   let #(_, enable_effects) = update.update(typed, EnablePassphrase)
   enable_effects |> should.equal([update.EnablePassphraseEffect("secret")])
@@ -834,7 +829,7 @@ pub fn passphrase_controls_emit_effects_and_status_test() {
 }
 
 pub fn account_switch_emits_effect_and_status_test() {
-  let m = model.init("classic", [])
+  let m = model.init("editorial", [])
   let #(_, effects) = update.update(m, SwitchAccount("abc123"))
   effects |> should.equal([update.SwitchAccountEffect("abc123")])
 

@@ -27,8 +27,7 @@ import omni/shell/msg.{
   SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShowIntentPrompt,
   ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh, SwitchAccount,
   ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
-  ToggleFullscreen, ToggleMobileMenu, TriggerWorkspaceSync, UninstallApp,
-  UnlockKey,
+  ToggleFullscreen, TriggerWorkspaceSync, UninstallApp, UnlockKey,
 }
 
 /// Side-effect commands emitted by the pure shell `update` function.
@@ -67,12 +66,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
   case msg {
     NavigateTo(page) -> {
       let next_model =
-        Model(
-          ..model,
-          active_page: page,
-          back_stack: push_back(model, page),
-          mobile_menu_open: False,
-        )
+        Model(..model, active_page: page, back_stack: push_back(model, page))
       let mount_effects = case page {
         PrimaryApp(plugin_id, route) -> [
           MountPluginInSlot(plugin_id: plugin_id, viewport: Main, route: route),
@@ -89,12 +83,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     OpenApp(plugin_id, route) -> {
       let page = PrimaryApp(plugin_id: plugin_id, route: route)
       let next_model =
-        Model(
-          ..model,
-          active_page: page,
-          back_stack: push_back(model, page),
-          mobile_menu_open: False,
-        )
+        Model(..model, active_page: page, back_stack: push_back(model, page))
       let effects = [
         MountPluginInSlot(plugin_id: plugin_id, viewport: Main, route: route),
         ..workspace_persistence_effects(next_model)
@@ -105,12 +94,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     OpenSettings(tab) -> {
       let page = Settings(tab: tab)
       let next_model =
-        Model(
-          ..model,
-          active_page: page,
-          back_stack: push_back(model, page),
-          mobile_menu_open: False,
-        )
+        Model(..model, active_page: page, back_stack: push_back(model, page))
       let mount_effects = case tab {
         TabPluginSettings(plugin_id) -> [
           MountPluginInSlot(
@@ -140,10 +124,6 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
 
     ToggleFullscreen -> {
       #(Model(..model, fullscreen: !model.fullscreen), [])
-    }
-
-    ToggleMobileMenu -> {
-      #(Model(..model, mobile_menu_open: !model.mobile_menu_open), [])
     }
 
     ToggleAppEnabled(plugin_id) -> {

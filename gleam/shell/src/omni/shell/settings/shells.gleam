@@ -25,7 +25,7 @@ pub type ShellInfo {
   )
 }
 
-/// Built-in first-class shells bundled with Omni (`"editorial"`, `"panorama"`, `"classic"`).
+/// Built-in first-class shells bundled with Omni (`"editorial"`, `"panorama"`).
 pub fn builtin_shells() -> List(ShellInfo) {
   [
     ShellInfo(
@@ -42,15 +42,6 @@ pub fn builtin_shells() -> List(ShellInfo) {
       name: "Panorama Hub",
       description: "Horizontal metro-inspired panoramic canvas with live tiles and fluid hub columns.",
       icon: "windows",
-      author: "Omni Core Team",
-      version: "1.0.0",
-      is_builtin: True,
-    ),
-    ShellInfo(
-      id: "classic",
-      name: "Omni Classic",
-      description: "Traditional desktop-style workspace with persistent navigation sidebar and top utility bar.",
-      icon: "layout",
       author: "Omni Core Team",
       version: "1.0.0",
       is_builtin: True,

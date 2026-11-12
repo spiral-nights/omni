@@ -8,7 +8,6 @@ const STYLE_FILES = [
   "tokens.css",
   "schema.css",
   "shell-modules.css",
-  "classic.css",
   "panorama.css",
   "editorial.css",
 ];

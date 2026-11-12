@@ -7,15 +7,15 @@ import gleeunit/should
 import omni/platform/storage
 import omni/shell/registry
 import omni/shell/settings/shells
-import omni/shell/themes/classic
+import omni/shell/themes/panorama
 
 pub fn registry_registers_and_resolves_themes_test() {
   let reg =
     registry.new()
-    |> registry.register(classic.theme())
+    |> registry.register(panorama.theme())
 
-  case registry.resolve(reg, "classic") {
-    Some(theme) -> theme.id |> should.equal("classic")
+  case registry.resolve(reg, "panorama") {
+    Some(theme) -> theme.id |> should.equal("panorama")
     None -> should.fail()
   }
 
@@ -46,21 +46,21 @@ pub fn registry_default_active_theme_is_editorial_test() {
 pub fn registry_active_theme_falls_back_when_missing_test() {
   let reg =
     registry.new()
-    |> registry.register(classic.theme())
+    |> registry.register(panorama.theme())
     |> registry.set_active("does-not-exist")
 
   // The default shell ID is not registered, so fall back to the first theme.
-  registry.active_theme(reg).id |> should.equal("classic")
+  registry.active_theme(reg).id |> should.equal("panorama")
 }
 
 pub fn registry_unregister_falls_back_test() {
   let reg =
     registry.with_builtin_themes()
-    |> registry.set_active("classic")
-    |> registry.unregister("classic")
+    |> registry.set_active("panorama")
+    |> registry.unregister("panorama")
 
   reg.active_id |> should.equal("editorial")
-  registry.resolve(reg, "classic") |> should.equal(None)
+  registry.resolve(reg, "panorama") |> should.equal(None)
 }
 
 pub fn registry_saves_and_loads_active_id_test() {

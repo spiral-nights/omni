@@ -308,7 +308,7 @@ pub fn relay_scoping_panel_renders_default_local_and_custom_modes_test() {
 pub fn shells_panel_renders_builtin_shells_and_accent_picker_test() {
   let builtins = shells.builtin_shells()
   let ids = list.map(builtins, fn(s) { s.id })
-  ids |> should.equal(["editorial", "panorama", "classic"])
+  ids |> should.equal(["editorial", "panorama"])
 
   let custom_shell =
     ShellInfo(
@@ -327,10 +327,9 @@ pub fn shells_panel_renders_builtin_shells_and_accent_picker_test() {
     |> element.to_string
 
   should.be_true(string.contains(html_str, "id=\"settings-shells-panel\""))
-  should.be_true(string.contains(html_str, "4 installed"))
+  should.be_true(string.contains(html_str, "3 installed"))
   should.be_true(string.contains(html_str, "Editorial Shell"))
   should.be_true(string.contains(html_str, "Panorama Hub"))
-  should.be_true(string.contains(html_str, "Omni Classic"))
   should.be_true(string.contains(html_str, "Minimalist E-Ink"))
   should.be_true(string.contains(html_str, "id=\"input-custom-accent-color\""))
   should.be_true(string.contains(html_str, "#d4a373"))

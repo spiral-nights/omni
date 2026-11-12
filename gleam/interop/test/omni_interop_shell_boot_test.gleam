@@ -35,10 +35,10 @@ pub fn shell_boot_render_and_navigation_test() {
   should.be_true(string.contains(html, "id=\"omni-boot-root\""))
   should.be_true(string.contains(html, "assets/styles/editorial.css"))
 
-  let classic = shell_boot.select_shell(host, "classic")
-  shell_boot.active_shell_id(classic) |> should.equal("classic")
-  shell_boot.render(classic)
-  |> string.contains("assets/styles/classic.css")
+  let panorama = shell_boot.select_shell(host, "panorama")
+  shell_boot.active_shell_id(panorama) |> should.equal("panorama")
+  shell_boot.render(panorama)
+  |> string.contains("assets/styles/panorama.css")
   |> should.equal(True)
 
   shell_boot.render(shell_boot.open_widgets(host))
