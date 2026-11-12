@@ -493,6 +493,17 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
   )
 }
 
+/// Advance any built-in app that owns a clock (the timer). Returns whether any
+/// app state changed, so callers only re-render when needed.
+pub fn tick_builtins(booted: Booted) -> Bool {
+  dict.fold(booted.builtins, False, fn(changed, _id, app) {
+    case app.tick {
+      Some(tick) -> tick() || changed
+      None -> changed
+    }
+  })
+}
+
 /// Import a hex or nsec private key and refresh the session profile.
 pub fn import_key(booted: Booted, raw: String) -> Result(Booted, String) {
   case keystore.switch_key(booted.kernel.keystore, raw) {

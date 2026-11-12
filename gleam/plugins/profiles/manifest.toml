@@ -41,3 +41,4 @@ omni_protocol = { path = "../../protocol" }
 omni_social = { path = "../../social" }
 omni_social_ui = { path = "../../social_ui" }
 omni_testkit = { path = "../../testkit" }
+omni_ui = { path = "../../ui" }

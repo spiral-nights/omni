@@ -147,6 +147,17 @@ export function mount_dom(selector, init, update, view, parse_url, page_url, pul
 }
 
 
+export function start_interval(ms, callback) {
+  if (typeof window === "undefined") return;
+  window.setInterval(() => {
+    try {
+      callback();
+    } catch (_error) {
+      // Never let a tick callback break the interval loop.
+    }
+  }, ms);
+}
+
 export function dispatch_shell_msg(message) {
   if (typeof window !== "undefined" && typeof window.__omniShellDispatch === "function") {
     window.__omniShellDispatch(message);

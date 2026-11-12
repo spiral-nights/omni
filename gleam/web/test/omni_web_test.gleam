@@ -1158,3 +1158,35 @@ pub fn feed_note_click_opens_thread_view_test() -> promise.Promise(Nil) {
   |> should.equal(True)
   promise.resolve(Nil)
 }
+
+pub fn timer_tick_advances_only_while_running_test() -> promise.Promise(Nil) {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+
+  let assert Ok(timer_app) = dict.get(booted.builtins, "org.omni.plugin.timer")
+  let rendered = timer_app.render() |> schema_codec.encode_node
+  string.contains(rendered, "25:00") |> should.equal(True)
+
+  // Idle timers do not change; the host clock is a no-op.
+  boot.tick_builtins(booted) |> should.equal(False)
+
+  let start = schema_action.new("start")
+  let #(running, _) =
+    boot.dispatch(booted, HostedSchemaAction("org.omni.plugin.timer", start))
+  boot.tick_builtins(running) |> should.equal(True)
+
+  let assert Ok(timer_running) =
+    dict.get(running.builtins, "org.omni.plugin.timer")
+  timer_running.render()
+  |> schema_codec.encode_node
+  |> string.contains("24:59")
+  |> should.equal(True)
+
+  let pause = schema_action.new("pause")
+  let #(paused, _) =
+    boot.dispatch(running, HostedSchemaAction("org.omni.plugin.timer", pause))
+  boot.tick_builtins(paused) |> should.equal(False)
+  promise.resolve(Nil)
+}

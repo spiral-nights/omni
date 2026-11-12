@@ -9,7 +9,7 @@
 import gleam/option.{type Option, None, Some}
 import omni/nostr/event.{type Event, type UnsignedEvent}
 import omni/platform/storage
-import omni/plugin_kit/app.{type RunningApp}
+import omni/plugin_kit/app
 import omni/plugin_kit/route
 import omni/plugin_kit/zap
 import omni/protocol/blossom.{type BlobUpload}
@@ -29,6 +29,8 @@ import plugin/relays/main as relays
 import plugin/relays/model.{StateConnected, StateDisconnected}
 import plugin/relays/msg as relays_msg
 import plugin/timer/main as timer
+import plugin/timer/model as timer_model
+import plugin/timer/msg as timer_msg
 
 /// A built-in plugin running in-process in the host.
 pub type BuiltinApp {
@@ -49,6 +51,7 @@ pub type BuiltinApp {
     take_urls: fn() -> List(String),
     zap_invoice_result: Option(fn(Result(String, String)) -> Nil),
     ingest_doc: Option(fn(String) -> Nil),
+    tick: Option(fn() -> Bool),
   )
 }
 
@@ -60,10 +63,7 @@ pub fn apps(pubkey_hex: String) -> List(#(String, BuiltinApp)) {
   [
     #("org.omni.plugin.feed", feed_app(store)),
     #("org.omni.plugin.checklist", checklist_app(store)),
-    #(
-      "org.omni.plugin.timer",
-      host(fn(emit) { timer.start_app("", emit) }, None, None),
-    ),
+    #("org.omni.plugin.timer", timer_app()),
     #("org.omni.plugin.notes", notes_app(store)),
     #("org.omni.plugin.relays", relays_app()),
     #("org.omni.plugin.profiles", profiles_app(store, pubkey_hex)),
@@ -94,6 +94,7 @@ fn feed_app(store: storage.Storage) -> BuiltinApp {
       app.dispatch(running, feed_msg.ZapInvoiceResult(result))
     }),
     ingest_doc: None,
+    tick: None,
   )
 }
 
@@ -119,6 +120,7 @@ fn profiles_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
     take_urls: fn() { app.take_urls(running) },
     zap_invoice_result: None,
     ingest_doc: None,
+    tick: None,
   )
 }
 
@@ -147,33 +149,7 @@ fn relays_app() -> BuiltinApp {
     take_urls: fn() { app.take_urls(running) },
     zap_invoice_result: None,
     ingest_doc: None,
-  )
-}
-
-fn host(
-  start: fn(fn(Node) -> Nil) -> RunningApp(a, b),
-  ingest: Option(fn(Event) -> Nil),
-  relay_status: Option(fn(String, Bool) -> Nil),
-) -> BuiltinApp {
-  let running = start(fn(_node) { Nil })
-
-  BuiltinApp(
-    render: fn() { app.current_view(running) },
-    navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
-    handle_action: fn(action) { app.handle_action(running, action) },
-    ingest: ingest,
-    relay_status: relay_status,
-    take_publishes: fn() { app.take_publishes(running) },
-    take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
-    take_fetches: fn() { app.take_fetches(running) },
-    take_relay_commands: fn() { app.take_relay_commands(running) },
-    take_chimes: fn() { app.take_chimes(running) },
-    take_uploads: fn() { app.take_uploads(running) },
-    take_zap_invoices: fn() { app.take_zap_invoices(running) },
-    take_searches: fn() { app.take_searches(running) },
-    take_urls: fn() { app.take_urls(running) },
-    zap_invoice_result: None,
-    ingest_doc: None,
+    tick: None,
   )
 }
 
@@ -196,6 +172,7 @@ fn publisher_app(pubkey_hex: String) -> BuiltinApp {
     take_urls: fn() { app.take_urls(running) },
     zap_invoice_result: None,
     ingest_doc: None,
+    tick: None,
   )
 }
 
@@ -217,6 +194,7 @@ fn checklist_app(store: storage.Storage) -> BuiltinApp {
     take_searches: fn() { app.take_searches(running) },
     take_urls: fn() { app.take_urls(running) },
     zap_invoice_result: None,
+    tick: None,
     ingest_doc: Some(fn(raw) {
       app.dispatch(running, checklist_msg.IngestRemoteDoc(raw))
     }),
@@ -241,8 +219,41 @@ fn notes_app(store: storage.Storage) -> BuiltinApp {
     take_searches: fn() { app.take_searches(running) },
     take_urls: fn() { app.take_urls(running) },
     zap_invoice_result: None,
+    tick: None,
     ingest_doc: Some(fn(raw) {
       app.dispatch(running, notes_msg.IngestRemoteDoc(raw))
+    }),
+  )
+}
+
+fn timer_app() -> BuiltinApp {
+  let running = timer.start_app("", fn(_) { Nil })
+
+  BuiltinApp(
+    render: fn() { app.current_view(running) },
+    navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
+    handle_action: fn(action) { app.handle_action(running, action) },
+    ingest: None,
+    relay_status: None,
+    take_publishes: fn() { app.take_publishes(running) },
+    take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
+    take_fetches: fn() { app.take_fetches(running) },
+    take_relay_commands: fn() { app.take_relay_commands(running) },
+    take_chimes: fn() { app.take_chimes(running) },
+    take_uploads: fn() { app.take_uploads(running) },
+    take_zap_invoices: fn() { app.take_zap_invoices(running) },
+    take_searches: fn() { app.take_searches(running) },
+    take_urls: fn() { app.take_urls(running) },
+    zap_invoice_result: None,
+    ingest_doc: None,
+    tick: Some(fn() {
+      case app.current_model(running).status {
+        timer_model.Running -> {
+          app.dispatch(running, timer_msg.Tick)
+          True
+        }
+        _ -> False
+      }
     }),
   )
 }

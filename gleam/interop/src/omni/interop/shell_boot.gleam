@@ -207,7 +207,22 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
     page_url,
     StartPullRefresh,
   )
+
+  // Clock for time-driven built-ins (the focus timer): one tick per second.
+  start_interval(1000, fn() {
+    case dict.values(host.booted.builtins) {
+      [] -> Nil
+      _ -> {
+        let _ = boot.tick_builtins(host.booted)
+        push_views(host)
+        Nil
+      }
+    }
+  })
 }
+
+@external(javascript, "./shell_boot.ffi.mjs", "start_interval")
+fn start_interval(ms: Int, callback: fn() -> Nil) -> Nil
 
 /// URL for the shell's current page, used for `history.pushState`.
 pub fn page_url(host: ShellBoot) -> String {
