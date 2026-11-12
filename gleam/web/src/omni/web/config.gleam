@@ -74,7 +74,7 @@ pub fn system_apps() -> List(InstalledApp) {
         ),
       ],
       placements: [],
-      handled_intents: ["view-note", "create-note", "view-profile"],
+      handled_intents: ["view-note", "create-note", "view-profile", "search"],
       disabled_intents: [],
       relays: None,
       source_url: "https://nsite.example/reader.html",

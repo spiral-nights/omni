@@ -21,6 +21,7 @@ pub type Msg {
   OpenApp(plugin_id: String, route: Option(String))
   OpenSettings(SettingsTab)
   ToggleFullscreen
+  OpenSearch
 
   // App lifecycle & placements
   ToggleAppEnabled(plugin_id: String)

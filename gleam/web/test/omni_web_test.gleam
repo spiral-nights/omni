@@ -43,6 +43,7 @@ import omni/protocol/schema/codec as schema_codec
 import omni/protocol/workspace
 import omni/sandbox/manager
 import omni/shell/model
+import omni/shell/msg as omni_shell_msg
 import omni/shell/msg.{
   EmbedSchema, HostedSchemaAction, NavigateTo, ToggleFullscreen,
 }
@@ -1188,5 +1189,20 @@ pub fn timer_tick_advances_only_while_running_test() -> promise.Promise(Nil) {
   let #(paused, _) =
     boot.dispatch(running, HostedSchemaAction("org.omni.plugin.timer", pause))
   boot.tick_builtins(paused) |> should.equal(False)
+  promise.resolve(Nil)
+}
+
+pub fn header_search_routes_to_the_feed_search_view_test() -> promise.Promise(
+  Nil,
+) {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+
+  let #(searching, _) = boot.dispatch(booted, omni_shell_msg.OpenSearch)
+  let assert Ok(feed) = dict.get(searching.builtins, "org.omni.plugin.feed")
+  let rendered = feed.render() |> schema_codec.encode_node
+  string.contains(rendered, "feed-search") |> should.equal(True)
   promise.resolve(Nil)
 }

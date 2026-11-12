@@ -380,6 +380,10 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
             storage.set(booted.kernel.storage, theme_mode_storage_key, mode)
           #(reg, Nil)
         }
+        update.RouteIntent(intent_name) -> {
+          let _ = route_intent(booted, action.new(intent_name))
+          #(reg, Nil)
+        }
         update.DispatchIntentToPlugin(plugin_id, intent_name, payload_json) -> {
           case action.decode_json(payload_json) {
             Ok(act) -> {

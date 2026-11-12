@@ -21,13 +21,14 @@ import omni/shell/msg.{
   DismissIntentPrompt, DismissUpdateModal, EmbedSchema, EnablePassphrase,
   ExportKey, FinishPullRefresh, HostedSchemaAction, ImportKey, InstallApp,
   KeyImportResult, KeySecurityResult, KeySecurityStatus, NavigateBack,
-  NavigateTo, OpenApp, OpenSettings, RemoveAppPlacement, ResolvePermission,
-  SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
-  SetAppRelays, SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
-  SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShowIntentPrompt,
-  ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh, SwitchAccount,
-  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
-  ToggleFullscreen, TriggerWorkspaceSync, UninstallApp, UnlockKey,
+  NavigateTo, OpenApp, OpenSearch, OpenSettings, RemoveAppPlacement,
+  ResolvePermission, SelectIntentHandler, SelectShell, SetAccentColor,
+  SetAppPlacements, SetAppRelays, SetCustomInstallUrl, SetExportedNsec,
+  SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
+  SetUserProfile, ShowIntentPrompt, ShowPermissionPrompt, ShowUpdateModal,
+  StartPullRefresh, SwitchAccount, ToggleAppEnabled, ToggleAppIntent,
+  ToggleAppPinned, ToggleAutoSync, ToggleFullscreen, TriggerWorkspaceSync,
+  UninstallApp, UnlockKey,
 }
 
 /// Side-effect commands emitted by the pure shell `update` function.
@@ -55,6 +56,7 @@ pub type ShellEffect {
     payload_json: String,
   )
   UpgradePlugin(plugin_id: String)
+  RouteIntent(intent_name: String)
   RefreshActiveView
   DispatchHostedAction(plugin_id: String, action: Action)
   PermissionDecision(prompt_id: Int, allowed: Bool)
@@ -125,6 +127,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     ToggleFullscreen -> {
       #(Model(..model, fullscreen: !model.fullscreen), [])
     }
+
+    OpenSearch -> #(model, [RouteIntent("search")])
 
     ToggleAppEnabled(plugin_id) -> {
       let target = model.find_app(model, plugin_id)

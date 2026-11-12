@@ -20,7 +20,7 @@ import omni/shell/model.{
   type Model, type SettingsTab, AppStore, PrimaryApp, Settings, WidgetsDashboard,
 }
 import omni/shell/msg.{
-  type Msg, NavigateTo, OpenApp, OpenSettings, ToggleFullscreen,
+  type Msg, NavigateTo, OpenApp, OpenSearch, OpenSettings, ToggleFullscreen,
 }
 import omni/shell/settings/intents
 import omni/shell/settings/permission_prompt
@@ -89,6 +89,17 @@ fn render_header(model: Model) -> Element(Msg) {
     html.div([attribute.class("editorial-header-inner")], [
       html.div([attribute.class("editorial-header-left")], [
         header_actions.render_back_button(model),
+        html.button(
+          [
+            attribute.type_("button"),
+            attribute.id("btn-editorial-search"),
+            attribute.class("editorial-header-btn"),
+            attribute.title("Search"),
+            attribute.attribute("aria-label", "Search"),
+            event.on_click(OpenSearch),
+          ],
+          [icons.render_icon("search", 17)],
+        ),
         html.button(
           [
             attribute.type_("button"),
