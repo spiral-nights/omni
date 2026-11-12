@@ -6,6 +6,7 @@ import gleam/float
 import gleam/int
 import gleam/json.{type Json}
 import gleam/list
+import gleam/option.{None}
 import gleam/string
 import omni/nostr/kind
 import omni/plugin_kit/local_store.{type StoreConfig, StoreConfig}
@@ -204,9 +205,30 @@ pub fn encode_task(task: TaskItem) -> Json {
 
 /// Decoder for a single `TaskItem`.
 pub fn task_decoder() -> Decoder(TaskItem) {
-  use id <- decode.field("id", decode.string)
-  use title <- decode.field("title", decode.string)
-  use completed <- decode.field("completed", decode.bool)
+  // The previous app stored `{ id: number, text, done }`; accept both shapes.
+  use id_raw <- decode.field("id", decode.dynamic)
+  let id = case decode.run(id_raw, decode.string) {
+    Ok(value) -> value
+    Error(_) ->
+      case decode.run(id_raw, decode.int) {
+        Ok(number) -> int.to_string(number)
+        Error(_) -> "task"
+      }
+  }
+  use title_opt <- decode.optional_field(
+    "title",
+    None,
+    decode.optional(decode.string),
+  )
+  use legacy_title <- decode.optional_field("text", "", decode.string)
+  let title = option.unwrap(title_opt, legacy_title)
+  use completed_opt <- decode.optional_field(
+    "completed",
+    None,
+    decode.optional(decode.bool),
+  )
+  use legacy_completed <- decode.optional_field("done", False, decode.bool)
+  let completed = option.unwrap(completed_opt, legacy_completed)
   use created_at <- decode.optional_field("created_at", 0, decode.int)
   use priority <- decode.optional_field("priority", "medium", decode.string)
   decode.success(TaskItem(

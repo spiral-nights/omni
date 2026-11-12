@@ -1,5 +1,6 @@
 import gleam/dict
 import gleam/dynamic
+import gleam/json
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
@@ -249,4 +250,13 @@ pub fn sync_publishes_and_ingests_nip78_document_test() {
   task.title |> should.equal("Synced task")
   task.completed |> should.be_true()
   m3.next_id |> should.equal(4)
+}
+
+pub fn legacy_task_document_decodes_test() {
+  let raw = "[{\"id\":7,\"text\":\"Water the plants\",\"done\":true}]"
+  let assert Ok(tasks) = json.parse(from: raw, using: model.tasks_decoder())
+  let assert [task] = tasks
+  task.id |> should.equal("7")
+  task.title |> should.equal("Water the plants")
+  task.completed |> should.equal(True)
 }

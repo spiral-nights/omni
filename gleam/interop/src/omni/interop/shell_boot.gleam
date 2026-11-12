@@ -886,7 +886,7 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
       fn(event) {
         case nostr_event.get_tag_values(event.tags, "d") {
           [d_tag, ..] ->
-            case d_tag == "omni/checklist/v1" {
+            case d_tag == "omni/checklist/v1" || d_tag == "omni/tasks/v1" {
               True -> {
                 dict.each(host.booted.builtins, fn(_id, app) {
                   case app.ingest_doc {
