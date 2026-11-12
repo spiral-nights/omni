@@ -5,6 +5,7 @@
 import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/string
 import omni/protocol/schema/node.{type Node}
 import omni/protocol/viewport.{type Viewport, Dock, HeaderActions, Sidebar}
 import omni/protocol/workspace.{
@@ -202,6 +203,14 @@ pub fn find_app(model: Model, plugin_id: String) -> Option(InstalledApp) {
     Ok(app) -> Some(app)
     Error(Nil) -> None
   }
+}
+
+/// Whether an app declares a dedicated settings view (`?view=settings`).
+pub fn app_has_settings_view(app: InstalledApp) -> Bool {
+  app.enabled
+  && list.any(app.views, fn(v) {
+    v.id == "settings" || string.contains(v.path, "view=settings")
+  })
 }
 
 /// Return enabled apps that are `pinned` or have a `Dock` companion placement.

@@ -406,26 +406,33 @@ pub fn settings_tabs_renders_system_tabs_and_dynamic_plugin_settings_test() {
       sync_status: Synced(1_700_000_000),
     )
   let ws_html = tabs.render_settings_view(m_ws) |> element.to_string
-  should.be_true(string.contains(ws_html, "id=\"settings-tab-profile\""))
-  should.be_true(string.contains(ws_html, "id=\"settings-tab-relays\""))
+  // The primary settings bar is exactly three sections, matching the original
+  // Editorial modal: Appearance & Shells, Plugins & Viewports, Workspace & Sync.
+  should.be_true(string.contains(ws_html, "id=\"settings-tab-shells\""))
   should.be_true(string.contains(ws_html, "id=\"settings-tab-plugins\""))
   should.be_true(string.contains(ws_html, "id=\"settings-tab-workspace\""))
-  should.be_true(string.contains(ws_html, "id=\"settings-tab-shells\""))
-  should.be_true(string.contains(
+  should.be_false(string.contains(ws_html, "id=\"settings-tab-profile\""))
+  should.be_false(string.contains(ws_html, "id=\"settings-tab-relays\""))
+  should.be_false(string.contains(
     ws_html,
     "id=\"settings-tab-plugin-nsite.sample.configurable\"",
   ))
-  should.be_false(string.contains(
-    ws_html,
-    "id=\"settings-tab-plugin-nsite.sample.simple\"",
-  ))
-  should.be_false(string.contains(
-    ws_html,
-    "id=\"settings-tab-plugin-nsite.sample.disabled\"",
-  ))
   should.be_true(string.contains(ws_html, "id=\"btn-toggle-auto-sync\""))
   should.be_true(string.contains(ws_html, "id=\"btn-trigger-workspace-sync\""))
-  should.be_true(string.contains(ws_html, "id=\"settings-placements-panel\""))
+
+  // Companion viewport assignment lives with the plugin list, as it did in the
+  // original "Plugins & Viewports" section.
+  let plugins_html =
+    tabs.render_settings_view(Model(..m0, active_page: Settings(TabPlugins)))
+    |> element.to_string
+  should.be_true(string.contains(
+    plugins_html,
+    "id=\"settings-placements-panel\"",
+  ))
+  should.be_true(string.contains(
+    plugins_html,
+    "id=\"settings-permissions-panel\"",
+  ))
 
   // 2. Dynamic TabPluginSettings mounts the ?view=settings slot anchor in Main
   let m_plug_settings =

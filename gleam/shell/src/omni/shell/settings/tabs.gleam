@@ -18,7 +18,7 @@ import omni/shell/layout/viewport_host
 import omni/shell/model.{
   type InstalledApp, type Model, type SettingsTab, type SyncStatus, Settings,
   SyncError, SyncIdle, Synced, Syncing, TabPluginSettings, TabPlugins,
-  TabProfile, TabRelays, TabShells, TabWorkspace,
+  TabProfile, TabRelays, TabShells, TabWorkspace, app_has_settings_view,
 }
 import omni/shell/msg.{
   type Msg, DisablePassphrase, EnablePassphrase, ExportKey, ImportKey,
@@ -35,12 +35,7 @@ import omni/ui/icons
 
 /// Return all enabled installed applications that declare a `settings` route (`?view=settings`).
 pub fn apps_with_settings_view(model: Model) -> List(InstalledApp) {
-  list.filter(model.installed_apps, fn(app) {
-    app.enabled
-    && list.any(app.views, fn(v) {
-      v.id == "settings" || string.contains(v.path, "view=settings")
-    })
-  })
+  list.filter(model.installed_apps, app_has_settings_view)
 }
 
 /// Resolve the active `SettingsTab` from `model.active_page` (defaults to `TabProfile`).
@@ -78,57 +73,64 @@ fn render_settings_tab_bar(
   model: Model,
   active_tab: SettingsTab,
 ) -> Element(Msg) {
-  let static_tabs = [
+  // Three primary sections, matching the original Editorial settings modal:
+  // Appearance & Shells, Plugins & Viewports, Workspace & Sync.
+  let primary_tabs = [
     render_tab_button(
-      id: "settings-tab-profile",
-      label: "Profile & Keys",
-      icon_name: "user",
-      is_active: active_tab == TabProfile,
-      target: TabProfile,
-    ),
-    render_tab_button(
-      id: "settings-tab-relays",
-      label: "Relays & Scoping",
-      icon_name: "relays",
-      is_active: active_tab == TabRelays,
-      target: TabRelays,
+      id: "settings-tab-shells",
+      label: "Appearance & Shells",
+      icon_name: "layout",
+      is_active: active_tab == TabShells,
+      target: TabShells,
     ),
     render_tab_button(
       id: "settings-tab-plugins",
-      label: "Apps & Permissions",
+      label: "Plugins & Viewports",
       icon_name: "plugins",
       is_active: active_tab == TabPlugins,
       target: TabPlugins,
     ),
     render_tab_button(
       id: "settings-tab-workspace",
-      label: "Workspace & Viewports",
-      icon_name: "widgets",
+      label: "Workspace & Sync",
+      icon_name: "cloud",
       is_active: active_tab == TabWorkspace,
       target: TabWorkspace,
     ),
-    render_tab_button(
-      id: "settings-tab-shells",
-      label: "Shells & Theme",
-      icon_name: "layout",
-      is_active: active_tab == TabShells,
-      target: TabShells,
-    ),
   ]
 
-  let dynamic_plugin_tabs =
-    apps_with_settings_view(model)
-    |> list.map(fn(app) {
-      let title = model.app_title(app)
-      let tab = TabPluginSettings(app.id)
+  // Identity and relay scoping remain reachable as deeper pages. Their tab is
+  // only surfaced while active so the primary bar stays at three entries.
+  let secondary_tab = case active_tab {
+    TabProfile -> [
       render_tab_button(
-        id: "settings-tab-plugin-" <> app.id,
-        label: title,
-        icon_name: app.icon,
-        is_active: active_tab == tab,
-        target: tab,
-      )
-    })
+        id: "settings-tab-profile",
+        label: "Profile & Keys",
+        icon_name: "user",
+        is_active: True,
+        target: TabProfile,
+      ),
+    ]
+    TabRelays -> [
+      render_tab_button(
+        id: "settings-tab-relays",
+        label: "Relays & Scoping",
+        icon_name: "relays",
+        is_active: True,
+        target: TabRelays,
+      ),
+    ]
+    TabPluginSettings(plugin_id) -> [
+      render_tab_button(
+        id: "settings-tab-plugin-" <> plugin_id,
+        label: plugin_title(model, plugin_id),
+        icon_name: "sliders",
+        is_active: True,
+        target: TabPluginSettings(plugin_id),
+      ),
+    ]
+    _ -> []
+  }
 
   html.nav(
     [
@@ -136,8 +138,15 @@ fn render_settings_tab_bar(
       attribute.attribute("role", "tablist"),
       attribute.attribute("aria-label", "Settings Categories"),
     ],
-    list.append(static_tabs, dynamic_plugin_tabs),
+    list.append(primary_tabs, secondary_tab),
   )
+}
+
+fn plugin_title(model: Model, plugin_id: String) -> String {
+  case model.find_app(model, plugin_id) {
+    Some(app) -> model.app_title(app)
+    None -> plugin_id
+  }
 }
 
 fn render_tab_button(
@@ -179,6 +188,8 @@ fn render_active_tab_panel(
     TabPlugins ->
       html.div([attribute.class("omni-settings-plugins-combined")], [
         permissions.render_permissions_panel(model),
+        placements.render_placements_panel(model),
+        relay_scoping.render_relay_scoping_panel(model),
         intents.render_intents_panel(model),
       ])
     TabWorkspace -> render_workspace_tab(model)
@@ -560,7 +571,6 @@ fn render_workspace_tab(model: Model) -> Element(Msg) {
 
   html.div([attribute.class("omni-settings-workspace-combined")], [
     nip78_sync_card,
-    placements.render_placements_panel(model),
   ])
 }
 

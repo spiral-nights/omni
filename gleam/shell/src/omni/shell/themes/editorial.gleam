@@ -55,7 +55,6 @@ pub fn view(model: Model) -> Element(Msg) {
       attribute.id("editorial-shell-root"),
       attribute.attribute("data-shell", "editorial"),
       attribute.attribute("data-theme-mode", model.theme_mode),
-      attribute.attribute("data-theme-mode", "dark"),
       attribute.style("--omni-accent-primary", model.accent_color),
     ],
     [

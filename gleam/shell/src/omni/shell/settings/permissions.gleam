@@ -10,9 +10,13 @@ import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
-import omni/shell/model.{type InstalledApp, type Model, InstalledApp, ViewOption}
+import omni/shell/model.{
+  type InstalledApp, type Model, InstalledApp, TabPluginSettings, ViewOption,
+  app_has_settings_view,
+}
 import omni/shell/msg.{
-  type Msg, InstallApp, SetCustomInstallUrl, ToggleAppEnabled, UninstallApp,
+  type Msg, InstallApp, OpenSettings, SetCustomInstallUrl, ToggleAppEnabled,
+  UninstallApp,
 }
 import omni/ui/icons
 
@@ -238,6 +242,23 @@ fn render_plugin_permission_card(app: InstalledApp) -> Element(Msg) {
           ]),
         ]),
         html.div([attribute.class("omni-permission-card-actions")], [
+          case app_has_settings_view(app) {
+            True ->
+              html.button(
+                [
+                  attribute.type_("button"),
+                  attribute.id("btn-app-settings-" <> app.id),
+                  attribute.class("omni-button omni-button-secondary"),
+                  attribute.title("Open " <> title <> " settings"),
+                  event.on_click(OpenSettings(TabPluginSettings(app.id))),
+                ],
+                [
+                  icons.render_icon("sliders", 14),
+                  html.span([], [element.text("Settings")]),
+                ],
+              )
+            False -> element.none()
+          },
           html.button(
             [
               attribute.type_("button"),

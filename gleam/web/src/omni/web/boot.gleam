@@ -148,11 +148,18 @@ pub fn init_with_relays(
     Some("light") -> "light"
     _ -> "dark"
   }
+  let accent_color = case
+    storage.get(kernel.storage, accent_color_storage_key)
+  {
+    Some(slug) if slug != "" -> slug
+    _ -> "#d4a373"
+  }
   let seeded_model =
     Model(
       ..seeded,
       user_profile: Some(session_profile(kernel)),
       theme_mode: theme_mode,
+      accent_color: accent_color,
       key_encrypted: keystore.is_encrypted(kernel.keystore),
       key_locked: keystore.is_locked(kernel.keystore),
       accounts: keystore.accounts(kernel.keystore),
