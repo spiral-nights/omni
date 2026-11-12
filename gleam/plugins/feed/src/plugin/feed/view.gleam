@@ -13,9 +13,10 @@ import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{
   type Node, AlignCenter, Body, Button, ButtonGhost, ButtonPrimary,
-  ButtonSecondary, Caption, IconButton, IconButtonGhost, IconButtonSecondary,
-  Input, InputNumber, InputSearch, JustifyBetween, JustifyCenter, JustifyEnd,
-  ListItem, NodeBase, PageDeclaration, TabItem, Toggle, ToneMuted,
+  ButtonSecondary, Caption, CodeBlock, IconButton, IconButtonGhost,
+  IconButtonSecondary, Input, InputNumber, InputSearch, JustifyBetween,
+  JustifyCenter, JustifyEnd, ListItem, NodeBase, PageDeclaration,
+  StatusConnecting, StatusIndicator, TabItem, Toggle, ToneMuted,
 }
 import omni/protocol/schema/style.{SizeMd, SizeSm, StyleRaw}
 import omni/social/note.{type Note}
@@ -362,6 +363,10 @@ fn render_search_view(model: Model) -> Node {
       action_on_change: Some(search_act),
     )
 
+  let relay_search_btn =
+    schema.button("Search Relays", action.new("submit-search"))
+    |> schema.with_icon("search")
+
   let cfg = feed_note_card_config(model.now_sec)
   let results = model.search_results(model)
 
@@ -385,7 +390,7 @@ fn render_search_view(model: Model) -> Node {
   ))
   |> schema.children(
     list.flatten([
-      [search_input, schema.divider()],
+      [search_input, relay_search_btn, schema.divider()],
       render_zap_panel(model),
       result_nodes,
     ]),
@@ -559,71 +564,18 @@ fn render_zap_panel(model: Model) -> List(Node) {
         None -> "Zapping " <> author_name
       }
 
-      let amount_status = case zap.parse_amount(model.zap_amount) {
-        Ok(sats) -> "Amount: " <> int.to_string(sats) <> " sats"
-        Error(_) -> "Enter a whole number of sats greater than zero."
-      }
-
-      let can_send = case target, zap.parse_amount(model.zap_amount) {
-        Some(_), Ok(_) -> True
-        _, _ -> False
-      }
-
-      let preset_row =
+      let button_row = fn(buttons: List(Node)) {
         schema.box()
         |> schema.row
+        |> schema.justify(JustifyEnd)
         |> schema.gap("xs")
-        |> schema.children([
-          zap_preset_button(21, model.zap_amount),
-          zap_preset_button(100, model.zap_amount),
-          zap_preset_button(1000, model.zap_amount),
-        ])
+        |> schema.children(buttons)
+      }
 
-      let amount_input =
-        Input(
-          base: node.empty_base(),
-          name: "zapAmount",
-          placeholder: Some("Amount in sats"),
-          value: Some(model.zap_amount),
-          input_type: Some(InputNumber),
-          accept: None,
-          clearable: None,
-          prefix_icon: Some("zap"),
-          action_on_enter: Some(action.new("send-zap")),
-          action_on_change: Some(action.new("set-zap-amount")),
-        )
-
-      let comment_input =
-        Input(
-          base: node.empty_base(),
-          name: "zapComment",
-          placeholder: Some("Optional zap comment"),
-          value: Some(model.zap_comment),
-          input_type: None,
-          accept: None,
-          clearable: Some(True),
-          prefix_icon: None,
-          action_on_enter: Some(action.new("send-zap")),
-          action_on_change: Some(action.new("set-zap-comment")),
-        )
-
-      let send_btn =
+      let cancel_btn = fn(label: String) {
         Button(
           base: node.empty_base(),
-          label: "Send Zap",
-          action: action.new("send-zap"),
-          variant: Some(ButtonPrimary),
-          size: Some(SizeSm),
-          icon: Some("zap"),
-          icon_position: None,
-          disabled: Some(!can_send),
-          loading: None,
-        )
-
-      let cancel_btn =
-        Button(
-          base: node.empty_base(),
-          label: "Cancel",
+          label: label,
           action: action.new("cancel-zap"),
           variant: Some(ButtonGhost),
           size: Some(SizeSm),
@@ -632,13 +584,134 @@ fn render_zap_panel(model: Model) -> List(Node) {
           disabled: None,
           loading: None,
         )
+      }
 
-      let button_row =
-        schema.box()
-        |> schema.row
-        |> schema.justify(JustifyEnd)
-        |> schema.gap("xs")
-        |> schema.children([cancel_btn, send_btn])
+      let body_nodes = case model.zap_pending, model.zap_invoice {
+        True, _ -> [
+          StatusIndicator(
+            base: node.empty_base(),
+            status: StatusConnecting,
+            label: Some("Waiting for Lightning invoice"),
+            pulse: Some(True),
+          ),
+          schema.text(
+            "Signing your zap request and contacting the Lightning address.",
+          )
+            |> schema.text_variant(Caption)
+            |> schema.text_tone(ToneMuted),
+          button_row([cancel_btn("Cancel")]),
+        ]
+
+        False, Some(invoice) -> {
+          let pay_action =
+            action.new("pay-invoice")
+            |> action.with_payload(
+              dict.from_list([#("invoice", dynamic.string(invoice))]),
+            )
+          let pay_btn =
+            Button(
+              base: node.empty_base(),
+              label: "Pay",
+              action: pay_action,
+              variant: Some(ButtonPrimary),
+              size: Some(SizeSm),
+              icon: Some("zap"),
+              icon_position: None,
+              disabled: None,
+              loading: None,
+            )
+          [
+            schema.text("Invoice ready")
+              |> schema.text_variant(Caption)
+              |> schema.text_tone(ToneMuted),
+            CodeBlock(
+              base: node.empty_base(),
+              code: invoice,
+              language: Some("text"),
+              copyable: Some(True),
+            ),
+            schema.text(
+              "Open the invoice in your Lightning wallet to complete the zap.",
+            )
+              |> schema.text_variant(Caption)
+              |> schema.text_tone(ToneMuted),
+            button_row([cancel_btn("Close"), pay_btn]),
+          ]
+        }
+
+        False, None -> {
+          let amount_status = case zap.parse_amount(model.zap_amount) {
+            Ok(sats) -> "Amount: " <> int.to_string(sats) <> " sats"
+            Error(_) -> "Enter a whole number of sats greater than zero."
+          }
+
+          let can_send = case target, zap.parse_amount(model.zap_amount) {
+            Some(_), Ok(_) -> True
+            _, _ -> False
+          }
+
+          let preset_row =
+            schema.box()
+            |> schema.row
+            |> schema.gap("xs")
+            |> schema.children([
+              zap_preset_button(21, model.zap_amount),
+              zap_preset_button(100, model.zap_amount),
+              zap_preset_button(1000, model.zap_amount),
+            ])
+
+          let amount_input =
+            Input(
+              base: node.empty_base(),
+              name: "zapAmount",
+              placeholder: Some("Amount in sats"),
+              value: Some(model.zap_amount),
+              input_type: Some(InputNumber),
+              accept: None,
+              clearable: None,
+              prefix_icon: Some("zap"),
+              action_on_enter: Some(action.new("send-zap")),
+              action_on_change: Some(action.new("set-zap-amount")),
+            )
+
+          let comment_input =
+            Input(
+              base: node.empty_base(),
+              name: "zapComment",
+              placeholder: Some("Optional zap comment"),
+              value: Some(model.zap_comment),
+              input_type: None,
+              accept: None,
+              clearable: Some(True),
+              prefix_icon: None,
+              action_on_enter: Some(action.new("send-zap")),
+              action_on_change: Some(action.new("set-zap-comment")),
+            )
+
+          let send_btn =
+            Button(
+              base: node.empty_base(),
+              label: "Send Zap",
+              action: action.new("send-zap"),
+              variant: Some(ButtonPrimary),
+              size: Some(SizeSm),
+              icon: Some("zap"),
+              icon_position: None,
+              disabled: Some(!can_send),
+              loading: None,
+            )
+
+          [
+            preset_row,
+            amount_input,
+            schema.text(amount_status)
+              |> schema.text_variant(Caption)
+              |> schema.text_tone(ToneMuted),
+            comment_input,
+            button_row([cancel_btn("Cancel"), send_btn]),
+          ]
+        }
+      }
 
       [
         schema.card()
@@ -649,15 +722,7 @@ fn render_zap_panel(model: Model) -> List(Node) {
         |> schema.with_style(StyleRaw(
           "margin-bottom: 12px; border: 1px solid rgba(229, 192, 123, 0.35);",
         ))
-        |> schema.children([
-          preset_row,
-          amount_input,
-          schema.text(amount_status)
-            |> schema.text_variant(Caption)
-            |> schema.text_tone(ToneMuted),
-          comment_input,
-          button_row,
-        ]),
+        |> schema.children(body_nodes),
       ]
     }
   }

@@ -22,7 +22,11 @@ pub type Msg {
   SetZapComment(String)
   SendZap
   CancelZap
+  /// Host returned the Lightning invoice (`Ok`) or an error message (`Error`).
+  ZapInvoiceResult(Result(String, String))
+  PayInvoice(String)
   SetSearchQuery(String)
+  SubmitSearch
   LoadMore
   ToggleShowReplies
   ToggleInlineMedia

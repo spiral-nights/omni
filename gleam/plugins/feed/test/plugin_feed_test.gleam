@@ -12,7 +12,7 @@ import omni/nostr/event_id
 import omni/nostr/kind.{type Kind, Metadata, Note, ZapRequest}
 import omni/nostr/pubkey
 import omni/platform/storage
-import omni/plugin_kit/app.{FetchUntil, Publish}
+import omni/plugin_kit/app.{FetchUntil, Publish, ZapInvoice as ZapInvoiceEffect}
 import omni/plugin_kit/local_store
 import omni/plugin_kit/route
 import omni/plugin_kit/schema
@@ -26,7 +26,8 @@ import plugin/feed/msg.{
   CancelZap, IngestEvent, LikeNote, LoadMore, NavigateBack, OpenThread,
   PublishNote, PublishReply, SelectTab, SelectView, SendZap, SetComposerDraft,
   SetComposerDraftAndPublish, SetReplyDraft, SetSearchQuery, SetZapAmount,
-  SetZapComment, StartReply, StartZap, ToggleInlineMedia, ToggleShowReplies,
+  SetZapComment, StartReply, StartZap, SubmitSearch, ToggleInlineMedia,
+  ToggleShowReplies, ZapInvoiceResult,
 }
 import plugin/feed/update
 import plugin/feed/view
@@ -419,15 +420,95 @@ pub fn zap_flow_publishes_kind_9734_test() {
   m5.zap_comment |> should.equal("great post")
 
   let #(m6, effects) = update.update(m5, SendZap)
-  m6.zap_target |> should.equal(None)
-  m6.zap_amount |> should.equal("21")
-  m6.zap_comment |> should.equal("")
-  m6.zap_recipient_lud16 |> should.equal(None)
-  m6.zap_lnurl |> should.equal(None)
+  // With an LNURL available the dialog stays open while the host fetches the
+  // invoice, and the plugin does not publish the 9734 itself.
+  m6.zap_target |> should.equal(Some(note1_hex))
+  m6.zap_pending |> should.be_true
+  m6.zap_invoice |> should.equal(None)
 
   let assert Ok(parsed_stats) = dict.get(m6.stats, note1_hex)
   parsed_stats.zaps |> should.equal(1)
   parsed_stats.zap_sats |> should.equal(100)
+
+  should.be_false(
+    list.any(effects, fn(effect) {
+      case effect {
+        Publish(_) -> True
+        _ -> False
+      }
+    }),
+  )
+
+  let assert Ok(request) =
+    list.find_map(effects, fn(effect) {
+      case effect {
+        ZapInvoiceEffect(invoice) -> Ok(invoice)
+        _ -> Error(Nil)
+      }
+    })
+  request.lnurl |> should.equal(lnurl)
+  request.amount_msats |> should.equal(100_000)
+  request.comment |> should.equal("great post")
+  request.event.kind |> should.equal(ZapRequest)
+  request.event.content |> should.equal("great post")
+  request.event.pubkey |> should.equal(None)
+  list.contains(request.event.tags, ["p", alice_hex]) |> should.be_true
+  list.contains(request.event.tags, ["e", note1_hex]) |> should.be_true
+  list.contains(request.event.tags, ["amount", "100000"])
+  |> should.be_true
+  list.contains(request.event.tags, ["lnurl", lnurl]) |> should.be_true
+  list.contains(request.event.tags, ["relays", ..zap.default_relay_urls])
+  |> should.be_true
+
+  // A second Send while pending is ignored to avoid duplicate requests.
+  let #(m6b, duplicate_effects) = update.update(m6, SendZap)
+  duplicate_effects |> should.equal([])
+  m6b.zap_pending |> should.be_true
+  let assert Ok(still_one) = dict.get(m6b.stats, note1_hex)
+  still_one.zaps |> should.equal(1)
+
+  // The host dispatches the invoice back into the plugin.
+  let #(m7, result_effects) =
+    update.update(m6, ZapInvoiceResult(Ok("lnbc1000n1testinvoice")))
+  result_effects |> should.equal([])
+  m7.zap_pending |> should.be_false
+  m7.zap_invoice |> should.equal(Some("lnbc1000n1testinvoice"))
+  m7.zap_target |> should.equal(Some(note1_hex))
+
+  // Cancel clears the dialog, invoice, and pending flag.
+  let #(m8, cancel_effects) = update.update(m7, CancelZap)
+  cancel_effects |> should.equal([])
+  m8.zap_target |> should.equal(None)
+  m8.zap_amount |> should.equal("21")
+  m8.zap_comment |> should.equal("")
+  m8.zap_recipient_lud16 |> should.equal(None)
+  m8.zap_lnurl |> should.equal(None)
+  m8.zap_invoice |> should.equal(None)
+  m8.zap_pending |> should.be_false
+}
+
+pub fn zap_without_lnurl_falls_back_to_publish_test() {
+  let m0 = model.init(route.main())
+  let #(m1, _) =
+    update.update(m0, IngestEvent(note_event(note1_hex, alice_hex, "zap me")))
+  // No Kind 0 profile, so the recipient has no lud16/lnurl.
+  let #(m2, _) = update.update(m1, StartZap(note1_hex))
+  m2.zap_lnurl |> should.equal(None)
+
+  let #(m3, effects) = update.update(m2, SendZap)
+  // Fallback keeps the legacy behaviour: publish the 9734 and close the dialog.
+  m3.zap_target |> should.equal(None)
+  m3.zap_pending |> should.be_false
+  m3.zap_invoice |> should.equal(None)
+
+  should.be_false(
+    list.any(effects, fn(effect) {
+      case effect {
+        ZapInvoiceEffect(_) -> True
+        _ -> False
+      }
+    }),
+  )
 
   let assert Ok(draft) =
     list.find_map(effects, fn(effect) {
@@ -437,14 +518,46 @@ pub fn zap_flow_publishes_kind_9734_test() {
       }
     })
   draft.kind |> should.equal(ZapRequest)
-  draft.content |> should.equal("great post")
-  draft.pubkey |> should.equal(None)
   list.contains(draft.tags, ["p", alice_hex]) |> should.be_true
-  list.contains(draft.tags, ["e", note1_hex]) |> should.be_true
-  list.contains(draft.tags, ["amount", "100000"]) |> should.be_true
-  list.contains(draft.tags, ["lnurl", lnurl]) |> should.be_true
-  list.contains(draft.tags, ["relays", ..zap.default_relay_urls])
-  |> should.be_true
+  list.contains(draft.tags, ["amount", "21000"]) |> should.be_true
+}
+
+pub fn zap_invoice_result_error_and_stale_test() {
+  let m0 = model.init(route.main())
+  let profile_event =
+    make_event(
+      "3333333333333333333333333333333333333333333333333333333333333333",
+      alice_hex,
+      1_700_000_050,
+      Metadata,
+      [],
+      "{\"lud16\":\"alice@getalby.com\"}",
+    )
+  let #(m1, _) = update.update(m0, IngestEvent(profile_event))
+  let #(m2, _) =
+    update.update(m1, IngestEvent(note_event(note1_hex, alice_hex, "zap me")))
+  let #(m3, _) = update.update(m2, StartZap(note1_hex))
+  let #(m4, _) = update.update(m3, SendZap)
+  m4.zap_pending |> should.be_true
+
+  let #(m5, effects) =
+    update.update(m4, ZapInvoiceResult(Error("LNURL endpoint failed")))
+  effects |> should.equal([])
+  m5.zap_pending |> should.be_false
+  m5.zap_invoice |> should.equal(None)
+  m5.zap_target |> should.equal(Some(note1_hex))
+
+  // A result arriving after the dialog closed is ignored.
+  let #(m6, _) = update.update(m5, CancelZap)
+  let #(m7, stale_effects) =
+    update.update(m6, ZapInvoiceResult(Ok("lnbc1stale")))
+  stale_effects |> should.equal([])
+  m7.zap_target |> should.equal(None)
+  m7.zap_invoice |> should.equal(None)
+
+  // The invoice result is not an action-driven message.
+  update.action_to_msg(schema_action("pay-invoice", []))
+  |> should.equal(None)
 }
 
 pub fn zap_invalid_amount_and_cancel_test() {
@@ -508,6 +621,22 @@ pub fn zap_dialog_renders_when_active_test() {
   should.be_true(string.contains(wire, "1000 sats"))
   should.be_true(string.contains(wire, "set-zap-amount"))
   should.be_true(string.contains(wire, "cancel-zap"))
+
+  // Pending invoice request shows a waiting state.
+  let pending_wire =
+    schema.encode_schema_message(view.view(Model(..m2, zap_pending: True)))
+  should.be_true(string.contains(pending_wire, "Waiting for Lightning invoice"))
+  should.be_true(string.contains(pending_wire, "cancel-zap"))
+
+  // A delivered invoice is rendered with copy and Pay affordances.
+  let invoice_wire =
+    schema.encode_schema_message(view.view(
+      Model(..m2, zap_invoice: Some("lnbc1000n1testinvoice")),
+    ))
+  should.be_true(string.contains(invoice_wire, "lnbc1000n1testinvoice"))
+  should.be_true(string.contains(invoice_wire, "pay-invoice"))
+  should.be_true(string.contains(invoice_wire, "Invoice ready"))
+  should.be_true(string.contains(invoice_wire, "\"code-block\""))
 }
 
 // Test-only helpers -----------------------------------------------------------
@@ -518,4 +647,43 @@ fn schema_action(name: String, fields: List(#(String, String))) -> Action {
     |> list.map(fn(pair) { #(pair.0, dynamic.string(pair.1)) })
     |> dict.from_list
   action.new(name) |> action.with_payload(payload)
+}
+
+pub fn submit_search_emits_relay_search_effect_test() {
+  let m = model.init(route.main())
+  let #(m, _) = update.update(m, SetSearchQuery("gleam nostr"))
+  let #(_, effects) = update.update(m, SubmitSearch)
+  should.be_true(
+    list.any(effects, fn(effect) {
+      case effect {
+        app.Search(query) -> query == "gleam nostr"
+        _ -> False
+      }
+    }),
+  )
+
+  let #(empty, _) = update.update(m, SetSearchQuery("   "))
+  let #(_, empty_effects) = update.update(empty, SubmitSearch)
+  empty_effects |> should.equal([])
+}
+
+pub fn pay_invoice_action_emits_open_url_test() {
+  let m = model.init(route.main())
+  let action =
+    action.new("pay-invoice")
+    |> action.with_payload(
+      dict.from_list([
+        #("invoice", dynamic.string("lnbc1test")),
+      ]),
+    )
+  let assert Some(msg) = update.action_to_msg(action)
+  let #(_, effects) = update.update(m, msg)
+  should.be_true(
+    list.any(effects, fn(effect) {
+      case effect {
+        app.OpenUrl(url) -> url == "lightning:lnbc1test"
+        _ -> False
+      }
+    }),
+  )
 }

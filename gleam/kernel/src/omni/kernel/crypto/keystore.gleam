@@ -8,7 +8,7 @@ import gleam/dynamic/decode
 import gleam/javascript/promise.{type Promise}
 import gleam/json
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
 import gleam/string
 import omni/nostr/event.{type Event, type UnsignedEvent, Event}
 import omni/nostr/event_id
@@ -40,6 +40,11 @@ pub fn account_key_storage_key(pubkey_hex: String) -> String {
   "omni_account_key:" <> string.lowercase(pubkey_hex)
 }
 
+/// Storage key holding a specific account's encrypted private key blob.
+pub fn account_enc_storage_key(pubkey_hex: String) -> String {
+  "omni_account_enc:" <> string.lowercase(pubkey_hex)
+}
+
 /// Key custody manager storing the active secret key and notifying subscribers.
 pub type Keystore {
   Keystore(
@@ -49,6 +54,8 @@ pub type Keystore {
     listeners: Ref(List(fn(Pubkey) -> Nil)),
     locked: Ref(Bool),
     encrypted: Ref(Bool),
+    passphrase_key: Ref(Option(String)),
+    passphrase_pub: Ref(Option(String)),
   )
 }
 
@@ -132,47 +139,97 @@ pub fn accounts(keystore: Keystore) -> List(String) {
   [active, ..list.filter(with_active, fn(pk) { pk != active })]
 }
 
-/// Switch to a previously imported account (plaintext accounts only).
+fn activate_account(keystore: Keystore, hex: String) -> Result(Pubkey, String) {
+  case secp256k1.get_public_key(hex) {
+    Error(_) -> Error("Stored account key is invalid")
+    Ok(pk_hex) ->
+      case pubkey.parse(pk_hex) {
+        Error(Nil) -> Error("Stored account key is invalid")
+        Ok(pk) -> {
+          ref.set(keystore.private_key, hex)
+          ref.set(keystore.public_key, pk)
+          let _ = storage.set(keystore.storage, storage_key_public_key, pk_hex)
+          case ref.get(keystore.encrypted) {
+            False -> {
+              let _ =
+                storage.set(keystore.storage, storage_key_private_key, hex)
+              let _ =
+                storage.set(
+                  keystore.storage,
+                  account_key_storage_key(pk_hex),
+                  hex,
+                )
+              Nil
+            }
+            True -> {
+              let _ = storage.remove(keystore.storage, storage_key_private_key)
+              Nil
+            }
+          }
+          let known = load_accounts(keystore.storage)
+          let next_accounts = case list.contains(known, pk_hex) {
+            True -> known
+            False -> [pk_hex, ..known]
+          }
+          save_accounts(keystore.storage, next_accounts)
+          let listeners = ref.get(keystore.listeners)
+          list.each(listeners, fn(listener) { listener(pk) })
+          Ok(pk)
+        }
+      }
+  }
+}
+
+/// Switch to a previously imported account, decrypting it when needed.
 pub fn switch_account(
   keystore: Keystore,
   pubkey_hex: String,
-) -> Result(Pubkey, String) {
+) -> Promise(Result(Pubkey, String)) {
   case ref.get(keystore.locked) {
-    True -> Error("Unlock the keystore before switching accounts")
+    True ->
+      promise.resolve(Error("Unlock the keystore before switching accounts"))
     False -> {
       let target = string.lowercase(string.trim(pubkey_hex))
       let current = pubkey.to_hex(get_public_key(keystore))
       case target == current {
-        True -> Ok(get_public_key(keystore))
+        True -> promise.resolve(Ok(get_public_key(keystore)))
         False ->
-          case storage.get(keystore.storage, account_key_storage_key(target)) {
-            None -> Error("Unknown account: " <> target)
-            Some(hex) ->
-              case secp256k1.get_public_key(hex) {
-                Error(_) -> Error("Stored account key is invalid")
-                Ok(pk_hex) ->
-                  case pubkey.parse(pk_hex) {
-                    Error(Nil) -> Error("Stored account key is invalid")
-                    Ok(pk) -> {
-                      ref.set(keystore.private_key, hex)
-                      ref.set(keystore.public_key, pk)
-                      let _ =
-                        storage.set(
-                          keystore.storage,
-                          storage_key_private_key,
-                          hex,
-                        )
-                      let _ =
-                        storage.set(
-                          keystore.storage,
-                          storage_key_public_key,
-                          pk_hex,
-                        )
-                      remember_account(keystore.storage, pk_hex, hex)
-                      let listeners = ref.get(keystore.listeners)
-                      list.each(listeners, fn(listener) { listener(pk) })
-                      Ok(pk)
+          case account_private_key(keystore, target) {
+            Some(hex) -> promise.resolve(activate_account(keystore, hex))
+            None ->
+              case
+                storage.get(keystore.storage, account_enc_storage_key(target))
+              {
+                None -> promise.resolve(Error("Unknown account: " <> target))
+                Some(blob) ->
+                  case
+                    ref.get(keystore.passphrase_key),
+                    ref.get(keystore.passphrase_pub)
+                  {
+                    Some(derived), Some(derived_pub) -> {
+                      use result <- promise.await(nip44.nip44_decrypt(
+                        derived,
+                        derived_pub,
+                        blob,
+                      ))
+                      case result {
+                        Error(_) ->
+                          promise.resolve(Error("Incorrect passphrase"))
+                        Ok(hex) -> {
+                          let _ =
+                            storage.set(
+                              keystore.storage,
+                              storage_key_encrypted_key,
+                              blob,
+                            )
+                          promise.resolve(activate_account(keystore, hex))
+                        }
+                      }
                     }
+                    _, _ ->
+                      promise.resolve(Error(
+                        "Unlock the keystore before switching accounts",
+                      ))
                   }
               }
           }
@@ -224,10 +281,15 @@ pub fn new(store: Storage) -> Keystore {
       }
   }
   let _ = store.set(storage_key_public_key, pubkey.to_hex(pubkey))
-  let encrypted = case encrypted_blob {
+  let active_encrypted = case encrypted_blob {
     Some(_) -> True
-    None -> False
+    None ->
+      case store.get(account_enc_storage_key(pubkey.to_hex(pubkey))) {
+        Some(_) -> True
+        None -> False
+      }
   }
+  let encrypted = active_encrypted
 
   let _ = case locked {
     False -> remember_account(store, pubkey.to_hex(pubkey), privkey)
@@ -242,6 +304,8 @@ pub fn new(store: Storage) -> Keystore {
     listeners: ref.new([]),
     locked: ref.new(locked),
     encrypted: ref.new(encrypted),
+    passphrase_key: ref.new(None),
+    passphrase_pub: ref.new(None),
   )
 }
 
@@ -348,12 +412,23 @@ fn derive_passphrase_key(
   }
 }
 
+fn active_encrypted_blob(keystore: Keystore) -> Option(String) {
+  case storage.get(keystore.storage, storage_key_encrypted_key) {
+    Some(blob) -> Some(blob)
+    None ->
+      storage.get(
+        keystore.storage,
+        account_enc_storage_key(pubkey.to_hex(get_public_key(keystore))),
+      )
+  }
+}
+
 /// Unlock an encrypted keystore with `passphrase`.
 pub fn unlock(
   keystore: Keystore,
   passphrase: String,
 ) -> Promise(Result(Pubkey, String)) {
-  case storage.get(keystore.storage, storage_key_encrypted_key) {
+  case active_encrypted_blob(keystore) {
     None -> promise.resolve(Ok(get_public_key(keystore)))
     Some(blob) ->
       case storage.get(keystore.storage, storage_key_key_salt) {
@@ -379,6 +454,8 @@ pub fn unlock(
                           ref.set(keystore.private_key, hex)
                           ref.set(keystore.public_key, pk)
                           ref.set(keystore.locked, False)
+                          ref.set(keystore.passphrase_key, Some(derived))
+                          ref.set(keystore.passphrase_pub, Some(derived_pub))
                           Ok(pk)
                         }
                       }
@@ -390,7 +467,60 @@ pub fn unlock(
   }
 }
 
-/// Encrypt the active private key at rest with `passphrase`.
+fn account_private_key(
+  keystore: Keystore,
+  pubkey_hex: String,
+) -> Option(String) {
+  let active = pubkey.to_hex(get_public_key(keystore))
+  case pubkey_hex == active {
+    True ->
+      case ref.get(keystore.private_key) {
+        "" -> storage.get(keystore.storage, account_key_storage_key(pubkey_hex))
+        key -> Some(key)
+      }
+    False -> storage.get(keystore.storage, account_key_storage_key(pubkey_hex))
+  }
+}
+
+fn encrypt_accounts(
+  keystore: Keystore,
+  derived: String,
+  derived_pub: String,
+  accounts: List(String),
+) -> Promise(Result(List(#(String, String)), String)) {
+  case accounts {
+    [] -> promise.resolve(Ok([]))
+    [pubkey_hex, ..rest] ->
+      case account_private_key(keystore, pubkey_hex) {
+        None -> encrypt_accounts(keystore, derived, derived_pub, rest)
+        Some(hex) -> {
+          use result <- promise.await(nip44.nip44_encrypt(
+            derived,
+            derived_pub,
+            hex,
+          ))
+          case result {
+            Error(err) -> promise.resolve(Error(err))
+            Ok(blob) -> {
+              use rest_result <- promise.await(encrypt_accounts(
+                keystore,
+                derived,
+                derived_pub,
+                rest,
+              ))
+              promise.resolve(case rest_result {
+                Error(err) -> Error(err)
+                Ok(rest_encrypted) ->
+                  Ok([#(pubkey_hex, blob), ..rest_encrypted])
+              })
+            }
+          }
+        }
+      }
+  }
+}
+
+/// Encrypt every imported account at rest with `passphrase`.
 pub fn enable_passphrase(
   keystore: Keystore,
   passphrase: String,
@@ -404,25 +534,60 @@ pub fn enable_passphrase(
       case derive_passphrase_key(salt, passphrase) {
         Error(err) -> promise.resolve(Error(err))
         Ok(#(derived, derived_pub)) -> {
-          use result <- promise.await(nip44.nip44_encrypt(
+          let accounts = accounts(keystore)
+          use result <- promise.await(encrypt_accounts(
+            keystore,
             derived,
             derived_pub,
-            ref.get(keystore.private_key),
+            accounts,
           ))
           promise.resolve(case result {
             Error(err) -> Error(err)
-            Ok(blob) -> {
-              let _ =
-                storage.set(keystore.storage, storage_key_encrypted_key, blob)
+            Ok(encrypted) -> {
+              list.each(encrypted, fn(entry) {
+                let #(pubkey_hex, blob) = entry
+                let _ =
+                  storage.set(
+                    keystore.storage,
+                    account_enc_storage_key(pubkey_hex),
+                    blob,
+                  )
+                let _ =
+                  storage.remove(
+                    keystore.storage,
+                    account_key_storage_key(pubkey_hex),
+                  )
+              })
+              let active_hex = pubkey.to_hex(get_public_key(keystore))
+              let active_blob = case
+                list.find(encrypted, fn(entry) { entry.0 == active_hex })
+              {
+                Ok(entry) -> Some(entry.1)
+                Error(Nil) -> None
+              }
+              case active_blob {
+                Some(blob) -> {
+                  let _ =
+                    storage.set(
+                      keystore.storage,
+                      storage_key_encrypted_key,
+                      blob,
+                    )
+                  Nil
+                }
+                None -> Nil
+              }
               let _ = storage.set(keystore.storage, storage_key_key_salt, salt)
               let _ =
                 storage.set(
                   keystore.storage,
                   storage_key_public_key,
-                  pubkey.to_hex(get_public_key(keystore)),
+                  active_hex,
                 )
               let _ = storage.remove(keystore.storage, storage_key_private_key)
               ref.set(keystore.encrypted, True)
+              ref.set(keystore.passphrase_key, Some(derived))
+              ref.set(keystore.passphrase_pub, Some(derived_pub))
               Ok(Nil)
             }
           })
@@ -432,22 +597,119 @@ pub fn enable_passphrase(
   }
 }
 
-/// Remove passphrase encryption and store the key in plaintext again.
-pub fn disable_passphrase(keystore: Keystore) -> Result(Nil, String) {
+fn decrypt_accounts(
+  keystore: Keystore,
+  derived: String,
+  derived_pub: String,
+  accounts: List(String),
+) -> Promise(Result(List(#(String, String)), String)) {
+  case accounts {
+    [] -> promise.resolve(Ok([]))
+    [pubkey_hex, ..rest] ->
+      case account_private_key(keystore, pubkey_hex) {
+        Some(hex) -> {
+          use rest_result <- promise.await(decrypt_accounts(
+            keystore,
+            derived,
+            derived_pub,
+            rest,
+          ))
+          promise.resolve(case rest_result {
+            Error(err) -> Error(err)
+            Ok(items) -> Ok([#(pubkey_hex, hex), ..items])
+          })
+        }
+        None -> {
+          let blob = case
+            storage.get(keystore.storage, account_enc_storage_key(pubkey_hex))
+          {
+            Some(value) -> Some(value)
+            None ->
+              case pubkey_hex == pubkey.to_hex(get_public_key(keystore)) {
+                True -> storage.get(keystore.storage, storage_key_encrypted_key)
+                False -> None
+              }
+          }
+          case blob {
+            None -> decrypt_accounts(keystore, derived, derived_pub, rest)
+            Some(blob) -> {
+              use result <- promise.await(nip44.nip44_decrypt(
+                derived,
+                derived_pub,
+                blob,
+              ))
+              case result {
+                Error(_) -> promise.resolve(Error("Incorrect passphrase"))
+                Ok(hex) -> {
+                  use rest_result <- promise.await(decrypt_accounts(
+                    keystore,
+                    derived,
+                    derived_pub,
+                    rest,
+                  ))
+                  promise.resolve(case rest_result {
+                    Error(err) -> Error(err)
+                    Ok(items) -> Ok([#(pubkey_hex, hex), ..items])
+                  })
+                }
+              }
+            }
+          }
+        }
+      }
+  }
+}
+
+/// Remove passphrase encryption and store account keys in plaintext again.
+pub fn disable_passphrase(keystore: Keystore) -> Promise(Result(Nil, String)) {
   case ref.get(keystore.locked) {
-    True -> Error("Unlock the key before disabling encryption")
-    False -> {
-      let _ =
-        storage.set(
-          keystore.storage,
-          storage_key_private_key,
-          ref.get(keystore.private_key),
-        )
-      let _ = storage.remove(keystore.storage, storage_key_encrypted_key)
-      let _ = storage.remove(keystore.storage, storage_key_key_salt)
-      ref.set(keystore.encrypted, False)
-      Ok(Nil)
-    }
+    True -> promise.resolve(Error("Unlock the key before disabling encryption"))
+    False ->
+      case ref.get(keystore.passphrase_key), ref.get(keystore.passphrase_pub) {
+        Some(derived), Some(derived_pub) -> {
+          let accounts = accounts(keystore)
+          use result <- promise.await(decrypt_accounts(
+            keystore,
+            derived,
+            derived_pub,
+            accounts,
+          ))
+          promise.resolve(case result {
+            Error(err) -> Error(err)
+            Ok(decrypted) -> {
+              list.each(decrypted, fn(entry) {
+                let #(pubkey_hex, hex) = entry
+                let _ =
+                  storage.set(
+                    keystore.storage,
+                    account_key_storage_key(pubkey_hex),
+                    hex,
+                  )
+                let _ =
+                  storage.remove(
+                    keystore.storage,
+                    account_enc_storage_key(pubkey_hex),
+                  )
+              })
+              let _ =
+                storage.set(
+                  keystore.storage,
+                  storage_key_private_key,
+                  ref.get(keystore.private_key),
+                )
+              let _ =
+                storage.remove(keystore.storage, storage_key_encrypted_key)
+              let _ = storage.remove(keystore.storage, storage_key_key_salt)
+              ref.set(keystore.encrypted, False)
+              ref.set(keystore.passphrase_key, None)
+              ref.set(keystore.passphrase_pub, None)
+              Ok(Nil)
+            }
+          })
+        }
+        _, _ ->
+          promise.resolve(Error("Unlock the key before disabling encryption"))
+      }
   }
 }
 
@@ -455,6 +717,16 @@ pub fn disable_passphrase(keystore: Keystore) -> Result(Nil, String) {
 ///
 /// Updates persistence and notifies all registered listeners.
 pub fn switch_key(
+  keystore: Keystore,
+  privkey_hex: String,
+) -> Result(Pubkey, String) {
+  case ref.get(keystore.encrypted) {
+    True -> Error("Remove passphrase encryption before importing a new key")
+    False -> switch_key_unencrypted(keystore, privkey_hex)
+  }
+}
+
+fn switch_key_unencrypted(
   keystore: Keystore,
   privkey_hex: String,
 ) -> Result(Pubkey, String) {

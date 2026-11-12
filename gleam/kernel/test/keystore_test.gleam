@@ -160,13 +160,14 @@ pub fn keystore_passphrase_encryption_roundtrip_test() -> promise.Promise(Nil) {
   assert get_private_key(reloaded) == original_priv
   assert sign_event(reloaded, draft) |> result.is_ok
 
-  let assert Ok(Nil) = disable_passphrase(reloaded)
+  use disabled <- promise.await(disable_passphrase(reloaded))
+  let assert Ok(Nil) = disabled
   assert is_encrypted(reloaded) == False
   assert storage.get(store, storage_key_private_key) == Some(original_priv)
   promise.resolve(Nil)
 }
 
-pub fn keystore_multi_account_switch_test() {
+pub fn keystore_multi_account_switch_test() -> promise.Promise(Nil) {
   let store = storage.in_memory()
   let ks = keystore.new(store)
   let first = get_public_key(ks)
@@ -181,10 +182,16 @@ pub fn keystore_multi_account_switch_test() {
   assert accounts(reloaded) |> list.length == 2
   assert get_public_key(reloaded) == second
 
-  let assert Ok(switched) = switch_account(reloaded, pubkey.to_hex(first))
+  use switched_result <- promise.await(switch_account(
+    reloaded,
+    pubkey.to_hex(first),
+  ))
+  let assert Ok(switched) = switched_result
   assert switched == first
   assert get_public_key(reloaded) == first
-  assert switch_account(reloaded, "not-a-pubkey") |> result.is_error
+  use invalid <- promise.await(switch_account(reloaded, "not-a-pubkey"))
+  assert invalid |> result.is_error
   assert second == keystore.get_public_key(ks)
   let _ = second_pub_hex
+  promise.resolve(Nil)
 }

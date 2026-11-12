@@ -9,10 +9,19 @@ import omni/nostr/event.{type UnsignedEvent}
 import omni/platform/ref.{type Ref}
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema
+import omni/plugin_kit/zap.{type ZapInvoice as ZapInvoicePayload}
 import omni/protocol/blossom.{type BlobUpload}
 import omni/protocol/relay_command.{type RelayCommand}
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
+
+/// Request the host to obtain a Lightning invoice for a zap.
+///
+/// The host signs and broadcasts `event` (Kind 9734), POSTs it to the LNURL
+/// pay callback resolved from `lnurl`, and dispatches the invoice string (or
+/// an error message) back into the plugin.
+pub type ZapInvoice =
+  ZapInvoicePayload
 
 /// Declarative effect returned by `init` and `update`.
 pub type Effect(msg) {
@@ -32,6 +41,12 @@ pub type Effect(msg) {
   PlayChime
   /// Request the host upload a blob to Blossom.
   UploadBlob(BlobUpload)
+  /// Request a NIP-50 relay search for `query`.
+  Search(String)
+  /// Request the host open an external URI (e.g. a `lightning:` invoice).
+  OpenUrl(String)
+  /// Request the host obtain a Lightning invoice for a zap request.
+  ZapInvoice(ZapInvoice)
 }
 
 /// Elm-style plugin application specification.
@@ -60,6 +75,9 @@ pub type RunningApp(model, msg) {
     relay_commands: Ref(List(RelayCommand)),
     chimes: Ref(Int),
     uploads: Ref(List(BlobUpload)),
+    searches: Ref(List(String)),
+    urls: Ref(List(String)),
+    zap_invoices: Ref(List(ZapInvoice)),
   )
 }
 
@@ -91,6 +109,9 @@ pub fn start(
       relay_commands: ref.new([]),
       chimes: ref.new(0),
       uploads: ref.new([]),
+      searches: ref.new([]),
+      urls: ref.new([]),
+      zap_invoices: ref.new([]),
     )
 
   emit_schema(initial_node)
@@ -186,6 +207,11 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
     PlayChime -> ref.update(app.chimes, fn(count) { count + 1 })
     UploadBlob(upload) ->
       ref.update(app.uploads, fn(queue) { [upload, ..queue] })
+    Search(query) -> ref.update(app.searches, fn(queue) { [query, ..queue] })
+    OpenUrl(url) -> ref.update(app.urls, fn(queue) { [url, ..queue] })
+    OpenUrl(url) -> ref.update(app.urls, fn(queue) { [url, ..queue] })
+    ZapInvoice(invoice) ->
+      ref.update(app.zap_invoices, fn(queue) { [invoice, ..queue] })
   }
 }
 
@@ -196,10 +222,31 @@ pub fn take_publishes(app: RunningApp(model, msg)) -> List(UnsignedEvent) {
   list.reverse(pending)
 }
 
+/// Drain pending external-URL requests.
+pub fn take_urls(app: RunningApp(model, msg)) -> List(String) {
+  let pending = ref.get(app.urls)
+  ref.set(app.urls, [])
+  list.reverse(pending)
+}
+
+/// Drain pending relay-search requests.
+pub fn take_searches(app: RunningApp(model, msg)) -> List(String) {
+  let pending = ref.get(app.searches)
+  ref.set(app.searches, [])
+  list.reverse(pending)
+}
+
 /// Drain pending Blossom uploads.
 pub fn take_uploads(app: RunningApp(model, msg)) -> List(BlobUpload) {
   let pending = ref.get(app.uploads)
   ref.set(app.uploads, [])
+  list.reverse(pending)
+}
+
+/// Drain pending Lightning invoice requests (`ZapInvoice` effects).
+pub fn take_zap_invoices(app: RunningApp(model, msg)) -> List(ZapInvoice) {
+  let pending = ref.get(app.zap_invoices)
+  ref.set(app.zap_invoices, [])
   list.reverse(pending)
 }
 

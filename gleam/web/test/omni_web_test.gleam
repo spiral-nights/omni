@@ -5,6 +5,7 @@ import gleam/bit_array
 import gleam/dict
 import gleam/dynamic
 import gleam/javascript/promise
+import gleam/json
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
@@ -21,6 +22,7 @@ import omni/nostr/event.{type Event, Event, UnsignedEvent}
 import omni/nostr/event_id
 import omni/nostr/filter.{Filter}
 import omni/nostr/kind
+import omni/nostr/kind as nostr_kind
 import omni/nostr/pubkey
 import omni/nostr/relay_frame
 import omni/nostr/relay_url
@@ -811,6 +813,17 @@ pub fn passphrase_lock_unlock_and_disable_test() -> promise.Promise(Nil) {
   use ports_res <- promise.await(test_ports(store))
   let assert Ok(ports) = ports_res
   let booted = boot.init_with_relays(ports, [], None)
+  let assert Some(original_profile) = booted.model.user_profile
+
+  // Import a second account so per-account encryption is exercised.
+  use imported <- promise.await(
+    promise.resolve(boot.import_key(
+      booted,
+      "0000000000000000000000000000000000000000000000000000000000000001",
+    )),
+  )
+  let assert Ok(booted) = imported
+  let assert Some(second_profile) = booted.model.user_profile
 
   use enabled <- promise.await(boot.enable_passphrase(booted, "s3cret"))
   let assert Ok(next) = enabled
@@ -833,7 +846,17 @@ pub fn passphrase_lock_unlock_and_disable_test() -> promise.Promise(Nil) {
   unlocked_boot.model.key_locked |> should.equal(False)
   should.be_ok(rpc.sign_draft_json(unlocked_boot, draft))
 
-  let assert Ok(plain) = boot.disable_passphrase(unlocked_boot)
+  // Other accounts can be decrypted from the unlocked session key.
+  use switched_result <- promise.await(boot.switch_account(
+    unlocked_boot,
+    original_profile.pubkey,
+  ))
+  let assert Ok(switched_boot) = switched_result
+  let assert Some(now_first) = switched_boot.model.user_profile
+  should.not_equal(now_first.pubkey, second_profile.pubkey)
+
+  use disabled <- promise.await(boot.disable_passphrase(switched_boot))
+  let assert Ok(plain) = disabled
   plain.model.key_encrypted |> should.equal(False)
   let assert Some(_) = storage.get(store, keystore.storage_key_private_key)
   promise.resolve(Nil)
@@ -960,9 +983,130 @@ pub fn imported_account_can_be_switched_back_test() -> promise.Promise(Nil) {
   should.not_equal(second.pubkey, original.pubkey)
   list.length(with_second.model.accounts) |> should.equal(2)
 
-  let assert Ok(switched) = boot.switch_account(with_second, original.pubkey)
+  use switched_result <- promise.await(boot.switch_account(
+    with_second,
+    original.pubkey,
+  ))
+  let assert Ok(switched) = switched_result
   let assert Some(back) = switched.model.user_profile
   back.pubkey |> should.equal(original.pubkey)
   list.length(switched.model.accounts) |> should.equal(2)
+  promise.resolve(Nil)
+}
+
+fn feed_event(
+  id_hex: String,
+  pubkey_hex: String,
+  kind_int: Int,
+  tags: List(List(String)),
+  content: String,
+  created_at: Int,
+) -> Event {
+  let assert Ok(eid) = event_id.parse(id_hex)
+  let assert Ok(pk) = pubkey.parse(pubkey_hex)
+  Event(
+    id: eid,
+    pubkey: pk,
+    created_at: created_at,
+    kind: nostr_kind.from_int(kind_int),
+    tags: tags,
+    content: content,
+    sig: "sig",
+  )
+}
+
+pub fn zap_invoice_flow_broadcasts_request_and_returns_invoice_test() -> promise.Promise(
+  Nil,
+) {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+  let assert Ok(feed) = dict.get(booted.builtins, "org.omni.plugin.feed")
+  let assert Some(ingest) = feed.ingest
+
+  let author =
+    "7777777777777777777777777777777777777777777777777777777777777777"
+  let note_id =
+    "8888888888888888888888888888888888888888888888888888888888888888"
+  ingest(feed_event(
+    "9999999999999999999999999999999999999999999999999999999999999999",
+    author,
+    0,
+    [],
+    "{\"lud16\":\"alice@example.com\"}",
+    1_700_000_000,
+  ))
+  ingest(feed_event(note_id, author, 1, [], "zap me", 1_700_000_001))
+
+  let open_zap =
+    schema_action.new("zap-note")
+    |> schema_action.with_payload(
+      dict.from_list([
+        #("id", dynamic.string(note_id)),
+      ]),
+    )
+  let #(opened, _) =
+    boot.dispatch(booted, HostedSchemaAction("org.omni.plugin.feed", open_zap))
+
+  let amount =
+    schema_action.new("set-zap-amount")
+    |> schema_action.with_payload(
+      dict.from_list([
+        #("value", dynamic.string("21")),
+      ]),
+    )
+  let #(with_amount, _) =
+    boot.dispatch(opened, HostedSchemaAction("org.omni.plugin.feed", amount))
+
+  let send = schema_action.new("send-zap")
+  let #(sent, _) =
+    boot.dispatch(with_amount, HostedSchemaAction("org.omni.plugin.feed", send))
+
+  let calls = ref.new([])
+  let fetch = fn(url) {
+    ref.update(calls, fn(items) { [url, ..items] })
+    case string.contains(url, "/cb") {
+      True -> promise.resolve(Ok("{\"pr\":\"lnbc1testinvoice\"}"))
+      False ->
+        promise.resolve(
+          Ok(
+            json.to_string(
+              json.object([
+                #("callback", json.string("https://lnurl.test/cb")),
+                #("minSendable", json.int(1000)),
+                #("maxSendable", json.int(100_000_000)),
+                #("commentAllowed", json.int(100)),
+              ]),
+            ),
+          ),
+        )
+    }
+  }
+
+  use _ <- promise.await(boot.process_zap_invoices_with(sent, fetch))
+  use events <- promise.await(event_store.get_events(
+    sent.kernel.event_store,
+    Filter(
+      None,
+      None,
+      Some([nostr_kind.from_int(9734)]),
+      None,
+      None,
+      None,
+      None,
+      dict.new(),
+    ),
+  ))
+  list.length(events) |> should.equal(1)
+  let assert [request_event] = events
+  list.contains(request_event.tags, ["amount", "21000"])
+  |> should.equal(True)
+
+  let assert Ok(feed_after) = dict.get(sent.builtins, "org.omni.plugin.feed")
+  let rendered = feed_after.render() |> schema_codec.encode_node
+  string.contains(rendered, "lnbc1testinvoice") |> should.equal(True)
+
+  list.length(ref.get(calls)) |> should.equal(2)
   promise.resolve(Nil)
 }

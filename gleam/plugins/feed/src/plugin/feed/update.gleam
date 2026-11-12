@@ -9,8 +9,11 @@ import gleam/string
 import omni/nostr/event.{type Event, UnsignedEvent}
 import omni/nostr/kind
 import omni/nostr/pubkey
-import omni/plugin_kit/app.{type Effect, FetchUntil, Publish}
+import omni/plugin_kit/app.{
+  type Effect, FetchUntil, OpenUrl, Publish, Search, ZapInvoice,
+}
 import omni/plugin_kit/schema
+import omni/plugin_kit/zap as kit_zap
 import omni/protocol/schema/action.{type Action}
 import omni/social/follows
 import omni/social/note.{type Note, Note}
@@ -23,10 +26,10 @@ import plugin/feed/model.{
 }
 import plugin/feed/msg.{
   type Msg, CancelZap, IngestEvent, IngestEvents, LikeNote, LoadMore,
-  NavigateBack, OpenThread, PublishNote, PublishReply, RepostNote, SelectTab,
-  SelectView, SendZap, SetComposerDraft, SetComposerDraftAndPublish,
+  NavigateBack, OpenThread, PayInvoice, PublishNote, PublishReply, RepostNote,
+  SelectTab, SelectView, SendZap, SetComposerDraft, SetComposerDraftAndPublish,
   SetReplyDraft, SetSearchQuery, SetZapAmount, SetZapComment, StartReply,
-  StartZap, ToggleInlineMedia, ToggleShowReplies,
+  StartZap, SubmitSearch, ToggleInlineMedia, ToggleShowReplies, ZapInvoiceResult,
 }
 import plugin/feed/zap
 
@@ -105,10 +108,27 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
 
     CancelZap -> #(clear_zap(model), [])
 
+    ZapInvoiceResult(result) -> apply_zap_invoice_result(model, result)
+
     SetSearchQuery(query) -> #(
       Model(..model, view: ViewSearch, search_query: query),
       [],
     )
+
+    PayInvoice(invoice) -> {
+      case string.trim(invoice) {
+        "" -> #(model, [])
+        invoice -> #(model, [OpenUrl("lightning:" <> invoice)])
+      }
+    }
+
+    SubmitSearch -> {
+      let query = string.trim(model.search_query)
+      case query {
+        "" -> #(model, [])
+        query -> #(model, [Search(query)])
+      }
+    }
 
     LoadMore -> {
       let next_model =
@@ -233,6 +253,14 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
     "send-zap" | "send_zap" -> Some(SendZap)
 
     "cancel-zap" | "cancel_zap" -> Some(CancelZap)
+
+    "pay-invoice" | "pay_invoice" ->
+      case extract_string(act, ["invoice", "pr", "value"]) {
+        Some(invoice) if invoice != "" -> Some(PayInvoice(invoice))
+        _ -> None
+      }
+
+    "submit-search" | "submit_search" | "search-relays" -> Some(SubmitSearch)
 
     "search" | "set-search-query" | "set_search_query" ->
       case extract_string(act, ["query", "q", "value", "searchQuery"]) {
@@ -528,13 +556,16 @@ fn clear_zap(model: Model) -> Model {
     zap_comment: "",
     zap_recipient_lud16: None,
     zap_lnurl: None,
+    zap_invoice: None,
+    zap_pending: False,
   )
 }
 
 fn send_zap(model: Model) -> #(Model, List(Effect(Msg))) {
-  case model.zap_target {
-    None -> #(model, [])
-    Some(note_id) ->
+  case model.zap_pending, model.zap_target {
+    True, _ -> #(model, [])
+    False, None -> #(model, [])
+    False, Some(note_id) ->
       case dict.get(model.notes, note_id) {
         Error(Nil) -> #(model, [])
         Ok(target) ->
@@ -551,11 +582,52 @@ fn send_zap(model: Model) -> #(Model, List(Effect(Msg))) {
                   lnurl: model.zap_lnurl,
                 )
               let unsigned = zap.request_event(draft, model.now_sec + 1)
-              #(increment_zap(clear_zap(model), target.id, sats), [
-                Publish(unsigned),
-              ])
+              case model.zap_lnurl {
+                Some(lnurl) ->
+                  case string.trim(lnurl) {
+                    "" -> #(increment_zap(clear_zap(model), target.id, sats), [
+                      Publish(unsigned),
+                    ])
+                    clean_lnurl -> {
+                      // The host signs and broadcasts the 9734, then calls
+                      // the LNURL callback; the plugin does not publish it.
+                      let request =
+                        kit_zap.ZapInvoice(
+                          event: unsigned,
+                          lnurl: clean_lnurl,
+                          amount_msats: zap.sats_to_millisats(sats),
+                          comment: string.trim(model.zap_comment),
+                        )
+                      let next_model =
+                        Model(..model, zap_invoice: None, zap_pending: True)
+                      #(increment_zap(next_model, target.id, sats), [
+                        ZapInvoice(request),
+                      ])
+                    }
+                  }
+                None -> #(increment_zap(clear_zap(model), target.id, sats), [
+                  Publish(unsigned),
+                ])
+              }
             }
           }
+      }
+  }
+}
+
+fn apply_zap_invoice_result(
+  model: Model,
+  result: Result(String, String),
+) -> #(Model, List(Effect(Msg))) {
+  case model.zap_target {
+    None -> #(model, [])
+    Some(_) ->
+      case result {
+        Ok(invoice) -> #(
+          Model(..model, zap_invoice: Some(invoice), zap_pending: False),
+          [],
+        )
+        Error(_) -> #(Model(..model, zap_invoice: None, zap_pending: False), [])
       }
   }
 }

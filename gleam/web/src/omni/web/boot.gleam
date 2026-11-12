@@ -8,11 +8,15 @@
 //// Mounting the returned element into `#omni-root` is the host page's job
 //// (`apps/web`), keeping the package free of DOM FFI.
 
+import gleam/bit_array
 import gleam/dict.{type Dict}
+import gleam/dynamic/decode
+import gleam/int
 import gleam/javascript/promise.{type Promise}
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
 import lustre/attribute
 import lustre/element.{type Element}
@@ -23,12 +27,15 @@ import omni/kernel/crypto/keystore
 import omni/kernel/intents/broker
 import omni/kernel/kernel.{type KernelPorts, type OmniKernel, KernelPorts}
 import omni/kernel/nostr/coordinator as subscription_coordinator
+import omni/kernel/nostr/coordinator
 import omni/kernel/nostr/event_store
 import omni/kernel/nostr/relay_pool
 import omni/kernel/workspace/sync
+import omni/nostr/bech32
 import omni/nostr/event.{type Event, type UnsignedEvent, UnsignedEvent}
 import omni/nostr/event_codec
 import omni/nostr/event_id
+import omni/nostr/filter as omni_filter
 import omni/nostr/kind
 import omni/nostr/pubkey
 import omni/nostr/relay_url
@@ -38,12 +45,15 @@ import omni/platform/nip44
 import omni/platform/promise_ext
 import omni/platform/ref
 import omni/platform/storage
+import omni/platform/url
 import omni/platform/websocket
+import omni/plugin_kit/zap
 import omni/protocol/blossom
 import omni/protocol/capability
 import omni/protocol/grant.{Always}
 import omni/protocol/intent.{IntentHandler}
 import omni/protocol/plugin_id
+import omni/protocol/rpc/method.{type FetchOptions, FetchOptions}
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
 import omni/protocol/workspace
@@ -513,8 +523,11 @@ pub fn enable_passphrase(
 }
 
 /// Remove passphrase encryption from the stored key.
-pub fn disable_passphrase(booted: Booted) -> Result(Booted, String) {
-  case keystore.disable_passphrase(booted.kernel.keystore) {
+pub fn disable_passphrase(booted: Booted) -> Promise(Result(Booted, String)) {
+  use result <- promise.await(keystore.disable_passphrase(
+    booted.kernel.keystore,
+  ))
+  promise.resolve(case result {
     Ok(_) ->
       Ok(
         Booted(
@@ -523,7 +536,7 @@ pub fn disable_passphrase(booted: Booted) -> Result(Booted, String) {
         ),
       )
     Error(err) -> Error(err)
-  }
+  })
 }
 
 /// Unlock a passphrase-encrypted key and refresh the session profile.
@@ -555,8 +568,12 @@ pub fn unlock_key(
 pub fn switch_account(
   booted: Booted,
   pubkey_hex: String,
-) -> Result(Booted, String) {
-  case keystore.switch_account(booted.kernel.keystore, pubkey_hex) {
+) -> Promise(Result(Booted, String)) {
+  use result <- promise.await(keystore.switch_account(
+    booted.kernel.keystore,
+    pubkey_hex,
+  ))
+  promise.resolve(case result {
     Error(err) -> Error(err)
     Ok(_) ->
       Ok(
@@ -569,7 +586,7 @@ pub fn switch_account(
           ),
         ),
       )
-  }
+  })
 }
 
 /// Export the active private key as an nsec string.
@@ -642,6 +659,239 @@ pub fn publish_pending_with(
         })
       })
   }
+}
+
+type LnurlPay {
+  LnurlPay(
+    callback: String,
+    min_sendable: Int,
+    max_sendable: Int,
+    comment_allowed: Int,
+  )
+}
+
+fn lnurl_pay_decoder() -> decode.Decoder(LnurlPay) {
+  use callback <- decode.field("callback", decode.string)
+  use min_sendable <- decode.optional_field("minSendable", 0, decode.int)
+  use max_sendable <- decode.optional_field("maxSendable", 0, decode.int)
+  use comment_allowed <- decode.optional_field("commentAllowed", 0, decode.int)
+  decode.success(LnurlPay(
+    callback: callback,
+    min_sendable: min_sendable,
+    max_sendable: max_sendable,
+    comment_allowed: comment_allowed,
+  ))
+}
+
+fn lnurl_invoice_decoder() -> decode.Decoder(String) {
+  use pr <- decode.field("pr", decode.string)
+  decode.success(pr)
+}
+
+fn lnurl_url(lnurl: String) -> Result(String, String) {
+  case bech32.decode_bytes(lnurl) {
+    Error(_) -> Error("Invalid LNURL")
+    Ok(#(hrp, bytes, _)) ->
+      case hrp == "lnurl" {
+        False -> Error("Invalid LNURL prefix")
+        True ->
+          bytes
+          |> bech32.bytes_to_bit_array
+          |> bit_array.to_string
+          |> result.replace_error("Invalid LNURL encoding")
+      }
+  }
+}
+
+fn query_join(base: String, params: List(#(String, String))) -> String {
+  let encoded =
+    params
+    |> list.map(fn(pair) { pair.0 <> "=" <> pair.1 })
+    |> string.join("&")
+  let separator = case string.contains(base, "?") {
+    True -> "&"
+    False -> "?"
+  }
+  base <> separator <> encoded
+}
+
+/// Request Lightning invoices for queued zap requests, broadcasting the 9734
+/// request to relays and calling the LNURL-pay callback.
+pub fn process_zap_invoices(booted: Booted) -> Promise(Nil) {
+  process_zap_invoices_with(booted, http.fetch_text)
+}
+
+/// Invoice processing with an injected text fetcher (tests).
+pub fn process_zap_invoices_with(
+  booted: Booted,
+  fetch_text: fn(String) -> Promise(Result(String, String)),
+) -> Promise(Nil) {
+  let requests =
+    dict.fold(booted.builtins, [], fn(acc, _id, app) {
+      let callback = app.zap_invoice_result
+      list.append(
+        acc,
+        list.map(app.take_zap_invoices(), fn(invoice) { #(invoice, callback) }),
+      )
+    })
+
+  use _ <- promise.await(
+    promise_ext.all(
+      list.map(requests, fn(request) {
+        process_zap_invoice(booted, fetch_text, request.0, request.1)
+      }),
+    ),
+  )
+  promise.resolve(Nil)
+}
+
+fn process_zap_invoice(
+  booted: Booted,
+  fetch_text: fn(String) -> Promise(Result(String, String)),
+  invoice: zap.ZapInvoice,
+  callback: Option(fn(Result(String, String)) -> Nil),
+) -> Promise(Nil) {
+  case keystore.sign_event(booted.kernel.keystore, invoice.event) {
+    Error(err) -> {
+      notify_zap(callback, Error(err))
+      promise.resolve(Nil)
+    }
+    Ok(signed) -> {
+      let _ = relay_pool.publish(booted.kernel.relay_pool, signed)
+      let _ = event_store.save_event(booted.kernel.event_store, signed)
+      ingest_signed(booted, signed)
+      let event_json = event_codec.encode(signed)
+
+      case lnurl_url(invoice.lnurl) {
+        Error(err) -> {
+          notify_zap(callback, Error(err))
+          promise.resolve(Nil)
+        }
+        Ok(pay_url) -> {
+          use metadata <- promise.await(fetch_text(pay_url))
+          case metadata {
+            Error(err) -> {
+              notify_zap(callback, Error(err))
+              promise.resolve(Nil)
+            }
+            Ok(body) -> {
+              case json.parse(from: body, using: lnurl_pay_decoder()) {
+                Error(_) -> {
+                  notify_zap(callback, Error("Invalid LNURL pay metadata"))
+                  promise.resolve(Nil)
+                }
+                Ok(pay) -> {
+                  let upper_ok =
+                    pay.max_sendable == 0
+                    || invoice.amount_msats <= pay.max_sendable
+                  let amount_ok =
+                    invoice.amount_msats >= pay.min_sendable && upper_ok
+                  case amount_ok {
+                    False -> {
+                      notify_zap(callback, Error("Zap amount is out of range"))
+                      promise.resolve(Nil)
+                    }
+                    True -> {
+                      let comment_param = case
+                        invoice.comment != ""
+                        && string.length(invoice.comment) <= pay.comment_allowed
+                      {
+                        True -> [
+                          #("comment", url.encode_component(invoice.comment)),
+                        ]
+                        False -> []
+                      }
+                      let callback_url =
+                        query_join(pay.callback, [
+                          #("amount", int.to_string(invoice.amount_msats)),
+                          #("nostr", url.encode_component(event_json)),
+                          ..comment_param
+                        ])
+                      use response <- promise.await(fetch_text(callback_url))
+                      case response {
+                        Error(err) -> {
+                          notify_zap(callback, Error(err))
+                          promise.resolve(Nil)
+                        }
+                        Ok(body) ->
+                          case
+                            json.parse(
+                              from: body,
+                              using: lnurl_invoice_decoder(),
+                            )
+                          {
+                            Ok(pr) -> {
+                              notify_zap(callback, Ok(pr))
+                              promise.resolve(Nil)
+                            }
+                            Error(_) -> {
+                              notify_zap(
+                                callback,
+                                Error("LNURL callback returned no invoice"),
+                              )
+                              promise.resolve(Nil)
+                            }
+                          }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn notify_zap(
+  callback: Option(fn(Result(String, String)) -> Nil),
+  result: Result(String, String),
+) -> Nil {
+  case callback {
+    Some(notify) -> notify(result)
+    None -> Nil
+  }
+}
+
+/// Run queued NIP-50 relay searches and feed results into built-in apps.
+pub fn process_searches(booted: Booted) -> Promise(Nil) {
+  let queries =
+    dict.fold(booted.builtins, [], fn(acc, _id, app) {
+      list.append(acc, app.take_searches())
+    })
+  use _ <- promise.await(
+    promise_ext.all(
+      list.map(queries, fn(query) {
+        let filter =
+          omni_filter.new()
+          |> omni_filter.with_kinds([kind.Note])
+          |> omni_filter.with_search(query)
+          |> omni_filter.with_limit(50)
+        use events <- promise.await(coordinator.fetch(
+          booted.kernel.coordinator,
+          "omni_internal_search",
+          [filter],
+          Some(FetchOptions(
+            timeout_ms: Some(5000),
+            relays: None,
+            local_only: None,
+          )),
+        ))
+        list.each(events, fn(event) {
+          dict.each(booted.builtins, fn(_id, app) {
+            case app.ingest {
+              Some(ingest) -> ingest(event)
+              None -> Nil
+            }
+          })
+        })
+        promise.resolve(Nil)
+      }),
+    ),
+  )
+  promise.resolve(Nil)
 }
 
 /// Debounce workspace publishes so rapid layout changes coalesce into one

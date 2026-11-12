@@ -115,6 +115,8 @@ pub fn classic_view_reflects_mobile_menu_state_test() {
   let open_html = classic.view(m_open) |> element.to_string
   should.be_true(string.contains(open_html, "data-mobile-menu=\"open\""))
   should.be_true(string.contains(open_html, "aria-expanded=\"true\""))
+  should.be_true(string.contains(open_html, "id=\"omni-mobile-menu-panel\""))
+  should.be_true(string.contains(open_html, "mobile-nav-settings"))
 
   let closed_html = classic.view(base) |> element.to_string
   should.be_true(string.contains(closed_html, "data-mobile-menu=\"closed\""))

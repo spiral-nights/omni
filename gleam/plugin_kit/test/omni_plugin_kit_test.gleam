@@ -7,6 +7,7 @@ import gleam/option.{None, Some}
 import gleam/string
 import gleeunit
 import gleeunit/should
+import omni/nostr/event.{UnsignedEvent}
 import omni/nostr/filter
 import omni/nostr/kind
 import omni/nostr/pubkey
@@ -14,11 +15,13 @@ import omni/platform/ref
 import omni/platform/storage
 import omni/plugin_kit/app.{
   type AppSpec, type Effect, AppSpec, Async, Batch, Dispatch, NoneEffect,
+  ZapInvoice,
 }
 import omni/plugin_kit/local_store.{StoreConfig}
 import omni/plugin_kit/nostr.{DocSpec, DraftEvent, FetchOptions}
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema
+import omni/plugin_kit/zap
 import omni/protocol/schema/action
 import omni/protocol/schema/codec
 import omni/protocol/schema/node
@@ -436,4 +439,55 @@ pub fn app_harness_full_lifecycle_test() {
   // Emitted schema history has every render step
   let hist = app.emitted_schema_history(running)
   { list.length(hist) >= 6 } |> should.be_true()
+}
+
+// -----------------------------------------------------------------------------
+// Zap invoice effects
+// -----------------------------------------------------------------------------
+
+fn zap_invoice_app_spec() -> AppSpec(Nil, Nil) {
+  AppSpec(
+    init: fn(_route: Route) {
+      let event =
+        UnsignedEvent(
+          pubkey: None,
+          created_at: 1_700_000_123,
+          kind: kind.ZapRequest,
+          tags: [["p", alice_hex], ["amount", "21000"]],
+          content: "nice post",
+        )
+      #(Nil, [
+        ZapInvoice(zap.ZapInvoice(
+          event: event,
+          lnurl: "lnurl1example",
+          amount_msats: 21_000,
+          comment: "nice post",
+        )),
+      ])
+    },
+    update: fn(_model: Nil, _msg: Nil) { #(Nil, []) },
+    view: fn(_model: Nil) { schema.text("zap") },
+    on_action: fn(_act: action.Action) { None },
+    on_route_change: None,
+  )
+}
+
+pub fn app_zap_invoice_effect_is_queued_and_drained_test() {
+  let running = app.start(zap_invoice_app_spec(), route.main(), fn(_) { Nil })
+
+  let invoices = app.take_zap_invoices(running)
+  list.length(invoices) |> should.equal(1)
+  let assert Ok(invoice) = list.first(invoices)
+  invoice.lnurl |> should.equal("lnurl1example")
+  invoice.amount_msats |> should.equal(21_000)
+  invoice.comment |> should.equal("nice post")
+  invoice.event.kind |> should.equal(kind.ZapRequest)
+  invoice.event.created_at |> should.equal(1_700_000_123)
+  invoice.event.content |> should.equal("nice post")
+
+  // Zap invoice requests do not also queue a plain publish.
+  app.take_publishes(running) |> should.equal([])
+  app.take_encrypted_publishes(running) |> should.equal([])
+  // Draining is idempotent.
+  app.take_zap_invoices(running) |> should.equal([])
 }

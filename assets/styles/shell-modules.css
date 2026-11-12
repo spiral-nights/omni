@@ -1261,3 +1261,28 @@
   font-family: var(--omni-font-mono);
   color: var(--omni-text-secondary);
 }
+
+/* Mobile navigation panel */
+.omni-mobile-menu-panel {
+  position: fixed;
+  inset: 56px 0 auto 0;
+  z-index: 60;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--omni-bg-surface);
+  border-bottom: 1px solid var(--omni-border-strong);
+  box-shadow: var(--omni-shadow-lg);
+}
+
+@media (max-width: 760px) {
+  .omni-mobile-menu-panel {
+    display: flex;
+  }
+
+  .omni-mobile-menu-item {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

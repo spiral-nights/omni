@@ -26,6 +26,7 @@ import omni/nostr/kind
 import omni/nostr/pubkey
 import omni/nostr/relay_url
 import omni/platform/audio
+import omni/platform/browser
 import omni/platform/clock
 import omni/platform/idb
 import omni/platform/nip44
@@ -336,26 +337,39 @@ fn apply_effects(
       }
 
       update.DisablePassphraseEffect -> {
-        case boot.disable_passphrase(acc.booted) {
-          Ok(_) -> dispatch_shell_msg(KeySecurityStatus(False, False))
-          Error(_) -> Nil
-        }
+        let _ =
+          boot.disable_passphrase(acc.booted)
+          |> promise.map(fn(result) {
+            case result {
+              Ok(_) -> {
+                dispatch_shell_msg(KeySecurityStatus(False, False))
+                dispatch_shell_msg(KeySecurityResult(Ok(Nil)))
+              }
+              Error(err) -> dispatch_shell_msg(KeySecurityResult(Error(err)))
+            }
+            Nil
+          })
         acc
       }
 
       update.SwitchAccountEffect(pubkey_hex) -> {
-        case boot.switch_account(acc.booted, pubkey_hex) {
-          Ok(next) -> {
-            dispatch_shell_msg(AccountSwitchResult(Ok(Nil)))
-            dispatch_shell_msg(
-              SetUserProfile(profile_summary_for(
-                user_npub(ShellBoot(next)),
-                empty_profile(keystore.get_public_key(next.kernel.keystore)),
-              )),
-            )
-          }
-          Error(err) -> dispatch_shell_msg(AccountSwitchResult(Error(err)))
-        }
+        let _ =
+          boot.switch_account(acc.booted, pubkey_hex)
+          |> promise.map(fn(result) {
+            case result {
+              Ok(next) -> {
+                dispatch_shell_msg(AccountSwitchResult(Ok(Nil)))
+                dispatch_shell_msg(
+                  SetUserProfile(profile_summary_for(
+                    user_npub(ShellBoot(next)),
+                    empty_profile(keystore.get_public_key(next.kernel.keystore)),
+                  )),
+                )
+              }
+              Error(err) -> dispatch_shell_msg(AccountSwitchResult(Error(err)))
+            }
+            Nil
+          })
         acc
       }
 
@@ -455,6 +469,15 @@ fn request_missing_profiles(host: ShellBoot, authors: List(String)) -> Nil {
       Nil
     }
   }
+}
+
+fn drain_urls(host: ShellBoot) -> Nil {
+  let urls =
+    dict.fold(host.booted.builtins, [], fn(acc, _id, app) {
+      list.append(acc, app.take_urls())
+    })
+  list.each(urls, browser.open_external)
+  Nil
 }
 
 fn drain_chimes(host: ShellBoot) -> Nil {

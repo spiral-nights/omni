@@ -61,6 +61,8 @@ pub type Model {
     zap_comment: String,
     zap_recipient_lud16: Option(String),
     zap_lnurl: Option(String),
+    zap_invoice: Option(String),
+    zap_pending: Bool,
   )
 }
 
@@ -116,6 +118,8 @@ pub fn init(initial_route: Route) -> Model {
     zap_comment: "",
     zap_recipient_lud16: None,
     zap_lnurl: None,
+    zap_invoice: None,
+    zap_pending: False,
   )
 }
 

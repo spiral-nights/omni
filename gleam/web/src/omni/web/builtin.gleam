@@ -11,6 +11,7 @@ import omni/nostr/event.{type Event, type UnsignedEvent}
 import omni/platform/storage
 import omni/plugin_kit/app.{type RunningApp}
 import omni/plugin_kit/route
+import omni/plugin_kit/zap
 import omni/protocol/blossom.{type BlobUpload}
 import omni/protocol/relay_command.{type RelayCommand}
 import omni/protocol/schema/action.{type Action}
@@ -43,6 +44,10 @@ pub type BuiltinApp {
     take_relay_commands: fn() -> List(RelayCommand),
     take_chimes: fn() -> Int,
     take_uploads: fn() -> List(BlobUpload),
+    take_zap_invoices: fn() -> List(zap.ZapInvoice),
+    take_searches: fn() -> List(String),
+    take_urls: fn() -> List(String),
+    zap_invoice_result: Option(fn(Result(String, String)) -> Nil),
     ingest_doc: Option(fn(String) -> Nil),
   )
 }
@@ -82,6 +87,12 @@ fn feed_app(store: storage.Storage) -> BuiltinApp {
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    take_zap_invoices: fn() { app.take_zap_invoices(running) },
+    take_searches: fn() { app.take_searches(running) },
+    take_urls: fn() { app.take_urls(running) },
+    zap_invoice_result: Some(fn(result) {
+      app.dispatch(running, feed_msg.ZapInvoiceResult(result))
+    }),
     ingest_doc: None,
   )
 }
@@ -102,6 +113,10 @@ fn profiles_app(store: storage.Storage) -> BuiltinApp {
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    take_zap_invoices: fn() { app.take_zap_invoices(running) },
+    take_searches: fn() { app.take_searches(running) },
+    take_urls: fn() { app.take_urls(running) },
+    zap_invoice_result: None,
     ingest_doc: None,
   )
 }
@@ -126,6 +141,10 @@ fn relays_app() -> BuiltinApp {
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    take_zap_invoices: fn() { app.take_zap_invoices(running) },
+    take_searches: fn() { app.take_searches(running) },
+    take_urls: fn() { app.take_urls(running) },
+    zap_invoice_result: None,
     ingest_doc: None,
   )
 }
@@ -149,6 +168,10 @@ fn host(
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    take_zap_invoices: fn() { app.take_zap_invoices(running) },
+    take_searches: fn() { app.take_searches(running) },
+    take_urls: fn() { app.take_urls(running) },
+    zap_invoice_result: None,
     ingest_doc: None,
   )
 }
@@ -167,6 +190,10 @@ fn publisher_app(pubkey_hex: String) -> BuiltinApp {
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    take_zap_invoices: fn() { app.take_zap_invoices(running) },
+    take_searches: fn() { app.take_searches(running) },
+    take_urls: fn() { app.take_urls(running) },
+    zap_invoice_result: None,
     ingest_doc: None,
   )
 }
@@ -185,6 +212,10 @@ fn checklist_app(store: storage.Storage) -> BuiltinApp {
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    take_zap_invoices: fn() { app.take_zap_invoices(running) },
+    take_searches: fn() { app.take_searches(running) },
+    take_urls: fn() { app.take_urls(running) },
+    zap_invoice_result: None,
     ingest_doc: Some(fn(raw) {
       app.dispatch(running, checklist_msg.IngestRemoteDoc(raw))
     }),
@@ -205,6 +236,10 @@ fn notes_app(store: storage.Storage) -> BuiltinApp {
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    take_zap_invoices: fn() { app.take_zap_invoices(running) },
+    take_searches: fn() { app.take_searches(running) },
+    take_urls: fn() { app.take_urls(running) },
+    zap_invoice_result: None,
     ingest_doc: Some(fn(raw) {
       app.dispatch(running, notes_msg.IngestRemoteDoc(raw))
     }),
