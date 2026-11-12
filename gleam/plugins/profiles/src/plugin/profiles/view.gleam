@@ -296,6 +296,19 @@ fn render_profile(model: Model, pubkey: String) -> Node {
     |> schema.text_variant(Caption)
     |> schema.text_tone(ToneMuted)
 
+  let back_button =
+    Button(
+      base: node.empty_base(),
+      label: "Back to Directory",
+      action: action.new("view-directory"),
+      variant: Some(ButtonGhost),
+      size: Some(SizeSm),
+      icon: Some("arrow-left"),
+      icon_position: None,
+      disabled: None,
+      loading: None,
+    )
+
   schema.card()
   |> schema.with_id("profile-" <> pubkey)
   |> schema.banner_background(generated_avatar.banner_gradient(pubkey))
@@ -307,7 +320,7 @@ fn render_profile(model: Model, pubkey: String) -> Node {
   ))
   |> schema.children(
     list.flatten([
-      [header, action_row, schema.divider(), notes_header],
+      [back_button, header, action_row, schema.divider(), notes_header],
       note_nodes,
     ]),
   )

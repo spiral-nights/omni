@@ -60,11 +60,9 @@ fn render_timeline_view(model: Model) -> Node {
     notes -> {
       let cards =
         list.map(notes, fn(n) { render_feed_note_card(model, n, cfg) })
-      let load_more_nodes = case model.has_more_timeline_notes(model) {
-        True -> [render_load_more_button()]
-        False -> []
-      }
-      list.append(cards, load_more_nodes)
+      // Always offer pagination: the host fetches older notes until relays
+      // stop returning results.
+      list.append(cards, [render_load_more_button()])
     }
   }
 
