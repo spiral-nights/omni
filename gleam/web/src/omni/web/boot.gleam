@@ -130,8 +130,14 @@ pub fn init_with_relays(
   let registry =
     registry.with_builtin_themes()
     |> registry.load_and_persist_active_id(kernel.storage)
+  let configured_relays =
+    relay_pool.get_configured_relays(kernel.relay_pool)
+    |> list.map(relay_url.to_string)
   let builtins =
-    builtin.apps(pubkey.to_hex(keystore.get_public_key(kernel.keystore)))
+    builtin.apps(
+      pubkey.to_hex(keystore.get_public_key(kernel.keystore)),
+      configured_relays,
+    )
     |> list.fold(dict.new(), fn(acc, pair) { dict.insert(acc, pair.0, pair.1) })
   let seeded =
     dict.fold(

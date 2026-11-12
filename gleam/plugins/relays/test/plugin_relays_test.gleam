@@ -1,5 +1,7 @@
 //// Unit and integration tests for `plugin_relays` (Phase 7.5).
 
+import gleam/dict
+import gleam/dynamic
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
@@ -10,6 +12,7 @@ import omni/platform/ref
 import omni/plugin_kit/app
 import omni/plugin_kit/route
 import omni/plugin_kit/schema
+import omni/plugin_kit/schema as schema_action
 import omni/protocol/relay_command as rc
 import omni/protocol/schema/node
 import plugin/relays/main
@@ -18,8 +21,9 @@ import plugin/relays/model.{
   ViewCompact, ViewMain, ViewWidget,
 }
 import plugin/relays/msg.{
-  AddRelay, DismissError, PublishNip65, ReconnectRelay, RemoveRelay, SetDraftUrl,
-  SetViewMode, ToggleRead, ToggleWrite, UpdateRelayState,
+  AddRelay, AddRelayUrl, DismissError, PublishNip65, ReconnectRelay, RemoveRelay,
+  SeedRelays, SetDraftUrl, SetViewMode, ToggleRead, ToggleWrite,
+  UpdateRelayState,
 }
 import plugin/relays/update
 import plugin/relays/view
@@ -273,4 +277,37 @@ pub fn relay_mutations_emit_pool_commands_test() {
       }
     }),
   )
+}
+
+pub fn preset_action_adds_the_relay_url_test() {
+  let m0 = model.init(ViewMain)
+  let act =
+    schema_action.new_action("add-relay")
+    |> schema_action.with_payload(
+      dict.from_list([
+        #("url", dynamic.string("wss://relay.primal.net")),
+      ]),
+    )
+
+  update.action_to_msg(act)
+  |> should.equal(Some(AddRelayUrl("wss://relay.primal.net")))
+
+  let #(m1, effects) = update.update(m0, AddRelayUrl("wss://relay.primal.net"))
+  list.any(m1.relays, fn(r) { r.url == "wss://relay.primal.net" })
+  |> should.equal(True)
+  list.any(effects, fn(effect) {
+    case effect {
+      app.Relay(rc.AddRelay(url)) -> url == "wss://relay.primal.net"
+      _ -> False
+    }
+  })
+  |> should.equal(True)
+}
+
+pub fn seed_relays_replaces_the_default_list_test() {
+  let m0 = model.init(ViewMain)
+  let #(m1, _) =
+    update.update(m0, SeedRelays(["wss://one.example", "wss://two.example"]))
+  list.map(m1.relays, fn(r) { r.url })
+  |> should.equal(["wss://one.example", "wss://two.example"])
 }

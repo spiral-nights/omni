@@ -9,9 +9,10 @@ import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{
   type IndicatorStatus, type Node, AlignCenter, BadgeNeutral, BadgeSubtle,
-  BadgeSuccess, BannerError, BannerInfo, ButtonDanger, ButtonSecondary, Input,
-  InputUrl, JustifyBetween, MetricInt, StatusConnecting, StatusError,
-  StatusIndicator, StatusOffline, StatusOnline, ToneSecondary,
+  BadgeSuccess, BannerError, BannerInfo, Button, ButtonDanger, ButtonGhost,
+  ButtonSecondary, Caption, Input, InputUrl, JustifyBetween, MetricInt,
+  StatusConnecting, StatusError, StatusIndicator, StatusOffline, StatusOnline,
+  ToneMuted, ToneSecondary,
 }
 import omni/protocol/schema/style.{SizeSm}
 import plugin/relays/model.{
@@ -147,6 +148,19 @@ fn view_main(model: Model) -> Node {
     |> schema.align(AlignCenter)
     |> schema.children([url_input, add_btn])
 
+  let preset_bar =
+    schema.box()
+    |> schema.row()
+    |> schema.gap("xs")
+    |> schema.align(AlignCenter)
+    |> schema.children([
+      preset_button("Ditto", "wss://relay.ditto.pub"),
+      preset_button("Damus", "wss://relay.damus.io"),
+      preset_button("nos.lol", "wss://nos.lol"),
+      preset_button("Primal", "wss://relay.primal.net"),
+      preset_button("nostr.band", "wss://relay.nostr.band"),
+    ])
+
   let error_nodes = case model.error_banner {
     Some(err_msg) -> {
       let ban = case
@@ -166,6 +180,11 @@ fn view_main(model: Model) -> Node {
     }
     None -> []
   }
+
+  let preset_hint =
+    schema.text("Quick add popular relays:")
+    |> schema.text_variant(Caption)
+    |> schema.text_tone(ToneMuted)
 
   let relay_cards = case model.relays {
     [] -> [
@@ -192,6 +211,24 @@ fn view_main(model: Model) -> Node {
   )
   |> schema.with_icon("server")
   |> schema.children(all_children)
+}
+
+fn preset_button(label: String, url: String) -> Node {
+  let act =
+    schema.new_action("add-relay")
+    |> schema.with_payload(dict.from_list([#("url", dynamic.string(url))]))
+
+  Button(
+    base: node.empty_base(),
+    label: label,
+    action: act,
+    variant: Some(ButtonGhost),
+    size: Some(SizeSm),
+    icon: Some("plus"),
+    icon_position: None,
+    disabled: None,
+    loading: None,
+  )
 }
 
 fn render_relay_card(entry: RelayEntry) -> Node {

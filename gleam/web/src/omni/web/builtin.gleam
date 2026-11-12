@@ -58,7 +58,10 @@ pub type BuiltinApp {
 
 /// The first-party applications bundled with the host, backed by the local
 /// storage port so their state survives reloads.
-pub fn apps(pubkey_hex: String) -> List(#(String, BuiltinApp)) {
+pub fn apps(
+  pubkey_hex: String,
+  relay_urls: List(String),
+) -> List(#(String, BuiltinApp)) {
   let store = storage.local_or_in_memory()
 
   [
@@ -66,7 +69,7 @@ pub fn apps(pubkey_hex: String) -> List(#(String, BuiltinApp)) {
     #("org.omni.plugin.checklist", checklist_app(store)),
     #("org.omni.plugin.timer", timer_app()),
     #("org.omni.plugin.notes", notes_app(store, pubkey_hex)),
-    #("org.omni.plugin.relays", relays_app()),
+    #("org.omni.plugin.relays", relays_app(relay_urls)),
     #("org.omni.plugin.profiles", profiles_app(store, pubkey_hex)),
     #("org.omni.plugin.publisher", publisher_app(pubkey_hex)),
   ]
@@ -127,8 +130,9 @@ fn profiles_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
   )
 }
 
-fn relays_app() -> BuiltinApp {
+fn relays_app(relay_urls: List(String)) -> BuiltinApp {
   let running = relays.start_app("", fn(_) { Nil })
+  app.dispatch(running, relays_msg.SeedRelays(relay_urls))
   BuiltinApp(
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },

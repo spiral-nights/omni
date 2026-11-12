@@ -17,8 +17,9 @@ import plugin/relays/model.{
   ViewCompact, ViewMain, ViewWidget,
 }
 import plugin/relays/msg.{
-  type Msg, AddRelay, DismissError, PublishNip65, ReconnectRelay, RemoveRelay,
-  SetDraftUrl, SetViewMode, ToggleRead, ToggleWrite, UpdateRelayState,
+  type Msg, AddRelay, AddRelayUrl, DismissError, PublishNip65, ReconnectRelay,
+  RemoveRelay, SeedRelays, SetDraftUrl, SetViewMode, ToggleRead, ToggleWrite,
+  UpdateRelayState,
 }
 
 /// Pure Elm-style state update function for `plugin_relays`.
@@ -29,7 +30,20 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       [],
     )
 
-    AddRelay -> handle_add_relay(model)
+    AddRelay -> add_relay_url(model, model.draft_url)
+
+    AddRelayUrl(url) -> add_relay_url(model, url)
+
+    SeedRelays(urls) -> {
+      let seeded =
+        list.map(urls, fn(url) {
+          case list.find(model.relays, fn(r) { r.url == url }) {
+            Ok(existing) -> existing
+            Error(Nil) -> model.default_relay_entry(url)
+          }
+        })
+      #(Model(..model, relays: seeded), [])
+    }
 
     RemoveRelay(url) -> {
       let filtered = list.filter(model.relays, fn(r) { r.url != url })
@@ -103,8 +117,8 @@ fn scope_effects(relays: List(RelayEntry), url: String) -> List(Effect(Msg)) {
   }
 }
 
-fn handle_add_relay(model: Model) -> #(Model, List(Effect(Msg))) {
-  let raw = string.trim(model.draft_url)
+fn add_relay_url(model: Model, raw_url: String) -> #(Model, List(Effect(Msg))) {
+  let raw = string.trim(raw_url)
   case relay_url.parse(raw) {
     Error(Nil) -> #(
       Model(
@@ -146,16 +160,15 @@ fn handle_add_relay(model: Model) -> #(Model, List(Effect(Msg))) {
 /// Maps incoming Channel 1 `Action` events into `Msg`.
 pub fn action_to_msg(act: Action) -> Option(Msg) {
   case act.name {
-    "add-relay" | "add_relay" -> {
+    "add-relay" | "add_relay" ->
       case extract_url_payload(act) {
         Some(url) ->
           case string.trim(url) {
             "" -> Some(AddRelay)
-            _ -> Some(AddRelay)
+            trimmed -> Some(AddRelayUrl(trimmed))
           }
         None -> Some(AddRelay)
       }
-    }
 
     "set-draft-url" | "set_draft_url" | "draft-url" ->
       case

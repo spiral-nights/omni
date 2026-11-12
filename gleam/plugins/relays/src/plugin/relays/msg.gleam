@@ -6,6 +6,8 @@ import plugin/relays/model.{type RelayConnectionState, type ViewMode}
 /// Messages handled by the `plugin_relays` state machine.
 pub type Msg {
   AddRelay
+  AddRelayUrl(String)
+  SeedRelays(List(String))
   RemoveRelay(url: String)
   ToggleRead(url: String)
   ToggleWrite(url: String)
