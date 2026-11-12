@@ -71,7 +71,7 @@ pub fn apps(
     #("org.omni.plugin.notes", notes_app(store, pubkey_hex)),
     #("org.omni.plugin.relays", relays_app(relay_urls)),
     #("org.omni.plugin.profiles", profiles_app(store, pubkey_hex)),
-    #("org.omni.plugin.publisher", publisher_app(pubkey_hex)),
+    #("org.omni.plugin.publisher", publisher_app(store, pubkey_hex)),
   ]
 }
 
@@ -161,8 +161,11 @@ fn relays_app(relay_urls: List(String)) -> BuiltinApp {
   )
 }
 
-fn publisher_app(pubkey_hex: String) -> BuiltinApp {
-  let running = publisher.start_app_with_pubkey("", pubkey_hex, fn(_) { Nil })
+fn publisher_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
+  let running =
+    publisher.start_app_with_pubkey_and_storage("", pubkey_hex, store, fn(_) {
+      Nil
+    })
   BuiltinApp(
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },

@@ -8,15 +8,17 @@ import gleeunit
 import gleeunit/should
 import omni/nostr/kind
 import omni/platform/ref
+import omni/platform/storage
 import omni/platform/zip
 import omni/plugin_kit/app
+import omni/plugin_kit/local_store
 import omni/plugin_kit/schema
 import omni/protocol/schema/node
 import plugin/publisher/bundle as publisher_bundle
 import plugin/publisher/main
 import plugin/publisher/model.{
-  type BlossomServer, BlossomServer, Model, PublishDraft, TabPublished,
-  TabServers, TabStudio, TabWidget,
+  type BlossomServer, BlossomServer, Model, PublishDraft, PublishedPlugin,
+  TabPublished, TabServers, TabStudio, TabWidget,
 }
 import plugin/publisher/msg.{
   AddServer, ChooseLocalZip, DismissBanner, PublishPackage, RemoveServer,
@@ -309,4 +311,44 @@ pub fn local_zip_action_populates_bundle_test() {
     schema.encode_schema_message(view.view(model)),
     "Choose .zip",
   )
+}
+
+pub fn studio_state_round_trips_through_the_store_test() {
+  let published =
+    PublishedPlugin(
+      id: "com.example.app",
+      name: "Example App",
+      version: "1.2.0",
+      description: "A test plugin",
+      icon: "apps",
+      blossom_sha256: "abc123",
+      blossom_url: "https://blossom.example/abc123",
+      naddr: "naddr1example",
+      published_at: 1_700_000_000,
+    )
+  let store = storage.in_memory()
+  let cfg = model.published_store_config()
+  let _ = local_store.save(store, cfg, [published])
+
+  let loaded = local_store.load(store, cfg)
+  let assert [restored] = loaded
+  restored.id |> should.equal("com.example.app")
+  restored.version |> should.equal("1.2.0")
+  restored.blossom_sha256 |> should.equal("abc123")
+  restored.published_at |> should.equal(1_700_000_000)
+}
+
+pub fn default_servers_round_trip_test() {
+  let store = storage.in_memory()
+  let cfg = model.servers_store_config()
+  let servers = local_store.load(store, cfg)
+  list.length(servers) |> should.equal(3)
+
+  let _ =
+    local_store.save(store, cfg, [
+      BlossomServer(url: "https://s.example", enabled: False, status: "Error"),
+    ])
+  let assert [only] = local_store.load(store, cfg)
+  only.url |> should.equal("https://s.example")
+  only.enabled |> should.equal(False)
 }

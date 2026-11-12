@@ -1,8 +1,11 @@
 //// Domain model and NIP-5A nsite tag helpers for `plugin_publisher`.
 
+import gleam/dynamic/decode.{type Decoder}
+import gleam/json.{type Json}
 import gleam/list
 import gleam/option.{type Option, None}
 import gleam/string
+import omni/plugin_kit/local_store.{type StoreConfig, StoreConfig}
 import plugin/publisher/bundle.{type Bundle, type BundleFile}
 
 /// Active tab or viewport mode in Plugin Studio.
@@ -149,4 +152,82 @@ pub fn build_nip5a_tags(
   let server_tags = list.map(servers, fn(server) { ["server", server] })
 
   list.flatten([base_tags, file_tags, server_tags])
+}
+
+// -----------------------------------------------------------------------------
+// Local persistence
+// -----------------------------------------------------------------------------
+
+fn encode_published(p: PublishedPlugin) -> Json {
+  json.object([
+    #("id", json.string(p.id)),
+    #("name", json.string(p.name)),
+    #("version", json.string(p.version)),
+    #("description", json.string(p.description)),
+    #("icon", json.string(p.icon)),
+    #("blossom_sha256", json.string(p.blossom_sha256)),
+    #("blossom_url", json.string(p.blossom_url)),
+    #("naddr", json.string(p.naddr)),
+    #("published_at", json.int(p.published_at)),
+  ])
+}
+
+fn published_decoder() -> Decoder(PublishedPlugin) {
+  use id <- decode.field("id", decode.string)
+  use name <- decode.field("name", decode.string)
+  use version <- decode.optional_field("version", "1.0.0", decode.string)
+  use description <- decode.optional_field("description", "", decode.string)
+  use icon <- decode.optional_field("icon", "apps", decode.string)
+  use sha <- decode.optional_field("blossom_sha256", "", decode.string)
+  use url <- decode.optional_field("blossom_url", "", decode.string)
+  use naddr <- decode.optional_field("naddr", "", decode.string)
+  use published_at <- decode.optional_field("published_at", 0, decode.int)
+  decode.success(PublishedPlugin(
+    id: id,
+    name: name,
+    version: version,
+    description: description,
+    icon: icon,
+    blossom_sha256: sha,
+    blossom_url: url,
+    naddr: naddr,
+    published_at: published_at,
+  ))
+}
+
+fn encode_server(server: BlossomServer) -> Json {
+  json.object([
+    #("url", json.string(server.url)),
+    #("enabled", json.bool(server.enabled)),
+    #("status", json.string(server.status)),
+  ])
+}
+
+fn server_decoder() -> Decoder(BlossomServer) {
+  use url <- decode.field("url", decode.string)
+  use enabled <- decode.optional_field("enabled", True, decode.bool)
+  use status <- decode.optional_field("status", "Ready", decode.string)
+  decode.success(BlossomServer(url: url, enabled: enabled, status: status))
+}
+
+/// Persisted list of published plugins.
+pub fn published_store_config() -> StoreConfig(List(PublishedPlugin)) {
+  StoreConfig(
+    key: "omni:publisher:published",
+    version: 1,
+    encode: fn(items) { json.array(items, of: encode_published) },
+    decoder: decode.list(published_decoder()),
+    default: fn() { [] },
+  )
+}
+
+/// Persisted Blossom server list.
+pub fn servers_store_config() -> StoreConfig(List(BlossomServer)) {
+  StoreConfig(
+    key: "omni:publisher:servers",
+    version: 1,
+    encode: fn(items) { json.array(items, of: encode_server) },
+    decoder: decode.list(server_decoder()),
+    default: default_blossom_servers,
+  )
 }
