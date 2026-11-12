@@ -3,6 +3,7 @@
 import gleam/list
 import gleam/option.{type Option, None}
 import gleam/string
+import plugin/publisher/bundle.{type Bundle, type BundleFile}
 
 /// Active tab or viewport mode in Plugin Studio.
 pub type StudioTab {
@@ -57,6 +58,9 @@ pub type Model {
     status_message: Option(String),
     error_message: Option(String),
     publishing: Bool,
+    bundle: Option(Bundle),
+    bundle_url: String,
+    user_pubkey: Option(String),
   )
 }
 
@@ -102,13 +106,17 @@ pub fn init(initial_tab: StudioTab) -> Model {
     status_message: None,
     error_message: None,
     publishing: False,
+    bundle: None,
+    bundle_url: "",
+    user_pubkey: None,
   )
 }
 
-/// Builds NIP-5A (`kind: 35129`) event tags from a `PublishDraft` and primary `blossom_url`.
+/// Builds NIP-5A (`kind: 35129`) event tags for a bundle and server list.
 pub fn build_nip5a_tags(
   draft: PublishDraft,
-  blossom_url: String,
+  files: List(BundleFile),
+  servers: List(String),
 ) -> List(List(String)) {
   let clean_id = string.trim(draft.id)
   let clean_name = string.trim(draft.name)
@@ -121,12 +129,7 @@ pub fn build_nip5a_tags(
     "" -> "globe"
     ic -> ic
   }
-  let clean_entry = case string.trim(draft.entry_html) {
-    "" -> "index.html"
-    e -> e
-  }
   let clean_hash = string.lowercase(string.trim(draft.bundle_sha256))
-  let clean_url = string.trim(blossom_url)
 
   let base_tags = [
     ["d", clean_id],
@@ -137,11 +140,13 @@ pub fn build_nip5a_tags(
     ["view", "main", clean_name, ""],
     ["view", "widget", clean_name <> " Widget", "?view=widget"],
     ["view", "settings", clean_name <> " Settings", "?view=settings"],
-    ["f", clean_entry, clean_hash, "text/html"],
+    ["x", clean_hash],
   ]
 
-  case clean_url {
-    "" -> base_tags
-    u -> list.append(base_tags, [["url", u], ["x", clean_hash]])
-  }
+  let file_tags =
+    list.map(files, fn(file) { ["f", file.path, file.sha256, file.mime] })
+
+  let server_tags = list.map(servers, fn(server) { ["server", server] })
+
+  list.flatten([base_tags, file_tags, server_tags])
 }

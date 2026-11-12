@@ -8,6 +8,7 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
 import omni/plugin_kit/schema
+import omni/protocol/blossom
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{
   type Node, AlignCenter, BannerError, BannerSuccess, ButtonDanger,
@@ -180,6 +181,24 @@ fn render_studio_tab(model: Model) -> List(Node) {
     |> schema.gap("sm")
     |> schema.children([name_input, id_input, ver_input, icon_input])
 
+  let bundle_url_input =
+    input_with_change(
+      "bundleUrl",
+      "Bundle zip URL",
+      model.bundle_url,
+      "set-bundle-url",
+    )
+
+  let load_bundle_btn =
+    schema.button("Load Bundle", schema.new_action("load-bundle"))
+    |> schema.with_icon("download")
+
+  let bundle_row =
+    schema.box()
+    |> schema.row()
+    |> schema.gap("sm")
+    |> schema.children([bundle_url_input, load_bundle_btn])
+
   let publish_btn =
     schema.button(
       "Upload to Blossom & Publish (NIP-5A)",
@@ -201,6 +220,7 @@ fn render_studio_tab(model: Model) -> List(Node) {
     |> schema.children([
       row_meta,
       desc_input,
+      bundle_row,
       action_row,
     ])
 
@@ -220,14 +240,15 @@ fn render_studio_tab(model: Model) -> List(Node) {
       |> schema.text_tone(ToneSecondary),
     ])
 
-  let primary_srv = case
-    list.find(model.servers, fn(s: BlossomServer) { s.enabled })
-  {
-    Ok(srv) -> srv.url
-    Error(Nil) -> "https://cdn.satellite.earth"
+  let preview_files = case model.bundle {
+    Some(parsed) -> parsed.files
+    None -> []
   }
-  let preview_url = primary_srv <> "/" <> d.bundle_sha256 <> ".html"
-  let tags = model.build_nip5a_tags(d, preview_url)
+  let preview_servers =
+    model.servers
+    |> list.filter(fn(s: BlossomServer) { s.enabled })
+    |> list.map(fn(s: BlossomServer) { blossom.normalize_server(s.url) })
+  let tags = model.build_nip5a_tags(d, preview_files, preview_servers)
   let preview_json =
     json.object([
       #("kind", json.int(35_129)),

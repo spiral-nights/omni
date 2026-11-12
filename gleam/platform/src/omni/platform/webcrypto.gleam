@@ -34,3 +34,7 @@ pub fn sha256(data: BitArray) -> BitArray
 /// Computes the 64-character lowercase hex-encoded SHA-256 digest of UTF-8 `data`.
 @external(javascript, "./webcrypto.ffi.mjs", "sha256_hex")
 pub fn sha256_hex(data: String) -> String
+
+/// Computes the 64-character lowercase hex-encoded SHA-256 digest of binary `data`.
+@external(javascript, "./webcrypto.ffi.mjs", "sha256_hex_bits")
+pub fn sha256_hex_bits(data: BitArray) -> String

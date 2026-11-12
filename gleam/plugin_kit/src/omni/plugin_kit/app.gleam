@@ -9,6 +9,7 @@ import omni/nostr/event.{type UnsignedEvent}
 import omni/platform/ref.{type Ref}
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema
+import omni/protocol/blossom.{type BlobUpload}
 import omni/protocol/relay_command.{type RelayCommand}
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
@@ -29,6 +30,8 @@ pub type Effect(msg) {
   Relay(RelayCommand)
   /// Request the host play the completion chime.
   PlayChime
+  /// Request the host upload a blob to Blossom.
+  UploadBlob(BlobUpload)
 }
 
 /// Elm-style plugin application specification.
@@ -56,6 +59,7 @@ pub type RunningApp(model, msg) {
     fetches: Ref(List(Int)),
     relay_commands: Ref(List(RelayCommand)),
     chimes: Ref(Int),
+    uploads: Ref(List(BlobUpload)),
   )
 }
 
@@ -86,6 +90,7 @@ pub fn start(
       fetches: ref.new([]),
       relay_commands: ref.new([]),
       chimes: ref.new(0),
+      uploads: ref.new([]),
     )
 
   emit_schema(initial_node)
@@ -179,6 +184,8 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
     Relay(command) ->
       ref.update(app.relay_commands, fn(queue) { [command, ..queue] })
     PlayChime -> ref.update(app.chimes, fn(count) { count + 1 })
+    UploadBlob(upload) ->
+      ref.update(app.uploads, fn(queue) { [upload, ..queue] })
   }
 }
 
@@ -186,6 +193,13 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
 pub fn take_publishes(app: RunningApp(model, msg)) -> List(UnsignedEvent) {
   let pending = ref.get(app.publishes)
   ref.set(app.publishes, [])
+  list.reverse(pending)
+}
+
+/// Drain pending Blossom uploads.
+pub fn take_uploads(app: RunningApp(model, msg)) -> List(BlobUpload) {
+  let pending = ref.get(app.uploads)
+  ref.set(app.uploads, [])
   list.reverse(pending)
 }
 

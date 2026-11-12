@@ -3,15 +3,37 @@
 //// Specifies Blossom BUD auth events (Kind 24242), user server lists (Kind 10063),
 //// and install-time asset MIME type detection.
 
+import gleam/bit_array
 import gleam/int
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import omni/nostr/event.{type Event, type UnsignedEvent, UnsignedEvent}
+import omni/nostr/event_codec
 import omni/nostr/kind.{type Kind}
 
 /// Blossom BUD-06 authorization event kind (24242).
 pub const auth_kind_int = 24_242
+
+/// NIP-5A nsite application manifest kind (35129).
+pub const nsite_manifest_kind_int = 35_129
+
+/// A blob to upload to one or more Blossom servers.
+pub type BlobUpload {
+  BlobUpload(
+    servers: List(String),
+    path: String,
+    mime: String,
+    sha256: String,
+    body: BitArray,
+  )
+}
+
+/// A blob accepted by a Blossom server.
+pub type UploadedBlob {
+  UploadedBlob(server: String, path: String, sha256: String, url: String)
+}
 
 /// Blossom user server list event kind (10063).
 pub const server_list_kind_int = 10_063
@@ -53,6 +75,40 @@ pub fn action_from_string(str: String) -> Result(AuthAction, Nil) {
     "delete" -> Ok(Delete)
     _ -> Error(Nil)
   }
+}
+
+/// Strip trailing slashes from a Blossom server URL.
+pub fn normalize_server(server: String) -> String {
+  server
+  |> string.trim
+  |> strip_trailing_slashes
+}
+
+fn strip_trailing_slashes(url: String) -> String {
+  case string.ends_with(url, "/") {
+    True -> strip_trailing_slashes(string.drop_end(url, 1))
+    False -> url
+  }
+}
+
+/// Blossom upload endpoint for `server`.
+pub fn upload_url(server: String) -> String {
+  normalize_server(server) <> "/upload"
+}
+
+/// Public blob URL for `sha256` on `server`.
+pub fn blob_url(server: String, sha256: String) -> String {
+  normalize_server(server) <> "/" <> string.lowercase(sha256)
+}
+
+/// Encode a signed BUD-06 event as a Blossom `Authorization` header value.
+pub fn encode_auth_header(signed: Event) -> String {
+  let encoded =
+    event_codec.to_json(signed)
+    |> json.to_string
+    |> bit_array.from_string
+    |> bit_array.base64_encode(True)
+  "Nostr " <> encoded
 }
 
 /// Construct an unsigned draft for a Blossom BUD-06 authorization event (`kind: 24242`).

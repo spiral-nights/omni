@@ -1,20 +1,32 @@
 //// Pure state transition logic and action mapping for `plugin_publisher`.
 
+import gleam/bit_array
+import gleam/javascript/promise
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
-import omni/plugin_kit/app.{type Effect}
+import omni/nostr/event.{UnsignedEvent}
+import omni/nostr/kind
+import omni/nostr/nip19
+import omni/nostr/pubkey
+import omni/platform/clock
+import omni/platform/http
+import omni/plugin_kit/app.{type Effect, Async, Publish, UploadBlob}
 import omni/plugin_kit/schema
+import omni/protocol/blossom
 import omni/protocol/schema/action.{type Action}
+import plugin/publisher/bundle
 import plugin/publisher/model.{
   type BlossomServer, type Model, type PublishedPlugin, type StudioTab,
   BlossomServer, Model, PublishDraft, PublishedPlugin, TabPublished, TabServers,
   TabStudio, TabWidget,
 }
 import plugin/publisher/msg.{
-  type Msg, AddServer, DismissBanner, PublishPackage, RemoveServer, SelectTab,
-  SetBundleMetadata, SetDraftDescription, SetDraftIcon, SetDraftId, SetDraftName,
-  SetDraftServerUrl, SetDraftVersion, ToggleServer,
+  type Msg, AddServer, BundleLoaded, DismissBanner, LoadBundle, PublishPackage,
+  RemoveServer, SelectTab, SetBundleMetadata, SetBundleUrl, SetDraftDescription,
+  SetDraftIcon, SetDraftId, SetDraftName, SetDraftServerUrl, SetDraftVersion,
+  ToggleServer,
 }
 
 /// Pure Elm-style state update function for `plugin_publisher`.
@@ -45,6 +57,112 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
     SetDraftIcon(icon) -> {
       let next_draft = PublishDraft(..model.draft, icon: icon)
       #(Model(..model, draft: next_draft), [])
+    }
+
+    SetBundleUrl(url) -> #(
+      Model(..model, bundle_url: url, error_message: None),
+      [],
+    )
+
+    LoadBundle -> {
+      case string.trim(model.bundle_url) {
+        "" -> #(
+          Model(
+            ..model,
+            error_message: Some("Enter a bundle zip URL."),
+            status_message: None,
+          ),
+          [],
+        )
+        url ->
+          case
+            string.starts_with(url, "https://")
+            || string.starts_with(url, "http://")
+          {
+            False -> #(
+              Model(
+                ..model,
+                error_message: Some("Bundle URL must be http(s)."),
+                status_message: None,
+              ),
+              [],
+            )
+            True -> #(Model(..model, publishing: True, error_message: None), [
+              Async(fn(dispatch) {
+                let _ =
+                  http.fetch_bytes(url)
+                  |> promise.map(fn(result) {
+                    dispatch(BundleLoaded(
+                      result
+                      |> result.map(fn(bytes) {
+                        bit_array.base64_encode(bytes, True)
+                      }),
+                    ))
+                    Nil
+                  })
+                Nil
+              }),
+            ])
+          }
+      }
+    }
+
+    BundleLoaded(result) -> {
+      case result {
+        Error(err) -> #(
+          Model(
+            ..model,
+            publishing: False,
+            error_message: Some(err),
+            status_message: None,
+          ),
+          [],
+        )
+        Ok(encoded) ->
+          case bit_array.base64_decode(encoded) {
+            Error(_) -> #(
+              Model(
+                ..model,
+                publishing: False,
+                error_message: Some("Invalid bundle data."),
+              ),
+              [],
+            )
+            Ok(bytes) ->
+              case bundle.from_zip_bytes(bytes) {
+                Error(err) -> #(
+                  Model(..model, publishing: False, error_message: Some(err)),
+                  [],
+                )
+                Ok(parsed) -> {
+                  let entry_size = case bundle.entry_file(parsed) {
+                    Ok(file) -> file.size
+                    Error(_) -> 0
+                  }
+                  let next_draft =
+                    PublishDraft(
+                      ..model.draft,
+                      bundle_sha256: case bundle.entry_file(parsed) {
+                        Ok(file) -> file.sha256
+                        Error(_) -> model.draft.bundle_sha256
+                      },
+                      bundle_size_bytes: entry_size,
+                    )
+                  #(
+                    Model(
+                      ..model,
+                      draft: next_draft,
+                      bundle: Some(parsed),
+                      publishing: False,
+                      status_message: Some("Bundle loaded."),
+                      error_message: None,
+                    ),
+                    [],
+                  )
+                }
+              }
+          }
+      }
     }
 
     SetBundleMetadata(sha256, size_bytes) -> {
@@ -100,91 +218,159 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
 fn handle_publish(model: Model) -> #(Model, List(Effect(Msg))) {
   let clean_id = string.trim(model.draft.id)
   let clean_name = string.trim(model.draft.name)
+
+  case model.bundle, model.user_pubkey {
+    None, _ -> #(
+      Model(
+        ..model,
+        error_message: Some("Load a bundle zip before publishing."),
+        status_message: None,
+      ),
+      [],
+    )
+    _, None -> #(
+      Model(
+        ..model,
+        error_message: Some("Sign in to publish an nsite."),
+        status_message: None,
+      ),
+      [],
+    )
+    Some(parsed), Some(pubkey_hex) ->
+      case clean_id == "", clean_name == "" {
+        True, _ -> #(
+          Model(
+            ..model,
+            error_message: Some("Plugin identifier ('d' tag) is required."),
+            status_message: None,
+          ),
+          [],
+        )
+        _, True -> #(
+          Model(
+            ..model,
+            error_message: Some("Plugin name is required."),
+            status_message: None,
+          ),
+          [],
+        )
+        False, False -> publish_bundle(model, parsed, pubkey_hex, clean_id)
+      }
+  }
+}
+
+fn publish_bundle(
+  model: Model,
+  parsed: bundle.Bundle,
+  pubkey_hex: String,
+  clean_id: String,
+) -> #(Model, List(Effect(Msg))) {
   let clean_ver = case string.trim(model.draft.version) {
     "" -> "1.0.0"
     v -> v
   }
-  let clean_hash = string.lowercase(string.trim(model.draft.bundle_sha256))
+  let servers =
+    model.servers
+    |> list.filter(fn(server: BlossomServer) { server.enabled })
+    |> list.map(fn(server: BlossomServer) {
+      blossom.normalize_server(server.url)
+    })
 
-  case clean_id == "", clean_name == "", clean_hash == "" {
-    True, _, _ -> #(
-      Model(
-        ..model,
-        error_message: Some("Plugin identifier ('d' tag) is required."),
-        status_message: None,
-      ),
-      [],
-    )
-    _, True, _ -> #(
-      Model(
-        ..model,
-        error_message: Some("Plugin name is required."),
-        status_message: None,
-      ),
-      [],
-    )
-    _, _, True -> #(
-      Model(
-        ..model,
-        error_message: Some(
-          "Bundle SHA-256 hash is required before publishing.",
-        ),
-        status_message: None,
-      ),
-      [],
-    )
-    False, False, False -> {
-      let primary_server = case
-        list.find(model.servers, fn(s: BlossomServer) { s.enabled })
-      {
-        Ok(srv) -> srv.url
-        Error(Nil) -> "https://cdn.satellite.earth"
-      }
-
-      let blossom_url =
-        strip_trailing_slashes(primary_server) <> "/" <> clean_hash <> ".html"
-      let naddr = "naddr1_" <> clean_id
-
-      let record =
-        PublishedPlugin(
-          id: clean_id,
-          name: clean_name,
-          version: clean_ver,
-          description: string.trim(model.draft.description),
-          icon: case string.trim(model.draft.icon) {
-            "" -> "globe"
-            ic -> ic
-          },
-          blossom_sha256: clean_hash,
-          blossom_url: blossom_url,
-          naddr: naddr,
-          published_at: 1_700_000_000,
-        )
-
-      let without_existing =
-        list.filter(model.published, fn(p: PublishedPlugin) { p.id != clean_id })
-      let next_published = [record, ..without_existing]
-
-      #(
-        Model(
-          ..model,
-          published: next_published,
-          status_message: Some(
-            "Published "
-            <> clean_name
-            <> " v"
-            <> clean_ver
-            <> " ("
-            <> naddr
-            <> ")",
-          ),
-          error_message: None,
-          publishing: False,
-        ),
-        [],
-      )
-    }
+  let uploads = case servers {
+    [] -> []
+    _ ->
+      list.map(parsed.files, fn(file) {
+        UploadBlob(blossom.BlobUpload(
+          servers: servers,
+          path: file.path,
+          mime: file.mime,
+          sha256: file.sha256,
+          body: file.bytes,
+        ))
+      })
   }
+
+  let files_for_tags = case servers {
+    [] -> []
+    _ -> parsed.files
+  }
+  let tags = model.build_nip5a_tags(model.draft, files_for_tags, servers)
+
+  let content = case servers, bundle.entry_file(parsed) {
+    [], Ok(entry) ->
+      case bit_array.to_string(entry.bytes) {
+        Ok(html) -> html
+        Error(_) -> ""
+      }
+    _, _ -> ""
+  }
+
+  let draft =
+    UnsignedEvent(
+      pubkey: None,
+      created_at: clock.system().now_ms() / 1000,
+      kind: kind.from_int(blossom.nsite_manifest_kind_int),
+      tags: tags,
+      content: content,
+    )
+
+  let assert Ok(pk) = pubkey_parse(pubkey_hex)
+  let naddr =
+    nip19.encode_naddr(
+      nip19.AddressData(
+        identifier: clean_id,
+        pubkey: pk,
+        kind: kind.from_int(blossom.nsite_manifest_kind_int),
+        relays: [],
+      ),
+    )
+
+  let record =
+    PublishedPlugin(
+      id: clean_id,
+      name: string.trim(model.draft.name),
+      version: clean_ver,
+      description: string.trim(model.draft.description),
+      icon: case string.trim(model.draft.icon) {
+        "" -> "globe"
+        ic -> ic
+      },
+      blossom_sha256: case bundle.entry_file(parsed) {
+        Ok(entry) -> entry.sha256
+        Error(_) -> model.draft.bundle_sha256
+      },
+      blossom_url: case servers {
+        [server, ..] -> blossom.blob_url(server, model.draft.bundle_sha256)
+        [] -> ""
+      },
+      naddr: naddr,
+      published_at: clock.system().now_ms() / 1000,
+    )
+
+  let without_existing =
+    list.filter(model.published, fn(p: PublishedPlugin) { p.id != clean_id })
+  let next_published = [record, ..without_existing]
+
+  #(
+    Model(
+      ..model,
+      published: next_published,
+      status_message: Some(
+        "Queued " <> string.trim(model.draft.name) <> " v" <> clean_ver,
+      ),
+      error_message: None,
+      publishing: False,
+    ),
+    list.append(uploads, [Publish(draft)]),
+  )
+}
+
+fn pubkey_parse(hex: String) -> Result(pubkey.Pubkey, Nil) {
+  pubkey.parse(pubkey_hex_trim(hex))
+}
+
+fn pubkey_hex_trim(raw: String) -> String {
+  string.trim(raw)
 }
 
 fn handle_add_server(model: Model) -> #(Model, List(Effect(Msg))) {
@@ -304,6 +490,14 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
 
     "publish-package" | "publish_package" | "publish-blossom" ->
       Some(PublishPackage)
+
+    "set-bundle-url" | "set_bundle_url" ->
+      Some(SetBundleUrl(extract_text(act, ["url", "bundleUrl", "value"])))
+
+    "load-bundle" | "load_bundle" -> Some(LoadBundle)
+
+    "set-bundle-zip" | "set_bundle_zip" ->
+      Some(BundleLoaded(Ok(extract_text(act, ["zip", "data", "value"]))))
 
     "set-draft-server-url" | "set_draft_server_url" ->
       Some(

@@ -69,7 +69,8 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | PL-2 | S1 | fixed | Intent broker never dispatches runtime intents; chooser is display-only. | fixed `644d92f`: hosted actions route through the intent broker (single handler opens + forwards, multiples prompt), aliases normalized. |
 | PL-3 | S1 | fixed | ACL prompts never fire (no `prompt_handler` on the engine). | fixed `644d92f`: kernel prompt handler bridged to a shell Allow/Deny modal; decisions resolve the grant promise. |
 | PL-4 | S2 | fixed | Relays app mutations (add/remove/reconnect/read-write/NIP-65) don't call the pool. | fixed `ac190f8`: relay mutations emit typed pool commands (add/remove/scope/force-reconnect) that the host applies to the live pool; NIP-65 publishing was already wired. |
-| PL-5 | S2 | open | Publisher has no zip, Blossom upload, or nsite publish. | Port zip engine + upload + kind publish. |
+| PL-5 | S2 | fixed | Publisher has no zip, Blossom upload, or nsite publish. | fixed `PENDING`: the publisher loads zip bundles (URL or base64 action), hashes/detects MIME per file, emits Blossom uploads plus a real kind-35129 event with `f`/`server` tags and a valid naddr, and the host uploads blobs before broadcasting. |
+| PL-5b | S3 | open | Publisher loads bundles by URL/action; no native file picker for local zips. | Add a platform file-read port and a Schema file input path that returns bytes. |
 | PL-6 | S2 | fixed | Profiles key custody/backup UI missing. | fixed `18fdcb6`: Settings Identity panel hosts the shared import/export custody card backed by the keystore. |
 | PL-7 | S2 | fixed | Timer completion has no chime. | fixed `0f3f1dd`: completing a session emits a chime effect and the host plays a synthesized two-tone signal via the audio port. |
 | PL-8 | S2 | fixed | App store custom install only records a descriptor. | fixed `d2deef6`: installation resolves/fetches the bundle first and rolls the optimistic install back if validation fails. |

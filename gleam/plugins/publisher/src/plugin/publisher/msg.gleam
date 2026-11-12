@@ -16,5 +16,8 @@ pub type Msg {
   RemoveServer(url: String)
   ToggleServer(url: String)
   SetDraftServerUrl(String)
+  SetBundleUrl(String)
+  LoadBundle
+  BundleLoaded(Result(String, String))
   DismissBanner
 }

@@ -18,6 +18,7 @@ import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import omni/kernel/acl/capability_store
+import omni/kernel/blossom/upload as blossom_upload
 import omni/kernel/crypto/keystore
 import omni/kernel/intents/broker
 import omni/kernel/kernel.{type KernelPorts, type OmniKernel, KernelPorts}
@@ -32,11 +33,13 @@ import omni/nostr/kind
 import omni/nostr/pubkey
 import omni/nostr/relay_url
 import omni/platform/clock
+import omni/platform/http
 import omni/platform/nip44
 import omni/platform/promise_ext
 import omni/platform/ref
 import omni/platform/storage
 import omni/platform/websocket
+import omni/protocol/blossom
 import omni/protocol/capability
 import omni/protocol/grant.{Always}
 import omni/protocol/intent.{IntentHandler}
@@ -121,7 +124,7 @@ pub fn init_with_relays(
     registry.with_builtin_themes()
     |> registry.load_and_persist_active_id(kernel.storage)
   let builtins =
-    builtin.apps()
+    builtin.apps(pubkey.to_hex(keystore.get_public_key(kernel.keystore)))
     |> list.fold(dict.new(), fn(acc, pair) { dict.insert(acc, pair.0, pair.1) })
   let seeded =
     dict.fold(
@@ -561,6 +564,26 @@ pub fn select_shell(booted: Booted, shell_id: String) -> Booted {
 /// Sign and broadcast drafts queued by built-in apps, then feed the signed
 /// events back into the apps and the local event store.
 pub fn publish_pending(booted: Booted) -> Promise(List(String)) {
+  let uploader = blossom_upload.upload_blob(
+    booted.kernel.keystore,
+    _,
+    booted.kernel.clock.now_ms() / 1000,
+    http.put_bytes,
+  )
+  publish_pending_with(booted, uploader)
+}
+
+/// Publish pending drafts after uploading any queued blobs with `uploader`.
+pub fn publish_pending_with(
+  booted: Booted,
+  uploader: fn(blossom.BlobUpload) ->
+    Promise(Result(blossom.UploadedBlob, String)),
+) -> Promise(List(String)) {
+  let uploads =
+    dict.fold(booted.builtins, [], fn(acc, _id, app) {
+      list.append(acc, app.take_uploads())
+    })
+  use _uploads <- promise.await(promise_ext.all(list.map(uploads, uploader)))
   let drafts =
     dict.fold(booted.builtins, [], fn(acc, _id, app) {
       list.append(acc, app.take_publishes())

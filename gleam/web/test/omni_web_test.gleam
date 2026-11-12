@@ -1,6 +1,7 @@
 //// Unit tests for the Omni web bootstrap configuration and bootloader.
 
 import fake_relay
+import gleam/bit_array
 import gleam/dict
 import gleam/dynamic
 import gleam/javascript/promise
@@ -29,6 +30,8 @@ import omni/platform/nip44
 import omni/platform/promise_ext as omni_promise_ext
 import omni/platform/ref
 import omni/platform/storage
+import omni/platform/zip
+import omni/protocol/blossom
 import omni/protocol/capability
 import omni/protocol/grant
 import omni/protocol/intent.{IntentHandler}
@@ -843,5 +846,98 @@ pub fn boot_restores_persisted_theme_mode_test() -> promise.Promise(Nil) {
   let assert Ok(ports) = ports_res
   let booted = boot.init_with_relays(ports, [], None)
   booted.model.theme_mode |> should.equal("light")
+  promise.resolve(Nil)
+}
+
+pub fn publisher_publish_uploads_and_broadcasts_nip5a_test() -> promise.Promise(
+  Nil,
+) {
+  let store =
+    storage.in_memory_from([
+      #(relay_pool.storage_key_configured_relays, "[\"wss://fake.example\"]"),
+    ])
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+  let _relay = fake_relay.start(booted.kernel.relay_pool, "wss://fake.example")
+
+  let archive =
+    zip.zip([
+      #("index.html", <<"<html><body>published app</body></html>":utf8>>),
+      #("app.js", <<"console.log('published')":utf8>>),
+    ])
+    |> bit_array.base64_encode(True)
+
+  let bundle_action =
+    schema_action.new("set-bundle-zip")
+    |> schema_action.with_payload(
+      dict.from_list([
+        #("zip", dynamic.string(archive)),
+      ]),
+    )
+  let #(loaded, _) =
+    boot.dispatch(
+      booted,
+      HostedSchemaAction("org.omni.plugin.publisher", bundle_action),
+    )
+
+  let publish_action = schema_action.new("publish-package")
+  let #(after, _) =
+    boot.dispatch(
+      loaded,
+      HostedSchemaAction("org.omni.plugin.publisher", publish_action),
+    )
+
+  let uploaded = ref.new([])
+  let uploader = fn(upload: blossom.BlobUpload) {
+    ref.update(uploaded, fn(items) { [upload.path, ..items] })
+    promise.resolve(
+      Ok(blossom.UploadedBlob(
+        server: "https://blossom.test",
+        path: upload.path,
+        sha256: upload.sha256,
+        url: "https://blossom.test/" <> upload.sha256,
+      )),
+    )
+  }
+
+  use ids <- promise.await(boot.publish_pending_with(after, uploader))
+  list.length(ids) |> should.equal(1)
+  list.sort(ref.get(uploaded), fn(a, b) { string.compare(a, b) })
+  |> should.equal(["app.js", "index.html"])
+
+  use count <- promise.await(event_store.count_events(
+    after.kernel.event_store,
+    Filter(
+      None,
+      None,
+      Some([kind.from_int(35_129)]),
+      None,
+      None,
+      None,
+      None,
+      dict.new(),
+    ),
+  ))
+  count |> should.equal(1)
+
+  use events <- promise.await(event_store.get_events(
+    after.kernel.event_store,
+    Filter(
+      None,
+      None,
+      Some([kind.from_int(35_129)]),
+      None,
+      None,
+      None,
+      None,
+      dict.new(),
+    ),
+  ))
+  let assert [event] = events
+  event.content |> should.equal("")
+  should.be_true(
+    list.contains(event.tags, ["server", "https://cdn.satellite.earth"]),
+  )
   promise.resolve(Nil)
 }

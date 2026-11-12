@@ -11,6 +11,7 @@ import omni/nostr/event.{type Event, type UnsignedEvent}
 import omni/platform/storage
 import omni/plugin_kit/app.{type RunningApp}
 import omni/plugin_kit/route
+import omni/protocol/blossom.{type BlobUpload}
 import omni/protocol/relay_command.{type RelayCommand}
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
@@ -41,13 +42,14 @@ pub type BuiltinApp {
     take_fetches: fn() -> List(Int),
     take_relay_commands: fn() -> List(RelayCommand),
     take_chimes: fn() -> Int,
+    take_uploads: fn() -> List(BlobUpload),
     ingest_doc: Option(fn(String) -> Nil),
   )
 }
 
 /// The first-party applications bundled with the host, backed by the local
 /// storage port so their state survives reloads.
-pub fn apps() -> List(#(String, BuiltinApp)) {
+pub fn apps(pubkey_hex: String) -> List(#(String, BuiltinApp)) {
   let store = storage.local_or_in_memory()
 
   [
@@ -60,10 +62,7 @@ pub fn apps() -> List(#(String, BuiltinApp)) {
     #("org.omni.plugin.notes", notes_app(store)),
     #("org.omni.plugin.relays", relays_app()),
     #("org.omni.plugin.profiles", profiles_app(store)),
-    #(
-      "org.omni.plugin.publisher",
-      host(fn(emit) { publisher.start_app("", emit) }, None, None),
-    ),
+    #("org.omni.plugin.publisher", publisher_app(pubkey_hex)),
   ]
 }
 
@@ -82,6 +81,7 @@ fn feed_app(store: storage.Storage) -> BuiltinApp {
     take_fetches: fn() { app.take_fetches(running) },
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
+    take_uploads: fn() { app.take_uploads(running) },
     ingest_doc: None,
   )
 }
@@ -101,6 +101,7 @@ fn profiles_app(store: storage.Storage) -> BuiltinApp {
     take_fetches: fn() { app.take_fetches(running) },
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
+    take_uploads: fn() { app.take_uploads(running) },
     ingest_doc: None,
   )
 }
@@ -124,6 +125,7 @@ fn relays_app() -> BuiltinApp {
     take_fetches: fn() { app.take_fetches(running) },
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
+    take_uploads: fn() { app.take_uploads(running) },
     ingest_doc: None,
   )
 }
@@ -146,6 +148,25 @@ fn host(
     take_fetches: fn() { app.take_fetches(running) },
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
+    take_uploads: fn() { app.take_uploads(running) },
+    ingest_doc: None,
+  )
+}
+
+fn publisher_app(pubkey_hex: String) -> BuiltinApp {
+  let running = publisher.start_app_with_pubkey("", pubkey_hex, fn(_) { Nil })
+  BuiltinApp(
+    render: fn() { app.current_view(running) },
+    navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
+    handle_action: fn(action) { app.handle_action(running, action) },
+    ingest: None,
+    relay_status: None,
+    take_publishes: fn() { app.take_publishes(running) },
+    take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
+    take_fetches: fn() { app.take_fetches(running) },
+    take_relay_commands: fn() { app.take_relay_commands(running) },
+    take_chimes: fn() { app.take_chimes(running) },
+    take_uploads: fn() { app.take_uploads(running) },
     ingest_doc: None,
   )
 }
@@ -163,6 +184,7 @@ fn checklist_app(store: storage.Storage) -> BuiltinApp {
     take_fetches: fn() { app.take_fetches(running) },
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
+    take_uploads: fn() { app.take_uploads(running) },
     ingest_doc: Some(fn(raw) {
       app.dispatch(running, checklist_msg.IngestRemoteDoc(raw))
     }),
@@ -182,6 +204,7 @@ fn notes_app(store: storage.Storage) -> BuiltinApp {
     take_fetches: fn() { app.take_fetches(running) },
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
+    take_uploads: fn() { app.take_uploads(running) },
     ingest_doc: Some(fn(raw) {
       app.dispatch(running, notes_msg.IngestRemoteDoc(raw))
     }),

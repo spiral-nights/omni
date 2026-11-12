@@ -1,17 +1,22 @@
 //// Unit and integration tests for `plugin_publisher` (Phase 7.8).
 
+import gleam/bit_array
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
 import gleeunit
+import gleeunit/should
+import omni/nostr/kind
 import omni/platform/ref
+import omni/platform/zip
 import omni/plugin_kit/app
 import omni/plugin_kit/schema
 import omni/protocol/schema/node
+import plugin/publisher/bundle as publisher_bundle
 import plugin/publisher/main
 import plugin/publisher/model.{
-  type BlossomServer, BlossomServer, PublishDraft, TabPublished, TabServers,
-  TabStudio, TabWidget,
+  type BlossomServer, BlossomServer, Model, PublishDraft, TabPublished,
+  TabServers, TabStudio, TabWidget,
 }
 import plugin/publisher/msg.{
   AddServer, DismissBanner, PublishPackage, RemoveServer, SelectTab,
@@ -55,7 +60,18 @@ pub fn studio_draft_validation_and_publish_test() {
       ),
     )
 
-  let #(m10, _) = update.update(m9, PublishPackage)
+  let m9b =
+    model.Model(
+      ..m9,
+      bundle: Some(publisher_bundle.from_html(
+        "<html><body>notes</body></html>",
+        "index.html",
+      )),
+      user_pubkey: Some(
+        "5555555555555555555555555555555555555555555555555555555555555555",
+      ),
+    )
+  let #(m10, effects) = update.update(m9b, PublishPackage)
   assert m10.error_message == None
   assert m10.status_message != None
   assert list.length(m10.published) == 1
@@ -64,8 +80,14 @@ pub fn studio_draft_validation_and_publish_test() {
   assert pkg.id == "org.example.notes"
   assert pkg.name == "Example Notes"
   assert pkg.version == "2.1.0"
-  assert pkg.naddr == "naddr1_org.example.notes"
-  assert string.contains(pkg.blossom_url, "cdn.satellite.earth")
+  assert string.starts_with(pkg.naddr, "naddr1")
+  // One publish effect is queued; Blossom uploads are separate effects.
+  assert list.any(effects, fn(effect) {
+    case effect {
+      app.Publish(event) -> event.kind == kind.from_int(35_129)
+      _ -> False
+    }
+  })
 }
 
 pub fn nip5a_tag_generation_test() {
@@ -81,11 +103,17 @@ pub fn nip5a_tag_generation_test() {
       bundle_size_bytes: 1024,
     )
 
+  let files = [
+    publisher_bundle.BundleFile(
+      path: "index.html",
+      mime: "text/html",
+      sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      size: 1024,
+      bytes: <<"<html></html>":utf8>>,
+    ),
+  ]
   let tags =
-    model.build_nip5a_tags(
-      draft,
-      "https://cdn.satellite.earth/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.html",
-    )
+    model.build_nip5a_tags(draft, files, ["https://cdn.satellite.earth"])
 
   assert list.contains(tags, ["d", "example.nsite.timer"])
   assert list.contains(tags, ["name", "Focus Timer"])
@@ -102,6 +130,7 @@ pub fn nip5a_tag_generation_test() {
     "x",
     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   ])
+  assert list.contains(tags, ["server", "https://cdn.satellite.earth"])
 }
 
 pub fn blossom_server_management_test() {
@@ -163,9 +192,11 @@ pub fn tab_navigation_and_views_test() {
 pub fn start_app_action_round_trip_test() {
   let emitted_ref = ref.new([])
   let running =
-    main.start_app("?view=main", fn(n) {
-      ref.update(emitted_ref, fn(prev) { list.append(prev, [n]) })
-    })
+    main.start_app_with_pubkey(
+      "?view=main",
+      "5555555555555555555555555555555555555555555555555555555555555555",
+      fn(n) { ref.update(emitted_ref, fn(prev) { list.append(prev, [n]) }) },
+    )
 
   assert list.length(ref.get(emitted_ref)) == 1
   assert app.current_model(running).active_tab == TabStudio
@@ -177,6 +208,17 @@ pub fn start_app_action_round_trip_test() {
       "{\"type\":\"omni:action\",\"action\":\"set-draft-id\",\"payload\":{\"value\":\"org.example.custom\"}}",
     )
   assert app.current_model(running).draft.id == "org.example.custom"
+
+  let archive =
+    zip.zip([#("index.html", <<"<html><body>hi</body></html>":utf8>>)])
+    |> bit_array.base64_encode(True)
+  let assert Ok(True) =
+    app.handle_action_json(
+      running,
+      "{\"type\":\"omni:action\",\"action\":\"set-bundle-zip\",\"payload\":{\"zip\":\""
+        <> archive
+        <> "\"}}",
+    )
 
   // Publish package via action
   let assert Ok(True) =
@@ -193,4 +235,28 @@ pub fn start_app_action_round_trip_test() {
       "{\"type\":\"omni:action\",\"action\":\"select-tab\",\"payload\":{\"tab\":\"published\"}}",
     )
   assert app.current_model(running).active_tab == TabPublished
+}
+
+pub fn bundle_zip_round_trip_strips_prefix_test() {
+  let archive =
+    zip.zip([
+      #("dist/index.html", <<"<html><body>hi</body></html>":utf8>>),
+      #("dist/app.js", <<"console.log('hi')":utf8>>),
+    ])
+  let assert Ok(parsed) = publisher_bundle.from_zip_bytes(archive)
+  parsed.entry |> should.equal("index.html")
+  assert list.length(parsed.files) == 2
+  assert list.any(parsed.files, fn(file) {
+    file.path == "index.html" && file.mime == "text/html"
+  })
+  assert list.any(parsed.files, fn(file) {
+    file.path == "app.js" && file.sha256 != ""
+  })
+}
+
+pub fn publish_without_bundle_is_rejected_test() {
+  let m = model.init(TabStudio)
+  let #(next, effects) = update.update(m, PublishPackage)
+  assert next.error_message != None
+  effects |> should.equal([])
 }

@@ -162,3 +162,16 @@ pub fn intent_and_resolution_codecs_test() {
     _ -> should.fail()
   }
 }
+
+pub fn blossom_url_helpers_test() {
+  blossom.normalize_server("https://cdn.example///")
+  |> should.equal("https://cdn.example")
+  blossom.upload_url("https://cdn.example/")
+  |> should.equal("https://cdn.example/upload")
+  blossom.blob_url("https://cdn.example/", "ABCDEF")
+  |> should.equal("https://cdn.example/abcdef")
+}
+
+pub fn nsite_manifest_kind_constant_test() {
+  blossom.nsite_manifest_kind_int |> should.equal(35_129)
+}

@@ -40,3 +40,13 @@ export function sha256_hex(str) {
   }
   return hex;
 }
+
+export function sha256_hex_bits(bitArray) {
+  const bytes = bitArrayToUint8Array(bitArray);
+  const digest = nobleSha256(bytes);
+  let hex = "";
+  for (let i = 0; i < digest.length; i++) {
+    hex += digest[i].toString(16).padStart(2, "0");
+  }
+  return hex;
+}
