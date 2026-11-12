@@ -71,7 +71,7 @@ profile metadata/follows sign, broadcast, store, and re-ingest.
 | PL-4 | S2 | fixed | Relays app mutations (add/remove/reconnect/read-write/NIP-65) don't call the pool. | fixed `ac190f8`: relay mutations emit typed pool commands (add/remove/scope/force-reconnect) that the host applies to the live pool; NIP-65 publishing was already wired. |
 | PL-5 | S2 | open | Publisher has no zip, Blossom upload, or nsite publish. | Port zip engine + upload + kind publish. |
 | PL-6 | S2 | fixed | Profiles key custody/backup UI missing. | fixed `18fdcb6`: Settings Identity panel hosts the shared import/export custody card backed by the keystore. |
-| PL-7 | S2 | fixed | Timer completion has no chime. | fixed `PENDING`: completing a session emits a chime effect and the host plays a synthesized two-tone signal via the audio port. |
+| PL-7 | S2 | fixed | Timer completion has no chime. | fixed `0f3f1dd`: completing a session emits a chime effect and the host plays a synthesized two-tone signal via the audio port. |
 | PL-8 | S2 | fixed | App store custom install only records a descriptor. | fixed `d2deef6`: installation resolves/fetches the bundle first and rolls the optimistic install back if validation fails. |
 | PL-9 | S2 | fixed | Plugin settings tabs render a placeholder; plugin settings content isn't hosted. | fixed `df09ed6`: opening a plugin settings tab emits a mount for its `?view=settings` route into the stable island container. |
 | PL-10 | S2 | fixed | Theme mode (light/dark) absent; Editorial hardcodes dark. | fixed `a514568`: shell model stores a persisted appearance mode, all themes emit `data-theme-mode`, Settings exposes a Dark/Light toggle, and tokens provide a warm-paper light palette. |
