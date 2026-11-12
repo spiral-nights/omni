@@ -1,0 +1,44 @@
+name: Relay smoke (nightly)
+
+# Optional network smoke test against public Nostr relays. This runs on a
+# schedule and on demand only; it is deliberately separate from ci.yml so it
+# can never block pull-request CI.
+
+on:
+  schedule:
+    # 04:17 UTC daily, off the hour to avoid the busiest cron slot.
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relay-smoke
+  cancel-in-progress: false
+
+jobs:
+  relay-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Node 22+ provides the global WebSocket used by the smoke script.
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Probe public relays
+        run: node scripts/e2e-relay-smoke.mjs --require-network
