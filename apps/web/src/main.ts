@@ -8,6 +8,7 @@ import {
 
 // Bundled Gleam guest runtime injected into every plugin sandbox.
 import guestBridgeScript from "../../../gleam/bridge/dist/guest-runtime.js?raw";
+import { installPwaPrompt } from "./pwa";
 
 /**
  * Omni host microkernel.
@@ -86,6 +87,7 @@ async function mountShell(): Promise<void> {
   // The pool replays subscriptions when sockets open, so this can start now.
   start_live_data(host);
   rootEl.setAttribute("data-omni-booted", "true");
+  installPwaPrompt(rootEl);
 }
 
 function registerServiceWorker(): void {
