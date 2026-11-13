@@ -137,6 +137,7 @@ pub type Model {
   Model(
     active_page: Page,
     back_stack: List(Page),
+    intent_page: Option(Page),
     active_shell_id: String,
     accent_color: String,
     theme_mode: String,
@@ -178,6 +179,7 @@ pub fn init(active_shell_id: String, apps: List(InstalledApp)) -> Model {
   Model(
     active_page: initial_page,
     back_stack: [],
+    intent_page: None,
     active_shell_id: active_shell_id,
     accent_color: "#d4a373",
     theme_mode: "dark",

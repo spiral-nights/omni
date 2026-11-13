@@ -22,14 +22,14 @@ import omni/shell/msg.{
   AccountSwitchResult, AddAppPlacement, ApplyRemoteWorkspace,
   ConfirmPluginUpdate, DisablePassphrase, DismissIntentPrompt,
   DismissUpdateModal, EnablePassphrase, ExportKey, FinishPullRefresh, ImportKey,
-  InstallApp, KeySecurityStatus, NavigateBack, NavigateTo, OpenApp, OpenSettings,
-  RemoveAppPlacement, SelectIntentHandler, SelectShell, SetAccentColor,
-  SetAppPlacements, SetAppRelays, SetCustomInstallUrl, SetExportedNsec,
-  SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
-  SetUserProfile, ShowIntentPrompt, ShowUpdateModal, StartPullRefresh,
-  SwitchAccount, ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned,
-  ToggleAutoSync, ToggleFullscreen, TriggerWorkspaceSync, UninstallApp,
-  UnlockKey,
+  InstallApp, KeySecurityStatus, NavigateBack, NavigateTo, OpenApp,
+  OpenIntentApp, OpenSettings, RemoveAppPlacement, SelectIntentHandler,
+  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
+  SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
+  SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShowIntentPrompt,
+  ShowUpdateModal, StartPullRefresh, SwitchAccount, ToggleAppEnabled,
+  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
+  TriggerWorkspaceSync, UninstallApp, UnlockKey,
 }
 import omni/shell/shell
 import omni/shell/themes/editorial as editorial_theme
@@ -856,4 +856,29 @@ pub fn app_default_route_resolves_declared_primary_view_test() {
   model.app_default_route(app) |> should.equal(None)
   model.app_view_route(app, "widget") |> should.equal(Some("?view=widget"))
   model.app_view_route(app, "missing") |> should.equal(None)
+}
+
+pub fn intent_navigation_coalesces_back_stack_test() {
+  let m0 = model.init("editorial", [])
+  let #(m1, _) = update.update(m0, NavigateTo(model.AppStore))
+  let #(m2, _) = update.update(m1, OpenIntentApp("nsite.a", None))
+  list.length(m2.back_stack) |> should.equal(2)
+
+  // A second intent navigation replaces the first intent entry.
+  let #(m3, _) = update.update(m2, OpenIntentApp("nsite.b", None))
+  list.length(m3.back_stack) |> should.equal(2)
+  case m3.active_page {
+    model.PrimaryApp("nsite.b", _) -> Nil
+    _ -> should.fail()
+  }
+  case m3.back_stack {
+    [model.AppStore, model.WidgetsDashboard] -> Nil
+    _ -> should.fail()
+  }
+
+  // Manual navigation clears the intent marker, so the next intent pushes.
+  let #(m4, _) = update.update(m3, OpenApp("nsite.manual", None))
+  m4.intent_page |> should.equal(None)
+  let #(m5, _) = update.update(m4, OpenIntentApp("nsite.c", None))
+  list.length(m5.back_stack) |> should.equal(4)
 }

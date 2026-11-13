@@ -22,7 +22,7 @@ import omni/shell/msg.{
   EnablePassphrase, ExportKey, FinishPullRefresh, HostedSchemaAction, ImportKey,
   InstallApp, InstallCustomShell, InstallShell, KeyImportResult,
   KeySecurityResult, KeySecurityStatus, NavigateBack, NavigateTo, OpenApp,
-  OpenSearch, OpenSettings, RemoveAppPlacement, ResolvePermission,
+  OpenIntentApp, OpenSearch, OpenSettings, RemoveAppPlacement, ResolvePermission,
   SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
   SetAppRelays, SetCapabilityGrants, SetCustomInstallUrl, SetCustomShellUrl,
   SetExportedNsec, SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus,
@@ -72,7 +72,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
   case msg {
     NavigateTo(page) -> {
       let next_model =
-        Model(..model, active_page: page, back_stack: push_back(model, page))
+        Model(
+          ..model,
+          active_page: page,
+          back_stack: push_back(model, page),
+          intent_page: None,
+        )
       let mount_effects = case page {
         PrimaryApp(plugin_id, route) -> [
           MountPluginInSlot(plugin_id: plugin_id, viewport: Main, route: route),
@@ -89,7 +94,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     OpenApp(plugin_id, route) -> {
       let page = PrimaryApp(plugin_id: plugin_id, route: route)
       let next_model =
-        Model(..model, active_page: page, back_stack: push_back(model, page))
+        Model(
+          ..model,
+          active_page: page,
+          back_stack: push_back(model, page),
+          intent_page: None,
+        )
       let effects = [
         MountPluginInSlot(plugin_id: plugin_id, viewport: Main, route: route),
         ..workspace_persistence_effects(next_model)
@@ -100,7 +110,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     OpenSettings(tab) -> {
       let page = Settings(tab: tab)
       let next_model =
-        Model(..model, active_page: page, back_stack: push_back(model, page))
+        Model(
+          ..model,
+          active_page: page,
+          back_stack: push_back(model, page),
+          intent_page: None,
+        )
       let mount_effects = case tab {
         TabPluginSettings(plugin_id) -> [
           MountPluginInSlot(
@@ -117,11 +132,26 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       )
     }
 
+    OpenIntentApp(plugin_id, route) -> {
+      let page = PrimaryApp(plugin_id: plugin_id, route: route)
+      let #(next_model, mount_effects) =
+        navigate_intent(model, page, plugin_id, route)
+      #(
+        next_model,
+        list.append(mount_effects, workspace_persistence_effects(next_model)),
+      )
+    }
+
     NavigateBack -> {
       case model.back_stack {
         [previous, ..rest] -> {
           let next_model =
-            Model(..model, active_page: previous, back_stack: rest)
+            Model(
+              ..model,
+              active_page: previous,
+              back_stack: rest,
+              intent_page: None,
+            )
           #(next_model, workspace_persistence_effects(next_model))
         }
         [] -> #(model, [])
@@ -427,23 +457,24 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
           let next_page = PrimaryApp(plugin_id: plugin_id, route: None)
           let next_defaults =
             dict.insert(model.default_intents, prompt.intent_name, plugin_id)
+          let #(with_page, mount_effects) =
+            navigate_intent(model, next_page, plugin_id, None)
           let next_model =
             Model(
-              ..model,
-              active_page: next_page,
+              ..with_page,
               intent_prompt: None,
               default_intents: next_defaults,
             )
-          let effects = [
-            MountPluginInSlot(plugin_id: plugin_id, viewport: Main, route: None),
-            DispatchIntentToPlugin(
-              plugin_id: plugin_id,
-              intent_name: prompt.intent_name,
-              payload_json: prompt.payload_json,
-            ),
-            SetIntentDefault(action: prompt.intent_name, plugin_id: plugin_id),
-            ..workspace_persistence_effects(next_model)
-          ]
+          let effects =
+            list.append(mount_effects, [
+              DispatchIntentToPlugin(
+                plugin_id: plugin_id,
+                intent_name: prompt.intent_name,
+                payload_json: prompt.payload_json,
+              ),
+              SetIntentDefault(action: prompt.intent_name, plugin_id: plugin_id),
+              ..workspace_persistence_effects(next_model)
+            ])
           #(next_model, effects)
         }
         None -> #(model, [])
@@ -664,6 +695,34 @@ fn widget_mount_effects(model: Model) -> List(ShellEffect) {
       )
     })
   })
+}
+
+fn navigate_intent(
+  model: Model,
+  page: Page,
+  plugin_id: String,
+  route: Option(String),
+) -> #(Model, List(ShellEffect)) {
+  // A second intent navigation from the previous intent page replaces it in
+  // history instead of stacking, so Back returns to where the user started.
+  let collapses = case model.intent_page {
+    Some(previous) -> previous == model.active_page
+    None -> False
+  }
+  let back_stack = case collapses {
+    True -> model.back_stack
+    False -> push_back(model, page)
+  }
+  let next_model =
+    Model(
+      ..model,
+      active_page: page,
+      back_stack: back_stack,
+      intent_page: Some(page),
+    )
+  #(next_model, [
+    MountPluginInSlot(plugin_id: plugin_id, viewport: Main, route: route),
+  ])
 }
 
 fn push_back(model: Model, next: Page) -> List(Page) {

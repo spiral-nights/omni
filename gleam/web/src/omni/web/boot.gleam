@@ -69,8 +69,8 @@ import omni/shell/model.{
 }
 import omni/shell/msg.{
   type Msg, DispatchIntent, HostedSchemaAction, InstallApp, InstallCustomShell,
-  InstallShell, OpenApp, SelectShell, SetCapabilityGrants, ShowIntentPrompt,
-  ToggleCapabilityGrant, UninstallShell,
+  InstallShell, OpenApp, OpenIntentApp, SelectShell, SetCapabilityGrants,
+  ShowIntentPrompt, ToggleCapabilityGrant, UninstallShell,
 }
 import omni/shell/registry.{type ShellRegistry}
 import omni/shell/shell
@@ -341,7 +341,7 @@ pub fn route_intent(booted: Booted, action: Action) -> Booted {
           action.payload,
         )
       let #(navigated, _) =
-        dispatch(booted, OpenApp(handler.plugin_id, handler.route))
+        dispatch(booted, OpenIntentApp(handler.plugin_id, handler.route))
       case invoked {
         True -> navigated
         False -> forward_action(navigated, handler.plugin_id, action)

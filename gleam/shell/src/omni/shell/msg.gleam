@@ -21,6 +21,7 @@ pub type Msg {
   NavigateTo(Page)
   NavigateBack
   OpenApp(plugin_id: String, route: Option(String))
+  OpenIntentApp(plugin_id: String, route: Option(String))
   OpenSettings(SettingsTab)
   ToggleFullscreen
   OpenSearch
