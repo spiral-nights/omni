@@ -94,7 +94,15 @@ pub fn view_from_route(r: Route) -> ProfilesView {
 /// Initialize the default `Model` for a given initial `Route`.
 pub fn init(initial_route: Route) -> Model {
   let view = view_from_route(initial_route)
-  let profiles = seed_profiles()
+  let demo = demo_enabled(initial_route)
+  let profiles = case demo {
+    True -> seed_profiles()
+    False -> dict.new()
+  }
+  let notes = case demo {
+    True -> seed_notes()
+    False -> dict.new()
+  }
   let my_pubkey = Some(my_pubkey_hex)
   let selected_pubkey = case view {
     ViewProfile(pk) -> Some(pk)
@@ -108,7 +116,7 @@ pub fn init(initial_route: Route) -> Model {
   Model(
     view: view,
     profiles: profiles,
-    notes: seed_notes(),
+    notes: notes,
     follows: follows.empty(my_pubkey_hex),
     my_pubkey: my_pubkey,
     selected_pubkey: selected_pubkey,
@@ -118,6 +126,18 @@ pub fn init(initial_route: Route) -> Model {
     signer_status: SignerLocked,
     now_sec: 1_700_000_000,
   )
+}
+
+/// Demo data is opt-in via `?demo=1` so real installs never show invented people.
+pub fn demo_enabled(r: Route) -> Bool {
+  case route_param(r, ["demo"]) {
+    Some(value) ->
+      case string.lowercase(string.trim(value)) {
+        "0" | "false" | "no" | "off" -> False
+        _ -> True
+      }
+    None -> False
+  }
 }
 
 fn route_param(r: Route, keys: List(String)) -> Option(String) {

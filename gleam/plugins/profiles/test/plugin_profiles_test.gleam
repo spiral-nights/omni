@@ -45,8 +45,20 @@ const dave_pubkey_hex =
 const alice_note_id =
   "1111111111111111111111111111111111111111111111111111111111111111"
 
-pub fn model_init_and_route_resolution_test() {
+pub fn init_has_no_demo_people_without_the_flag_test() {
   let m = model.init(route.main())
+  dict.size(m.profiles) |> should.equal(0)
+  dict.size(m.notes) |> should.equal(0)
+
+  let demo = model.init(route.parse_search("?demo=1"))
+  dict.size(demo.profiles) |> should.equal(3)
+
+  model.demo_enabled(route.parse_search("?demo=0")) |> should.be_false()
+  model.demo_enabled(route.parse_search("?demo=1")) |> should.be_true()
+}
+
+pub fn model_init_and_route_resolution_test() {
+  let m = model.init(route.parse_search("?demo=1"))
   m.view |> should.equal(ViewDirectory)
   dict.size(m.profiles) |> should.equal(3)
   m.my_pubkey |> should.equal(Some(my_pubkey_hex))
@@ -59,21 +71,21 @@ pub fn model_init_and_route_resolution_test() {
     "?view=profile&id=" <> bob_pubkey_hex,
   ))
   |> should.equal(ViewProfile(bob_pubkey_hex))
-  model.view_from_route(route.parse_search("?view=metadata"))
+  model.view_from_route(route.parse_search("?demo=1&view=metadata"))
   |> should.equal(ViewMetadata)
-  model.view_from_route(route.parse_search("?view=keys"))
+  model.view_from_route(route.parse_search("?demo=1&view=keys"))
   |> should.equal(ViewKeys)
   model.view_from_route(route.parse_search("?view=profile"))
   |> should.equal(ViewDirectory)
 
   let routed =
-    model.init(route.parse_search("?view=profile&id=" <> bob_pubkey_hex))
+    model.init(route.parse_search("?demo=1&view=profile&id=" <> bob_pubkey_hex))
   routed.selected_pubkey |> should.equal(Some(bob_pubkey_hex))
   routed.metadata_draft.name |> should.equal("Bob")
 }
 
 pub fn directory_search_filters_people_test() {
-  let m0 = model.init(route.main())
+  let m0 = model.init(route.parse_search("?demo=1"))
   let #(m1, _) = update.update(m0, SetSearchQuery("bob@"))
 
   let matched = filtered_profiles(m1)
@@ -93,7 +105,7 @@ pub fn directory_search_filters_people_test() {
 }
 
 pub fn select_profile_populates_detail_and_draft_test() {
-  let m0 = model.init(route.main())
+  let m0 = model.init(route.parse_search("?demo=1"))
   let #(m1, _) = update.update(m0, SelectProfile(bob_pubkey_hex))
 
   m1.view |> should.equal(ViewProfile(bob_pubkey_hex))
@@ -114,7 +126,7 @@ pub fn select_profile_populates_detail_and_draft_test() {
 }
 
 pub fn follow_toggle_updates_contact_list_test() {
-  let m0 = model.init(route.main())
+  let m0 = model.init(route.parse_search("?demo=1"))
   follow_count(m0) |> should.equal(0)
   following(m0, bob_pubkey_hex) |> should.equal(False)
 
@@ -132,7 +144,7 @@ pub fn follow_toggle_updates_contact_list_test() {
 }
 
 pub fn metadata_edit_and_save_test() {
-  let m0 = model.init(route.parse_search("?view=metadata"))
+  let m0 = model.init(route.parse_search("?demo=1&view=metadata"))
   m0.metadata_dirty |> should.equal(False)
 
   let #(m1, _) = update.update(m0, SetMetadataName("  Alice Updated  "))
@@ -228,7 +240,7 @@ pub fn view_note_intent_is_emitted_but_not_consumed_test() {
   update.action_to_msg(schema_action("view_note", [#("id", alice_note_id)]))
   |> should.equal(None)
 
-  let m0 = model.init(route.main())
+  let m0 = model.init(route.parse_search("?demo=1"))
   let #(m1, _) = update.update(m0, SelectProfile(my_pubkey_hex))
   let wire = view.view(m1) |> schema.encode_schema_message
 
@@ -240,7 +252,7 @@ pub fn view_note_intent_is_emitted_but_not_consumed_test() {
 }
 
 pub fn directory_view_renders_people_and_search_test() {
-  let m = model.init(route.main())
+  let m = model.init(route.parse_search("?demo=1"))
   let wire = view.view(m) |> schema.encode_schema_message
 
   string.contains(wire, "People") |> should.be_true()
@@ -251,7 +263,7 @@ pub fn directory_view_renders_people_and_search_test() {
 }
 
 pub fn profile_view_renders_detail_follow_and_notes_test() {
-  let m0 = model.init(route.main())
+  let m0 = model.init(route.parse_search("?demo=1"))
   let #(m1, _) = update.update(m0, SelectProfile(bob_pubkey_hex))
   let wire = view.view(m1) |> schema.encode_schema_message
 
@@ -270,7 +282,7 @@ pub fn profile_view_renders_detail_follow_and_notes_test() {
 }
 
 pub fn metadata_and_keys_views_render_test() {
-  let m0 = model.init(route.parse_search("?view=metadata"))
+  let m0 = model.init(route.parse_search("?demo=1&view=metadata"))
   let metadata_wire = view.view(m0) |> schema.encode_schema_message
   string.contains(metadata_wire, "Edit Metadata") |> should.be_true()
   string.contains(metadata_wire, "Save Profile") |> should.be_true()
@@ -282,7 +294,7 @@ pub fn metadata_and_keys_views_render_test() {
   string.contains(dirty_wire, "Unsaved changes") |> should.be_true()
 
   let keys_wire =
-    view.view(model.init(route.parse_search("?view=keys")))
+    view.view(model.init(route.parse_search("?demo=1&view=keys")))
     |> schema.encode_schema_message
   string.contains(keys_wire, "Key Custody") |> should.be_true()
   string.contains(keys_wire, "npub1") |> should.be_true()
@@ -291,7 +303,7 @@ pub fn metadata_and_keys_views_render_test() {
 }
 
 pub fn ingest_metadata_note_and_contact_events_test() {
-  let m0 = model.init(route.main())
+  let m0 = model.init(route.parse_search("?demo=1"))
 
   let metadata_event =
     make_event(
@@ -339,7 +351,7 @@ pub fn ingest_metadata_note_and_contact_events_test() {
 }
 
 pub fn refresh_signer_status_test() {
-  let m0 = model.init(route.main())
+  let m0 = model.init(route.parse_search("?demo=1"))
   m0.signer_status |> should.equal(SignerLocked)
 
   let #(m1, _) = update.update(m0, RefreshSigner)
@@ -355,7 +367,7 @@ pub fn refresh_signer_status_test() {
 pub fn storage_backed_spec_persists_profiles_test() {
   let store = fake_ports.in_memory_storage()
   let spec = profiles_main.app_spec_with_storage(store)
-  let #(m0, _) = spec.init(route.main())
+  let #(m0, _) = spec.init(route.parse_search("?demo=1"))
 
   let #(m1, _) = spec.update(m0, SetMetadataName("Persisted Alice"))
   let #(_m2, _) = spec.update(m1, SaveMetadata)
@@ -365,7 +377,7 @@ pub fn storage_backed_spec_persists_profiles_test() {
   alice.name |> should.equal(Some("Persisted Alice"))
   dict.size(stored) |> should.equal(3)
 
-  let #(reloaded, _) = spec.init(route.main())
+  let #(reloaded, _) = spec.init(route.parse_search("?demo=1"))
   let assert Ok(cached) = dict.get(reloaded.profiles, my_pubkey_hex)
   cached.name |> should.equal(Some("Persisted Alice"))
 }
@@ -429,7 +441,7 @@ fn schema_action(name: String, fields: List(#(String, String))) -> Action {
 }
 
 pub fn follow_and_metadata_emits_publish_effects_test() {
-  let m0 = model.init(route.main())
+  let m0 = model.init(route.parse_search("?demo=1"))
   let #(_, follow_effects) = update.update(m0, ToggleFollow(bob_pubkey_hex))
   should.be_true(
     list.any(follow_effects, fn(effect) {
@@ -453,7 +465,7 @@ pub fn follow_and_metadata_emits_publish_effects_test() {
 }
 
 pub fn metadata_editor_round_trips_contact_fields_test() {
-  let m0 = model.init(route.parse_search("?view=metadata"))
+  let m0 = model.init(route.parse_search("?demo=1&view=metadata"))
   let #(m1, _) = update.update(m0, SetMetadataNip05("alice@example.com"))
   let #(m2, _) = update.update(m1, SetMetadataLud16("alice@getalby.com"))
   let #(m3, _) = update.update(m2, SetMetadataWebsite("https://alice.example"))
@@ -475,7 +487,7 @@ pub fn metadata_editor_round_trips_contact_fields_test() {
 }
 
 pub fn following_view_lists_only_followed_profiles_test() {
-  let m0 = model.init(route.parse_search("?view=following"))
+  let m0 = model.init(route.parse_search("?demo=1&view=following"))
   m0.view |> should.equal(ViewFollowing)
 
   let #(m1, _) = update.update(m0, ToggleFollow(bob_pubkey_hex))
