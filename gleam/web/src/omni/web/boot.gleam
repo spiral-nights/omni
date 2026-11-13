@@ -63,7 +63,7 @@ import omni/shell/model.{
   UserProfileSummary,
 }
 import omni/shell/msg.{
-  type Msg, HostedSchemaAction, InstallApp, OpenApp, SelectShell,
+  type Msg, DispatchIntent, HostedSchemaAction, InstallApp, OpenApp, SelectShell,
   ShowIntentPrompt,
 }
 import omni/shell/registry.{type ShellRegistry}
@@ -351,6 +351,10 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
           }
         Error(Nil) -> #(route_intent(booted, action), [])
       }
+    DispatchIntent(name, payload) -> {
+      let action = action.Action(name: name, payload: payload, navigate: None)
+      #(route_intent(booted, action), [])
+    }
     _ -> dispatch_normal(booted, msg)
   }
 }

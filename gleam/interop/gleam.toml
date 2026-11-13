@@ -16,6 +16,7 @@ omni_platform = { path = "../platform" }
 omni_shell = { path = "../shell" }
 omni_web = { path = "../web" }
 omni_social = { path = "../social" }
+omni_sandbox = { path = "../sandbox" }
 omni_plugin_kit = { path = "../plugin_kit" }
 lustre = ">= 5.7.1 and < 6.0.0"
 

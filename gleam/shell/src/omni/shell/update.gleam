@@ -18,17 +18,17 @@ import omni/shell/model.{
 import omni/shell/msg.{
   type Msg, AccountSwitchResult, AddAppPlacement, ApplyRemoteWorkspace,
   ClearEmbeddedSchema, ConfirmPluginUpdate, DisablePassphrase,
-  DismissIntentPrompt, DismissUpdateModal, EmbedSchema, EnablePassphrase,
-  ExportKey, FinishPullRefresh, HostedSchemaAction, ImportKey, InstallApp,
-  KeyImportResult, KeySecurityResult, KeySecurityStatus, NavigateBack,
-  NavigateTo, OpenApp, OpenSearch, OpenSettings, RemoveAppPlacement,
-  ResolvePermission, SelectIntentHandler, SelectShell, SetAccentColor,
-  SetAppPlacements, SetAppRelays, SetCustomInstallUrl, SetExportedNsec,
-  SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
-  SetUserProfile, ShowIntentPrompt, ShowPermissionPrompt, ShowUpdateModal,
-  StartPullRefresh, SwitchAccount, ToggleAppEnabled, ToggleAppIntent,
-  ToggleAppPinned, ToggleAutoSync, ToggleFullscreen, TriggerWorkspaceSync,
-  UninstallApp, UnlockKey,
+  DismissIntentPrompt, DismissUpdateModal, DispatchIntent, EmbedSchema,
+  EnablePassphrase, ExportKey, FinishPullRefresh, HostedSchemaAction, ImportKey,
+  InstallApp, KeyImportResult, KeySecurityResult, KeySecurityStatus,
+  NavigateBack, NavigateTo, OpenApp, OpenSearch, OpenSettings,
+  RemoveAppPlacement, ResolvePermission, SelectIntentHandler, SelectShell,
+  SetAccentColor, SetAppPlacements, SetAppRelays, SetCustomInstallUrl,
+  SetExportedNsec, SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus,
+  SetThemeMode, SetUserProfile, ShowIntentPrompt, ShowPermissionPrompt,
+  ShowUpdateModal, StartPullRefresh, SwitchAccount, ToggleAppEnabled,
+  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
+  TriggerWorkspaceSync, UninstallApp, UnlockKey,
 }
 
 /// Side-effect commands emitted by the pure shell `update` function.
@@ -453,6 +453,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     HostedSchemaAction(plugin_id, action) -> #(model, [
       DispatchHostedAction(plugin_id, action),
     ])
+
+    DispatchIntent(_action, _payload) -> #(model, [])
 
     SelectShell(shell_id) -> {
       let next_model = Model(..model, active_shell_id: shell_id)

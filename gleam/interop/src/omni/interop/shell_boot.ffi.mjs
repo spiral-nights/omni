@@ -170,3 +170,24 @@ export function after_render(callback) {
     if (typeof callback === "function") callback();
   }, 60);
 }
+
+function optionValue(value) {
+  return value instanceof Some ? value[0] : undefined;
+}
+
+export function host_share(title, text, url) {
+  if (typeof navigator === "undefined") return;
+  const payload = {
+    title: optionValue(title),
+    text: optionValue(text),
+    url: optionValue(url),
+  };
+  if (typeof navigator.share === "function") {
+    navigator.share(payload).catch(() => {});
+    return;
+  }
+  const combined = [payload.text, payload.url].filter(Boolean).join(" ");
+  if (combined && navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(combined).catch(() => {});
+  }
+}

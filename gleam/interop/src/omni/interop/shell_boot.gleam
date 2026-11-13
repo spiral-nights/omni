@@ -20,6 +20,7 @@ import omni/kernel/kernel.{KernelPorts}
 import omni/kernel/nostr/coordinator
 import omni/kernel/nostr/relay_pool
 import omni/kernel/plugins/updates
+import omni/kernel/rpc/dispatcher
 import omni/nostr/event as nostr_event
 import omni/nostr/filter.{type Filter, Filter}
 import omni/nostr/kind
@@ -40,6 +41,7 @@ import omni/protocol/relay_command.{
 import omni/protocol/rpc/method.{FetchOptions}
 import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace
+import omni/sandbox/protocol_shims
 import omni/shell/layout/viewport_host
 import omni/shell/model.{
   type InstalledApp, type SettingsTab, AppStore, InstalledApp, PrimaryApp,
@@ -47,10 +49,11 @@ import omni/shell/model.{
   TabWorkspace, UpdateModalState, WidgetsDashboard,
 }
 import omni/shell/msg.{
-  AccountSwitchResult, ApplyRemoteWorkspace, EmbedSchema, FinishPullRefresh,
-  InstallApp, KeyImportResult, KeySecurityResult, KeySecurityStatus, NavigateTo,
-  OpenApp, OpenSettings, SetExportedNsec, SetUserProfile, ShowPermissionPrompt,
-  ShowUpdateModal, StartPullRefresh, UninstallApp,
+  AccountSwitchResult, ApplyRemoteWorkspace, DispatchIntent, EmbedSchema,
+  FinishPullRefresh, InstallApp, KeyImportResult, KeySecurityResult,
+  KeySecurityStatus, NavigateTo, OpenApp, OpenSettings, SetExportedNsec,
+  SetUserProfile, ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh,
+  UninstallApp,
 }
 import omni/shell/update
 import omni/social/profile as social_profile
@@ -115,7 +118,13 @@ pub fn spawn_plugin(
     Ok(#(next_booted, mount)) -> {
       mount_island(selector, mount.srcdoc, plugin_id, fn(raw_request, respond) {
         let _ =
-          rpc.handle(next_booted, plugin_id, raw_request)
+          rpc.handle_streaming(
+            next_booted,
+            plugin_id,
+            raw_request,
+            host_hooks(),
+            fn(notification) { respond(notification) },
+          )
           |> promise.map(fn(response) { respond(response) })
         Nil
       })
@@ -142,13 +151,33 @@ pub fn sign_event(
   rpc.sign_draft_json(host.booted, draft_json)
 }
 
+/// Host callbacks exposed to guest RPC methods.
+fn host_hooks() -> dispatcher.HostHooks {
+  dispatcher.HostHooks(
+    dispatch_intent: Some(fn(name, payload) {
+      dispatch_shell_msg(DispatchIntent(name, payload))
+    }),
+    navigate: Some(fn(view, page) { dispatch_shell_msg(OpenApp(view, page)) }),
+    share: Some(host_share),
+    handle_uri: Some(fn(uri) {
+      case protocol_shims.parse_protocol_uri(uri) {
+        Ok(parsed) -> {
+          let intent = protocol_shims.route_to_intent(parsed, None)
+          dispatch_shell_msg(DispatchIntent(intent.action, intent.data))
+        }
+        Error(_) -> Nil
+      }
+    }),
+  )
+}
+
 /// Answer a raw JSON-RPC frame for `plugin_id` (Channel 2 host binding).
 pub fn rpc_frame(
   host: ShellBoot,
   plugin_id: String,
   request_json: String,
 ) -> promise.Promise(String) {
-  rpc.handle(host.booted, plugin_id, request_json)
+  rpc.handle_with_hooks(host.booted, plugin_id, request_json, host_hooks())
 }
 
 /// Terminate a plugin sandbox and remove its mounted island contents.
@@ -1133,6 +1162,13 @@ fn push_views(host: ShellBoot) -> Nil {
 
 @external(javascript, "./shell_boot.ffi.mjs", "dispatch_shell_msg")
 fn dispatch_shell_msg(message: msg.Msg) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "host_share")
+fn host_share(
+  title: Option(String),
+  text: Option(String),
+  url: Option(String),
+) -> Nil
 
 /// The active shell theme ID (`"panorama"`, `"editorial"`).
 pub fn active_shell_id(host: ShellBoot) -> String {

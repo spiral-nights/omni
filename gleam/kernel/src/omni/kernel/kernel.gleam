@@ -59,6 +59,7 @@ pub type OmniKernel {
     quota_tracker: QuotaTracker,
     storage: Storage,
     clock: Clock,
+    guest_subscriptions: dispatcher.SubscriptionRegistry,
   )
 }
 
@@ -109,11 +110,21 @@ pub fn new(
     quota_tracker: quota,
     storage: ports.storage,
     clock: ports.clock,
+    guest_subscriptions: dispatcher.new_subscription_registry(),
   )
 }
 
 /// Create an RPC context for a specific plugin.
 pub fn get_rpc_context(kernel: OmniKernel, plugin_id: PluginId) -> RpcContext {
+  get_rpc_context_with(kernel, plugin_id, dispatcher.default_host_hooks())
+}
+
+/// Create an RPC context wired to host callbacks (intents, navigation, share).
+pub fn get_rpc_context_with(
+  kernel: OmniKernel,
+  plugin_id: PluginId,
+  host: dispatcher.HostHooks,
+) -> RpcContext {
   dispatcher.RpcContext(
     plugin_id: plugin_id,
     acl_engine: kernel.acl_engine,
@@ -124,6 +135,8 @@ pub fn get_rpc_context(kernel: OmniKernel, plugin_id: PluginId) -> RpcContext {
     storage: kernel.storage,
     rate_limiter: kernel.rate_limiter,
     quota_tracker: kernel.quota_tracker,
+    host: host,
+    subscriptions: kernel.guest_subscriptions,
   )
 }
 

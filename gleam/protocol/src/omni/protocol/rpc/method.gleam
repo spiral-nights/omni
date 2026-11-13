@@ -96,6 +96,12 @@ pub fn fetch_options_fields(
   fields
 }
 
+/// Wire encryption scheme requested by a `nostr.nip04.*` or `nostr.nip44.*` call.
+pub type EncryptionScheme {
+  Nip04
+  Nip44
+}
+
 /// Exhaustive ADT covering all RPC requests emitted by guest plugins.
 pub type Request {
   /// Query the active user's public key (NIP-07 `getPublicKey`).
@@ -106,10 +112,30 @@ pub type Request {
   NostrFetch(filters: List(Filter), options: Option(FetchOptions))
   /// Broadcast a signed Nostr event to relays and local store (`nostr.publish`).
   NostrPublish(event: Event)
+  /// Sign and broadcast an unsigned draft (`nostr.publish` from the bridge).
+  NostrPublishDraft(draft: UnsignedEvent)
+  /// Open a live relay subscription (`nostr.subscribe`).
+  NostrSubscribe(subscription_id: String, filters: List(Filter))
+  /// Close a live relay subscription (`nostr.unsubscribe`).
+  NostrUnsubscribe(subscription_id: String)
+  /// Active relay map with read/write scopes (`nostr.getRelays`).
+  NostrGetRelays
+  /// Read a cached Kind 0 profile (`profile.get`).
+  ProfileGet(pubkey: Pubkey)
+  /// Publish a Kind 0 profile metadata document (`profile.publish`).
+  ProfilePublish(metadata: Dynamic)
   /// Encrypt plaintext for a recipient pubkey (NIP-04 / NIP-44).
-  NostrEncrypt(recipient_pubkey: Pubkey, plaintext: String)
+  NostrEncrypt(
+    scheme: EncryptionScheme,
+    recipient_pubkey: Pubkey,
+    plaintext: String,
+  )
   /// Decrypt ciphertext from a sender pubkey (NIP-04 / NIP-44).
-  NostrDecrypt(sender_pubkey: Pubkey, ciphertext: String)
+  NostrDecrypt(
+    scheme: EncryptionScheme,
+    sender_pubkey: Pubkey,
+    ciphertext: String,
+  )
   /// Read a value from plugin-partitioned storage (`storage.get`).
   StorageGet(key: String)
   /// Write a key-value entry into plugin storage (`storage.set`).
@@ -133,7 +159,15 @@ pub type Request {
   /// Invoke host web share dialog (`kernel.handleShare`).
   Share(title: Option(String), text: Option(String), url: Option(String))
   /// Switch the active cryptographic identity (`auth.switchKey`).
-  AuthSwitchKey(pubkey: Pubkey)
+  AuthSwitchKey(key: String)
+  /// Read the active user's bech32 `npub1...` (`auth.getNpub`).
+  AuthGetNpub
+  /// Read the active user's bech32 `nsec1...` (`auth.getNsec`).
+  AuthGetNsec
+  /// Generate a fresh secp256k1 keypair without switching to it (`auth.generateKey`).
+  AuthGenerateKey
+  /// Open a protocol URI through the shell intent broker (`kernel.handleUri`).
+  KernelHandleUri(uri: String)
   /// Any unrecognized or extension method name.
   UnknownMethod(name: String, params: Option(Dynamic))
 }
@@ -145,8 +179,14 @@ pub fn method_name(request: Request) -> String {
     NostrSignEvent(_) -> "nostr.signEvent"
     NostrFetch(_, _) -> "nostr.fetch"
     NostrPublish(_) -> "nostr.publish"
-    NostrEncrypt(_, _) -> "nostr.nip04.encrypt"
-    NostrDecrypt(_, _) -> "nostr.nip04.decrypt"
+    NostrPublishDraft(_) -> "nostr.publish"
+    NostrSubscribe(_, _) -> "nostr.subscribe"
+    NostrUnsubscribe(_) -> "nostr.unsubscribe"
+    NostrGetRelays -> "nostr.getRelays"
+    ProfileGet(_) -> "profile.get"
+    ProfilePublish(_) -> "profile.publish"
+    NostrEncrypt(scheme, _, _) -> encryption_method(scheme, "encrypt")
+    NostrDecrypt(scheme, _, _) -> encryption_method(scheme, "decrypt")
     StorageGet(_) -> "storage.get"
     StorageSet(_, _) -> "storage.set"
     StorageRemove(_) -> "storage.delete"
@@ -159,7 +199,18 @@ pub fn method_name(request: Request) -> String {
     NavigationOpen(_, _) -> "navigation.open"
     Share(_, _, _) -> "kernel.handleShare"
     AuthSwitchKey(_) -> "auth.switchKey"
+    AuthGetNpub -> "auth.getNpub"
+    AuthGetNsec -> "auth.getNsec"
+    AuthGenerateKey -> "auth.generateKey"
+    KernelHandleUri(_) -> "kernel.handleUri"
     UnknownMethod(name, _) -> name
+  }
+}
+
+fn encryption_method(scheme: EncryptionScheme, op: String) -> String {
+  case scheme {
+    Nip04 -> "nostr.nip04." <> op
+    Nip44 -> "nostr.nip44." <> op
   }
 }
 

@@ -17,6 +17,7 @@ import omni/nostr/filter
 import omni/nostr/kind
 import omni/nostr/pubkey
 import omni/nostr/relay_url
+import omni/platform/ref
 import omni/platform/storage
 import omni/protocol/capability
 import omni/protocol/grant
@@ -24,9 +25,10 @@ import omni/protocol/plugin_id
 import omni/protocol/rpc/envelope.{Error, IntId, Success}
 import omni/protocol/rpc/error_code
 import omni/protocol/rpc/method.{
-  AuthSwitchKey, IntentsDispatch, NostrFetch, NostrGetPublicKey, NostrPublish,
-  NostrSignEvent, RelaysAdd, RelaysList, RelaysRemove, StorageClear, StorageGet,
-  StorageKeys, StorageRemove, StorageSet, UnknownMethod,
+  AuthSwitchKey, IntentsDispatch, Nip44, NostrDecrypt, NostrEncrypt, NostrFetch,
+  NostrGetPublicKey, NostrGetRelays, NostrPublish, NostrSignEvent, RelaysAdd,
+  RelaysList, RelaysRemove, StorageClear, StorageGet, StorageKeys, StorageRemove,
+  StorageSet, UnknownMethod,
 }
 
 fn setup_test_context() -> Promise(
@@ -58,6 +60,8 @@ fn setup_test_context() -> Promise(
       storage: store,
       rate_limiter: limiter,
       quota_tracker: q_tracker,
+      host: dispatcher.default_host_hooks(),
+      subscriptions: dispatcher.new_subscription_registry(),
     )
 
   promise.resolve(#(ctx, cap_store))
@@ -539,15 +543,13 @@ pub fn dispatcher_intents_dispatch_test() -> Promise(Nil) {
 pub fn dispatcher_auth_switch_key_test() -> Promise(Nil) {
   use #(ctx, cap_store) <- promise.await(setup_test_context())
 
-  let assert Ok(target_pk) =
-    pubkey.parse(
-      "1111111111111111111111111111111111111111111111111111111111111111",
-    )
+  let target_priv =
+    "1111111111111111111111111111111111111111111111111111111111111111"
 
   use res_denied <- promise.await(dispatcher.dispatch(
     ctx,
     IntId(50),
-    AuthSwitchKey(target_pk),
+    AuthSwitchKey(target_priv),
   ))
   case res_denied {
     Error(_, code, _, _) -> code |> should.equal(error_code.PermissionDenied)
@@ -565,20 +567,18 @@ pub fn dispatcher_auth_switch_key_test() -> Promise(Nil) {
   use res_ok <- promise.await(dispatcher.dispatch(
     ctx,
     IntId(51),
-    AuthSwitchKey(target_pk),
+    AuthSwitchKey(target_priv),
   ))
   case res_ok {
     Success(id, result) -> {
       id |> should.equal(IntId(51))
+      let expected_pk = keystore.get_public_key(ctx.keystore)
       let assert Ok(pk_str) =
         decode.run(result, decode.at(["pubkey"], decode.string))
-      pk_str
-      |> should.equal(
-        "1111111111111111111111111111111111111111111111111111111111111111",
-      )
+      pk_str |> should.equal(pubkey.to_hex(expected_pk))
 
       event_store.get_user_pubkey(ctx.event_store)
-      |> should.equal(Some(target_pk))
+      |> should.equal(Some(expected_pk))
       promise.resolve(Nil)
     }
     _ -> panic as "expected Success for AuthSwitchKey"
@@ -620,5 +620,103 @@ pub fn dispatcher_dispatch_json_wire_test() -> Promise(Nil) {
       promise.resolve(Nil)
     }
     _ -> panic as "expected Success on wire JSON request"
+  }
+}
+
+pub fn dispatcher_get_relays_test() -> Promise(Nil) {
+  use #(ctx, cap_store) <- promise.await(setup_test_context())
+  capability_store.set_grant(
+    cap_store,
+    ctx.plugin_id,
+    capability.RelaysManage,
+    grant.Always,
+    None,
+  )
+  let assert Ok(url) = relay_url.parse("wss://relay.example.com")
+  relay_pool.add_relay(ctx.relay_pool, url)
+
+  use res <- promise.await(dispatcher.dispatch(ctx, IntId(70), NostrGetRelays))
+  case res {
+    Success(_, result) -> {
+      let assert Ok(entry) =
+        decode.run(
+          result,
+          decode.at(["wss://relay.example.com"], decode.dynamic),
+        )
+      let assert Ok(read) = decode.run(entry, decode.at(["read"], decode.bool))
+      let assert Ok(write) =
+        decode.run(entry, decode.at(["write"], decode.bool))
+      read |> should.equal(True)
+      write |> should.equal(True)
+      promise.resolve(Nil)
+    }
+    _ -> panic as "expected Success for NostrGetRelays"
+  }
+}
+
+pub fn dispatcher_subscribe_streams_eose_test() -> Promise(Nil) {
+  use #(ctx, cap_store) <- promise.await(setup_test_context())
+  capability_store.set_grant(
+    cap_store,
+    ctx.plugin_id,
+    capability.NostrRead,
+    grant.Always,
+    None,
+  )
+  let notifications = ref.new([])
+  let wire =
+    "{\"jsonrpc\":\"2.0\",\"id\":71,\"method\":\"nostr.subscribe\",\"params\":{\"subscriptionId\":\"feed\",\"filters\":[{\"kinds\":[1]}]}}"
+  use res <- promise.await(
+    dispatcher.dispatch_json_streaming(ctx, wire, fn(notification) {
+      ref.update(notifications, fn(items) { [notification, ..items] })
+    }),
+  )
+  case res {
+    Success(_, _) -> {
+      let assert [first, ..] = ref.get(notifications)
+      first
+      |> should.equal(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"nostr.stream.eose\",\"params\":{\"subscriptionId\":\"feed\"}}",
+      )
+      promise.resolve(Nil)
+    }
+    _ -> panic as "expected Success for NostrSubscribe"
+  }
+}
+
+pub fn dispatcher_nip44_roundtrip_test() -> Promise(Nil) {
+  use #(ctx, cap_store) <- promise.await(setup_test_context())
+  capability_store.set_grant(
+    cap_store,
+    ctx.plugin_id,
+    capability.NostrEncrypt,
+    grant.Always,
+    None,
+  )
+  let me = keystore.get_public_key(ctx.keystore)
+
+  use enc <- promise.await(dispatcher.dispatch(
+    ctx,
+    IntId(72),
+    NostrEncrypt(Nip44, me, "payload"),
+  ))
+  case enc {
+    Success(_, result) -> {
+      let assert Ok(ciphertext) = decode.run(result, decode.string)
+      use dec <- promise.await(dispatcher.dispatch(
+        ctx,
+        IntId(73),
+        NostrDecrypt(Nip44, me, ciphertext),
+      ))
+      case dec {
+        Success(_, plain) -> {
+          let assert Ok(text) = decode.run(plain, decode.string)
+          text |> should.equal("payload")
+          promise.resolve(Nil)
+        }
+        _ -> panic as "expected NIP-44 decrypt to succeed"
+      }
+    }
+    _ -> panic as "expected NIP-44 encrypt to succeed"
   }
 }

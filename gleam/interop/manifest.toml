@@ -31,8 +31,8 @@ packages = [
   { name = "plugin_checklist", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol"], source = "local", path = "../plugins/checklist" },
   { name = "plugin_feed", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol", "omni_social", "omni_social_ui"], source = "local", path = "../plugins/feed" },
   { name = "plugin_notes", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "lustre", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol", "omni_ui"], source = "local", path = "../plugins/notes" },
-  { name = "plugin_profiles", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol", "omni_social", "omni_social_ui"], source = "local", path = "../plugins/profiles" },
-  { name = "plugin_publisher", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol"], source = "local", path = "../plugins/publisher" },
+  { name = "plugin_profiles", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol", "omni_social", "omni_social_ui", "omni_ui"], source = "local", path = "../plugins/profiles" },
+  { name = "plugin_publisher", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_javascript", "gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol"], source = "local", path = "../plugins/publisher" },
   { name = "plugin_relays", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol"], source = "local", path = "../plugins/relays" },
   { name = "plugin_timer", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol"], source = "local", path = "../plugins/timer" },
 ]
@@ -47,6 +47,7 @@ omni_nostr = { path = "../nostr" }
 omni_platform = { path = "../platform" }
 omni_plugin_kit = { path = "../plugin_kit" }
 omni_protocol = { path = "../protocol" }
+omni_sandbox = { path = "../sandbox" }
 omni_shell = { path = "../shell" }
 omni_social = { path = "../social" }
 omni_web = { path = "../web" }

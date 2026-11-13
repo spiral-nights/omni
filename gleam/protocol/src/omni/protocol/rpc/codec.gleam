@@ -19,10 +19,13 @@ import omni/protocol/rpc/envelope.{
 }
 import omni/protocol/rpc/error_code.{type ErrorCode}
 import omni/protocol/rpc/method.{
-  type Request, AuthSwitchKey, IntentsDispatch, NavigationOpen, NostrDecrypt,
-  NostrEncrypt, NostrFetch, NostrGetPublicKey, NostrPublish, NostrSignEvent,
-  RelaysAdd, RelaysList, RelaysRemove, Share, StorageClear, StorageGet,
-  StorageKeys, StorageRemove, StorageSet, UnknownMethod,
+  type Request, AuthGenerateKey, AuthGetNpub, AuthGetNsec, AuthSwitchKey,
+  IntentsDispatch, KernelHandleUri, NavigationOpen, Nip04, Nip44, NostrDecrypt,
+  NostrEncrypt, NostrFetch, NostrGetPublicKey, NostrGetRelays, NostrPublish,
+  NostrPublishDraft, NostrSignEvent, NostrSubscribe, NostrUnsubscribe,
+  ProfileGet, ProfilePublish, RelaysAdd, RelaysList, RelaysRemove, Share,
+  StorageClear, StorageGet, StorageKeys, StorageRemove, StorageSet,
+  UnknownMethod,
 }
 
 /// Structured error when decoding an incoming JSON-RPC request.
@@ -50,7 +53,14 @@ pub fn encode_request(id: Id, request: Request) -> String {
   let method_str = json.string(method.method_name(request)) |> json.to_string
 
   let params_json_opt: Option(String) = case request {
-    NostrGetPublicKey | StorageKeys | StorageClear | RelaysList -> None
+    NostrGetPublicKey
+    | StorageKeys
+    | StorageClear
+    | RelaysList
+    | NostrGetRelays
+    | AuthGetNpub
+    | AuthGetNsec
+    | AuthGenerateKey -> None
     NostrSignEvent(draft) ->
       Some(
         json.object([#("event", event_codec.unsigned_to_json(draft))])
@@ -72,7 +82,34 @@ pub fn encode_request(id: Id, request: Request) -> String {
         json.object([#("event", event_codec.to_json(ev))])
         |> json.to_string,
       )
-    NostrEncrypt(pk, plaintext) ->
+    NostrPublishDraft(draft) ->
+      Some(
+        json.object([#("draft", event_codec.unsigned_to_json(draft))])
+        |> json.to_string,
+      )
+    NostrSubscribe(sub_id, filters) ->
+      Some(
+        json.object([
+          #("subscriptionId", json.string(sub_id)),
+          #("filters", json.array(filters, of: filter_codec.to_json)),
+        ])
+        |> json.to_string,
+      )
+    NostrUnsubscribe(sub_id) ->
+      Some(
+        json.object([#("subscriptionId", json.string(sub_id))])
+        |> json.to_string,
+      )
+    ProfileGet(profile_pubkey) ->
+      Some(
+        json.object([#("pubkey", json.string(pubkey.to_hex(profile_pubkey)))])
+        |> json.to_string,
+      )
+    ProfilePublish(metadata) -> Some(serialize_dynamic(metadata))
+    KernelHandleUri(uri) ->
+      Some(json.object([#("uri", json.string(uri))]) |> json.to_string)
+    NostrEncrypt(scheme, pk, plaintext) -> {
+      let _ = scheme
       Some(
         json.object([
           #("pubkey", json.string(pubkey.to_hex(pk))),
@@ -80,7 +117,9 @@ pub fn encode_request(id: Id, request: Request) -> String {
         ])
         |> json.to_string,
       )
-    NostrDecrypt(pk, ciphertext) ->
+    }
+    NostrDecrypt(scheme, pk, ciphertext) -> {
+      let _ = scheme
       Some(
         json.object([
           #("pubkey", json.string(pubkey.to_hex(pk))),
@@ -88,6 +127,7 @@ pub fn encode_request(id: Id, request: Request) -> String {
         ])
         |> json.to_string,
       )
+    }
     StorageGet(key) ->
       Some(json.object([#("key", json.string(key))]) |> json.to_string)
     StorageSet(key, value) ->
@@ -147,11 +187,8 @@ pub fn encode_request(id: Id, request: Request) -> String {
       }
       Some(json.object(fields) |> json.to_string)
     }
-    AuthSwitchKey(pk) ->
-      Some(
-        json.object([#("pubkey", json.string(pubkey.to_hex(pk)))])
-        |> json.to_string,
-      )
+    AuthSwitchKey(key) ->
+      Some(json.object([#("key", json.string(key))]) |> json.to_string)
     UnknownMethod(_, params) ->
       case params {
         Some(p) -> Some(serialize_dynamic(p))
@@ -326,44 +363,114 @@ fn decode_method_params(
         use ev <- decode.field("event", event_codec.decoder())
         decode.success(ev)
       }
+      let dec_draft_in_obj = {
+        use ev <- decode.field("draft", event_codec.unsigned_decoder())
+        decode.success(ev)
+      }
       case decode.run(dyn, dec_in_obj) {
         Ok(ev) -> Ok(NostrPublish(ev))
         Error(_) ->
           case decode.run(dyn, event_codec.decoder()) {
             Ok(ev) -> Ok(NostrPublish(ev))
-            Error(_) -> Error("Invalid event for nostr.publish")
+            Error(_) ->
+              case decode.run(dyn, dec_draft_in_obj) {
+                Ok(draft) -> Ok(NostrPublishDraft(draft))
+                Error(_) ->
+                  case decode.run(dyn, event_codec.unsigned_decoder()) {
+                    Ok(draft) -> Ok(NostrPublishDraft(draft))
+                    Error(_) -> Error("Invalid event for nostr.publish")
+                  }
+              }
           }
       }
     }
 
-    "nostr.nip04.encrypt"
-    | "nostr.nip04Encrypt"
-    | "nostr.nip44.encrypt"
-    | "nostr.nip44Encrypt"
-    | "nostr.encrypt" -> {
-      use dyn <- require_params(params, "Missing encryption parameters")
+    "nostr.subscribe" -> {
+      use dyn <- require_params(params, "Missing nostr.subscribe parameters")
       let dec = {
-        use pk <- decode.field("pubkey", method.pubkey_tolerant_decoder())
-        use pt <- decode.field("plaintext", decode.string)
-        decode.success(NostrEncrypt(pk, pt))
+        use sub_id <- decode.field("subscriptionId", decode.string)
+        use fs <- decode.field("filters", decode.list(filter_codec.decoder()))
+        decode.success(#(sub_id, fs))
       }
-      decode.run(dyn, dec)
-      |> result_to_param_error("Missing pubkey or plaintext for encrypt")
+      case decode.run(dyn, dec) {
+        Ok(#(sub_id, fs)) ->
+          case sub_id != "" && !list.is_empty(fs) {
+            True -> Ok(NostrSubscribe(sub_id, fs))
+            False ->
+              Error("Missing subscriptionId or filters for nostr.subscribe")
+          }
+        _ -> Error("Missing subscriptionId or filters for nostr.subscribe")
+      }
     }
 
-    "nostr.nip04.decrypt"
-    | "nostr.nip04Decrypt"
-    | "nostr.nip44.decrypt"
-    | "nostr.nip44Decrypt"
-    | "nostr.decrypt" -> {
-      use dyn <- require_params(params, "Missing decryption parameters")
+    "nostr.unsubscribe" -> {
+      use dyn <- require_params(params, "Missing nostr.unsubscribe parameters")
+      let dec = {
+        use sub_id <- decode.field("subscriptionId", decode.string)
+        decode.success(sub_id)
+      }
+      case decode.run(dyn, dec) {
+        Ok(sub_id) ->
+          case sub_id != "" {
+            True -> Ok(NostrUnsubscribe(sub_id))
+            False -> Error("Missing subscriptionId for nostr.unsubscribe")
+          }
+        _ -> Error("Missing subscriptionId for nostr.unsubscribe")
+      }
+    }
+
+    "nostr.getRelays" -> Ok(NostrGetRelays)
+
+    "profile.get" -> {
+      use dyn <- require_params(params, "Missing profile.get parameters")
       let dec = {
         use pk <- decode.field("pubkey", method.pubkey_tolerant_decoder())
-        use ct <- decode.field("ciphertext", decode.string)
-        decode.success(NostrDecrypt(pk, ct))
+        decode.success(ProfileGet(pk))
       }
       decode.run(dyn, dec)
-      |> result_to_param_error("Missing pubkey or ciphertext for decrypt")
+      |> result_to_param_error("Missing or invalid pubkey for profile.get")
+    }
+
+    "profile.publish" -> {
+      use dyn <- require_params(params, "Missing profile.publish parameters")
+      let dec = {
+        use meta <- decode.field("metadata", decode.dynamic)
+        decode.success(meta)
+      }
+      case decode.run(dyn, dec) {
+        Ok(meta) -> Ok(ProfilePublish(meta))
+        Error(_) -> Ok(ProfilePublish(dyn))
+      }
+    }
+
+    "nostr.nip04.encrypt" | "nostr.nip04Encrypt" -> {
+      use dyn <- require_params(params, "Missing encryption parameters")
+      decode_encrypt(dyn, Nip04)
+    }
+
+    "nostr.nip44.encrypt" | "nostr.nip44Encrypt" -> {
+      use dyn <- require_params(params, "Missing encryption parameters")
+      decode_encrypt(dyn, Nip44)
+    }
+
+    "nostr.encrypt" -> {
+      use dyn <- require_params(params, "Missing encryption parameters")
+      decode_encrypt(dyn, Nip04)
+    }
+
+    "nostr.nip04.decrypt" | "nostr.nip04Decrypt" -> {
+      use dyn <- require_params(params, "Missing decryption parameters")
+      decode_decrypt(dyn, Nip04)
+    }
+
+    "nostr.nip44.decrypt" | "nostr.nip44Decrypt" -> {
+      use dyn <- require_params(params, "Missing decryption parameters")
+      decode_decrypt(dyn, Nip44)
+    }
+
+    "nostr.decrypt" -> {
+      use dyn <- require_params(params, "Missing decryption parameters")
+      decode_decrypt(dyn, Nip04)
     }
 
     "storage.get" -> {
@@ -492,27 +599,66 @@ fn decode_method_params(
 
     "auth.switchKey" -> {
       use dyn <- require_params(params, "Missing auth.switchKey parameters")
-      let dec_pk = {
-        use pk <- decode.field("pubkey", method.pubkey_tolerant_decoder())
-        decode.success(AuthSwitchKey(pk))
+      let dec = {
+        use raw <- decode.field("key", decode.string)
+        decode.success(AuthSwitchKey(raw))
       }
-      let dec_key = {
-        use pk <- decode.field("key", method.pubkey_tolerant_decoder())
-        decode.success(AuthSwitchKey(pk))
+      let dec_pubkey = {
+        use raw <- decode.field("pubkey", decode.string)
+        decode.success(AuthSwitchKey(raw))
       }
-      case decode.run(dyn, dec_pk) {
+      case decode.run(dyn, dec) {
         Ok(req) -> Ok(req)
         Error(_) ->
-          case decode.run(dyn, dec_key) {
+          case decode.run(dyn, dec_pubkey) {
             Ok(req) -> Ok(req)
-            Error(_) ->
-              Error("Missing or invalid key/pubkey for auth.switchKey")
+            Error(_) -> Error("Missing key/pubkey for auth.switchKey")
           }
       }
     }
 
+    "auth.getNpub" -> Ok(AuthGetNpub)
+    "auth.getNsec" -> Ok(AuthGetNsec)
+    "auth.generateKey" -> Ok(AuthGenerateKey)
+
+    "kernel.handleUri" -> {
+      use dyn <- require_params(params, "Missing kernel.handleUri parameters")
+      let dec = {
+        use uri <- decode.field("uri", decode.string)
+        decode.success(KernelHandleUri(uri))
+      }
+      decode.run(dyn, dec)
+      |> result_to_param_error("Missing uri for kernel.handleUri")
+    }
+
     other -> Ok(UnknownMethod(other, params))
   }
+}
+
+fn decode_encrypt(
+  dyn: Dynamic,
+  scheme: method.EncryptionScheme,
+) -> Result(Request, String) {
+  let dec = {
+    use pk <- decode.field("pubkey", method.pubkey_tolerant_decoder())
+    use pt <- decode.field("plaintext", decode.string)
+    decode.success(NostrEncrypt(scheme, pk, pt))
+  }
+  decode.run(dyn, dec)
+  |> result_to_param_error("Missing pubkey or plaintext for encrypt")
+}
+
+fn decode_decrypt(
+  dyn: Dynamic,
+  scheme: method.EncryptionScheme,
+) -> Result(Request, String) {
+  let dec = {
+    use pk <- decode.field("pubkey", method.pubkey_tolerant_decoder())
+    use ct <- decode.field("ciphertext", decode.string)
+    decode.success(NostrDecrypt(scheme, pk, ct))
+  }
+  decode.run(dyn, dec)
+  |> result_to_param_error("Missing pubkey or ciphertext for decrypt")
 }
 
 fn require_params(

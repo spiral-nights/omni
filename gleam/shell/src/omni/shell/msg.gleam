@@ -2,6 +2,8 @@
 ////
 //// Strictly plugin-agnostic: zero hardcoded plugin IDs.
 
+import gleam/dict.{type Dict}
+import gleam/dynamic.{type Dynamic}
 import gleam/option.{type Option}
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
@@ -47,6 +49,7 @@ pub type Msg {
   EmbedSchema(plugin_id: String, node: Node)
   ClearEmbeddedSchema(plugin_id: String)
   HostedSchemaAction(plugin_id: String, action: Action)
+  DispatchIntent(action: String, payload: Option(Dict(String, Dynamic)))
 
   // Shell & theme
   SelectShell(shell_id: String)

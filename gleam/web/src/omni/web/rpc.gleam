@@ -25,6 +25,37 @@ pub fn handle(
   plugin_id_str: String,
   request_json: String,
 ) -> Promise(String) {
+  handle_streaming(
+    booted,
+    plugin_id_str,
+    request_json,
+    dispatcher.default_host_hooks(),
+    fn(_notification) { Nil },
+  )
+}
+
+/// Answer a raw JSON-RPC request with host callbacks wired (intents,
+/// navigation, share, protocol URIs).
+pub fn handle_with_hooks(
+  booted: Booted,
+  plugin_id_str: String,
+  request_json: String,
+  host: dispatcher.HostHooks,
+) -> Promise(String) {
+  handle_streaming(booted, plugin_id_str, request_json, host, fn(_notification) {
+    Nil
+  })
+}
+
+/// Answer a raw JSON-RPC request, routing live subscription notifications to
+/// `notify` (each argument is a ready-to-send JSON-RPC notification string).
+pub fn handle_streaming(
+  booted: Booted,
+  plugin_id_str: String,
+  request_json: String,
+  host: dispatcher.HostHooks,
+  notify: fn(String) -> Nil,
+) -> Promise(String) {
   case plugin_id.parse(plugin_id_str) {
     Error(Nil) ->
       promise.resolve(
@@ -36,8 +67,8 @@ pub fn handle(
         )),
       )
     Ok(pid) -> {
-      let ctx = kernel.get_rpc_context(booted.kernel, pid)
-      dispatcher.dispatch_json(ctx, request_json)
+      let ctx = kernel.get_rpc_context_with(booted.kernel, pid, host)
+      dispatcher.dispatch_json_streaming(ctx, request_json, notify)
       |> promise.map(codec.encode_response)
     }
   }
