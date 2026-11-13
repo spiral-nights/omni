@@ -15,6 +15,7 @@ import omni/shell/msg.{
   SetSearchQuery,
 }
 import omni/ui/icons
+import omni/ui/plugin_icon
 
 /// Entry in the App Store nsite catalog.
 pub type CatalogEntry {
@@ -368,7 +369,7 @@ fn render_installed_row(model: Model, app: InstalledApp) -> Element(Msg) {
     ],
     [
       html.div([attribute.class("omni-app-index-icon")], [
-        icons.render_icon(app.icon, 18),
+        plugin_icon.render(app.icon, 18),
       ]),
       html.div([attribute.class("omni-app-index-info")], [
         html.div([attribute.class("omni-app-index-name-row")], [
@@ -465,7 +466,7 @@ fn render_catalog_card(model: Model, entry: CatalogEntry) -> Element(Msg) {
     [
       html.div([attribute.class("omni-catalog-card-header")], [
         html.div([attribute.class("omni-catalog-card-icon")], [
-          icons.render_icon(entry.icon, 20),
+          plugin_icon.render(entry.icon, 20),
         ]),
         html.div([attribute.class("omni-catalog-card-titles")], [
           html.div([attribute.class("omni-catalog-card-title-row")], [

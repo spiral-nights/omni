@@ -20,6 +20,7 @@ import omni/shell/msg.{
 }
 import omni/shell/shell
 import omni/ui/icons
+import omni/ui/plugin_icon
 import omni/ui/sanitize
 
 /// Render an in-app back button when there is navigation history.
@@ -113,7 +114,7 @@ fn render_header_action_pill(
         event.on_click(OpenApp(app.id, placement.route)),
       ],
       [
-        icons.render_icon(app.icon, 14),
+        plugin_icon.render(app.icon, 14),
         html.span([attribute.class("omni-header-action-label")], [
           element.text(title),
         ]),

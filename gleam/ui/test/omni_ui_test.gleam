@@ -13,6 +13,7 @@ import omni/protocol/schema/style.{
 }
 import omni/ui/avatar
 import omni/ui/icons
+import omni/ui/plugin_icon
 import omni/ui/sanitize
 import omni/ui/tokens
 
@@ -61,6 +62,36 @@ pub fn unknown_icon_falls_back_to_alert_circle_test() {
     |> element.to_string
   should.be_true(string.contains(help, "M9.09 9"))
   should.be_false(string.contains(help, "data-icon-fallback=\"true\""))
+}
+
+pub fn plugin_icons_accept_urls_svg_and_aliases_test() {
+  let url_str =
+    plugin_icon.render("https://example.com/icon.png", 20)
+    |> element.to_string
+
+  should.be_true(string.contains(url_str, "omni-plugin-icon-img"))
+  should.be_true(string.contains(
+    url_str,
+    "src=\"https://example.com/icon.png\"",
+  ))
+  should.be_true(string.contains(url_str, "width=\"20\""))
+
+  let svg_str =
+    plugin_icon.render(
+      "<svg viewBox=\"0 0 24 24\"><script>alert(1)</script><circle cx=\"12\" cy=\"12\" r=\"10\" onload=\"alert(2)\"/></svg>",
+      16,
+    )
+    |> element.to_string
+
+  should.be_true(string.contains(svg_str, "omni-plugin-icon-svg"))
+  should.be_false(string.contains(string.lowercase(svg_str), "<script"))
+  should.be_false(string.contains(string.lowercase(svg_str), "onload"))
+
+  let alias_str = plugin_icon.render("rss", 16) |> element.to_string
+  should.be_true(string.contains(alias_str, "data-icon=\"feed\""))
+
+  let emoji_str = plugin_icon.render("not-a-real-icon", 16) |> element.to_string
+  should.be_true(string.contains(emoji_str, "data-icon-fallback=\"true\""))
 }
 
 pub fn generated_avatar_is_a_labeled_image_test() {

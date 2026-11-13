@@ -1527,3 +1527,22 @@ omni-virtual-list,
   flex-direction: column;
   gap: 4px;
 }
+
+/* Plugin-supplied icons (inline SVG or image URL) */
+.omni-plugin-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  line-height: 1;
+}
+.omni-plugin-icon-img {
+  object-fit: cover;
+  border-radius: 4px;
+}
+.omni-plugin-icon-svg > span,
+.omni-plugin-icon-svg svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

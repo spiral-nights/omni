@@ -15,6 +15,7 @@ import omni/shell/model.{
 }
 import omni/shell/msg.{type Msg, NavigateTo, OpenApp, OpenSettings}
 import omni/ui/icons
+import omni/ui/plugin_icon
 
 /// Render the primary navigation dock `<nav class="omni-dock">`.
 pub fn render_dock(model: Model) -> Element(Msg) {
@@ -109,7 +110,7 @@ fn render_dock_button(
     ],
     [
       html.div([attribute.class("dock-icon-wrapper")], [
-        icons.render_icon(icon_name, 18),
+        plugin_icon.render(icon_name, 18),
       ]),
       html.span([], [element.text(label)]),
     ],
