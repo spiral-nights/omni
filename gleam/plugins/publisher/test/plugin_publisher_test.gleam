@@ -21,9 +21,10 @@ import plugin/publisher/model.{
   TabPublished, TabServers, TabStudio, TabWidget,
 }
 import plugin/publisher/msg.{
-  AddServer, ChooseLocalZip, DismissBanner, PublishPackage, RemoveServer,
-  SelectTab, SetBundleMetadata, SetDraftDescription, SetDraftIcon, SetDraftId,
-  SetDraftName, SetDraftServerUrl, SetDraftVersion, ToggleServer,
+  AddServer, ChooseLocalZip, DeletePublished, DismissBanner, PublishPackage,
+  PublishServerList, RemoveServer, SelectTab, SetBundleMetadata,
+  SetDraftDescription, SetDraftIcon, SetDraftId, SetDraftName, SetDraftServerUrl,
+  SetDraftVersion, ToggleServer, UseTemplate,
 }
 import plugin/publisher/update
 import plugin/publisher/view
@@ -351,4 +352,69 @@ pub fn default_servers_round_trip_test() {
   let assert [only] = local_store.load(store, cfg)
   only.url |> should.equal("https://s.example")
   only.enabled |> should.equal(False)
+}
+
+pub fn template_bundle_and_inventory_render_test() {
+  let m0 = model.init(TabStudio)
+  let #(m1, effects) = update.update(m0, UseTemplate)
+  assert list.length(effects) == 0
+  assert m1.bundle != None
+  assert m1.draft.entry_html == "index.html"
+  assert m1.draft.bundle_size_bytes > 0
+
+  let html = view.view(m1) |> schema.encode_schema_message
+  assert string.contains(html, "Bundle File Inventory")
+  assert string.contains(html, "index.html")
+  assert string.contains(html, "Start from Template")
+}
+
+pub fn delete_published_queues_kind5_test() {
+  let m0 =
+    Model(
+      ..model.init(TabPublished),
+      user_pubkey: Some(
+        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      ),
+      published: [
+        PublishedPlugin(
+          id: "org.example.app",
+          name: "Example",
+          version: "1.0.0",
+          description: "",
+          icon: "globe",
+          blossom_sha256: "abc",
+          blossom_url: "https://blossom.example/abc",
+          naddr: "naddr1example",
+          published_at: 1_700_000_000,
+        ),
+      ],
+    )
+  let #(m1, effects) = update.update(m0, DeletePublished("org.example.app"))
+  assert list.length(m1.published) == 0
+
+  let assert [app.Publish(draft)] = effects
+  kind.to_int(draft.kind) |> should.equal(5)
+  list.any(draft.tags, fn(tag) {
+    case tag {
+      ["a", value] ->
+        value
+        == "35129:79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798:org.example.app"
+      _ -> False
+    }
+  })
+  |> should.be_true()
+}
+
+pub fn publish_server_list_queues_kind10063_test() {
+  let m0 =
+    Model(
+      ..model.init(TabServers),
+      user_pubkey: Some(
+        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      ),
+    )
+  let #(_, effects) = update.update(m0, PublishServerList)
+  let assert [app.Publish(draft)] = effects
+  kind.to_int(draft.kind) |> should.equal(10_063)
+  list.length(draft.tags) |> should.equal(3)
 }

@@ -6,6 +6,7 @@ import gleam/int
 import gleam/json
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/string
 import omni/plugin_kit/schema
 import omni/protocol/blossom
 import omni/protocol/schema/action.{type Action}
@@ -196,11 +197,20 @@ fn render_studio_tab(model: Model) -> List(Node) {
     schema.button("Choose .zip", schema.new_action("choose-local-zip"))
     |> schema.with_icon("upload")
 
+  let template_btn =
+    schema.button("Start from Template", schema.new_action("use-template"))
+    |> schema.with_icon("file")
+
   let bundle_row =
     schema.box()
     |> schema.row()
     |> schema.gap("sm")
-    |> schema.children([bundle_url_input, load_bundle_btn, choose_zip_btn])
+    |> schema.children([
+      bundle_url_input,
+      load_bundle_btn,
+      choose_zip_btn,
+      template_btn,
+    ])
 
   let publish_btn =
     schema.button(
@@ -278,7 +288,9 @@ fn render_studio_tab(model: Model) -> List(Node) {
     |> schema.with_icon("file")
     |> schema.children([code_preview])
 
-  [studio_form_card, hash_inspector_card, preview_card]
+  let inventory = render_bundle_inventory(model)
+
+  [studio_form_card, hash_inspector_card, inventory, preview_card]
 }
 
 fn render_published_tab(model: Model) -> List(Node) {
@@ -289,6 +301,34 @@ fn render_published_tab(model: Model) -> List(Node) {
     ]
     items -> list.map(items, render_published_card)
   }
+}
+
+fn render_bundle_inventory(model: Model) -> Node {
+  let files = case model.bundle {
+    Some(parsed) -> parsed.files
+    None -> []
+  }
+  let items =
+    list.map(files, fn(file) {
+      schema.list_item(file.path)
+      |> schema.subtitle(
+        file.mime
+        <> " | "
+        <> int.to_string(file.size)
+        <> " bytes | "
+        <> string.slice(file.sha256, 0, 12)
+        <> "...",
+      )
+      |> schema.with_icon("file")
+    })
+  schema.card()
+  |> schema.title("Bundle File Inventory")
+  |> schema.subtitle(case files {
+    [] -> "No bundle loaded yet."
+    list -> int.to_string(list.length(list)) <> " file(s) packaged"
+  })
+  |> schema.with_icon("package")
+  |> schema.children([schema.list_view(items)])
 }
 
 fn render_published_card(pkg: PublishedPlugin) -> Node {
@@ -308,6 +348,13 @@ fn render_published_card(pkg: PublishedPlugin) -> Node {
   |> schema.children([
     schema.text(pkg.description),
     naddr_code,
+    schema.box()
+      |> schema.row()
+      |> schema.justify(JustifyEnd)
+      |> schema.children([
+        schema.button("Delete (Kind 5)", url_action("delete-published", pkg.id))
+        |> schema.with_icon("trash"),
+      ]),
   ])
 }
 
@@ -339,6 +386,13 @@ fn render_servers_tab(model: Model) -> List(Node) {
 
   let srv_items = list.map(model.servers, render_server_item)
 
+  let sync_btn =
+    schema.button(
+      "Publish Server List (Kind 10063)",
+      schema.new_action("publish-server-list"),
+    )
+    |> schema.with_icon("send")
+
   [
     schema.card()
     |> schema.title("Blossom Server Endpoints (BUD-01 / Kind 10063)")
@@ -349,6 +403,10 @@ fn render_servers_tab(model: Model) -> List(Node) {
     |> schema.children([
       add_row,
       schema.list_view(srv_items),
+      schema.box()
+        |> schema.row()
+        |> schema.justify(JustifyEnd)
+        |> schema.children([sync_btn]),
     ]),
   ]
 }

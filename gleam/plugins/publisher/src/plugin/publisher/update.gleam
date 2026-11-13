@@ -24,10 +24,11 @@ import plugin/publisher/model.{
   TabStudio, TabWidget,
 }
 import plugin/publisher/msg.{
-  type Msg, AddServer, BundleLoaded, ChooseLocalZip, DismissBanner, LoadBundle,
-  PublishPackage, RemoveServer, SelectTab, SetBundleMetadata, SetBundleUrl,
-  SetDraftDescription, SetDraftIcon, SetDraftId, SetDraftName, SetDraftServerUrl,
-  SetDraftVersion, ToggleServer,
+  type Msg, AddServer, BundleLoaded, ChooseLocalZip, DeletePublished,
+  DismissBanner, LoadBundle, PublishPackage, PublishServerList, RemoveServer,
+  SelectTab, SetBundleMetadata, SetBundleUrl, SetDraftDescription, SetDraftIcon,
+  SetDraftId, SetDraftName, SetDraftServerUrl, SetDraftVersion, ToggleServer,
+  UseTemplate,
 }
 
 /// Pure Elm-style state update function for `plugin_publisher`.
@@ -177,6 +178,36 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
           }
       }
     }
+
+    UseTemplate -> {
+      let parsed = bundle.from_html(template_html(), "index.html")
+      let #(sha, size) = case bundle.entry_file(parsed) {
+        Ok(file) -> #(file.sha256, file.size)
+        Error(_) -> #("", 0)
+      }
+      let next_draft =
+        PublishDraft(
+          ..model.draft,
+          entry_html: "index.html",
+          bundle_sha256: sha,
+          bundle_size_bytes: size,
+        )
+      #(
+        Model(
+          ..model,
+          draft: next_draft,
+          bundle: Some(parsed),
+          status_message: Some("Template bundle ready to publish."),
+          error_message: None,
+          publishing: False,
+        ),
+        [],
+      )
+    }
+
+    DeletePublished(plugin_id) -> handle_delete(model, plugin_id)
+
+    PublishServerList -> handle_server_list(model)
 
     SetBundleMetadata(sha256, size_bytes) -> {
       let next_draft =
@@ -509,6 +540,16 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
 
     "load-bundle" | "load_bundle" -> Some(LoadBundle)
 
+    "use-template" | "use_template" -> Some(UseTemplate)
+
+    "delete-published" | "delete_published" ->
+      case extract_opt_text(act, ["id", "url", "value"]) {
+        Some(id) -> Some(DeletePublished(id))
+        None -> None
+      }
+
+    "publish-server-list" | "publish_server_list" -> Some(PublishServerList)
+
     "choose-local-zip" | "choose_local_zip" | "pick-local-zip" ->
       Some(ChooseLocalZip)
 
@@ -567,5 +608,91 @@ fn first_some(items: List(Option(a))) -> Option(a) {
     [] -> None
     [Some(v), ..] -> Some(v)
     [None, ..rest] -> first_some(rest)
+  }
+}
+
+fn template_html() -> String {
+  "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
+  <> "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+  <> "<title>Omni Nsite</title>\n"
+  <> "<style>body{margin:0;font-family:system-ui,sans-serif;background:#141312;color:#ede8df;display:flex;align-items:center;justify-content:center;min-height:100vh}main{text-align:center;padding:32px}h1{color:#d4a373;font-size:1.6rem}</style>\n"
+  <> "</head>\n<body>\n<main>\n<h1>Hello from an Omni nsite</h1>\n"
+  <> "<p>Edit index.html and publish to NIP-5A.</p>\n</main>\n</body>\n</html>\n"
+}
+
+fn handle_delete(
+  model: Model,
+  plugin_id: String,
+) -> #(Model, List(Effect(Msg))) {
+  let removed =
+    list.filter(model.published, fn(p: PublishedPlugin) { p.id != plugin_id })
+  let next_model = Model(..model, published: removed)
+  case model.user_pubkey {
+    None -> #(
+      Model(
+        ..next_model,
+        error_message: Some("Sign in to delete a published nsite."),
+        status_message: None,
+      ),
+      [],
+    )
+    Some(pubkey_hex) -> {
+      let draft =
+        UnsignedEvent(
+          pubkey: None,
+          created_at: clock.system().now_ms() / 1000,
+          kind: kind.from_int(5),
+          tags: [
+            ["a", "35129:" <> pubkey_hex <> ":" <> plugin_id],
+            ["k", "35129"],
+          ],
+          content: "Deleted nsite " <> plugin_id,
+        )
+      #(
+        Model(
+          ..next_model,
+          status_message: Some("Queued deletion for " <> plugin_id),
+          error_message: None,
+        ),
+        [Publish(draft)],
+      )
+    }
+  }
+}
+
+fn handle_server_list(model: Model) -> #(Model, List(Effect(Msg))) {
+  let servers =
+    model.servers
+    |> list.filter(fn(server: BlossomServer) { server.enabled })
+    |> list.map(fn(server: BlossomServer) {
+      blossom.normalize_server(server.url)
+    })
+  case model.user_pubkey {
+    None -> #(
+      Model(
+        ..model,
+        error_message: Some("Sign in to publish your Blossom server list."),
+        status_message: None,
+      ),
+      [],
+    )
+    Some(_) -> {
+      let draft =
+        UnsignedEvent(
+          pubkey: None,
+          created_at: clock.system().now_ms() / 1000,
+          kind: blossom.server_list_kind(),
+          tags: list.map(servers, fn(url) { ["server", url] }),
+          content: "",
+        )
+      #(
+        Model(
+          ..model,
+          status_message: Some("Queued Blossom server list (Kind 10063)."),
+          error_message: None,
+        ),
+        [Publish(draft)],
+      )
+    }
   }
 }

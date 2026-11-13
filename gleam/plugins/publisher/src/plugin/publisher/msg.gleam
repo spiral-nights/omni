@@ -19,6 +19,9 @@ pub type Msg {
   SetBundleUrl(String)
   LoadBundle
   ChooseLocalZip
+  UseTemplate
+  DeletePublished(String)
+  PublishServerList
   BundleLoaded(Result(String, String))
   DismissBanner
 }
