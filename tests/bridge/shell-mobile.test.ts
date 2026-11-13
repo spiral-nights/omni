@@ -159,7 +159,7 @@ describe("pull-to-refresh gesture state machine", () => {
     );
   });
 
-  it("crosses the 72px threshold and emits StartPullRefresh on release", () => {
+  it("crosses the 50px threshold and emits StartPullRefresh on release", () => {
     const pulling = on_touch_start(PullState$PullIdle(), 0, 100);
     expect(PullState$isPulling(pulling)).toBe(true);
 
@@ -177,7 +177,7 @@ describe("pull-to-refresh gesture state machine", () => {
 
   it("resets to idle when released before the threshold", () => {
     const pulling = on_touch_start(PullState$PullIdle(), 0, 100);
-    const [next, message] = on_touch_end(on_touch_move(pulling, 150));
+    const [next, message] = on_touch_end(on_touch_move(pulling, 140));
     expect(next).toBe(PullState$PullIdle());
     expect(message.constructor.name).toBe("None");
   });
@@ -190,14 +190,14 @@ describe("pull-to-refresh touch listeners (shell_boot FFI)", () => {
     await nextFrame();
   }
 
-  it("dispatches StartPullRefresh and renders the refreshing indicator past 72px", async () => {
+  it("dispatches StartPullRefresh and renders the refreshing indicator past 50px", async () => {
     await triggerRefresh(90);
 
     const indicator = pullIndicator();
     expect(indicator).not.toBeNull();
     expect(indicator!.className).toContain("is-refreshing");
     expect(indicator!.className).not.toContain("pulling");
-    expect(indicator!.getAttribute("data-pull-distance")).toBe("72.0");
+    expect(indicator!.getAttribute("data-pull-distance")).toBe("50.0");
     expect(indicator!.getAttribute("aria-live")).toBe("polite");
     expect(indicator!.textContent).toContain("refreshing...");
 
@@ -207,7 +207,7 @@ describe("pull-to-refresh touch listeners (shell_boot FFI)", () => {
     expect(pullIndicator()!.className).toBe("omni-pull-to-refresh");
   });
 
-  it("does not refresh for a pull shorter than 72px", async () => {
+  it("does not refresh for a pull shorter than 50px", async () => {
     document.dispatchEvent(touchEvent("touchend", 150));
     await triggerRefresh(threshold_px - 1);
 

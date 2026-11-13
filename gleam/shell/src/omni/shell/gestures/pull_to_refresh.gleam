@@ -20,10 +20,10 @@ pub type PullState {
 }
 
 /// Pull distance threshold in pixels required to trigger a refresh on release.
-pub const threshold_px = 72.0
+pub const threshold_px = 50.0
 
 /// Maximum visual pull distance in pixels.
-pub const max_distance_px = 120.0
+pub const max_distance_px = 90.0
 
 /// Handle a touch start event. Only initiates pulling when at the top of the scroll container (`scroll_top <= 1.0`).
 pub fn on_touch_start(

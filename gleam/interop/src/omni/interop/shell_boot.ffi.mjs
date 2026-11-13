@@ -227,7 +227,7 @@ export function mount_dom(selector, init, update, view, parse_url, page_url, pul
       "touchmove",
       (e) => {
         if (startY === null || fired || !e.touches || !e.touches.length) return;
-        if (e.touches[0].clientY - startY >= 72) {
+        if (e.touches[0].clientY - startY >= 50) {
           fired = true;
           spa.dispatch(pull_start);
         }
