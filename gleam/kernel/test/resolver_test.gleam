@@ -3,6 +3,7 @@ import gleam/list
 import gleam/option.{None}
 import gleam/string
 import gleeunit/should
+import omni/kernel/crypto/keystore
 import omni/kernel/plugins/resolver.{
   CoordinateTarget, EventTarget, StrategyExhausted, UrlTarget,
 }
@@ -10,6 +11,7 @@ import omni/nostr/event.{type Event, Event}
 import omni/nostr/event_id.{type EventId}
 import omni/nostr/kind
 import omni/nostr/pubkey.{type Pubkey}
+import omni/platform/storage
 
 fn make_pubkey(suffix: String) -> Pubkey {
   let padded = string.pad_start(suffix, to: 64, with: "0")
@@ -139,4 +141,21 @@ pub fn resolver_url_strategy_test() {
 
   strategy(UrlTarget("https://cdn.example.com/missing.html"))
   |> should.be_error
+}
+
+pub fn verify_event_signature_accepts_real_and_rejects_tampered_test() {
+  let ks = keystore.new(storage.in_memory())
+  let draft =
+    event.UnsignedEvent(
+      pubkey: None,
+      created_at: 1_700_000_000,
+      kind: kind.from_int(35_129),
+      tags: [["d", "app"]],
+      content: "<html></html>",
+    )
+  let assert Ok(signed) = keystore.sign_event(ks, draft)
+  resolver.verify_event_signature(signed) |> should.be_true()
+
+  let tampered = Event(..signed, content: "<html>evil</html>")
+  resolver.verify_event_signature(tampered) |> should.be_false()
 }

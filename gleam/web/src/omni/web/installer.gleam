@@ -5,7 +5,7 @@ import gleam/dict
 import gleam/int
 import gleam/javascript/promise.{type Promise}
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
 import gleam/string
 import omni/kernel/kernel.{type OmniKernel}
 import omni/kernel/nostr/coordinator
@@ -15,6 +15,7 @@ import omni/nostr/kind.{type Kind, from_int}
 import omni/nostr/pubkey
 import omni/platform/http
 import omni/platform/promise_ext
+import omni/platform/webcrypto
 import omni/protocol/rpc/method.{FetchOptions}
 import omni/shell/model.{type InstalledApp, InstalledApp, ViewOption}
 
@@ -45,7 +46,10 @@ pub fn resolve_url_with(
   promise.resolve(case result {
     Error(err) -> Error(err)
     Ok(content) ->
-      Ok(InstalledBundle(app: app_from(url, plugin_id), content: content))
+      Ok(InstalledBundle(
+        app: app_from_content(url, plugin_id, content),
+        content: content,
+      ))
   })
 }
 
@@ -146,13 +150,24 @@ fn resolve_nostr(
 
   case list.sort(events, fn(a, b) { int.compare(b.created_at, a.created_at) }) {
     [event, ..] ->
-      bundle_from_resolved(
-        raw,
-        plugin_id,
-        resolver.resolve_event(event, Some(raw)),
-        resolver.default_blossom_servers,
-        fetch,
-      )
+      case resolver.verify_event_signature(event) {
+        False ->
+          promise.resolve(
+            Error(
+              resolve_error(resolver.InvalidSignature(
+                "manifest signature does not verify",
+              )),
+            ),
+          )
+        True ->
+          bundle_from_resolved(
+            raw,
+            plugin_id,
+            resolver.resolve_event(event, Some(raw)),
+            resolver.default_blossom_servers,
+            fetch,
+          )
+      }
     [] -> promise.resolve(Error("Event not found: " <> raw))
   }
 }
@@ -248,7 +263,13 @@ fn fetch_blob(
       let url = base <> "/" <> blob_hash
       use result <- promise.await(fetch(url))
       case result {
-        Ok(content) -> promise.resolve(Ok(content))
+        Ok(content) -> {
+          let actual = webcrypto.sha256_hex(content)
+          case string.lowercase(actual) == string.lowercase(blob_hash) {
+            True -> promise.resolve(Ok(content))
+            False -> fetch_blob(rest, hash, fetch)
+          }
+        }
         Error(_) -> fetch_blob(rest, hash, fetch)
       }
     }
@@ -342,16 +363,33 @@ fn resolve_error(err: resolver.ResolveError) -> String {
 
 /// Build the installed-app descriptor for a fetched URL bundle.
 pub fn app_from(url: String, plugin_id: String) -> InstalledApp {
-  let name = case string.split(url, "/") |> list.reverse {
+  app_from_content(url, plugin_id, "")
+}
+
+/// Build the descriptor, preferring an HTML `<title>` and icon link when present.
+pub fn app_from_content(
+  url: String,
+  plugin_id: String,
+  content: String,
+) -> InstalledApp {
+  let fallback_name = case string.split(url, "/") |> list.reverse {
     [last, ..] if last != "" -> last
     _ -> "Custom Nsite"
+  }
+  let name = case detect_html_title(content) {
+    Some(title) -> title
+    None -> fallback_name
+  }
+  let icon = case detect_html_icon(content) {
+    Some(icon) -> icon
+    None -> "apps"
   }
   InstalledApp(
     id: plugin_id,
     name: name,
     display_name: Some(name),
     description: "Installed from " <> url,
-    icon: "apps",
+    icon: icon,
     enabled: True,
     pinned: True,
     views: [
@@ -373,12 +411,25 @@ pub fn app_from_resolved(
   plugin_id: String,
   plugin: resolver.ResolvedPlugin,
 ) -> InstalledApp {
+  let html_content = plugin.content
+  let name = case plugin.name {
+    "" ->
+      case detect_html_title(html_content) {
+        Some(title) -> title
+        None -> plugin.id
+      }
+    value -> value
+  }
+  let detected_icon = case plugin.icon {
+    Some(icon) if icon != "" -> Some(icon)
+    _ -> detect_html_icon(html_content)
+  }
   InstalledApp(
     id: plugin_id,
-    name: plugin.name,
+    name: name,
     display_name: plugin.display_name,
     description: plugin.description,
-    icon: case plugin.icon {
+    icon: case detected_icon {
       Some(icon) if icon != "" -> icon
       _ -> "apps"
     },
@@ -394,4 +445,91 @@ pub fn app_from_resolved(
     source_url: raw,
     version: Some(plugin.version),
   )
+}
+
+/// Extract the `<title>` text from an HTML document, if present.
+pub fn detect_html_title(html: String) -> Option(String) {
+  case string.split_once(html, "<title>") {
+    Ok(#(_, after)) ->
+      case string.split_once(after, "</title>") {
+        Ok(#(title, _)) -> {
+          let clean = string.trim(title)
+          case clean {
+            "" -> None
+            value -> Some(value)
+          }
+        }
+        Error(Nil) -> None
+      }
+    Error(Nil) -> {
+      case string.split_once(html, "<TITLE>") {
+        Ok(#(_, after)) ->
+          case string.split_once(after, "</TITLE>") {
+            Ok(#(title, _)) -> {
+              let clean = string.trim(title)
+              case clean {
+                "" -> None
+                value -> Some(value)
+              }
+            }
+            Error(Nil) -> None
+          }
+        Error(Nil) -> None
+      }
+    }
+  }
+}
+
+/// Extract a `<link rel="icon">` / `apple-touch-icon` href from an HTML document.
+pub fn detect_html_icon(html: String) -> Option(String) {
+  html
+  |> find_link_tags
+  |> list.find_map(fn(tag) {
+    let rel = attribute_value(tag, "rel")
+    let href = attribute_value(tag, "href")
+    case rel, href {
+      Some(rel_value), Some(href_value) ->
+        case string.contains(string.lowercase(rel_value), "icon") {
+          True ->
+            case string.trim(href_value) {
+              "" -> Error(Nil)
+              value -> Ok(value)
+            }
+          False -> Error(Nil)
+        }
+      _, _ -> Error(Nil)
+    }
+  })
+  |> option.from_result
+}
+
+fn find_link_tags(html: String) -> List(String) {
+  html
+  |> string.split("<link")
+  |> list.drop(1)
+  |> list.filter_map(fn(chunk) {
+    case string.split_once(chunk, ">") {
+      Ok(#(tag, _)) -> Ok(tag)
+      Error(Nil) -> Error(Nil)
+    }
+  })
+}
+
+fn attribute_value(tag: String, name: String) -> Option(String) {
+  case string.split_once(tag, name <> "=\"") {
+    Ok(#(_, after)) ->
+      case string.split_once(after, "\"") {
+        Ok(#(value, _)) -> Some(value)
+        Error(Nil) -> None
+      }
+    Error(Nil) ->
+      case string.split_once(tag, name <> "='") {
+        Ok(#(_, after)) ->
+          case string.split_once(after, "'") {
+            Ok(#(value, _)) -> Some(value)
+            Error(Nil) -> None
+          }
+        Error(Nil) -> None
+      }
+  }
 }

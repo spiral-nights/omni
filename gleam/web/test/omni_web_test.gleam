@@ -33,6 +33,7 @@ import omni/platform/nip44
 import omni/platform/promise_ext as omni_promise_ext
 import omni/platform/ref
 import omni/platform/storage
+import omni/platform/webcrypto
 import omni/platform/zip
 import omni/protocol/blossom
 import omni/protocol/capability
@@ -473,23 +474,17 @@ pub fn installer_builds_app_from_url_test() {
 }
 
 fn manifest_event(content: String, tags: List(List(String))) -> Event {
-  let assert Ok(eid) =
-    event_id.parse(
-      "4444444444444444444444444444444444444444444444444444444444444444",
+  let ks = keystore.new(storage.in_memory())
+  let draft =
+    UnsignedEvent(
+      pubkey: None,
+      created_at: 1_700_000_000,
+      kind: kind.from_int(35_129),
+      tags: tags,
+      content: content,
     )
-  let assert Ok(pk) =
-    pubkey.parse(
-      "5555555555555555555555555555555555555555555555555555555555555555",
-    )
-  Event(
-    id: eid,
-    pubkey: pk,
-    created_at: 1_700_000_000,
-    kind: kind.from_int(35_129),
-    tags: tags,
-    content: content,
-    sig: "sig",
-  )
+  let assert Ok(signed) = keystore.sign_event(ks, draft)
+  signed
 }
 
 fn no_fetch(_url: String) -> promise.Promise(Result(String, String)) {
@@ -544,8 +539,7 @@ pub fn installer_coordinate_resolves_cached_manifest_test() -> promise.Promise(
     cur_event,
   ))
 
-  let target =
-    "35129:5555555555555555555555555555555555555555555555555555555555555555:my-app"
+  let target = "35129:" <> pubkey.to_hex(cur_event.pubkey) <> ":my-app"
   use result <- promise.await(installer.resolve_with(
     booted.kernel,
     target,
@@ -571,12 +565,18 @@ pub fn installer_blossom_manifest_inlines_assets_test() -> promise.Promise(Nil) 
   let assert Ok(ports) = ports_res
   let booted = boot.init_with_relays(ports, [], None)
 
+  let html = "<html><head></head><body><div id=\"app\"></div></body></html>"
+  let js = "console.log('omni')"
+  let css = "body{margin:0}"
+  let html_hash = webcrypto.sha256_hex(html)
+  let js_hash = webcrypto.sha256_hex(js)
+  let css_hash = webcrypto.sha256_hex(css)
   let cur_event =
     manifest_event("", [
       ["d", "blossom-app"],
-      ["f", "index.html", "hash-html"],
-      ["f", "app.js", "hash-js"],
-      ["f", "app.css", "hash-css"],
+      ["f", "index.html", html_hash],
+      ["f", "app.js", js_hash],
+      ["f", "app.css", css_hash],
       ["server", "https://blossom.test"],
     ])
   use _ <- promise.await(event_store.save_event(
@@ -587,18 +587,15 @@ pub fn installer_blossom_manifest_inlines_assets_test() -> promise.Promise(Nil) 
   use result <- promise.await(
     installer.resolve_with(
       booted.kernel,
-      "35129:5555555555555555555555555555555555555555555555555555555555555555:blossom-app",
+      "35129:" <> pubkey.to_hex(cur_event.pubkey) <> ":blossom-app",
       "nsite.custom.blossom-app",
       fn(url) {
         case url {
-          "https://blossom.test/hash-html" ->
-            promise.resolve(Ok(
-              "<html><head></head><body><div id=\"app\"></div></body></html>",
-            ))
-          "https://blossom.test/hash-js" ->
-            promise.resolve(Ok("console.log('omni')"))
-          "https://blossom.test/hash-css" ->
-            promise.resolve(Ok("body{margin:0}"))
+          "https://blossom.test/" <> h if h == html_hash ->
+            promise.resolve(Ok(html))
+          "https://blossom.test/" <> h if h == js_hash -> promise.resolve(Ok(js))
+          "https://blossom.test/" <> h if h == css_hash ->
+            promise.resolve(Ok(css))
           _ -> promise.resolve(Error("404"))
         }
       },
@@ -1312,4 +1309,20 @@ pub fn boot_uninstall_revokes_grants_and_clears_storage_test() {
   storage.get(store, feed <> "::theme") |> should.equal(None)
 
   promise.resolve(Nil)
+}
+
+pub fn installer_detects_html_title_and_icon_test() {
+  let html =
+    "<html><head><title>  Pretty App  </title><link rel=\"icon\" href=\"./icon.svg\"></head><body></body></html>"
+  installer.detect_html_title(html) |> should.equal(Some("Pretty App"))
+  installer.detect_html_icon(html) |> should.equal(Some("./icon.svg"))
+
+  let app =
+    installer.app_from_content(
+      "https://example.test/app.html",
+      "example.app",
+      html,
+    )
+  app.name |> should.equal("Pretty App")
+  app.icon |> should.equal("./icon.svg")
 }

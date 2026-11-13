@@ -13,6 +13,8 @@ import omni/nostr/event_id
 import omni/nostr/kind.{type Kind}
 import omni/nostr/nip19.{type AddressData, Naddr}
 import omni/nostr/pubkey.{type Pubkey}
+import omni/platform/secp256k1
+import omni/platform/webcrypto
 import omni/protocol/manifest.{type PluginViewDeclaration}
 
 /// Standard NIP-5A nsite application manifest kind (35129).
@@ -126,6 +128,15 @@ pub fn resolve_chain(
         Error(_) -> resolve_chain(target, rest)
       }
   }
+}
+
+/// Verify a signed event: its ID must hash to the canonical NIP-01 serialization
+/// and its Schnorr signature must validate against the author pubkey.
+pub fn verify_event_signature(event: Event) -> Bool {
+  let hash = webcrypto.sha256_hex(event.serialize_event_for_id(event))
+  let id_matches = string.lowercase(event_id.to_hex(event.id)) == hash
+  id_matches
+  && secp256k1.schnorr_verify(event.sig, hash, pubkey.to_hex(event.pubkey))
 }
 
 /// Extract Blossom file mappings (`["f", name, hash, ...]`) from event tags.
