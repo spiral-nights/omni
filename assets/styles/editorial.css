@@ -1381,13 +1381,6 @@ style, script, head, title, meta, link,
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
-/* Theme Mode Switcher */
-.editorial-mode-switcher {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
 .editorial-mode-btn {
   background: var(--omni-bg-elevated);
   border: 1px solid var(--omni-border-subtle);
@@ -1429,20 +1422,6 @@ style, script, head, title, meta, link,
   box-sizing: border-box;
 }
 
-.editorial-swatch-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-  background: transparent;
-  border: none;
-  padding: 4px;
-  min-width: 44px;
-  flex-shrink: 0;
-  box-sizing: border-box;
-}
-
 .editorial-swatch-circle {
   width: 32px;
   height: 32px;
@@ -1454,15 +1433,6 @@ style, script, head, title, meta, link,
   transition: transform 0.18s ease;
   position: relative;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-}
-
-.editorial-swatch-item:hover .editorial-swatch-circle {
-  transform: scale(1.08);
-}
-
-.editorial-swatch-item.active .editorial-swatch-circle {
-  outline: 2px solid var(--omni-text-primary);
-  outline-offset: 2px;
 }
 
 .editorial-swatch-label {
