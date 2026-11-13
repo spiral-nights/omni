@@ -12,12 +12,14 @@ import omni/kernel/nostr/coordinator
 import omni/kernel/plugins/resolver
 import omni/nostr/filter
 import omni/nostr/kind.{type Kind, from_int}
+import omni/nostr/nip89
 import omni/nostr/pubkey
 import omni/platform/http
 import omni/platform/promise_ext
 import omni/platform/webcrypto
 import omni/protocol/rpc/method.{FetchOptions}
 import omni/shell/model.{type InstalledApp, InstalledApp, ViewOption}
+import omni/web/nip89 as discovery
 
 /// A fetched bundle ready to be mounted in a sandbox.
 pub type InstalledBundle {
@@ -531,5 +533,47 @@ fn attribute_value(tag: String, name: String) -> Option(String) {
           }
         Error(Nil) -> None
       }
+  }
+}
+
+/// Discover a NIP-89 handler for `handled_kind` and install its web app.
+pub fn resolve_discovered_handler(
+  kernel: OmniKernel,
+  handled_kind: Int,
+  plugin_id: String,
+) -> Promise(Result(InstalledBundle, String)) {
+  resolve_discovered_handler_with(
+    kernel,
+    handled_kind,
+    plugin_id,
+    http.fetch_text,
+  )
+}
+
+/// Discover and install a NIP-89 handler using an injected fetcher.
+pub fn resolve_discovered_handler_with(
+  kernel: OmniKernel,
+  handled_kind: Int,
+  plugin_id: String,
+  fetch: Fetcher,
+) -> Promise(Result(InstalledBundle, String)) {
+  use handlers <- promise.await(discovery.discover_handlers(
+    kernel,
+    handled_kind,
+  ))
+  let web_urls =
+    handlers
+    |> list.filter_map(fn(handler: nip89.HandlerInfo) {
+      case handler.web {
+        Some(url) -> Ok(url)
+        None -> Error(Nil)
+      }
+    })
+    |> list.filter(fn(url) {
+      string.starts_with(url, "https://") || string.starts_with(url, "http://")
+    })
+  case web_urls {
+    [] -> promise.resolve(Error("No NIP-89 handler with a web URL found"))
+    [url, ..] -> resolve_url_with(url, plugin_id, fetch)
   }
 }

@@ -53,6 +53,7 @@ import omni/shell/registry
 import omni/web/boot
 import omni/web/config
 import omni/web/installer
+import omni/web/nip89 as nip89_discovery
 import omni/web/permission_prompt
 import omni/web/rpc
 
@@ -1350,5 +1351,91 @@ pub fn boot_loads_persisted_intent_defaults_test() {
   |> should.equal(Some("org.omni.plugin.feed"))
   booted.model.default_intents |> should.equal(defaults)
 
+  promise.resolve(Nil)
+}
+
+fn sign_nip89_event(
+  ks: keystore.Keystore,
+  kind_int: Int,
+  tags: List(List(String)),
+  content: String,
+) -> Event {
+  let draft =
+    UnsignedEvent(
+      pubkey: None,
+      created_at: 1_700_000_000,
+      kind: kind.from_int(kind_int),
+      tags: tags,
+      content: content,
+    )
+  let assert Ok(signed) = keystore.sign_event(ks, draft)
+  signed
+}
+
+pub fn nip89_discovery_finds_and_installs_handler_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+  let ks = keystore.new(storage.in_memory())
+
+  let handler_event =
+    sign_nip89_event(
+      ks,
+      31_990,
+      [
+        ["d", "handler-x"],
+        ["k", "1"],
+        ["web", "https://handler.example/app.html"],
+      ],
+      "{\"name\":\"Handler X\",\"about\":\"notes\"}",
+    )
+  let handler_pubkey = pubkey.to_hex(handler_event.pubkey)
+  let recommendation =
+    sign_nip89_event(
+      ks,
+      31_989,
+      [
+        ["d", "1"],
+        ["a", "31990:" <> handler_pubkey <> ":handler-x"],
+      ],
+      "",
+    )
+
+  use _ <- promise.await(
+    event_store.save_events(booted.kernel.event_store, [
+      handler_event,
+      recommendation,
+    ]),
+  )
+
+  use handlers <- promise.await(nip89_discovery.discover_handlers(
+    booted.kernel,
+    1,
+  ))
+  let assert [handler] = handlers
+  handler.name |> should.equal("Handler X")
+  handler.web |> should.equal(Some("https://handler.example/app.html"))
+
+  use result <- promise.await(
+    installer.resolve_discovered_handler_with(
+      booted.kernel,
+      1,
+      "nsite.custom.nip89.handler",
+      fn(url) {
+        url |> should.equal("https://handler.example/app.html")
+        promise.resolve(Ok(
+          "<html><head><title>Handler App</title></head><body></body></html>",
+        ))
+      },
+    ),
+  )
+  case result {
+    Ok(bundle) -> {
+      bundle.app.name |> should.equal("Handler App")
+      bundle.app.icon |> should.equal("apps")
+    }
+    Error(err) -> panic as err
+  }
   promise.resolve(Nil)
 }
