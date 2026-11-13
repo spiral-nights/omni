@@ -1135,6 +1135,29 @@
   font-family: var(--omni-font-mono, monospace);
 }
 
+.omni-capability-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+button.omni-kind-badge {
+  border: 1px solid transparent;
+  background: var(--omni-bg-subtle, #22201d);
+  color: var(--omni-accent-primary, #d4a373);
+  cursor: pointer;
+}
+
+.omni-kind-toggle[data-granted="true"] {
+  border-color: var(--omni-accent-primary, #d4a373);
+}
+
+.omni-kind-toggle[data-granted="false"] {
+  opacity: 0.55;
+  color: var(--omni-text-muted, #6b665f);
+}
+
 /* --- Plugin custom settings mount --- */
 .omni-plugin-custom-settings-panel,
 .plugin-settings-mount-container {

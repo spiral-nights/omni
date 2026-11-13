@@ -4,7 +4,7 @@
 
 import gleam/int
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
 import gleam/string
 import lustre/attribute
 import lustre/element.{type Element}
@@ -16,7 +16,7 @@ import omni/shell/model.{
 }
 import omni/shell/msg.{
   type Msg, InstallApp, OpenSettings, SetCustomInstallUrl, ToggleAppEnabled,
-  UninstallApp,
+  ToggleCapabilityGrant, UninstallApp,
 }
 import omni/ui/icons
 
@@ -72,7 +72,7 @@ pub fn render_permissions_panel(model: Model) -> Element(Msg) {
 
   let app_cards =
     list.map(model.installed_apps, fn(app) {
-      render_plugin_permission_card(app)
+      render_plugin_permission_card(model, app)
     })
 
   let list_content = case app_cards {
@@ -154,7 +154,10 @@ fn render_custom_installer_bar(custom_url: String) -> Element(Msg) {
   ])
 }
 
-fn render_plugin_permission_card(app: InstalledApp) -> Element(Msg) {
+fn render_plugin_permission_card(
+  model: Model,
+  app: InstalledApp,
+) -> Element(Msg) {
   let title = model.app_title(app)
   let version_str = option.unwrap(app.version, "1.0.0")
   let status_badge = case app.enabled {
@@ -170,37 +173,66 @@ fn render_plugin_permission_card(app: InstalledApp) -> Element(Msg) {
 
   let capability_pills = [
     render_capability_pill(
+      model,
+      app.id,
       "storage:kv",
       "Scoped Storage (KV)",
       "Isolated local storage partition",
-      app.enabled,
+      None,
     ),
     render_capability_pill(
+      model,
+      app.id,
       "nostr:read",
       "Nostr Subscriptions",
       "Read public events and local 0ms cache",
-      app.enabled,
+      None,
     ),
     render_capability_pill(
-      "nostr:write",
-      "NIP-07 Event Signing",
-      "Sign and publish Nostr events via host keystore",
-      app.enabled,
+      model,
+      app.id,
+      "nostr:sign",
+      "Event Signing",
+      "Sign Nostr events via host keystore",
+      None,
     ),
     render_capability_pill(
+      model,
+      app.id,
+      "nostr:encrypt",
+      "Encryption",
+      "NIP-04 and NIP-44 direct message access",
+      None,
+    ),
+    render_capability_pill(
+      model,
+      app.id,
       "intents:dispatch",
       "Intent Routing",
       "Cross-application protocol & intent invocation",
-      app.enabled,
+      None,
     ),
   ]
 
   let kind_badges =
     list.map(standard_nostr_kinds(), fn(k) {
-      html.span(
+      let scope = Some(int.to_string(k.kind))
+      let granted = grant_allows(model, app.id, "nostr:write", scope)
+      html.button(
         [
-          attribute.class("omni-kind-badge"),
+          attribute.type_("button"),
+          attribute.class("omni-kind-badge omni-kind-toggle"),
           attribute.title(k.description),
+          attribute.attribute("data-granted", case granted {
+            True -> "true"
+            False -> "false"
+          }),
+          event.on_click(ToggleCapabilityGrant(
+            app.id,
+            "nostr:write",
+            scope,
+            !granted,
+          )),
         ],
         [
           element.text(
@@ -305,11 +337,14 @@ fn render_plugin_permission_card(app: InstalledApp) -> Element(Msg) {
 }
 
 fn render_capability_pill(
+  model: Model,
+  plugin_id: String,
   cap_key: String,
   label: String,
   description: String,
-  granted: Bool,
+  scope: Option(String),
 ) -> Element(Msg) {
+  let granted = grant_allows(model, plugin_id, cap_key, scope)
   html.div(
     [
       attribute.class(case granted {
@@ -327,14 +362,53 @@ fn render_capability_pill(
           element.text(description),
         ]),
       ]),
-      html.span([attribute.class("omni-capability-status")], [
-        element.text(case granted {
-          True -> "Active"
-          False -> "Suspended"
-        }),
+      html.div([attribute.class("omni-capability-controls")], [
+        html.span([attribute.class("omni-capability-status")], [
+          element.text(case granted {
+            True -> "Granted"
+            False -> "Not granted"
+          }),
+        ]),
+        html.button(
+          [
+            attribute.type_("button"),
+            attribute.id("btn-capability-" <> plugin_id <> "-" <> cap_key),
+            attribute.class("omni-button omni-button-secondary"),
+            event.on_click(ToggleCapabilityGrant(
+              plugin_id,
+              cap_key,
+              scope,
+              !granted,
+            )),
+          ],
+          [
+            element.text(case granted {
+              True -> "Revoke"
+              False -> "Grant"
+            }),
+          ],
+        ),
       ]),
     ],
   )
+}
+
+fn grant_allows(
+  model: Model,
+  plugin_id: String,
+  capability_name: String,
+  scope: Option(String),
+) -> Bool {
+  let matches =
+    list.filter(model.capability_grants, fn(item) {
+      item.plugin_id == plugin_id
+      && item.capability == capability_name
+      && item.scope == scope
+    })
+  case matches {
+    [item, ..] -> item.level != "deny"
+    [] -> False
+  }
 }
 
 fn derive_app_from_url(url: String) -> InstalledApp {

@@ -159,6 +159,20 @@ pub fn permissions_panel_renders_acl_capabilities_and_installer_test() {
     Model(
       ..model.init("editorial", [app1, app2]),
       custom_install_url: "https://nsite.example/custom.html",
+      capability_grants: [
+        model.CapabilityGrant(
+          "nsite.sample.alpha",
+          "storage:kv",
+          None,
+          "always",
+        ),
+        model.CapabilityGrant(
+          "nsite.sample.alpha",
+          "nostr:write",
+          Some("1"),
+          "always",
+        ),
+      ],
     )
 
   let html_str = permissions.render_permissions_panel(m) |> element.to_string
@@ -175,8 +189,14 @@ pub fn permissions_panel_renders_acl_capabilities_and_installer_test() {
     "id=\"btn-uninstall-nsite.sample.alpha\"",
   ))
   should.be_true(string.contains(html_str, "Scoped Storage (KV)"))
-  should.be_true(string.contains(html_str, "NIP-07 Event Signing"))
+  should.be_true(string.contains(html_str, "Event Signing"))
   should.be_true(string.contains(html_str, "Kind 1 (Short Notes)"))
+  should.be_true(string.contains(
+    html_str,
+    "id=\"btn-capability-nsite.sample.alpha-storage:kv\"",
+  ))
+  should.be_true(string.contains(html_str, "Revoke"))
+  should.be_true(string.contains(html_str, "Grant"))
   should.be_true(string.contains(html_str, "Enabled"))
   should.be_true(string.contains(html_str, "Disabled"))
 }

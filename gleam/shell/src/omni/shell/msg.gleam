@@ -10,7 +10,7 @@ import omni/protocol/schema/node.{type Node}
 import omni/protocol/viewport.{type Viewport}
 import omni/protocol/workspace.{type WorkspaceState}
 import omni/shell/model.{
-  type InstalledApp, type IntentPromptState, type Page,
+  type CapabilityGrant, type InstalledApp, type IntentPromptState, type Page,
   type PermissionPromptState, type PlacementConfig, type SettingsTab,
   type SyncStatus, type UpdateModalState, type UserProfileSummary,
 }
@@ -79,6 +79,13 @@ pub type Msg {
   // Permission prompts
   ShowPermissionPrompt(PermissionPromptState)
   ResolvePermission(prompt_id: Int, allowed: Bool)
+  ToggleCapabilityGrant(
+    plugin_id: String,
+    capability: String,
+    scope: Option(String),
+    allowed: Bool,
+  )
+  SetCapabilityGrants(List(CapabilityGrant))
 
   // Modals & gestures
   ShowUpdateModal(UpdateModalState)

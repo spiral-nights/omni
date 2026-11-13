@@ -23,12 +23,13 @@ import omni/shell/msg.{
   InstallApp, KeyImportResult, KeySecurityResult, KeySecurityStatus,
   NavigateBack, NavigateTo, OpenApp, OpenSearch, OpenSettings,
   RemoveAppPlacement, ResolvePermission, SelectIntentHandler, SelectShell,
-  SetAccentColor, SetAppPlacements, SetAppRelays, SetCustomInstallUrl,
-  SetExportedNsec, SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus,
-  SetThemeMode, SetUserProfile, ShowIntentPrompt, ShowPermissionPrompt,
-  ShowUpdateModal, StartPullRefresh, SwitchAccount, ToggleAppEnabled,
-  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
-  TriggerWorkspaceSync, UninstallApp, UnlockKey,
+  SetAccentColor, SetAppPlacements, SetAppRelays, SetCapabilityGrants,
+  SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
+  SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShowIntentPrompt,
+  ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh, SwitchAccount,
+  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
+  ToggleCapabilityGrant, ToggleFullscreen, TriggerWorkspaceSync, UninstallApp,
+  UnlockKey,
 }
 
 /// Side-effect commands emitted by the pure shell `update` function.
@@ -392,6 +393,16 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       [
         PermissionDecision(prompt_id, allowed),
       ],
+    )
+
+    SetCapabilityGrants(grants) -> #(
+      Model(..model, capability_grants: grants),
+      [],
+    )
+
+    ToggleCapabilityGrant(_plugin_id, _capability, _scope, _allowed) -> #(
+      model,
+      [],
     )
 
     ShowIntentPrompt(prompt) -> {

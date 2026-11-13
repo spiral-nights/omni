@@ -49,7 +49,7 @@ import omni/platform/url
 import omni/plugin_kit/zap
 import omni/protocol/blossom
 import omni/protocol/capability
-import omni/protocol/grant.{Always}
+import omni/protocol/grant.{Always, Deny}
 import omni/protocol/intent.{IntentHandler}
 import omni/protocol/plugin_id
 import omni/protocol/rpc/method.{type FetchOptions, FetchOptions}
@@ -64,7 +64,7 @@ import omni/shell/model.{
 }
 import omni/shell/msg.{
   type Msg, DispatchIntent, HostedSchemaAction, InstallApp, OpenApp, SelectShell,
-  ShowIntentPrompt,
+  SetCapabilityGrants, ShowIntentPrompt, ToggleCapabilityGrant,
 }
 import omni/shell/registry.{type ShellRegistry}
 import omni/shell/shell
@@ -195,7 +195,45 @@ pub fn init_with_relays(
   grant_default_capabilities(booted)
   register_intent_handlers(booted)
   install_auth_handler(booted)
-  booted
+  with_capability_grants(booted)
+}
+
+/// Rebuild `Booted` with the model's capability-grant list read from the kernel.
+pub fn with_capability_grants(booted: Booted) -> Booted {
+  let grants = load_capability_grants(booted)
+  let #(model, _) = shell.update(booted.model, SetCapabilityGrants(grants))
+  Booted(..booted, model: model)
+}
+
+fn load_capability_grants(booted: Booted) -> List(model.CapabilityGrant) {
+  list.flat_map(booted.model.installed_apps, fn(app) {
+    case plugin_id.parse(app.id) {
+      Ok(pid) -> {
+        let all =
+          capability_store.get_all_grants(booted.kernel.capability_store, pid)
+        dict.fold(all, [], fn(acc, key, level) {
+          let #(capability_name, scope) = case string.split(key, ":") {
+            [prefix, name, scope] -> #(prefix <> ":" <> name, scope)
+            _ -> #(key, "*")
+          }
+          let scope_opt = case scope {
+            "*" | "" -> None
+            value -> Some(value)
+          }
+          [
+            model.CapabilityGrant(
+              plugin_id: app.id,
+              capability: capability_name,
+              scope: scope_opt,
+              level: grant.to_string(level),
+            ),
+            ..acc
+          ]
+        })
+      }
+      Error(_) -> []
+    }
+  })
 }
 
 fn register_intent_handlers(booted: Booted) -> Nil {
@@ -354,6 +392,25 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
     DispatchIntent(name, payload) -> {
       let action = action.Action(name: name, payload: payload, navigate: None)
       #(route_intent(booted, action), [])
+    }
+    ToggleCapabilityGrant(pid_str, cap_str, scope, allowed) -> {
+      case plugin_id.parse(pid_str), capability.parse(cap_str) {
+        Ok(pid), Ok(cap) -> {
+          let level = case allowed {
+            True -> Always
+            False -> Deny
+          }
+          capability_store.set_grant(
+            booted.kernel.capability_store,
+            pid,
+            cap,
+            level,
+            scope,
+          )
+          #(with_capability_grants(booted), [])
+        }
+        _, _ -> #(booted, [])
+      }
     }
     _ -> dispatch_normal(booted, msg)
   }

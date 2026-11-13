@@ -1206,3 +1206,42 @@ pub fn header_search_routes_to_the_feed_search_view_test() -> promise.Promise(
   string.contains(rendered, "feed-search") |> should.equal(True)
   promise.resolve(Nil)
 }
+
+pub fn boot_capability_grants_toggle_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+
+  let booted = boot.init_with_relays(ports, [], None)
+  let feed_id = "org.omni.plugin.feed"
+
+  let assert Ok(initial) =
+    list.find(booted.model.capability_grants, fn(item) {
+      item.plugin_id == feed_id && item.capability == "storage:kv"
+    })
+  initial.level |> should.equal("always")
+
+  let #(revoked, _) =
+    boot.dispatch(
+      booted,
+      omni_shell_msg.ToggleCapabilityGrant(feed_id, "storage:kv", None, False),
+    )
+  let assert Ok(after_revoke) =
+    list.find(revoked.model.capability_grants, fn(item) {
+      item.plugin_id == feed_id && item.capability == "storage:kv"
+    })
+  after_revoke.level |> should.equal("deny")
+
+  let #(regranted, _) =
+    boot.dispatch(
+      revoked,
+      omni_shell_msg.ToggleCapabilityGrant(feed_id, "storage:kv", None, True),
+    )
+  let assert Ok(after_grant) =
+    list.find(regranted.model.capability_grants, fn(item) {
+      item.plugin_id == feed_id && item.capability == "storage:kv"
+    })
+  after_grant.level |> should.equal("always")
+
+  promise.resolve(Nil)
+}

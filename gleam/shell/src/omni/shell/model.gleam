@@ -109,6 +109,16 @@ pub type PermissionPromptState {
   )
 }
 
+/// A stored capability grant surfaced in the permissions settings panel.
+pub type CapabilityGrant {
+  CapabilityGrant(
+    plugin_id: String,
+    capability: String,
+    scope: Option(String),
+    level: String,
+  )
+}
+
 /// Root state model for the Omni Shell.
 pub type Model {
   Model(
@@ -129,6 +139,7 @@ pub type Model {
     custom_install_url: String,
     embedded_views: Dict(String, Node),
     permission_prompt: Option(PermissionPromptState),
+    capability_grants: List(CapabilityGrant),
     key_input: String,
     key_message: Option(String),
     exported_nsec: Option(String),
@@ -165,6 +176,7 @@ pub fn init(active_shell_id: String, apps: List(InstalledApp)) -> Model {
     custom_install_url: "",
     embedded_views: dict.new(),
     permission_prompt: None,
+    capability_grants: [],
     key_input: "",
     key_message: None,
     exported_nsec: None,
