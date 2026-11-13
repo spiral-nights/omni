@@ -491,6 +491,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     SetThemeMode(mode) -> {
       let normalized = case string.lowercase(string.trim(mode)) {
         "light" -> "light"
+        "system" -> "system"
+        "auto" -> "system"
         _ -> "dark"
       }
       #(Model(..model, theme_mode: normalized), [PersistThemeMode(normalized)])

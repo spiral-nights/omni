@@ -5,6 +5,7 @@ import gleeunit/should
 import lustre/element
 import omni/platform/storage
 import omni/protocol/viewport.{Sidebar}
+import omni/shell/accent
 import omni/shell/app_store
 import omni/shell/gestures/pull_to_refresh.{
   PullIdle, Pulling, ReadyToRefresh, Refreshing,
@@ -15,7 +16,7 @@ import omni/shell/model.{
   Synced, TabPluginSettings, TabPlugins, TabProfile, TabRelays, TabShells,
   TabWorkspace, UpdateModalState, UserProfileSummary, ViewOption,
 }
-import omni/shell/msg.{StartPullRefresh}
+import omni/shell/msg.{SetThemeMode, StartPullRefresh}
 import omni/shell/registry
 import omni/shell/settings/intents
 import omni/shell/settings/permissions
@@ -24,7 +25,9 @@ import omni/shell/settings/relay_scoping.{
   ScopeCustom, ScopeDefaultPool, ScopeLocalOnly,
 }
 import omni/shell/settings/shells
+import omni/shell/shell
 import omni/shell/theme
+import omni/shell/update
 
 import omni/shell/settings/tabs
 import omni/shell/update_modal
@@ -708,4 +711,29 @@ pub fn shells_panel_renders_curated_catalog_and_install_test() {
   should.be_true(string.contains(html_str, "id=\"btn-install-shell-mantra\""))
   should.be_true(string.contains(html_str, "id=\"input-custom-shell-url\""))
   should.be_true(string.contains(html_str, "id=\"btn-install-shell-panorama\""))
+}
+
+pub fn accent_derivation_bundle_test() {
+  let tokens = accent.tokens("#d4a373")
+  let lookup = fn(name: String) {
+    list.find_map(tokens, fn(pair) {
+      case pair.0 == name {
+        True -> Ok(pair.1)
+        False -> Error(Nil)
+      }
+    })
+  }
+  lookup("--omni-accent-primary") |> should.equal(Ok("#d4a373"))
+  lookup("--omni-accent-hover") |> should.equal(Ok("#ae865e"))
+  lookup("--omni-accent-contrast") |> should.equal(Ok("#141312"))
+  accent.normalize("not-a-color") |> should.equal("#d4a373")
+  accent.normalize("#A9743F") |> should.equal("#a9743f")
+}
+
+pub fn theme_mode_accepts_system_test() {
+  let m0 = model.init("editorial", [])
+  let #(m1, effects) = shell.update(m0, SetThemeMode("system"))
+  m1.theme_mode |> should.equal("system")
+  list.any(effects, fn(effect) { effect == update.PersistThemeMode("system") })
+  |> should.be_true()
 }

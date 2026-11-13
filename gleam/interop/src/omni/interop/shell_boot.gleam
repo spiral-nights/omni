@@ -42,6 +42,7 @@ import omni/protocol/rpc/method.{FetchOptions}
 import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace
 import omni/sandbox/protocol_shims
+import omni/shell/accent
 import omni/shell/layout/viewport_host
 import omni/shell/model.{
   type InstalledApp, type SettingsTab, AppStore, InstalledApp, PrimaryApp,
@@ -195,11 +196,19 @@ pub fn render(host: ShellBoot) -> String {
 /// Messages are dispatched through the bootloader, so persistence effects apply
 /// and the view re-renders in place with live event handlers.
 pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
+  apply_document_theme(
+    host.booted.model.theme_mode,
+    accent.style_attribute(host.booted.model.accent_color),
+  )
   mount_dom(
     selector,
     fn(_flags) { #(host, effect.none()) },
     fn(current: ShellBoot, message: msg.Msg) {
       let #(next, effects) = boot.dispatch(current.booted, message)
+      apply_document_theme(
+        next.model.theme_mode,
+        accent.style_attribute(next.model.accent_color),
+      )
       let host = apply_effects(ShellBoot(next), effects)
       let _ = drain_fetches(host)
       let _ = drain_thread_fetches(host)
@@ -1162,6 +1171,9 @@ fn push_views(host: ShellBoot) -> Nil {
 
 @external(javascript, "./shell_boot.ffi.mjs", "dispatch_shell_msg")
 fn dispatch_shell_msg(message: msg.Msg) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "apply_document_theme")
+fn apply_document_theme(theme_mode: String, accent_css: String) -> Nil
 
 @external(javascript, "./shell_boot.ffi.mjs", "host_share")
 fn host_share(

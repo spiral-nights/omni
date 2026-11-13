@@ -249,6 +249,29 @@ fn lookup_icon_children(name: String) -> Result(List(Element(msg)), Nil) {
         ]),
       ])
 
+    "monitor" ->
+      Ok([
+        svg.rect([
+          attribute("x", "3"),
+          attribute("y", "4"),
+          attribute("width", "18"),
+          attribute("height", "12"),
+          attribute("rx", "2"),
+        ]),
+        svg.line([
+          attribute("x1", "8"),
+          attribute("y1", "20"),
+          attribute("x2", "16"),
+          attribute("y2", "20"),
+        ]),
+        svg.line([
+          attribute("x1", "12"),
+          attribute("y1", "16"),
+          attribute("x2", "12"),
+          attribute("y2", "20"),
+        ]),
+      ])
+
     "windows" ->
       Ok([
         svg.rect([

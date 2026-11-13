@@ -271,6 +271,7 @@ pub fn render_shells_panel(
         html.div([attribute.class("omni-theme-mode-row")], [
           theme_mode_button(model.theme_mode, "dark", "Dark", "moon"),
           theme_mode_button(model.theme_mode, "light", "Light", "sun"),
+          theme_mode_button(model.theme_mode, "system", "System", "monitor"),
         ]),
       ]),
       html.div([attribute.class("omni-accent-color-section")], [

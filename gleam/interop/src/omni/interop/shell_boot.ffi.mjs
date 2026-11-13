@@ -191,3 +191,11 @@ export function host_share(title, text, url) {
     navigator.clipboard.writeText(combined).catch(() => {});
   }
 }
+
+export function apply_document_theme(themeMode, accentCss) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (!root) return;
+  root.setAttribute("data-theme-mode", String(themeMode || "dark"));
+  root.setAttribute("style", String(accentCss || ""));
+}

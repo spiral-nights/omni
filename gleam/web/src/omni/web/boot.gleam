@@ -58,6 +58,7 @@ import omni/protocol/schema/node
 import omni/protocol/workspace
 import omni/sandbox/iframe_host.{type IframeMount, IframeConfig}
 import omni/sandbox/manager.{type SandboxManager, SpawnOptions}
+import omni/shell/accent
 import omni/shell/model.{
   type Model, type UserProfileSummary, IntentPromptState, Model, PrimaryApp,
   UserProfileSummary,
@@ -1218,7 +1219,8 @@ pub fn spawn_sandbox(
           plugin_id: plugin_id_str,
           content: content,
           csp: None,
-          tokens: None,
+          tokens: Some(dict.from_list(accent.tokens(booted.model.accent_color))),
+          theme_mode: Some(booted.model.theme_mode),
           bridge_script: booted.bridge_script,
         ))
 

@@ -68,6 +68,31 @@ pub fn default_tokens() -> List(#(String, String)) {
   ]
 }
 
+/// Warm Paper Light palette used when the guest follows light appearance.
+pub fn light_tokens() -> List(#(String, String)) {
+  [
+    #(bg_canvas, "#f3efe6"),
+    #(bg_surface, "#faf7f0"),
+    #(bg_elevated, "#ffffff"),
+    #(text_primary, "#24221e"),
+    #(text_secondary, "#5f5a52"),
+    #(text_muted, "#8a847a"),
+    #(border_subtle, "#e2dccf"),
+    #(border_strong, "#cfc7b8"),
+    #(accent_primary, "#a9743f"),
+    #(radius_sm, "6px"),
+    #(radius_md, "10px"),
+    #(
+      font_sans,
+      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    ),
+    #(
+      font_mono,
+      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    ),
+  ]
+}
+
 // -----------------------------------------------------------------------------
 // Stylesheet Generation
 // -----------------------------------------------------------------------------
@@ -106,6 +131,27 @@ pub fn build_token_style_tag_from_option_dict(
 /// Builds the default HTML token style tag for iframe injection.
 pub fn default_token_style_tag() -> String {
   build_token_style_tag(default_tokens())
+}
+
+/// Inject light or system-following appearance tokens into a guest document.
+///
+/// `mode` is `"light"`, `"system"`, or `"dark"` (no override for dark).
+pub fn theme_mode_style_tag(
+  mode: String,
+  overrides: List(#(String, String)),
+) -> String {
+  let rules =
+    merge_tokens(light_tokens(), overrides)
+    |> to_css_rules
+  case mode {
+    "light" ->
+      "<style id=\"omni-theme-mode\">\n:root {\n" <> rules <> "\n}\n</style>"
+    "system" ->
+      "<style id=\"omni-theme-mode\">\n@media (prefers-color-scheme: light) {\n:root {\n"
+      <> rules
+      <> "\n}\n}\n</style>"
+    _ -> ""
+  }
 }
 
 // -----------------------------------------------------------------------------

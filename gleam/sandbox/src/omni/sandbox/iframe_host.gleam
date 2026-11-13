@@ -4,7 +4,7 @@
 //// Injects strict CSP, theme design tokens, and the guest bridge script.
 
 import gleam/dict.{type Dict}
-import gleam/option.{type Option, None, Some}
+import gleam/option.{type Option, None, Some, unwrap}
 import gleam/string
 import omni/sandbox/csp
 import omni/sandbox/tokens
@@ -16,6 +16,7 @@ pub type IframeConfig {
     content: String,
     csp: Option(String),
     tokens: Option(Dict(String, String)),
+    theme_mode: Option(String),
     bridge_script: Option(String),
   )
 }
@@ -112,20 +113,24 @@ pub fn build_srcdoc(config: IframeConfig) -> String {
     None -> csp.locked_down_csp()
   }
   let csp_tag = csp.to_meta_tag(policy)
-  let token_style = case config.tokens {
-    Some(t) ->
-      tokens.build_token_style_tag(tokens.merge_tokens(
-        tokens.default_tokens(),
-        tokens.from_dict(t),
-      ))
-    None -> tokens.default_token_style_tag()
+  let overrides = case config.tokens {
+    Some(t) -> tokens.from_dict(t)
+    None -> []
   }
+  let token_style =
+    tokens.build_token_style_tag(tokens.merge_tokens(
+      tokens.default_tokens(),
+      overrides,
+    ))
+  let theme_style =
+    tokens.theme_mode_style_tag(unwrap(config.theme_mode, "dark"), overrides)
   let bridge = case config.bridge_script {
     Some(b) -> b
     None -> build_guest_bridge_script(config.plugin_id)
   }
 
-  let head_injections = csp_tag <> "\n" <> token_style <> "\n" <> bridge
+  let head_injections =
+    csp_tag <> "\n" <> token_style <> "\n" <> theme_style <> "\n" <> bridge
 
   let raw = config.content
   case string.contains(raw, "</head>") {

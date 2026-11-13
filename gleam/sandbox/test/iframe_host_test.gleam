@@ -11,6 +11,7 @@ pub fn srcdoc_structure_fragment_wrap_test() {
       content: "<div id=\"root\">Hello Omni</div>",
       csp: None,
       tokens: None,
+      theme_mode: None,
       bridge_script: None,
     )
   let srcdoc = iframe_host.build_srcdoc(cfg)
@@ -30,6 +31,7 @@ pub fn csp_tag_injection_test() {
       content: "<p>Isolated</p>",
       csp: None,
       tokens: None,
+      theme_mode: None,
       bridge_script: None,
     )
   let srcdoc = iframe_host.build_srcdoc(cfg)
@@ -53,6 +55,7 @@ pub fn custom_csp_tag_injection_test() {
       content: "<p>Custom</p>",
       csp: Some(custom_csp),
       tokens: None,
+      theme_mode: None,
       bridge_script: None,
     )
   let srcdoc = iframe_host.build_srcdoc(cfg)
@@ -73,6 +76,7 @@ pub fn token_style_tag_injection_test() {
       content: "<h1>Styled</h1>",
       csp: None,
       tokens: None,
+      theme_mode: None,
       bridge_script: None,
     )
   let srcdoc = iframe_host.build_srcdoc(cfg)
@@ -96,6 +100,7 @@ pub fn custom_theme_tokens_injection_test() {
       content: "<h1>Custom Styled</h1>",
       csp: None,
       tokens: Some(custom_tokens),
+      theme_mode: None,
       bridge_script: None,
     )
   let srcdoc = iframe_host.build_srcdoc(cfg)
@@ -113,6 +118,7 @@ pub fn bridge_script_placement_in_head_test() {
       content: html,
       csp: None,
       tokens: None,
+      theme_mode: None,
       bridge_script: None,
     )
   let srcdoc = iframe_host.build_srcdoc(cfg)
@@ -140,6 +146,7 @@ pub fn prepare_mount_attributes_test() {
       content: "<p>Editor</p>",
       csp: None,
       tokens: None,
+      theme_mode: None,
       bridge_script: None,
     )
   let mount = iframe_host.prepare_mount(cfg)

@@ -74,3 +74,15 @@ pub fn from_dict_and_to_dict_test() {
   let roundtrip = tokens.to_dict(list_tokens)
   assert roundtrip == sample
 }
+
+pub fn theme_mode_style_tag_light_and_system_test() {
+  let light = tokens.theme_mode_style_tag("light", [])
+  assert string.contains(light, "omni-theme-mode")
+  assert string.contains(light, "#f3efe6")
+  assert !string.contains(light, "prefers-color-scheme")
+
+  let system = tokens.theme_mode_style_tag("system", [])
+  assert string.contains(system, "prefers-color-scheme: light")
+
+  assert tokens.theme_mode_style_tag("dark", []) == ""
+}

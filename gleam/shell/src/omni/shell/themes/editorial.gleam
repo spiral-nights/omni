@@ -11,6 +11,7 @@ import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
+import omni/shell/accent
 import omni/shell/app_store
 import omni/shell/gestures/pull_to_refresh.{PullIdle}
 import omni/shell/layout/header_actions
@@ -55,7 +56,7 @@ pub fn view(model: Model) -> Element(Msg) {
       attribute.id("editorial-shell-root"),
       attribute.attribute("data-shell", "editorial"),
       attribute.attribute("data-theme-mode", model.theme_mode),
-      attribute.style("--omni-accent-primary", model.accent_color),
+      attribute.attribute("style", accent.style_attribute(model.accent_color)),
     ],
     [
       render_header(model),
