@@ -16,6 +16,7 @@ import omni/nostr/event_id
 import omni/nostr/filter.{type Filter}
 import omni/nostr/relay_frame.{type RelayFrame}
 import omni/nostr/relay_url.{type RelayUrl}
+import omni/platform/clock
 import omni/platform/promise_ext
 import omni/platform/ref.{type Ref}
 import omni/platform/storage.{type Storage}
@@ -43,6 +44,7 @@ pub type Subscriber {
 pub type PublishReceipt {
   PublishReceipt(
     results: Ref(List(#(RelayUrl, Bool, String))),
+    started_ms: Int,
     expected: Int,
     resolve: fn(List(#(RelayUrl, Bool, String))) -> Nil,
     done: Ref(Bool),
@@ -67,6 +69,7 @@ pub type RelayPool {
     notice_listeners: Ref(List(fn(String, String) -> Nil)),
     auth_handler: Ref(Option(AuthHandler)),
     scopes: Ref(Dict(String, #(Bool, Bool))),
+    latencies: Ref(Dict(String, Int)),
   )
 }
 
@@ -117,6 +120,7 @@ pub fn new(storage: Storage, bootstrap_relays: List(RelayUrl)) -> RelayPool {
       notice_listeners: ref.new([]),
       auth_handler: ref.new(None),
       scopes: ref.new(dict.new()),
+      latencies: ref.new(dict.new()),
     )
   list.each(configured, fn(u) { connect(pool, u) })
   pool
@@ -345,6 +349,10 @@ pub fn register_ok(
       case relay_url.parse(source_url) {
         Error(Nil) -> Nil
         Ok(relay) -> {
+          let elapsed = clock.system().now_ms() - receipt.started_ms
+          ref.update(pool.latencies, fn(latencies) {
+            dict.insert(latencies, relay_url.to_string(relay), elapsed)
+          })
           ref.update(receipt.results, fn(results) {
             [#(relay, accepted, message), ..results]
           })
@@ -426,6 +434,7 @@ pub fn publish_tracked(
       let receipt =
         PublishReceipt(
           results: results,
+          started_ms: clock.system().now_ms(),
           expected: list.length(sent),
           resolve: resolve,
           done: done,
@@ -531,6 +540,21 @@ fn write_enabled(pool: RelayPool, url_str: String) -> Bool {
   case dict.get(ref.get(pool.scopes), url_str) {
     Ok(#(_read, write)) -> write
     Error(Nil) -> True
+  }
+}
+
+/// Record a measured round-trip latency for one relay.
+pub fn record_latency(pool: RelayPool, url: RelayUrl, latency_ms: Int) -> Nil {
+  ref.update(pool.latencies, fn(latencies) {
+    dict.insert(latencies, relay_url.to_string(url), latency_ms)
+  })
+}
+
+/// Last measured publish round-trip for `url`, if any.
+pub fn get_latency(pool: RelayPool, url: RelayUrl) -> Option(Int) {
+  case dict.get(ref.get(pool.latencies), relay_url.to_string(url)) {
+    Ok(value) -> Some(value)
+    Error(Nil) -> None
   }
 }
 

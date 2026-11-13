@@ -1148,9 +1148,10 @@ fn push_relay_statuses(
       relay_pool.Connected -> True
       _ -> False
     }
+    let latency = relay_pool.get_latency(host.booted.kernel.relay_pool, url)
     dict.each(host.booted.builtins, fn(_id, app) {
       case app.relay_status {
-        Some(update) -> update(relay_url.to_string(url), connected)
+        Some(update) -> update(relay_url.to_string(url), connected, latency)
         None -> Nil
       }
     })

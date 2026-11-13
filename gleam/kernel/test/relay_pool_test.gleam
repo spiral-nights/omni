@@ -1,12 +1,12 @@
 import gleam/dict
 import gleam/javascript/promise.{type Promise}
 import gleam/list
-import gleam/option.{None}
+import gleam/option.{None, is_some}
 import gleeunit/should
 import omni/kernel/nostr/relay_pool.{
   Connected, Disconnected, add_relay, attach_socket, get_configured_relays,
-  get_statuses, publish, publish_tracked, register_ok, relay_scope, remove_relay,
-  set_relay_scope, storage_key_configured_relays, subscribe,
+  get_latency, get_statuses, publish, publish_tracked, register_ok, relay_scope,
+  remove_relay, set_relay_scope, storage_key_configured_relays, subscribe,
 }
 import omni/nostr/event.{type Event, Event}
 import omni/nostr/event_id
@@ -229,6 +229,7 @@ pub fn relay_pool_publish_tracked_receipts_test() {
   assert accepted
   assert message == "accepted"
   assert list.length(ref.get(sent)) == 1
+  assert is_some(get_latency(pool, url))
   promise.resolve(Nil)
 }
 

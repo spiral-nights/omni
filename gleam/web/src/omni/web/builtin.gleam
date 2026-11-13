@@ -41,7 +41,7 @@ pub type BuiltinApp {
     navigate: fn(String) -> Nil,
     handle_action: fn(Action) -> Bool,
     ingest: Option(fn(Event) -> Nil),
-    relay_status: Option(fn(String, Bool) -> Nil),
+    relay_status: Option(fn(String, Bool, Option(Int)) -> Nil),
     take_publishes: fn() -> List(UnsignedEvent),
     take_encrypted_publishes: fn() -> List(UnsignedEvent),
     take_fetches: fn() -> List(Int),
@@ -145,12 +145,12 @@ fn relays_app(relay_urls: List(String)) -> BuiltinApp {
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: None,
-    relay_status: Some(fn(url, connected) {
+    relay_status: Some(fn(url, connected, latency) {
       let state = case connected {
         True -> StateConnected
         False -> StateDisconnected
       }
-      app.dispatch(running, relays_msg.UpdateRelayState(url, state, None))
+      app.dispatch(running, relays_msg.UpdateRelayState(url, state, latency))
     }),
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
