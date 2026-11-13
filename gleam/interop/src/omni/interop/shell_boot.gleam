@@ -52,10 +52,10 @@ import omni/shell/model.{
 }
 import omni/shell/msg.{
   AccountSwitchResult, ApplyRemoteWorkspace, DispatchIntent, EmbedSchema,
-  FinishPullRefresh, InstallApp, KeyImportResult, KeySecurityResult,
-  KeySecurityStatus, NavigateTo, OpenApp, OpenSettings, SetExportedNsec,
-  SetUserProfile, ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh,
-  UninstallApp,
+  EscapePressed, FinishPullRefresh, InstallApp, KeyImportResult,
+  KeySecurityResult, KeySecurityStatus, NavigateTo, OpenApp, OpenSettings,
+  ScrollToTop, SetExportedNsec, SetUserProfile, ShellScrolled,
+  ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh, UninstallApp,
 }
 import omni/shell/update
 import omni/social/profile as social_profile
@@ -211,6 +211,10 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
     fn(_flags) { #(host, effect.none()) },
     fn(current: ShellBoot, message: msg.Msg) {
       let #(next, effects) = boot.dispatch(current.booted, message)
+      case message {
+        msg.ScrollToTop -> scroll_shell_top()
+        _ -> Nil
+      }
       apply_document_theme(
         next.model.theme_mode,
         accent.style_attribute(next.model.accent_color),
@@ -252,6 +256,11 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
     page_url,
     StartPullRefresh,
   )
+
+  listen_shell_scroll(fn(at_top, scrolling_down) {
+    dispatch_shell_msg(ShellScrolled(at_top, scrolling_down))
+  })
+  listen_escape(fn() { dispatch_shell_msg(EscapePressed) })
 
   // Clock for time-driven built-ins (the focus timer): one tick per second.
   start_interval(1000, fn() {
@@ -1181,6 +1190,15 @@ fn push_views(host: ShellBoot) -> Nil {
 
 @external(javascript, "./shell_boot.ffi.mjs", "dispatch_shell_msg")
 fn dispatch_shell_msg(message: msg.Msg) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "listen_shell_scroll")
+fn listen_shell_scroll(on_change: fn(Bool, Bool) -> Nil) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "listen_escape")
+fn listen_escape(on_escape: fn() -> Nil) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "scroll_shell_top")
+fn scroll_shell_top() -> Nil
 
 @external(javascript, "./shell_boot.ffi.mjs", "apply_document_theme")
 fn apply_document_theme(theme_mode: String, accent_css: String) -> Nil

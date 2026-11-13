@@ -24,6 +24,9 @@ pub type Msg {
   OpenIntentApp(plugin_id: String, route: Option(String))
   OpenSettings(SettingsTab)
   ToggleFullscreen
+  ShellScrolled(at_top: Bool, scrolling_down: Bool)
+  ScrollToTop
+  EscapePressed
   OpenSearch
 
   // Shells & catalog

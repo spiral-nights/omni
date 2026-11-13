@@ -21,7 +21,8 @@ import omni/shell/model.{
   type Model, type SettingsTab, AppStore, PrimaryApp, Settings, WidgetsDashboard,
 }
 import omni/shell/msg.{
-  type Msg, NavigateTo, OpenApp, OpenSearch, OpenSettings, ToggleFullscreen,
+  type Msg, NavigateTo, OpenApp, OpenSearch, OpenSettings, ScrollToTop,
+  ToggleFullscreen,
 }
 import omni/shell/settings/intents
 import omni/shell/settings/permission_prompt
@@ -305,7 +306,10 @@ fn render_dock(model: Model) -> Element(Msg) {
 
   html.nav(
     [
-      attribute.class("editorial-dock"),
+      attribute.class(case model.dock_hidden {
+        True -> "editorial-dock dock-hidden"
+        False -> "editorial-dock"
+      }),
       attribute.attribute("aria-label", "Primary Navigation"),
     ],
     [
@@ -359,10 +363,46 @@ fn render_dock_item(
 /// Floating overlays rendered above the shell: pull-to-refresh indicator,
 /// intent handler chooser modal, and plugin update confirmation modal.
 fn render_overlays(model: Model) -> Element(Msg) {
+  let exit_fullscreen = case model.fullscreen {
+    True ->
+      html.button(
+        [
+          attribute.type_("button"),
+          attribute.id("btn-editorial-exit-fullscreen"),
+          attribute.class("editorial-floating-exit-fullscreen"),
+          attribute.title("Exit fullscreen"),
+          event.on_click(ToggleFullscreen),
+        ],
+        [
+          icons.render_icon("close", 14),
+          html.span([], [element.text("Exit")]),
+        ],
+      )
+    False -> element.none()
+  }
+
+  let back_to_top = case model.show_back_to_top {
+    True ->
+      html.button(
+        [
+          attribute.type_("button"),
+          attribute.id("btn-editorial-back-to-top"),
+          attribute.class("editorial-back-to-top"),
+          attribute.title("Back to top"),
+          attribute.attribute("aria-label", "Back to top"),
+          event.on_click(ScrollToTop),
+        ],
+        [icons.render_icon("arrow-up", 16)],
+      )
+    False -> element.none()
+  }
+
   html.div([attribute.class("omni-shell-overlays")], [
     pull_to_refresh.render_indicator(model, PullIdle),
     intents.render_intent_chooser_modal(model),
     permission_prompt.render_permission_prompt(model),
     update_modal.render_update_modal(model),
+    exit_fullscreen,
+    back_to_top,
   ])
 }

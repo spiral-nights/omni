@@ -19,14 +19,15 @@ import omni/shell/msg.{
   type Msg, AccountSwitchResult, AddAppPlacement, ApplyRemoteWorkspace,
   ClearEmbeddedSchema, ConfirmPluginUpdate, DisablePassphrase,
   DismissIntentPrompt, DismissUpdateModal, DispatchIntent, EmbedSchema,
-  EnablePassphrase, ExportKey, FinishPullRefresh, HostedSchemaAction, ImportKey,
-  InstallApp, InstallCustomShell, InstallShell, KeyImportResult,
-  KeySecurityResult, KeySecurityStatus, NavigateBack, NavigateTo, OpenApp,
-  OpenIntentApp, OpenSearch, OpenSettings, RemoveAppPlacement, ResolvePermission,
-  SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
-  SetAppRelays, SetCapabilityGrants, SetCustomInstallUrl, SetCustomShellUrl,
-  SetExportedNsec, SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus,
-  SetThemeMode, SetUserProfile, ShowIntentPrompt, ShowPermissionPrompt,
+  EnablePassphrase, EscapePressed, ExportKey, FinishPullRefresh,
+  HostedSchemaAction, ImportKey, InstallApp, InstallCustomShell, InstallShell,
+  KeyImportResult, KeySecurityResult, KeySecurityStatus, NavigateBack,
+  NavigateTo, OpenApp, OpenIntentApp, OpenSearch, OpenSettings,
+  RemoveAppPlacement, ResolvePermission, ScrollToTop, SelectIntentHandler,
+  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
+  SetCapabilityGrants, SetCustomInstallUrl, SetCustomShellUrl, SetExportedNsec,
+  SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
+  SetUserProfile, ShellScrolled, ShowIntentPrompt, ShowPermissionPrompt,
   ShowUpdateModal, StartPullRefresh, SwitchAccount, ToggleAppEnabled,
   ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleCapabilityGrant,
   ToggleFullscreen, TriggerWorkspaceSync, UninstallApp, UninstallShell,
@@ -160,6 +161,29 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
 
     ToggleFullscreen -> {
       #(Model(..model, fullscreen: !model.fullscreen), [])
+    }
+
+    ShellScrolled(at_top, scrolling_down) -> #(
+      Model(
+        ..model,
+        dock_hidden: !at_top && scrolling_down,
+        show_back_to_top: !at_top,
+      ),
+      [],
+    )
+
+    ScrollToTop -> #(Model(..model, dock_hidden: False), [])
+
+    EscapePressed -> {
+      let next = case model.intent_prompt {
+        Some(_) -> Model(..model, intent_prompt: None)
+        None ->
+          case model.update_modal {
+            Some(_) -> Model(..model, update_modal: None)
+            None -> Model(..model, fullscreen: False)
+          }
+      }
+      #(next, [])
     }
 
     OpenSearch -> #(model, [RouteIntent("search")])

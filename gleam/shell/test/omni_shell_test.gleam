@@ -21,15 +21,15 @@ import omni/shell/model.{
 import omni/shell/msg.{
   AccountSwitchResult, AddAppPlacement, ApplyRemoteWorkspace,
   ConfirmPluginUpdate, DisablePassphrase, DismissIntentPrompt,
-  DismissUpdateModal, EnablePassphrase, ExportKey, FinishPullRefresh, ImportKey,
-  InstallApp, KeySecurityStatus, NavigateBack, NavigateTo, OpenApp,
-  OpenIntentApp, OpenSettings, RemoveAppPlacement, SelectIntentHandler,
-  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
-  SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
-  SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShowIntentPrompt,
-  ShowUpdateModal, StartPullRefresh, SwitchAccount, ToggleAppEnabled,
-  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
-  TriggerWorkspaceSync, UninstallApp, UnlockKey,
+  DismissUpdateModal, EnablePassphrase, EscapePressed, ExportKey,
+  FinishPullRefresh, ImportKey, InstallApp, KeySecurityStatus, NavigateBack,
+  NavigateTo, OpenApp, OpenIntentApp, OpenSettings, RemoveAppPlacement,
+  SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
+  SetAppRelays, SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
+  SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShellScrolled,
+  ShowIntentPrompt, ShowUpdateModal, StartPullRefresh, SwitchAccount,
+  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
+  ToggleFullscreen, TriggerWorkspaceSync, UninstallApp, UnlockKey,
 }
 import omni/shell/shell
 import omni/shell/themes/editorial as editorial_theme
@@ -881,4 +881,53 @@ pub fn intent_navigation_coalesces_back_stack_test() {
   m4.intent_page |> should.equal(None)
   let #(m5, _) = update.update(m4, OpenIntentApp("nsite.c", None))
   list.length(m5.back_stack) |> should.equal(4)
+}
+
+pub fn scroll_state_hides_dock_and_shows_back_to_top_test() {
+  let m0 = model.init("editorial", [])
+  let #(m1, _) = update.update(m0, ShellScrolled(False, True))
+  m1.dock_hidden |> should.equal(True)
+  m1.show_back_to_top |> should.equal(True)
+
+  let #(m2, _) = update.update(m1, ShellScrolled(False, False))
+  m2.dock_hidden |> should.equal(False)
+  m2.show_back_to_top |> should.equal(True)
+
+  let #(m3, _) = update.update(m2, ShellScrolled(True, False))
+  m3.dock_hidden |> should.equal(False)
+  m3.show_back_to_top |> should.equal(False)
+}
+
+pub fn escape_exits_fullscreen_and_dismisses_intent_prompt_test() {
+  let m0 =
+    Model(
+      ..model.init("editorial", []),
+      fullscreen: True,
+      intent_prompt: Some(IntentPromptState(
+        "view_note",
+        ["nsite.sample.alpha"],
+        "{}",
+      )),
+    )
+  let #(m1, _) = update.update(m0, EscapePressed)
+  m1.intent_prompt |> should.equal(None)
+  m1.fullscreen |> should.equal(True)
+
+  let #(m2, _) = update.update(m1, EscapePressed)
+  m2.fullscreen |> should.equal(False)
+}
+
+pub fn editorial_chrome_renders_exit_and_back_to_top_test() {
+  let base = model.init("editorial", [])
+  let fullscreen = Model(..base, fullscreen: True)
+  let full_html = editorial_theme.view(fullscreen) |> element.to_string
+  string.contains(full_html, "btn-editorial-exit-fullscreen")
+  |> should.be_true()
+
+  let scrolled = Model(..base, show_back_to_top: True, dock_hidden: True)
+  let scrolled_html = editorial_theme.view(scrolled) |> element.to_string
+  string.contains(scrolled_html, "btn-editorial-back-to-top")
+  |> should.be_true()
+  string.contains(scrolled_html, "editorial-dock dock-hidden")
+  |> should.be_true()
 }

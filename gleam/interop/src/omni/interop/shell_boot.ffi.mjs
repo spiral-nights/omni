@@ -199,3 +199,50 @@ export function apply_document_theme(themeMode, accentCss) {
   root.setAttribute("data-theme-mode", String(themeMode || "dark"));
   root.setAttribute("style", String(accentCss || ""));
 }
+
+export function listen_shell_scroll(onChange) {
+  if (typeof document === "undefined") return;
+  let lastY = 0;
+  let lastDown = null;
+  let lastAtTop = null;
+  document.addEventListener(
+    "scroll",
+    (event) => {
+      const target = event.target;
+      const y =
+        target && typeof target.scrollTop === "number"
+          ? target.scrollTop
+          : window.scrollY || 0;
+      const down = y > lastY;
+      const atTop = y <= 24;
+      lastY = y;
+      if (down !== lastDown || atTop !== lastAtTop) {
+        lastDown = down;
+        lastAtTop = atTop;
+        onChange(atTop, down);
+      }
+    },
+    true,
+  );
+}
+
+export function listen_escape(onEscape) {
+  if (typeof document === "undefined") return;
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") onEscape();
+  });
+}
+
+export function scroll_shell_top() {
+  if (typeof document === "undefined") return;
+  const target =
+    document.querySelector(".editorial-viewport-page.active") ||
+    document.scrollingElement ||
+    document.documentElement;
+  if (target && typeof target.scrollTo === "function") {
+    target.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
