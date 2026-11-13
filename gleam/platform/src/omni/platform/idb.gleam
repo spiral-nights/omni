@@ -34,6 +34,7 @@ pub type IdbUpgrade {
     new_version: Int,
     create_store: fn(StoreDef) -> Result(Nil, String),
     delete_store: fn(String) -> Result(Nil, String),
+    create_index: fn(String, IndexDef) -> Result(Nil, String),
   )
 }
 
@@ -47,6 +48,7 @@ fn ffi_open_db(
     Int,
     fn(StoreDef) -> Result(Nil, String),
     fn(String) -> Result(Nil, String),
+    fn(String, IndexDef) -> Result(Nil, String),
   ) -> IdbUpgrade,
 ) -> Promise(Result(Dynamic, String))
 
@@ -58,6 +60,7 @@ fn ffi_open_in_memory(
     Int,
     fn(StoreDef) -> Result(Nil, String),
     fn(String) -> Result(Nil, String),
+    fn(String, IndexDef) -> Result(Nil, String),
   ) -> IdbUpgrade,
 ) -> Promise(Result(Dynamic, String))
 
@@ -68,9 +71,14 @@ pub fn open(
   on_upgrade: fn(IdbUpgrade) -> Nil,
 ) -> Promise(Result(IdbDatabase, String)) {
   use res <- promise.map(
-    ffi_open_db(name, version, on_upgrade, fn(old_v, new_v, create_s, del_s) {
-      IdbUpgrade(old_v, new_v, create_s, del_s)
-    }),
+    ffi_open_db(
+      name,
+      version,
+      on_upgrade,
+      fn(old_v, new_v, create_s, del_s, create_idx) {
+        IdbUpgrade(old_v, new_v, create_s, del_s, create_idx)
+      },
+    ),
   )
   case res {
     Ok(raw) -> Ok(IdbDatabase(raw))
@@ -83,9 +91,12 @@ pub fn in_memory(
   on_upgrade: fn(IdbUpgrade) -> Nil,
 ) -> Promise(Result(IdbDatabase, String)) {
   use res <- promise.map(
-    ffi_open_in_memory(on_upgrade, fn(old_v, new_v, create_s, del_s) {
-      IdbUpgrade(old_v, new_v, create_s, del_s)
-    }),
+    ffi_open_in_memory(
+      on_upgrade,
+      fn(old_v, new_v, create_s, del_s, create_idx) {
+        IdbUpgrade(old_v, new_v, create_s, del_s, create_idx)
+      },
+    ),
   )
   case res {
     Ok(raw) -> Ok(IdbDatabase(raw))
@@ -244,6 +255,40 @@ fn ffi_query_by_index_range(
   db: Dynamic,
   store: String,
   index_name: String,
+  lower: Int,
+  upper: Int,
+  fn_ok: fn(List(String)) -> Result(List(String), String),
+  fn_err: fn(String) -> Result(List(String), String),
+) -> Promise(Result(List(String), String))
+
+/// Queries records whose `index_name` compound key starts with `first` and
+/// whose second component lies between `lower` and `upper` (inclusive).
+pub fn query_by_index_tuple_range(
+  db: IdbDatabase,
+  store: String,
+  index_name: String,
+  first: Int,
+  lower: Int,
+  upper: Int,
+) -> Promise(Result(List(String), String)) {
+  ffi_query_by_index_tuple_range(
+    db.raw,
+    store,
+    index_name,
+    first,
+    lower,
+    upper,
+    fn(items) { Ok(items) },
+    fn(e) { Error(e) },
+  )
+}
+
+@external(javascript, "./idb.ffi.mjs", "ffi_query_by_index_tuple_range")
+fn ffi_query_by_index_tuple_range(
+  db: Dynamic,
+  store: String,
+  index_name: String,
+  first: Int,
   lower: Int,
   upper: Int,
   fn_ok: fn(List(String)) -> Result(List(String), String),

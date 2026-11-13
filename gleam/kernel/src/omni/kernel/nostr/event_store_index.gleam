@@ -3,12 +3,14 @@
 //// This module contains no I/O, no promises, and no side effects.
 
 import gleam/int
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order.{type Order}
 import gleam/set
 import gleam/string
 import omni/nostr/event.{type Event}
+import omni/nostr/event_codec
 import omni/nostr/event_id
 import omni/nostr/filter.{type Filter}
 import omni/nostr/kind
@@ -29,13 +31,46 @@ pub fn store_def() -> StoreDef {
       IndexDef(name: "pubkey", key_path: "pubkey", unique: False),
       IndexDef(name: "kind", key_path: "kind", unique: False),
       IndexDef(name: "created_at", key_path: "created_at", unique: False),
+      IndexDef(name: "kind_created", key_path: "kind_created", unique: False),
     ],
   )
 }
 
+/// Encode an event for storage, adding the synthetic `kind_created` compound
+/// key used by the time-bounded kind index.
+pub fn stored_event_json(event: Event) -> String {
+  json.object([
+    #("id", json.string(event_id.to_hex(event.id))),
+    #("pubkey", json.string(pubkey.to_hex(event.pubkey))),
+    #("created_at", json.int(event.created_at)),
+    #("kind", json.int(kind.to_int(event.kind))),
+    #(
+      "tags",
+      json.array(event.tags, of: fn(tag) { json.array(tag, of: json.string) }),
+    ),
+    #("content", json.string(event.content)),
+    #("sig", json.string(event.sig)),
+    #(
+      "kind_created",
+      json.preprocessed_array([
+        json.int(kind.to_int(event.kind)),
+        json.int(event.created_at),
+      ]),
+    ),
+  ])
+  |> json.to_string
+}
+
 /// Applies the schema creation to an open IndexedDB upgrade migration.
 pub fn upgrade_schema(upgrade: idb.IdbUpgrade) -> Result(Nil, String) {
-  upgrade.create_store(store_def())
+  case upgrade.old_version {
+    0 -> upgrade.create_store(store_def())
+    _ ->
+      upgrade.create_index(
+        events_store_name,
+        IndexDef(name: "kind_created", key_path: "kind_created", unique: False),
+      )
+  }
 }
 
 /// Query execution plan determining which IndexedDB index or scan strategy to use.
@@ -44,6 +79,7 @@ pub type QueryPlan {
   ByPubkey(String)
   ByKind(Int)
   ByCreatedAt(Int, Int)
+  ByKindCreated(Int, Int, Int)
   ScanAll
 }
 
@@ -68,16 +104,28 @@ pub fn plan_query(filter: Filter) -> QueryPlan {
             True -> ByPubkey(author)
             False ->
               case filter.kinds {
-                Some([k]) -> ByKind(kind.to_int(k))
+                Some([k]) -> plan_kind_range(kind.to_int(k), filter)
                 _ -> plan_time_range(filter)
               }
           }
         _ ->
           case filter.kinds {
-            Some([k]) -> ByKind(kind.to_int(k))
+            Some([k]) -> plan_kind_range(kind.to_int(k), filter)
             _ -> plan_time_range(filter)
           }
       }
+  }
+}
+
+fn plan_kind_range(kind_int: Int, filter: Filter) -> QueryPlan {
+  case filter.since, filter.until {
+    None, None -> ByKind(kind_int)
+    since, until ->
+      ByKindCreated(
+        kind_int,
+        option.unwrap(since, 0),
+        option.unwrap(until, max_timestamp),
+      )
   }
 }
 

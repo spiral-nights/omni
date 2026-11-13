@@ -221,7 +221,7 @@ fn commit_event(
   use put_res <- promise.await(idb.put_record(
     store.db,
     event_store_index.events_store_name,
-    event_codec.encode(event),
+    event_store_index.stored_event_json(event),
   ))
   case put_res {
     Ok(Nil) -> {
@@ -381,6 +381,17 @@ pub fn get_events(
         event_store_index.events_store_name,
         "kind",
         int.to_string(k),
+      ))
+      decode_records(res)
+    }
+    event_store_index.ByKindCreated(kind_int, lower, upper) -> {
+      use res <- promise.map(idb.query_by_index_tuple_range(
+        store.db,
+        event_store_index.events_store_name,
+        "kind_created",
+        kind_int,
+        lower,
+        upper,
       ))
       decode_records(res)
     }

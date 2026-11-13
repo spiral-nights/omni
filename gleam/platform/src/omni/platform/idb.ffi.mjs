@@ -157,6 +157,24 @@ function createRealDbWrapper(idb) {
       }
     },
 
+    async query_by_index_tuple_range(storeName, indexName, first, lower, upper, fnOk, fnErr) {
+      try {
+        const tx = idb.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        const index = store.index(indexName);
+        const range = IDBKeyRange.bound([first, lower], [first, upper]);
+        const req = index.getAll(range);
+        const records = await new Promise((resolve, reject) => {
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error || new globalThis.Error("Tuple range query failed"));
+        });
+        const mapped = (records || []).map(stringifyStoredValue);
+        return fnOk(toList(mapped));
+      } catch (err) {
+        return fnErr(String(err && err.message ? err.message : err));
+      }
+    },
+
     async count(storeName) {
       try {
         const tx = idb.transaction(storeName, "readonly");
@@ -242,6 +260,20 @@ export async function open_db(name, version, on_upgrade, makeUpgrade) {
           try {
             if (db.objectStoreNames.contains(storeName)) {
               db.deleteObjectStore(storeName);
+            }
+            return new Ok(undefined);
+          } catch (err) {
+            return new Error(String(err && err.message ? err.message : err));
+          }
+        },
+        (storeName, indexDef) => {
+          try {
+            const tx = req.transaction;
+            const store = tx.objectStore(storeName);
+            if (!store.indexNames.contains(indexDef.name)) {
+              store.createIndex(indexDef.name, indexDef.key_path, {
+                unique: indexDef.unique,
+              });
             }
             return new Ok(undefined);
           } catch (err) {
@@ -356,6 +388,22 @@ function createInMemoryDbWrapper(schemas) {
       return fnOk(toList(results));
     },
 
+    async query_by_index_tuple_range(storeName, indexName, first, lower, upper, fnOk, _fnErr) {
+      const store = getStore(storeName);
+      const indexDef = (store.schema.indexes || []).find(i => i.name === indexName);
+      const keyPath = indexDef ? indexDef.key_path : indexName;
+      const results = [];
+      for (const record of store.data.values()) {
+        if (record.parsed && typeof record.parsed === "object") {
+          const val = record.parsed[keyPath];
+          if (Array.isArray(val) && val[0] === first && val[1] >= lower && val[1] <= upper) {
+            results.push(record.raw);
+          }
+        }
+      }
+      return fnOk(toList(results));
+    },
+
     async count(storeName) {
       const store = getStore(storeName);
       return new Ok(store.data.size);
@@ -391,6 +439,15 @@ export async function open_in_memory(on_upgrade, makeUpgrade) {
     },
     (storeName) => {
       schemas.delete(storeName);
+      return new Ok(undefined);
+    },
+    (storeName, indexDef) => {
+      const schema = schemas.get(storeName);
+      if (schema) {
+        if (!schema.indexes.some((idx) => idx.name === indexDef.name)) {
+          schema.indexes.push(indexDef);
+        }
+      }
       return new Ok(undefined);
     }
   );
@@ -439,4 +496,9 @@ export function ffi_close(db) {
 
 export function ffi_query_by_index_range(db, store, indexName, lower, upper, fnOk, fnErr) {
   return db.query_by_index_range(store, indexName, lower, upper, fnOk, fnErr);
+}
+
+
+export function ffi_query_by_index_tuple_range(db, store, indexName, first, lower, upper, fnOk, fnErr) {
+  return db.query_by_index_tuple_range(store, indexName, first, lower, upper, fnOk, fnErr);
 }

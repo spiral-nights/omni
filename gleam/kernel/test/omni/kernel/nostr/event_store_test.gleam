@@ -351,3 +351,20 @@ pub fn get_events_time_range_filters_without_scan_test() -> Promise(Nil) {
 
   promise.resolve(Nil)
 }
+
+pub fn get_events_uses_kind_created_compound_index_test() -> Promise(Nil) {
+  use store <- promise.await(setup_store(None, None, None))
+  let ev1 = make_event("21", "a", 1, 1000, [], "early note")
+  let ev2 = make_event("22", "a", 1, 2000, [], "late note")
+  let ev3 = make_event("23", "a", 7, 2000, [], "reaction")
+  use _ <- promise.await(save_events(store, [ev1, ev2, ev3]))
+
+  let filter_notes =
+    filter.new()
+    |> filter.with_kinds([kind.from_int(1)])
+    |> filter.with_since(1500)
+  use notes <- promise.await(get_events(store, filter_notes))
+  assert notes == [ev2]
+
+  promise.resolve(Nil)
+}
