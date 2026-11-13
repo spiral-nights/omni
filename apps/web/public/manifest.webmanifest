@@ -35,21 +35,21 @@
       "name": "Timeline Feed",
       "short_name": "Feed",
       "description": "Open your decentralized Nostr timeline notes",
-      "url": "./?view=feed",
+      "url": "./?app=org.omni.plugin.feed",
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Tasks",
       "short_name": "Tasks",
       "description": "Track daily goals and productivity tasks",
-      "url": "./?view=widget",
+      "url": "./?app=org.omni.plugin.checklist",
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Relay Manager",
       "short_name": "Relays",
       "description": "Inspect and manage Nostr relay connections",
-      "url": "./?view=settings",
+      "url": "./?view=settings&tab=relays",
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
     }
   ]
