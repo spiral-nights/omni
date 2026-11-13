@@ -6,13 +6,14 @@
 //// trees to the shell for rendering. Plugin IDs live only in `config`/`builtin`,
 //// never in the shell or UI.
 
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import omni/nostr/event.{type Event, type UnsignedEvent}
 import omni/platform/storage
 import omni/plugin_kit/app
 import omni/plugin_kit/route
 import omni/plugin_kit/zap
-import omni/protocol/blossom.{type BlobUpload}
+import omni/protocol/blossom.{type BlobUpload, type UploadedBlob}
 import omni/protocol/relay_command.{type RelayCommand}
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
@@ -25,6 +26,7 @@ import plugin/notes/msg as notes_msg
 import plugin/profiles/main as profiles
 import plugin/profiles/msg as profiles_msg
 import plugin/publisher/main as publisher
+import plugin/publisher/msg as publisher_msg
 import plugin/relays/main as relays
 import plugin/relays/model.{StateConnected, StateDisconnected}
 import plugin/relays/msg as relays_msg
@@ -47,6 +49,9 @@ pub type BuiltinApp {
     take_relay_commands: fn() -> List(RelayCommand),
     take_chimes: fn() -> Int,
     take_uploads: fn() -> List(BlobUpload),
+    report_upload: Option(
+      fn(String, List(#(String, Result(UploadedBlob, String)))) -> Nil,
+    ),
     take_zap_invoices: fn() -> List(zap.ZapInvoice),
     take_searches: fn() -> List(String),
     take_urls: fn() -> List(String),
@@ -92,6 +97,7 @@ fn feed_app(store: storage.Storage) -> BuiltinApp {
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    report_upload: None,
     take_zap_invoices: fn() { app.take_zap_invoices(running) },
     take_searches: fn() { app.take_searches(running) },
     take_urls: fn() { app.take_urls(running) },
@@ -121,6 +127,7 @@ fn profiles_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    report_upload: None,
     take_zap_invoices: fn() { app.take_zap_invoices(running) },
     take_searches: fn() { app.take_searches(running) },
     take_urls: fn() { app.take_urls(running) },
@@ -152,6 +159,7 @@ fn relays_app(relay_urls: List(String)) -> BuiltinApp {
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    report_upload: None,
     take_zap_invoices: fn() { app.take_zap_invoices(running) },
     take_searches: fn() { app.take_searches(running) },
     take_urls: fn() { app.take_urls(running) },
@@ -187,6 +195,16 @@ fn publisher_app(
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    report_upload: Some(fn(path, results) {
+      let servers =
+        list.map(results, fn(pair: #(String, Result(UploadedBlob, String))) {
+          case pair.1 {
+            Ok(_) -> #(pair.0, True)
+            Error(_) -> #(pair.0, False)
+          }
+        })
+      app.dispatch(running, publisher_msg.UploadReported(path, servers))
+    }),
     take_zap_invoices: fn() { app.take_zap_invoices(running) },
     take_searches: fn() { app.take_searches(running) },
     take_urls: fn() { app.take_urls(running) },
@@ -211,6 +229,7 @@ fn checklist_app(store: storage.Storage) -> BuiltinApp {
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    report_upload: None,
     take_zap_invoices: fn() { app.take_zap_invoices(running) },
     take_searches: fn() { app.take_searches(running) },
     take_urls: fn() { app.take_urls(running) },
@@ -238,6 +257,7 @@ fn notes_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    report_upload: None,
     take_zap_invoices: fn() { app.take_zap_invoices(running) },
     take_searches: fn() { app.take_searches(running) },
     take_urls: fn() { app.take_urls(running) },
@@ -265,6 +285,7 @@ fn timer_app() -> BuiltinApp {
     take_relay_commands: fn() { app.take_relay_commands(running) },
     take_chimes: fn() { app.take_chimes(running) },
     take_uploads: fn() { app.take_uploads(running) },
+    report_upload: None,
     take_zap_invoices: fn() { app.take_zap_invoices(running) },
     take_searches: fn() { app.take_searches(running) },
     take_urls: fn() { app.take_urls(running) },

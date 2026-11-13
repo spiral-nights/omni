@@ -1,6 +1,7 @@
 //// Pure state transition logic and action mapping for `plugin_publisher`.
 
 import gleam/bit_array
+import gleam/int
 import gleam/javascript/promise
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -28,7 +29,7 @@ import plugin/publisher/msg.{
   DismissBanner, LoadBundle, PublishPackage, PublishServerList, RemoveServer,
   SelectTab, SetBundleMetadata, SetBundleUrl, SetDraftDescription, SetDraftIcon,
   SetDraftId, SetDraftName, SetDraftServerUrl, SetDraftVersion, ToggleServer,
-  UseTemplate,
+  UploadReported, UseTemplate,
 }
 
 /// Pure Elm-style state update function for `plugin_publisher`.
@@ -177,6 +178,40 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
               }
           }
       }
+    }
+
+    UploadReported(path, servers) -> {
+      let report = model.UploadReport(path: path, servers: servers)
+      let succeeded =
+        list.count(servers, fn(pair) {
+          case pair {
+            #(_, True) -> True
+            _ -> False
+          }
+        })
+      let next_reports = [
+        report,
+        ..list.filter(model.upload_reports, fn(existing) {
+          existing.path != path
+        })
+      ]
+      let message =
+        "Uploaded "
+        <> path
+        <> " to "
+        <> int.to_string(succeeded)
+        <> "/"
+        <> int.to_string(list.length(servers))
+        <> " server(s)"
+      #(
+        Model(
+          ..model,
+          upload_reports: next_reports,
+          status_message: Some(message),
+          error_message: None,
+        ),
+        [],
+      )
     }
 
     UseTemplate -> {

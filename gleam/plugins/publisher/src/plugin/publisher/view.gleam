@@ -321,6 +321,26 @@ fn render_bundle_inventory(model: Model) -> Node {
       )
       |> schema.with_icon("file")
     })
+  let report_items =
+    list.map(model.upload_reports, fn(report) {
+      let ok =
+        list.count(report.servers, fn(pair) {
+          case pair {
+            #(_, True) -> True
+            _ -> False
+          }
+        })
+      schema.list_item(report.path)
+      |> schema.subtitle(
+        "Uploaded to "
+        <> int.to_string(ok)
+        <> "/"
+        <> int.to_string(list.length(report.servers))
+        <> " server(s)",
+      )
+      |> schema.with_icon("upload")
+    })
+
   schema.card()
   |> schema.title("Bundle File Inventory")
   |> schema.subtitle(case files {
@@ -328,7 +348,12 @@ fn render_bundle_inventory(model: Model) -> Node {
     list -> int.to_string(list.length(list)) <> " file(s) packaged"
   })
   |> schema.with_icon("package")
-  |> schema.children([schema.list_view(items)])
+  |> schema.children(
+    list.append([schema.list_view(items)], case report_items {
+      [] -> []
+      _ -> [schema.list_view(report_items)]
+    }),
+  )
 }
 
 fn render_published_card(pkg: PublishedPlugin) -> Node {

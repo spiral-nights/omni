@@ -25,7 +25,7 @@ import plugin/publisher/msg.{
   AddServer, ChooseLocalZip, DeletePublished, DismissBanner, PublishPackage,
   PublishServerList, RemoveServer, SelectTab, SetBundleMetadata,
   SetDraftDescription, SetDraftIcon, SetDraftId, SetDraftName, SetDraftServerUrl,
-  SetDraftVersion, ToggleServer, UseTemplate,
+  SetDraftVersion, ToggleServer, UploadReported, UseTemplate,
 }
 import plugin/publisher/update
 import plugin/publisher/view
@@ -453,4 +453,24 @@ pub fn publish_embeds_relay_hints_in_naddr_test() {
       ])
     _ -> panic as "expected naddr"
   }
+}
+
+pub fn upload_report_tracks_per_server_results_test() {
+  let m0 = model.init(TabStudio)
+  let #(m1, _) =
+    update.update(
+      m0,
+      UploadReported("index.html", [
+        #("https://one.example", True),
+        #("https://two.example", False),
+      ]),
+    )
+  let assert [report] = m1.upload_reports
+  report.path |> should.equal("index.html")
+  list.length(report.servers) |> should.equal(2)
+  m1.status_message
+  |> should.equal(Some("Uploaded index.html to 1/2 server(s)"))
+
+  let html = view.view(m1) |> schema.encode_schema_message
+  string.contains(html, "Uploaded to 1/2 server(s)") |> should.equal(True)
 }

@@ -23,5 +23,6 @@ pub type Msg {
   DeletePublished(String)
   PublishServerList
   BundleLoaded(Result(String, String))
+  UploadReported(path: String, servers: List(#(String, Bool)))
   DismissBanner
 }

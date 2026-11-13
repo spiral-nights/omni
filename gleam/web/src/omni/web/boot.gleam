@@ -790,7 +790,7 @@ pub fn select_shell(booted: Booted, shell_id: String) -> Booted {
 /// Sign and broadcast drafts queued by built-in apps, then feed the signed
 /// events back into the apps and the local event store.
 pub fn publish_pending(booted: Booted) -> Promise(List(String)) {
-  let uploader = blossom_upload.upload_blob(
+  let uploader = blossom_upload.upload_blob_to_all(
     booted.kernel.keystore,
     _,
     booted.kernel.clock.now_ms() / 1000,
@@ -803,13 +803,41 @@ pub fn publish_pending(booted: Booted) -> Promise(List(String)) {
 pub fn publish_pending_with(
   booted: Booted,
   uploader: fn(blossom.BlobUpload) ->
-    Promise(Result(blossom.UploadedBlob, String)),
+    Promise(List(#(String, Result(blossom.UploadedBlob, String)))),
 ) -> Promise(List(String)) {
   let uploads =
     dict.fold(booted.builtins, [], fn(acc, _id, app) {
-      list.append(acc, app.take_uploads())
+      list.append(
+        acc,
+        list.map(app.take_uploads(), fn(upload) { #(app, upload) }),
+      )
     })
-  use _uploads <- promise.await(promise_ext.all(list.map(uploads, uploader)))
+  use results <- promise.await(
+    promise_ext.all(
+      list.map(uploads, fn(pair) {
+        use server_results <- promise.map(uploader(pair.1))
+        #(pair.0, pair.1, server_results)
+      }),
+    ),
+  )
+  list.each(
+    results,
+    fn(
+      entry: #(
+        BuiltinApp,
+        blossom.BlobUpload,
+        List(#(String, Result(blossom.UploadedBlob, String))),
+      ),
+    ) {
+      case entry {
+        #(plugin_app, blob, server_results) ->
+          case plugin_app.report_upload {
+            Some(report) -> report(blob.path, server_results)
+            None -> Nil
+          }
+      }
+    },
+  )
   let drafts =
     dict.fold(booted.builtins, [], fn(acc, _id, app) {
       list.append(acc, app.take_publishes())

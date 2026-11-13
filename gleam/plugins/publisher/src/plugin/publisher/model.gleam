@@ -50,6 +50,11 @@ pub type PublishDraft {
   )
 }
 
+/// Per-file, per-server upload result shown after a publish.
+pub type UploadReport {
+  UploadReport(path: String, servers: List(#(String, Bool)))
+}
+
 /// Complete state model for `plugin_publisher`.
 pub type Model {
   Model(
@@ -65,6 +70,7 @@ pub type Model {
     bundle_url: String,
     user_pubkey: Option(String),
     relay_urls: List(String),
+    upload_reports: List(UploadReport),
   )
 }
 
@@ -114,6 +120,7 @@ pub fn init(initial_tab: StudioTab) -> Model {
     bundle_url: "",
     user_pubkey: None,
     relay_urls: [],
+    upload_reports: [],
   )
 }
 

@@ -916,14 +916,17 @@ pub fn publisher_publish_uploads_and_broadcasts_nip5a_test() -> promise.Promise(
   let uploaded = ref.new([])
   let uploader = fn(upload: blossom.BlobUpload) {
     ref.update(uploaded, fn(items) { [upload.path, ..items] })
-    promise.resolve(
-      Ok(blossom.UploadedBlob(
-        server: "https://blossom.test",
-        path: upload.path,
-        sha256: upload.sha256,
-        url: "https://blossom.test/" <> upload.sha256,
-      )),
-    )
+    promise.resolve([
+      #(
+        "https://blossom.test",
+        Ok(blossom.UploadedBlob(
+          server: "https://blossom.test",
+          path: upload.path,
+          sha256: upload.sha256,
+          url: "https://blossom.test/" <> upload.sha256,
+        )),
+      ),
+    ])
   }
 
   use ids <- promise.await(boot.publish_pending_with(after, uploader))
