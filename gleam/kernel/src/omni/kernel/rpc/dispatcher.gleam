@@ -27,7 +27,7 @@ import omni/nostr/filter
 import omni/nostr/kind
 import omni/nostr/nip19
 import omni/nostr/pubkey.{type Pubkey}
-import omni/nostr/relay_url
+import omni/nostr/relay_url.{type RelayUrl}
 import omni/platform/clock
 import omni/platform/json as platform_json
 import omni/platform/nip44
@@ -40,13 +40,13 @@ import omni/protocol/rpc/codec
 import omni/protocol/rpc/envelope.{type Id, type Response}
 import omni/protocol/rpc/error_code
 import omni/protocol/rpc/method.{
-  type Request, AuthGenerateKey, AuthGetNpub, AuthGetNsec, AuthSwitchKey,
-  IntentsDispatch, KernelHandleUri, NavigationOpen, Nip04, Nip44, NostrDecrypt,
-  NostrEncrypt, NostrFetch, NostrGetPublicKey, NostrGetRelays, NostrPublish,
-  NostrPublishDraft, NostrSignEvent, NostrSubscribe, NostrUnsubscribe,
-  ProfileGet, ProfilePublish, RelaysAdd, RelaysList, RelaysRemove, Share,
-  StorageClear, StorageGet, StorageKeys, StorageRemove, StorageSet,
-  UnknownMethod,
+  type FetchOptions, type Request, AuthGenerateKey, AuthGetNpub, AuthGetNsec,
+  AuthSwitchKey, FetchOptions, IntentsDispatch, KernelHandleUri, NavigationOpen,
+  Nip04, Nip44, NostrDecrypt, NostrEncrypt, NostrFetch, NostrGetPublicKey,
+  NostrGetRelays, NostrPublish, NostrPublishDraft, NostrSignEvent,
+  NostrSubscribe, NostrUnsubscribe, ProfileGet, ProfilePublish, RelaysAdd,
+  RelaysList, RelaysRemove, Share, StorageClear, StorageGet, StorageKeys,
+  StorageRemove, StorageSet, UnknownMethod,
 }
 
 /// Callbacks into the host shell used by guest RPC methods that mutate shell
@@ -92,6 +92,7 @@ pub type RpcContext {
     storage: Storage,
     rate_limiter: RateLimiter,
     quota_tracker: QuotaTracker,
+    relay_scope: Option(List(String)),
     host: HostHooks,
     subscriptions: SubscriptionRegistry,
   )
@@ -101,6 +102,28 @@ fn json_to_dynamic(j: json.Json) -> Dynamic {
   case json.to_string(j) |> platform_json.parse_dynamic {
     Ok(d) -> d
     Error(_) -> dynamic.nil()
+  }
+}
+
+fn relay_in_scope(ctx: RpcContext, url: RelayUrl) -> Bool {
+  case ctx.relay_scope {
+    None -> True
+    Some(scoped) -> list.contains(scoped, relay_url.to_string(url))
+  }
+}
+
+fn scoped_relay_urls(scope: Option(List(String))) -> Option(List(RelayUrl)) {
+  case scope {
+    Some(urls) ->
+      Some(
+        list.filter_map(urls, fn(raw) {
+          case relay_url.parse(raw) {
+            Ok(url) -> Ok(url)
+            Error(_) -> Error(Nil)
+          }
+        }),
+      )
+    None -> None
   }
 }
 
@@ -216,19 +239,33 @@ fn handle_subscribe(
     True -> {
       close_subscription(ctx, sub_id)
       let namespaced = plugin_id.to_string(ctx.plugin_id) <> ":" <> sub_id
-      use closer <- promise.await(coordinator.subscribe(
-        ctx.coordinator,
-        namespaced,
-        filters,
-        fn(ev) {
-          notify(stream_event_json(sub_id, ev))
-          Nil
-        },
-        Some(fn() {
-          notify(stream_eose_json(sub_id))
-          Nil
-        }),
-      ))
+      let on_event = fn(ev) {
+        notify(stream_event_json(sub_id, ev))
+        Nil
+      }
+      let on_eose = fn() {
+        notify(stream_eose_json(sub_id))
+        Nil
+      }
+      use closer <- promise.await(case ctx.relay_scope {
+        Some(urls) ->
+          coordinator.subscribe_targeted(
+            ctx.coordinator,
+            namespaced,
+            filters,
+            urls,
+            on_event,
+            Some(on_eose),
+          )
+        None ->
+          coordinator.subscribe(
+            ctx.coordinator,
+            namespaced,
+            filters,
+            on_event,
+            Some(on_eose),
+          )
+      })
       ref.update(ctx.subscriptions.active, fn(active) {
         dict.insert(active, subscription_key(ctx, sub_id), closer)
       })
@@ -365,11 +402,26 @@ fn handle_request(
           ))
         True -> {
           let sub_id = plugin_id.to_string(ctx.plugin_id) <> ":fetch"
+          let scoped_options = case ctx.relay_scope {
+            Some([]) ->
+              Some(FetchOptions(
+                timeout_ms: None,
+                relays: None,
+                local_only: Some(True),
+              ))
+            Some(urls) ->
+              Some(FetchOptions(
+                timeout_ms: None,
+                relays: Some(list.filter_map(urls, relay_url.parse)),
+                local_only: None,
+              ))
+            None -> options
+          }
           use events <- promise.await(coordinator.fetch(
             ctx.coordinator,
             sub_id,
             filters,
-            options,
+            scoped_options,
           ))
           promise.resolve(envelope.Success(
             id: id,
@@ -431,7 +483,9 @@ fn handle_request(
           ))
         True -> {
           let fields =
-            list.map(relay_pool.get_configured_relays(ctx.relay_pool), fn(url) {
+            relay_pool.get_configured_relays(ctx.relay_pool)
+            |> list.filter(fn(url) { relay_in_scope(ctx, url) })
+            |> list.map(fn(url) {
               let #(read, write) = relay_pool.relay_scope(ctx.relay_pool, url)
               #(
                 relay_url.to_string(url),
@@ -888,7 +942,9 @@ fn handle_request(
             data: None,
           ))
         True -> {
-          let statuses = relay_pool.get_statuses(ctx.relay_pool)
+          let statuses =
+            relay_pool.get_statuses(ctx.relay_pool)
+            |> list.filter(fn(pair) { relay_in_scope(ctx, pair.0) })
           let json_items =
             list.map(statuses, fn(pair) {
               let status_str = case pair.1 {
@@ -1145,7 +1201,16 @@ fn publish_signed_event(
       ))
     True -> {
       use _ <- promise.await(event_store.save_event(ctx.event_store, ev))
-      use publish_res <- promise.await(relay_pool.publish(ctx.relay_pool, ev))
+      use publish_res <- promise.await(case ctx.relay_scope {
+        Some([]) -> promise.resolve([])
+        Some(urls) ->
+          relay_pool.publish_targeted(
+            ctx.relay_pool,
+            ev,
+            list.filter_map(urls, relay_url.parse),
+          )
+        None -> relay_pool.publish(ctx.relay_pool, ev)
+      })
       let accepted =
         list.filter_map(publish_res, fn(r) {
           case r.1 {

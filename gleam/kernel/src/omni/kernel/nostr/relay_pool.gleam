@@ -557,12 +557,20 @@ pub fn publish(
   pool: RelayPool,
   event: Event,
 ) -> Promise(List(#(RelayUrl, Bool, String))) {
+  publish_targeted(pool, event, get_configured_relays(pool))
+}
+
+/// Publishes an event only to `targets`, returning send results per relay.
+pub fn publish_targeted(
+  pool: RelayPool,
+  event: Event,
+  targets: List(RelayUrl),
+) -> Promise(List(#(RelayUrl, Bool, String))) {
   let frame_json = relay_frame.client_frame_to_json(relay_frame.Event(event))
-  let relays = get_configured_relays(pool)
   let sockets = ref.get(pool.sockets)
   let statuses = ref.get(pool.statuses)
   let results =
-    list.filter(relays, fn(url) {
+    list.filter(targets, fn(url) {
       write_enabled(pool, relay_url.to_string(url))
     })
     |> list.map(fn(url) {

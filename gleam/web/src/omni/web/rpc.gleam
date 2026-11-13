@@ -6,6 +6,7 @@
 
 import gleam/javascript/promise.{type Promise}
 import gleam/json
+import gleam/list
 import gleam/option.{None}
 import omni/kernel/crypto/keystore
 import omni/kernel/kernel
@@ -67,7 +68,16 @@ pub fn handle_streaming(
         )),
       )
     Ok(pid) -> {
-      let ctx = kernel.get_rpc_context_with(booted.kernel, pid, host)
+      let relay_scope = case
+        list.find(booted.model.installed_apps, fn(app) {
+          app.id == plugin_id_str
+        })
+      {
+        Ok(app) -> app.relays
+        Error(_) -> None
+      }
+      let ctx =
+        kernel.get_rpc_context_scoped(booted.kernel, pid, host, relay_scope)
       dispatcher.dispatch_json_streaming(ctx, request_json, notify)
       |> promise.map(codec.encode_response)
     }

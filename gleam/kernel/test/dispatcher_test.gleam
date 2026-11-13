@@ -1,6 +1,7 @@
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/javascript/promise.{type Promise}
+import gleam/list
 import gleam/option.{None, Some}
 import gleeunit/should
 import omni/kernel/acl/capability_store
@@ -60,6 +61,7 @@ fn setup_test_context() -> Promise(
       storage: store,
       rate_limiter: limiter,
       quota_tracker: q_tracker,
+      relay_scope: None,
       host: dispatcher.default_host_hooks(),
       subscriptions: dispatcher.new_subscription_registry(),
     )
@@ -718,5 +720,56 @@ pub fn dispatcher_nip44_roundtrip_test() -> Promise(Nil) {
       }
     }
     _ -> panic as "expected NIP-44 encrypt to succeed"
+  }
+}
+
+pub fn dispatcher_relay_scope_filters_relay_list_test() -> Promise(Nil) {
+  use #(ctx, cap_store) <- promise.await(setup_test_context())
+  capability_store.set_grant(
+    cap_store,
+    ctx.plugin_id,
+    capability.RelaysManage,
+    grant.Always,
+    None,
+  )
+  let assert Ok(one) = relay_url.parse("wss://one.example")
+  let assert Ok(two) = relay_url.parse("wss://two.example")
+  relay_pool.add_relay(ctx.relay_pool, one)
+  relay_pool.add_relay(ctx.relay_pool, two)
+
+  let scoped = RpcContext(..ctx, relay_scope: Some(["wss://one.example"]))
+
+  use res <- promise.await(dispatcher.dispatch(scoped, IntId(80), RelaysList))
+  case res {
+    Success(_, result) -> {
+      let assert Ok(items) = decode.run(result, decode.list(decode.dynamic))
+      list.length(items) |> should.equal(1)
+      promise.resolve(Nil)
+    }
+    _ -> panic as "expected Success for RelaysList"
+  }
+}
+
+pub fn dispatcher_local_only_scope_filters_relays_test() -> Promise(Nil) {
+  use #(ctx, cap_store) <- promise.await(setup_test_context())
+  capability_store.set_grant(
+    cap_store,
+    ctx.plugin_id,
+    capability.RelaysManage,
+    grant.Always,
+    None,
+  )
+  let assert Ok(one) = relay_url.parse("wss://one.example")
+  relay_pool.add_relay(ctx.relay_pool, one)
+
+  let scoped = RpcContext(..ctx, relay_scope: Some([]))
+  use res <- promise.await(dispatcher.dispatch(scoped, IntId(81), RelaysList))
+  case res {
+    Success(_, result) -> {
+      let assert Ok(items) = decode.run(result, decode.list(decode.dynamic))
+      list.length(items) |> should.equal(0)
+      promise.resolve(Nil)
+    }
+    _ -> panic as "expected Success for RelaysList"
   }
 }

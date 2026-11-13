@@ -125,6 +125,16 @@ pub fn get_rpc_context_with(
   plugin_id: PluginId,
   host: dispatcher.HostHooks,
 ) -> RpcContext {
+  get_rpc_context_scoped(kernel, plugin_id, host, option.None)
+}
+
+/// Create an RPC context with host callbacks and the app's relay scope.
+pub fn get_rpc_context_scoped(
+  kernel: OmniKernel,
+  plugin_id: PluginId,
+  host: dispatcher.HostHooks,
+  relay_scope: Option(List(String)),
+) -> RpcContext {
   dispatcher.RpcContext(
     plugin_id: plugin_id,
     acl_engine: kernel.acl_engine,
@@ -135,6 +145,7 @@ pub fn get_rpc_context_with(
     storage: kernel.storage,
     rate_limiter: kernel.rate_limiter,
     quota_tracker: kernel.quota_tracker,
+    relay_scope: relay_scope,
     host: host,
     subscriptions: kernel.guest_subscriptions,
   )
