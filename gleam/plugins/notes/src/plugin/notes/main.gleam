@@ -1,13 +1,14 @@
 //// Application specification and entrypoint for the Notes plugin (`plugin_notes`).
 
 import gleam/option.{None, Some}
+import gleam/string
 import omni/platform/storage.{type Storage}
-import omni/plugin_kit/app.{type AppSpec, type RunningApp, AppSpec}
+import omni/plugin_kit/app.{type AppSpec, type RunningApp, AppSpec, Dispatch}
 import omni/plugin_kit/local_store.{type StoreConfig, StoreConfig}
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema.{type Node}
 import plugin/notes/model.{type Model, encode_notebook, init, notebook_decoder}
-import plugin/notes/msg.{type Msg, SelectFolder}
+import plugin/notes/msg.{type Msg, SelectFolder, ShowSettings}
 import plugin/notes/update
 import plugin/notes/view
 
@@ -25,12 +26,14 @@ pub fn notebook_store_config() -> StoreConfig(Model) {
 /// Constructs the pure `AppSpec(Model, Msg)` for the Notes plugin.
 pub fn app_spec() -> AppSpec(Model, Msg) {
   AppSpec(
-    init: fn(_initial_route: Route) { #(init(), []) },
+    init: fn(initial_route: Route) {
+      #(init(), [Dispatch(ShowSettings(route_shows_settings(initial_route)))])
+    },
     update: update.update,
     view: view.view,
     on_action: update.action_to_msg,
-    on_route_change: Some(fn(_next_route: Route) {
-      SelectFolder(model.FolderAll)
+    on_route_change: Some(fn(next_route: Route) {
+      ShowSettings(route_shows_settings(next_route))
     }),
   )
 }
@@ -40,7 +43,11 @@ pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
   let cfg = notebook_store_config()
 
   AppSpec(
-    init: fn(_initial_route: Route) { #(local_store.load(store, cfg), []) },
+    init: fn(initial_route: Route) {
+      #(local_store.load(store, cfg), [
+        Dispatch(ShowSettings(route_shows_settings(initial_route))),
+      ])
+    },
     update: fn(current_model: Model, message: Msg) {
       let #(next_model, effects) = update.update(current_model, message)
       let _ = local_store.save(store, cfg, next_model)
@@ -48,10 +55,14 @@ pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
     },
     view: view.view,
     on_action: update.action_to_msg,
-    on_route_change: Some(fn(_next_route: Route) {
-      SelectFolder(model.FolderAll)
+    on_route_change: Some(fn(next_route: Route) {
+      ShowSettings(route_shows_settings(next_route))
     }),
   )
+}
+
+fn route_shows_settings(r: Route) -> Bool {
+  string.lowercase(string.trim(r.view)) == "settings"
 }
 
 /// Starts a running Notes application from `initial_search`

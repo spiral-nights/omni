@@ -12,8 +12,8 @@ import gleam/string
 import omni/protocol/schema/action
 import omni/protocol/schema/builder as schema
 import omni/protocol/schema/node.{
-  type Node, Button, Input, InputSearch, InputText, JustifyBetween, TabItem,
-  Textarea, Toggle, empty_base,
+  type Node, Button, ButtonGhost, Caption, Input, InputSearch, InputText,
+  JustifyBetween, JustifyEnd, TabItem, Textarea, Toggle, ToneMuted, empty_base,
 }
 import omni/protocol/schema/style.{SizeMd, SizeSm, StyleRaw}
 import omni/ui/sanitize
@@ -21,6 +21,13 @@ import plugin/notes/model.{type Model, type NoteDoc, folder_to_id}
 
 /// Render the full Notes application view.
 pub fn view(model: Model) -> Node {
+  case model.show_settings {
+    True -> render_settings(model)
+    False -> render_notebook(model)
+  }
+}
+
+fn render_notebook(model: Model) -> Node {
   schema.box()
   |> schema.column
   |> schema.gap("md")
@@ -80,17 +87,81 @@ fn render_header(model: Model) -> Node {
         schema.badge(int.to_string(list.length(model.notes)) <> " notes"),
         ..dirty_badge
       ]),
-    Button(
+    schema.box()
+      |> schema.row
+      |> schema.gap("xs")
+      |> schema.children([
+        Button(
+          base: empty_base(),
+          label: "Settings",
+          action: action.new("show-settings"),
+          variant: Some(ButtonGhost),
+          size: Some(SizeSm),
+          icon: Some("sliders"),
+          icon_position: None,
+          disabled: None,
+          loading: None,
+        ),
+        Button(
+          base: empty_base(),
+          label: "New Note",
+          action: action.new("create_note"),
+          variant: None,
+          size: Some(SizeMd),
+          icon: Some("plus"),
+          icon_position: None,
+          disabled: None,
+          loading: None,
+        ),
+      ]),
+  ])
+}
+
+fn render_settings(model: Model) -> Node {
+  let encrypted_label = case model.sync_encrypted {
+    True -> "Encrypted sync (NIP-44)"
+    False -> "Plaintext sync"
+  }
+
+  let toggle =
+    Toggle(
       base: empty_base(),
-      label: "New Note",
-      action: action.new("create_note"),
-      variant: None,
-      size: Some(SizeMd),
-      icon: Some("plus"),
-      icon_position: None,
+      name: "sync_encrypted",
+      label: Some(encrypted_label),
+      checked: model.sync_encrypted,
+      action: action.new("toggle-encrypted-sync"),
       disabled: None,
-      loading: None,
-    ),
+    )
+
+  schema.card()
+  |> schema.with_id("notes-settings")
+  |> schema.title("Notes Settings")
+  |> schema.subtitle("How notebook documents are synchronized")
+  |> schema.with_icon("sliders")
+  |> schema.page("settings")
+  |> schema.children([
+    toggle,
+    schema.text(
+      "Encrypted sync protects note contents with your key. Turning it off publishes plaintext documents that any relay reader can decode.",
+    )
+      |> schema.text_variant(Caption)
+      |> schema.text_tone(ToneMuted),
+    schema.box()
+      |> schema.row
+      |> schema.justify(JustifyEnd)
+      |> schema.children([
+        Button(
+          base: empty_base(),
+          label: "Back to Notes",
+          action: action.new("hide-settings"),
+          variant: Some(ButtonGhost),
+          size: Some(SizeSm),
+          icon: Some("arrow-left"),
+          icon_position: None,
+          disabled: None,
+          loading: None,
+        ),
+      ]),
   ])
 }
 

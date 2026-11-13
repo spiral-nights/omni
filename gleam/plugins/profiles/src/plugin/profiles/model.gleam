@@ -84,7 +84,7 @@ pub fn view_from_route(r: Route) -> ProfilesView {
         None -> ViewDirectory
       }
     "metadata" | "edit" | "editor" -> ViewMetadata
-    "keys" | "key-custody" | "custody" | "signer" -> ViewKeys
+    "keys" | "key-custody" | "custody" | "signer" | "settings" -> ViewKeys
     _ -> ViewDirectory
   }
 }

@@ -46,6 +46,7 @@ pub type Model {
     dirty: Bool,
     next_id: Int,
     my_pubkey: Option(String),
+    show_settings: Bool,
   )
 }
 
@@ -78,6 +79,7 @@ pub fn init() -> Model {
     dirty: False,
     next_id: 2,
     my_pubkey: None,
+    show_settings: False,
   )
 }
 
@@ -97,6 +99,7 @@ pub fn init_with_notes(notes: List(NoteDoc)) -> Model {
         dirty: False,
         next_id: 1,
         my_pubkey: None,
+        show_settings: False,
       )
     [first, ..] ->
       Model(
@@ -111,6 +114,7 @@ pub fn init_with_notes(notes: List(NoteDoc)) -> Model {
         dirty: False,
         next_id: list.length(notes) + 1,
         my_pubkey: None,
+        show_settings: False,
       )
   }
 }
@@ -378,6 +382,7 @@ pub fn notebook_decoder() -> Decoder(Model) {
     dirty: False,
     next_id: computed_next_id,
     my_pubkey: None,
+    show_settings: False,
   ))
 }
 

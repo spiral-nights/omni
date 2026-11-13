@@ -345,3 +345,22 @@ pub fn legacy_note_document_decodes_test() {
   note.updated_at |> should.equal(123)
   note.starred |> should.equal(True)
 }
+
+pub fn settings_route_renders_the_settings_card_test() {
+  let running =
+    notes_main.start_app_with_storage(
+      "?view=settings",
+      storage.in_memory(),
+      fn(_) { Nil },
+    )
+  let rendered = app.current_view(running) |> schema.encode_schema_message
+  string.contains(rendered, "notes-settings") |> should.equal(True)
+  string.contains(rendered, "toggle-encrypted-sync") |> should.equal(True)
+
+  let plain =
+    notes_main.start_app_with_storage("", storage.in_memory(), fn(_) { Nil })
+  app.current_view(plain)
+  |> schema.encode_schema_message
+  |> string.contains("notes-settings")
+  |> should.equal(False)
+}

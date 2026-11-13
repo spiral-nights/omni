@@ -180,12 +180,6 @@ pub fn system_apps() -> List(InstalledApp) {
       pinned: True,
       views: [
         ViewOption(id: "main", title: "Relays", path: "/", format: "html"),
-        ViewOption(
-          id: "settings",
-          title: "Relay Settings",
-          path: "/?view=settings",
-          format: "html",
-        ),
       ],
       placements: [],
       handled_intents: [],

@@ -18,7 +18,8 @@ import plugin/notes/model.{
 import plugin/notes/msg.{
   type Msg, AddTag, CreateNote, DeleteNote, IngestRemoteDoc, RemoveTag,
   SaveActiveNote, SelectFolder, SelectNote, SetDraftContent, SetDraftTitle,
-  SetPubkey, SetSearchQuery, ToggleArchive, ToggleEncryptedSync, ToggleStar,
+  SetPubkey, SetSearchQuery, ShowSettings, ToggleArchive, ToggleEncryptedSync,
+  ToggleStar,
 }
 
 /// Apply a `Msg` to `model`, returning the updated `Model` and resulting effects.
@@ -226,6 +227,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
     }
 
     SetSearchQuery(query) -> #(Model(..model, search_query: query), [])
+
+    ShowSettings(visible) -> #(Model(..model, show_settings: visible), [])
 
     SelectFolder(folder) -> #(Model(..model, folder: folder), [])
 
@@ -440,6 +443,12 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
         Some(tag) -> Some(RemoveTag(tag))
         None -> None
       }
+
+    "show-settings" | "show_settings" | "open-settings" ->
+      Some(ShowSettings(True))
+
+    "hide-settings" | "hide_settings" | "close-settings" ->
+      Some(ShowSettings(False))
 
     "set_search_query" | "set-search-query" | "search" ->
       case extract_value(act, "query") {

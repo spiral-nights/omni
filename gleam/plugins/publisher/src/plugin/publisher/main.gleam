@@ -1,12 +1,15 @@
 //// Application specification and entrypoint for `plugin_publisher`.
 
 import gleam/option.{type Option, None, Some}
+import gleam/string
 import omni/platform/storage.{type Storage}
 import omni/plugin_kit/app.{type AppSpec, type Effect, type RunningApp, AppSpec}
 import omni/plugin_kit/local_store
 import omni/plugin_kit/route.{type Route}
 import omni/protocol/schema/node.{type Node}
-import plugin/publisher/model.{type Model, type StudioTab, Model, TabStudio}
+import plugin/publisher/model.{
+  type Model, type StudioTab, Model, TabServers, TabStudio,
+}
 import plugin/publisher/msg.{type Msg, SelectTab}
 import plugin/publisher/update
 import plugin/publisher/view
@@ -118,8 +121,9 @@ fn resolve_route_tab(r: Route) -> StudioTab {
   case route.get_param(r, "tab") {
     Some(tab_param) -> update.parse_tab(tab_param)
     None ->
-      case r.view {
+      case string.lowercase(string.trim(r.view)) {
         "main" | "" -> TabStudio
+        "settings" -> TabServers
         other -> update.parse_tab(other)
       }
   }

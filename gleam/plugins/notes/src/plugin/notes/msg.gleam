@@ -21,4 +21,6 @@ pub type Msg {
   IngestRemoteDoc(String)
   /// The signed-in account's public key (used for deletion tombstones).
   SetPubkey(String)
+  /// Show or hide the notebook settings panel.
+  ShowSettings(Bool)
 }
