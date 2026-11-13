@@ -27,11 +27,11 @@ import omni/shell/msg.{
   SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays, SetAppStoreView,
   SetCapabilityGrants, SetCustomInstallUrl, SetCustomShellUrl, SetExportedNsec,
   SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
-  SetUserProfile, ShellScrolled, ShowIntentPrompt, ShowPermissionPrompt,
-  ShowToast, ShowToastTone, ShowUpdateModal, StartPullRefresh, SwitchAccount,
-  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
-  ToggleCapabilityGrant, ToggleFullscreen, TriggerWorkspaceSync, UninstallApp,
-  UninstallShell, UnlockKey,
+  SetUpdateSourceUrl, SetUserProfile, ShellScrolled, ShowIntentPrompt,
+  ShowPermissionPrompt, ShowToast, ShowToastTone, ShowUpdateModal,
+  StartPullRefresh, SwitchAccount, ToggleAppEnabled, ToggleAppIntent,
+  ToggleAppPinned, ToggleAutoSync, ToggleCapabilityGrant, ToggleFullscreen,
+  TriggerWorkspaceSync, UninstallApp, UninstallShell, UnlockKey, UpdateFromFile,
 }
 
 /// Side-effect commands emitted by the pure shell `update` function.
@@ -61,6 +61,8 @@ pub type ShellEffect {
     payload_json: String,
   )
   UpgradePlugin(plugin_id: String)
+  UpgradePluginFromUrl(plugin_id: String, url: String)
+  UpgradePluginFromFile(plugin_id: String)
   RouteIntent(intent_name: String)
   RefreshActiveView
   DispatchHostedAction(plugin_id: String, action: Action)
@@ -727,8 +729,29 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     }
 
     ConfirmPluginUpdate(plugin_id) -> {
+      let source = case model.update_modal {
+        Some(modal) -> string.trim(modal.source_url)
+        None -> ""
+      }
       let next_model = Model(..model, update_modal: None)
-      #(next_model, [UpgradePlugin(plugin_id: plugin_id)])
+      let effect = case source {
+        "" -> UpgradePlugin(plugin_id: plugin_id)
+        url -> UpgradePluginFromUrl(plugin_id: plugin_id, url: url)
+      }
+      #(next_model, [effect])
+    }
+
+    UpdateFromFile(plugin_id) -> {
+      let next_model = Model(..model, update_modal: None)
+      #(next_model, [UpgradePluginFromFile(plugin_id: plugin_id)])
+    }
+
+    SetUpdateSourceUrl(url) -> {
+      let next_modal = case model.update_modal {
+        Some(modal) -> Some(model.UpdateModalState(..modal, source_url: url))
+        None -> None
+      }
+      #(Model(..model, update_modal: next_modal), [])
     }
 
     DismissUpdateModal -> {

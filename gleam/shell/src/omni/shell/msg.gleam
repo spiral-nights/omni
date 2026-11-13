@@ -105,6 +105,8 @@ pub type Msg {
   // Modals & gestures
   ShowUpdateModal(UpdateModalState)
   ConfirmPluginUpdate(plugin_id: String)
+  UpdateFromFile(plugin_id: String)
+  SetUpdateSourceUrl(String)
   DismissUpdateModal
   StartPullRefresh
   FinishPullRefresh

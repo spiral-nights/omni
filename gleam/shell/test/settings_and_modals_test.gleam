@@ -17,7 +17,10 @@ import omni/shell/model.{
   Synced, TabPluginSettings, TabPlugins, TabProfile, TabRelays, TabShells,
   TabWorkspace, UpdateModalState, UserProfileSummary, ViewOption,
 }
-import omni/shell/msg.{SelectIntentHandler, SetThemeMode, StartPullRefresh}
+import omni/shell/msg.{
+  ConfirmPluginUpdate, SelectIntentHandler, SetThemeMode, SetUpdateSourceUrl,
+  StartPullRefresh, UpdateFromFile,
+}
 import omni/shell/registry
 import omni/shell/settings/intents
 import omni/shell/settings/permissions
@@ -599,6 +602,7 @@ pub fn update_modal_renders_version_diff_changelog_and_actions_test() {
       current_version: "1.0.0",
       latest_version: "1.3.0",
       changelog: Some("Added offline thread caching and faster NIP-44 decrypt."),
+      source_url: "",
     )
   let m1 = Model(..m0, update_modal: Some(modal_state))
   let modal_html = update_modal.render_update_modal(m1) |> element.to_string
@@ -790,4 +794,40 @@ pub fn workspace_round_trip_preserves_intent_defaults_test() {
   let restored = model.apply_workspace_state(m0, ws)
   restored.default_intents
   |> should.equal(dict.from_list([#("view_note", "nsite.sample.alpha")]))
+}
+
+pub fn update_modal_source_url_and_file_effects_test() {
+  let modal =
+    UpdateModalState(
+      plugin_id: "nsite.sample.alpha",
+      plugin_name: "Alpha",
+      current_version: "1.0.0",
+      latest_version: "1.1.0",
+      changelog: None,
+      source_url: "",
+    )
+  let m0 = Model(..model.init("editorial", []), update_modal: Some(modal))
+
+  let modal_html = update_modal.render_update_modal(m0) |> element.to_string
+  should.be_true(string.contains(modal_html, "id=\"input-update-source-url\""))
+  should.be_true(string.contains(modal_html, "id=\"btn-update-from-file\""))
+
+  let #(with_url, _) =
+    shell.update(m0, SetUpdateSourceUrl("https://example.test/app.html"))
+  let #(_, confirm_effects) =
+    shell.update(with_url, ConfirmPluginUpdate("nsite.sample.alpha"))
+  confirm_effects
+  |> should.equal([
+    update.UpgradePluginFromUrl(
+      plugin_id: "nsite.sample.alpha",
+      url: "https://example.test/app.html",
+    ),
+  ])
+
+  let #(_, file_effects) =
+    shell.update(m0, UpdateFromFile("nsite.sample.alpha"))
+  file_effects
+  |> should.equal([
+    update.UpgradePluginFromFile(plugin_id: "nsite.sample.alpha"),
+  ])
 }

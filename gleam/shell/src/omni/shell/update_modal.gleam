@@ -11,7 +11,10 @@ import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
 import omni/shell/model.{type Model, type UpdateModalState}
-import omni/shell/msg.{type Msg, ConfirmPluginUpdate, DismissUpdateModal}
+import omni/shell/msg.{
+  type Msg, ConfirmPluginUpdate, DismissUpdateModal, SetUpdateSourceUrl,
+  UpdateFromFile,
+}
 import omni/ui/icons
 
 /// Render the plugin update confirmation modal when `model.update_modal` is `Some(state)`.
@@ -93,6 +96,37 @@ fn render_active_update_modal(state: UpdateModalState) -> Element(Msg) {
             ),
           ]),
           changelog_el,
+          html.div([attribute.class("omni-update-source-row")], [
+            html.label(
+              [
+                attribute.class("omni-update-source-label"),
+                attribute.for("input-update-source-url"),
+              ],
+              [element.text("Update from a specific URL, naddr, or local file")],
+            ),
+            html.div([attribute.class("omni-update-source-controls")], [
+              html.input([
+                attribute.type_("text"),
+                attribute.id("input-update-source-url"),
+                attribute.class("omni-input"),
+                attribute.placeholder("https://... or naddr1..."),
+                attribute.value(state.source_url),
+                event.on_input(SetUpdateSourceUrl),
+              ]),
+              html.button(
+                [
+                  attribute.type_("button"),
+                  attribute.id("btn-update-from-file"),
+                  attribute.class("omni-button omni-button-secondary"),
+                  event.on_click(UpdateFromFile(state.plugin_id)),
+                ],
+                [
+                  icons.render_icon("upload", 14),
+                  html.span([], [element.text("Choose File")]),
+                ],
+              ),
+            ]),
+          ]),
         ]),
         html.footer([attribute.class("omni-modal-footer")], [
           html.button(

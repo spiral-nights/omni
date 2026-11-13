@@ -405,6 +405,7 @@ pub fn update_intents_relays_theme_sync_and_modals_test() {
   // Modals & Pull refresh
   let upd_modal =
     UpdateModalState(
+      source_url: "",
       plugin_id: "example.app.alpha",
       plugin_name: "Alpha",
       current_version: "1.0.0",

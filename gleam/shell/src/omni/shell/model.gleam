@@ -109,6 +109,7 @@ pub type UpdateModalState {
     current_version: String,
     latest_version: String,
     changelog: Option(String),
+    source_url: String,
   )
 }
 

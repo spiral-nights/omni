@@ -6,6 +6,7 @@
 //// through the exposed message helpers. DOM mounting and event wiring stay in
 //// the host so this shared package needs no DOM FFI.
 
+import gleam/bit_array
 import gleam/dict
 import gleam/javascript/promise
 import gleam/list
@@ -30,6 +31,7 @@ import omni/nostr/relay_url
 import omni/platform/audio
 import omni/platform/browser
 import omni/platform/clock
+import omni/platform/file_picker
 import omni/platform/idb
 import omni/platform/nip44
 import omni/platform/storage
@@ -380,7 +382,17 @@ fn apply_effects(
       }
 
       update.UpgradePlugin(plugin_id) -> {
-        upgrade_plugin(acc, plugin_id)
+        upgrade_plugin(acc, plugin_id, None)
+        acc
+      }
+
+      update.UpgradePluginFromUrl(plugin_id, url) -> {
+        upgrade_plugin(acc, plugin_id, Some(url))
+        acc
+      }
+
+      update.UpgradePluginFromFile(plugin_id) -> {
+        upgrade_plugin_from_file(acc, plugin_id)
         acc
       }
 
@@ -844,6 +856,7 @@ fn offer_update(
               current_version: current_version,
               latest_version: latest_version,
               changelog: None,
+              source_url: "",
             )),
           )
         _, _ -> Nil
@@ -855,37 +868,103 @@ fn offer_update(
 
 /// Re-resolve and re-spawn a plugin after the user confirms an update,
 /// preserving companion placements, pinning, and enablement.
-fn upgrade_plugin(host: ShellBoot, plugin_id: String) -> Nil {
+fn upgrade_plugin(
+  host: ShellBoot,
+  plugin_id: String,
+  target_override: Option(String),
+) -> Nil {
   case find_installed(host, plugin_id) {
     Error(Nil) -> Nil
     Ok(app) ->
-      case app.source_url {
-        "" -> Nil
-        target -> {
-          let _ =
-            installer.resolve(host.booted.kernel, target, plugin_id)
-            |> promise.map(fn(result) {
-              case result {
-                Error(_) -> Nil
-                Ok(bundle) -> {
-                  unmount_island(slot_selector(Main, plugin_id))
-                  let merged =
-                    InstalledApp(
-                      ..bundle.app,
-                      placements: app.placements,
-                      pinned: app.pinned,
-                      enabled: app.enabled,
-                    )
-                  dispatch_shell_msg(InstallApp(merged))
-                  dispatch_shell_msg(OpenApp(plugin_id, None))
-                  Nil
-                }
-              }
-            })
-          Nil
-        }
+      case target_override, app.source_url {
+        Some(""), _ -> Nil
+        _, "" -> Nil
+        Some(target), _ -> resolve_upgrade(host, plugin_id, app, target)
+        None, target -> resolve_upgrade(host, plugin_id, app, target)
       }
   }
+}
+
+fn resolve_upgrade(
+  host: ShellBoot,
+  plugin_id: String,
+  app: InstalledApp,
+  target: String,
+) -> Nil {
+  let _ =
+    installer.resolve(host.booted.kernel, target, plugin_id)
+    |> promise.map(fn(result) {
+      case result {
+        Error(_) -> Nil
+        Ok(bundle) ->
+          apply_upgrade(host, plugin_id, app, bundle.app, bundle.content)
+      }
+    })
+  Nil
+}
+
+fn upgrade_plugin_from_file(host: ShellBoot, plugin_id: String) -> Nil {
+  case find_installed(host, plugin_id) {
+    Error(Nil) -> Nil
+    Ok(app) -> {
+      let _ =
+        file_picker.pick_base64("text/html,application/xhtml+xml,text/plain")
+        |> promise.map(fn(result) {
+          case result {
+            Error(_) -> Nil
+            Ok(encoded) ->
+              case bit_array.base64_decode(encoded) {
+                Error(_) -> Nil
+                Ok(bytes) ->
+                  case bit_array.to_string(bytes) {
+                    Error(_) -> Nil
+                    Ok(content) -> {
+                      let next_app =
+                        installer.app_from_content(
+                          app.source_url,
+                          plugin_id,
+                          content,
+                        )
+                      apply_upgrade(host, plugin_id, app, next_app, content)
+                    }
+                  }
+              }
+          }
+        })
+      Nil
+    }
+  }
+}
+
+fn apply_upgrade(
+  host: ShellBoot,
+  plugin_id: String,
+  previous: InstalledApp,
+  next_app: InstalledApp,
+  content: String,
+) -> Nil {
+  unmount_island(slot_selector(Main, plugin_id))
+  let merged =
+    InstalledApp(
+      ..next_app,
+      placements: previous.placements,
+      pinned: previous.pinned,
+      enabled: previous.enabled,
+    )
+  dispatch_shell_msg(InstallApp(merged))
+  dispatch_shell_msg(OpenApp(plugin_id, None))
+  after_render(fn() {
+    let _ =
+      spawn_plugin(
+        host,
+        slot_selector(Main, plugin_id),
+        plugin_id,
+        content,
+        None,
+      )
+    Nil
+  })
+  Nil
 }
 
 @external(javascript, "./shell_boot.ffi.mjs", "island_mounted")
