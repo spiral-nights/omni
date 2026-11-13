@@ -14,8 +14,8 @@ import omni/social/follows
 import omni/social/profile.{type Profile, Profile}
 import plugin/profiles/model.{
   type Model, type ProfilesView, MetadataDraft, Model, SignerMissing,
-  SignerReady, ViewDirectory, ViewKeys, ViewMetadata, ViewProfile, draft_for,
-  ingest_event, metadata_pubkey,
+  SignerReady, ViewDirectory, ViewFollowing, ViewKeys, ViewMetadata, ViewProfile,
+  draft_for, ingest_event, metadata_pubkey,
 }
 import plugin/profiles/msg.{
   type Msg, IngestEvent, IngestEvents, RefreshSigner, SaveMetadata,
@@ -203,6 +203,9 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
     "view-directory" | "view_directory" | "back-to-directory" ->
       Some(SelectView(ViewDirectory))
 
+    "view-following" | "view_following" | "following" ->
+      Some(SelectView(ViewFollowing))
+
     "set-metadata-name" | "set_metadata_name" ->
       case extract_string(act, ["value", "name"]) {
         Some(value) -> Some(SetMetadataName(value))
@@ -269,6 +272,8 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
 fn apply_view(model: Model, view: ProfilesView) -> Model {
   case view {
     ViewDirectory -> Model(..model, view: ViewDirectory)
+
+    ViewFollowing -> Model(..model, view: ViewFollowing)
 
     ViewProfile(pubkey) -> {
       let cleaned = string.trim(pubkey)
@@ -369,6 +374,7 @@ fn extract_view(act: Action) -> Option(ProfilesView) {
     Some(value) ->
       case string.lowercase(string.trim(value)) {
         "directory" | "people" | "main" -> Some(ViewDirectory)
+        "following" | "follows" -> Some(ViewFollowing)
         "profile" ->
           case extract_pubkey(act) {
             Some(pk) -> Some(ViewProfile(pk))

@@ -19,9 +19,10 @@ import omni/protocol/schema/action.{type Action}
 import omni/testkit/fake_ports
 import plugin/profiles/main as profiles_main
 import plugin/profiles/model.{
-  Model, SignerLocked, SignerMissing, SignerReady, ViewDirectory, ViewKeys,
-  ViewMetadata, ViewProfile, bob_pubkey_hex, filtered_profiles, follow_count,
-  following, my_pubkey_hex, notes_by_author, own_npub, selected_profile,
+  Model, SignerLocked, SignerMissing, SignerReady, ViewDirectory, ViewFollowing,
+  ViewKeys, ViewMetadata, ViewProfile, bob_pubkey_hex, filtered_profiles,
+  follow_count, following, following_profiles, my_pubkey_hex, notes_by_author,
+  own_npub, selected_profile,
 }
 import plugin/profiles/msg.{
   IngestEvent, RefreshSigner, SaveMetadata, SelectProfile, SelectView,
@@ -471,4 +472,18 @@ pub fn metadata_editor_round_trips_contact_fields_test() {
   string.contains(draft.content, "alice@getalby.com") |> should.equal(True)
   string.contains(draft.content, "https://alice.example") |> should.equal(True)
   saved.display_name |> should.equal(Some("Alice"))
+}
+
+pub fn following_view_lists_only_followed_profiles_test() {
+  let m0 = model.init(route.parse_search("?view=following"))
+  m0.view |> should.equal(ViewFollowing)
+
+  let #(m1, _) = update.update(m0, ToggleFollow(bob_pubkey_hex))
+  let followed = following_profiles(m1)
+  list.any(followed, fn(person) { person.pubkey == bob_pubkey_hex })
+  |> should.equal(True)
+
+  let html = view.view(m1) |> schema.encode_schema_message
+  string.contains(html, "profiles-following") |> should.equal(True)
+  string.contains(html, "Following") |> should.equal(True)
 }

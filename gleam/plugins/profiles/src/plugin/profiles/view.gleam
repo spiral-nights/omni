@@ -24,14 +24,15 @@ import omni/social/stats
 import omni/social_ui/note_card.{type NoteCardConfig, NoteCardConfig}
 import omni/ui/avatar as generated_avatar
 import plugin/profiles/model.{
-  type Model, SignerLocked, SignerMissing, SignerReady, ViewDirectory, ViewKeys,
-  ViewMetadata, ViewProfile,
+  type Model, SignerLocked, SignerMissing, SignerReady, ViewDirectory,
+  ViewFollowing, ViewKeys, ViewMetadata, ViewProfile,
 }
 
 /// Render the top-level declarative Schema `Node` for `model`.
 pub fn view(model: Model) -> Node {
   case model.view {
     ViewDirectory -> render_directory(model)
+    ViewFollowing -> render_following(model)
     ViewProfile(pubkey) -> render_profile(model, pubkey)
     ViewMetadata -> render_metadata_editor(model)
     ViewKeys -> render_key_custody(model)
@@ -91,7 +92,52 @@ fn render_directory(model: Model) -> Node {
   |> schema.with_style(StyleRaw(
     "max-width: 720px; margin: 0 auto; width: 100%;",
   ))
-  |> schema.children(list.flatten([[search_input, header], body]))
+  |> schema.children(
+    list.flatten([[render_view_tabs("directory"), search_input, header], body]),
+  )
+}
+
+fn render_view_tabs(active: String) -> Node {
+  let people_action = action.new("view-directory")
+  let following_action = action.new("view-following")
+  schema.box()
+  |> schema.row()
+  |> schema.gap("xs")
+  |> schema.children([
+    schema.button("People", people_action)
+      |> schema.with_icon("users"),
+    schema.button("Following", following_action)
+      |> schema.with_icon("user-check"),
+  ])
+  |> schema.with_id("profiles-tabs-" <> active)
+}
+
+fn render_following(model: Model) -> Node {
+  let people = model.following_profiles(model)
+  let body = case people {
+    [] -> [
+      note_card.render_empty_timeline(
+        "Not following anyone yet",
+        "Follow people from the directory and they will appear here.",
+      ),
+    ]
+    matched -> [
+      schema.list_view(
+        list.map(matched, fn(person) { render_directory_item(model, person) }),
+      ),
+    ]
+  }
+
+  schema.card()
+  |> schema.with_id("profiles-following")
+  |> schema.title("Following")
+  |> schema.subtitle("People you follow with your Kind 3 contact list")
+  |> schema.with_icon("user-check")
+  |> schema.page("following")
+  |> schema.with_style(StyleRaw(
+    "max-width: 720px; margin: 0 auto; width: 100%;",
+  ))
+  |> schema.children(list.flatten([[render_view_tabs("following")], body]))
 }
 
 fn render_directory_item(model: Model, person: profile.Profile) -> Node {

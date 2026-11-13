@@ -34,6 +34,7 @@ pub const carol_pubkey_hex =
 /// Active view mode for the Profiles plugin.
 pub type ProfilesView {
   ViewDirectory
+  ViewFollowing
   ViewProfile(pubkey: String)
   ViewMetadata
   ViewKeys
@@ -83,6 +84,7 @@ pub fn view_from_route(r: Route) -> ProfilesView {
         Some(pk) -> ViewProfile(pk)
         None -> ViewDirectory
       }
+    "following" | "follows" -> ViewFollowing
     "metadata" | "edit" | "editor" -> ViewMetadata
     "keys" | "key-custody" | "custody" | "signer" | "settings" -> ViewKeys
     _ -> ViewDirectory
@@ -287,6 +289,29 @@ pub fn notes_by_author(model: Model, author_pubkey: String) -> List(Note) {
 /// Returns `True` when `target_pubkey` is in the Kind 3 follow list.
 pub fn following(model: Model, target_pubkey: String) -> Bool {
   follows.is_following(model.follows, target_pubkey)
+}
+
+/// Profiles followed by the local user, matching the current search.
+pub fn following_profiles(model: Model) -> List(Profile) {
+  let needle = string.lowercase(string.trim(model.search_query))
+  all_profiles(model)
+  |> list.filter(fn(prof) { following(model, prof.pubkey) })
+  |> list.filter(fn(prof) {
+    case needle {
+      "" -> True
+      _ -> {
+        let haystacks = [
+          display_name(prof),
+          option.unwrap(prof.name, ""),
+          option.unwrap(prof.nip05, ""),
+          prof.pubkey,
+        ]
+        list.any(haystacks, fn(value) {
+          string.contains(string.lowercase(value), needle)
+        })
+      }
+    }
+  })
 }
 
 /// Number of followed pubkeys in the active Kind 3 list.
