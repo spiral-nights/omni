@@ -232,6 +232,45 @@ pub fn start_app_action_round_trip_test() {
   { list.length(ref.get(emitted)) >= 4 } |> should.be_true()
 }
 
+pub fn id_sequence_follows_existing_task_ids_test() {
+  model.next_sequence([]) |> should.equal(1)
+  model.next_sequence(model.default_tasks()) |> should.equal(4)
+
+  let with_gap =
+    list.append(model.default_tasks(), [
+      TaskItem(
+        id: "task-17",
+        title: "Seventeen",
+        completed: False,
+        created_at: 1,
+        priority: "low",
+      ),
+      TaskItem(
+        id: "remote-42",
+        title: "Foreign id",
+        completed: False,
+        created_at: 2,
+        priority: "low",
+      ),
+    ])
+  model.next_sequence(with_gap) |> should.equal(18)
+}
+
+pub fn ingest_is_gated_by_sync_toggle_test() {
+  let m1 = model.init(route.main())
+  let #(m_off, _) = update.update(m1, ToggleSyncNostr)
+  m_off.settings.sync_nostr |> should.be_false()
+
+  let remote =
+    "[{\"id\":\"remote-1\",\"title\":\"Ignored\",\"completed\":false,\"created_at\":1,\"priority\":\"low\"}]"
+  let #(m_ignored, _) = update.update(m_off, IngestRemoteDoc(remote))
+  m_ignored.tasks |> should.equal(m_off.tasks)
+
+  let #(m_on, _) = update.update(m_off, ToggleSyncNostr)
+  let #(m_ingested, _) = update.update(m_on, IngestRemoteDoc(remote))
+  list.length(m_ingested.tasks) |> should.equal(1)
+}
+
 pub fn sync_publishes_and_ingests_nip78_document_test() {
   let m1 = model.init(route.main())
   m1.settings.sync_nostr |> should.equal(True)

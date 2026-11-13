@@ -29,12 +29,7 @@ pub fn app_spec() -> AppSpec(Model, Msg) {
 pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
   let tasks_cfg = model.tasks_store_config()
   let settings_cfg = model.settings_store_config()
-  let next_seq_fn = fn(items) {
-    case items {
-      [] -> 1
-      _ -> 100
-    }
-  }
+  let next_seq_fn = model.next_sequence
 
   AppSpec(
     init: fn(initial_route: Route) {

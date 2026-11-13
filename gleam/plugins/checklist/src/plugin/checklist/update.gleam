@@ -108,7 +108,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
     }
 
     LoadTasks(loaded) -> {
-      let next_seq = list.length(loaded) + 1
+      let next_seq = model.next_sequence(loaded)
       #(
         Model(..model, tasks: loaded, next_id: int.max(model.next_id, next_seq)),
         [],
@@ -116,19 +116,23 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
     }
 
     IngestRemoteDoc(raw) ->
-      case json.parse(from: raw, using: tasks_decoder()) {
-        Ok(tasks) -> {
-          let next_seq = list.length(tasks) + 1
-          #(
-            Model(
-              ..model,
-              tasks: tasks,
-              next_id: int.max(model.next_id, next_seq),
-            ),
-            [],
-          )
-        }
-        Error(_) -> #(model, [])
+      case model.settings.sync_nostr {
+        False -> #(model, [])
+        True ->
+          case json.parse(from: raw, using: tasks_decoder()) {
+            Ok(tasks) -> {
+              let next_seq = model.next_sequence(tasks)
+              #(
+                Model(
+                  ..model,
+                  tasks: tasks,
+                  next_id: int.max(model.next_id, next_seq),
+                ),
+                [],
+              )
+            }
+            Error(_) -> #(model, [])
+          }
       }
   }
 }

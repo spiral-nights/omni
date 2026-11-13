@@ -31,6 +31,23 @@ pub type TaskItem {
   )
 }
 
+/// Next free `task-<n>` id given a set of tasks. Non-numeric ids are ignored so
+/// remote tasks with foreign ids never advance or reset the local sequence.
+pub fn next_sequence(tasks: List(TaskItem)) -> Int {
+  let highest =
+    list.fold(tasks, 0, fn(highest: Int, item: TaskItem) {
+      case string.starts_with(item.id, "task-") {
+        True ->
+          case int.parse(string.drop_start(item.id, 5)) {
+            Ok(n) -> int.max(highest, n)
+            Error(_) -> highest
+          }
+        False -> highest
+      }
+    })
+  highest + 1
+}
+
 /// User settings for the checklist plugin.
 pub type ChecklistSettings {
   ChecklistSettings(
