@@ -287,6 +287,8 @@ pub fn render_code_block_test() {
     s,
     "<pre class=\"omni-code-pre\"><code class=\"omni-code\">pub fn main() { Nil }</code></pre>",
   ))
+  should.be_true(string.contains(s, "omni-code-copy-btn"))
+  should.be_true(string.contains(s, "data-copy-text=\"pub fn main() { Nil }\""))
 }
 
 pub fn render_buttons_and_inputs_test() {

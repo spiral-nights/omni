@@ -332,5 +332,21 @@ pub fn render_code_block(
     ])
 
   let attrs = list.flatten([[class_attr], base_attrs, data_attrs])
-  html.div(attrs, [code_el])
+  let children = case copyable {
+    Some(False) -> [code_el]
+    _ -> [
+      code_el,
+      html.button(
+        [
+          attribute.class("omni-code-copy-btn"),
+          attribute.attribute("type", "button"),
+          attribute.attribute("aria-label", "Copy code"),
+          attribute.attribute("title", "Copy code"),
+          attribute.attribute("data-copy-text", code),
+        ],
+        [icons.render_icon_default("copy")],
+      ),
+    ]
+  }
+  html.div(attrs, children)
 }

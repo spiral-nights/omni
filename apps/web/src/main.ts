@@ -17,6 +17,47 @@ import guestBridgeScript from "../../../gleam/bridge/dist/guest-runtime.js?raw";
  * registry, and paints the active theme into `#omni-root`.
  */
 
+function copyText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+
+  return new Promise((resolve, reject) => {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    if (ok) resolve();
+    else reject(new Error("copy command was rejected"));
+  });
+}
+
+function installCopyHandlers(): void {
+  document.addEventListener("click", (event) => {
+    const target = event.target as Element | null;
+    const button = target?.closest<HTMLButtonElement>(".omni-code-copy-btn");
+    if (!button) return;
+
+    const text = button.getAttribute("data-copy-text") ?? "";
+    const label = button.getAttribute("aria-label") ?? "Copy code";
+    copyText(text)
+      .then(() => {
+        button.setAttribute("aria-label", "Copied");
+        button.setAttribute("title", "Copied");
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", label);
+          button.setAttribute("title", label);
+        }, 1200);
+      })
+      .catch((err) => {
+        console.warn("[Omni] Copy failed:", err);
+      });
+  });
+}
+
 function showBootError(rootEl: HTMLElement, message: string): void {
   rootEl.innerHTML = "";
   const box = document.createElement("div");
@@ -75,6 +116,8 @@ function registerServiceWorker(): void {
     window.addEventListener("load", register);
   }
 }
+
+installCopyHandlers();
 
 mountShell().catch((err) => {
   console.error("Fatal startup error in Omni Web:", err);
