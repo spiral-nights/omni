@@ -35,6 +35,7 @@ import omni/platform/ref
 import omni/platform/storage
 import omni/platform/webcrypto
 import omni/platform/zip
+import omni/plugin_kit/schema
 import omni/protocol/blossom
 import omni/protocol/capability
 import omni/protocol/grant
@@ -367,6 +368,16 @@ pub fn nip65_relay_list_is_applied_test() {
   let assert Ok(both) = relay_url.parse("wss://relay.example")
   let assert Ok(read_only) = relay_url.parse("wss://readonly.example")
   let assert Ok(write_only) = relay_url.parse("wss://writeonly.example")
+
+  // The Relays app reflects the ingested list, not only the pool.
+  let rendered =
+    dict.values(booted.builtins)
+    |> list.map(fn(app) { app.render() |> schema.encode_schema_message })
+  should.be_true(
+    list.any(rendered, fn(wire) {
+      string.contains(wire, "wss://readonly.example")
+    }),
+  )
 
   relay_pool.relay_scope(booted.kernel.relay_pool, both)
   |> should.equal(#(True, True))

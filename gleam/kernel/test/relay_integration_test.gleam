@@ -79,6 +79,11 @@ pub fn fake_relay_streams_and_dedupes_events_test() {
   fake_relay.emit(relay, note_event_json("it-sub", event_id_hex, "hello"))
   should.equal(list.length(ref.get(received)), 1)
 
+  // Both frames were received even though the duplicate was deduped.
+  relay_pool.get_counters(pool)
+  |> dict.get("wss://fake.example")
+  |> should.equal(Ok(#(0, 2)))
+
   let assert Ok(eid) = event_id.parse(event_id_hex)
   use stored <- promise.await(event_store.get_event_by_id(ev_store, eid))
   should.be_true(case stored {

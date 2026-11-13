@@ -1197,6 +1197,12 @@ pub fn apply_relay_list(booted: Booted, tags: List(List(String))) -> Nil {
     pubkey.to_hex(keystore.get_public_key(booted.kernel.keystore)),
     tags,
   )
+  dict.each(booted.builtins, fn(_id, app) {
+    case app.apply_relay_list {
+      Some(apply) -> apply(tags)
+      None -> Nil
+    }
+  })
   list.each(nip65.parse_tags(tags), fn(hint) {
     case relay_url.parse(hint.url) {
       Error(Nil) -> Nil

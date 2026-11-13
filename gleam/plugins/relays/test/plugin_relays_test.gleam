@@ -21,9 +21,9 @@ import plugin/relays/model.{
   ViewCompact, ViewMain, ViewWidget,
 }
 import plugin/relays/msg.{
-  AddRelay, AddRelayUrl, DismissError, PublishNip65, ReconnectRelay, RemoveRelay,
-  SeedRelays, SetDraftUrl, SetViewMode, ToggleRead, ToggleWrite,
-  UpdateRelayState,
+  AddRelay, AddRelayUrl, ApplyRelayList, DismissError, PublishNip65,
+  ReconnectRelay, RemoveRelay, SeedRelays, SetDraftUrl, SetViewMode, ToggleRead,
+  ToggleWrite, UpdateRelayCounters, UpdateRelayState,
 }
 import plugin/relays/update
 import plugin/relays/view
@@ -108,9 +108,48 @@ pub fn remove_and_toggle_flags_test() {
     list.find(m4.relays, fn(r) { r.url == "wss://relay.damus.io" })
   assert damus_conn.latency_ms == Some(42)
 
+  let #(m_counters, _) =
+    update.update(m4, UpdateRelayCounters("wss://relay.damus.io", 12, 4))
+  let assert Ok(damus_counted) =
+    list.find(m_counters.relays, fn(r) { r.url == "wss://relay.damus.io" })
+  assert damus_counted.events_received == 12
+  assert damus_counted.events_sent == 4
+  assert model.total_events_received(m_counters) == 12
+
   // Remove relay
   let #(m5, _) = update.update(m4, RemoveRelay("wss://relay.nostr.band"))
   assert list.length(m5.relays) == 2
+}
+
+pub fn apply_relay_list_keeps_live_counters_test() {
+  let m = model.init(ViewMain)
+  let #(m, _) =
+    update.update(m, UpdateRelayCounters("wss://relay.ditto.pub", 7, 2))
+
+  let #(next, _) =
+    update.update(
+      m,
+      ApplyRelayList([
+        ["r", "wss://relay.ditto.pub", "read"],
+        ["r", "wss://relay.primal.net", "write"],
+      ]),
+    )
+
+  let assert Ok(ditto) =
+    list.find(next.relays, fn(r) { r.url == "wss://relay.ditto.pub" })
+  assert ditto.read == True
+  assert ditto.write == False
+  assert ditto.events_received == 7
+  assert ditto.events_sent == 2
+
+  let assert Ok(primal) =
+    list.find(next.relays, fn(r) { r.url == "wss://relay.primal.net" })
+  assert primal.read == False
+  assert primal.write == True
+
+  // An empty list is ignored rather than blanking the UI.
+  let #(kept, _) = update.update(next, ApplyRelayList([]))
+  assert list.length(kept.relays) == 2
 }
 
 pub fn nip65_tags_round_trip_test() {

@@ -1191,16 +1191,22 @@ fn push_relay_statuses(
   host: ShellBoot,
   statuses: List(#(relay_url.RelayUrl, relay_pool.RelayStatus)),
 ) -> Nil {
+  let counters = relay_pool.get_counters(host.booted.kernel.relay_pool)
   list.each(statuses, fn(pair) {
     let #(url, status) = pair
+    let url_str = relay_url.to_string(url)
     let connected = case status {
       relay_pool.Connected -> True
       _ -> False
     }
     let latency = relay_pool.get_latency(host.booted.kernel.relay_pool, url)
+    let #(sent, received) = case dict.get(counters, url_str) {
+      Ok(pair) -> pair
+      Error(Nil) -> #(0, 0)
+    }
     dict.each(host.booted.builtins, fn(_id, app) {
       case app.relay_status {
-        Some(update) -> update(relay_url.to_string(url), connected, latency)
+        Some(update) -> update(url_str, connected, latency, received, sent)
         None -> Nil
       }
     })

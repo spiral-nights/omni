@@ -17,9 +17,9 @@ import plugin/relays/model.{
   ViewCompact, ViewMain, ViewWidget,
 }
 import plugin/relays/msg.{
-  type Msg, AddRelay, AddRelayUrl, DismissError, PublishNip65, ReconnectRelay,
-  RemoveRelay, SeedRelays, SetDraftUrl, SetViewMode, ToggleRead, ToggleWrite,
-  UpdateRelayState,
+  type Msg, AddRelay, AddRelayUrl, ApplyRelayList, DismissError, PublishNip65,
+  ReconnectRelay, RemoveRelay, SeedRelays, SetDraftUrl, SetViewMode, ToggleRead,
+  ToggleWrite, UpdateRelayCounters, UpdateRelayState,
 }
 
 /// Pure Elm-style state update function for `plugin_relays`.
@@ -92,6 +92,40 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
           }
         })
       #(Model(..model, relays: updated), [])
+    }
+
+    UpdateRelayCounters(url, received, sent) -> {
+      let updated =
+        list.map(model.relays, fn(r) {
+          case r.url == url {
+            True ->
+              RelayEntry(..r, events_received: received, events_sent: sent)
+            False -> r
+          }
+        })
+      #(Model(..model, relays: updated), [])
+    }
+
+    ApplyRelayList(tags) -> {
+      let discovered = model.from_nip65_tags(tags)
+      let merged =
+        list.map(discovered, fn(entry) {
+          case list.find(model.relays, fn(r) { r.url == entry.url }) {
+            Ok(existing) ->
+              RelayEntry(
+                ..entry,
+                state: existing.state,
+                latency_ms: existing.latency_ms,
+                events_received: existing.events_received,
+                events_sent: existing.events_sent,
+              )
+            Error(Nil) -> entry
+          }
+        })
+      case merged {
+        [] -> #(model, [])
+        _ -> #(Model(..model, relays: merged), [])
+      }
     }
 
     PublishNip65 -> #(Model(..model, syncing_nip65: True, error_banner: None), [

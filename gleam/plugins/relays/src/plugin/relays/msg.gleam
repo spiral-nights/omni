@@ -18,6 +18,8 @@ pub type Msg {
     state: RelayConnectionState,
     latency_ms: Option(Int),
   )
+  UpdateRelayCounters(url: String, received: Int, sent: Int)
+  ApplyRelayList(List(List(String)))
   PublishNip65
   DismissError
   SetViewMode(ViewMode)

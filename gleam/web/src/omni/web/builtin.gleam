@@ -41,7 +41,8 @@ pub type BuiltinApp {
     navigate: fn(String) -> Nil,
     handle_action: fn(Action) -> Bool,
     ingest: Option(fn(Event) -> Nil),
-    relay_status: Option(fn(String, Bool, Option(Int)) -> Nil),
+    relay_status: Option(fn(String, Bool, Option(Int), Int, Int) -> Nil),
+    apply_relay_list: Option(fn(List(List(String))) -> Nil),
     take_publishes: fn() -> List(UnsignedEvent),
     take_encrypted_publishes: fn() -> List(UnsignedEvent),
     take_fetches: fn() -> List(Int),
@@ -90,6 +91,7 @@ fn feed_app(store: storage.Storage) -> BuiltinApp {
       app.dispatch(running, feed_msg.IngestEvent(event))
     }),
     relay_status: None,
+    apply_relay_list: None,
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     take_fetches: fn() { app.take_fetches(running) },
@@ -120,6 +122,7 @@ fn profiles_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
       app.dispatch(running, profiles_msg.IngestEvent(event))
     }),
     relay_status: None,
+    apply_relay_list: None,
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     take_fetches: fn() { app.take_fetches(running) },
@@ -145,12 +148,16 @@ fn relays_app(relay_urls: List(String)) -> BuiltinApp {
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: None,
-    relay_status: Some(fn(url, connected, latency) {
+    relay_status: Some(fn(url, connected, latency, received, sent) {
       let state = case connected {
         True -> StateConnected
         False -> StateDisconnected
       }
       app.dispatch(running, relays_msg.UpdateRelayState(url, state, latency))
+      app.dispatch(running, relays_msg.UpdateRelayCounters(url, received, sent))
+    }),
+    apply_relay_list: Some(fn(tags) {
+      app.dispatch(running, relays_msg.ApplyRelayList(tags))
     }),
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
@@ -188,6 +195,7 @@ fn publisher_app(
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: None,
     relay_status: None,
+    apply_relay_list: None,
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     take_fetches: fn() { app.take_fetches(running) },
@@ -222,6 +230,7 @@ fn checklist_app(store: storage.Storage) -> BuiltinApp {
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: None,
     relay_status: None,
+    apply_relay_list: None,
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     take_fetches: fn() { app.take_fetches(running) },
@@ -250,6 +259,7 @@ fn notes_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: None,
     relay_status: None,
+    apply_relay_list: None,
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     take_fetches: fn() { app.take_fetches(running) },
@@ -278,6 +288,7 @@ fn timer_app() -> BuiltinApp {
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: None,
     relay_status: None,
+    apply_relay_list: None,
     take_publishes: fn() { app.take_publishes(running) },
     take_encrypted_publishes: fn() { app.take_encrypted_publishes(running) },
     take_fetches: fn() { app.take_fetches(running) },

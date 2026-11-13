@@ -5,8 +5,9 @@ import gleam/option.{None, is_some}
 import gleeunit/should
 import omni/kernel/nostr/relay_pool.{
   Connected, Disconnected, add_relay, attach_socket, get_configured_relays,
-  get_latency, get_statuses, publish, publish_tracked, register_ok, relay_scope,
-  remove_relay, set_relay_scope, storage_key_configured_relays, subscribe,
+  get_counters, get_latency, get_statuses, publish, publish_tracked, register_ok,
+  relay_scope, remove_relay, set_relay_scope, storage_key_configured_relays,
+  subscribe,
 }
 import omni/nostr/event.{type Event, Event}
 import omni/nostr/event_id
@@ -297,6 +298,9 @@ pub fn relay_pool_read_write_scopes_are_honoured_test() {
   )
   use results <- promise.await(waiter)
   assert list.length(results) == 1
+  get_counters(pool)
+  |> dict.get(relay_url.to_string(write_url))
+  |> should.equal(Ok(#(1, 0)))
   promise.resolve(Nil)
 }
 

@@ -71,6 +71,7 @@ pub type RelayPool {
     auth_handler: Ref(Option(AuthHandler)),
     scopes: Ref(Dict(String, #(Bool, Bool))),
     latencies: Ref(Dict(String, Int)),
+    counters: Ref(Dict(String, #(Int, Int))),
   )
 }
 
@@ -122,6 +123,7 @@ pub fn new(storage: Storage, bootstrap_relays: List(RelayUrl)) -> RelayPool {
       auth_handler: ref.new(None),
       scopes: ref.new(dict.new()),
       latencies: ref.new(dict.new()),
+      counters: ref.new(dict.new()),
     )
   list.each(configured, fn(u) { connect(pool, u) })
   pool
@@ -280,16 +282,12 @@ fn dispatch_frame(
 ) -> Nil {
   let subs = ref.get(pool.subscribers)
   case frame {
-    relay_frame.EventFrame(sub_id, _)
-    | relay_frame.Eose(sub_id)
-    | relay_frame.Closed(sub_id, _) -> {
-      case dict.get(subs, sub_id) {
-        Ok(subscribers) ->
-          list.each(subscribers, fn(subscriber) {
-            subscriber.handler(source_url, frame)
-          })
-        Error(Nil) -> Nil
-      }
+    relay_frame.EventFrame(sub_id, _) -> {
+      bump_counter(pool, source_url, 0, 1)
+      deliver_frame(pool, subs, source_url, frame)
+    }
+    relay_frame.Eose(sub_id) | relay_frame.Closed(sub_id, _) -> {
+      deliver_frame(pool, subs, source_url, frame)
     }
     relay_frame.Notice(message) -> {
       ref.get(pool.notice_listeners)
@@ -328,6 +326,48 @@ fn dispatch_frame(
       }
     }
   }
+}
+
+fn deliver_frame(
+  pool: RelayPool,
+  subs: Dict(String, List(Subscriber)),
+  source_url: String,
+  frame: RelayFrame,
+) -> Nil {
+  let sub_id = case frame {
+    relay_frame.EventFrame(id, _) -> id
+    relay_frame.Eose(id) -> id
+    relay_frame.Closed(id, _) -> id
+    _ -> ""
+  }
+  case dict.get(subs, sub_id) {
+    Ok(subscribers) ->
+      list.each(subscribers, fn(subscriber) {
+        subscriber.handler(source_url, frame)
+      })
+    Error(Nil) -> Nil
+  }
+  Nil
+}
+
+fn bump_counter(
+  pool: RelayPool,
+  url: String,
+  sent_delta: Int,
+  received_delta: Int,
+) -> Nil {
+  ref.update(pool.counters, fn(counters) {
+    let #(sent, received) = case dict.get(counters, url) {
+      Ok(pair) -> pair
+      Error(Nil) -> #(0, 0)
+    }
+    dict.insert(counters, url, #(sent + sent_delta, received + received_delta))
+  })
+}
+
+/// Returns sent/received event counts per relay URL.
+pub fn get_counters(pool: RelayPool) -> Dict(String, #(Int, Int)) {
+  ref.get(pool.counters)
 }
 
 /// Inject a raw relay frame (used by tests and non-WebSocket transports).
@@ -425,7 +465,10 @@ pub fn publish_tracked(
       case dict.get(statuses, url_str), dict.get(sockets, url_str) {
         Ok(Connected), Ok(sock) ->
           case websocket.send(sock, frame_json) {
-            Ok(Nil) -> Ok(url)
+            Ok(Nil) -> {
+              bump_counter(pool, url_str, 1, 0)
+              Ok(url)
+            }
             Error(Nil) -> Error(Nil)
           }
         _, _ -> Error(Nil)
@@ -612,7 +655,10 @@ pub fn publish_targeted(
           case dict.get(sockets, url_str) {
             Ok(sock) -> {
               case websocket.send(sock, frame_json) {
-                Ok(Nil) -> #(url, True, "sent")
+                Ok(Nil) -> {
+                  bump_counter(pool, url_str, 1, 0)
+                  #(url, True, "sent")
+                }
                 Error(Nil) -> {
                   log.warn("relay", url_str <> " rejected a publish frame")
                   #(url, False, "send failed")
