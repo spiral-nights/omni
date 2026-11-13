@@ -43,8 +43,12 @@ pub type QueryPlan {
   ByIds(List(String))
   ByPubkey(String)
   ByKind(Int)
+  ByCreatedAt(Int, Int)
   ScanAll
 }
+
+/// Upper bound used when only `since` is specified.
+pub const max_timestamp = 9_007_199_254_740_991
 
 /// Plans the most selective query strategy for a given `Filter`.
 pub fn plan_query(filter: Filter) -> QueryPlan {
@@ -65,15 +69,23 @@ pub fn plan_query(filter: Filter) -> QueryPlan {
             False ->
               case filter.kinds {
                 Some([k]) -> ByKind(kind.to_int(k))
-                _ -> ScanAll
+                _ -> plan_time_range(filter)
               }
           }
         _ ->
           case filter.kinds {
             Some([k]) -> ByKind(kind.to_int(k))
-            _ -> ScanAll
+            _ -> plan_time_range(filter)
           }
       }
+  }
+}
+
+fn plan_time_range(filter: Filter) -> QueryPlan {
+  case filter.since, filter.until {
+    None, None -> ScanAll
+    since, until ->
+      ByCreatedAt(option.unwrap(since, 0), option.unwrap(until, max_timestamp))
   }
 }
 

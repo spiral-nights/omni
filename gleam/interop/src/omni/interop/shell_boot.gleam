@@ -18,6 +18,7 @@ import lustre/element.{type Element}
 import omni/kernel/crypto/keystore
 import omni/kernel/kernel.{KernelPorts}
 import omni/kernel/nostr/coordinator
+import omni/kernel/nostr/event_store_index
 import omni/kernel/nostr/relay_pool
 import omni/kernel/plugins/updates
 import omni/kernel/rpc/dispatcher
@@ -87,7 +88,12 @@ pub fn start_with_bridge(
     "" -> None
     source -> Some(source)
   }
-  use db_res <- promise.await(idb.open(db_name, 1, fn(_) { Nil }))
+  use db_res <- promise.await(
+    idb.open(db_name, 1, fn(upgrade) {
+      let _ = event_store_index.upgrade_schema(upgrade)
+      Nil
+    }),
+  )
 
   case db_res {
     Ok(db) -> {

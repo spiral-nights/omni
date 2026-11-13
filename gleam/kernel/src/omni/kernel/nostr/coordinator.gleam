@@ -361,6 +361,24 @@ fn subscribe_impl(
     }
   }
 
+  // Guarantee `on_eose` fires even when a relay never answers, mirroring the
+  // legacy 2.5 s fallback so live subscribers cannot hang.
+  let _ =
+    promise_ext.delay(2500, Nil)
+    |> promise.map(fn(_) {
+      case ref.get(eose_fired) {
+        True -> Nil
+        False -> {
+          ref.set(eose_fired, True)
+          case on_eose {
+            Some(cb) -> cb()
+            None -> Nil
+          }
+        }
+      }
+      Nil
+    })
+
   // 2. Start live multiplexed relay subscription
   let unsubscribe_relays =
     relay_pool.subscribe_targeted(

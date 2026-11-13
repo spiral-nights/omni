@@ -329,3 +329,25 @@ pub fn prune_transient_notes_test() -> Promise(Nil) {
 
   promise.resolve(Nil)
 }
+
+pub fn get_events_time_range_filters_without_scan_test() -> Promise(Nil) {
+  use store <- promise.await(setup_store(None, None, None))
+  let ev1 = make_event("11", "a", 1, 1000, [], "early")
+  let ev2 = make_event("12", "a", 1, 2000, [], "middle")
+  let ev3 = make_event("13", "a", 7, 3000, [], "late")
+
+  use _ <- promise.await(save_events(store, [ev1, ev2, ev3]))
+
+  let ranged =
+    filter.new()
+    |> filter.with_since(1500)
+    |> filter.with_until(2500)
+  use events <- promise.await(get_events(store, ranged))
+  assert events == [ev2]
+
+  let recent = filter.new() |> filter.with_since(2500)
+  use recent_events <- promise.await(get_events(store, recent))
+  assert recent_events == [ev3]
+
+  promise.resolve(Nil)
+}

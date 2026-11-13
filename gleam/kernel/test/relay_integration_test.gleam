@@ -92,3 +92,32 @@ pub fn fake_relay_streams_and_dedupes_events_test() {
   closer()
   promise.resolve(Nil)
 }
+
+pub fn subscribe_fires_eose_fallback_without_relay_answer_test() {
+  let store =
+    storage.in_memory_from([
+      #(relay_pool.storage_key_configured_relays, "[\"wss://silent.example\"]"),
+    ])
+  let pool = relay_pool.new(store, [])
+  let _relay = fake_relay.start(pool, "wss://silent.example")
+  use store_res <- promise.await(
+    event_store.open_in_memory(event_store.default_options()),
+  )
+  let assert Ok(ev_store) = store_res
+  let coord = coordinator.new(ev_store, pool, None)
+
+  let eose = ref.new(False)
+  use closer <- promise.await(coordinator.subscribe(
+    coord,
+    "silent-sub",
+    [Filter(None, None, Some([kind.Note]), None, None, None, None, dict.new())],
+    fn(_ev) { Nil },
+    Some(fn() { ref.set(eose, True) }),
+  ))
+
+  // No relay EOSE frame is ever emitted; the fallback timer must fire.
+  use _ <- promise.await(promise_ext.delay(2800, Nil))
+  ref.get(eose) |> should.be_true()
+  closer()
+  promise.resolve(Nil)
+}

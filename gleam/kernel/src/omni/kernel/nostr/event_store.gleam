@@ -384,6 +384,16 @@ pub fn get_events(
       ))
       decode_records(res)
     }
+    event_store_index.ByCreatedAt(lower, upper) -> {
+      use res <- promise.map(idb.query_by_index_range(
+        store.db,
+        event_store_index.events_store_name,
+        "created_at",
+        lower,
+        upper,
+      ))
+      decode_records(res)
+    }
     event_store_index.ScanAll -> {
       use res <- promise.map(idb.all(
         store.db,

@@ -139,6 +139,24 @@ function createRealDbWrapper(idb) {
       }
     },
 
+    async query_by_index_range(storeName, indexName, lower, upper, fnOk, fnErr) {
+      try {
+        const tx = idb.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        const index = store.index(indexName);
+        const range = IDBKeyRange.bound(lower, upper);
+        const req = index.getAll(range);
+        const records = await new Promise((resolve, reject) => {
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error || new globalThis.Error("Index range query failed"));
+        });
+        const mapped = (records || []).map(stringifyStoredValue);
+        return fnOk(toList(mapped));
+      } catch (err) {
+        return fnErr(String(err && err.message ? err.message : err));
+      }
+    },
+
     async count(storeName) {
       try {
         const tx = idb.transaction(storeName, "readonly");
@@ -322,6 +340,22 @@ function createInMemoryDbWrapper(schemas) {
       return fnOk(toList(results));
     },
 
+    async query_by_index_range(storeName, indexName, lower, upper, fnOk, _fnErr) {
+      const store = getStore(storeName);
+      const indexDef = (store.schema.indexes || []).find(i => i.name === indexName);
+      const keyPath = indexDef ? indexDef.key_path : indexName;
+      const results = [];
+      for (const record of store.data.values()) {
+        if (record.parsed && typeof record.parsed === "object") {
+          const val = record.parsed[keyPath];
+          if (typeof val === "number" && val >= lower && val <= upper) {
+            results.push(record.raw);
+          }
+        }
+      }
+      return fnOk(toList(results));
+    },
+
     async count(storeName) {
       const store = getStore(storeName);
       return new Ok(store.data.size);
@@ -402,3 +436,7 @@ export function ffi_close(db) {
   db.close();
 }
 
+
+export function ffi_query_by_index_range(db, store, indexName, lower, upper, fnOk, fnErr) {
+  return db.query_by_index_range(store, indexName, lower, upper, fnOk, fnErr);
+}

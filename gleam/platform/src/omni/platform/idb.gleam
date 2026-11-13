@@ -220,6 +220,36 @@ pub fn query_by_index(
   )
 }
 
+/// Queries records from `store` via `index_name` between `lower` and `upper` (inclusive).
+pub fn query_by_index_range(
+  db: IdbDatabase,
+  store: String,
+  index_name: String,
+  lower: Int,
+  upper: Int,
+) -> Promise(Result(List(String), String)) {
+  ffi_query_by_index_range(
+    db.raw,
+    store,
+    index_name,
+    lower,
+    upper,
+    fn(items) { Ok(items) },
+    fn(e) { Error(e) },
+  )
+}
+
+@external(javascript, "./idb.ffi.mjs", "ffi_query_by_index_range")
+fn ffi_query_by_index_range(
+  db: Dynamic,
+  store: String,
+  index_name: String,
+  lower: Int,
+  upper: Int,
+  fn_ok: fn(List(String)) -> Result(List(String), String),
+  fn_err: fn(String) -> Result(List(String), String),
+) -> Promise(Result(List(String), String))
+
 @external(javascript, "./idb.ffi.mjs", "ffi_count")
 fn ffi_count(db: Dynamic, store: String) -> Promise(Result(Int, String))
 
