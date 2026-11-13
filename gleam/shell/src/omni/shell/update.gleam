@@ -41,6 +41,7 @@ pub type ShellEffect {
     route: Option(String),
   )
   UnmountPluginFromSlot(plugin_id: String, viewport: Viewport)
+  UninstallPlugin(plugin_id: String)
   PersistWorkspaceLocal(WorkspaceState)
   PublishWorkspaceNip78(WorkspaceState)
   SwitchActiveShell(shell_id: String)
@@ -351,7 +352,10 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
 
       #(
         next_model,
-        list.append(unmount_effects, workspace_persistence_effects(next_model)),
+        list.append(
+          [UninstallPlugin(plugin_id), ..unmount_effects],
+          workspace_persistence_effects(next_model),
+        ),
       )
     }
 

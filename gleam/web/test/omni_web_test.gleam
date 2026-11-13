@@ -12,6 +12,7 @@ import gleam/string
 import gleeunit
 import gleeunit/should
 import lustre/element
+import omni/kernel/acl/capability_store
 import omni/kernel/crypto/keystore
 import omni/kernel/intents/broker as intent_broker
 import omni/kernel/kernel.{type KernelPorts, KernelPorts}
@@ -1277,6 +1278,38 @@ pub fn boot_shell_catalog_install_uninstall_test() {
     string.starts_with(item.id, "shell.custom.")
   })
   |> should.be_true()
+
+  promise.resolve(Nil)
+}
+
+pub fn boot_uninstall_revokes_grants_and_clears_storage_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+
+  let booted = boot.init_with_relays(ports, [], None)
+  let feed = "org.omni.plugin.feed"
+  let assert Ok(pid) = plugin_id.parse(feed)
+
+  capability_store.set_grant(
+    booted.kernel.capability_store,
+    pid,
+    capability.NostrRead,
+    grant.Always,
+    None,
+  )
+  let _ = storage.set(store, feed <> "::theme", "warm")
+
+  let next = boot.uninstall_plugin(booted, feed)
+  capability_store.get_grant(
+    next.kernel.capability_store,
+    pid,
+    capability.NostrRead,
+    None,
+    False,
+  )
+  |> should.equal(None)
+  storage.get(store, feed <> "::theme") |> should.equal(None)
 
   promise.resolve(Nil)
 }

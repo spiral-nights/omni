@@ -356,6 +356,10 @@ fn apply_effects(
         ShellBoot(boot.terminate_sandbox(acc.booted, plugin_id))
       }
 
+      update.UninstallPlugin(plugin_id) -> {
+        ShellBoot(boot.uninstall_plugin(acc.booted, plugin_id))
+      }
+
       update.MountPluginInSlot(plugin_id, viewport, route) -> {
         mount_installed(acc, plugin_id, viewport, route)
         acc

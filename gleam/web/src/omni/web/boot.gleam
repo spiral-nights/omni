@@ -25,11 +25,15 @@ import omni/kernel/acl/capability_store
 import omni/kernel/blossom/upload as blossom_upload
 import omni/kernel/crypto/keystore
 import omni/kernel/intents/broker
-import omni/kernel/kernel.{type KernelPorts, type OmniKernel, KernelPorts}
+import omni/kernel/kernel.{
+  type KernelPorts, type OmniKernel, KernelPorts, OmniKernel,
+}
 import omni/kernel/nostr/coordinator as subscription_coordinator
 import omni/kernel/nostr/coordinator
 import omni/kernel/nostr/event_store
 import omni/kernel/nostr/relay_pool
+import omni/kernel/plugins/registry as plugin_registry
+import omni/kernel/rpc/quota
 import omni/kernel/workspace/sync
 import omni/nostr/bech32
 import omni/nostr/event.{type Event, type UnsignedEvent, UnsignedEvent}
@@ -1285,4 +1289,40 @@ pub fn view(booted: Booted) -> Element(Msg) {
       theme.render(booted.model),
     ],
   )
+}
+
+/// Fully uninstall a plugin: revoke grants, clear its scoped storage, drop its
+/// intent handlers and registry entry, and tear down its sandbox.
+pub fn uninstall_plugin(booted: Booted, plugin_id_str: String) -> Booted {
+  case plugin_id.parse(plugin_id_str) {
+    Error(_) -> booted
+    Ok(pid) -> {
+      capability_store.revoke(booted.kernel.capability_store, pid, None)
+      let prefix = quota.plugin_prefix(pid)
+      let _ =
+        storage.keys(booted.kernel.storage)
+        |> list.filter(fn(key) { string.starts_with(key, prefix) })
+        |> list.each(fn(key) {
+          let _ = storage.remove(booted.kernel.storage, key)
+          Nil
+        })
+      let _ =
+        ref.update(booted.intent_broker, fn(current) {
+          broker.unregister_plugin(current, plugin_id_str)
+        })
+      Booted(
+        ..booted,
+        kernel: OmniKernel(
+          ..booted.kernel,
+          registry: plugin_registry.uninstall(
+            booted.kernel.registry,
+            plugin_id_str,
+          ),
+        ),
+        builtins: dict.delete(booted.builtins, plugin_id_str),
+        sandboxes: manager.terminate(booted.sandboxes, pid),
+      )
+      |> with_capability_grants
+    }
+  }
 }
