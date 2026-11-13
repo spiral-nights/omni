@@ -3,7 +3,10 @@ function resolveHost(selector) {
   return document.querySelector(selector);
 }
 
-export function mount_island(selector, srcdoc, pluginId, onRpc) {
+const islandHosts = new Map();
+const workerHosts = new Map();
+
+export function mount_island(selector, srcdoc, pluginId, onRpc, onSchema) {
   const host = resolveHost(selector);
   if (!host) return;
   host.innerHTML = "";
@@ -15,6 +18,15 @@ export function mount_island(selector, srcdoc, pluginId, onRpc) {
 
   const schemaChannel = new MessageChannel();
   const rpcChannel = new MessageChannel();
+
+  schemaChannel.port1.onmessage = (event) => {
+    if (typeof onSchema !== "function") return;
+    try {
+      onSchema(JSON.stringify(event.data));
+    } catch (_) {
+      // Ignore malformed schema messages.
+    }
+  };
 
   rpcChannel.port1.onmessage = (event) => {
     if (typeof onRpc !== "function") return;
@@ -49,6 +61,85 @@ export function mount_island(selector, srcdoc, pluginId, onRpc) {
 
   iframe.srcdoc = String(srcdoc);
   host.appendChild(iframe);
+  islandHosts.set(String(pluginId), { iframe });
+}
+
+export function mount_worker(selector, script, pluginId, onRpc, onSchema) {
+  const host = resolveHost(selector);
+  if (!host) return;
+  host.innerHTML = "";
+  const parentShim =
+    "self.window = self; self.top = self;" +
+    "self.parent = { postMessage: function (message) { self.postMessage(message); } };\n";
+  const blob = new Blob([parentShim, String(script)], {
+    type: "text/javascript",
+  });
+  const url = URL.createObjectURL(blob);
+  const worker = new Worker(url);
+  const schemaChannel = new MessageChannel();
+  const rpcChannel = new MessageChannel();
+  const deliverSchema = (data) => {
+    if (typeof onSchema !== "function") return;
+    try {
+      onSchema(JSON.stringify(data));
+    } catch (_) {
+      // Ignore malformed schema messages.
+    }
+  };
+  schemaChannel.port1.onmessage = (event) => deliverSchema(event.data);
+  rpcChannel.port1.onmessage = (event) => {
+    if (typeof onRpc !== "function") return;
+    let raw;
+    try {
+      raw = JSON.stringify(event.data);
+    } catch {
+      return;
+    }
+    onRpc(raw, (responseJson) => {
+      try {
+        rpcChannel.port1.postMessage(JSON.parse(responseJson));
+      } catch {
+        rpcChannel.port1.postMessage({
+          jsonrpc: "2.0",
+          id: event.data && event.data.id,
+          error: { code: -32603, message: "Invalid response" },
+        });
+      }
+    });
+  };
+  worker.onmessage = (event) => {
+    const data = event && event.data;
+    if (!data || typeof data !== "object") return;
+    if (data.type === "omni:schema" || data.type === "omni:action") {
+      deliverSchema(data);
+    }
+  };
+  worker.postMessage(
+    { type: "omni:init", payload: { pluginId: String(pluginId) } },
+    [schemaChannel.port2, rpcChannel.port2],
+  );
+  workerHosts.set(String(pluginId), { worker, url });
+}
+
+export function send_plugin_action(pluginId, actionJson) {
+  let payload;
+  try {
+    payload = JSON.parse(actionJson);
+  } catch {
+    return;
+  }
+  const workerEntry = workerHosts.get(String(pluginId));
+  if (workerEntry && workerEntry.worker) {
+    workerEntry.worker.postMessage({ type: "omni:action", action: payload });
+    return;
+  }
+  const island = islandHosts.get(String(pluginId));
+  if (island && island.iframe && island.iframe.contentWindow) {
+    island.iframe.contentWindow.postMessage(
+      { type: "omni:action", action: payload },
+      "*",
+    );
+  }
 }
 
 export function island_mounted(selector) {
@@ -60,6 +151,18 @@ export function unmount_island(selector) {
   const host = resolveHost(selector);
   if (!host) return;
   host.innerHTML = "";
+}
+
+export function unmount_worker(pluginId) {
+  const entry = workerHosts.get(String(pluginId));
+  if (!entry) return;
+  try {
+    entry.worker.terminate();
+  } catch (_) {}
+  try {
+    URL.revokeObjectURL(entry.url);
+  } catch (_) {}
+  workerHosts.delete(String(pluginId));
 }
 
 import { start } from "../../../lustre/lustre/runtime/client/spa.ffi.mjs";

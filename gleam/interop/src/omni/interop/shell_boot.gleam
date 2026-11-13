@@ -9,6 +9,7 @@
 import gleam/bit_array
 import gleam/dict
 import gleam/javascript/promise
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
@@ -42,9 +43,13 @@ import omni/protocol/relay_command.{
   RemoveRelay as RelayRemove, SetRelayScope as RelaySetScope,
 }
 import omni/protocol/rpc/method.{FetchOptions}
+import omni/protocol/schema/action as schema_action
+import omni/protocol/schema/codec as schema_codec
 import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace
+import omni/sandbox/manager as sandbox_manager
 import omni/sandbox/protocol_shims
+import omni/sandbox/worker_host
 import omni/shell/accent
 import omni/shell/layout/viewport_host
 import omni/shell/model.{
@@ -125,7 +130,7 @@ pub fn spawn_plugin(
 ) -> Result(ShellBoot, String) {
   case boot.spawn_sandbox(host.booted, plugin_id, content, route) {
     Ok(#(next_booted, mount)) -> {
-      mount_island(selector, mount.srcdoc, plugin_id, fn(raw_request, respond) {
+      let on_rpc = fn(raw_request, respond) {
         let _ =
           rpc.handle_streaming(
             next_booted,
@@ -136,11 +141,47 @@ pub fn spawn_plugin(
           )
           |> promise.map(fn(response) { respond(response) })
         Nil
-      })
+      }
+      let on_schema = fn(raw) { handle_guest_schema(plugin_id, raw) }
+      let format = sandbox_manager.detect_format(None, route, Some(content))
+      case format {
+        sandbox_manager.WorkerFormat -> {
+          let runtime = case next_booted.bridge_script {
+            Some(source) -> source
+            None -> ""
+          }
+          let script =
+            worker_host.build_worker_script(worker_host.WorkerConfig(
+              plugin_id: plugin_id,
+              plugin_script: content,
+              runtime_script: Some(runtime),
+              route: route,
+              view_id: None,
+              initial_storage: None,
+            ))
+          mount_worker(selector, script, plugin_id, on_rpc, on_schema)
+        }
+        _ -> mount_island(selector, mount.srcdoc, plugin_id, on_rpc, on_schema)
+      }
       Ok(ShellBoot(next_booted))
     }
     Error(err) -> Error(err)
   }
+}
+
+fn handle_guest_schema(plugin_id: String, raw: String) -> Nil {
+  case schema_codec.decode_schema_message(raw) {
+    Ok(message) -> dispatch_shell_msg(EmbedSchema(plugin_id, message.schema))
+    Error(_) -> Nil
+  }
+}
+
+/// Send a host-rendered schema action back to the guest that owns it.
+pub fn forward_guest_action(
+  plugin_id: String,
+  action: schema_action.Action,
+) -> Nil {
+  send_plugin_action(plugin_id, schema_action.to_json(action) |> json.to_string)
 }
 
 /// Current user public key (hex) and npub.
@@ -215,6 +256,8 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
       let #(next, effects) = boot.dispatch(current.booted, message)
       case message {
         msg.ScrollToTop -> scroll_shell_top()
+        msg.HostedSchemaAction(plugin_id, action) ->
+          forward_guest_action(plugin_id, action)
         _ -> Nil
       }
       apply_document_theme(
@@ -363,6 +406,7 @@ fn apply_effects(
   list.fold(effects, host, fn(acc, effect) {
     case effect {
       update.UnmountPluginFromSlot(plugin_id, viewport) -> {
+        unmount_worker(plugin_id)
         unmount_island(slot_selector(viewport, plugin_id))
         ShellBoot(boot.terminate_sandbox(acc.booted, plugin_id))
       }
@@ -943,6 +987,7 @@ fn apply_upgrade(
   next_app: InstalledApp,
   content: String,
 ) -> Nil {
+  unmount_worker(plugin_id)
   unmount_island(slot_selector(Main, plugin_id))
   let merged =
     InstalledApp(
@@ -1352,10 +1397,26 @@ fn mount_island(
   srcdoc: String,
   plugin_id: String,
   on_rpc: fn(String, fn(String) -> Nil) -> Nil,
+  on_schema: fn(String) -> Nil,
 ) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "mount_worker")
+fn mount_worker(
+  selector: String,
+  script: String,
+  plugin_id: String,
+  on_rpc: fn(String, fn(String) -> Nil) -> Nil,
+  on_schema: fn(String) -> Nil,
+) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "send_plugin_action")
+fn send_plugin_action(plugin_id: String, action_json: String) -> Nil
 
 @external(javascript, "./shell_boot.ffi.mjs", "unmount_island")
 fn unmount_island(selector: String) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "unmount_worker")
+fn unmount_worker(plugin_id: String) -> Nil
 
 fn plugin_settings_id(tab_id: String) -> String {
   string.drop_start(tab_id, 7)
