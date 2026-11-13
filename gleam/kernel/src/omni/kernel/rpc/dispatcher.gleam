@@ -30,6 +30,7 @@ import omni/nostr/pubkey.{type Pubkey}
 import omni/nostr/relay_url.{type RelayUrl}
 import omni/platform/clock
 import omni/platform/json as platform_json
+import omni/platform/log
 import omni/platform/nip44
 import omni/platform/ref
 import omni/platform/secp256k1
@@ -215,13 +216,15 @@ pub fn dispatch(
   let client_key = plugin_id.to_string(ctx.plugin_id)
   let now_ms = clock.system().now_ms()
   case rate_limit.check(ctx.rate_limiter, client_key, now_ms) {
-    False ->
+    False -> {
+      log.warn("rpc", client_key <> " exceeded the request rate limit")
       promise.resolve(envelope.Error(
         id: Some(id),
         code: error_code.RateLimitExceeded,
         message: "Rate limit exceeded",
         data: None,
       ))
+    }
     True -> handle_request(ctx, id, request)
   }
 }
@@ -230,13 +233,21 @@ pub fn dispatch(
 pub fn dispatch_json(ctx: RpcContext, raw_json: String) -> Promise(Response) {
   case codec.decode_request(raw_json) {
     Ok(#(id, req)) -> dispatch(ctx, id, req)
-    Error(err) ->
+    Error(err) -> {
+      log.warn(
+        "rpc",
+        "rejected a malformed request from "
+          <> plugin_id.to_string(ctx.plugin_id)
+          <> ": "
+          <> err.message,
+      )
       promise.resolve(envelope.Error(
         id: err.id,
         code: err.code,
         message: err.message,
         data: None,
       ))
+    }
   }
 }
 
@@ -269,13 +280,15 @@ pub fn dispatch_streaming(
   let client_key = plugin_id.to_string(ctx.plugin_id)
   let now_ms = clock.system().now_ms()
   case rate_limit.check(ctx.rate_limiter, client_key, now_ms) {
-    False ->
+    False -> {
+      log.warn("rpc", client_key <> " exceeded the request rate limit")
       promise.resolve(envelope.Error(
         id: Some(id),
         code: error_code.RateLimitExceeded,
         message: "Rate limit exceeded",
         data: None,
       ))
+    }
     True ->
       case request {
         NostrSubscribe(sub_id, filters) ->

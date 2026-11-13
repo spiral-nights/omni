@@ -34,6 +34,7 @@ import omni/platform/browser
 import omni/platform/clock
 import omni/platform/file_picker
 import omni/platform/idb
+import omni/platform/log
 import omni/platform/nip44
 import omni/platform/storage
 import omni/platform/url
@@ -855,19 +856,22 @@ fn mount_installed(
             installer.resolve(host.booted.kernel, target, plugin_id)
             |> promise.map(fn(result) {
               case result {
-                Error(_) -> Nil
+                Error(err) ->
+                  log.error(
+                    "sandbox",
+                    "could not resolve bundle for " <> plugin_id <> ": " <> err,
+                  )
                 Ok(bundle) -> {
                   offer_update(host, app, bundle.app)
                   after_render(fn() {
-                    let _ =
-                      spawn_plugin(
-                        host,
-                        slot_selector(viewport, plugin_id),
-                        plugin_id,
-                        bundle.content,
-                        route,
-                      )
-                    Nil
+                    spawn_plugin(
+                      host,
+                      slot_selector(viewport, plugin_id),
+                      plugin_id,
+                      bundle.content,
+                      route,
+                    )
+                    |> log_spawn_result
                   })
                   Nil
                 }
@@ -999,17 +1003,17 @@ fn apply_upgrade(
   dispatch_shell_msg(InstallApp(merged))
   dispatch_shell_msg(OpenApp(plugin_id, None))
   after_render(fn() {
-    let _ =
-      spawn_plugin(
-        host,
-        slot_selector(Main, plugin_id),
-        plugin_id,
-        content,
-        None,
-      )
-    Nil
+    spawn_plugin(host, slot_selector(Main, plugin_id), plugin_id, content, None)
+    |> log_spawn_result
   })
   Nil
+}
+
+fn log_spawn_result(result: Result(ShellBoot, String)) -> Nil {
+  case result {
+    Ok(_) -> Nil
+    Error(err) -> log.error("sandbox", "failed to mount plugin: " <> err)
+  }
 }
 
 @external(javascript, "./shell_boot.ffi.mjs", "island_mounted")

@@ -17,6 +17,7 @@ import omni/nostr/filter.{type Filter}
 import omni/nostr/relay_frame.{type RelayFrame}
 import omni/nostr/relay_url.{type RelayUrl}
 import omni/platform/clock
+import omni/platform/log
 import omni/platform/promise_ext
 import omni/platform/ref.{type Ref}
 import omni/platform/storage.{type Storage}
@@ -152,12 +153,17 @@ fn begin_connect(pool: RelayPool, url: RelayUrl, url_str: String) -> Nil {
             Error(Nil) -> Nil
           }
         }
-        websocket.Close(_code, reason) -> {
+        websocket.Close(code, reason) -> {
+          log.warn(
+            "relay",
+            url_str <> " closed (" <> int.to_string(code) <> "): " <> reason,
+          )
           ref.update(pool.sockets, fn(s) { dict.delete(s, url_str) })
           set_status(pool, url_str, Disconnected(reason))
           reconnect(pool, url, url_str)
         }
         websocket.Error(err) -> {
+          log.error("relay", url_str <> " socket error: " <> err)
           ref.update(pool.sockets, fn(s) { dict.delete(s, url_str) })
           set_status(pool, url_str, Disconnected(err))
           reconnect(pool, url, url_str)
@@ -165,7 +171,8 @@ fn begin_connect(pool: RelayPool, url: RelayUrl, url_str: String) -> Nil {
         websocket.Message(text) -> {
           case relay_frame.parse_relay_frame(text) {
             Ok(frame) -> dispatch_frame(pool, url_str, frame)
-            Error(_) -> Nil
+            Error(_) ->
+              log.warn("relay", url_str <> " sent an unparseable frame")
           }
         }
       }
@@ -606,7 +613,10 @@ pub fn publish_targeted(
             Ok(sock) -> {
               case websocket.send(sock, frame_json) {
                 Ok(Nil) -> #(url, True, "sent")
-                Error(Nil) -> #(url, False, "send failed")
+                Error(Nil) -> {
+                  log.warn("relay", url_str <> " rejected a publish frame")
+                  #(url, False, "send failed")
+                }
               }
             }
             Error(Nil) -> #(url, False, "socket missing")

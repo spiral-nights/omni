@@ -26,6 +26,7 @@ import omni/nostr/nip65 as omni_nostr_nip65
 import omni/nostr/relay_frame
 import omni/nostr/relay_url
 import omni/platform/clock
+import omni/platform/log
 import omni/platform/promise_ext
 import omni/platform/ref
 import omni/protocol/plugin_id
@@ -395,7 +396,18 @@ fn subscribe_impl(
             remember_seen(seen_ids, eid)
 
             // Ingest into local store after notifying the subscriber.
-            let _ = event_store.save_event(coord.event_store, ev)
+            let _ =
+              event_store.save_event(coord.event_store, ev)
+              |> promise.map(fn(result) {
+                case result {
+                  Ok(_) -> Nil
+                  Error(err) ->
+                    log.warn(
+                      "store",
+                      "failed to cache event " <> eid <> ": " <> err,
+                    )
+                }
+              })
 
             case is_new {
               True ->
