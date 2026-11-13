@@ -55,14 +55,14 @@ pub fn render_stylesheet_link(id: String, href: String) -> Element(msg) {
 
 /// Render the core stylesheet `<link>` tags (`tokens.css`, `schema.css`, the
 /// shared shell module styles, and the active shell stylesheet).
-pub fn render_shell_stylesheets(shell_id: String) -> List(Element(msg)) {
+pub fn render_shell_stylesheets(
+  shell_id: String,
+  stylesheet_href: String,
+) -> List(Element(msg)) {
   [
     render_stylesheet_link("omni-styles-tokens", tokens_css_path),
     render_stylesheet_link("omni-styles-schema", schema_css_path),
     render_stylesheet_link("omni-styles-shell-modules", shell_modules_css_path),
-    render_stylesheet_link(
-      "omni-styles-theme-" <> shell_id,
-      shell_stylesheet_path(shell_id),
-    ),
+    render_stylesheet_link("omni-styles-theme-" <> shell_id, stylesheet_href),
   ]
 }

@@ -1245,3 +1245,38 @@ pub fn boot_capability_grants_toggle_test() {
 
   promise.resolve(Nil)
 }
+
+pub fn boot_shell_catalog_install_uninstall_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+
+  let booted = boot.init_with_relays(ports, [], None)
+  list.length(booted.model.installed_shells) |> should.equal(2)
+  list.any(booted.model.curated_shells, fn(item) { item.id == "mantra" })
+  |> should.be_true()
+
+  let #(installed, _) =
+    boot.dispatch(booted, omni_shell_msg.InstallShell("mantra"))
+  list.length(installed.model.installed_shells) |> should.equal(3)
+  list.any(installed.model.curated_shells, fn(item) { item.id == "mantra" })
+  |> should.be_false()
+
+  let #(removed, _) =
+    boot.dispatch(installed, omni_shell_msg.UninstallShell("mantra"))
+  list.length(removed.model.installed_shells) |> should.equal(2)
+
+  let #(with_url, _) =
+    boot.dispatch(
+      removed,
+      omni_shell_msg.SetCustomShellUrl("https://example.test/shell.html"),
+    )
+  let #(custom, _) =
+    boot.dispatch(with_url, omni_shell_msg.InstallCustomShell("panorama"))
+  list.any(custom.model.installed_shells, fn(item) {
+    string.starts_with(item.id, "shell.custom.")
+  })
+  |> should.be_true()
+
+  promise.resolve(Nil)
+}

@@ -648,6 +648,31 @@
   gap: 10px;
 }
 
+.omni-shell-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--omni-border-subtle, #272522);
+  border-radius: var(--omni-radius-md, 10px);
+  background: var(--omni-bg-surface, #191816);
+}
+
+.omni-shell-card.active {
+  border-color: var(--omni-accent-primary, #d4a373);
+}
+
+.omni-shell-catalog-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.omni-shell-badge.catalog {
+  color: var(--omni-text-muted, #6b665f);
+}
+
 .omni-shell-card-header,
 .omni-shell-card-title-row {
   display: flex;

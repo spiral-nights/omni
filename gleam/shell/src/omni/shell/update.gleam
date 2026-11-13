@@ -20,15 +20,16 @@ import omni/shell/msg.{
   ClearEmbeddedSchema, ConfirmPluginUpdate, DisablePassphrase,
   DismissIntentPrompt, DismissUpdateModal, DispatchIntent, EmbedSchema,
   EnablePassphrase, ExportKey, FinishPullRefresh, HostedSchemaAction, ImportKey,
-  InstallApp, KeyImportResult, KeySecurityResult, KeySecurityStatus,
-  NavigateBack, NavigateTo, OpenApp, OpenSearch, OpenSettings,
-  RemoveAppPlacement, ResolvePermission, SelectIntentHandler, SelectShell,
-  SetAccentColor, SetAppPlacements, SetAppRelays, SetCapabilityGrants,
-  SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
-  SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShowIntentPrompt,
-  ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh, SwitchAccount,
-  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
-  ToggleCapabilityGrant, ToggleFullscreen, TriggerWorkspaceSync, UninstallApp,
+  InstallApp, InstallCustomShell, InstallShell, KeyImportResult,
+  KeySecurityResult, KeySecurityStatus, NavigateBack, NavigateTo, OpenApp,
+  OpenSearch, OpenSettings, RemoveAppPlacement, ResolvePermission,
+  SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
+  SetAppRelays, SetCapabilityGrants, SetCustomInstallUrl, SetCustomShellUrl,
+  SetExportedNsec, SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus,
+  SetThemeMode, SetUserProfile, ShowIntentPrompt, ShowPermissionPrompt,
+  ShowUpdateModal, StartPullRefresh, SwitchAccount, ToggleAppEnabled,
+  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleCapabilityGrant,
+  ToggleFullscreen, TriggerWorkspaceSync, UninstallApp, UninstallShell,
   UnlockKey,
 }
 
@@ -399,6 +400,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       Model(..model, capability_grants: grants),
       [],
     )
+
+    SetCustomShellUrl(url) -> #(Model(..model, custom_shell_url: url), [])
+
+    InstallShell(_shell_id) -> #(model, [])
+    UninstallShell(_shell_id) -> #(model, [])
+    InstallCustomShell(_base_layout) -> #(model, [])
 
     ToggleCapabilityGrant(_plugin_id, _capability, _scope, _allowed) -> #(
       model,

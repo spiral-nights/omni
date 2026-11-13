@@ -3,6 +3,7 @@ import gleam/option.{None, Some}
 import gleam/string
 import gleeunit/should
 import lustre/element
+import omni/platform/storage
 import omni/protocol/viewport.{Sidebar}
 import omni/shell/app_store
 import omni/shell/gestures/pull_to_refresh.{
@@ -10,18 +11,21 @@ import omni/shell/gestures/pull_to_refresh.{
 }
 import omni/shell/model.{
   type InstalledApp, type PlacementConfig, type ViewOption, InstalledApp,
-  IntentPromptState, Model, PlacementConfig, Settings, SyncError, Synced,
-  TabPluginSettings, TabPlugins, TabProfile, TabRelays, TabShells, TabWorkspace,
-  UpdateModalState, UserProfileSummary, ViewOption,
+  IntentPromptState, Model, PlacementConfig, Settings, ShellInfo, SyncError,
+  Synced, TabPluginSettings, TabPlugins, TabProfile, TabRelays, TabShells,
+  TabWorkspace, UpdateModalState, UserProfileSummary, ViewOption,
 }
 import omni/shell/msg.{StartPullRefresh}
+import omni/shell/registry
 import omni/shell/settings/intents
 import omni/shell/settings/permissions
 import omni/shell/settings/placements
 import omni/shell/settings/relay_scoping.{
   ScopeCustom, ScopeDefaultPool, ScopeLocalOnly,
 }
-import omni/shell/settings/shells.{ShellInfo}
+import omni/shell/settings/shells
+import omni/shell/theme
+
 import omni/shell/settings/tabs
 import omni/shell/update_modal
 
@@ -649,4 +653,59 @@ pub fn pull_to_refresh_state_machine_and_indicator_test() {
     "class=\"omni-pull-to-refresh is-refreshing\"",
   ))
   should.be_true(string.contains(refreshing_html, "refreshing..."))
+}
+
+pub fn shell_registry_install_uninstall_persists_test() {
+  let store = storage.in_memory()
+  let reg = registry.with_builtin_themes()
+  let assert Ok(desc) = list.first(registry.curated_descriptors())
+
+  let installed = registry.install_descriptor(reg, desc)
+  registry.save_installed_shells(installed, store)
+
+  let reloaded =
+    registry.with_builtin_themes()
+    |> registry.load_installed_shells(store)
+  list.any(registry.list_shells(reloaded), fn(theme) { theme.id == desc.id })
+  |> should.be_true()
+
+  let removed = registry.uninstall_shell(installed, desc.id)
+  list.any(registry.list_shells(removed), fn(theme) { theme.id == desc.id })
+  |> should.be_false()
+
+  // Built-in shells cannot be uninstalled.
+  let still_there = registry.uninstall_shell(removed, "editorial")
+  list.any(registry.list_shells(still_there), fn(theme: theme.Theme) {
+    theme.id == "editorial"
+  })
+  |> should.be_true()
+}
+
+pub fn shells_panel_renders_curated_catalog_and_install_test() {
+  let m =
+    Model(
+      ..model.init("editorial", []),
+      installed_shells: shells.builtin_shells(),
+      curated_shells: [
+        ShellInfo(
+          id: "mantra",
+          name: "Mantra Shell",
+          description: "Curated shell",
+          icon: "layout",
+          author: "Omni Core Team",
+          version: "1.0.0",
+          is_builtin: False,
+        ),
+      ],
+      custom_shell_url: "https://example.com/shell.html",
+    )
+
+  let html_str =
+    shells.render_shells_panel(m, shells.builtin_shells())
+    |> element.to_string
+
+  should.be_true(string.contains(html_str, "id=\"curated-shells-list\""))
+  should.be_true(string.contains(html_str, "id=\"btn-install-shell-mantra\""))
+  should.be_true(string.contains(html_str, "id=\"input-custom-shell-url\""))
+  should.be_true(string.contains(html_str, "id=\"btn-install-shell-panorama\""))
 }

@@ -5,9 +5,8 @@
 //// `Theme` descriptor and view rendering function.
 
 import lustre/element.{type Element}
-import omni/shell/model.{type Model}
+import omni/shell/model.{type Model, type ShellInfo, ShellInfo}
 import omni/shell/msg.{type Msg}
-import omni/shell/settings/shells.{type ShellInfo, ShellInfo}
 
 /// Strategy descriptor for a swappable shell theme.
 pub type Theme {

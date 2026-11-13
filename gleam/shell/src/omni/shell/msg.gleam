@@ -25,6 +25,12 @@ pub type Msg {
   ToggleFullscreen
   OpenSearch
 
+  // Shells & catalog
+  InstallShell(shell_id: String)
+  UninstallShell(shell_id: String)
+  InstallCustomShell(base_layout: String)
+  SetCustomShellUrl(String)
+
   // App lifecycle & placements
   ToggleAppEnabled(plugin_id: String)
   ToggleAppPinned(plugin_id: String)

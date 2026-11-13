@@ -63,8 +63,9 @@ import omni/shell/model.{
   UserProfileSummary,
 }
 import omni/shell/msg.{
-  type Msg, DispatchIntent, HostedSchemaAction, InstallApp, OpenApp, SelectShell,
-  SetCapabilityGrants, ShowIntentPrompt, ToggleCapabilityGrant,
+  type Msg, DispatchIntent, HostedSchemaAction, InstallApp, InstallCustomShell,
+  InstallShell, OpenApp, SelectShell, SetCapabilityGrants, ShowIntentPrompt,
+  ToggleCapabilityGrant, UninstallShell,
 }
 import omni/shell/registry.{type ShellRegistry}
 import omni/shell/shell
@@ -129,6 +130,7 @@ pub fn init_with_relays(
   let kernel = kernel.new(ports, bootstrap_relays, config.default_shell_id)
   let registry =
     registry.with_builtin_themes()
+    |> registry.load_installed_shells(kernel.storage)
     |> registry.load_and_persist_active_id(kernel.storage)
   let configured_relays =
     relay_pool.get_configured_relays(kernel.relay_pool)
@@ -195,7 +197,33 @@ pub fn init_with_relays(
   grant_default_capabilities(booted)
   register_intent_handlers(booted)
   install_auth_handler(booted)
-  with_capability_grants(booted)
+  booted |> with_capability_grants |> with_shell_catalog
+}
+
+/// Rebuild `Booted` with the installed and curated shell catalogs.
+pub fn with_shell_catalog(booted: Booted) -> Booted {
+  let installed =
+    registry.list_shells(booted.registry)
+    |> list.map(theme.to_shell_info)
+  let curated =
+    registry.curated_descriptors()
+    |> list.filter(fn(desc) {
+      case registry.resolve(booted.registry, desc.id) {
+        Some(_) -> False
+        None -> True
+      }
+    })
+    |> list.map(fn(desc) {
+      theme.to_shell_info(registry.theme_from_descriptor(desc))
+    })
+  Booted(
+    ..booted,
+    model: Model(
+      ..booted.model,
+      installed_shells: installed,
+      curated_shells: curated,
+    ),
+  )
 }
 
 /// Rebuild `Booted` with the model's capability-grant list read from the kernel.
@@ -234,6 +262,12 @@ fn load_capability_grants(booted: Booted) -> List(model.CapabilityGrant) {
       Error(_) -> []
     }
   })
+}
+
+fn install_shell(booted: Booted, desc: registry.ShellDescriptor) -> Booted {
+  let next_registry = registry.install_descriptor(booted.registry, desc)
+  registry.save_installed_shells(next_registry, booted.kernel.storage)
+  with_shell_catalog(Booted(..booted, registry: next_registry))
 }
 
 fn register_intent_handlers(booted: Booted) -> Nil {
@@ -392,6 +426,42 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
     DispatchIntent(name, payload) -> {
       let action = action.Action(name: name, payload: payload, navigate: None)
       #(route_intent(booted, action), [])
+    }
+    InstallShell(shell_id) -> {
+      case
+        list.find(registry.curated_descriptors(), fn(desc) {
+          desc.id == shell_id
+        })
+      {
+        Ok(desc) -> #(install_shell(booted, desc), [])
+        Error(_) -> #(booted, [])
+      }
+    }
+    InstallCustomShell(base_layout) -> {
+      let url = string.trim(booted.model.custom_shell_url)
+      case url {
+        "" -> #(booted, [])
+        _ -> {
+          let desc = registry.descriptor_from_url(url, base_layout)
+          #(install_shell(booted, desc), [])
+        }
+      }
+    }
+    UninstallShell(shell_id) -> {
+      let next_registry = registry.uninstall_shell(booted.registry, shell_id)
+      registry.save_installed_shells(next_registry, booted.kernel.storage)
+      let active_changed = next_registry.active_id != booted.registry.active_id
+      let _ = case active_changed {
+        True -> registry.save_active_id(next_registry, booted.kernel.storage)
+        False -> Ok(Nil)
+      }
+      let next =
+        Booted(
+          ..booted,
+          registry: next_registry,
+          model: Model(..booted.model, active_shell_id: next_registry.active_id),
+        )
+      #(with_shell_catalog(next), [])
     }
     ToggleCapabilityGrant(pid_str, cap_str, scope, allowed) -> {
       case plugin_id.parse(pid_str), capability.parse(cap_str) {
@@ -1208,7 +1278,7 @@ pub fn view(booted: Booted) -> Element(Msg) {
     [
       html.div(
         [attribute.class("omni-shell-stylesheets")],
-        styles.render_shell_stylesheets(theme.id),
+        styles.render_shell_stylesheets(theme.id, theme.stylesheet_href),
       ),
       theme.render(booted.model),
     ],

@@ -49,6 +49,19 @@ pub type UserProfileSummary {
   )
 }
 
+/// Metadata describing an installed or built-in user-swappable shell.
+pub type ShellInfo {
+  ShellInfo(
+    id: String,
+    name: String,
+    description: String,
+    icon: String,
+    author: String,
+    version: String,
+    is_builtin: Bool,
+  )
+}
+
 /// Sub-view or route declared by an installed plugin.
 pub type ViewOption {
   ViewOption(id: String, title: String, path: String, format: String)
@@ -138,6 +151,9 @@ pub type Model {
     search_query: String,
     custom_install_url: String,
     embedded_views: Dict(String, Node),
+    installed_shells: List(ShellInfo),
+    curated_shells: List(ShellInfo),
+    custom_shell_url: String,
     permission_prompt: Option(PermissionPromptState),
     capability_grants: List(CapabilityGrant),
     key_input: String,
@@ -175,6 +191,9 @@ pub fn init(active_shell_id: String, apps: List(InstalledApp)) -> Model {
     search_query: "",
     custom_install_url: "",
     embedded_views: dict.new(),
+    installed_shells: [],
+    curated_shells: [],
+    custom_shell_url: "",
     permission_prompt: None,
     capability_grants: [],
     key_input: "",
