@@ -77,7 +77,7 @@ pub fn render_relay_scoping_panel(model: Model) -> Element(Msg) {
   )
 }
 
-fn render_app_relay_scope_card(app: InstalledApp) -> Element(Msg) {
+pub fn render_app_relay_scope_card(app: InstalledApp) -> Element(Msg) {
   let title = model.app_title(app)
   let scope = app_relay_scope(app)
 

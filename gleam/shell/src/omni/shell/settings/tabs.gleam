@@ -249,9 +249,6 @@ fn render_active_tab_panel(
     TabPlugins ->
       html.div([attribute.class("omni-settings-plugins-combined")], [
         permissions.render_permissions_panel(model),
-        placements.render_placements_panel(model),
-        relay_scoping.render_relay_scoping_panel(model),
-        intents.render_intents_panel(model),
       ])
     TabWorkspace -> render_workspace_tab(model)
     TabShells -> shells.render_shells_panel(model, shells.builtin_shells())

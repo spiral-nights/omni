@@ -645,7 +645,7 @@ pub fn pull_to_refresh_state_machine_and_indicator_test() {
   s_cancel |> should.equal(PullIdle)
   msg_cancel |> should.equal(None)
 
-  // 4. Touch move past threshold_px (72.0) transitions to ReadyToRefresh
+  // 4. Touch move past threshold_px (50.0) transitions to ReadyToRefresh
   let s2 = pull_to_refresh.on_touch_move(s0, 180.0)
   s2 |> should.equal(ReadyToRefresh(distance: 80.0))
 

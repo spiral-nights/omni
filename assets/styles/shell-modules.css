@@ -1508,3 +1508,66 @@ button.omni-kind-badge {
   color: var(--omni-text-muted, #6b665f);
   cursor: pointer;
 }
+
+/* Per-app settings composition: placements, relay scope, and intents cards. */
+.omni-app-settings-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--omni-border-subtle, #272522);
+}
+
+.omni-route-chip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--omni-border-subtle, #383530);
+  background: var(--omni-bg-canvas, #141312);
+  color: var(--omni-text-secondary, #9e988f);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.omni-route-chip:hover {
+  border-color: var(--omni-accent-primary, #d4a373);
+}
+.omni-route-chip.active {
+  border-color: var(--omni-accent-primary, #d4a373);
+  color: var(--omni-text-primary, #ede8df);
+  background: var(--omni-bg-elevated, #22201d);
+}
+.omni-route-chip-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.omni-route-chip-path {
+  font-family: var(--omni-font-mono, monospace);
+  font-size: 0.72rem;
+  color: var(--omni-text-muted, #6b665f);
+}
+
+.omni-relay-scope-btn,
+.omni-intent-toggle-btn {
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--omni-border-subtle, #383530);
+  background: var(--omni-bg-canvas, #141312);
+  color: var(--omni-text-secondary, #9e988f);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.omni-relay-scope-btn:hover,
+.omni-intent-toggle-btn:hover {
+  border-color: var(--omni-accent-primary, #d4a373);
+}
+.omni-relay-scope-btn.active,
+.omni-intent-toggle-btn.active {
+  border-color: var(--omni-accent-primary, #d4a373);
+  background: color-mix(in srgb, var(--omni-accent-primary, #d4a373) 18%, transparent);
+  color: var(--omni-text-primary, #ede8df);
+}

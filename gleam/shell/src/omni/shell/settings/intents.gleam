@@ -119,7 +119,7 @@ pub fn render_intents_panel(model: Model) -> Element(Msg) {
   )
 }
 
-fn render_app_intents_card(app: InstalledApp) -> Element(Msg) {
+pub fn render_app_intents_card(app: InstalledApp) -> Element(Msg) {
   let title = model.app_title(app)
   let intents_content = case app.handled_intents {
     [] ->
