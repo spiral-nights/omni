@@ -12,7 +12,7 @@
 |---|---|---|
 | `IframeHost` | Visual nsites / HTML+JS apps | `sandbox="allow-scripts"`, `connect-src 'none'`, srcdoc with CSP + tokens + bridge |
 | `WorkerHost` | Declarative Schema plugins rendered by the shell | no DOM in the guest, Schema over Channel 1 |
-| `WasmHost` | Compiled components (Rust/Zig/C/Go) | same Schema surface via WIT |
+| `WasmHost` | Compiled components (Rust/Zig/C/Go) | declared type only; no host module ships (see "WASM hosts") |
 
 `SandboxManager` tracks active hosts, virtual ports, and blob URLs, and
 spawns/terminates them. `iframe_host.build_srcdoc` injects:
@@ -25,6 +25,26 @@ spawns/terminates them. `iframe_host.build_srcdoc` injects:
 `omni_web/boot.spawn_sandbox` registers the host and returns the mount
 descriptor; `omni_interop/shell_boot.spawn_plugin` inserts the iframe into the
 `[data-plugin-slot]` island.
+
+### WASM hosts
+
+There is no WASM host implementation. `host.gleam` still declares
+`WasmHost` and `sandbox/manager` returns the WIT-shaped descriptor for a
+`?host=wasm` hint, but no loader, WASM runtime binding, or `WIT` bridge
+exists in `gleam/sandbox` or `gleam/bridge`.
+
+Decision: **defer** rather than half-ship it. No first-party plugin targets
+WASM, and iframe/worker hosts cover every current guest. A real WASM host
+means adding:
+
+1. a runtime (e.g. `wasmtime`/`wasmer` via JS bindings) behind a new
+   quarantined port,
+2. the component-model import surface (`window.nostr`, relays, storage) as
+   WIT, mirroring the JSON-RPC methods,
+3. the same Channel 1 schema contract the worker host already implements.
+
+Until then, `?host=wasm` plugins are rejected by `SandboxManager` with the
+unsupported-format error; there is no silent iframe fallback.
 
 ## Dual-channel IPC
 

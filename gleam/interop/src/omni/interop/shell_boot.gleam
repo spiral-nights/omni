@@ -145,7 +145,9 @@ pub fn spawn_plugin(
       }
       let on_schema = fn(raw) { handle_guest_schema(plugin_id, raw) }
       let format = sandbox_manager.detect_format(None, route, Some(content))
-      case format {
+      use _ <- result.try(case format {
+        sandbox_manager.WasmFormat ->
+          Error("WASM plugins are not supported; use an iframe or schema host")
         sandbox_manager.WorkerFormat -> {
           let runtime = case next_booted.bridge_script {
             Some(source) -> source
@@ -161,9 +163,13 @@ pub fn spawn_plugin(
               initial_storage: None,
             ))
           mount_worker(selector, script, plugin_id, on_rpc, on_schema)
+          Ok(Nil)
         }
-        _ -> mount_island(selector, mount.srcdoc, plugin_id, on_rpc, on_schema)
-      }
+        _ -> {
+          mount_island(selector, mount.srcdoc, plugin_id, on_rpc, on_schema)
+          Ok(Nil)
+        }
+      })
       Ok(ShellBoot(next_booted))
     }
     Error(err) -> Error(err)
