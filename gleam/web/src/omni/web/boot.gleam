@@ -195,7 +195,10 @@ pub fn init_with_relays(
       sandboxes: manager.new(),
       bridge_script: bridge_script,
       builtins: builtins,
-      intent_broker: ref.new(broker.new()),
+      intent_broker: ref.new(broker.load_defaults(
+        broker.new(),
+        sync.load(kernel.storage).default_intents,
+      )),
       permission_prompts: permission_prompts,
       workspace_sync_seq: ref.new(0),
     )
@@ -330,9 +333,19 @@ pub fn route_intent(booted: Booted, action: Action) -> Booted {
     )
   case broker.resolve(ref.get(booted.intent_broker), request) {
     intent.Resolved(handler, _data) -> {
+      let invoked =
+        kernel.invoke_guest_intent(
+          booted.kernel,
+          handler.plugin_id,
+          action.name,
+          action.payload,
+        )
       let #(navigated, _) =
         dispatch(booted, OpenApp(handler.plugin_id, handler.route))
-      forward_action(navigated, handler.plugin_id, action)
+      case invoked {
+        True -> navigated
+        False -> forward_action(navigated, handler.plugin_id, action)
+      }
     }
     intent.Disambiguate(act, candidates, _data) -> {
       let ids = list.map(candidates, fn(candidate) { candidate.plugin_id })
@@ -545,6 +558,12 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
               Nil
             }
           }
+          #(reg, Nil)
+        }
+        update.SetIntentDefault(action, plugin_id) -> {
+          ref.update(booted.intent_broker, fn(current) {
+            broker.set_default_handler(current, action, plugin_id)
+          })
           #(reg, Nil)
         }
         update.PermissionDecision(prompt_id, allowed) -> {

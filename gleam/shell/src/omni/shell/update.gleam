@@ -42,6 +42,7 @@ pub type ShellEffect {
   )
   UnmountPluginFromSlot(plugin_id: String, viewport: Viewport)
   UninstallPlugin(plugin_id: String)
+  SetIntentDefault(action: String, plugin_id: String)
   PersistWorkspaceLocal(WorkspaceState)
   PublishWorkspaceNip78(WorkspaceState)
   SwitchActiveShell(shell_id: String)
@@ -424,8 +425,15 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       case model.intent_prompt {
         Some(prompt) -> {
           let next_page = PrimaryApp(plugin_id: plugin_id, route: None)
+          let next_defaults =
+            dict.insert(model.default_intents, prompt.intent_name, plugin_id)
           let next_model =
-            Model(..model, active_page: next_page, intent_prompt: None)
+            Model(
+              ..model,
+              active_page: next_page,
+              intent_prompt: None,
+              default_intents: next_defaults,
+            )
           let effects = [
             MountPluginInSlot(plugin_id: plugin_id, viewport: Main, route: None),
             DispatchIntentToPlugin(
@@ -433,6 +441,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
               intent_name: prompt.intent_name,
               payload_json: prompt.payload_json,
             ),
+            SetIntentDefault(action: prompt.intent_name, plugin_id: plugin_id),
+            ..workspace_persistence_effects(next_model)
           ]
           #(next_model, effects)
         }

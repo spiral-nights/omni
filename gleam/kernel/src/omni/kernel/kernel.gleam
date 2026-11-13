@@ -4,6 +4,8 @@
 //// ACL engine, capability store, subscription coordinator, plugin registry,
 //// navigation history, intent broker, and RPC dispatcher using injectable ports.
 
+import gleam/dict
+import gleam/dynamic
 import gleam/javascript/promise.{type Promise}
 import gleam/option.{type Option, None, Some}
 import omni/kernel/acl/capability_store.{type CapabilityStore}
@@ -60,6 +62,7 @@ pub type OmniKernel {
     storage: Storage,
     clock: Clock,
     guest_subscriptions: dispatcher.SubscriptionRegistry,
+    guest_intents: dispatcher.GuestIntentRegistry,
   )
 }
 
@@ -111,6 +114,7 @@ pub fn new(
     storage: ports.storage,
     clock: ports.clock,
     guest_subscriptions: dispatcher.new_subscription_registry(),
+    guest_intents: dispatcher.new_intent_registry(),
   )
 }
 
@@ -148,10 +152,26 @@ pub fn get_rpc_context_scoped(
     relay_scope: relay_scope,
     host: host,
     subscriptions: kernel.guest_subscriptions,
+    guest_intents: kernel.guest_intents,
   )
 }
 
 /// Set active user public key across keystore and event store.
 pub fn set_user_pubkey(kernel: OmniKernel, pk: Pubkey) -> Nil {
   event_store.set_user_pubkey(kernel.event_store, pk)
+}
+
+/// Invoke a guest plugin's registered `intent.handle` handler, if any.
+pub fn invoke_guest_intent(
+  kernel: OmniKernel,
+  plugin_id: String,
+  action: String,
+  payload: Option(dict.Dict(String, dynamic.Dynamic)),
+) -> Bool {
+  dispatcher.invoke_guest_intent(
+    kernel.guest_intents,
+    plugin_id,
+    action,
+    payload,
+  )
 }

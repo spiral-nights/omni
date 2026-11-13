@@ -20,12 +20,12 @@ import omni/protocol/rpc/envelope.{
 import omni/protocol/rpc/error_code.{type ErrorCode}
 import omni/protocol/rpc/method.{
   type Request, AuthGenerateKey, AuthGetNpub, AuthGetNsec, AuthSwitchKey,
-  IntentsDispatch, KernelHandleUri, NavigationOpen, Nip04, Nip44, NostrDecrypt,
-  NostrEncrypt, NostrFetch, NostrGetPublicKey, NostrGetRelays, NostrPublish,
-  NostrPublishDraft, NostrSignEvent, NostrSubscribe, NostrUnsubscribe,
-  ProfileGet, ProfilePublish, RelaysAdd, RelaysList, RelaysRemove, Share,
-  StorageClear, StorageGet, StorageKeys, StorageRemove, StorageSet,
-  UnknownMethod,
+  IntentEmit, IntentHandle, IntentsDispatch, KernelHandleUri, NavigationOpen,
+  Nip04, Nip44, NostrDecrypt, NostrEncrypt, NostrFetch, NostrGetPublicKey,
+  NostrGetRelays, NostrPublish, NostrPublishDraft, NostrSignEvent,
+  NostrSubscribe, NostrUnsubscribe, ProfileGet, ProfilePublish, RelaysAdd,
+  RelaysList, RelaysRemove, Share, StorageClear, StorageGet, StorageKeys,
+  StorageRemove, StorageSet, UnknownMethod,
 }
 
 /// Structured error when decoding an incoming JSON-RPC request.
@@ -147,6 +147,24 @@ pub fn encode_request(id: Id, request: Request) -> String {
         json.object([#("url", json.string(relay_url.to_string(url)))])
         |> json.to_string,
       )
+    IntentHandle(action) -> {
+      Some(
+        json.object([#("action", json.string(action))])
+        |> json.to_string,
+      )
+    }
+    IntentEmit(action, payload) -> {
+      let payload_part = case payload {
+        Some(p) -> ",\"payload\":" <> serialize_dynamic(p)
+        None -> ""
+      }
+      Some(
+        "{\"action\":"
+        <> { json.string(action) |> json.to_string }
+        <> payload_part
+        <> "}",
+      )
+    }
     IntentsDispatch(action, payload) -> {
       let payload_part = case payload {
         Some(p) -> ",\"payload\":" <> serialize_dynamic(p)
@@ -526,6 +544,40 @@ fn decode_method_params(
       }
       decode.run(dyn, dec)
       |> result_to_param_error("Missing or invalid url for relays.remove")
+    }
+
+    "intent.handle" | "intents.handle" -> {
+      use dyn <- require_params(params, "Missing intent.handle parameters")
+      let dec = {
+        use action <- decode.field("action", decode.string)
+        decode.success(IntentHandle(action))
+      }
+      decode.run(dyn, dec)
+      |> result_to_param_error("Missing action parameter for intent.handle")
+    }
+
+    "intent.emit" | "intents.emit" -> {
+      use dyn <- require_params(params, "Missing intent.emit parameters")
+      let dec = {
+        use action <- decode.field("action", decode.string)
+        use payload <- decode.optional_field(
+          "payload",
+          None,
+          decode.optional(decode.dynamic),
+        )
+        use data <- decode.optional_field(
+          "data",
+          None,
+          decode.optional(decode.dynamic),
+        )
+        let effective_payload = case payload {
+          Some(_) -> payload
+          None -> data
+        }
+        decode.success(IntentEmit(action, effective_payload))
+      }
+      decode.run(dyn, dec)
+      |> result_to_param_error("Missing action parameter for intent.emit")
     }
 
     "intent.dispatch" | "intents.dispatch" -> {

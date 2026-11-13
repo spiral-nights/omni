@@ -1,8 +1,10 @@
+import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/javascript/promise.{type Promise}
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/string
 import gleeunit/should
 import omni/kernel/acl/capability_store
 import omni/kernel/acl/engine
@@ -64,6 +66,7 @@ fn setup_test_context() -> Promise(
       relay_scope: None,
       host: dispatcher.default_host_hooks(),
       subscriptions: dispatcher.new_subscription_registry(),
+      guest_intents: dispatcher.new_intent_registry(),
     )
 
   promise.resolve(#(ctx, cap_store))
@@ -771,5 +774,53 @@ pub fn dispatcher_local_only_scope_filters_relays_test() -> Promise(Nil) {
       promise.resolve(Nil)
     }
     _ -> panic as "expected Success for RelaysList"
+  }
+}
+
+pub fn dispatcher_intent_handle_and_emit_test() -> Promise(Nil) {
+  use #(ctx, cap_store) <- promise.await(setup_test_context())
+  capability_store.set_grant(
+    cap_store,
+    ctx.plugin_id,
+    capability.IntentsHandle,
+    grant.Always,
+    None,
+  )
+  capability_store.set_grant(
+    cap_store,
+    ctx.plugin_id,
+    capability.IntentsDispatch,
+    grant.Always,
+    None,
+  )
+  let notifications = ref.new([])
+  let wire =
+    "{\"jsonrpc\":\"2.0\",\"id\":82,\"method\":\"intent.handle\",\"params\":{\"action\":\"view_note\"}}"
+  use res <- promise.await(
+    dispatcher.dispatch_json_streaming(ctx, wire, fn(notification) {
+      ref.update(notifications, fn(items) { [notification, ..items] })
+    }),
+  )
+  case res {
+    Success(_, _) -> {
+      let payload =
+        Some(dict.from_list([#("target", dynamic.string("note1abc"))]))
+      dispatcher.invoke_guest_intent(
+        ctx.guest_intents,
+        "org.omni.test",
+        "view_note",
+        payload,
+      )
+      |> should.be_true()
+      let assert [first, ..] = ref.get(notifications)
+      string.contains(first, "intent.invoke") |> should.be_true()
+      string.contains(first, "note1abc") |> should.be_true()
+
+      dispatcher.emit_guest_intents(ctx.guest_intents, "view_note", payload)
+      |> should.equal(1)
+      list.length(ref.get(notifications)) |> should.equal(2)
+      promise.resolve(Nil)
+    }
+    _ -> panic as "expected Success for intent.handle"
   }
 }

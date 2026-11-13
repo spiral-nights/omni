@@ -35,18 +35,19 @@ import omni/platform/ref
 import omni/platform/secp256k1
 import omni/platform/storage.{type Storage}
 import omni/protocol/capability
+import omni/protocol/intent as protocol_intent
 import omni/protocol/plugin_id.{type PluginId}
 import omni/protocol/rpc/codec
 import omni/protocol/rpc/envelope.{type Id, type Response}
 import omni/protocol/rpc/error_code
 import omni/protocol/rpc/method.{
   type FetchOptions, type Request, AuthGenerateKey, AuthGetNpub, AuthGetNsec,
-  AuthSwitchKey, FetchOptions, IntentsDispatch, KernelHandleUri, NavigationOpen,
-  Nip04, Nip44, NostrDecrypt, NostrEncrypt, NostrFetch, NostrGetPublicKey,
-  NostrGetRelays, NostrPublish, NostrPublishDraft, NostrSignEvent,
-  NostrSubscribe, NostrUnsubscribe, ProfileGet, ProfilePublish, RelaysAdd,
-  RelaysList, RelaysRemove, Share, StorageClear, StorageGet, StorageKeys,
-  StorageRemove, StorageSet, UnknownMethod,
+  AuthSwitchKey, FetchOptions, IntentEmit, IntentHandle, IntentsDispatch,
+  KernelHandleUri, NavigationOpen, Nip04, Nip44, NostrDecrypt, NostrEncrypt,
+  NostrFetch, NostrGetPublicKey, NostrGetRelays, NostrPublish, NostrPublishDraft,
+  NostrSignEvent, NostrSubscribe, NostrUnsubscribe, ProfileGet, ProfilePublish,
+  RelaysAdd, RelaysList, RelaysRemove, Share, StorageClear, StorageGet,
+  StorageKeys, StorageRemove, StorageSet, UnknownMethod,
 }
 
 /// Callbacks into the host shell used by guest RPC methods that mutate shell
@@ -68,6 +69,79 @@ pub fn default_host_hooks() -> HostHooks {
     share: None,
     handle_uri: None,
   )
+}
+
+/// A guest plugin that registered an RPC intent handler.
+pub type GuestIntentHandler {
+  GuestIntentHandler(
+    plugin_id: String,
+    notify: fn(String, Option(Dict(String, Dynamic))) -> Nil,
+  )
+}
+
+/// Per-kernel registry of `intent.handle` registrations keyed by action.
+pub type GuestIntentRegistry {
+  GuestIntentRegistry(handlers: ref.Ref(Dict(String, List(GuestIntentHandler))))
+}
+
+/// Create an empty guest intent registry.
+pub fn new_intent_registry() -> GuestIntentRegistry {
+  GuestIntentRegistry(handlers: ref.new(dict.new()))
+}
+
+/// Register (or replace) a plugin's handler for `action`.
+pub fn register_guest_intent(
+  registry: GuestIntentRegistry,
+  plugin_id: String,
+  action: String,
+  notify: fn(String, Option(Dict(String, Dynamic))) -> Nil,
+) -> Nil {
+  let key = protocol_intent.canonical_action(action)
+  ref.update(registry.handlers, fn(handlers) {
+    let current = case dict.get(handlers, key) {
+      Ok(items) -> items
+      Error(_) -> []
+    }
+    let filtered =
+      list.filter(current, fn(item) { item.plugin_id != plugin_id })
+    dict.insert(handlers, key, [
+      GuestIntentHandler(plugin_id: plugin_id, notify: notify),
+      ..filtered
+    ])
+  })
+}
+
+/// Invoke every registered handler for `action`; returns the invoke count.
+pub fn emit_guest_intents(
+  registry: GuestIntentRegistry,
+  action: String,
+  payload: Option(Dict(String, Dynamic)),
+) -> Int {
+  let key = protocol_intent.canonical_action(action)
+  let handlers = case dict.get(ref.get(registry.handlers), key) {
+    Ok(items) -> items
+    Error(_) -> []
+  }
+  list.each(handlers, fn(item) { item.notify(key, payload) })
+  list.length(handlers)
+}
+
+/// Invoke one plugin's handler for `action`; returns True when invoked.
+pub fn invoke_guest_intent(
+  registry: GuestIntentRegistry,
+  plugin_id: String,
+  action: String,
+  payload: Option(Dict(String, Dynamic)),
+) -> Bool {
+  let key = protocol_intent.canonical_action(action)
+  case dict.get(ref.get(registry.handlers), key) {
+    Ok(items) -> {
+      let matches = list.filter(items, fn(item) { item.plugin_id == plugin_id })
+      list.each(matches, fn(item) { item.notify(key, payload) })
+      !list.is_empty(matches)
+    }
+    Error(_) -> False
+  }
 }
 
 /// Per-kernel registry of live guest subscriptions keyed by plugin and sub id.
@@ -95,6 +169,7 @@ pub type RpcContext {
     relay_scope: Option(List(String)),
     host: HostHooks,
     subscriptions: SubscriptionRegistry,
+    guest_intents: GuestIntentRegistry,
   )
 }
 
@@ -205,6 +280,7 @@ pub fn dispatch_streaming(
       case request {
         NostrSubscribe(sub_id, filters) ->
           handle_subscribe(ctx, id, sub_id, filters, notify)
+        IntentHandle(action) -> handle_intent_handle(ctx, id, action, notify)
         _ -> handle_request(ctx, id, request)
       }
   }
@@ -280,6 +356,82 @@ fn handle_subscribe(
       ))
     }
   }
+}
+
+fn handle_intent_handle(
+  ctx: RpcContext,
+  id: Id,
+  action: String,
+  notify: fn(String) -> Nil,
+) -> Promise(Response) {
+  let policy_req =
+    policy.Request(
+      capability: capability.IntentsHandle,
+      kind: None,
+      d_tag: None,
+    )
+  use allowed <- promise.await(acl_engine.check_permission(
+    ctx.acl_engine,
+    ctx.plugin_id,
+    policy_req,
+  ))
+  case allowed {
+    False ->
+      promise.resolve(envelope.Error(
+        id: Some(id),
+        code: error_code.PermissionDenied,
+        message: "Permission denied for intents:handle",
+        data: None,
+      ))
+    True -> {
+      register_guest_intent(
+        ctx.guest_intents,
+        plugin_id.to_string(ctx.plugin_id),
+        action,
+        fn(action_name, payload) {
+          notify(intent_invoke_json(action_name, payload))
+          Nil
+        },
+      )
+      promise.resolve(envelope.Success(
+        id: id,
+        result: json_to_dynamic(
+          json.object([
+            #("action", json.string(protocol_intent.canonical_action(action))),
+            #("registered", json.bool(True)),
+          ]),
+        ),
+      ))
+    }
+  }
+}
+
+fn intent_invoke_json(
+  action: String,
+  payload: Option(Dict(String, Dynamic)),
+) -> String {
+  let payload_part = case payload {
+    Some(fields) -> ",\"payload\":" <> dynamic_dict_json(fields)
+    None -> ""
+  }
+  "{\"jsonrpc\":\"2.0\",\"method\":\"intent.invoke\",\"params\":{\"action\":"
+  <> { json.string(action) |> json.to_string }
+  <> payload_part
+  <> "}}"
+}
+
+fn dynamic_dict_json(fields: Dict(String, Dynamic)) -> String {
+  let inner =
+    fields
+    |> dict.to_list
+    |> list.filter_map(fn(pair) {
+      case platform_json.stringify(pair.1) {
+        Ok(raw) -> Ok("\"" <> pair.0 <> "\":" <> raw)
+        Error(_) -> Error(Nil)
+      }
+    })
+    |> string.join(",")
+  "{" <> inner <> "}"
 }
 
 fn close_subscription(ctx: RpcContext, sub_id: String) -> Nil {
@@ -445,6 +597,15 @@ fn handle_request(
           ))
         Ok(signed) -> publish_signed_event(ctx, id, signed)
       }
+    }
+
+    IntentHandle(_action) -> {
+      promise.resolve(envelope.Error(
+        id: Some(id),
+        code: error_code.InvalidRequest,
+        message: "intent.handle requires a streaming dispatcher",
+        data: None,
+      ))
     }
 
     NostrSubscribe(_sub_id, _filters) -> {
@@ -1035,6 +1196,47 @@ fn handle_request(
       }
     }
 
+    IntentEmit(action, payload) -> {
+      let policy_req =
+        policy.Request(
+          capability: capability.IntentsDispatch,
+          kind: None,
+          d_tag: None,
+        )
+      use allowed <- promise.await(acl_engine.check_permission(
+        ctx.acl_engine,
+        ctx.plugin_id,
+        policy_req,
+      ))
+      case allowed {
+        False ->
+          promise.resolve(envelope.Error(
+            id: Some(id),
+            code: error_code.PermissionDenied,
+            message: "Permission denied for intents:dispatch",
+            data: None,
+          ))
+        True -> {
+          let count =
+            emit_guest_intents(
+              ctx.guest_intents,
+              action,
+              to_payload_dict(payload),
+            )
+          promise.resolve(envelope.Success(
+            id: id,
+            result: json_to_dynamic(
+              json.object([
+                #("success", json.bool(True)),
+                #("action", json.string(action)),
+                #("handlers", json.int(count)),
+              ]),
+            ),
+          ))
+        }
+      }
+    }
+
     IntentsDispatch(action, payload) -> {
       let policy_req =
         policy.Request(
@@ -1056,14 +1258,7 @@ fn handle_request(
             data: None,
           ))
         True -> {
-          let payload_dict = case payload {
-            Some(p) ->
-              case decode.run(p, decode.dict(decode.string, decode.dynamic)) {
-                Ok(fields) -> Some(fields)
-                Error(_) -> None
-              }
-            None -> None
-          }
+          let payload_dict = to_payload_dict(payload)
           case ctx.host.dispatch_intent {
             Some(handler) -> handler(action, payload_dict)
             None -> Nil
@@ -1169,6 +1364,17 @@ fn handle_request(
         data: None,
       ))
     }
+  }
+}
+
+fn to_payload_dict(payload: Option(Dynamic)) -> Option(Dict(String, Dynamic)) {
+  case payload {
+    Some(value) ->
+      case decode.run(value, decode.dict(decode.string, decode.dynamic)) {
+        Ok(fields) -> Some(fields)
+        Error(_) -> None
+      }
+    None -> None
   }
 }
 

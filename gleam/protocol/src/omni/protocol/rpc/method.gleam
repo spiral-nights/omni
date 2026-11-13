@@ -154,6 +154,10 @@ pub type Request {
   RelaysRemove(url: RelayUrl)
   /// Dispatch a semantic intent action (`intent.dispatch`).
   IntentsDispatch(action: String, payload: Option(Dynamic))
+  /// Register this plugin as a guest handler for an intent (`intent.handle`).
+  IntentHandle(action: String)
+  /// Broadcast an intent to every registered guest handler (`intent.emit`).
+  IntentEmit(action: String, payload: Option(Dynamic))
   /// Navigate to a view and optional page in the shell (`navigation.open`).
   NavigationOpen(view: String, page: Option(String))
   /// Invoke host web share dialog (`kernel.handleShare`).
@@ -196,6 +200,8 @@ pub fn method_name(request: Request) -> String {
     RelaysAdd(_) -> "relays.add"
     RelaysRemove(_) -> "relays.remove"
     IntentsDispatch(_, _) -> "intent.dispatch"
+    IntentHandle(_) -> "intent.handle"
+    IntentEmit(_, _) -> "intent.emit"
     NavigationOpen(_, _) -> "navigation.open"
     Share(_, _, _) -> "kernel.handleShare"
     AuthSwitchKey(_) -> "auth.switchKey"

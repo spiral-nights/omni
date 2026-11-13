@@ -1,3 +1,4 @@
+import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
@@ -16,7 +17,7 @@ import omni/shell/model.{
   Synced, TabPluginSettings, TabPlugins, TabProfile, TabRelays, TabShells,
   TabWorkspace, UpdateModalState, UserProfileSummary, ViewOption,
 }
-import omni/shell/msg.{SetThemeMode, StartPullRefresh}
+import omni/shell/msg.{SelectIntentHandler, SetThemeMode, StartPullRefresh}
 import omni/shell/registry
 import omni/shell/settings/intents
 import omni/shell/settings/permissions
@@ -736,4 +737,39 @@ pub fn theme_mode_accepts_system_test() {
   m1.theme_mode |> should.equal("system")
   list.any(effects, fn(effect) { effect == update.PersistThemeMode("system") })
   |> should.be_true()
+}
+
+pub fn select_intent_handler_persists_default_test() {
+  let m0 =
+    Model(
+      ..model.init("editorial", []),
+      intent_prompt: Some(IntentPromptState(
+        "view_note",
+        ["nsite.sample.alpha"],
+        "{}",
+      )),
+    )
+  let #(m1, effects) =
+    shell.update(m0, SelectIntentHandler("nsite.sample.alpha"))
+  m1.default_intents
+  |> should.equal(dict.from_list([#("view_note", "nsite.sample.alpha")]))
+  list.any(effects, fn(effect) {
+    effect == update.SetIntentDefault("view_note", "nsite.sample.alpha")
+  })
+  |> should.be_true()
+}
+
+pub fn workspace_round_trip_preserves_intent_defaults_test() {
+  let m0 =
+    Model(
+      ..model.init("editorial", []),
+      default_intents: dict.from_list([#("view_note", "nsite.sample.alpha")]),
+    )
+  let ws = model.to_workspace_state(m0, 1_700_000_000)
+  ws.default_intents
+  |> should.equal(dict.from_list([#("view_note", "nsite.sample.alpha")]))
+
+  let restored = model.apply_workspace_state(m0, ws)
+  restored.default_intents
+  |> should.equal(dict.from_list([#("view_note", "nsite.sample.alpha")]))
 }

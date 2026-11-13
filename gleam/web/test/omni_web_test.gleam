@@ -1326,3 +1326,29 @@ pub fn installer_detects_html_title_and_icon_test() {
   app.name |> should.equal("Pretty App")
   app.icon |> should.equal("./icon.svg")
 }
+
+pub fn boot_loads_persisted_intent_defaults_test() {
+  let store = storage.in_memory()
+  let defaults = dict.from_list([#("view_note", "org.omni.plugin.feed")])
+  let ws =
+    workspace.WorkspaceState(
+      ..workspace_sync.default_state(),
+      default_intents: defaults,
+    )
+  let _ =
+    storage.set(
+      store,
+      workspace_sync.storage_key_workspace,
+      workspace.encode(ws),
+    )
+
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+
+  intent_broker.get_default_handler(ref.get(booted.intent_broker), "view_note")
+  |> should.equal(Some("org.omni.plugin.feed"))
+  booted.model.default_intents |> should.equal(defaults)
+
+  promise.resolve(Nil)
+}

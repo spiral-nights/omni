@@ -1,5 +1,6 @@
 import gleam/list
 import gleam/option.{None, Some}
+import gleeunit/should
 import omni/nostr/event.{Event, UnsignedEvent}
 import omni/nostr/event_id
 import omni/nostr/filter
@@ -11,11 +12,12 @@ import omni/protocol/rpc/codec.{DecodeRpcError}
 import omni/protocol/rpc/envelope.{IntId, StringId}
 import omni/protocol/rpc/error_code
 import omni/protocol/rpc/method.{
-  AuthSwitchKey, FetchOptions, IntentsDispatch, NavigationOpen, Nip04, Nip44,
-  NostrDecrypt, NostrEncrypt, NostrFetch, NostrGetPublicKey, NostrGetRelays,
-  NostrPublish, NostrSignEvent, NostrSubscribe, NostrUnsubscribe, ProfileGet,
-  RelaysAdd, RelaysList, RelaysRemove, Share, StorageClear, StorageGet,
-  StorageKeys, StorageRemove, StorageSet, UnknownMethod,
+  AuthSwitchKey, FetchOptions, IntentEmit, IntentHandle, IntentsDispatch,
+  NavigationOpen, Nip04, Nip44, NostrDecrypt, NostrEncrypt, NostrFetch,
+  NostrGetPublicKey, NostrGetRelays, NostrPublish, NostrSignEvent,
+  NostrSubscribe, NostrUnsubscribe, ProfileGet, RelaysAdd, RelaysList,
+  RelaysRemove, Share, StorageClear, StorageGet, StorageKeys, StorageRemove,
+  StorageSet, UnknownMethod,
 }
 
 fn sample_pubkey() {
@@ -343,5 +345,20 @@ pub fn decode_error_scenarios_test() {
       assert code == error_code.InvalidParams
     }
     Ok(_) -> panic as "Expected InvalidParams"
+  }
+}
+
+pub fn decode_intent_handle_and_emit_test() {
+  let handle_wire =
+    "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"intent.handle\",\"params\":{\"action\":\"view_note\"}}"
+  let assert Ok(#(_, handle_req)) = codec.decode_request(handle_wire)
+  handle_req |> should.equal(IntentHandle("view_note"))
+
+  let emit_wire =
+    "{\"jsonrpc\":\"2.0\",\"id\":13,\"method\":\"intent.emit\",\"params\":{\"action\":\"view_note\",\"payload\":{\"target\":\"note1abc\"}}}"
+  let assert Ok(#(_, emit_req)) = codec.decode_request(emit_wire)
+  case emit_req {
+    IntentEmit("view_note", Some(_)) -> Nil
+    _ -> panic as "expected IntentEmit"
   }
 }

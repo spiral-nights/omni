@@ -151,6 +151,7 @@ pub type Model {
     search_query: String,
     custom_install_url: String,
     embedded_views: Dict(String, Node),
+    default_intents: Dict(String, String),
     installed_shells: List(ShellInfo),
     curated_shells: List(ShellInfo),
     custom_shell_url: String,
@@ -191,6 +192,7 @@ pub fn init(active_shell_id: String, apps: List(InstalledApp)) -> Model {
     search_query: "",
     custom_install_url: "",
     embedded_views: dict.new(),
+    default_intents: dict.new(),
     installed_shells: [],
     curated_shells: [],
     custom_shell_url: "",
@@ -365,7 +367,7 @@ pub fn to_workspace_state(model: Model, updated_at: Int) -> WorkspaceState {
     active_page: active_page_str,
     auto_sync: Some(model.auto_sync_nip78),
     shell_type: Some(model.active_shell_id),
-    default_intents: dict.new(),
+    default_intents: model.default_intents,
     plugins: plugin_configs,
   )
 }
@@ -470,5 +472,9 @@ pub fn apply_workspace_state(model: Model, ws: WorkspaceState) -> Model {
     active_shell_id: next_shell_id,
     auto_sync_nip78: next_auto_sync,
     installed_apps: merged_apps,
+    default_intents: case dict.size(ws.default_intents) {
+      0 -> model.default_intents
+      _ -> ws.default_intents
+    },
   )
 }
