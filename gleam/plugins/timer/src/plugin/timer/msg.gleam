@@ -13,4 +13,7 @@ pub type Msg {
   SelectPreset(TimerPreset)
   SetCustomMinutes(String)
   ApplyCustomDuration
+  SetMinutes(Int)
+  ToggleFocus
+  AdjustMinutes(Int)
 }

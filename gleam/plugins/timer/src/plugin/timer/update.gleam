@@ -10,8 +10,8 @@ import plugin/timer/model.{
   Paused, Running, Short5,
 }
 import plugin/timer/msg.{
-  type Msg, ApplyCustomDuration, Complete, Pause, Reset, Resume, SelectPreset,
-  SetCustomMinutes, Start, Tick,
+  type Msg, AdjustMinutes, ApplyCustomDuration, Complete, Pause, Reset, Resume,
+  SelectPreset, SetCustomMinutes, SetMinutes, Start, Tick, ToggleFocus,
 }
 
 /// Apply a `Msg` to `model`, returning the updated `Model` and effects.
@@ -19,8 +19,11 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
   case msg {
     Start ->
       case model.status {
-        Completed -> #(Model(..reset_timer(model), status: Running), [])
-        _ -> #(Model(..model, status: Running), [])
+        Completed -> #(
+          Model(..reset_timer(model), status: Running, focus_mode: True),
+          [],
+        )
+        _ -> #(Model(..model, status: Running, focus_mode: True), [])
       }
 
     Pause ->
@@ -79,18 +82,37 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
     ApplyCustomDuration -> {
       case model.parse_custom_minutes(model.custom_minutes) {
         0 -> #(model, [])
-        minutes -> #(
-          Model(
-            ..model,
-            preset: Custom,
-            status: Idle,
-            duration_sec: minutes * 60,
-            remaining_sec: minutes * 60,
-          ),
-          [],
-        )
+        minutes -> #(set_minutes(model, minutes), [])
       }
     }
+
+    SetMinutes(minutes) -> #(set_minutes(model, clamp_minutes(minutes)), [])
+
+    ToggleFocus -> #(Model(..model, focus_mode: !model.focus_mode), [])
+
+    AdjustMinutes(delta) -> {
+      let minutes = clamp_minutes(model.duration_sec / 60 + delta)
+      #(set_minutes(model, minutes), [])
+    }
+  }
+}
+
+fn set_minutes(model: Model, minutes: Int) -> Model {
+  Model(
+    ..model,
+    preset: Custom,
+    status: Idle,
+    duration_sec: minutes * 60,
+    remaining_sec: minutes * 60,
+    custom_minutes: int.to_string(minutes),
+  )
+}
+
+fn clamp_minutes(minutes: Int) -> Int {
+  case minutes {
+    m if m < 1 -> 1
+    m if m > 180 -> 180
+    m -> m
   }
 }
 
@@ -134,6 +156,18 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
       }
     "apply-custom-duration" | "apply_custom_duration" ->
       Some(ApplyCustomDuration)
+    "set-minutes" | "set_minutes" ->
+      case payload_int(act, "minutes") {
+        Some(minutes) -> Some(SetMinutes(minutes))
+        None -> None
+      }
+    "toggle-focus" | "toggle_focus" | "focus-mode" | "focus_mode" ->
+      Some(ToggleFocus)
+    "adjust-minutes" | "adjust_minutes" ->
+      case payload_int(act, "delta") {
+        Some(delta) -> Some(AdjustMinutes(delta))
+        None -> None
+      }
     "input" | "change" ->
       case schema.payload_string(act, "name") {
         Some("custom_minutes") | Some("minutes") ->
@@ -144,6 +178,21 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
         _ -> None
       }
     _ -> None
+  }
+}
+
+fn payload_int(act: Action, key: String) -> Option(Int) {
+  case schema.payload_int(act, key) {
+    Some(value) -> Some(value)
+    None ->
+      case schema.payload_string(act, key) {
+        Some(raw) ->
+          case int.parse(raw) {
+            Ok(value) -> Some(value)
+            Error(_) -> None
+          }
+        None -> None
+      }
   }
 }
 

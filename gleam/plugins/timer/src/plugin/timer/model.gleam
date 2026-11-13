@@ -29,6 +29,7 @@ pub type Model {
     remaining_sec: Int,
     custom_minutes: String,
     completed_sessions: Int,
+    focus_mode: Bool,
   )
 }
 
@@ -44,6 +45,7 @@ pub fn init() -> Model {
     remaining_sec: default_focus_seconds,
     custom_minutes: "25",
     completed_sessions: 0,
+    focus_mode: False,
   )
 }
 
@@ -88,6 +90,35 @@ pub fn status_label(status: TimerStatus) -> String {
     Paused -> "Paused"
     Completed -> "Session complete"
   }
+}
+
+/// Ring colour for the progress disk, shifting from accent to warning as the
+/// session nears its end and settling on a calm green once complete.
+pub fn disk_color(model: Model) -> String {
+  case model.status {
+    Completed -> "#6fbf8b"
+    _ ->
+      case progress_percent(model) {
+        percent if percent > 50 -> "#d4a373"
+        percent if percent > 25 -> "#e0a458"
+        percent if percent > 10 -> "#e07a5f"
+        _ -> "#c8553d"
+      }
+  }
+}
+
+/// CSS conic-gradient background for the progress disk, including tick marks.
+pub fn disk_background(model: Model) -> String {
+  let color = disk_color(model)
+  let elapsed = elapsed_percent(model)
+  "repeating-conic-gradient(from -0.5deg, rgba(237, 232, 223, 0.18) 0 1deg, transparent 1deg 30deg), "
+  <> "conic-gradient("
+  <> color
+  <> " 0% "
+  <> int.to_string(elapsed)
+  <> "%, #2a2723 "
+  <> int.to_string(elapsed)
+  <> "% 100%)"
 }
 
 /// Format seconds as `MM:SS`.

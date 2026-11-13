@@ -13,12 +13,12 @@ import omni/protocol/schema/action.{type Action}
 import plugin/timer/main as timer_main
 import plugin/timer/model.{
   Completed, Custom, Focus25, Idle, Long15, Model, Paused, Running, Short5,
-  elapsed_percent, format_remaining, init, parse_custom_minutes, preset_label,
-  preset_seconds, progress_percent, status_label,
+  disk_color, elapsed_percent, format_remaining, init, parse_custom_minutes,
+  preset_label, preset_seconds, progress_percent, status_label,
 }
 import plugin/timer/msg.{
-  ApplyCustomDuration, Complete, Pause, Reset, Resume, SelectPreset,
-  SetCustomMinutes, Start, Tick,
+  AdjustMinutes, ApplyCustomDuration, Complete, Pause, Reset, Resume,
+  SelectPreset, SetCustomMinutes, SetMinutes, Start, Tick, ToggleFocus,
 }
 import plugin/timer/update
 import plugin/timer/view
@@ -140,6 +140,45 @@ pub fn progress_percent_test() {
   elapsed_percent(halfway) |> should.equal(50)
 }
 
+pub fn focus_mode_and_adjustments_test() {
+  let m = init()
+  m.focus_mode |> should.equal(False)
+
+  // Starting a session opens the expanded focus view.
+  let #(running, _) = update.update(m, Start)
+  running.focus_mode |> should.equal(True)
+
+  let #(shrunk, _) = update.update(running, ToggleFocus)
+  shrunk.focus_mode |> should.equal(False)
+
+  // Fine adjust moves in whole minutes and clamps to 1..180.
+  let m = Model(..m, duration_sec: 1500, remaining_sec: 1500)
+  let #(plus, _) = update.update(m, AdjustMinutes(5))
+  plus.duration_sec |> should.equal(1800)
+  plus.remaining_sec |> should.equal(1800)
+  plus.custom_minutes |> should.equal("30")
+
+  let #(low, _) = update.update(m, AdjustMinutes(-100))
+  low.duration_sec |> should.equal(60)
+
+  // Quick presets set the clock and highlight via exact duration.
+  let #(twenty, _) = update.update(m, SetMinutes(20))
+  twenty.duration_sec |> should.equal(1200)
+  twenty.preset |> should.equal(Custom)
+  twenty.custom_minutes |> should.equal("20")
+}
+
+pub fn disk_colour_tracks_remaining_test() {
+  let m = init()
+  disk_color(m) |> should.equal("#d4a373")
+
+  let #(done, _) = update.update(m, Complete)
+  disk_color(done) |> should.equal("#6fbf8b")
+
+  let low = Model(..m, remaining_sec: 60)
+  disk_color(low) |> should.equal("#c8553d")
+}
+
 pub fn action_mapping_test() {
   update.action_to_msg(schema_action("start", [])) |> should.equal(Some(Start))
   update.action_to_msg(schema_action("pause-timer", []))
@@ -163,6 +202,15 @@ pub fn action_mapping_test() {
 
   update.action_to_msg(schema_action("apply-custom-duration", []))
   |> should.equal(Some(ApplyCustomDuration))
+
+  update.action_to_msg(schema_action("toggle-focus", []))
+  |> should.equal(Some(ToggleFocus))
+
+  update.action_to_msg(schema_action("set-minutes", [#("minutes", "20")]))
+  |> should.equal(Some(SetMinutes(20)))
+
+  update.action_to_msg(schema_action("adjust-minutes", [#("delta", "-5")]))
+  |> should.equal(Some(AdjustMinutes(-5)))
 
   update.action_to_msg(
     schema_action("input", [#("name", "custom_minutes"), #("value", "12")]),
@@ -190,7 +238,7 @@ pub fn view_renders_timer_and_widget_test() {
   let wire = view.view(m) |> schema.encode_schema_message
   should.be_true(string.contains(wire, "25:00"))
   should.be_true(string.contains(wire, "Focus Timer"))
-  should.be_true(string.contains(wire, "timer-progress"))
+  should.be_true(string.contains(wire, "conic-gradient"))
   should.be_true(string.contains(wire, "Start"))
 
   let running = Model(..m, status: Running)
