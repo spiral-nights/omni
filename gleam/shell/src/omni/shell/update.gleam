@@ -24,7 +24,7 @@ import omni/shell/msg.{
   KeyImportResult, KeySecurityResult, KeySecurityStatus, NavigateBack,
   NavigateTo, OpenApp, OpenIntentApp, OpenSearch, OpenSettings,
   RemoveAppPlacement, ResolvePermission, ScrollToTop, SelectIntentHandler,
-  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
+  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays, SetAppStoreView,
   SetCapabilityGrants, SetCustomInstallUrl, SetCustomShellUrl, SetExportedNsec,
   SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
   SetUserProfile, ShellScrolled, ShowIntentPrompt, ShowPermissionPrompt,
@@ -432,6 +432,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
 
     SetSearchQuery(query) -> {
       #(Model(..model, search_query: query), [])
+    }
+
+    SetAppStoreView(view) -> {
+      let normalized = case string.lowercase(string.trim(view)) {
+        "ledger" -> "ledger"
+        _ -> "grid"
+      }
+      #(Model(..model, app_store_view: normalized), [])
     }
 
     ToggleAppIntent(plugin_id, intent_name) -> {

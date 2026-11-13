@@ -564,6 +564,132 @@
   gap: 12px;
 }
 
+.omni-app-store-ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.omni-app-store-ledger .omni-catalog-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+}
+
+.omni-app-store-ledger .omni-catalog-card-description {
+  flex: 1;
+  margin: 0;
+  -webkit-line-clamp: 1;
+}
+
+.omni-app-store-view-toggle {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.omni-view-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  color: var(--omni-text-secondary, #9e988f);
+  border: 1px solid var(--omni-border-subtle, #272522);
+  border-radius: var(--omni-radius-sm, 6px);
+  cursor: pointer;
+}
+
+.omni-view-toggle-btn.active {
+  color: var(--omni-accent-primary, #d4a373);
+  border-color: var(--omni-accent-primary, #d4a373);
+}
+
+.omni-app-index {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.omni-app-index-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  color: var(--omni-text-primary, #ede8df);
+  margin: 0;
+}
+
+.omni-app-index-subtitle {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--omni-text-muted, #6b665f);
+  margin: 4px 0 0;
+}
+
+.omni-app-index-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.omni-app-index-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--omni-bg-surface, #191816);
+  border: 1px solid var(--omni-border-subtle, #272522);
+  border-radius: var(--omni-radius-md, 10px);
+}
+
+.omni-app-index-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--omni-radius-sm, 6px);
+  background: var(--omni-bg-subtle, #22201d);
+  color: var(--omni-accent-primary, #d4a373);
+  flex-shrink: 0;
+}
+
+.omni-app-index-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.omni-app-index-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.omni-app-index-name {
+  font-size: 0.84rem;
+  color: var(--omni-text-primary, #ede8df);
+}
+
+.omni-app-index-pin {
+  display: flex;
+  color: var(--omni-accent-primary, #d4a373);
+}
+
+.omni-app-index-desc {
+  font-size: 0.72rem;
+  color: var(--omni-text-muted, #6b665f);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .omni-catalog-card {
   background: var(--omni-bg-surface, #191816);
   border: 1px solid var(--omni-border-subtle, #272522);

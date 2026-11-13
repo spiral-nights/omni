@@ -552,6 +552,22 @@ pub fn app_store_renders_search_custom_install_and_catalog_cards_test() {
     store_html,
     "id=\"btn-install-catalog-nsite.catalog.tasks\"",
   ))
+  should.be_true(string.contains(store_html, "id=\"btn-app-store-view-grid\""))
+  should.be_true(string.contains(store_html, "id=\"btn-app-store-view-ledger\""))
+
+  // Installed apps appear in a pinned/all index.
+  let pinned_app = InstalledApp(..installed_first, pinned: True)
+  let m_pinned = Model(..m0, installed_apps: [pinned_app])
+  let pinned_html =
+    app_store.render_app_store(m_pinned, catalog) |> element.to_string
+  should.be_true(string.contains(pinned_html, "id=\"omni-app-index\""))
+  should.be_true(string.contains(pinned_html, "Pinned"))
+
+  // Ledger mode switches the catalog container class.
+  let m_ledger = Model(..m0, app_store_view: "ledger")
+  let ledger_html =
+    app_store.render_app_store(m_ledger, catalog) |> element.to_string
+  should.be_true(string.contains(ledger_html, "omni-app-store-ledger"))
 
   // Search filtering narrows results
   let m_search = Model(..m0, search_query: "timer")

@@ -11,7 +11,8 @@ import lustre/element/html
 import lustre/event
 import omni/shell/model.{type InstalledApp, type Model, InstalledApp, ViewOption}
 import omni/shell/msg.{
-  type Msg, InstallApp, OpenApp, SetCustomInstallUrl, SetSearchQuery,
+  type Msg, InstallApp, OpenApp, SetAppStoreView, SetCustomInstallUrl,
+  SetSearchQuery,
 }
 import omni/ui/icons
 
@@ -162,6 +163,8 @@ pub fn render_app_store(
   let cards =
     list.map(filtered, fn(entry) { render_catalog_card(model, entry) })
 
+  let installed_section = render_installed_index(model)
+
   let grid_body = case cards {
     [] ->
       html.div([attribute.class("omni-empty-state")], [
@@ -179,7 +182,16 @@ pub fn render_app_store(
           ),
         ]),
       ])
-    items -> html.div([attribute.class("omni-app-store-grid")], items)
+    items ->
+      html.div(
+        [
+          attribute.class(case model.app_store_view {
+            "ledger" -> "omni-app-store-ledger"
+            _ -> "omni-app-store-grid"
+          }),
+        ],
+        items,
+      )
   }
 
   html.div(
@@ -217,6 +229,42 @@ pub fn render_app_store(
               event.on_input(SetSearchQuery),
             ]),
           ]),
+          html.div([attribute.class("omni-app-store-view-toggle")], [
+            html.button(
+              [
+                attribute.type_("button"),
+                attribute.id("btn-app-store-view-grid"),
+                attribute.class(case model.app_store_view {
+                  "ledger" -> "omni-view-toggle-btn"
+                  _ -> "omni-view-toggle-btn active"
+                }),
+                attribute.title("Grid view"),
+                attribute.attribute("aria-pressed", case model.app_store_view {
+                  "ledger" -> "false"
+                  _ -> "true"
+                }),
+                event.on_click(SetAppStoreView("grid")),
+              ],
+              [icons.render_icon("grid", 15)],
+            ),
+            html.button(
+              [
+                attribute.type_("button"),
+                attribute.id("btn-app-store-view-ledger"),
+                attribute.class(case model.app_store_view {
+                  "ledger" -> "omni-view-toggle-btn active"
+                  _ -> "omni-view-toggle-btn"
+                }),
+                attribute.title("Ledger view"),
+                attribute.attribute("aria-pressed", case model.app_store_view {
+                  "ledger" -> "true"
+                  _ -> "false"
+                }),
+                event.on_click(SetAppStoreView("ledger")),
+              ],
+              [icons.render_icon("menu", 15)],
+            ),
+          ]),
           // Custom naddr / URL Install Bar
           html.div([attribute.class("omni-app-store-custom-install")], [
             html.input([
@@ -247,7 +295,110 @@ pub fn render_app_store(
           ]),
         ]),
       ]),
+      installed_section,
       grid_body,
+    ],
+  )
+}
+
+fn render_installed_index(model: Model) -> Element(Msg) {
+  let q = string.lowercase(string.trim(model.search_query))
+  let matches = fn(app: InstalledApp) {
+    case q {
+      "" -> True
+      _ ->
+        string.contains(string.lowercase(model.app_title(app)), q)
+        || string.contains(string.lowercase(app.id), q)
+        || string.contains(string.lowercase(app.description), q)
+    }
+  }
+  let apps = list.filter(model.installed_apps, matches)
+  let pinned = list.filter(apps, fn(app) { app.pinned })
+  let others = list.filter(apps, fn(app) { !app.pinned })
+
+  case apps {
+    [] -> element.none()
+    _ ->
+      html.section(
+        [
+          attribute.class("omni-app-index"),
+          attribute.id("omni-app-index"),
+        ],
+        list.flatten([
+          [
+            html.h3([attribute.class("omni-app-index-title")], [
+              icons.render_icon("widgets", 16),
+              element.text("Your Apps"),
+            ]),
+          ],
+          case pinned {
+            [] -> []
+            _ -> [
+              html.h4([attribute.class("omni-app-index-subtitle")], [
+                element.text("Pinned"),
+              ]),
+              html.div(
+                [attribute.class("omni-app-index-list")],
+                list.map(pinned, fn(app) { render_installed_row(model, app) }),
+              ),
+            ]
+          },
+          case others {
+            [] -> []
+            _ -> [
+              html.h4([attribute.class("omni-app-index-subtitle")], [
+                element.text("All Apps"),
+              ]),
+              html.div(
+                [attribute.class("omni-app-index-list")],
+                list.map(others, fn(app) { render_installed_row(model, app) }),
+              ),
+            ]
+          },
+        ]),
+      )
+  }
+}
+
+fn render_installed_row(model: Model, app: InstalledApp) -> Element(Msg) {
+  html.div(
+    [
+      attribute.class("omni-app-index-row"),
+      attribute.attribute("data-app-id", app.id),
+    ],
+    [
+      html.div([attribute.class("omni-app-index-icon")], [
+        icons.render_icon(app.icon, 18),
+      ]),
+      html.div([attribute.class("omni-app-index-info")], [
+        html.div([attribute.class("omni-app-index-name-row")], [
+          html.strong([attribute.class("omni-app-index-name")], [
+            element.text(model.app_title(app)),
+          ]),
+          case app.pinned {
+            True ->
+              html.span([attribute.class("omni-app-index-pin")], [
+                icons.render_icon("pin", 12),
+              ])
+            False -> element.none()
+          },
+        ]),
+        html.span([attribute.class("omni-app-index-desc")], [
+          element.text(app.description),
+        ]),
+      ]),
+      html.button(
+        [
+          attribute.type_("button"),
+          attribute.id("btn-app-index-open-" <> app.id),
+          attribute.class("omni-button omni-button-secondary"),
+          event.on_click(OpenApp(app.id, None)),
+        ],
+        [
+          icons.render_icon("external", 14),
+          html.span([], [element.text("Open")]),
+        ],
+      ),
     ],
   )
 }
