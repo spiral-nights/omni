@@ -54,9 +54,9 @@ import omni/sandbox/worker_host
 import omni/shell/accent
 import omni/shell/layout/viewport_host
 import omni/shell/model.{
-  type InstalledApp, type SettingsTab, AppStore, InstalledApp, PrimaryApp,
-  Settings, TabPluginSettings, TabPlugins, TabProfile, TabRelays, TabShells,
-  TabWorkspace, UpdateModalState, WidgetsDashboard,
+  type InstalledApp, type Page, type SettingsTab, AppStore, InstalledApp,
+  PrimaryApp, Settings, TabPluginSettings, TabPlugins, TabProfile, TabRelays,
+  TabShells, TabWorkspace, UpdateModalState, WidgetsDashboard,
 }
 import omni/shell/msg.{
   AccountSwitchResult, ApplyRemoteWorkspace, DispatchIntent, EmbedSchema,
@@ -248,6 +248,54 @@ pub fn render(host: ShellBoot) -> String {
   boot.view(host.booted) |> element.to_string
 }
 
+fn handle_shell_message(
+  current: ShellBoot,
+  message: msg.Msg,
+) -> #(ShellBoot, Effect(msg.Msg)) {
+  let #(next, effects) = boot.dispatch(current.booted, message)
+  case message {
+    msg.ScrollToTop -> scroll_shell_top()
+    msg.HostedSchemaAction(plugin_id, action) ->
+      forward_guest_action(plugin_id, action)
+    _ -> Nil
+  }
+  apply_document_theme(
+    next.model.theme_mode,
+    accent.style_attribute(next.model.accent_color),
+  )
+  let host = apply_effects(ShellBoot(next), effects)
+  let _ = drain_fetches(host)
+  let _ = drain_thread_fetches(host)
+  let _ = drain_relay_commands(host)
+  let _ = drain_chimes(host)
+  let _ = drain_urls(host)
+  let _ =
+    boot.process_zap_invoices(host.booted)
+    |> promise.map(fn(did_work) {
+      case did_work {
+        True -> push_views(host)
+        False -> Nil
+      }
+    })
+  let _ =
+    boot.process_searches(host.booted)
+    |> promise.map(fn(did_work) {
+      case did_work {
+        True -> push_views(host)
+        False -> Nil
+      }
+    })
+  let _ =
+    boot.publish_pending(host.booted)
+    |> promise.map(fn(event_ids) {
+      case event_ids {
+        [] -> Nil
+        _ -> push_views(host)
+      }
+    })
+  #(host, effect.none())
+}
+
 /// Mount the interactive shell into `selector` using Lustre's client runtime.
 /// Messages are dispatched through the bootloader, so persistence effects apply
 /// and the view re-renders in place with live event handlers.
@@ -260,51 +308,19 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
     selector,
     fn(_flags) { #(host, effect.none()) },
     fn(current: ShellBoot, message: msg.Msg) {
-      let #(next, effects) = boot.dispatch(current.booted, message)
       case message {
-        msg.ScrollToTop -> scroll_shell_top()
-        msg.HostedSchemaAction(plugin_id, action) ->
-          forward_guest_action(plugin_id, action)
-        _ -> Nil
+        msg.NavigateBack -> {
+          // Let the browser pop its own history entry; `popstate` then drives
+          // the model through `HistorySync`, so both stay in lockstep.
+          history_back()
+          #(current, effect.none())
+        }
+        _ -> handle_shell_message(current, message)
       }
-      apply_document_theme(
-        next.model.theme_mode,
-        accent.style_attribute(next.model.accent_color),
-      )
-      let host = apply_effects(ShellBoot(next), effects)
-      let _ = drain_fetches(host)
-      let _ = drain_thread_fetches(host)
-      let _ = drain_relay_commands(host)
-      let _ = drain_chimes(host)
-      let _ = drain_urls(host)
-      let _ =
-        boot.process_zap_invoices(host.booted)
-        |> promise.map(fn(did_work) {
-          case did_work {
-            True -> push_views(host)
-            False -> Nil
-          }
-        })
-      let _ =
-        boot.process_searches(host.booted)
-        |> promise.map(fn(did_work) {
-          case did_work {
-            True -> push_views(host)
-            False -> Nil
-          }
-        })
-      let _ =
-        boot.publish_pending(host.booted)
-        |> promise.map(fn(event_ids) {
-          case event_ids {
-            [] -> Nil
-            _ -> push_views(host)
-          }
-        })
-      #(host, effect.none())
     },
     fn(current: ShellBoot) { boot.view(current.booted) },
-    msg_from_url,
+    page_from_url,
+    history_sync_msg,
     page_url,
     StartPullRefresh,
   )
@@ -333,7 +349,15 @@ fn start_interval(ms: Int, callback: fn() -> Nil) -> Nil
 /// URL for the shell's current page, used for `history.pushState`.
 pub fn page_url(host: ShellBoot) -> String {
   case host.booted.model.active_page {
-    PrimaryApp(plugin_id, _route) -> "?app=" <> url.encode_component(plugin_id)
+    PrimaryApp(plugin_id, route) ->
+      case route {
+        Some(value) if value != "" ->
+          "?app="
+          <> url.encode_component(plugin_id)
+          <> "&route="
+          <> url.encode_component(value)
+        _ -> "?app=" <> url.encode_component(plugin_id)
+      }
     WidgetsDashboard -> "?view=widgets"
     AppStore -> "?view=apps"
     Settings(tab) -> "?view=settings&tab=" <> settings_tab_slug(tab)
@@ -351,8 +375,8 @@ fn settings_tab_slug(tab: SettingsTab) -> String {
   }
 }
 
-/// Decode a browser URL (`path?search`) into a shell message for back/forward.
-pub fn msg_from_url(raw: String) -> Option(msg.Msg) {
+/// Decode a page from a browser URL (`path?search`).
+pub fn page_from_url(raw: String) -> Option(Page) {
   let search = case string.split_once(raw, "?") {
     Ok(#(_path, query)) -> "?" <> query
     Error(Nil) -> raw
@@ -360,18 +384,48 @@ pub fn msg_from_url(raw: String) -> Option(msg.Msg) {
   let parsed = route.parse_search(search)
 
   case route.get_param(parsed, "app") {
-    Some(plugin_id) if plugin_id != "" -> Some(msg.OpenApp(plugin_id, None))
+    Some(plugin_id) if plugin_id != "" ->
+      Some(PrimaryApp(plugin_id: plugin_id, route: route_param(parsed)))
     _ ->
       case route.get_param(parsed, "view") {
         Some(view) ->
           case string.lowercase(view) {
-            "widgets" -> Some(msg.NavigateTo(WidgetsDashboard))
-            "apps" -> Some(msg.NavigateTo(AppStore))
-            "settings" -> Some(msg.OpenSettings(tab_from_slug(parsed)))
+            "widgets" -> Some(WidgetsDashboard)
+            "apps" -> Some(AppStore)
+            "settings" -> Some(Settings(tab: tab_from_slug(parsed)))
             _ -> None
           }
         None -> None
       }
+  }
+}
+
+fn route_param(parsed: Route) -> Option(String) {
+  case route.get_param(parsed, "route") {
+    Some(value) if value != "" -> Some(value)
+    _ -> None
+  }
+}
+
+/// Decode a browser URL (`path?search`) into a shell message for back/forward.
+pub fn msg_from_url(raw: String) -> Option(msg.Msg) {
+  page_from_url(raw)
+  |> option.map(fn(page) { msg.HistorySync(page, backward: True) })
+}
+
+/// Build the message a browser history move dispatches for `page`.
+pub fn history_sync_msg(page: Page, backward: Bool) -> msg.Msg {
+  msg.HistorySync(page, backward: backward)
+}
+
+/// Apply a URL to the freshly booted shell before the first render.
+pub fn apply_initial_url(host: ShellBoot, raw: String) -> ShellBoot {
+  case msg_from_url(raw) {
+    Some(message) -> {
+      let #(next, effects) = boot.dispatch(host.booted, message)
+      apply_effects(ShellBoot(next), effects)
+    }
+    None -> host
   }
 }
 
@@ -399,7 +453,8 @@ fn mount_dom(
   init: fn(String) -> #(ShellBoot, Effect(msg.Msg)),
   update: fn(ShellBoot, msg.Msg) -> #(ShellBoot, Effect(msg.Msg)),
   view: fn(ShellBoot) -> Element(msg.Msg),
-  parse_url: fn(String) -> Option(msg.Msg),
+  parse_page: fn(String) -> Option(Page),
+  sync_msg: fn(Page, Bool) -> msg.Msg,
   page_url: fn(ShellBoot) -> String,
   pull_start: msg.Msg,
 ) -> Nil
@@ -1331,6 +1386,9 @@ fn push_views(host: ShellBoot) -> Nil {
 
 @external(javascript, "./shell_boot.ffi.mjs", "dispatch_shell_msg")
 fn dispatch_shell_msg(message: msg.Msg) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "history_back")
+fn history_back() -> Nil
 
 @external(javascript, "./shell_boot.ffi.mjs", "listen_shell_scroll")
 fn listen_shell_scroll(on_change: fn(Bool, Bool) -> Nil) -> Nil

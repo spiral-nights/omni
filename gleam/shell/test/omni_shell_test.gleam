@@ -22,15 +22,15 @@ import omni/shell/msg.{
   AccountSwitchResult, AddAppPlacement, ApplyRemoteWorkspace,
   ConfirmPluginUpdate, DisablePassphrase, DismissIntentPrompt, DismissToast,
   DismissUpdateModal, EnablePassphrase, EscapePressed, ExportKey,
-  FinishPullRefresh, ImportKey, InstallApp, KeySecurityStatus, NavigateBack,
-  NavigateTo, OpenApp, OpenIntentApp, OpenSettings, RemoveAppPlacement,
-  SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
-  SetAppRelays, SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
-  SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShellScrolled,
-  ShowIntentPrompt, ShowToast, ShowToastTone, ShowUpdateModal, StartPullRefresh,
-  SwitchAccount, ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned,
-  ToggleAutoSync, ToggleFullscreen, TriggerWorkspaceSync, UninstallApp,
-  UnlockKey,
+  FinishPullRefresh, HistorySync, ImportKey, InstallApp, KeySecurityStatus,
+  NavigateBack, NavigateTo, OpenApp, OpenIntentApp, OpenSettings,
+  RemoveAppPlacement, SelectIntentHandler, SelectShell, SetAccentColor,
+  SetAppPlacements, SetAppRelays, SetCustomInstallUrl, SetExportedNsec,
+  SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
+  SetUserProfile, ShellScrolled, ShowIntentPrompt, ShowToast, ShowToastTone,
+  ShowUpdateModal, StartPullRefresh, SwitchAccount, ToggleAppEnabled,
+  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
+  TriggerWorkspaceSync, UninstallApp, UnlockKey,
 }
 import omni/shell/shell
 import omni/shell/themes/editorial as editorial_theme
@@ -734,6 +734,36 @@ pub fn in_app_back_navigation_pops_history_test() {
     _ -> should.fail()
   }
   back2.back_stack |> should.equal([])
+}
+
+pub fn browser_history_sync_keeps_the_back_stack_consistent_test() {
+  let m = model.init("editorial", [])
+  let #(apps, _) = update.update(m, NavigateTo(model.AppStore))
+  let #(widgets, _) = update.update(apps, NavigateTo(model.WidgetsDashboard))
+  // Visiting Apps then Widgets leaves Apps -> Widgets on the back stack.
+  widgets.back_stack
+  |> should.equal([model.AppStore, model.WidgetsDashboard])
+
+  // Browser Back to Apps pops one entry.
+  let #(back, _) =
+    update.update(widgets, HistorySync(model.AppStore, backward: True))
+  back.active_page |> should.equal(model.AppStore)
+  back.back_stack |> should.equal([model.WidgetsDashboard])
+
+  // Browser Forward to Widgets records Apps again, restoring Back.
+  let #(forward, _) =
+    update.update(back, HistorySync(model.WidgetsDashboard, backward: False))
+  forward.active_page |> should.equal(model.WidgetsDashboard)
+  forward.back_stack |> should.equal([model.AppStore, model.WidgetsDashboard])
+}
+
+pub fn history_sync_to_the_active_page_is_a_no_op_test() {
+  let m = model.init("editorial", [])
+  let #(apps, _) = update.update(m, NavigateTo(model.AppStore))
+  let #(same, _) =
+    update.update(apps, HistorySync(model.AppStore, backward: True))
+  same.active_page |> should.equal(model.AppStore)
+  same.back_stack |> should.equal(apps.back_stack)
 }
 
 pub fn theme_renders_back_button_only_with_history_test() {

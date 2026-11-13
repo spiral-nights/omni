@@ -168,18 +168,39 @@ export function unmount_worker(pluginId) {
 import { start } from "../../../lustre/lustre/runtime/client/spa.ffi.mjs";
 import { Some } from "../../../gleam_stdlib/gleam/option.mjs";
 
-export function mount_dom(selector, init, update, view, parse_url, page_url, pull_start) {
-  let lastUrl = null;
+export function mount_dom(
+  selector,
+  init,
+  update,
+  view,
+  parse_page,
+  sync_msg,
+  page_url,
+  pull_start,
+) {
+  const currentSearch = () => window.location.search || "";
+  let historyIndex = 0;
 
+  const readIndex = (state) =>
+    state && typeof state.omniIndex === "number" ? state.omniIndex : null;
+
+  // Compare against the live address bar rather than a cached copy: after a
+  // `popstate` the model already describes the URL, so re-pushing it would
+  // silently append history entries and make Back appear broken.
   const syncHistory = (model, replace) => {
     const url = page_url(model);
-    if (!url || url === lastUrl) return;
-    lastUrl = url;
-    if (replace) window.history.replaceState(null, "", url);
-    else window.history.pushState(null, "", url);
+    if (!url || url === currentSearch()) return;
+    if (replace) window.history.replaceState({ omniIndex: historyIndex }, "", url);
+    else {
+      historyIndex += 1;
+      window.history.pushState({ omniIndex: historyIndex }, "", url);
+    }
   };
 
   const wrappedInit = (flags) => {
+    const booted = window.history.state;
+    const restored = readIndex(booted);
+    if (restored !== null) historyIndex = restored;
     const pair = init(flags);
     syncHistory(pair[0], true);
     return pair;
@@ -238,15 +259,20 @@ export function mount_dom(selector, init, update, view, parse_url, page_url, pul
     document.addEventListener("touchcancel", reset, { passive: true });
   }
 
-  window.addEventListener("popstate", () => {
+  window.addEventListener("popstate", (event) => {
     if (!spa) return;
+    const target = readIndex(event && event.state);
+    const backward = target === null ? true : target < historyIndex;
+    if (target !== null) historyIndex = target;
     const raw = `${window.location.pathname}${window.location.search}`;
-    const message = parse_url(raw);
-    if (message instanceof Some) {
-      lastUrl = `${window.location.pathname}${window.location.search}`;
-      spa.dispatch(message[0]);
-    }
+    const page = parse_page(raw);
+    if (page instanceof Some) spa.dispatch(sync_msg(page[0], backward));
   });
+}
+
+export function history_back() {
+  if (typeof window === "undefined") return;
+  window.history.back();
 }
 
 

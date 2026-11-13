@@ -1,4 +1,5 @@
 import {
+  apply_initial_url,
   mount_shell,
   start_live_data,
   start_with_bridge,
@@ -80,7 +81,8 @@ async function mountShell(): Promise<void> {
     return;
   }
 
-  const host = (result as unknown as { 0: ShellBoot })[0];
+  const booted = (result as unknown as { 0: ShellBoot })[0];
+  const host = apply_initial_url(booted, window.location.search);
   rootEl.innerHTML = "";
   mount_shell("#omni-root", host);
   watch_permission_prompts(host);

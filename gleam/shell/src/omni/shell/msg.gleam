@@ -20,6 +20,7 @@ import omni/shell/model.{
 pub type Msg {
   // Navigation
   NavigateTo(Page)
+  HistorySync(Page, backward: Bool)
   NavigateBack
   OpenApp(plugin_id: String, route: Option(String))
   OpenIntentApp(plugin_id: String, route: Option(String))

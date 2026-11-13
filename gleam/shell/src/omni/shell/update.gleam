@@ -20,9 +20,9 @@ import omni/shell/msg.{
   ClearEmbeddedSchema, ConfirmPluginUpdate, DisablePassphrase,
   DismissIntentPrompt, DismissToast, DismissUpdateModal, DispatchIntent,
   EmbedSchema, EnablePassphrase, EscapePressed, ExportKey, FinishPullRefresh,
-  HostedSchemaAction, ImportKey, InstallApp, InstallCustomShell, InstallShell,
-  KeyImportResult, KeySecurityResult, KeySecurityStatus, NavigateBack,
-  NavigateTo, OpenApp, OpenIntentApp, OpenSearch, OpenSettings,
+  HistorySync, HostedSchemaAction, ImportKey, InstallApp, InstallCustomShell,
+  InstallShell, KeyImportResult, KeySecurityResult, KeySecurityStatus,
+  NavigateBack, NavigateTo, OpenApp, OpenIntentApp, OpenSearch, OpenSettings,
   RemoveAppPlacement, ResolvePermission, ScrollToTop, SelectIntentHandler,
   SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays, SetAppStoreView,
   SetCapabilityGrants, SetCustomInstallUrl, SetCustomShellUrl, SetExportedNsec,
@@ -91,6 +91,23 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       #(
         next_model,
         list.append(mount_effects, workspace_persistence_effects(next_model)),
+      )
+    }
+
+    HistorySync(page, backward) -> {
+      let next_model =
+        Model(
+          ..model,
+          active_page: page,
+          back_stack: sync_back_stack(model, page, backward),
+          intent_page: None,
+        )
+      #(
+        next_model,
+        list.append(
+          page_mount_effects(model, page),
+          workspace_persistence_effects(next_model),
+        ),
       )
     }
 
@@ -830,6 +847,49 @@ fn push_back(model: Model, next: Page) -> List(Page) {
   case model.active_page == next {
     True -> model.back_stack
     False -> [model.active_page, ..model.back_stack]
+  }
+}
+
+/// Reconcile the back stack with a page reached through browser history.
+/// Backward navigation to a page already on the stack drops it and everything
+/// newer; forward navigation records the page we are leaving.
+fn sync_back_stack(model: Model, next: Page, backward: Bool) -> List(Page) {
+  case model.active_page == next {
+    True -> model.back_stack
+    False ->
+      case backward, page_index(model.back_stack, next, 0) {
+        True, Some(index) -> list.drop(model.back_stack, index + 1)
+        True, None -> list.drop(model.back_stack, 1)
+        False, _ -> [model.active_page, ..model.back_stack]
+      }
+  }
+}
+
+fn page_index(pages: List(Page), target: Page, index: Int) -> Option(Int) {
+  case pages {
+    [] -> None
+    [page, ..rest] ->
+      case page == target {
+        True -> Some(index)
+        False -> page_index(rest, target, index + 1)
+      }
+  }
+}
+
+fn page_mount_effects(model: Model, page: Page) -> List(ShellEffect) {
+  case page {
+    PrimaryApp(plugin_id, route) -> [
+      MountPluginInSlot(plugin_id: plugin_id, viewport: Main, route: route),
+    ]
+    WidgetsDashboard -> widget_mount_effects(model)
+    Settings(tab: TabPluginSettings(plugin_id)) -> [
+      MountPluginInSlot(
+        plugin_id: plugin_id,
+        viewport: Main,
+        route: Some("?view=settings"),
+      ),
+    ]
+    _ -> []
   }
 }
 
