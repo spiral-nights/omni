@@ -113,7 +113,6 @@ pub fn render(key: String, letter: String) -> Element(msg) {
       attribute("width", "100%"),
       attribute("height", "100%"),
       attribute("role", "img"),
-      attribute("aria-hidden", "true"),
       attribute("style", "display: block; border-radius: 50%;"),
       attribute("data-avatar-seed", int.to_string(s)),
     ],
@@ -194,10 +193,10 @@ pub fn banner_gradient(key: String) -> String {
 
 fn opacity_string(permille: Int) -> String {
   let whole = permille / 1000
-  let fraction = permille - whole * 1000
-  let padded = case fraction {
-    f if f < 10 -> "00" <> int.to_string(f)
-    f if f < 100 -> "0" <> int.to_string(f)
+  let remainder = permille - whole * 1000
+  let hundredths = remainder / 10
+  let padded = case hundredths {
+    f if f < 10 -> "0" <> int.to_string(f)
     f -> int.to_string(f)
   }
   int.to_string(whole) <> "." <> padded

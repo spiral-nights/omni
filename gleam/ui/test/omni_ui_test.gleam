@@ -11,6 +11,7 @@ import omni/protocol/schema/style.{
   SizeSm, SizeXl, SizeXs, StyleMap, StyleProps, StyleRaw, Surface, TextPrimary,
   Width,
 }
+import omni/ui/avatar
 import omni/ui/icons
 import omni/ui/sanitize
 import omni/ui/tokens
@@ -43,6 +44,30 @@ pub fn all_icon_names_render_valid_svg_test() {
     should.be_true(string.contains(rendered, "data-icon=\"" <> name <> "\""))
     should.be_false(string.contains(rendered, "data-icon-fallback=\"true\""))
   })
+}
+
+pub fn unknown_icon_falls_back_to_alert_circle_test() {
+  let rendered =
+    icons.render_icon("not-a-real-icon", 16)
+    |> element.to_string
+  should.be_true(string.contains(rendered, "data-icon-fallback=\"true\""))
+  should.be_true(string.contains(rendered, "aria-hidden=\"true\""))
+  // Alert fallback: straight line down to the dot, not a question mark.
+  should.be_true(string.contains(rendered, "y1=\"8\""))
+  should.be_false(string.contains(rendered, "M9.09 9"))
+
+  let help =
+    icons.render_icon("help-circle", 16)
+    |> element.to_string
+  should.be_true(string.contains(help, "M9.09 9"))
+  should.be_false(string.contains(help, "data-icon-fallback=\"true\""))
+}
+
+pub fn generated_avatar_is_a_labeled_image_test() {
+  let svg_str = avatar.render("alice", "A") |> element.to_string
+  should.be_true(string.contains(svg_str, "role=\"img\""))
+  should.be_false(string.contains(svg_str, "aria-hidden"))
+  should.be_false(string.contains(svg_str, "aria-hidden=\"true\""))
 }
 
 pub fn render_icon_custom_size_test() {

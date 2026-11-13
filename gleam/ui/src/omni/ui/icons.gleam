@@ -104,7 +104,7 @@ pub fn render_icon_default(name: String) -> Element(msg) {
 }
 
 /// Renders a geometric monochrome SVG line icon for the given `name` and `size`.
-/// If `name` is unknown, renders a fallback geometric help-circle icon with
+/// If `name` is unknown, renders an alert-circle fallback with
 /// `data-icon="<name>"` and `data-icon-fallback="true"`.
 pub fn render_icon(name: String, size: Int) -> Element(msg) {
   let size_str = int.to_string(size)
@@ -124,6 +124,7 @@ pub fn render_icon(name: String, size: Int) -> Element(msg) {
     attribute("stroke-linejoin", "round"),
     attribute.class(base_class),
     attribute("data-icon", name),
+    attribute("aria-hidden", "true"),
   ]
 
   case lookup_icon_children(name) {
@@ -137,6 +138,28 @@ pub fn render_icon(name: String, size: Int) -> Element(msg) {
 }
 
 fn fallback_children() -> List(Element(msg)) {
+  [
+    svg.circle([
+      attribute("cx", "12"),
+      attribute("cy", "12"),
+      attribute("r", "10"),
+    ]),
+    svg.line([
+      attribute("x1", "12"),
+      attribute("y1", "8"),
+      attribute("x2", "12"),
+      attribute("y2", "12"),
+    ]),
+    svg.line([
+      attribute("x1", "12"),
+      attribute("y1", "16"),
+      attribute("x2", "12.01"),
+      attribute("y2", "16"),
+    ]),
+  ]
+}
+
+fn help_circle_children() -> List(Element(msg)) {
   [
     svg.circle([
       attribute("cx", "12"),
@@ -343,7 +366,7 @@ fn lookup_icon_children(name: String) -> Result(List(Element(msg)), Nil) {
         svg.path([attribute("d", "M5 17h14l-2-7V4H7v6l-2 7z")]),
       ])
 
-    "help-circle" -> Ok(fallback_children())
+    "help-circle" -> Ok(help_circle_children())
 
     "cloud" ->
       Ok([
