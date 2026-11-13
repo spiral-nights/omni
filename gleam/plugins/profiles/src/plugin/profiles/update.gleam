@@ -19,8 +19,9 @@ import plugin/profiles/model.{
 }
 import plugin/profiles/msg.{
   type Msg, IngestEvent, IngestEvents, RefreshSigner, SaveMetadata,
-  SelectProfile, SelectView, SetMetadataAbout, SetMetadataName,
-  SetMetadataPicture, SetPubkey, SetSearchQuery, ToggleFollow,
+  SelectProfile, SelectView, SetMetadataAbout, SetMetadataLud16, SetMetadataName,
+  SetMetadataNip05, SetMetadataPicture, SetMetadataWebsite, SetPubkey,
+  SetSearchQuery, ToggleFollow,
 }
 
 /// Apply a `Msg` to `Model`, returning the updated `Model` and any side `Effect`s.
@@ -90,6 +91,33 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       Model(
         ..model,
         metadata_draft: MetadataDraft(..model.metadata_draft, picture: picture),
+        metadata_dirty: True,
+      ),
+      [],
+    )
+
+    SetMetadataNip05(nip05) -> #(
+      Model(
+        ..model,
+        metadata_draft: MetadataDraft(..model.metadata_draft, nip05: nip05),
+        metadata_dirty: True,
+      ),
+      [],
+    )
+
+    SetMetadataLud16(lud16) -> #(
+      Model(
+        ..model,
+        metadata_draft: MetadataDraft(..model.metadata_draft, lud16: lud16),
+        metadata_dirty: True,
+      ),
+      [],
+    )
+
+    SetMetadataWebsite(website) -> #(
+      Model(
+        ..model,
+        metadata_draft: MetadataDraft(..model.metadata_draft, website: website),
         metadata_dirty: True,
       ),
       [],
@@ -187,6 +215,24 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
         None -> Some(SetMetadataAbout(""))
       }
 
+    "set-metadata-nip05" | "set_metadata_nip05" ->
+      case extract_string(act, ["value", "nip05"]) {
+        Some(value) -> Some(SetMetadataNip05(value))
+        None -> Some(SetMetadataNip05(""))
+      }
+
+    "set-metadata-lud16" | "set_metadata_lud16" | "set-metadata-lud06" ->
+      case extract_string(act, ["value", "lud16", "lud06"]) {
+        Some(value) -> Some(SetMetadataLud16(value))
+        None -> Some(SetMetadataLud16(""))
+      }
+
+    "set-metadata-website" | "set_metadata_website" | "set-metadata-url" ->
+      case extract_string(act, ["value", "website", "url"]) {
+        Some(value) -> Some(SetMetadataWebsite(value))
+        None -> Some(SetMetadataWebsite(""))
+      }
+
     "set-metadata-picture" | "set_metadata_picture" ->
       case extract_string(act, ["value", "picture"]) {
         Some(value) -> Some(SetMetadataPicture(value))
@@ -267,6 +313,9 @@ fn save_metadata(model: Model) -> Model {
           name: optional_text(draft.name),
           about: optional_text(draft.about),
           picture: optional_text(draft.picture),
+          nip05: optional_text(draft.nip05),
+          lud16: optional_text(draft.lud16),
+          website: optional_text(draft.website),
           created_at: created_at,
         )
       Model(
@@ -276,6 +325,9 @@ fn save_metadata(model: Model) -> Model {
           name: option.unwrap(updated.name, ""),
           about: option.unwrap(updated.about, ""),
           picture: option.unwrap(updated.picture, ""),
+          nip05: option.unwrap(updated.nip05, ""),
+          lud16: option.unwrap(updated.lud16, ""),
+          website: option.unwrap(updated.website, ""),
         ),
         metadata_dirty: False,
         now_sec: created_at,

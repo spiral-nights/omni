@@ -25,8 +25,8 @@ import plugin/profiles/model.{
 }
 import plugin/profiles/msg.{
   IngestEvent, RefreshSigner, SaveMetadata, SelectProfile, SelectView,
-  SetMetadataAbout, SetMetadataName, SetMetadataPicture, SetSearchQuery,
-  ToggleFollow,
+  SetMetadataAbout, SetMetadataLud16, SetMetadataName, SetMetadataNip05,
+  SetMetadataPicture, SetMetadataWebsite, SetSearchQuery, ToggleFollow,
 }
 import plugin/profiles/update
 import plugin/profiles/view
@@ -449,4 +449,26 @@ pub fn follow_and_metadata_emits_publish_effects_test() {
       }
     }),
   )
+}
+
+pub fn metadata_editor_round_trips_contact_fields_test() {
+  let m0 = model.init(route.parse_search("?view=metadata"))
+  let #(m1, _) = update.update(m0, SetMetadataNip05("alice@example.com"))
+  let #(m2, _) = update.update(m1, SetMetadataLud16("alice@getalby.com"))
+  let #(m3, _) = update.update(m2, SetMetadataWebsite("https://alice.example"))
+  m3.metadata_dirty |> should.equal(True)
+
+  let #(m4, effects) = update.update(m3, SaveMetadata)
+  let assert Ok(saved) = dict.get(m4.profiles, my_pubkey_hex)
+  saved.nip05 |> should.equal(Some("alice@example.com"))
+  saved.lud16 |> should.equal(Some("alice@getalby.com"))
+  saved.website |> should.equal(Some("https://alice.example"))
+
+  // The published Kind 0 event contains the edited fields and keeps the
+  // display name that was already known.
+  let assert [Publish(draft)] = effects
+  string.contains(draft.content, "alice@example.com") |> should.equal(True)
+  string.contains(draft.content, "alice@getalby.com") |> should.equal(True)
+  string.contains(draft.content, "https://alice.example") |> should.equal(True)
+  saved.display_name |> should.equal(Some("Alice"))
 }

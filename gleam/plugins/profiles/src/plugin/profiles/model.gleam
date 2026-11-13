@@ -48,7 +48,14 @@ pub type SignerStatus {
 
 /// Editable Kind 0 metadata draft.
 pub type MetadataDraft {
-  MetadataDraft(name: String, about: String, picture: String)
+  MetadataDraft(
+    name: String,
+    about: String,
+    picture: String,
+    nip05: String,
+    lud16: String,
+    website: String,
+  )
 }
 
 /// Complete immutable state for the Profiles plugin.
@@ -334,8 +341,19 @@ pub fn draft_for(
         name: option.unwrap(p.name, ""),
         about: option.unwrap(p.about, ""),
         picture: option.unwrap(p.picture, ""),
+        nip05: option.unwrap(p.nip05, ""),
+        lud16: option.unwrap(p.lud16, ""),
+        website: option.unwrap(p.website, ""),
       )
-    None -> MetadataDraft(name: "", about: "", picture: "")
+    None ->
+      MetadataDraft(
+        name: "",
+        about: "",
+        picture: "",
+        nip05: "",
+        lud16: "",
+        website: "",
+      )
   }
 }
 

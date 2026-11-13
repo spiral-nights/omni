@@ -12,6 +12,9 @@ pub type Msg {
   SetMetadataName(String)
   SetMetadataAbout(String)
   SetMetadataPicture(String)
+  SetMetadataNip05(String)
+  SetMetadataLud16(String)
+  SetMetadataWebsite(String)
   SaveMetadata
   RefreshSigner
   SetPubkey(String)

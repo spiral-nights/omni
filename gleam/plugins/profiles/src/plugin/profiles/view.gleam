@@ -383,6 +383,48 @@ fn render_metadata_editor(model: Model) -> Node {
       action_on_change: Some(action.new("set-metadata-picture")),
     )
 
+  let nip05_input =
+    Input(
+      base: node.empty_base(),
+      name: "nip05",
+      placeholder: Some("you@example.com"),
+      value: Some(draft.nip05),
+      input_type: Some(InputText),
+      accept: None,
+      clearable: Some(True),
+      prefix_icon: Some("check-circle"),
+      action_on_enter: None,
+      action_on_change: Some(action.new("set-metadata-nip05")),
+    )
+
+  let lud16_input =
+    Input(
+      base: node.empty_base(),
+      name: "lud16",
+      placeholder: Some("you@getalby.com"),
+      value: Some(draft.lud16),
+      input_type: Some(InputText),
+      accept: None,
+      clearable: Some(True),
+      prefix_icon: Some("zap"),
+      action_on_enter: None,
+      action_on_change: Some(action.new("set-metadata-lud16")),
+    )
+
+  let website_input =
+    Input(
+      base: node.empty_base(),
+      name: "website",
+      placeholder: Some("https://example.com"),
+      value: Some(draft.website),
+      input_type: Some(InputUrl),
+      accept: None,
+      clearable: Some(True),
+      prefix_icon: Some("external"),
+      action_on_enter: None,
+      action_on_change: Some(action.new("set-metadata-website")),
+    )
+
   let save_button =
     Button(
       base: node.empty_base(),
@@ -435,6 +477,9 @@ fn render_metadata_editor(model: Model) -> Node {
     name_input,
     about_area,
     picture_input,
+    nip05_input,
+    lud16_input,
+    website_input,
     footer,
     back_button,
   ])
