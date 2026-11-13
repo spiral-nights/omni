@@ -7,6 +7,7 @@ import gleam/string
 import gleeunit
 import gleeunit/should
 import omni/nostr/kind
+import omni/nostr/nip19
 import omni/platform/ref
 import omni/platform/storage
 import omni/platform/zip
@@ -417,4 +418,39 @@ pub fn publish_server_list_queues_kind10063_test() {
   let assert [app.Publish(draft)] = effects
   kind.to_int(draft.kind) |> should.equal(10_063)
   list.length(draft.tags) |> should.equal(3)
+}
+
+pub fn publish_embeds_relay_hints_in_naddr_test() {
+  let html = "<html><body>hi</body></html>"
+  let m0 =
+    Model(
+      ..model.init(TabStudio),
+      user_pubkey: Some(
+        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      ),
+      relay_urls: [
+        "wss://one.example",
+        "wss://two.example",
+        "wss://three.example",
+        "wss://four.example",
+      ],
+      bundle: Some(publisher_bundle.from_html(html, "index.html")),
+      draft: PublishDraft(
+        ..model.default_draft(),
+        id: "org.example.hints",
+        name: "Hints App",
+      ),
+    )
+  let #(m1, _) = update.update(m0, PublishPackage)
+  let assert [pkg] = m1.published
+  case nip19.decode(pkg.naddr) {
+    Ok(nip19.Naddr(address)) ->
+      address.relays
+      |> should.equal([
+        "wss://one.example",
+        "wss://two.example",
+        "wss://three.example",
+      ])
+    _ -> panic as "expected naddr"
+  }
 }

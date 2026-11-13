@@ -51,9 +51,27 @@ pub fn start_app_with_pubkey_and_storage(
   store: Storage,
   emit_schema: fn(Node) -> Nil,
 ) -> RunningApp(Model, Msg) {
+  start_app_with_pubkey_storage_and_relays(
+    initial_search,
+    pubkey_hex,
+    store,
+    [],
+    emit_schema,
+  )
+}
+
+/// Start the publisher with the signed-in key, durable state, and the relay
+/// hints to embed in published naddr addresses.
+pub fn start_app_with_pubkey_storage_and_relays(
+  initial_search: String,
+  pubkey_hex: String,
+  store: Storage,
+  relay_urls: List(String),
+  emit_schema: fn(Node) -> Nil,
+) -> RunningApp(Model, Msg) {
   let initial_route = route.parse_search(initial_search)
   app.start(
-    app_spec_persisted(Some(pubkey_hex), store),
+    app_spec_persisted(Some(pubkey_hex), store, relay_urls),
     initial_route,
     emit_schema,
   )
@@ -62,6 +80,7 @@ pub fn start_app_with_pubkey_and_storage(
 fn app_spec_persisted(
   pubkey_hex: Option(String),
   store: Storage,
+  relay_urls: List(String),
 ) -> AppSpec(Model, Msg) {
   let published_cfg = model.published_store_config()
   let servers_cfg = model.servers_store_config()
@@ -72,6 +91,7 @@ fn app_spec_persisted(
         Model(
           ..model.init(resolve_route_tab(initial_route)),
           user_pubkey: pubkey_hex,
+          relay_urls: relay_urls,
         )
       #(
         Model(

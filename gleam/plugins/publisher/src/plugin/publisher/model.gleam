@@ -64,6 +64,7 @@ pub type Model {
     bundle: Option(Bundle),
     bundle_url: String,
     user_pubkey: Option(String),
+    relay_urls: List(String),
   )
 }
 
@@ -112,6 +113,7 @@ pub fn init(initial_tab: StudioTab) -> Model {
     bundle: None,
     bundle_url: "",
     user_pubkey: None,
+    relay_urls: [],
   )
 }
 

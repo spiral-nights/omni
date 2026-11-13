@@ -360,14 +360,12 @@ fn publish_bundle(
 
   let assert Ok(pk) = pubkey_parse(pubkey_hex)
   let naddr =
-    nip19.encode_naddr(
-      nip19.AddressData(
-        identifier: clean_id,
-        pubkey: pk,
-        kind: kind.from_int(blossom.nsite_manifest_kind_int),
-        relays: [],
-      ),
-    )
+    nip19.encode_naddr(nip19.AddressData(
+      identifier: clean_id,
+      pubkey: pk,
+      kind: kind.from_int(blossom.nsite_manifest_kind_int),
+      relays: list.take(model.relay_urls, 3),
+    ))
 
   let record =
     PublishedPlugin(
