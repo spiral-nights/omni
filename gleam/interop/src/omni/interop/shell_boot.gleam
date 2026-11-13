@@ -54,8 +54,8 @@ import omni/shell/msg.{
   AccountSwitchResult, ApplyRemoteWorkspace, DispatchIntent, EmbedSchema,
   EscapePressed, FinishPullRefresh, InstallApp, KeyImportResult,
   KeySecurityResult, KeySecurityStatus, NavigateTo, OpenApp, OpenSettings,
-  ScrollToTop, SetExportedNsec, SetUserProfile, ShellScrolled,
-  ShowPermissionPrompt, ShowUpdateModal, StartPullRefresh, UninstallApp,
+  SetExportedNsec, SetUserProfile, ShellScrolled, ShowPermissionPrompt,
+  ShowUpdateModal, StartPullRefresh, UninstallApp,
 }
 import omni/shell/update
 import omni/social/profile as social_profile

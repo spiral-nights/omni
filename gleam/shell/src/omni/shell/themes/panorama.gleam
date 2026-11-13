@@ -27,6 +27,7 @@ import omni/shell/settings/tabs
 import omni/shell/shell
 import omni/shell/styles
 import omni/shell/theme.{type Theme, Theme}
+import omni/shell/toast
 import omni/shell/update_modal
 import omni/ui/icons
 import omni/ui/sanitize
@@ -332,5 +333,6 @@ fn render_overlays(model: Model) -> Element(Msg) {
     intents.render_intent_chooser_modal(model),
     permission_prompt.render_permission_prompt(model),
     update_modal.render_update_modal(model),
+    toast.render_toasts(model),
   ])
 }

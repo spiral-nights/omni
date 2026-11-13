@@ -12,7 +12,8 @@ import omni/protocol/workspace.{type WorkspaceState}
 import omni/shell/model.{
   type CapabilityGrant, type InstalledApp, type IntentPromptState, type Page,
   type PermissionPromptState, type PlacementConfig, type SettingsTab,
-  type SyncStatus, type UpdateModalState, type UserProfileSummary,
+  type SyncStatus, type ToastTone, type UpdateModalState,
+  type UserProfileSummary,
 }
 
 /// Messages processed by the Omni Shell Elm update loop.
@@ -27,6 +28,9 @@ pub type Msg {
   ShellScrolled(at_top: Bool, scrolling_down: Bool)
   ScrollToTop
   EscapePressed
+  ShowToast(String)
+  ShowToastTone(String, ToastTone)
+  DismissToast(Int)
   OpenSearch
 
   // Shells & catalog

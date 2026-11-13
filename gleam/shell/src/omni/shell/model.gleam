@@ -112,6 +112,18 @@ pub type UpdateModalState {
   )
 }
 
+/// Tone of a transient shell notification.
+pub type ToastTone {
+  ToastInfo
+  ToastSuccess
+  ToastError
+}
+
+/// A dismissible transient shell notification.
+pub type Toast {
+  Toast(id: Int, message: String, tone: ToastTone)
+}
+
 /// A runtime capability request awaiting the user's decision.
 pub type PermissionPromptState {
   PermissionPromptState(
@@ -144,6 +156,8 @@ pub type Model {
     fullscreen: Bool,
     dock_hidden: Bool,
     show_back_to_top: Bool,
+    toasts: List(Toast),
+    next_toast_id: Int,
     installed_apps: List(InstalledApp),
     user_profile: Option(UserProfileSummary),
     sync_status: SyncStatus,
@@ -188,6 +202,8 @@ pub fn init(active_shell_id: String, apps: List(InstalledApp)) -> Model {
     fullscreen: False,
     dock_hidden: False,
     show_back_to_top: False,
+    toasts: [],
+    next_toast_id: 1,
     installed_apps: apps,
     user_profile: None,
     sync_status: SyncIdle,

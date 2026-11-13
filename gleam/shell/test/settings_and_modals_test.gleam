@@ -438,6 +438,8 @@ pub fn settings_tabs_renders_system_tabs_and_dynamic_plugin_settings_test() {
   should.be_true(string.contains(ws_html, "id=\"settings-tab-shells\""))
   should.be_true(string.contains(ws_html, "id=\"settings-tab-plugins\""))
   should.be_true(string.contains(ws_html, "id=\"settings-tab-workspace\""))
+  should.be_true(string.contains(ws_html, "id=\"select-settings-tab\""))
+  should.be_true(string.contains(ws_html, "value=\"workspace\""))
   should.be_false(string.contains(ws_html, "id=\"settings-tab-profile\""))
   should.be_false(string.contains(ws_html, "id=\"settings-tab-relays\""))
   should.be_false(string.contains(

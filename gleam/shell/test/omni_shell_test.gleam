@@ -20,16 +20,17 @@ import omni/shell/model.{
 }
 import omni/shell/msg.{
   AccountSwitchResult, AddAppPlacement, ApplyRemoteWorkspace,
-  ConfirmPluginUpdate, DisablePassphrase, DismissIntentPrompt,
+  ConfirmPluginUpdate, DisablePassphrase, DismissIntentPrompt, DismissToast,
   DismissUpdateModal, EnablePassphrase, EscapePressed, ExportKey,
   FinishPullRefresh, ImportKey, InstallApp, KeySecurityStatus, NavigateBack,
   NavigateTo, OpenApp, OpenIntentApp, OpenSettings, RemoveAppPlacement,
   SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
   SetAppRelays, SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
   SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShellScrolled,
-  ShowIntentPrompt, ShowUpdateModal, StartPullRefresh, SwitchAccount,
-  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
-  ToggleFullscreen, TriggerWorkspaceSync, UninstallApp, UnlockKey,
+  ShowIntentPrompt, ShowToast, ShowToastTone, ShowUpdateModal, StartPullRefresh,
+  SwitchAccount, ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned,
+  ToggleAutoSync, ToggleFullscreen, TriggerWorkspaceSync, UninstallApp,
+  UnlockKey,
 }
 import omni/shell/shell
 import omni/shell/themes/editorial as editorial_theme
@@ -930,4 +931,22 @@ pub fn editorial_chrome_renders_exit_and_back_to_top_test() {
   |> should.be_true()
   string.contains(scrolled_html, "editorial-dock dock-hidden")
   |> should.be_true()
+}
+
+pub fn toast_stack_caps_and_dismisses_test() {
+  let m0 = model.init("editorial", [])
+  let #(m1, _) = update.update(m0, ShowToast("first"))
+  let #(m2, _) = update.update(m1, ShowToastTone("second", model.ToastError))
+  let #(m3, _) = update.update(m2, ShowToast("third"))
+  let #(m4, _) = update.update(m3, ShowToast("fourth"))
+  list.length(m4.toasts) |> should.equal(3)
+  let assert [newest, ..] = m4.toasts
+  newest.message |> should.equal("fourth")
+
+  let #(m5, _) = update.update(m4, DismissToast(newest.id))
+  list.length(m5.toasts) |> should.equal(2)
+
+  let html_str = editorial_theme.view(m4) |> element.to_string
+  string.contains(html_str, "omni-toast-stack") |> should.be_true()
+  string.contains(html_str, "btn-dismiss-toast-") |> should.be_true()
 }

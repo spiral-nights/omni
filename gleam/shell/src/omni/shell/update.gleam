@@ -13,13 +13,13 @@ import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace.{type WorkspaceState}
 import omni/shell/model.{
   type InstalledApp, type Model, type Page, InstalledApp, Model, PrimaryApp,
-  Settings, Syncing, TabPluginSettings, WidgetsDashboard,
+  Settings, SyncError, Syncing, TabPluginSettings, WidgetsDashboard,
 }
 import omni/shell/msg.{
   type Msg, AccountSwitchResult, AddAppPlacement, ApplyRemoteWorkspace,
   ClearEmbeddedSchema, ConfirmPluginUpdate, DisablePassphrase,
-  DismissIntentPrompt, DismissUpdateModal, DispatchIntent, EmbedSchema,
-  EnablePassphrase, EscapePressed, ExportKey, FinishPullRefresh,
+  DismissIntentPrompt, DismissToast, DismissUpdateModal, DispatchIntent,
+  EmbedSchema, EnablePassphrase, EscapePressed, ExportKey, FinishPullRefresh,
   HostedSchemaAction, ImportKey, InstallApp, InstallCustomShell, InstallShell,
   KeyImportResult, KeySecurityResult, KeySecurityStatus, NavigateBack,
   NavigateTo, OpenApp, OpenIntentApp, OpenSearch, OpenSettings,
@@ -28,10 +28,10 @@ import omni/shell/msg.{
   SetCapabilityGrants, SetCustomInstallUrl, SetCustomShellUrl, SetExportedNsec,
   SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
   SetUserProfile, ShellScrolled, ShowIntentPrompt, ShowPermissionPrompt,
-  ShowUpdateModal, StartPullRefresh, SwitchAccount, ToggleAppEnabled,
-  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleCapabilityGrant,
-  ToggleFullscreen, TriggerWorkspaceSync, UninstallApp, UninstallShell,
-  UnlockKey,
+  ShowToast, ShowToastTone, ShowUpdateModal, StartPullRefresh, SwitchAccount,
+  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
+  ToggleCapabilityGrant, ToggleFullscreen, TriggerWorkspaceSync, UninstallApp,
+  UninstallShell, UnlockKey,
 }
 
 /// Side-effect commands emitted by the pure shell `update` function.
@@ -173,6 +173,18 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     )
 
     ScrollToTop -> #(Model(..model, dock_hidden: False), [])
+
+    ShowToast(message) -> #(push_toast(model, message, model.ToastInfo), [])
+
+    ShowToastTone(message, tone) -> #(push_toast(model, message, tone), [])
+
+    DismissToast(id) -> #(
+      Model(
+        ..model,
+        toasts: list.filter(model.toasts, fn(toast) { toast.id != id }),
+      ),
+      [],
+    )
 
     EscapePressed -> {
       let next = case model.intent_prompt {
@@ -586,8 +598,16 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
         Ok(_) -> "Key imported. Signing as the new identity."
         Error(err) -> err
       }
+      let tone = case result {
+        Ok(_) -> model.ToastSuccess
+        Error(_) -> model.ToastError
+      }
       #(
-        Model(..model, key_input: "", key_message: Some(message)),
+        push_toast(
+          Model(..model, key_input: "", key_message: Some(message)),
+          message,
+          tone,
+        ),
         workspace_persistence_effects(model),
       )
     }
@@ -627,7 +647,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
         Ok(Nil) -> "Switched account."
         Error(err) -> err
       }
-      #(Model(..model, key_message: Some(message)), [])
+      let tone = case result {
+        Ok(_) -> model.ToastSuccess
+        Error(_) -> model.ToastError
+      }
+      #(
+        push_toast(Model(..model, key_message: Some(message)), message, tone),
+        [],
+      )
     }
 
     KeySecurityResult(result) -> {
@@ -635,7 +662,10 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
         Ok(Nil) -> None
         Error(err) -> Some(err)
       }
-      #(Model(..model, key_message: message), [])
+      case message {
+        Some(err) -> #(push_toast(model, err, model.ToastError), [])
+        None -> #(Model(..model, key_message: message), [])
+      }
     }
 
     SetExportedNsec(result) -> {
@@ -653,7 +683,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     }
 
     SetSyncStatus(status) -> {
-      #(Model(..model, sync_status: status), [])
+      let next = Model(..model, sync_status: status)
+      case status {
+        SyncError(err) -> #(
+          push_toast(next, "Sync failed: " <> err, model.ToastError),
+          [],
+        )
+        _ -> #(next, [])
+      }
     }
 
     ToggleAutoSync(enabled) -> {
@@ -719,6 +756,15 @@ fn widget_mount_effects(model: Model) -> List(ShellEffect) {
       )
     })
   })
+}
+
+fn push_toast(model: Model, message: String, tone: model.ToastTone) -> Model {
+  let toast = model.Toast(id: model.next_toast_id, message: message, tone: tone)
+  Model(
+    ..model,
+    toasts: list.take([toast, ..model.toasts], 3),
+    next_toast_id: model.next_toast_id + 1,
+  )
 }
 
 fn navigate_intent(

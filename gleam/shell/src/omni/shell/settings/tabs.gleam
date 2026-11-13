@@ -63,6 +63,7 @@ pub fn render_settings_view(model: Model) -> Element(Msg) {
           element.text("Workspace & System Settings"),
         ]),
         nav_bar,
+        render_mobile_tab_select(model, active_tab),
       ]),
       html.div([attribute.class("omni-settings-content")], [panel_body]),
     ],
@@ -146,6 +147,66 @@ fn plugin_title(model: Model, plugin_id: String) -> String {
   case model.find_app(model, plugin_id) {
     Some(app) -> model.app_title(app)
     None -> plugin_id
+  }
+}
+
+fn render_mobile_tab_select(
+  model: Model,
+  active_tab: SettingsTab,
+) -> Element(Msg) {
+  let targets = all_settings_targets(model)
+  let options =
+    list.map(targets, fn(target) {
+      let #(slug, label, tab) = target
+      html.option(
+        [
+          attribute.value(slug),
+          attribute.selected(active_tab == tab),
+        ],
+        label,
+      )
+    })
+  html.select(
+    [
+      attribute.id("select-settings-tab"),
+      attribute.class("omni-settings-tab-select"),
+      attribute.attribute("aria-label", "Settings Category"),
+      event.on_change(fn(slug) {
+        OpenSettings(settings_tab_from_slug(targets, slug, active_tab))
+      }),
+    ],
+    options,
+  )
+}
+
+fn all_settings_targets(model: Model) -> List(#(String, String, SettingsTab)) {
+  let base = [
+    #("shells", "Appearance & Shells", TabShells),
+    #("plugins", "Plugins & Viewports", TabPlugins),
+    #("workspace", "Workspace & Sync", TabWorkspace),
+    #("profile", "Profile & Keys", TabProfile),
+    #("relays", "Relays & Scoping", TabRelays),
+  ]
+  let plugin_targets =
+    apps_with_settings_view(model)
+    |> list.map(fn(app) {
+      #(
+        "plugin:" <> app.id,
+        plugin_title(model, app.id),
+        TabPluginSettings(app.id),
+      )
+    })
+  list.append(base, plugin_targets)
+}
+
+fn settings_tab_from_slug(
+  targets: List(#(String, String, SettingsTab)),
+  slug: String,
+  fallback: SettingsTab,
+) -> SettingsTab {
+  case list.find(targets, fn(target) { target.0 == slug }) {
+    Ok(target) -> target.2
+    Error(_) -> fallback
   }
 }
 
