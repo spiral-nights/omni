@@ -3,9 +3,9 @@
 import gleam/option.{None, Some}
 import gleeunit/should
 import omni/shell/gestures/pull_to_refresh.{
-  PullIdle, Pulling, ReadyToRefresh, Refreshing, max_distance_px, on_touch_end,
-  on_touch_move, on_touch_start, threshold_px,
+  max_distance_px, on_touch_end, on_touch_move, on_touch_start, threshold_px,
 }
+import omni/shell/model.{PullIdle, Pulling, ReadyToRefresh, Refreshing}
 import omni/shell/msg.{StartPullRefresh}
 
 pub fn touch_start_requires_top_of_scroll_test() {

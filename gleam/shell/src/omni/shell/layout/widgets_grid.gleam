@@ -4,7 +4,6 @@
 //// empty state inviting the user to configure widgets in Settings.
 
 import gleam/list
-import gleam/option.{None}
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
@@ -26,12 +25,13 @@ pub fn render_widgets_grid(model: Model) -> Element(Msg) {
     items ->
       html.div(
         [attribute.class("omni-widgets-grid")],
-        list.map(items, fn(pair) { render_widget_card(pair.0, pair.1) }),
+        list.map(items, fn(pair) { render_widget_card(model, pair.0, pair.1) }),
       )
   }
 }
 
 fn render_widget_card(
+  model: Model,
   app: InstalledApp,
   placement: PlacementConfig,
 ) -> Element(Msg) {
@@ -63,7 +63,12 @@ fn render_widget_card(
         ),
       ]),
       html.div([attribute.class("omni-widget-body")], [
-        viewport_host.render_slot_anchor(Sidebar, app.id, placement.route, True),
+        viewport_host.render_embedded_or_island_in(
+          Sidebar,
+          model,
+          app.id,
+          placement.route,
+        ),
       ]),
     ],
   )

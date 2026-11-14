@@ -26,6 +26,8 @@ import {
   PullState$isPulling,
   PullState$isReadyToRefresh,
   PullState$isRefreshing,
+} from "../../gleam/interop/build/dev/javascript/omni_shell/omni/shell/model.mjs";
+import {
   on_touch_end,
   on_touch_move,
   on_touch_start,
@@ -187,6 +189,7 @@ describe("pull-to-refresh touch listeners (shell_boot FFI)", () => {
   async function triggerRefresh(deltaPx: number): Promise<void> {
     document.dispatchEvent(touchEvent("touchstart", 100));
     document.dispatchEvent(touchEvent("touchmove", 100 + deltaPx));
+    document.dispatchEvent(touchEvent("touchend", 100 + deltaPx));
     await nextFrame();
   }
 
@@ -208,15 +211,11 @@ describe("pull-to-refresh touch listeners (shell_boot FFI)", () => {
   });
 
   it("does not refresh for a pull shorter than 50px", async () => {
-    document.dispatchEvent(touchEvent("touchend", 150));
     await triggerRefresh(threshold_px - 1);
 
     const indicator = pullIndicator();
     expect(indicator).not.toBeNull();
     expect(indicator!.className).not.toContain("is-refreshing");
-
-    document.dispatchEvent(touchEvent("touchend", 150));
-    await nextFrame();
   });
 
   it("ignores a gesture that starts while the page is scrolled", async () => {

@@ -13,7 +13,6 @@ import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
-import omni/protocol/viewport.{Main}
 import omni/shell/layout/viewport_host
 import omni/shell/model.{
   type InstalledApp, type Model, type SettingsTab, type SyncStatus, Settings,
@@ -74,8 +73,6 @@ fn render_settings_tab_bar(
   model: Model,
   active_tab: SettingsTab,
 ) -> Element(Msg) {
-  // Three primary sections, matching the original Editorial settings modal:
-  // Appearance & Shells, Plugins & Viewports, Workspace & Sync.
   let primary_tabs = [
     render_tab_button(
       id: "settings-tab-shells",
@@ -98,29 +95,23 @@ fn render_settings_tab_bar(
       is_active: active_tab == TabWorkspace,
       target: TabWorkspace,
     ),
+    render_tab_button(
+      id: "settings-tab-profile",
+      label: "Profile & Keys",
+      icon_name: "user",
+      is_active: active_tab == TabProfile,
+      target: TabProfile,
+    ),
+    render_tab_button(
+      id: "settings-tab-relays",
+      label: "Relays & Scoping",
+      icon_name: "relays",
+      is_active: active_tab == TabRelays,
+      target: TabRelays,
+    ),
   ]
 
-  // Identity and relay scoping remain reachable as deeper pages. Their tab is
-  // only surfaced while active so the primary bar stays at three entries.
   let secondary_tab = case active_tab {
-    TabProfile -> [
-      render_tab_button(
-        id: "settings-tab-profile",
-        label: "Profile & Keys",
-        icon_name: "user",
-        is_active: True,
-        target: TabProfile,
-      ),
-    ]
-    TabRelays -> [
-      render_tab_button(
-        id: "settings-tab-relays",
-        label: "Relays & Scoping",
-        icon_name: "relays",
-        is_active: True,
-        target: TabRelays,
-      ),
-    ]
     TabPluginSettings(plugin_id) -> [
       render_tab_button(
         id: "settings-tab-plugin-" <> plugin_id,
@@ -248,6 +239,9 @@ fn render_active_tab_panel(
     TabRelays -> relay_scoping.render_relay_scoping_panel(model)
     TabPlugins ->
       html.div([attribute.class("omni-settings-plugins-combined")], [
+        placements.render_placements_panel(model),
+        intents.render_default_applications_panel(model),
+        intents.render_intents_panel(model),
         permissions.render_permissions_panel(model),
       ])
     TabWorkspace -> render_workspace_tab(model)
@@ -653,11 +647,10 @@ fn render_plugin_settings_tab(model: Model, plugin_id: String) -> Element(Msg) {
         ]),
       ]),
       html.div([attribute.class("plugin-settings-mount-container")], [
-        viewport_host.render_slot_anchor(
-          Main,
+        viewport_host.render_embedded_or_island(
+          model,
           plugin_id,
           Some("?view=settings"),
-          True,
         ),
       ]),
     ],

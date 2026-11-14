@@ -2,6 +2,7 @@
 ////
 //// Strictly plugin-agnostic: zero hardcoded plugin IDs.
 
+import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
 import lustre/attribute
@@ -10,7 +11,8 @@ import lustre/element/html
 import lustre/event
 import omni/shell/model.{type InstalledApp, type IntentPromptState, type Model}
 import omni/shell/msg.{
-  type Msg, DismissIntentPrompt, SelectIntentHandler, ToggleAppIntent,
+  type Msg, DismissIntentPrompt, SelectIntentHandler, SetDefaultIntent,
+  ToggleAppIntent, ToggleRememberIntentChoice,
 }
 import omni/ui/icons
 
@@ -76,6 +78,120 @@ pub fn describe_intent(action: String) -> IntentDescriptor {
         label: action,
         description: "Handler for \"" <> action <> "\" intent",
       )
+  }
+}
+
+/// Render the Default Applications settings grid for standard cross-app intents.
+pub fn render_default_applications_panel(model: Model) -> Element(Msg) {
+  let standard_actions = [
+    #("compose_note", ["create_note"], "Compose Note"),
+    #("view_note", [], "View Note & Thread"),
+    #("view_profile", [], "View Profile"),
+    #("edit_profile", [], "Edit Profile"),
+    #("share", [], "Web Share Target"),
+    #("pay_invoice", [], "Lightning Payment"),
+    #("search", [], "Search"),
+  ]
+
+  let cards =
+    list.map(standard_actions, fn(entry) {
+      let #(action_name, aliases, label) = entry
+      let all_actions = [action_name, ..aliases]
+      let candidates =
+        list.filter(model.installed_apps, fn(app) {
+          list.any(all_actions, fn(act) {
+            list.contains(app.handled_intents, act)
+            && !list.contains(app.disabled_intents, act)
+          })
+        })
+      let current_default =
+        find_default_for_actions(model.default_intents, all_actions)
+      let empty_label = case candidates {
+        [] -> "No apps available"
+        _ -> "Prompt every time (None)"
+      }
+      let options = [
+        html.option(
+          [attribute.value(""), attribute.selected(current_default == "")],
+          empty_label,
+        ),
+        ..list.map(candidates, fn(cand) {
+          html.option(
+            [
+              attribute.value(cand.id),
+              attribute.selected(current_default == cand.id),
+            ],
+            model.app_title(cand),
+          )
+        })
+      ]
+      let info = describe_intent(action_name)
+
+      html.article(
+        [
+          attribute.class("omni-settings-card default-app-card"),
+          attribute.attribute("data-default-intent", action_name),
+        ],
+        [
+          html.div([attribute.class("omni-settings-card-header")], [
+            html.strong([attribute.class("omni-settings-app-name")], [
+              element.text(label),
+            ]),
+            html.code([attribute.class("intent-capability-code")], [
+              element.text(action_name),
+            ]),
+          ]),
+          html.p([attribute.class("omni-settings-section-desc")], [
+            element.text(info.description),
+          ]),
+          html.select(
+            [
+              attribute.id("select-default-intent-" <> action_name),
+              attribute.class("default-app-select"),
+              attribute.attribute("aria-label", label <> " default application"),
+              event.on_change(fn(val) { SetDefaultIntent(action_name, val) }),
+            ],
+            options,
+          ),
+        ],
+      )
+    })
+
+  html.section(
+    [
+      attribute.class("omni-settings-panel default-applications-box"),
+      attribute.id("settings-default-apps-panel"),
+    ],
+    [
+      html.header([attribute.class("omni-settings-section-header")], [
+        html.div([attribute.class("omni-settings-title-group")], [
+          icons.render_icon("apps", 18),
+          html.h3([attribute.class("omni-settings-section-title")], [
+            element.text("Default Applications"),
+          ]),
+        ]),
+        html.p([attribute.class("omni-settings-section-desc")], [
+          element.text(
+            "Assign default applications to handle common actions across plugins without prompting every time.",
+          ),
+        ]),
+      ]),
+      html.div([attribute.class("default-applications-grid")], cards),
+    ],
+  )
+}
+
+fn find_default_for_actions(
+  defaults: dict.Dict(String, String),
+  actions: List(String),
+) -> String {
+  case actions {
+    [] -> ""
+    [first, ..rest] ->
+      case dict.get(defaults, first) {
+        Ok(id) -> id
+        Error(_) -> find_default_for_actions(defaults, rest)
+      }
   }
 }
 
@@ -310,6 +426,21 @@ fn render_active_intent_modal(
         html.div(
           [attribute.class("omni-intent-candidates-list")],
           candidate_buttons,
+        ),
+        html.label(
+          [
+            attribute.class("omni-intent-remember-row"),
+            attribute.for("chk-remember-intent-choice"),
+          ],
+          [
+            html.input([
+              attribute.type_("checkbox"),
+              attribute.id("chk-remember-intent-choice"),
+              attribute.checked(model.remember_intent_choice),
+              event.on_check(fn(_) { ToggleRememberIntentChoice }),
+            ]),
+            html.span([], [element.text("Always use this app")]),
+          ],
         ),
         html.footer([attribute.class("omni-modal-footer")], [
           html.button(

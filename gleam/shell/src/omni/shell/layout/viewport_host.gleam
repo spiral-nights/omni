@@ -48,8 +48,19 @@ pub fn render_slot_anchor(
 }
 
 /// Render a host-embedded built-in plugin schema when present, otherwise the
-/// stable sandbox island anchor for a guest plugin.
+/// stable sandbox island anchor for a guest plugin in `Main`.
 pub fn render_embedded_or_island(
+  model: Model,
+  plugin_id: String,
+  route: Option(String),
+) -> Element(Msg) {
+  render_embedded_or_island_in(Main, model, plugin_id, route)
+}
+
+/// Render a host-embedded built-in plugin schema when present, otherwise the
+/// stable sandbox island anchor for a guest plugin in `vp`.
+pub fn render_embedded_or_island_in(
+  vp: Viewport,
   model: Model,
   plugin_id: String,
   route: Option(String),
@@ -61,6 +72,6 @@ pub fn render_embedded_or_island(
           HostedSchemaAction(plugin_id, action)
         }),
       ])
-    Error(Nil) -> render_slot_anchor(Main, plugin_id, route, True)
+    Error(Nil) -> render_slot_anchor(vp, plugin_id, route, True)
   }
 }

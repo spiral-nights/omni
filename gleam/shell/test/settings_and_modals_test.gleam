@@ -8,14 +8,14 @@ import omni/platform/storage
 import omni/protocol/viewport.{Sidebar}
 import omni/shell/accent
 import omni/shell/app_store
-import omni/shell/gestures/pull_to_refresh.{
-  PullIdle, Pulling, ReadyToRefresh, Refreshing,
-}
+import omni/shell/gestures/pull_to_refresh
+import omni/shell/layout/context_menu
 import omni/shell/model.{
   type InstalledApp, type PlacementConfig, type ViewOption, InstalledApp,
-  IntentPromptState, Model, PlacementConfig, Settings, ShellInfo, SyncError,
-  Synced, TabPluginSettings, TabPlugins, TabProfile, TabRelays, TabShells,
-  TabWorkspace, UpdateModalState, UserProfileSummary, ViewOption,
+  IntentPromptState, Model, PlacementConfig, PullIdle, Pulling, ReadyToRefresh,
+  Refreshing, Settings, ShellInfo, SyncError, Synced, TabPluginSettings,
+  TabPlugins, TabProfile, TabRelays, TabShells, TabWorkspace, UpdateModalState,
+  UserProfileSummary, ViewOption,
 }
 import omni/shell/msg.{
   ConfirmPluginUpdate, SelectIntentHandler, SetThemeMode, SetUpdateSourceUrl,
@@ -436,15 +436,14 @@ pub fn settings_tabs_renders_system_tabs_and_dynamic_plugin_settings_test() {
       sync_status: Synced(1_700_000_000),
     )
   let ws_html = tabs.render_settings_view(m_ws) |> element.to_string
-  // The primary settings bar is exactly three sections, matching the original
-  // Editorial modal: Appearance & Shells, Plugins & Viewports, Workspace & Sync.
+  // All five standard settings tabs are exposed on desktop alongside the mobile select.
   should.be_true(string.contains(ws_html, "id=\"settings-tab-shells\""))
   should.be_true(string.contains(ws_html, "id=\"settings-tab-plugins\""))
   should.be_true(string.contains(ws_html, "id=\"settings-tab-workspace\""))
   should.be_true(string.contains(ws_html, "id=\"select-settings-tab\""))
   should.be_true(string.contains(ws_html, "value=\"workspace\""))
-  should.be_false(string.contains(ws_html, "id=\"settings-tab-profile\""))
-  should.be_false(string.contains(ws_html, "id=\"settings-tab-relays\""))
+  should.be_true(string.contains(ws_html, "id=\"settings-tab-profile\""))
+  should.be_true(string.contains(ws_html, "id=\"settings-tab-relays\""))
   should.be_false(string.contains(
     ws_html,
     "id=\"settings-tab-plugin-nsite.sample.configurable\"",
@@ -461,6 +460,11 @@ pub fn settings_tabs_renders_system_tabs_and_dynamic_plugin_settings_test() {
     plugins_html,
     "id=\"settings-placements-panel\"",
   ))
+  should.be_true(string.contains(
+    plugins_html,
+    "id=\"settings-default-apps-panel\"",
+  ))
+  should.be_true(string.contains(plugins_html, "id=\"settings-intents-panel\""))
   should.be_true(string.contains(
     plugins_html,
     "id=\"settings-permissions-panel\"",
@@ -771,10 +775,23 @@ pub fn select_intent_handler_persists_default_test() {
         "{}",
       )),
     )
-  let #(m1, effects) =
+  // Without "Always use this app", default_intents is not modified.
+  let #(m_once, effects_once) =
     shell.update(m0, SelectIntentHandler("nsite.sample.alpha"))
+  m_once.default_intents |> should.equal(dict.new())
+  list.any(effects_once, fn(effect) {
+    effect == update.SetIntentDefault("view_note", "nsite.sample.alpha")
+  })
+  |> should.be_false()
+
+  // With "Always use this app" toggled on, default_intents is persisted.
+  let #(m_remember, _) = shell.update(m0, msg.ToggleRememberIntentChoice)
+  m_remember.remember_intent_choice |> should.be_true()
+  let #(m1, effects) =
+    shell.update(m_remember, SelectIntentHandler("nsite.sample.alpha"))
   m1.default_intents
   |> should.equal(dict.from_list([#("view_note", "nsite.sample.alpha")]))
+  m1.remember_intent_choice |> should.be_false()
   list.any(effects, fn(effect) {
     effect == update.SetIntentDefault("view_note", "nsite.sample.alpha")
   })
@@ -830,4 +847,73 @@ pub fn update_modal_source_url_and_file_effects_test() {
   |> should.equal([
     update.UpgradePluginFromFile(plugin_id: "nsite.sample.alpha"),
   ])
+}
+
+pub fn context_menu_toast_timer_escape_permission_and_default_intent_test() {
+  let app =
+    make_app(
+      "nsite.sample.alpha",
+      "Sample Alpha",
+      True,
+      True,
+      [],
+      [],
+      [],
+      [],
+      None,
+    )
+  let m0 = model.init("editorial", [app])
+
+  // Context menu open & dismiss
+  let #(m_ctx, _) =
+    shell.update(m0, msg.OpenAppContextMenu("nsite.sample.alpha", 120, 240))
+  let ctx_html = context_menu.render_context_menu(m_ctx) |> element.to_string
+  should.be_true(string.contains(ctx_html, "id=\"omni-app-context-menu\""))
+  should.be_true(string.contains(ctx_html, "id=\"ctx-menu-update\""))
+  let #(m_ctx_closed, _) = shell.update(m_ctx, msg.DismissAppContextMenu)
+  m_ctx_closed.context_menu |> should.equal(None)
+
+  // Toast emits ScheduleToastDismiss
+  let #(m_toast, toast_effects) = shell.update(m0, msg.ShowToast("Saved"))
+  m_toast.toasts |> list.length |> should.equal(1)
+  list.any(toast_effects, fn(eff) {
+    case eff {
+      update.ScheduleToastDismiss(_) -> True
+      _ -> False
+    }
+  })
+  |> should.be_true()
+
+  // EscapePressed denies & closes active permission_prompt
+  let prompt =
+    model.PermissionPromptState(
+      id: 42,
+      plugin_id: "nsite.sample.alpha",
+      capability: "nostr.sign",
+      scope: None,
+    )
+  let m_perm = Model(..m0, permission_prompt: Some(prompt))
+  let #(m_perm_closed, perm_effects) = shell.update(m_perm, msg.EscapePressed)
+  m_perm_closed.permission_prompt |> should.equal(None)
+  list.any(perm_effects, fn(eff) {
+    eff == update.PermissionDecision(prompt_id: 42, allowed: False)
+  })
+  |> should.be_true()
+
+  // SetDefaultIntent sets and clears default_intents
+  let #(m_def, def_effects) =
+    shell.update(m0, msg.SetDefaultIntent("view_note", "nsite.sample.alpha"))
+  dict.get(m_def.default_intents, "view_note")
+  |> should.equal(Ok("nsite.sample.alpha"))
+  list.any(def_effects, fn(eff) {
+    eff == update.SetIntentDefault("view_note", "nsite.sample.alpha")
+  })
+  |> should.be_true()
+  let #(m_cleared, clear_effects) =
+    shell.update(m_def, msg.SetDefaultIntent("view_note", ""))
+  dict.get(m_cleared.default_intents, "view_note") |> should.equal(Error(Nil))
+  list.any(clear_effects, fn(eff) {
+    eff == update.ClearIntentDefault("view_note")
+  })
+  |> should.be_true()
 }

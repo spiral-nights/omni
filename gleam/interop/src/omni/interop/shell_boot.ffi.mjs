@@ -539,37 +539,6 @@ export function mount_dom(
   const spa = result && result.isOk ? result[0] : null;
   if (spa) window.__omniShellDispatch = (message) => spa.dispatch(message);
 
-  if (spa) {
-    let startY = null;
-    let fired = false;
-    const reset = () => {
-      startY = null;
-      fired = false;
-    };
-    document.addEventListener(
-      "touchstart",
-      (e) => {
-        if (!e.touches || e.touches.length !== 1) return;
-        startY = (window.scrollY || 0) <= 1 ? e.touches[0].clientY : null;
-        fired = false;
-      },
-      { passive: true },
-    );
-    document.addEventListener(
-      "touchmove",
-      (e) => {
-        if (startY === null || fired || !e.touches || !e.touches.length) return;
-        if (e.touches[0].clientY - startY >= 50) {
-          fired = true;
-          spa.dispatch(pull_start);
-        }
-      },
-      { passive: true },
-    );
-    document.addEventListener("touchend", reset, { passive: true });
-    document.addEventListener("touchcancel", reset, { passive: true });
-  }
-
   window.addEventListener("popstate", (event) => {
     if (!spa) return;
     const target = readIndex(event && event.state);
@@ -682,6 +651,91 @@ export function listen_escape(onEscape) {
   });
 }
 
+export function listen_pull_to_refresh(onStart, onMove, onEnd) {
+  if (typeof document === "undefined") return;
+  let tracking = false;
+  document.addEventListener(
+    "touchstart",
+    (e) => {
+      if (!e.touches || e.touches.length !== 1) return;
+      tracking = true;
+      onStart(window.scrollY || 0, e.touches[0].clientY);
+    },
+    { passive: true },
+  );
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!tracking || !e.touches || !e.touches.length) return;
+      onMove(e.touches[0].clientY);
+    },
+    { passive: true },
+  );
+  const finish = () => {
+    if (!tracking) return;
+    tracking = false;
+    onEnd();
+  };
+  document.addEventListener("touchend", finish, { passive: true });
+  document.addEventListener("touchcancel", finish, { passive: true });
+}
+
+export function listen_app_context_menu(onOpen) {
+  if (typeof document === "undefined") return;
+  document.addEventListener("contextmenu", (event) => {
+    const target = event.target && event.target.closest
+      ? event.target.closest("[data-context-app-id]")
+      : null;
+    if (!target) return;
+    const appId = target.getAttribute("data-context-app-id");
+    if (!appId) return;
+    event.preventDefault();
+    onOpen(appId, Math.round(event.clientX || 0), Math.round(event.clientY || 0));
+  });
+
+  let timer = null;
+  let startX = 0;
+  let startY = 0;
+  const clearTimer = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+  document.addEventListener(
+    "touchstart",
+    (event) => {
+      if (!event.touches || event.touches.length !== 1) return;
+      const target = event.target && event.target.closest
+        ? event.target.closest("[data-context-app-id]")
+        : null;
+      if (!target) return;
+      const appId = target.getAttribute("data-context-app-id");
+      if (!appId) return;
+      startX = event.touches[0].clientX;
+      startY = event.touches[0].clientY;
+      clearTimer();
+      timer = setTimeout(() => {
+        timer = null;
+        onOpen(appId, Math.round(startX), Math.round(startY));
+      }, 500);
+    },
+    { passive: true },
+  );
+  document.addEventListener(
+    "touchmove",
+    (event) => {
+      if (timer === null || !event.touches || !event.touches.length) return;
+      const dx = Math.abs(event.touches[0].clientX - startX);
+      const dy = Math.abs(event.touches[0].clientY - startY);
+      if (dx > 10 || dy > 10) clearTimer();
+    },
+    { passive: true },
+  );
+  document.addEventListener("touchend", clearTimer, { passive: true });
+  document.addEventListener("touchcancel", clearTimer, { passive: true });
+}
+
 export function scroll_shell_top() {
   if (typeof document === "undefined") return;
   const target =
@@ -694,4 +748,8 @@ export function scroll_shell_top() {
   if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
+}
+
+export function set_timeout(ms, cb) {
+  setTimeout(cb, ms);
 }

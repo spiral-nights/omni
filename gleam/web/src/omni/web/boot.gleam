@@ -566,6 +566,12 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
           })
           #(reg, Nil)
         }
+        update.ClearIntentDefault(action) -> {
+          ref.update(booted.intent_broker, fn(current) {
+            broker.clear_default_handler(current, action)
+          })
+          #(reg, Nil)
+        }
         update.PermissionDecision(prompt_id, allowed) -> {
           permission_prompt.resolve(
             booted.permission_prompts,

@@ -8,6 +8,7 @@
 
 import gleam/bit_array
 import gleam/dict
+import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/javascript/promise
 import gleam/json
@@ -63,9 +64,10 @@ import omni/shell/model.{
 import omni/shell/msg.{
   AccountSwitchResult, ApplyRemoteWorkspace, DispatchIntent, EmbedSchema,
   EscapePressed, FinishPullRefresh, InstallApp, KeyImportResult,
-  KeySecurityResult, KeySecurityStatus, NavigateTo, OpenApp, OpenSettings,
-  SetExportedNsec, SetUserProfile, ShellScrolled, ShowPermissionPrompt,
-  ShowUpdateModal, StartPullRefresh, UninstallApp,
+  KeySecurityResult, KeySecurityStatus, NavigateTo, OpenApp, OpenAppContextMenu,
+  OpenSettings, PullTouchEnd, PullTouchMove, PullTouchStart, SetExportedNsec,
+  SetUserProfile, ShellScrolled, ShowPermissionPrompt, ShowUpdateModal,
+  StartPullRefresh, UninstallApp,
 }
 import omni/shell/update
 import omni/social/profile as social_profile
@@ -253,7 +255,7 @@ fn handle_channel1_fallback(raw_json: String) -> Nil {
             "" -> None
             _ -> Some(url)
           }
-          host_share(t_opt, tx_opt, u_opt)
+          route_share_intent(t_opt, tx_opt, u_opt)
         }
         _ ->
           case decode.run(dyn, dec_link) {
@@ -291,6 +293,26 @@ pub fn sign_event(
   rpc.sign_draft_json(host.booted, draft_json)
 }
 
+fn route_share_intent(
+  title: Option(String),
+  text: Option(String),
+  url: Option(String),
+) -> Nil {
+  let pairs =
+    [
+      option.map(title, fn(v) { #("title", dynamic.string(v)) }),
+      option.map(text, fn(v) { #("text", dynamic.string(v)) }),
+      option.map(url, fn(v) { #("url", dynamic.string(v)) }),
+    ]
+    |> list.filter_map(fn(item) {
+      case item {
+        Some(pair) -> Ok(pair)
+        None -> Error(Nil)
+      }
+    })
+  dispatch_shell_msg(DispatchIntent("share", Some(dict.from_list(pairs))))
+}
+
 /// Host callbacks exposed to guest RPC methods.
 fn host_hooks() -> dispatcher.HostHooks {
   dispatcher.HostHooks(
@@ -298,7 +320,7 @@ fn host_hooks() -> dispatcher.HostHooks {
       dispatch_shell_msg(DispatchIntent(name, payload))
     }),
     navigate: Some(fn(view, page) { dispatch_shell_msg(OpenApp(view, page)) }),
-    share: Some(host_share),
+    share: Some(route_share_intent),
     handle_uri: Some(handle_uri),
   )
 }
@@ -405,7 +427,18 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
   listen_shell_scroll(fn(at_top, scrolling_down) {
     dispatch_shell_msg(ShellScrolled(at_top, scrolling_down))
   })
+  listen_pull_to_refresh(
+    fn(scroll_top, client_y) {
+      dispatch_shell_msg(PullTouchStart(scroll_top, client_y))
+    },
+    fn(client_y) { dispatch_shell_msg(PullTouchMove(client_y)) },
+    fn() { dispatch_shell_msg(PullTouchEnd) },
+  )
+  listen_app_context_menu(fn(plugin_id, x, y) {
+    dispatch_shell_msg(OpenAppContextMenu(plugin_id, x, y))
+  })
   listen_escape(fn() { dispatch_shell_msg(EscapePressed) })
+  mount_widget_placements(host)
 
   // Clock for time-driven built-ins (the focus timer): one tick per second.
   start_interval(1000, fn() {
@@ -582,6 +615,11 @@ fn apply_effects(
 
       update.RefreshActiveView -> {
         refresh_public_feed(acc)
+        acc
+      }
+
+      update.ScheduleToastDismiss(id) -> {
+        set_timeout(4000, fn() { dispatch_shell_msg(msg.DismissToast(id)) })
         acc
       }
 
@@ -1095,7 +1133,9 @@ fn upgrade_plugin_from_file(host: ShellBoot, plugin_id: String) -> Nil {
     Error(Nil) -> Nil
     Ok(app) -> {
       let _ =
-        file_picker.pick_base64("text/html,application/xhtml+xml,text/plain")
+        file_picker.pick_base64(
+          ".zip,application/zip,text/html,application/xhtml+xml,text/plain",
+        )
         |> promise.map(fn(result) {
           case result {
             Error(_) -> Nil
@@ -1103,17 +1143,34 @@ fn upgrade_plugin_from_file(host: ShellBoot, plugin_id: String) -> Nil {
               case bit_array.base64_decode(encoded) {
                 Error(_) -> Nil
                 Ok(bytes) ->
-                  case bit_array.to_string(bytes) {
-                    Error(_) -> Nil
-                    Ok(content) -> {
-                      let next_app =
-                        installer.app_from_content(
-                          app.source_url,
-                          plugin_id,
-                          content,
-                        )
-                      apply_upgrade(host, plugin_id, app, next_app, content)
-                    }
+                  case
+                    installer.resolve_zip_bytes(
+                      bytes,
+                      app.source_url,
+                      plugin_id,
+                    )
+                  {
+                    Ok(bundle) ->
+                      apply_upgrade(
+                        host,
+                        plugin_id,
+                        app,
+                        bundle.app,
+                        bundle.content,
+                      )
+                    Error(_) ->
+                      case bit_array.to_string(bytes) {
+                        Error(_) -> Nil
+                        Ok(content) -> {
+                          let next_app =
+                            installer.app_from_content(
+                              app.source_url,
+                              plugin_id,
+                              content,
+                            )
+                          apply_upgrade(host, plugin_id, app, next_app, content)
+                        }
+                      }
                   }
               }
           }
@@ -1475,18 +1532,49 @@ fn listen_shell_scroll(on_change: fn(Bool, Bool) -> Nil) -> Nil
 @external(javascript, "./shell_boot.ffi.mjs", "listen_escape")
 fn listen_escape(on_escape: fn() -> Nil) -> Nil
 
+@external(javascript, "./shell_boot.ffi.mjs", "listen_pull_to_refresh")
+fn listen_pull_to_refresh(
+  on_start: fn(Float, Float) -> Nil,
+  on_move: fn(Float) -> Nil,
+  on_end: fn() -> Nil,
+) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "listen_app_context_menu")
+fn listen_app_context_menu(on_open: fn(String, Int, Int) -> Nil) -> Nil
+
 @external(javascript, "./shell_boot.ffi.mjs", "scroll_shell_top")
 fn scroll_shell_top() -> Nil
 
+@external(javascript, "./shell_boot.ffi.mjs", "set_timeout")
+fn set_timeout(ms: Int, cb: fn() -> Nil) -> Nil
+
+fn mount_widget_placements(host: ShellBoot) -> Nil {
+  list.each(host.booted.model.installed_apps, fn(app) {
+    case app.enabled {
+      False -> Nil
+      True ->
+        list.each(app.placements, fn(placement) {
+          case placement.viewport {
+            viewport.Sidebar ->
+              case dict.has_key(host.booted.builtins, app.id) {
+                True -> Nil
+                False ->
+                  mount_installed(
+                    host,
+                    app.id,
+                    viewport.Sidebar,
+                    placement.route,
+                  )
+              }
+            _ -> Nil
+          }
+        })
+    }
+  })
+}
+
 @external(javascript, "./shell_boot.ffi.mjs", "apply_document_theme")
 fn apply_document_theme(theme_mode: String, accent_css: String) -> Nil
-
-@external(javascript, "./shell_boot.ffi.mjs", "host_share")
-fn host_share(
-  title: Option(String),
-  text: Option(String),
-  url: Option(String),
-) -> Nil
 
 /// The active shell theme ID (`"panorama"`, `"editorial"`).
 pub fn active_shell_id(host: ShellBoot) -> String {

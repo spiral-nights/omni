@@ -145,6 +145,19 @@ pub type CapabilityGrant {
   )
 }
 
+/// State for the floating application context menu.
+pub type AppContextMenu {
+  AppContextMenu(plugin_id: String, x: Int, y: Int)
+}
+
+/// Pull-to-refresh state machine states.
+pub type PullState {
+  PullIdle
+  Pulling(start_y: Float, current_y: Float, distance: Float)
+  ReadyToRefresh(distance: Float)
+  Refreshing
+}
+
 /// Root state model for the Omni Shell.
 pub type Model {
   Model(
@@ -164,8 +177,11 @@ pub type Model {
     sync_status: SyncStatus,
     auto_sync_nip78: Bool,
     intent_prompt: Option(IntentPromptState),
+    remember_intent_choice: Bool,
     update_modal: Option(UpdateModalState),
+    context_menu: Option(AppContextMenu),
     pull_refreshing: Bool,
+    pull_state: PullState,
     search_query: String,
     app_store_view: String,
     custom_install_url: String,
@@ -211,8 +227,11 @@ pub fn init(active_shell_id: String, apps: List(InstalledApp)) -> Model {
     sync_status: SyncIdle,
     auto_sync_nip78: True,
     intent_prompt: None,
+    remember_intent_choice: False,
     update_modal: None,
+    context_menu: None,
     pull_refreshing: False,
+    pull_state: PullIdle,
     search_query: "",
     app_store_view: "grid",
     custom_install_url: "",

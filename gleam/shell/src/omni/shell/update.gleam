@@ -11,26 +11,30 @@ import omni/platform/clock
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/viewport.{type Viewport, Main}
 import omni/protocol/workspace.{type WorkspaceState}
+import omni/shell/gestures/pull_to_refresh
 import omni/shell/model.{
-  type InstalledApp, type Model, type Page, InstalledApp, Model, PrimaryApp,
-  Settings, SyncError, Syncing, TabPluginSettings, WidgetsDashboard,
+  type InstalledApp, type Model, type Page, AppContextMenu, InstalledApp, Model,
+  PrimaryApp, PullIdle, Settings, SyncError, Syncing, TabPluginSettings,
+  WidgetsDashboard,
 }
 import omni/shell/msg.{
   type Msg, AccountSwitchResult, AddAppPlacement, ApplyRemoteWorkspace,
   ClearEmbeddedSchema, ConfirmPluginUpdate, DisablePassphrase,
-  DismissIntentPrompt, DismissToast, DismissUpdateModal, DispatchIntent,
-  EmbedSchema, EnablePassphrase, EscapePressed, ExportKey, FinishPullRefresh,
-  HistorySync, HostedSchemaAction, ImportKey, InstallApp, InstallCustomShell,
-  InstallShell, KeyImportResult, KeySecurityResult, KeySecurityStatus,
-  NavigateBack, NavigateTo, OpenApp, OpenIntentApp, OpenSearch, OpenSettings,
-  RemoveAppPlacement, ResolvePermission, ScrollToTop, SelectIntentHandler,
-  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays, SetAppStoreView,
-  SetCapabilityGrants, SetCustomInstallUrl, SetCustomShellUrl, SetExportedNsec,
-  SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
-  SetUpdateSourceUrl, SetUserProfile, ShellScrolled, ShowIntentPrompt,
-  ShowPermissionPrompt, ShowToast, ShowToastTone, ShowUpdateModal,
-  StartPullRefresh, SwitchAccount, ToggleAppEnabled, ToggleAppIntent,
-  ToggleAppPinned, ToggleAutoSync, ToggleCapabilityGrant, ToggleFullscreen,
+  DismissAppContextMenu, DismissIntentPrompt, DismissToast, DismissUpdateModal,
+  DispatchIntent, EmbedSchema, EnablePassphrase, EscapePressed, ExportKey,
+  FinishPullRefresh, HistorySync, HostedSchemaAction, ImportKey, InstallApp,
+  InstallCustomShell, InstallShell, KeyImportResult, KeySecurityResult,
+  KeySecurityStatus, NavigateBack, NavigateTo, OpenApp, OpenAppContextMenu,
+  OpenIntentApp, OpenSearch, OpenSettings, PullTouchEnd, PullTouchMove,
+  PullTouchStart, RemoveAppPlacement, ResolvePermission, ScrollToTop,
+  SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
+  SetAppRelays, SetAppStoreView, SetCapabilityGrants, SetCustomInstallUrl,
+  SetCustomShellUrl, SetDefaultIntent, SetExportedNsec, SetKeyInput,
+  SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode, SetUpdateSourceUrl,
+  SetUserProfile, ShellScrolled, ShowIntentPrompt, ShowPermissionPrompt,
+  ShowToast, ShowToastTone, ShowUpdateModal, StartPullRefresh, SwitchAccount,
+  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
+  ToggleCapabilityGrant, ToggleFullscreen, ToggleRememberIntentChoice,
   TriggerWorkspaceSync, UninstallApp, UninstallShell, UnlockKey, UpdateFromFile,
 }
 
@@ -44,6 +48,7 @@ pub type ShellEffect {
   UnmountPluginFromSlot(plugin_id: String, viewport: Viewport)
   UninstallPlugin(plugin_id: String)
   SetIntentDefault(action: String, plugin_id: String)
+  ClearIntentDefault(action: String)
   PersistWorkspaceLocal(WorkspaceState)
   PublishWorkspaceNip78(WorkspaceState)
   SwitchActiveShell(shell_id: String)
@@ -68,6 +73,7 @@ pub type ShellEffect {
   DispatchHostedAction(plugin_id: String, action: Action)
   PermissionDecision(prompt_id: Int, allowed: Bool)
   InstallPluginFromUrl(url: String, plugin_id: String)
+  ScheduleToastDismiss(id: Int)
 }
 
 /// Pure, exhaustive, deterministic state transition for `Model`.
@@ -80,6 +86,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
           active_page: page,
           back_stack: push_back(model, page),
           intent_page: None,
+          context_menu: None,
         )
       let mount_effects = case page {
         PrimaryApp(plugin_id, route) -> [
@@ -119,6 +126,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
           active_page: page,
           back_stack: push_back(model, page),
           intent_page: None,
+          context_menu: None,
         )
       let effects = [
         MountPluginInSlot(plugin_id: plugin_id, viewport: Main, route: route),
@@ -135,6 +143,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
           active_page: page,
           back_stack: push_back(model, page),
           intent_page: None,
+          context_menu: None,
         )
       let mount_effects = case tab {
         TabPluginSettings(plugin_id) -> [
@@ -193,9 +202,13 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
 
     ScrollToTop -> #(Model(..model, dock_hidden: False), [])
 
-    ShowToast(message) -> #(push_toast(model, message, model.ToastInfo), [])
+    ShowToast(message) -> #(push_toast(model, message, model.ToastInfo), [
+      ScheduleToastDismiss(id: model.next_toast_id),
+    ])
 
-    ShowToastTone(message, tone) -> #(push_toast(model, message, tone), [])
+    ShowToastTone(message, tone) -> #(push_toast(model, message, tone), [
+      ScheduleToastDismiss(id: model.next_toast_id),
+    ])
 
     DismissToast(id) -> #(
       Model(
@@ -206,15 +219,31 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     )
 
     EscapePressed -> {
-      let next = case model.intent_prompt {
-        Some(_) -> Model(..model, intent_prompt: None)
+      case model.context_menu {
+        Some(_) -> #(Model(..model, context_menu: None), [])
         None ->
-          case model.update_modal {
-            Some(_) -> Model(..model, update_modal: None)
-            None -> Model(..model, fullscreen: False)
+          case model.permission_prompt {
+            Some(prompt) -> #(Model(..model, permission_prompt: None), [
+              PermissionDecision(prompt_id: prompt.id, allowed: False),
+            ])
+            None ->
+              case model.intent_prompt {
+                Some(_) -> #(
+                  Model(
+                    ..model,
+                    intent_prompt: None,
+                    remember_intent_choice: False,
+                  ),
+                  [],
+                )
+                None ->
+                  case model.update_modal {
+                    Some(_) -> #(Model(..model, update_modal: None), [])
+                    None -> #(Model(..model, fullscreen: False), [])
+                  }
+              }
           }
       }
-      #(next, [])
     }
 
     OpenSearch -> #(model, [RouteIntent("search")])
@@ -237,7 +266,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       }
 
       let next_model =
-        Model(..model, installed_apps: updated_apps, active_page: next_page)
+        Model(
+          ..model,
+          installed_apps: updated_apps,
+          active_page: next_page,
+          context_menu: None,
+        )
 
       let slot_effects = case target {
         Some(app) ->
@@ -284,7 +318,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
             False -> app
           }
         })
-      let next_model = Model(..model, installed_apps: updated_apps)
+      let next_model =
+        Model(..model, installed_apps: updated_apps, context_menu: None)
       #(next_model, workspace_persistence_effects(next_model))
     }
 
@@ -297,7 +332,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
             False -> app
           }
         })
-      let next_model = Model(..model, installed_apps: updated_apps)
+      let next_model =
+        Model(..model, installed_apps: updated_apps, context_menu: None)
 
       let unmount_removed = case prev_app {
         Some(prev) ->
@@ -349,7 +385,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
             False -> app
           }
         })
-      let next_model = Model(..model, installed_apps: updated_apps)
+      let next_model =
+        Model(..model, installed_apps: updated_apps, context_menu: None)
       let effects = [
         MountPluginInSlot(
           plugin_id: plugin_id,
@@ -373,7 +410,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
             False -> app
           }
         })
-      let next_model = Model(..model, installed_apps: updated_apps)
+      let next_model =
+        Model(..model, installed_apps: updated_apps, context_menu: None)
       let effects = [
         UnmountPluginFromSlot(plugin_id: plugin_id, viewport: viewport),
         ..workspace_persistence_effects(next_model)
@@ -420,7 +458,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
         page -> page
       }
       let next_model =
-        Model(..model, installed_apps: updated_apps, active_page: next_page)
+        Model(
+          ..model,
+          installed_apps: updated_apps,
+          active_page: next_page,
+          context_menu: None,
+        )
 
       let unmount_effects = case target {
         Some(app) -> {
@@ -478,7 +521,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
             False -> app
           }
         })
-      let next_model = Model(..model, installed_apps: updated_apps)
+      let next_model =
+        Model(..model, installed_apps: updated_apps, context_menu: None)
       #(next_model, workspace_persistence_effects(next_model))
     }
 
@@ -511,32 +555,62 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     )
 
     ShowIntentPrompt(prompt) -> {
-      #(Model(..model, intent_prompt: Some(prompt)), [])
+      #(
+        Model(
+          ..model,
+          intent_prompt: Some(prompt),
+          remember_intent_choice: False,
+        ),
+        [],
+      )
+    }
+
+    ToggleRememberIntentChoice -> {
+      #(
+        Model(..model, remember_intent_choice: !model.remember_intent_choice),
+        [],
+      )
     }
 
     SelectIntentHandler(plugin_id) -> {
       case model.intent_prompt {
         Some(prompt) -> {
           let next_page = PrimaryApp(plugin_id: plugin_id, route: None)
-          let next_defaults =
-            dict.insert(model.default_intents, prompt.intent_name, plugin_id)
+          let #(next_defaults, default_effects) = case
+            model.remember_intent_choice
+          {
+            True -> #(
+              dict.insert(model.default_intents, prompt.intent_name, plugin_id),
+              [
+                SetIntentDefault(
+                  action: prompt.intent_name,
+                  plugin_id: plugin_id,
+                ),
+              ],
+            )
+            False -> #(model.default_intents, [])
+          }
           let #(with_page, mount_effects) =
             navigate_intent(model, next_page, plugin_id, None)
           let next_model =
             Model(
               ..with_page,
               intent_prompt: None,
+              remember_intent_choice: False,
               default_intents: next_defaults,
             )
           let effects =
-            list.append(mount_effects, [
-              DispatchIntentToPlugin(
-                plugin_id: plugin_id,
-                intent_name: prompt.intent_name,
-                payload_json: prompt.payload_json,
-              ),
-              SetIntentDefault(action: prompt.intent_name, plugin_id: plugin_id),
-              ..workspace_persistence_effects(next_model)
+            list.flatten([
+              mount_effects,
+              [
+                DispatchIntentToPlugin(
+                  plugin_id: plugin_id,
+                  intent_name: prompt.intent_name,
+                  payload_json: prompt.payload_json,
+                ),
+              ],
+              default_effects,
+              workspace_persistence_effects(next_model),
             ])
           #(next_model, effects)
         }
@@ -545,7 +619,23 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     }
 
     DismissIntentPrompt -> {
-      #(Model(..model, intent_prompt: None), [])
+      #(Model(..model, intent_prompt: None, remember_intent_choice: False), [])
+    }
+
+    SetDefaultIntent(action, plugin_id) -> {
+      let #(next_defaults, intent_effect) = case plugin_id {
+        "" -> #(dict.delete(model.default_intents, action), [
+          ClearIntentDefault(action: action),
+        ])
+        id -> #(dict.insert(model.default_intents, action, id), [
+          SetIntentDefault(action: action, plugin_id: id),
+        ])
+      }
+      let next_model = Model(..model, default_intents: next_defaults)
+      #(
+        next_model,
+        list.append(intent_effect, workspace_persistence_effects(next_model)),
+      )
     }
 
     SetAppRelays(plugin_id, relays) -> {
@@ -556,7 +646,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
             False -> app
           }
         })
-      let next_model = Model(..model, installed_apps: updated_apps)
+      let next_model =
+        Model(..model, installed_apps: updated_apps, context_menu: None)
       #(next_model, workspace_persistence_effects(next_model))
     }
 
@@ -742,7 +833,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
     }
 
     ShowUpdateModal(modal) -> {
-      #(Model(..model, update_modal: Some(modal)), [])
+      #(Model(..model, update_modal: Some(modal), context_menu: None), [])
     }
 
     ConfirmPluginUpdate(plugin_id) -> {
@@ -775,12 +866,49 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       #(Model(..model, update_modal: None), [])
     }
 
+    OpenAppContextMenu(plugin_id, x, y) -> {
+      #(
+        Model(
+          ..model,
+          context_menu: Some(AppContextMenu(plugin_id: plugin_id, x: x, y: y)),
+        ),
+        [],
+      )
+    }
+
+    DismissAppContextMenu -> {
+      #(Model(..model, context_menu: None), [])
+    }
+
     StartPullRefresh -> {
       #(Model(..model, pull_refreshing: True), [RefreshActiveView])
     }
 
     FinishPullRefresh -> {
-      #(Model(..model, pull_refreshing: False), [])
+      #(Model(..model, pull_refreshing: False, pull_state: PullIdle), [])
+    }
+
+    PullTouchStart(scroll_top, client_y) -> {
+      let next_state =
+        pull_to_refresh.on_touch_start(model.pull_state, scroll_top, client_y)
+      #(Model(..model, pull_state: next_state), [])
+    }
+
+    PullTouchMove(client_y) -> {
+      let next_state = pull_to_refresh.on_touch_move(model.pull_state, client_y)
+      #(Model(..model, pull_state: next_state), [])
+    }
+
+    PullTouchEnd -> {
+      let #(next_state, maybe_msg) =
+        pull_to_refresh.on_touch_end(model.pull_state)
+      case maybe_msg {
+        Some(StartPullRefresh) -> #(
+          Model(..model, pull_refreshing: True, pull_state: next_state),
+          [RefreshActiveView],
+        )
+        _ -> #(Model(..model, pull_state: next_state), [])
+      }
     }
   }
 }

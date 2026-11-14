@@ -7,17 +7,11 @@ import gleam/option.{type Option, None, Some}
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
-import omni/shell/model.{type Model}
+import omni/shell/model.{
+  type Model, type PullState, PullIdle, Pulling, ReadyToRefresh, Refreshing,
+}
 import omni/shell/msg.{type Msg, StartPullRefresh}
 import omni/ui/icons
-
-/// Pull-to-refresh state machine states.
-pub type PullState {
-  PullIdle
-  Pulling(start_y: Float, current_y: Float, distance: Float)
-  ReadyToRefresh(distance: Float)
-  Refreshing
-}
 
 /// Pull distance threshold in pixels required to trigger a refresh on release.
 pub const threshold_px = 50.0

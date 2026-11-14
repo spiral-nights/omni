@@ -54,7 +54,9 @@ pub type Msg {
 
   // Intents & permissions
   ToggleAppIntent(plugin_id: String, intent_name: String)
+  SetDefaultIntent(action: String, plugin_id: String)
   ShowIntentPrompt(IntentPromptState)
+  ToggleRememberIntentChoice
   SelectIntentHandler(plugin_id: String)
   DismissIntentPrompt
 
@@ -109,6 +111,11 @@ pub type Msg {
   UpdateFromFile(plugin_id: String)
   SetUpdateSourceUrl(String)
   DismissUpdateModal
+  OpenAppContextMenu(plugin_id: String, x: Int, y: Int)
+  DismissAppContextMenu
   StartPullRefresh
   FinishPullRefresh
+  PullTouchStart(scroll_top: Float, client_y: Float)
+  PullTouchMove(client_y: Float)
+  PullTouchEnd
 }

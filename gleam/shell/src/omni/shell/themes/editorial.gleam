@@ -13,7 +13,8 @@ import lustre/element/html
 import lustre/event
 import omni/shell/accent
 import omni/shell/app_store
-import omni/shell/gestures/pull_to_refresh.{PullIdle}
+import omni/shell/gestures/pull_to_refresh
+import omni/shell/layout/context_menu
 import omni/shell/layout/header_actions
 import omni/shell/layout/viewport_host
 import omni/shell/layout/widgets_grid
@@ -110,7 +111,7 @@ fn render_header(model: Model) -> Element(Msg) {
             attribute.class("editorial-header-btn"),
             attribute.title("Settings"),
             attribute.attribute("aria-label", "Open Settings"),
-            event.on_click(OpenSettings(tabs.current_tab(model))),
+            event.on_click(OpenSettings(model.TabShells)),
           ],
           [icons.render_icon("sliders", 17)],
         ),
@@ -135,6 +136,7 @@ fn render_header(model: Model) -> Element(Msg) {
         ],
       ),
       html.div([attribute.class("editorial-header-right")], [
+        header_actions.render_header_actions(model),
         html.button(
           [
             attribute.type_("button"),
@@ -200,7 +202,7 @@ fn render_profile_avatar(model: Model) -> Element(Msg) {
       attribute.class("editorial-header-avatar"),
       attribute.title(title),
       attribute.attribute("aria-label", "Open Profile Settings"),
-      event.on_click(OpenSettings(tabs.current_tab(model))),
+      event.on_click(OpenSettings(model.TabProfile)),
     ],
     [
       html.img([attribute.src(avatar_src), attribute.alt(title)]),
@@ -268,6 +270,7 @@ fn render_dock(model: Model) -> Element(Msg) {
           PrimaryApp(active_id, _) -> active_id == app.id
           _ -> False
         },
+        context_app_id: Some(app.id),
         on_click_msg: OpenApp(app.id, None),
       )
     })
@@ -281,6 +284,7 @@ fn render_dock(model: Model) -> Element(Msg) {
         AppStore -> True
         _ -> False
       },
+      context_app_id: None,
       on_click_msg: NavigateTo(AppStore),
     ),
     render_dock_item(
@@ -291,6 +295,7 @@ fn render_dock(model: Model) -> Element(Msg) {
         WidgetsDashboard -> True
         _ -> False
       },
+      context_app_id: None,
       on_click_msg: NavigateTo(WidgetsDashboard),
     ),
     render_dock_item(
@@ -301,7 +306,8 @@ fn render_dock(model: Model) -> Element(Msg) {
         Settings(_) -> True
         _ -> False
       },
-      on_click_msg: OpenSettings(tabs.current_tab(model)),
+      context_app_id: None,
+      on_click_msg: OpenSettings(model.TabShells),
     ),
   ]
 
@@ -330,35 +336,41 @@ fn render_dock_item(
   label label: String,
   icon_name icon_name: String,
   active active: Bool,
+  context_app_id context_app_id: option.Option(String),
   on_click_msg on_click_msg: Msg,
 ) -> Element(Msg) {
   let class_str = case active {
     True -> "editorial-dock-item active"
     False -> "editorial-dock-item"
   }
+  let base_attrs = [
+    attribute.type_("button"),
+    attribute.id(id),
+    attribute.class(class_str),
+    attribute.title(label),
+    attribute.attribute("aria-current", case active {
+      True -> "page"
+      False -> "false"
+    }),
+    event.on_click(on_click_msg),
+  ]
+  let attrs = case context_app_id {
+    Some(app_id) -> [
+      attribute.attribute("data-context-app-id", app_id),
+      ..base_attrs
+    ]
+    None -> base_attrs
+  }
 
-  html.button(
-    [
-      attribute.type_("button"),
-      attribute.id(id),
-      attribute.class(class_str),
-      attribute.title(label),
-      attribute.attribute("aria-current", case active {
-        True -> "page"
-        False -> "false"
-      }),
-      event.on_click(on_click_msg),
-    ],
-    [
-      html.div([attribute.class("editorial-dock-icon")], [
-        icons.render_icon(icon_name, 20),
-      ]),
-      html.span([attribute.class("editorial-dock-label")], [
-        element.text(label),
-      ]),
-      html.div([attribute.class("editorial-active-dot")], []),
-    ],
-  )
+  html.button(attrs, [
+    html.div([attribute.class("editorial-dock-icon")], [
+      icons.render_icon(icon_name, 20),
+    ]),
+    html.span([attribute.class("editorial-dock-label")], [
+      element.text(label),
+    ]),
+    html.div([attribute.class("editorial-active-dot")], []),
+  ])
 }
 
 /// Floating overlays rendered above the shell: pull-to-refresh indicator,
@@ -399,7 +411,8 @@ fn render_overlays(model: Model) -> Element(Msg) {
   }
 
   html.div([attribute.class("omni-shell-overlays")], [
-    pull_to_refresh.render_indicator(model, PullIdle),
+    pull_to_refresh.render_indicator(model, model.pull_state),
+    context_menu.render_context_menu(model),
     intents.render_intent_chooser_modal(model),
     permission_prompt.render_permission_prompt(model),
     update_modal.render_update_modal(model),

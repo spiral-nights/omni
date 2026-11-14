@@ -9,10 +9,12 @@ import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
-import omni/shell/model.{type InstalledApp, type Model, InstalledApp, ViewOption}
+import omni/shell/model.{
+  type InstalledApp, type Model, InstalledApp, UpdateModalState, ViewOption,
+}
 import omni/shell/msg.{
   type Msg, InstallApp, OpenApp, SetAppStoreView, SetCustomInstallUrl,
-  SetSearchQuery,
+  SetSearchQuery, ShowUpdateModal,
 }
 import omni/ui/icons
 import omni/ui/plugin_icon
@@ -362,10 +364,13 @@ fn render_installed_index(model: Model) -> Element(Msg) {
 }
 
 fn render_installed_row(model: Model, app: InstalledApp) -> Element(Msg) {
+  let title = model.app_title(app)
+  let version = option.unwrap(app.version, "0.1.0")
   html.div(
     [
       attribute.class("omni-app-index-row"),
       attribute.attribute("data-app-id", app.id),
+      attribute.attribute("data-context-app-id", app.id),
     ],
     [
       html.div([attribute.class("omni-app-index-icon")], [
@@ -374,7 +379,7 @@ fn render_installed_row(model: Model, app: InstalledApp) -> Element(Msg) {
       html.div([attribute.class("omni-app-index-info")], [
         html.div([attribute.class("omni-app-index-name-row")], [
           html.strong([attribute.class("omni-app-index-name")], [
-            element.text(model.app_title(app)),
+            element.text(title),
           ]),
           case app.pinned {
             True ->
@@ -388,18 +393,41 @@ fn render_installed_row(model: Model, app: InstalledApp) -> Element(Msg) {
           element.text(app.description),
         ]),
       ]),
-      html.button(
-        [
-          attribute.type_("button"),
-          attribute.id("btn-app-index-open-" <> app.id),
-          attribute.class("omni-button omni-button-secondary"),
-          event.on_click(OpenApp(app.id, None)),
-        ],
-        [
-          icons.render_icon("external", 14),
-          html.span([], [element.text("Open")]),
-        ],
-      ),
+      html.div([attribute.class("omni-app-index-actions")], [
+        html.button(
+          [
+            attribute.type_("button"),
+            attribute.id("btn-app-index-update-" <> app.id),
+            attribute.class("omni-button omni-button-secondary"),
+            event.on_click(
+              ShowUpdateModal(UpdateModalState(
+                plugin_id: app.id,
+                plugin_name: title,
+                current_version: version,
+                latest_version: version,
+                changelog: None,
+                source_url: app.source_url,
+              )),
+            ),
+          ],
+          [
+            icons.render_icon("download", 14),
+            html.span([], [element.text("Update")]),
+          ],
+        ),
+        html.button(
+          [
+            attribute.type_("button"),
+            attribute.id("btn-app-index-open-" <> app.id),
+            attribute.class("omni-button omni-button-secondary"),
+            event.on_click(OpenApp(app.id, None)),
+          ],
+          [
+            icons.render_icon("external", 14),
+            html.span([], [element.text("Open")]),
+          ],
+        ),
+      ]),
     ],
   )
 }

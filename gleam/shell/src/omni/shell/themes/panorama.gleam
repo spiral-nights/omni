@@ -13,14 +13,18 @@ import lustre/element/html
 import lustre/event
 import omni/shell/accent
 import omni/shell/app_store
-import omni/shell/gestures/pull_to_refresh.{PullIdle}
+import omni/shell/gestures/pull_to_refresh
+import omni/shell/layout/context_menu
 import omni/shell/layout/header_actions
 import omni/shell/layout/viewport_host
 import omni/shell/layout/widgets_grid
 import omni/shell/model.{
-  type Model, type SettingsTab, AppStore, PrimaryApp, Settings, WidgetsDashboard,
+  type Model, type SettingsTab, AppStore, PrimaryApp, Settings, TabProfile,
+  TabShells, WidgetsDashboard,
 }
-import omni/shell/msg.{type Msg, NavigateTo, OpenApp, OpenSettings}
+import omni/shell/msg.{
+  type Msg, NavigateTo, OpenApp, OpenSearch, OpenSettings, ToggleFullscreen,
+}
 import omni/shell/settings/intents
 import omni/shell/settings/permission_prompt
 import omni/shell/settings/tabs
@@ -49,9 +53,13 @@ pub fn theme() -> Theme {
 
 /// Render the full Panorama Hub shell layout for the given model.
 pub fn view(model: Model) -> Element(Msg) {
+  let root_classes = case model.fullscreen {
+    True -> "omni-shell panorama-shell-root app-fullscreen"
+    False -> "omni-shell panorama-shell-root"
+  }
   html.div(
     [
-      attribute.class("omni-shell panorama-shell-root"),
+      attribute.class(root_classes),
       attribute.id("panorama-shell-root"),
       attribute.attribute("data-shell", "panorama"),
       attribute.attribute("data-theme-mode", model.theme_mode),
@@ -79,6 +87,29 @@ fn render_header(model: Model) -> Element(Msg) {
         header_actions.render_back_button(model),
         render_pivot_nav(model),
         html.div([attribute.class("panorama-header-profile-wrap")], [
+          header_actions.render_header_actions(model),
+          html.button(
+            [
+              attribute.type_("button"),
+              attribute.id("btn-panorama-search"),
+              attribute.class("panorama-header-btn"),
+              attribute.title("Search"),
+              attribute.attribute("aria-label", "Search"),
+              event.on_click(OpenSearch),
+            ],
+            [icons.render_icon("search", 16)],
+          ),
+          html.button(
+            [
+              attribute.type_("button"),
+              attribute.id("btn-panorama-toggle-fullscreen"),
+              attribute.class("panorama-header-btn"),
+              attribute.title("Toggle Fullscreen"),
+              attribute.attribute("aria-label", "Toggle Fullscreen"),
+              event.on_click(ToggleFullscreen),
+            ],
+            [icons.render_icon("external", 16)],
+          ),
           render_profile_tile(model),
         ]),
       ]),
@@ -99,6 +130,7 @@ fn render_pivot_nav(model: Model) -> Element(Msg) {
           PrimaryApp(active_id, _) -> active_id == app.id
           _ -> False
         },
+        context_app_id: Some(app.id),
         on_click_msg: OpenApp(app.id, None),
       )
     })
@@ -112,6 +144,7 @@ fn render_pivot_nav(model: Model) -> Element(Msg) {
         WidgetsDashboard -> True
         _ -> False
       },
+      context_app_id: None,
       on_click_msg: NavigateTo(WidgetsDashboard),
     ),
     render_pivot_item(
@@ -122,6 +155,7 @@ fn render_pivot_nav(model: Model) -> Element(Msg) {
         AppStore -> True
         _ -> False
       },
+      context_app_id: None,
       on_click_msg: NavigateTo(AppStore),
     ),
     render_pivot_item(
@@ -132,7 +166,8 @@ fn render_pivot_nav(model: Model) -> Element(Msg) {
         Settings(_) -> True
         _ -> False
       },
-      on_click_msg: OpenSettings(tabs.current_tab(model)),
+      context_app_id: None,
+      on_click_msg: OpenSettings(TabShells),
     ),
   ]
 
@@ -151,30 +186,36 @@ fn render_pivot_item(
   label label: String,
   icon_name icon_name: String,
   active active: Bool,
+  context_app_id context_app_id: option.Option(String),
   on_click_msg on_click_msg: Msg,
 ) -> Element(Msg) {
   let class_str = case active {
     True -> "panorama-pivot-item active"
     False -> "panorama-pivot-item"
   }
+  let base_attrs = [
+    attribute.type_("button"),
+    attribute.id(id),
+    attribute.class(class_str),
+    attribute.title(label),
+    attribute.attribute("aria-current", case active {
+      True -> "page"
+      False -> "false"
+    }),
+    event.on_click(on_click_msg),
+  ]
+  let attrs = case context_app_id {
+    Some(app_id) -> [
+      attribute.attribute("data-context-app-id", app_id),
+      ..base_attrs
+    ]
+    None -> base_attrs
+  }
 
-  html.button(
-    [
-      attribute.type_("button"),
-      attribute.id(id),
-      attribute.class(class_str),
-      attribute.title(label),
-      attribute.attribute("aria-current", case active {
-        True -> "page"
-        False -> "false"
-      }),
-      event.on_click(on_click_msg),
-    ],
-    [
-      icons.render_icon(icon_name, 14),
-      html.span([], [element.text(label)]),
-    ],
-  )
+  html.button(attrs, [
+    icons.render_icon(icon_name, 14),
+    html.span([], [element.text(label)]),
+  ])
 }
 
 /// Metro user profile tile in the header.
@@ -220,7 +261,7 @@ fn render_profile_tile(model: Model) -> Element(Msg) {
       attribute.class("panorama-header-user-btn"),
       attribute.title(display_name <> " (Manage Profile & Keys)"),
       attribute.attribute("aria-label", "Open Profile Settings"),
-      event.on_click(OpenSettings(tabs.current_tab(model))),
+      event.on_click(OpenSettings(TabProfile)),
     ],
     [
       html.div([attribute.class("panorama-header-avatar")], [avatar_content]),
@@ -328,11 +369,31 @@ fn settings_tab_id(tab: SettingsTab) -> String {
 /// Floating overlays rendered above the shell: pull-to-refresh indicator,
 /// intent handler chooser modal, and plugin update confirmation modal.
 fn render_overlays(model: Model) -> Element(Msg) {
+  let exit_fullscreen = case model.fullscreen {
+    True ->
+      html.button(
+        [
+          attribute.type_("button"),
+          attribute.id("btn-panorama-exit-fullscreen"),
+          attribute.class("editorial-floating-exit-fullscreen"),
+          attribute.title("Exit fullscreen"),
+          event.on_click(ToggleFullscreen),
+        ],
+        [
+          icons.render_icon("close", 14),
+          html.span([], [element.text("Exit")]),
+        ],
+      )
+    False -> element.none()
+  }
+
   html.div([attribute.class("omni-shell-overlays")], [
-    pull_to_refresh.render_indicator(model, PullIdle),
+    pull_to_refresh.render_indicator(model, model.pull_state),
+    context_menu.render_context_menu(model),
     intents.render_intent_chooser_modal(model),
     permission_prompt.render_permission_prompt(model),
     update_modal.render_update_modal(model),
+    exit_fullscreen,
     toast.render_toasts(model),
   ])
 }

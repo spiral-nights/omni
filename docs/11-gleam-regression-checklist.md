@@ -64,18 +64,18 @@
 
 ## D. Shell & Theme Regressions (`omni_shell`, `omni_web`, `apps/web`)
 
-- [ ] **D1. Desktop Settings tabs (`gleam/shell/src/omni/shell/settings/tabs.gleam`):** Expose `TabProfile` and `TabRelays` in the desktop tab bar (currently only in the mobile `<select>` hidden above `720px`).
-- [ ] **D2. Missing Settings panels (`tabs.gleam`, `intents.gleam`):** Render `placements.render_placements_panel` in `TabPlugins` and restore the **Default Applications** settings grid (`compose_note`, `view_note`, `view_profile`, `edit_profile`, `share`, `pay_invoice`, `search`).
-- [ ] **D3. Built-in plugin settings & widgets (`tabs.gleam`, `widgets_grid.gleam`):** Use `viewport_host.render_embedded_or_island` instead of `render_slot_anchor` in `render_plugin_settings_tab` and `render_widget_card` so built-in schema apps render instead of empty `<div>`s.
-- [ ] **D4. Theme header actions & sync indicator (`editorial.gleam`, `panorama.gleam`):** Call `header_actions.render_header_actions(model)` in both themes so the NIP-78 sync pill and header companion apps appear.
-- [ ] **D5. Profile avatar button target (`editorial.gleam`, `panorama.gleam`):** Dispatch `OpenSettings(TabProfile)` instead of `OpenSettings(tabs.current_tab(model))` on profile avatar clicks; dispatch `OpenSettings(TabShells)` on settings gear/pivot buttons.
-- [ ] **D6. Panorama Search & Fullscreen controls (`panorama.gleam`):** Add `OpenSearch`, `ToggleFullscreen`, and fullscreen exit overlay parity with `editorial.gleam`.
-- [ ] **D7. Pull-to-refresh drag feedback (`editorial.gleam`, `panorama.gleam`):** Pass live drag state instead of hardcoded `PullIdle` to `pull_to_refresh.render_indicator`.
-- [ ] **D8. App context menu:** Restore right-click & 500ms mobile long-press context menu on dock items / app tiles (Open, Update, Pin/Unpin, Configure, Uninstall).
-- [ ] **D9. "Open With..." `"Always use this app"` checkbox (`intents.gleam`, `update.gleam`):** Add the checkbox instead of unconditionally saving `default_intents` on every selection.
-- [ ] **D10. Manual plugin updates & `.zip` update (`update_modal.gleam`, `shell_boot.gleam`):** Add a UI trigger for `ShowUpdateModal` and support `.zip` unpacking in `upgrade_plugin_from_file`.
-- [ ] **D11. Share target routing (`shell_boot.gleam`, `manifest.webmanifest`):** Route incoming `host_share` into the shell's `create_note` / `share` intent composer (and add `share_target` to `manifest.webmanifest` if desired).
-- [ ] **D12. Toast auto-dismiss, Escape on permission prompt, & boot widgets:** Add auto-dismiss timer for `toast.gleam`, close `permission_prompt` on `EscapePressed`, and mount companion widgets on boot (`ensureWidgetsMounted`).
+- [x] **D1. Desktop Settings tabs (`gleam/shell/src/omni/shell/settings/tabs.gleam`):** Expose `TabProfile` and `TabRelays` in the desktop tab bar (currently only in the mobile `<select>` hidden above `720px`).
+- [x] **D2. Missing Settings panels (`tabs.gleam`, `intents.gleam`):** Render `placements.render_placements_panel` in `TabPlugins` and restore the **Default Applications** settings grid (`compose_note`, `view_note`, `view_profile`, `edit_profile`, `share`, `pay_invoice`, `search`).
+- [x] **D3. Built-in plugin settings & widgets (`tabs.gleam`, `widgets_grid.gleam`):** Use `viewport_host.render_embedded_or_island` instead of `render_slot_anchor` in `render_plugin_settings_tab` and `render_widget_card` so built-in schema apps render instead of empty `<div>`s.
+- [x] **D4. Theme header actions & sync indicator (`editorial.gleam`, `panorama.gleam`):** Call `header_actions.render_header_actions(model)` in both themes so the NIP-78 sync pill and header companion apps appear.
+- [x] **D5. Profile avatar button target (`editorial.gleam`, `panorama.gleam`):** Dispatch `OpenSettings(TabProfile)` instead of `OpenSettings(tabs.current_tab(model))` on profile avatar clicks; dispatch `OpenSettings(TabShells)` on settings gear/pivot buttons.
+- [x] **D6. Panorama Search & Fullscreen controls (`panorama.gleam`):** Add `OpenSearch`, `ToggleFullscreen`, and fullscreen exit overlay parity with `editorial.gleam`.
+- [x] **D7. Pull-to-refresh drag feedback (`editorial.gleam`, `panorama.gleam`):** Pass live drag state instead of hardcoded `PullIdle` to `pull_to_refresh.render_indicator`.
+- [x] **D8. App context menu:** Restore right-click & 500ms mobile long-press context menu on dock items / app tiles (Open, Update, Pin/Unpin, Configure, Uninstall).
+- [x] **D9. "Open With..." `"Always use this app"` checkbox (`intents.gleam`, `update.gleam`):** Add the checkbox instead of unconditionally saving `default_intents` on every selection.
+- [x] **D10. Manual plugin updates & `.zip` update (`update_modal.gleam`, `shell_boot.gleam`):** Add a UI trigger for `ShowUpdateModal` and support `.zip` unpacking in `upgrade_plugin_from_file`.
+- [x] **D11. Share target routing (`shell_boot.gleam`, `manifest.webmanifest`):** Route incoming `host_share` into the shell's `create_note` / `share` intent composer (and add `share_target` to `manifest.webmanifest` if desired).
+- [x] **D12. Toast auto-dismiss, Escape on permission prompt, & boot widgets:** Add auto-dismiss timer for `toast.gleam`, close `permission_prompt` on `EscapePressed`, and mount companion widgets on boot (`ensureWidgetsMounted`).
 
 ---
 
