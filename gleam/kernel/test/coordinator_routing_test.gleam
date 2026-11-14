@@ -1,6 +1,7 @@
 //// Outbox/gossip routing acceptance tests for the subscription coordinator.
 
 import fake_relay
+import gleam/dict
 import gleam/javascript/promise
 import gleam/list
 import gleam/option.{None, Some}
@@ -26,7 +27,7 @@ const author = "6666666666666666666666666666666666666666666666666666666666666666
 
 fn open_store() -> promise.Promise(event_store.LocalEventStore) {
   use res <- promise.await(idb.in_memory_simple())
-  let db = case res {
+  let _db = case res {
     Ok(db) -> db
     Error(_) -> panic as "in-memory idb"
   }
@@ -149,10 +150,56 @@ pub fn hint_cache_ttl_and_negative_entries_test() {
   relay_hints.lookup(cache, author) |> should.equal(None)
 
   relay_hints.put_missing(cache, author)
-  relay_hints.lookup(cache, author) |> should.equal(None)
+  relay_hints.lookup(cache, author) |> should.equal(Some([]))
   ref.set(
     now,
     1_000_000 + relay_hints.hint_ttl_ms + relay_hints.negative_ttl_ms + 2,
   )
   relay_hints.lookup(cache, author) |> should.equal(None)
+}
+
+pub fn coordinator_refresh_hints_closes_sub_and_caches_missing_test() -> promise.Promise(
+  Nil,
+) {
+  use store <- promise.await(open_store())
+  let pool = two_relay_pool()
+  let relay_a = fake_relay.start(pool, "wss://a.example")
+  let relay_b = fake_relay.start(pool, "wss://b.example")
+
+  let coord = coordinator.new(store, pool, None)
+  let flt = filter.new() |> filter.with_authors([author])
+
+  // Subscribing to author without hints triggers refresh_hints
+  use closer <- promise.await(coordinator.subscribe(
+    coord,
+    "user_sub",
+    [flt],
+    fn(_event) { Nil },
+    None,
+  ))
+
+  // "relay_hints_refresh" should now be registered in pool.subscribers
+  dict.has_key(ref.get(pool.subscribers), "relay_hints_refresh")
+  |> should.equal(True)
+
+  // Emit EOSE from both relays to finish refresh_hints
+  fake_relay.emit(
+    relay_a,
+    relay_frame.relay_frame_to_json(relay_frame.Eose("relay_hints_refresh")),
+  )
+  fake_relay.emit(
+    relay_b,
+    relay_frame.relay_frame_to_json(relay_frame.Eose("relay_hints_refresh")),
+  )
+
+  // Subscription handle must be cleaned up from pool.subscribers
+  dict.has_key(ref.get(pool.subscribers), "relay_hints_refresh")
+  |> should.equal(False)
+
+  // Author should now be cached as missing (returns Some([]) within negative TTL)
+  relay_hints.lookup(coordinator.relay_hints(coord), author)
+  |> should.equal(Some([]))
+
+  closer()
+  promise.resolve(Nil)
 }

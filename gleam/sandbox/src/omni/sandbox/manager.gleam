@@ -13,6 +13,7 @@ import omni/protocol/plugin_id.{type PluginId}
 import omni/sandbox/host.{
   type GuestHost, type HostType, GuestHost, IframeHost, WasmHost, WorkerHost,
 }
+import omni/sandbox/wasm_host
 
 /// Target execution format detected for a plugin view.
 pub type ExecutionFormat {
@@ -126,8 +127,12 @@ pub fn detect_format(
       string.contains(r, "format=wasm") || string.contains(r, "view=wasm")
     None -> False
   }
+  let is_wasm_content = case content {
+    Some(cnt) -> wasm_host.is_wasm_content(cnt)
+    None -> False
+  }
 
-  case is_wasm_hint || is_wasm_route {
+  case is_wasm_hint || is_wasm_route || is_wasm_content {
     True -> WasmFormat
     False -> {
       let is_schema_hint = case format_hint {

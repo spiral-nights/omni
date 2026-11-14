@@ -39,6 +39,7 @@ pub type SubscriptionCoordinator {
     relay_pool: RelayPool,
     acl_engine: Option(AclEngine),
     relay_hints: relay_hints.RelayHintCache,
+    refresh_closer: ref.Ref(Option(fn() -> Nil)),
   )
 }
 
@@ -68,6 +69,7 @@ pub fn new_with_hints(
     relay_pool: relay_pool,
     acl_engine: acl_engine,
     relay_hints: hints,
+    refresh_closer: ref.new(None),
   )
 }
 
@@ -216,6 +218,39 @@ fn resolve_author_targets(
 }
 
 fn refresh_hints(coord: SubscriptionCoordinator, authors: List(String)) -> Nil {
+  // Close any existing refresh subscription
+  case ref.get(coord.refresh_closer) {
+    Some(close) -> {
+      close()
+      ref.set(coord.refresh_closer, None)
+    }
+    None -> Nil
+  }
+
+  let done = ref.new(False)
+  let finish = fn() {
+    case ref.get(done) {
+      True -> Nil
+      False -> {
+        ref.set(done, True)
+        case ref.get(coord.refresh_closer) {
+          Some(close) -> {
+            close()
+            ref.set(coord.refresh_closer, None)
+          }
+          None -> Nil
+        }
+        list.each(authors, fn(author) {
+          case relay_hints.lookup(coord.relay_hints, author) {
+            None -> relay_hints.put_missing(coord.relay_hints, author)
+            Some(_) -> Nil
+          }
+        })
+        relay_hints.finish_fetch(coord.relay_hints, authors)
+      }
+    }
+  }
+
   let relay_list_filter =
     filter.new()
     |> filter.with_kinds([kind.RelayList])
@@ -230,14 +265,18 @@ fn refresh_hints(coord: SubscriptionCoordinator, authors: List(String)) -> Nil {
       None,
       False,
       fn(event) { relay_hints.seed_from_event(coord.relay_hints, event) },
-      Some(fn() { relay_hints.finish_fetch(coord.relay_hints, authors) }),
+      Some(finish),
     )
+    |> promise.map(fn(closer) {
+      case ref.get(done) {
+        True -> closer()
+        False -> ref.set(coord.refresh_closer, Some(closer))
+      }
+    })
 
   let _ =
     promise_ext.delay(5000, Nil)
-    |> promise.map(fn(_) {
-      relay_hints.finish_fetch(coord.relay_hints, authors)
-    })
+    |> promise.map(fn(_) { finish() })
   Nil
 }
 

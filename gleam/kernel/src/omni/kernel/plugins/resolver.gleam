@@ -3,10 +3,12 @@
 //// Resolves addressable Nostr coordinates (`naddr1...`, `35129:pubkey:d`),
 //// Blossom-backed bundles, and HTTP/HTTPS URLs into executable plugin entries.
 
+import gleam/bit_array
 import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
 import omni/nostr/event.{type Event}
 import omni/nostr/event_id
@@ -15,6 +17,7 @@ import omni/nostr/nip19.{type AddressData, Naddr}
 import omni/nostr/pubkey.{type Pubkey}
 import omni/platform/secp256k1
 import omni/platform/webcrypto
+import omni/platform/zip
 import omni/protocol/manifest.{type PluginViewDeclaration}
 
 /// Standard NIP-5A nsite application manifest kind (35129).
@@ -55,6 +58,8 @@ pub type ResolveTarget {
   NaddrTarget(naddr: String, address: AddressData)
   CoordinateTarget(kind: Int, pubkey: String, identifier: String)
   UrlTarget(url: String)
+  ZipUrlTarget(url: String)
+  ZipBytesTarget(bytes: BitArray)
   EventTarget(event: Event)
 }
 
@@ -89,27 +94,48 @@ pub fn parse_target(raw: String) -> Result(ResolveTarget, ResolveError) {
         string.starts_with(clean, "https://")
         || string.starts_with(clean, "http://")
       {
-        True -> Ok(UrlTarget(clean))
+        True ->
+          case is_zip_url(clean) {
+            True -> Ok(ZipUrlTarget(clean))
+            False -> Ok(UrlTarget(clean))
+          }
         False ->
-          case string.split(clean, ":") {
-            [kind_str, pk, id] -> {
-              case int.parse(kind_str) {
-                Ok(k) ->
-                  Ok(CoordinateTarget(kind: k, pubkey: pk, identifier: id))
+          case string.starts_with(clean, "data:application/zip;base64,") {
+            True -> {
+              let b64 =
+                string.drop_start(
+                  clean,
+                  string.length("data:application/zip;base64,"),
+                )
+              case bit_array.base64_decode(b64) {
+                Ok(bytes) -> Ok(ZipBytesTarget(bytes))
                 Error(_) ->
-                  Error(TargetParseError("Invalid kind integer in coordinate"))
+                  Error(TargetParseError("Invalid base64 zip data URI"))
               }
             }
-            [pk, id] ->
-              Ok(CoordinateTarget(
-                kind: nsite_manifest_kind_int,
-                pubkey: pk,
-                identifier: id,
-              ))
-            _ ->
-              Error(TargetParseError(
-                "Expected naddr1..., http(s)://..., or kind:pubkey:d",
-              ))
+            False ->
+              case string.split(clean, ":") {
+                [kind_str, pk, id] -> {
+                  case int.parse(kind_str) {
+                    Ok(k) ->
+                      Ok(CoordinateTarget(kind: k, pubkey: pk, identifier: id))
+                    Error(_) ->
+                      Error(TargetParseError(
+                        "Invalid kind integer in coordinate",
+                      ))
+                  }
+                }
+                [pk, id] ->
+                  Ok(CoordinateTarget(
+                    kind: nsite_manifest_kind_int,
+                    pubkey: pk,
+                    identifier: id,
+                  ))
+                _ ->
+                  Error(TargetParseError(
+                    "Expected naddr1..., http(s)://..., or kind:pubkey:d",
+                  ))
+              }
           }
       }
   }
@@ -357,6 +383,414 @@ pub fn url_strategy(
             )
           }
           Error(err) -> Error(err)
+        }
+      _ -> Error(StrategyExhausted)
+    }
+  }
+}
+
+/// Check if a URL or path points to a .zip archive.
+pub fn is_zip_url(url: String) -> Bool {
+  let lower = string.lowercase(string.trim(url))
+  string.ends_with(lower, ".zip")
+}
+
+/// Filter out OS metadata and directories from zip entries.
+fn is_bundle_file(path: String) -> Bool {
+  !string.ends_with(path, "/")
+  && !string.starts_with(path, "__MACOSX/")
+  && !string.contains(path, "/__MACOSX/")
+  && path != ".DS_Store"
+  && !string.ends_with(path, "/.DS_Store")
+}
+
+/// Strip common single-directory prefix if all entries are nested.
+fn strip_shared_prefix(
+  entries: List(#(String, BitArray)),
+) -> List(#(String, BitArray)) {
+  let paths = list.map(entries, fn(e) { e.0 })
+  case paths {
+    [] -> entries
+    [first, ..] ->
+      case string.split_once(first, "/") {
+        Ok(#(prefix, _)) -> {
+          let prefix_with_slash = prefix <> "/"
+          let all_share =
+            list.all(paths, fn(p) { string.starts_with(p, prefix_with_slash) })
+          case all_share {
+            True -> {
+              let stripped =
+                list.map(entries, fn(e) {
+                  #(
+                    string.drop_start(e.0, string.length(prefix_with_slash)),
+                    e.1,
+                  )
+                })
+              strip_shared_prefix(stripped)
+            }
+            False -> entries
+          }
+        }
+        Error(Nil) -> entries
+      }
+  }
+}
+
+/// Pick primary entry file in candidate priority order.
+fn pick_entry_file(paths: List(String)) -> Result(String, ResolveError) {
+  let candidates = [
+    "index.html",
+    "dist/index.html",
+    "public/index.html",
+    "index.htm",
+    "index.js",
+    "dist/index.js",
+    "main.js",
+  ]
+  case list.find(candidates, fn(c) { list.contains(paths, c) }) {
+    Ok(found) -> Ok(found)
+    Error(Nil) ->
+      case
+        list.find(paths, fn(p) {
+          string.ends_with(p, ".html") || string.ends_with(p, ".htm")
+        })
+      {
+        Ok(html) -> Ok(html)
+        Error(Nil) ->
+          case
+            list.find(paths, fn(p) {
+              string.ends_with(p, ".js") || string.ends_with(p, ".mjs")
+            })
+          {
+            Ok(js) -> Ok(js)
+            Error(Nil) ->
+              Error(NoExecutableContent(
+                "Zip archive has no index.html or index.js",
+              ))
+          }
+      }
+  }
+}
+
+/// Extract `<title>` text from an HTML document.
+pub fn detect_html_title(html: String) -> Option(String) {
+  case string.split_once(html, "<title>") {
+    Ok(#(_, after)) ->
+      case string.split_once(after, "</title>") {
+        Ok(#(title, _)) -> {
+          let clean = string.trim(title)
+          case clean {
+            "" -> None
+            value -> Some(value)
+          }
+        }
+        Error(Nil) -> None
+      }
+    Error(Nil) -> {
+      case string.split_once(html, "<TITLE>") {
+        Ok(#(_, after)) ->
+          case string.split_once(after, "</TITLE>") {
+            Ok(#(title, _)) -> {
+              let clean = string.trim(title)
+              case clean {
+                "" -> None
+                value -> Some(value)
+              }
+            }
+            Error(Nil) -> None
+          }
+        Error(Nil) -> None
+      }
+    }
+  }
+}
+
+/// Extract `<link rel="icon">` from an HTML document.
+pub fn detect_html_icon(html: String) -> Option(String) {
+  html
+  |> find_link_tags
+  |> list.find_map(fn(tag) {
+    let rel = attribute_value(tag, "rel")
+    let href = attribute_value(tag, "href")
+    case rel, href {
+      Some(rel_value), Some(href_value) ->
+        case string.contains(string.lowercase(rel_value), "icon") {
+          True ->
+            case string.trim(href_value) {
+              "" -> Error(Nil)
+              value -> Ok(value)
+            }
+          False -> Error(Nil)
+        }
+      _, _ -> Error(Nil)
+    }
+  })
+  |> option.from_result
+}
+
+fn find_link_tags(html: String) -> List(String) {
+  html
+  |> string.split("<link")
+  |> list.drop(1)
+  |> list.filter_map(fn(chunk) {
+    case string.split_once(chunk, ">") {
+      Ok(#(tag, _)) -> Ok(tag)
+      Error(Nil) -> Error(Nil)
+    }
+  })
+}
+
+fn attribute_value(tag: String, name: String) -> Option(String) {
+  case string.split_once(tag, name <> "=\"") {
+    Ok(#(_, after)) ->
+      case string.split_once(after, "\"") {
+        Ok(#(value, _)) -> Some(value)
+        Error(Nil) -> None
+      }
+    Error(Nil) ->
+      case string.split_once(tag, name <> "='") {
+        Ok(#(_, after)) ->
+          case string.split_once(after, "'") {
+            Ok(#(value, _)) -> Some(value)
+            Error(Nil) -> None
+          }
+        Error(Nil) -> None
+      }
+  }
+}
+
+/// Inline CSS and JS companion assets into HTML.
+pub fn inline_assets(html: String, assets: List(#(String, String))) -> String {
+  let css =
+    list.filter_map(assets, fn(asset) {
+      let #(name, content) = asset
+      case string.ends_with(name, ".css") {
+        True ->
+          Ok(
+            "<style data-omni-asset=\""
+            <> name
+            <> "\">\n"
+            <> content
+            <> "\n</style>",
+          )
+        False -> Error(Nil)
+      }
+    })
+    |> string.join("\n")
+
+  let js =
+    list.filter_map(assets, fn(asset) {
+      let #(name, content) = asset
+      case string.ends_with(name, ".js") {
+        True ->
+          Ok(
+            "<script data-omni-asset=\""
+            <> name
+            <> "\">\n"
+            <> content
+            <> "\n</script>",
+          )
+        False -> Error(Nil)
+      }
+    })
+    |> string.join("\n")
+
+  let with_css = case css {
+    "" -> html
+    _ ->
+      case string.contains(html, "</head>") {
+        True -> string.replace(html, "</head>", css <> "\n</head>")
+        False -> css <> "\n" <> html
+      }
+  }
+
+  case js {
+    "" -> with_css
+    _ ->
+      case string.contains(with_css, "</body>") {
+        True -> string.replace(with_css, "</body>", js <> "\n</body>")
+        False -> with_css <> "\n" <> js
+      }
+  }
+}
+
+/// Extract a zip archive into a self-contained `ResolvedPlugin`.
+pub fn extract_zip_bundle(
+  bytes: BitArray,
+  fallback_id: String,
+) -> Result(ResolvedPlugin, ResolveError) {
+  case zip.unzip(bytes) {
+    Error(err) -> Error(NoExecutableContent("ZIP extraction failed: " <> err))
+    Ok(entries) -> {
+      let valid_entries =
+        entries
+        |> list.filter(fn(e) { is_bundle_file(e.0) })
+        |> strip_shared_prefix
+
+      case valid_entries {
+        [] -> Error(NoExecutableContent("ZIP archive contains no files"))
+        _ -> {
+          let file_map = dict.from_list(valid_entries)
+          let paths = dict.keys(file_map)
+
+          use entry_path <- result.try(pick_entry_file(paths))
+          case dict.get(file_map, entry_path) {
+            Error(_) -> Error(NoExecutableContent("Entry file not found"))
+            Ok(entry_bytes) -> {
+              let base_html = case
+                string.ends_with(entry_path, ".js")
+                || string.ends_with(entry_path, ".mjs")
+              {
+                True -> {
+                  let js_text = case bit_array.to_string(entry_bytes) {
+                    Ok(s) -> s
+                    Error(_) -> ""
+                  }
+                  "<!DOCTYPE html>\n<html><head></head><body><div id=\"app\"></div><script type=\"module\">\n"
+                  <> js_text
+                  <> "\n</script></body></html>"
+                }
+                False ->
+                  case bit_array.to_string(entry_bytes) {
+                    Ok(s) -> s
+                    Error(_) -> ""
+                  }
+              }
+
+              let manifest_candidates = [
+                "manifest.webmanifest",
+                "manifest.json",
+                "omni.manifest.json",
+                "package.json",
+              ]
+              let manifest_json =
+                list.find_map(manifest_candidates, fn(m) {
+                  case dict.get(file_map, m) {
+                    Ok(b) ->
+                      case bit_array.to_string(b) {
+                        Ok(s) -> Ok(s)
+                        Error(_) -> Error(Nil)
+                      }
+                    Error(_) -> Error(Nil)
+                  }
+                })
+
+              let decoded_manifest = case manifest_json {
+                Ok(json_str) ->
+                  case manifest.decode_web_manifest(json_str) {
+                    Ok(m) -> Some(m)
+                    Error(_) -> None
+                  }
+                Error(_) -> None
+              }
+
+              let name = case decoded_manifest {
+                Some(m) ->
+                  case m.name {
+                    Some(n) if n != "" -> n
+                    _ ->
+                      case m.short_name {
+                        Some(sn) if sn != "" -> sn
+                        _ ->
+                          detect_html_title(base_html)
+                          |> option.unwrap(fallback_id)
+                      }
+                  }
+                None ->
+                  detect_html_title(base_html) |> option.unwrap(fallback_id)
+              }
+
+              let description = case decoded_manifest {
+                Some(m) -> option.unwrap(m.description, "")
+                None -> ""
+              }
+
+              let icon = detect_html_icon(base_html)
+
+              let companion_assets =
+                valid_entries
+                |> list.filter_map(fn(e) {
+                  let #(path, contents) = e
+                  case
+                    path != entry_path
+                    && {
+                      string.ends_with(path, ".css")
+                      || string.ends_with(path, ".js")
+                    }
+                  {
+                    True ->
+                      case bit_array.to_string(contents) {
+                        Ok(str) -> Ok(#(path, str))
+                        Error(_) -> Error(Nil)
+                      }
+                    False -> Error(Nil)
+                  }
+                })
+
+              let bundled_html = inline_assets(base_html, companion_assets)
+
+              let views = case decoded_manifest {
+                Some(m) if m.shortcuts != [] ->
+                  list.map(m.shortcuts, manifest.shortcut_to_view)
+                _ -> [
+                  manifest.PluginViewDeclaration(
+                    "default",
+                    "Default",
+                    "/",
+                    manifest.Auto,
+                  ),
+                ]
+              }
+
+              Ok(
+                ResolvedPlugin(
+                  id: fallback_id,
+                  name: name,
+                  display_name: Some(name),
+                  version: "1.0.0",
+                  description: description,
+                  icon: icon,
+                  entry: entry_path,
+                  content: bundled_html,
+                  source_url: None,
+                  naddr: None,
+                  author_pubkey: None,
+                  author_npub: None,
+                  relays: [],
+                  views: views,
+                  handled_intents: [],
+                  blossom_hashes: dict.new(),
+                  blossom_servers: [],
+                ),
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Strategy for resolving zip targets using a byte fetcher.
+pub fn zip_strategy(
+  fetch_bytes: fn(String) -> Result(BitArray, ResolveError),
+) -> ResolverStrategy {
+  fn(target: ResolveTarget) {
+    case target {
+      ZipUrlTarget(url) ->
+        case fetch_bytes(url) {
+          Ok(bytes) -> extract_zip_bundle(bytes, url)
+          Error(err) -> Error(err)
+        }
+      ZipBytesTarget(bytes) -> extract_zip_bundle(bytes, "zip-plugin")
+      UrlTarget(url) ->
+        case is_zip_url(url) {
+          True ->
+            case fetch_bytes(url) {
+              Ok(bytes) -> extract_zip_bundle(bytes, url)
+              Error(err) -> Error(err)
+            }
+          False -> Error(StrategyExhausted)
         }
       _ -> Error(StrategyExhausted)
     }

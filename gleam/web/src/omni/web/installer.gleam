@@ -1,6 +1,7 @@
 //// Nsite bundle installation: resolve URLs, naddr coordinates, and Blossom
 //// manifests into a mountable installed-app entry.
 
+import gleam/bit_array
 import gleam/dict
 import gleam/int
 import gleam/javascript/promise.{type Promise}
@@ -38,6 +39,42 @@ pub fn resolve_url(
   resolve_url_with(url, plugin_id, http.fetch_text)
 }
 
+/// Extract an `InstalledBundle` from raw zip bytes.
+pub fn resolve_zip_bytes(
+  bytes: BitArray,
+  raw_url: String,
+  plugin_id: String,
+) -> Result(InstalledBundle, String) {
+  case resolver.extract_zip_bundle(bytes, plugin_id) {
+    Error(err) -> Error(resolve_error(err))
+    Ok(plugin) -> {
+      let app = app_from_resolved(raw_url, plugin_id, plugin)
+      Ok(InstalledBundle(app: app, content: plugin.content))
+    }
+  }
+}
+
+/// Resolve a .zip URL using the platform HTTP byte fetcher.
+pub fn resolve_zip_url(
+  url: String,
+  plugin_id: String,
+) -> Promise(Result(InstalledBundle, String)) {
+  resolve_zip_url_with(url, plugin_id, http.fetch_bytes)
+}
+
+/// Resolve a .zip URL using an injectable byte fetcher (used by tests).
+pub fn resolve_zip_url_with(
+  url: String,
+  plugin_id: String,
+  fetch_bytes: fn(String) -> Promise(Result(BitArray, String)),
+) -> Promise(Result(InstalledBundle, String)) {
+  use result <- promise.await(fetch_bytes(url))
+  promise.resolve(case result {
+    Error(err) -> Error(err)
+    Ok(bytes) -> resolve_zip_bytes(bytes, url, plugin_id)
+  })
+}
+
 /// Fetch `url` using an injected fetcher (used by tests).
 pub fn resolve_url_with(
   url: String,
@@ -48,10 +85,20 @@ pub fn resolve_url_with(
   promise.resolve(case result {
     Error(err) -> Error(err)
     Ok(content) ->
-      Ok(InstalledBundle(
-        app: app_from_content(url, plugin_id, content),
-        content: content,
-      ))
+      case resolver.is_zip_url(url) {
+        True -> {
+          let bytes = case bit_array.base64_decode(string.trim(content)) {
+            Ok(b) -> b
+            Error(_) -> bit_array.from_string(content)
+          }
+          resolve_zip_bytes(bytes, url, plugin_id)
+        }
+        False ->
+          Ok(InstalledBundle(
+            app: app_from_content(url, plugin_id, content),
+            content: content,
+          ))
+      }
   })
 }
 
@@ -62,7 +109,10 @@ pub fn resolve(
   raw: String,
   plugin_id: String,
 ) -> Promise(Result(InstalledBundle, String)) {
-  resolve_with(kernel, raw, plugin_id, http.fetch_text)
+  case resolver.is_zip_url(raw) {
+    True -> resolve_zip_url(raw, plugin_id)
+    False -> resolve_with(kernel, raw, plugin_id, http.fetch_text)
+  }
 }
 
 /// Resolve an install target using an injected fetcher (used by tests).
@@ -75,6 +125,9 @@ pub fn resolve_with(
   case resolver.parse_target(raw) {
     Error(err) -> promise.resolve(Error(resolve_error(err)))
     Ok(resolver.UrlTarget(url)) -> resolve_url_with(url, plugin_id, fetch)
+    Ok(resolver.ZipUrlTarget(url)) -> resolve_url_with(url, plugin_id, fetch)
+    Ok(resolver.ZipBytesTarget(bytes)) ->
+      promise.resolve(resolve_zip_bytes(bytes, raw, plugin_id))
     Ok(resolver.NaddrTarget(_naddr, addr)) ->
       resolve_nostr(
         kernel,

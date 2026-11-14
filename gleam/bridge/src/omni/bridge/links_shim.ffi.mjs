@@ -1,10 +1,16 @@
-function emit(post, rawUrl) {
-  if (typeof post === "function") post(String(rawUrl));
+function emit(post, rawUrl, rpc) {
+  if (typeof rpc === "function") {
+    try {
+      rpc("kernel.handleUri", { uri: String(rawUrl) });
+    } catch (_) {}
+  } else if (typeof post === "function") {
+    post(String(rawUrl));
+  }
 }
 
 const PROTOCOL_PREFIXES = ["nostr:", "lightning:", "cashu:"];
 
-export function install(post) {
+export function install(post, rpc) {
   if (typeof document !== "undefined") {
     document.addEventListener(
       "click",
@@ -17,7 +23,7 @@ export function install(post) {
           return;
         }
         event.preventDefault();
-        emit(post, href);
+        emit(post, href, rpc);
       },
       true,
     );
@@ -28,7 +34,7 @@ export function install(post) {
     window.open = (url, ...rest) => {
       const lower = String(url || "").toLowerCase().trim();
       if (PROTOCOL_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
-        emit(post, url);
+        emit(post, url, rpc);
         return null;
       }
       return nativeOpen.call(window, url, ...rest);

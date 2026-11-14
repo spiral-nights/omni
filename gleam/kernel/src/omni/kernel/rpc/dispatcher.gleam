@@ -7,6 +7,7 @@
 import gleam/dict.{type Dict}
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
+import gleam/int
 import gleam/javascript/promise.{type Promise}
 import gleam/json
 import gleam/list
@@ -42,10 +43,10 @@ import omni/protocol/rpc/codec
 import omni/protocol/rpc/envelope.{type Id, type Response}
 import omni/protocol/rpc/error_code
 import omni/protocol/rpc/method.{
-  type FetchOptions, type Request, AuthGenerateKey, AuthGetNpub, AuthGetNsec,
-  AuthSwitchKey, FetchOptions, IntentEmit, IntentHandle, IntentsDispatch,
-  KernelHandleUri, NavigationOpen, Nip04, Nip44, NostrDecrypt, NostrEncrypt,
-  NostrFetch, NostrGetPublicKey, NostrGetRelays, NostrPublish, NostrPublishDraft,
+  type Request, AuthGenerateKey, AuthGetNpub, AuthGetNsec, AuthSwitchKey,
+  FetchOptions, IntentEmit, IntentHandle, IntentsDispatch, KernelHandleUri,
+  NavigationOpen, Nip04, Nip44, NostrDecrypt, NostrDoc, NostrEncrypt, NostrFetch,
+  NostrGetPublicKey, NostrGetRelays, NostrPublish, NostrPublishDraft,
   NostrSignEvent, NostrSubscribe, NostrUnsubscribe, ProfileGet, ProfilePublish,
   RelaysAdd, RelaysList, RelaysRemove, Share, StorageClear, StorageGet,
   StorageKeys, StorageRemove, StorageSet, UnknownMethod,
@@ -185,21 +186,6 @@ fn relay_in_scope(ctx: RpcContext, url: RelayUrl) -> Bool {
   case ctx.relay_scope {
     None -> True
     Some(scoped) -> list.contains(scoped, relay_url.to_string(url))
-  }
-}
-
-fn scoped_relay_urls(scope: Option(List(String))) -> Option(List(RelayUrl)) {
-  case scope {
-    Some(urls) ->
-      Some(
-        list.filter_map(urls, fn(raw) {
-          case relay_url.parse(raw) {
-            Ok(url) -> Ok(url)
-            Error(_) -> Error(Nil)
-          }
-        }),
-      )
-    None -> None
   }
 }
 
@@ -600,15 +586,40 @@ fn handle_request(
     NostrPublish(ev) -> publish_signed_event(ctx, id, ev)
 
     NostrPublishDraft(draft) -> {
-      case keystore.sign_event(ctx.keystore, draft) {
-        Error(err) ->
+      let d_tag =
+        list.first(event.get_tag_values(draft.tags, "d"))
+        |> option.from_result
+      let policy_req =
+        policy.Request(
+          capability: capability.NostrSign,
+          kind: Some(kind.to_int(draft.kind)),
+          d_tag: d_tag,
+        )
+      use allowed <- promise.await(acl_engine.check_permission(
+        ctx.acl_engine,
+        ctx.plugin_id,
+        policy_req,
+      ))
+      case allowed {
+        False ->
           promise.resolve(envelope.Error(
             id: Some(id),
-            code: error_code.SignerRejected,
-            message: err,
+            code: error_code.PermissionDenied,
+            message: "Permission denied to sign event",
             data: None,
           ))
-        Ok(signed) -> publish_signed_event(ctx, id, signed)
+        True -> {
+          case keystore.sign_event(ctx.keystore, draft) {
+            Error(err) ->
+              promise.resolve(envelope.Error(
+                id: Some(id),
+                code: error_code.SignerRejected,
+                message: err,
+                data: None,
+              ))
+            Ok(signed) -> publish_signed_event(ctx, id, signed)
+          }
+        }
       }
     }
 
@@ -828,25 +839,36 @@ fn handle_request(
             data: None,
           ))
         True -> {
-          let priv = keystore.get_private_key(ctx.keystore)
-          let recipient_hex = pubkey.to_hex(recipient_pubkey)
-          use res <- promise.await(case scheme {
-            Nip04 -> nip44.nip04_encrypt(priv, recipient_hex, plaintext)
-            Nip44 -> nip44.nip44_encrypt(priv, recipient_hex, plaintext)
-          })
-          case res {
-            Ok(ciphertext) ->
-              promise.resolve(envelope.Success(
-                id: id,
-                result: dynamic.string(ciphertext),
-              ))
-            Error(err) ->
+          case keystore.is_locked(ctx.keystore) {
+            True ->
               promise.resolve(envelope.Error(
                 id: Some(id),
-                code: error_code.InternalError,
-                message: err,
+                code: error_code.SignerRejected,
+                message: "Keystore is locked",
                 data: None,
               ))
+            False -> {
+              let priv = keystore.get_private_key(ctx.keystore)
+              let recipient_hex = pubkey.to_hex(recipient_pubkey)
+              use res <- promise.await(case scheme {
+                Nip04 -> nip44.nip04_encrypt(priv, recipient_hex, plaintext)
+                Nip44 -> nip44.nip44_encrypt(priv, recipient_hex, plaintext)
+              })
+              case res {
+                Ok(ciphertext) ->
+                  promise.resolve(envelope.Success(
+                    id: id,
+                    result: dynamic.string(ciphertext),
+                  ))
+                Error(err) ->
+                  promise.resolve(envelope.Error(
+                    id: Some(id),
+                    code: error_code.InternalError,
+                    message: err,
+                    data: None,
+                  ))
+              }
+            }
           }
         }
       }
@@ -873,25 +895,36 @@ fn handle_request(
             data: None,
           ))
         True -> {
-          let priv = keystore.get_private_key(ctx.keystore)
-          let sender_hex = pubkey.to_hex(sender_pubkey)
-          use res <- promise.await(case scheme {
-            Nip04 -> nip44.nip04_decrypt(priv, sender_hex, ciphertext)
-            Nip44 -> nip44.nip44_decrypt(priv, sender_hex, ciphertext)
-          })
-          case res {
-            Ok(plaintext) ->
-              promise.resolve(envelope.Success(
-                id: id,
-                result: dynamic.string(plaintext),
-              ))
-            Error(err) ->
+          case keystore.is_locked(ctx.keystore) {
+            True ->
               promise.resolve(envelope.Error(
                 id: Some(id),
-                code: error_code.InternalError,
-                message: err,
+                code: error_code.SignerRejected,
+                message: "Keystore is locked",
                 data: None,
               ))
+            False -> {
+              let priv = keystore.get_private_key(ctx.keystore)
+              let sender_hex = pubkey.to_hex(sender_pubkey)
+              use res <- promise.await(case scheme {
+                Nip04 -> nip44.nip04_decrypt(priv, sender_hex, ciphertext)
+                Nip44 -> nip44.nip44_decrypt(priv, sender_hex, ciphertext)
+              })
+              case res {
+                Ok(plaintext) ->
+                  promise.resolve(envelope.Success(
+                    id: id,
+                    result: dynamic.string(plaintext),
+                  ))
+                Error(err) ->
+                  promise.resolve(envelope.Error(
+                    id: Some(id),
+                    code: error_code.InternalError,
+                    message: err,
+                    data: None,
+                  ))
+              }
+            }
           }
         }
       }
@@ -1369,6 +1402,209 @@ fn handle_request(
       ))
     }
 
+    NostrDoc(spec, options) -> {
+      let #(kind_num, d_tag, enc_from_spec, scheme_from_spec) = case
+        decode.run(spec, decode.string)
+      {
+        Ok(d_str) -> #(30_078, d_str, False, "nip04")
+        Error(_) -> {
+          let k = case
+            decode.run(spec, {
+              use kind_int <- decode.field("kind", decode.int)
+              decode.success(kind_int)
+            })
+          {
+            Ok(k_val) -> k_val
+            Error(_) -> 30_078
+          }
+          let d = case
+            decode.run(spec, {
+              use d_val <- decode.field("d", decode.string)
+              decode.success(d_val)
+            })
+          {
+            Ok(d_val) -> d_val
+            Error(_) ->
+              case
+                decode.run(spec, {
+                  use d_val <- decode.field("d_tag", decode.string)
+                  decode.success(d_val)
+                })
+              {
+                Ok(d_val) -> d_val
+                Error(_) ->
+                  case
+                    decode.run(spec, {
+                      use d_val <- decode.field("dTag", decode.string)
+                      decode.success(d_val)
+                    })
+                  {
+                    Ok(d_val) -> d_val
+                    Error(_) -> ""
+                  }
+              }
+          }
+          let enc = case
+            decode.run(spec, {
+              use enc_val <- decode.field("encrypted", decode.bool)
+              decode.success(enc_val)
+            })
+          {
+            Ok(e_val) -> e_val
+            Error(_) -> False
+          }
+          let scheme = case
+            decode.run(spec, {
+              use s <- decode.field("encryptionType", decode.string)
+              decode.success(s)
+            })
+          {
+            Ok(s_val) -> s_val
+            Error(_) ->
+              case
+                decode.run(spec, {
+                  use s <- decode.field("scheme", decode.string)
+                  decode.success(s)
+                })
+              {
+                Ok(s_val) -> s_val
+                Error(_) -> "nip04"
+              }
+          }
+          #(k, d, enc, scheme)
+        }
+      }
+
+      let is_encrypted = case
+        decode.run(options, {
+          use enc <- decode.field("encrypted", decode.bool)
+          decode.success(enc)
+        })
+      {
+        Ok(True) -> True
+        _ -> enc_from_spec
+      }
+
+      let scheme_str = case
+        decode.run(options, {
+          use s <- decode.field("encryptionType", decode.string)
+          decode.success(s)
+        })
+      {
+        Ok(s) -> s
+        _ ->
+          case
+            decode.run(options, {
+              use s <- decode.field("scheme", decode.string)
+              decode.success(s)
+            })
+          {
+            Ok(s) -> s
+            _ -> scheme_from_spec
+          }
+      }
+
+      let policy_req =
+        policy.Request(
+          capability: capability.NostrRead,
+          kind: Some(kind_num),
+          d_tag: case d_tag {
+            "" -> None
+            _ -> Some(d_tag)
+          },
+        )
+      use allowed <- promise.await(acl_engine.check_permission(
+        ctx.acl_engine,
+        ctx.plugin_id,
+        policy_req,
+      ))
+      case allowed {
+        False ->
+          promise.resolve(envelope.Error(
+            id: Some(id),
+            code: error_code.PermissionDenied,
+            message: "Permission denied for nostr:read",
+            data: None,
+          ))
+        True -> {
+          let my_pk = keystore.get_public_key(ctx.keystore)
+          let f =
+            filter.new()
+            |> filter.with_kinds([kind.from_int(kind_num)])
+            |> filter.with_pubkeys([my_pk])
+            |> fn(flt) {
+              case d_tag {
+                "" -> flt
+                _ -> filter.with_d_tag(flt, d_tag)
+              }
+            }
+            |> filter.with_limit(1)
+
+          use events <- promise.await(event_store.get_events(ctx.event_store, f))
+          case events {
+            [] ->
+              promise.resolve(envelope.Success(
+                id: id,
+                result: build_doc_dynamic(kind_num, d_tag, None, None),
+              ))
+            [ev, ..] -> {
+              case is_encrypted {
+                False ->
+                  promise.resolve(envelope.Success(
+                    id: id,
+                    result: build_doc_dynamic(
+                      kind_num,
+                      d_tag,
+                      Some(ev.content),
+                      Some(ev),
+                    ),
+                  ))
+                True -> {
+                  case keystore.is_locked(ctx.keystore) {
+                    True ->
+                      promise.resolve(envelope.Error(
+                        id: Some(id),
+                        code: error_code.SignerRejected,
+                        message: "Keystore is locked",
+                        data: None,
+                      ))
+                    False -> {
+                      let priv = keystore.get_private_key(ctx.keystore)
+                      let sender_hex = pubkey.to_hex(ev.pubkey)
+                      use dec_res <- promise.await(case scheme_str {
+                        "nip44" ->
+                          nip44.nip44_decrypt(priv, sender_hex, ev.content)
+                        _ -> nip44.nip04_decrypt(priv, sender_hex, ev.content)
+                      })
+                      case dec_res {
+                        Ok(plaintext) ->
+                          promise.resolve(envelope.Success(
+                            id: id,
+                            result: build_doc_dynamic(
+                              kind_num,
+                              d_tag,
+                              Some(plaintext),
+                              Some(ev),
+                            ),
+                          ))
+                        Error(err) ->
+                          promise.resolve(envelope.Error(
+                            id: Some(id),
+                            code: error_code.InternalError,
+                            message: "Decryption failed: " <> err,
+                            data: None,
+                          ))
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     UnknownMethod(name, _params) -> {
       promise.resolve(envelope.Error(
         id: Some(id),
@@ -1388,6 +1624,46 @@ fn to_payload_dict(payload: Option(Dynamic)) -> Option(Dict(String, Dynamic)) {
         Error(_) -> None
       }
     None -> None
+  }
+}
+
+fn build_doc_dynamic(
+  kind_int: Int,
+  d_tag: String,
+  content: Option(String),
+  ev: Option(event.Event),
+) -> Dynamic {
+  let content_field = case content {
+    Some(c) -> "\"content\":" <> json.to_string(json.string(c))
+    None -> "\"content\":null"
+  }
+  let data_field = case content {
+    Some(c) ->
+      case platform_json.parse_dynamic(c) {
+        Ok(_) -> "\"data\":" <> c
+        Error(_) -> "\"data\":" <> json.to_string(json.string(c))
+      }
+    None -> "\"data\":null"
+  }
+  let event_field = case ev {
+    Some(e) -> "\"event\":" <> json.to_string(event_codec.to_json(e))
+    None -> "\"event\":null"
+  }
+  let json_str =
+    "{\"kind\":"
+    <> int.to_string(kind_int)
+    <> ",\"d\":"
+    <> json.to_string(json.string(d_tag))
+    <> ","
+    <> content_field
+    <> ","
+    <> data_field
+    <> ","
+    <> event_field
+    <> "}"
+  case platform_json.parse_dynamic(json_str) {
+    Ok(d) -> d
+    Error(_) -> dynamic.nil()
   }
 }
 
@@ -1415,7 +1691,7 @@ fn publish_signed_event(
       promise.resolve(envelope.Error(
         id: Some(id),
         code: error_code.PermissionDenied,
-        message: "Permission denied to publish event",
+        message: "Permission denied for nostr:write",
         data: None,
       ))
     True -> {

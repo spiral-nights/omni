@@ -44,21 +44,21 @@
 
 ### C1. Guest Bridge & Sandbox (`gleam/bridge`, `gleam/sandbox`, `gleam/interop`)
 
-- [ ] **C1.1 `localStorage` shim `SecurityError` (`gleam/bridge/src/omni/bridge/storage_shim.ffi.mjs`):** Wrap `window.localStorage` access in `try/catch`, seed from `__OMNI_INITIAL_STORAGE__`, and persist `setItem`/`removeItem`/`clear` via `storage.set`/`storage.delete`/`storage.clear` RPCs.
-- [ ] **C1.2 Protocol links (`links_shim.ffi.mjs` + `shell_boot.ffi.mjs`):** Route `nostr:` / `lightning:` / `cashu:` clicks through `kernel.handleUri` RPC (or handle them in `shell_boot.ffi.mjs`), instead of dropping them in `handle_guest_schema`.
-- [ ] **C1.3 `navigator.share` (`share_shim.ffi.mjs` + `shell_boot.ffi.mjs`):** Route `navigator.share` through `kernel.handleShare` RPC instead of posting an unhandled `omni:share` message to Channel 1.
-- [ ] **C1.4 `window.nostr.doc` (`nostr_shim.ffi.mjs` + `method.gleam`/`codec.gleam`/`dispatcher.gleam`):** Implement `"nostr.doc"` RPC or remove/alias it so calls don't fail with `MethodNotFound`.
-- [ ] **C1.5 `guest-runtime.mjs` RPC queue & `#omni-schema`:** Queue `callRpc` calls made before `omni:init` instead of rejecting immediately, and auto-emit inline `<script type="application/json" id="omni-schema">` on boot.
-- [ ] **C1.6 Worker termination (`gleam/interop/src/omni/interop/shell_boot.gleam`):** Update `terminate_plugin` to also call `unmount_worker(plugin_id)` and `sandbox_manager.terminate`.
-- [ ] **C1.7 `.zip` plugin bundle extraction:** Wire `gleam/platform/src/omni/platform/zip.ffi.mjs` into `installer.gleam` / `resolver.gleam` for `.zip` plugin bundles.
-- [ ] **C1.8 WASM/WIT plugin host:** Decide whether to restore `WasmGuestHost` support or explicitly deprecate `WasmFormat` in `omni_sandbox`.
+- [x] **C1.1 `localStorage` shim `SecurityError` (`gleam/bridge/src/omni/bridge/storage_shim.ffi.mjs`):** Wrap `window.localStorage` access in `try/catch`, seed from `__OMNI_INITIAL_STORAGE__`, and persist `setItem`/`removeItem`/`clear` via `storage.set`/`storage.delete`/`storage.clear` RPCs.
+- [x] **C1.2 Protocol links (`links_shim.ffi.mjs` + `shell_boot.ffi.mjs`):** Route `nostr:` / `lightning:` / `cashu:` clicks through `kernel.handleUri` RPC (or handle them in `shell_boot.ffi.mjs`), instead of dropping them in `handle_guest_schema`.
+- [x] **C1.3 `navigator.share` (`share_shim.ffi.mjs` + `shell_boot.ffi.mjs`):** Route `navigator.share` through `kernel.handleShare` RPC instead of posting an unhandled `omni:share` message to Channel 1.
+- [x] **C1.4 `window.nostr.doc` (`nostr_shim.ffi.mjs` + `method.gleam`/`codec.gleam`/`dispatcher.gleam`):** Implement `"nostr.doc"` RPC or remove/alias it so calls don't fail with `MethodNotFound`.
+- [x] **C1.5 `guest-runtime.mjs` RPC queue & `#omni-schema`:** Queue `callRpc` calls made before `omni:init` instead of rejecting immediately, and auto-emit inline `<script type="application/json" id="omni-schema">` on boot.
+- [x] **C1.6 Worker termination (`gleam/interop/src/omni/interop/shell_boot.gleam`):** Update `terminate_plugin` to also call `unmount_worker(plugin_id)` and `sandbox_manager.terminate`.
+- [x] **C1.7 `.zip` plugin bundle extraction:** Wire `gleam/platform/src/omni/platform/zip.ffi.mjs` into `installer.gleam` / `resolver.gleam` for `.zip` plugin bundles.
+- [x] **C1.8 WASM/WIT plugin host:** Restore `WasmGuestHost` support in `omni_sandbox` and `omni_interop`.
 
 ### C2. Kernel (`gleam/kernel`, `gleam/interop`)
 
-- [ ] **C2.1 Locked keystore check in `NostrEncrypt` / `NostrDecrypt` (`dispatcher.gleam`):** Check `keystore.is_locked(ctx.keystore)` before calling `nip04`/`nip44` so locked keystores return `"Keystore is locked"` instead of a secp256k1 error.
-- [ ] **C2.2 `NostrPublishDraft` ACL check (`dispatcher.gleam`):** Check `capability.NostrSign` in addition to `capability.NostrWrite`.
-- [ ] **C2.3 `RelayHintCache` & `refresh_hints` leak (`relay_hints.gleam`, `coordinator.gleam`):** Fix negative-cache TTL handling in `lookup`/`put_missing` and store/close the `"relay_hints_refresh"` subscription instead of discarding the closer.
-- [ ] **C2.4 Remove `panic`s on untrusted input (`bech32.gleam`, `keystore.gleam`):** Return `Result` errors instead of panicking on malformed bech32 strings or stored pubkeys.
+- [x] **C2.1 Locked keystore check in `NostrEncrypt` / `NostrDecrypt` (`dispatcher.gleam`):** Check `keystore.is_locked(ctx.keystore)` before calling `nip04`/`nip44` so locked keystores return `"Keystore is locked"` instead of a secp256k1 error.
+- [x] **C2.2 `NostrPublishDraft` ACL check (`dispatcher.gleam`):** Check `capability.NostrSign` in addition to `capability.NostrWrite`.
+- [x] **C2.3 `RelayHintCache` & `refresh_hints` leak (`relay_hints.gleam`, `coordinator.gleam`):** Fix negative-cache TTL handling in `lookup`/`put_missing` and store/close the `"relay_hints_refresh"` subscription instead of discarding the closer.
+- [x] **C2.4 Remove `panic`s on untrusted input (`bech32.gleam`, `keystore.gleam`):** Return `Result` errors instead of panicking on malformed bech32 strings or stored pubkeys.
 
 ---
 

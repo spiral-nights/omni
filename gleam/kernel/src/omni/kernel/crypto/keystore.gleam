@@ -79,20 +79,22 @@ fn normalize_key_input(input: String) -> Result(String, String) {
 
 /// Initializes a new `Keystore`. If a key already exists in `storage`, loads and
 /// validates it; otherwise generates and persists a fresh secp256k1 private key.
-fn parse_pubkey_or_panic(hex: String) -> Pubkey {
-  case pubkey.parse(hex) {
-    Ok(pk) -> pk
-    Error(Nil) -> panic as "invalid public key"
-  }
+fn default_pubkey() -> Pubkey {
+  let assert Ok(pk) =
+    pubkey.parse(
+      "0000000000000000000000000000000000000000000000000000000000000000",
+    )
+  pk
 }
 
 fn locked_or_stored_pubkey(store: Storage) -> Pubkey {
   case store.get(storage_key_public_key) {
-    Some(stored) -> parse_pubkey_or_panic(stored)
-    None ->
-      parse_pubkey_or_panic(
-        "0000000000000000000000000000000000000000000000000000000000000000",
-      )
+    Some(stored) ->
+      case pubkey.parse(stored) {
+        Ok(pk) -> pk
+        Error(Nil) -> default_pubkey()
+      }
+    None -> default_pubkey()
   }
 }
 
@@ -267,7 +269,11 @@ pub fn new(store: Storage) -> Keystore {
   let pubkey = case existing_key {
     Some(hex) ->
       case secp256k1.get_public_key(hex) {
-        Ok(pk_hex) -> parse_pubkey_or_panic(pk_hex)
+        Ok(pk_hex) ->
+          case pubkey.parse(pk_hex) {
+            Ok(pk) -> pk
+            Error(Nil) -> locked_or_stored_pubkey(store)
+          }
         Error(_) -> locked_or_stored_pubkey(store)
       }
     None ->
@@ -275,7 +281,11 @@ pub fn new(store: Storage) -> Keystore {
         True -> locked_or_stored_pubkey(store)
         False ->
           case secp256k1.get_public_key(privkey) {
-            Ok(pk_hex) -> parse_pubkey_or_panic(pk_hex)
+            Ok(pk_hex) ->
+              case pubkey.parse(pk_hex) {
+                Ok(pk) -> pk
+                Error(Nil) -> locked_or_stored_pubkey(store)
+              }
             Error(_) -> locked_or_stored_pubkey(store)
           }
       }
@@ -357,34 +367,38 @@ fn sign_event_unlocked(
   let privkey = ref.get(keystore.private_key)
   case secp256k1.get_public_key(privkey) {
     Ok(pub_hex) -> {
-      let assert Ok(pk) = pubkey.parse(pub_hex)
-      let serialized =
-        event.serialize_for_id(
-          pk,
-          draft.created_at,
-          draft.kind,
-          draft.tags,
-          draft.content,
-        )
-      let id_hex = webcrypto.sha256_hex(serialized)
-      case event_id.parse(id_hex) {
-        Ok(eid) -> {
-          case secp256k1.schnorr_sign(id_hex, privkey) {
-            Ok(sig) -> {
-              Ok(Event(
-                id: eid,
-                pubkey: pk,
-                created_at: draft.created_at,
-                kind: draft.kind,
-                tags: draft.tags,
-                content: draft.content,
-                sig: sig,
-              ))
+      case pubkey.parse(pub_hex) {
+        Ok(pk) -> {
+          let serialized =
+            event.serialize_for_id(
+              pk,
+              draft.created_at,
+              draft.kind,
+              draft.tags,
+              draft.content,
+            )
+          let id_hex = webcrypto.sha256_hex(serialized)
+          case event_id.parse(id_hex) {
+            Ok(eid) -> {
+              case secp256k1.schnorr_sign(id_hex, privkey) {
+                Ok(sig) -> {
+                  Ok(Event(
+                    id: eid,
+                    pubkey: pk,
+                    created_at: draft.created_at,
+                    kind: draft.kind,
+                    tags: draft.tags,
+                    content: draft.content,
+                    sig: sig,
+                  ))
+                }
+                Error(Nil) -> Error("Schnorr sign failed")
+              }
             }
-            Error(Nil) -> Error("Schnorr sign failed")
+            Error(Nil) -> Error("Failed to parse calculated event ID")
           }
         }
-        Error(Nil) -> Error("Failed to parse calculated event ID")
+        Error(Nil) -> Error("Failed to parse derived public key")
       }
     }
     Error(Nil) -> Error("Invalid private key in keystore")
@@ -734,19 +748,26 @@ fn switch_key_unencrypted(
     Ok(hex) -> {
       case secp256k1.get_public_key(hex) {
         Ok(pub_hex) -> {
-          let assert Ok(pk) = pubkey.parse(pub_hex)
-          ref.set(keystore.private_key, hex)
-          ref.set(keystore.public_key, pk)
-          ref.set(keystore.locked, False)
-          ref.set(keystore.encrypted, False)
-          let _ = storage.set(keystore.storage, storage_key_private_key, hex)
-          let _ = storage.set(keystore.storage, storage_key_public_key, pub_hex)
-          remember_account(keystore.storage, pub_hex, hex)
-          let _ = storage.remove(keystore.storage, storage_key_encrypted_key)
-          let _ = storage.remove(keystore.storage, storage_key_key_salt)
-          let listeners = ref.get(keystore.listeners)
-          list.each(listeners, fn(listener) { listener(pk) })
-          Ok(pk)
+          case pubkey.parse(pub_hex) {
+            Ok(pk) -> {
+              ref.set(keystore.private_key, hex)
+              ref.set(keystore.public_key, pk)
+              ref.set(keystore.locked, False)
+              ref.set(keystore.encrypted, False)
+              let _ =
+                storage.set(keystore.storage, storage_key_private_key, hex)
+              let _ =
+                storage.set(keystore.storage, storage_key_public_key, pub_hex)
+              remember_account(keystore.storage, pub_hex, hex)
+              let _ =
+                storage.remove(keystore.storage, storage_key_encrypted_key)
+              let _ = storage.remove(keystore.storage, storage_key_key_salt)
+              let listeners = ref.get(keystore.listeners)
+              list.each(listeners, fn(listener) { listener(pk) })
+              Ok(pk)
+            }
+            Error(Nil) -> Error("Failed to parse derived public key")
+          }
         }
         Error(Nil) -> Error("Invalid secp256k1 private key")
       }

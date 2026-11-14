@@ -37,8 +37,17 @@ describe.skipIf(!hasBundle)("bundled Gleam guest bridge", () => {
 
     const pending = window.nostr.getPublicKey();
     await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(requests.length).toBe(1);
-    const request = requests[0] as {
+    expect(requests.length).toBe(2);
+
+    const storageReq = requests[0] as {
+      id: number;
+      method: string;
+      params: { key: string; value: string };
+    };
+    expect(storageReq.method).toBe("storage.set");
+    expect(storageReq.params).toEqual({ key: "token", value: "abc" });
+
+    const request = requests[1] as {
       id: number;
       method: string;
     };

@@ -20,48 +20,52 @@ fn js_object(entries: List(#(String, Dynamic))) -> Dynamic
 fn js_null() -> Dynamic
 
 /// Encode raw hex to bech32 string with the given HRP.
-pub fn to_bech32(hrp: String, hex: String) -> String {
+pub fn to_bech32(hrp: String, hex: String) -> Result(String, String) {
   case bech32.to_bech32(hrp, hex) {
-    Ok(s) -> s
-    Error(_) -> panic as "Failed to convert bits for bech32 encoding"
+    Ok(s) -> Ok(s)
+    Error(_) -> Error("Failed to convert bits for bech32 encoding")
   }
 }
 
 /// Decode bech32 string to `{ hrp: string, hex: string }` plain JS object.
-pub fn from_bech32(str: String) -> Dynamic {
+pub fn from_bech32(str: String) -> Result(Dynamic, String) {
   case bech32.from_bech32(str) {
     Ok(#(hrp, hex)) ->
-      js_object([
-        #("hrp", dynamic.string(hrp)),
-        #("hex", dynamic.string(hex)),
-      ])
-    Error(_) -> panic as "Invalid bech32 string"
+      Ok(
+        js_object([
+          #("hrp", dynamic.string(hrp)),
+          #("hex", dynamic.string(hex)),
+        ]),
+      )
+    Error(_) -> Error("Invalid bech32 string")
   }
 }
 
 /// Convert hex to npub1...
-pub fn hex_to_npub(hex: String) -> String {
+pub fn hex_to_npub(hex: String) -> Result(String, String) {
   to_bech32("npub", hex)
 }
 
 /// Convert npub1... to hex.
-pub fn npub_to_hex(npub_str: String) -> String {
+pub fn npub_to_hex(npub_str: String) -> Result(String, String) {
   case bech32.from_bech32(npub_str) {
-    Ok(#(_, hex)) -> hex
-    Error(_) -> panic as "Invalid npub string"
+    Ok(#("npub", hex)) -> Ok(hex)
+    Ok(_) -> Error("Invalid npub string: unexpected HRP")
+    Error(_) -> Error("Invalid npub string")
   }
 }
 
 /// Convert hex to nsec1...
-pub fn hex_to_nsec(hex: String) -> String {
+pub fn hex_to_nsec(hex: String) -> Result(String, String) {
   to_bech32("nsec", hex)
 }
 
 /// Convert nsec1... to hex.
-pub fn nsec_to_hex(nsec_str: String) -> String {
+pub fn nsec_to_hex(nsec_str: String) -> Result(String, String) {
   case bech32.from_bech32(nsec_str) {
-    Ok(#(_, hex)) -> hex
-    Error(_) -> panic as "Invalid nsec string"
+    Ok(#("nsec", hex)) -> Ok(hex)
+    Ok(_) -> Error("Invalid nsec string: unexpected HRP")
+    Error(_) -> Error("Invalid nsec string")
   }
 }
 
@@ -144,7 +148,7 @@ pub fn decode_nostr_entity(raw: String) -> Dynamic {
 }
 
 /// Encode naddr from `{ identifier: string, pubkey: string, kind: number, relays?: string[] }`.
-pub fn encode_naddr(params: Dynamic) -> String {
+pub fn encode_naddr(params: Dynamic) -> Result(String, String) {
   let identifier =
     decode.run(params, decode.at(["identifier"], decode.string))
     |> result.unwrap("")
@@ -167,9 +171,9 @@ pub fn encode_naddr(params: Dynamic) -> String {
           kind: kind.from_int(kind_int),
           relays: relays,
         )
-      nip19.encode_naddr(addr)
+      Ok(nip19.encode_naddr(addr))
     }
-    Error(_) -> panic as "Invalid pubkey for encode_naddr"
+    Error(_) -> Error("Invalid pubkey for encode_naddr")
   }
 }
 

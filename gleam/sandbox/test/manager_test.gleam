@@ -44,6 +44,16 @@ pub fn format_detection_test() {
     Some("<!DOCTYPE html><html><body>Direct nsite</body></html>"),
   )
   |> should.equal(IframeFormat)
+  manager.detect_format(None, None, Some("AGFzbQEAAAAB"))
+  |> should.equal(WasmFormat)
+  manager.detect_format(
+    None,
+    None,
+    Some("data:application/wasm;base64,AGFzbQEAAAAB"),
+  )
+  |> should.equal(WasmFormat)
+  manager.detect_format(None, None, Some("\u{0}asm\u{1}\u{0}\u{0}\u{0}"))
+  |> should.equal(WasmFormat)
 
   // 4. Default fallback: direct nsite -> Iframe
   manager.detect_format(None, None, None)

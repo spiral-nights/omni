@@ -6,7 +6,8 @@ import gleam/string
 import omni/kernel/crypto/keystore.{
   accounts, disable_passphrase, enable_passphrase, get_npub, get_nsec,
   get_private_key, get_public_key, is_encrypted, is_locked, on_key_change,
-  sign_event, storage_key_private_key, switch_account, switch_key, unlock,
+  sign_event, storage_key_encrypted_key, storage_key_private_key,
+  storage_key_public_key, switch_account, switch_key, unlock,
 }
 import omni/nostr/event.{UnsignedEvent}
 import omni/nostr/event_id
@@ -194,4 +195,22 @@ pub fn keystore_multi_account_switch_test() -> promise.Promise(Nil) {
   assert second == keystore.get_public_key(ks)
   let _ = second_pub_hex
   promise.resolve(Nil)
+}
+
+pub fn keystore_corrupted_stored_pubkey_test() {
+  let store = storage.in_memory()
+  // Store an invalid / corrupted public key string
+  let _ = storage.set(store, storage_key_public_key, "corrupt_invalid_pubkey")
+  // Also store encrypted blob so locked branch reads stored pubkey
+  let _ = storage.set(store, storage_key_encrypted_key, "encrypted_blob")
+
+  // Initializing keystore should NOT panic, and should fall back to default pubkey
+  let ks = keystore.new(store)
+  assert is_locked(ks) == True
+  let pk_hex = pubkey.to_hex(get_public_key(ks))
+  assert pk_hex
+    == "0000000000000000000000000000000000000000000000000000000000000000"
+
+  // Switch key with malformed input returns Error without panicking
+  assert switch_key(ks, "invalid_privkey") |> result.is_error
 }

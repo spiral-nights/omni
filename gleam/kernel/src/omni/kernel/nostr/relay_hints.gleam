@@ -43,8 +43,8 @@ pub fn new(clock: clock.Clock) -> RelayHintCache {
   )
 }
 
-/// Look up the read relays for `author`. Returns `None` on a cache miss,
-/// an expired entry, or a cached "no relay list" result.
+/// Look up the read relays for `author`. Returns `Some(relays)` on a cache hit,
+/// `Some([])` on a cached negative result within negative TTL, or `None` on a cache miss or expired entry.
 pub fn lookup(cache: RelayHintCache, author: String) -> Option(List(String)) {
   let now = cache.clock.now_ms()
   case dict.get(ref.get(cache.entries), normalize(author)) {
@@ -54,7 +54,7 @@ pub fn lookup(cache: RelayHintCache, author: String) -> Option(List(String)) {
         True, True -> Some(entry.read_relays)
         False, _ ->
           case now - entry.fetched_at_ms <= negative_ttl_ms {
-            True -> None
+            True -> Some([])
             False -> None
           }
         _, False -> None

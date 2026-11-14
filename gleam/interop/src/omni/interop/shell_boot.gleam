@@ -8,6 +8,7 @@
 
 import gleam/bit_array
 import gleam/dict
+import gleam/dynamic/decode
 import gleam/javascript/promise
 import gleam/json
 import gleam/list
@@ -34,6 +35,7 @@ import omni/platform/browser
 import omni/platform/clock
 import omni/platform/file_picker
 import omni/platform/idb
+import omni/platform/json as platform_json
 import omni/platform/log
 import omni/platform/nip44
 import omni/platform/storage
@@ -146,8 +148,21 @@ pub fn spawn_plugin(
       let on_schema = fn(raw) { handle_guest_schema(plugin_id, raw) }
       let format = sandbox_manager.detect_format(None, route, Some(content))
       use _ <- result.try(case format {
-        sandbox_manager.WasmFormat ->
-          Error("WASM plugins are not supported; use an iframe or schema host")
+        sandbox_manager.WasmFormat -> {
+          let pubkey_str = case next_booted.model.user_profile {
+            Some(profile) -> profile.pubkey
+            None -> ""
+          }
+          mount_wasm(
+            selector,
+            content,
+            plugin_id,
+            pubkey_str,
+            on_rpc,
+            on_schema,
+          )
+          Ok(Nil)
+        }
         sandbox_manager.WorkerFormat -> {
           let runtime = case next_booted.bridge_script {
             Some(source) -> source
@@ -176,9 +191,77 @@ pub fn spawn_plugin(
   }
 }
 
+fn handle_uri(uri: String) -> Nil {
+  case protocol_shims.parse_protocol_uri(uri) {
+    Ok(parsed) -> {
+      let intent = protocol_shims.route_to_intent(parsed, None)
+      dispatch_shell_msg(DispatchIntent(intent.action, intent.data))
+    }
+    Error(_) -> Nil
+  }
+}
+
 fn handle_guest_schema(plugin_id: String, raw: String) -> Nil {
   case schema_codec.decode_schema_message(raw) {
     Ok(message) -> dispatch_shell_msg(EmbedSchema(plugin_id, message.schema))
+    Error(_) -> {
+      let trimmed = string.trim(raw)
+      let uri = case
+        string.starts_with(trimmed, "\"") && string.ends_with(trimmed, "\"")
+      {
+        True -> string.slice(trimmed, 1, string.length(trimmed) - 2)
+        False -> trimmed
+      }
+      let lower = string.lowercase(uri)
+      case
+        string.starts_with(lower, "nostr:")
+        || string.starts_with(lower, "lightning:")
+        || string.starts_with(lower, "cashu:")
+      {
+        True -> handle_uri(uri)
+        False -> handle_channel1_fallback(trimmed)
+      }
+    }
+  }
+}
+
+fn handle_channel1_fallback(raw_json: String) -> Nil {
+  case platform_json.parse_dynamic(raw_json) {
+    Ok(dyn) -> {
+      let dec_share = {
+        use msg_type <- decode.field("type", decode.string)
+        use title <- decode.optional_field("title", "", decode.string)
+        use text <- decode.optional_field("text", "", decode.string)
+        use url <- decode.optional_field("url", "", decode.string)
+        decode.success(#(msg_type, title, text, url))
+      }
+      let dec_link = {
+        use uri <- decode.field("uri", decode.string)
+        decode.success(uri)
+      }
+      case decode.run(dyn, dec_share) {
+        Ok(#("omni:share", title, text, url)) -> {
+          let t_opt = case title {
+            "" -> None
+            _ -> Some(title)
+          }
+          let tx_opt = case text {
+            "" -> None
+            _ -> Some(text)
+          }
+          let u_opt = case url {
+            "" -> None
+            _ -> Some(url)
+          }
+          host_share(t_opt, tx_opt, u_opt)
+        }
+        _ ->
+          case decode.run(dyn, dec_link) {
+            Ok(uri) -> handle_uri(uri)
+            Error(_) -> Nil
+          }
+      }
+    }
     Error(_) -> Nil
   }
 }
@@ -216,15 +299,7 @@ fn host_hooks() -> dispatcher.HostHooks {
     }),
     navigate: Some(fn(view, page) { dispatch_shell_msg(OpenApp(view, page)) }),
     share: Some(host_share),
-    handle_uri: Some(fn(uri) {
-      case protocol_shims.parse_protocol_uri(uri) {
-        Ok(parsed) -> {
-          let intent = protocol_shims.route_to_intent(parsed, None)
-          dispatch_shell_msg(DispatchIntent(intent.action, intent.data))
-        }
-        Error(_) -> Nil
-      }
-    }),
+    handle_uri: Some(handle_uri),
   )
 }
 
@@ -238,9 +313,11 @@ pub fn rpc_frame(
 }
 
 /// Terminate a plugin sandbox and remove its mounted island contents.
-pub fn terminate_plugin(host: ShellBoot, selector: String) -> ShellBoot {
-  unmount_island(selector)
-  ShellBoot(host.booted)
+pub fn terminate_plugin(host: ShellBoot, plugin_id: String) -> ShellBoot {
+  unmount_worker(plugin_id)
+  unmount_wasm(plugin_id)
+  unmount_island(plugin_id)
+  ShellBoot(boot.terminate_sandbox(host.booted, plugin_id))
 }
 
 /// Render the current shell tree as HTML (static snapshot; no event handlers).
@@ -469,6 +546,7 @@ fn apply_effects(
     case effect {
       update.UnmountPluginFromSlot(plugin_id, viewport) -> {
         unmount_worker(plugin_id)
+        unmount_wasm(plugin_id)
         unmount_island(slot_selector(viewport, plugin_id))
         ShellBoot(boot.terminate_sandbox(acc.booted, plugin_id))
       }
@@ -1053,6 +1131,7 @@ fn apply_upgrade(
   content: String,
 ) -> Nil {
   unmount_worker(plugin_id)
+  unmount_wasm(plugin_id)
   unmount_island(slot_selector(Main, plugin_id))
   let merged =
     InstalledApp(
@@ -1491,6 +1570,19 @@ fn unmount_island(selector: String) -> Nil
 
 @external(javascript, "./shell_boot.ffi.mjs", "unmount_worker")
 fn unmount_worker(plugin_id: String) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "mount_wasm")
+fn mount_wasm(
+  selector: String,
+  content: String,
+  plugin_id: String,
+  user_pubkey: String,
+  on_rpc: fn(String, fn(String) -> Nil) -> Nil,
+  on_schema: fn(String) -> Nil,
+) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "unmount_wasm")
+fn unmount_wasm(plugin_id: String) -> Nil
 
 fn plugin_settings_id(tab_id: String) -> String {
   string.drop_start(tab_id, 7)

@@ -21,11 +21,11 @@ import omni/protocol/rpc/error_code.{type ErrorCode}
 import omni/protocol/rpc/method.{
   type Request, AuthGenerateKey, AuthGetNpub, AuthGetNsec, AuthSwitchKey,
   IntentEmit, IntentHandle, IntentsDispatch, KernelHandleUri, NavigationOpen,
-  Nip04, Nip44, NostrDecrypt, NostrEncrypt, NostrFetch, NostrGetPublicKey,
-  NostrGetRelays, NostrPublish, NostrPublishDraft, NostrSignEvent,
-  NostrSubscribe, NostrUnsubscribe, ProfileGet, ProfilePublish, RelaysAdd,
-  RelaysList, RelaysRemove, Share, StorageClear, StorageGet, StorageKeys,
-  StorageRemove, StorageSet, UnknownMethod,
+  Nip04, Nip44, NostrDecrypt, NostrDoc, NostrEncrypt, NostrFetch,
+  NostrGetPublicKey, NostrGetRelays, NostrPublish, NostrPublishDraft,
+  NostrSignEvent, NostrSubscribe, NostrUnsubscribe, ProfileGet, ProfilePublish,
+  RelaysAdd, RelaysList, RelaysRemove, Share, StorageClear, StorageGet,
+  StorageKeys, StorageRemove, StorageSet, UnknownMethod,
 }
 
 /// Structured error when decoding an incoming JSON-RPC request.
@@ -207,6 +207,14 @@ pub fn encode_request(id: Id, request: Request) -> String {
     }
     AuthSwitchKey(key) ->
       Some(json.object([#("key", json.string(key))]) |> json.to_string)
+    NostrDoc(spec, options) ->
+      Some(
+        "{\"spec\":"
+        <> serialize_dynamic(spec)
+        <> ",\"options\":"
+        <> serialize_dynamic(options)
+        <> "}",
+      )
     UnknownMethod(_, params) ->
       case params {
         Some(p) -> Some(serialize_dynamic(p))
@@ -681,6 +689,23 @@ fn decode_method_params(
       }
       decode.run(dyn, dec)
       |> result_to_param_error("Missing uri for kernel.handleUri")
+    }
+
+    "nostr.doc" -> {
+      use dyn <- require_params(params, "Missing nostr.doc parameters")
+      let dec = {
+        use spec <- decode.field("spec", decode.dynamic)
+        use options <- decode.optional_field(
+          "options",
+          dynamic.nil(),
+          decode.dynamic,
+        )
+        decode.success(NostrDoc(spec, options))
+      }
+      case decode.run(dyn, dec) {
+        Ok(req) -> Ok(req)
+        Error(_) -> Ok(NostrDoc(dyn, dynamic.nil()))
+      }
     }
 
     other -> Ok(UnknownMethod(other, params))

@@ -65,6 +65,25 @@ describe("bridge parity: protocol links", () => {
     expect(post).not.toHaveBeenCalled();
     document.body.removeChild(anchor);
   });
+
+  it("routes protocol anchors via RPC without calling post when rpc is provided", () => {
+    const post = vi.fn();
+    const rpc = vi.fn();
+    installLinks(post, rpc);
+
+    const anchor = document.createElement("a");
+    anchor.href = "nostr:nevent1abc";
+    document.body.appendChild(anchor);
+
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    anchor.dispatchEvent(click);
+
+    expect(click.defaultPrevented).toBe(true);
+    expect(rpc).toHaveBeenCalledWith("kernel.handleUri", { uri: "nostr:nevent1abc" });
+    expect(post).not.toHaveBeenCalled();
+
+    document.body.removeChild(anchor);
+  });
 });
 
 describe("bridge parity: share", () => {
@@ -81,6 +100,20 @@ describe("bridge parity: share", () => {
       text: "Hello nostr",
       url: "https://x.test",
     });
+  });
+
+  it("routes navigator.share via RPC without calling post when rpc is provided", async () => {
+    const post = vi.fn();
+    const rpc = vi.fn();
+    installShare(post, rpc);
+    await navigator.share({ title: "Hi", text: "Hello nostr", url: "https://x.test" });
+
+    expect(rpc).toHaveBeenCalledWith("kernel.handleShare", {
+      title: "Hi",
+      text: "Hello nostr",
+      url: "https://x.test",
+    });
+    expect(post).not.toHaveBeenCalled();
   });
 });
 

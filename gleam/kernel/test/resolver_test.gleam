@@ -1,17 +1,20 @@
+import gleam/bit_array
 import gleam/dict
 import gleam/list
-import gleam/option.{None}
+import gleam/option.{None, Some}
 import gleam/string
 import gleeunit/should
 import omni/kernel/crypto/keystore
 import omni/kernel/plugins/resolver.{
-  CoordinateTarget, EventTarget, StrategyExhausted, UrlTarget,
+  CoordinateTarget, EventTarget, StrategyExhausted, UrlTarget, ZipBytesTarget,
+  ZipUrlTarget,
 }
 import omni/nostr/event.{type Event, Event}
 import omni/nostr/event_id.{type EventId}
 import omni/nostr/kind
 import omni/nostr/pubkey.{type Pubkey}
 import omni/platform/storage
+import omni/platform/zip
 
 fn make_pubkey(suffix: String) -> Pubkey {
   let padded = string.pad_start(suffix, to: 64, with: "0")
@@ -158,4 +161,112 @@ pub fn verify_event_signature_accepts_real_and_rejects_tampered_test() {
 
   let tampered = Event(..signed, content: "<html>evil</html>")
   resolver.verify_event_signature(tampered) |> should.be_false()
+}
+
+pub fn resolver_parse_target_zip_url_test() {
+  resolver.parse_target("https://example.com/app.zip")
+  |> should.equal(Ok(ZipUrlTarget("https://example.com/app.zip")))
+
+  resolver.parse_target("http://localhost:8080/plugins/custom.ZIP")
+  |> should.equal(Ok(ZipUrlTarget("http://localhost:8080/plugins/custom.ZIP")))
+
+  let valid_zip =
+    zip.zip([
+      #(
+        "index.html",
+        bit_array.from_string("<!DOCTYPE html><html><body>Zip</body></html>"),
+      ),
+    ])
+  let b64 = bit_array.base64_encode(valid_zip, True)
+  let data_uri = "data:application/zip;base64," <> b64
+
+  let assert Ok(ZipBytesTarget(bytes)) = resolver.parse_target(data_uri)
+  bytes |> should.equal(valid_zip)
+}
+
+pub fn resolver_extract_zip_bundle_test() {
+  let manifest_json =
+    "{\"name\":\"Zip Calculator\",\"short_name\":\"Calc\",\"description\":\"A calculator app in zip\"}"
+  let index_html =
+    "<!DOCTYPE html><html><head><title>Calc App</title></head><body><div id=\"root\"></div></body></html>"
+  let style_css = "body { background: #000; }"
+  let app_js = "console.log('zip app loaded');"
+
+  let archive =
+    zip.zip([
+      #("manifest.json", bit_array.from_string(manifest_json)),
+      #("index.html", bit_array.from_string(index_html)),
+      #("style.css", bit_array.from_string(style_css)),
+      #("app.js", bit_array.from_string(app_js)),
+      #("__MACOSX/._index.html", bit_array.from_string("garbage")),
+      #(".DS_Store", bit_array.from_string("junk")),
+    ])
+
+  let assert Ok(plugin) =
+    resolver.extract_zip_bundle(archive, "example.calculator")
+  plugin.id |> should.equal("example.calculator")
+  plugin.name |> should.equal("Zip Calculator")
+  plugin.description |> should.equal("A calculator app in zip")
+  plugin.entry |> should.equal("index.html")
+  string.contains(plugin.content, "data-omni-asset=\"style.css\"")
+  |> should.be_true
+  string.contains(plugin.content, "body { background: #000; }")
+  |> should.be_true
+  string.contains(plugin.content, "data-omni-asset=\"app.js\"")
+  |> should.be_true
+  string.contains(plugin.content, "console.log('zip app loaded');")
+  |> should.be_true
+}
+
+pub fn resolver_extract_zip_bundle_nested_prefix_test() {
+  let index_html =
+    "<!DOCTYPE html><html><head><title>Nested App</title></head><body>Hello</body></html>"
+  let style_css = "p { color: red; }"
+
+  let archive =
+    zip.zip([
+      #("dist/index.html", bit_array.from_string(index_html)),
+      #("dist/style.css", bit_array.from_string(style_css)),
+    ])
+
+  let assert Ok(plugin) = resolver.extract_zip_bundle(archive, "nested.app")
+  plugin.name |> should.equal("Nested App")
+  plugin.entry |> should.equal("index.html")
+  string.contains(plugin.content, "data-omni-asset=\"style.css\"")
+  |> should.be_true
+}
+
+pub fn resolver_zip_strategy_test() {
+  let archive =
+    zip.zip([
+      #(
+        "index.html",
+        bit_array.from_string(
+          "<html><head><title>Fetched</title></head></html>",
+        ),
+      ),
+    ])
+
+  let fetch_bytes = fn(url: String) {
+    case url == "https://cdn.example.com/bundle.zip" {
+      True -> Ok(archive)
+      False -> Error(resolver.HttpFetchFailed(url, "Not found"))
+    }
+  }
+
+  let strategy = resolver.zip_strategy(fetch_bytes)
+  let strategies = [strategy, resolver.event_strategy]
+
+  let assert Ok(plugin) =
+    resolver.resolve_chain(
+      ZipUrlTarget("https://cdn.example.com/bundle.zip"),
+      strategies,
+    )
+  plugin.name |> should.equal("Fetched")
+
+  resolver.resolve_chain(
+    ZipUrlTarget("https://cdn.example.com/other.zip"),
+    strategies,
+  )
+  |> should.be_error
 }

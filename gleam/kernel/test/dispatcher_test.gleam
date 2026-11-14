@@ -28,10 +28,10 @@ import omni/protocol/plugin_id
 import omni/protocol/rpc/envelope.{Error, IntId, Success}
 import omni/protocol/rpc/error_code
 import omni/protocol/rpc/method.{
-  AuthSwitchKey, IntentsDispatch, Nip44, NostrDecrypt, NostrEncrypt, NostrFetch,
-  NostrGetPublicKey, NostrGetRelays, NostrPublish, NostrSignEvent, RelaysAdd,
-  RelaysList, RelaysRemove, StorageClear, StorageGet, StorageKeys, StorageRemove,
-  StorageSet, UnknownMethod,
+  AuthSwitchKey, IntentsDispatch, Nip44, NostrDecrypt, NostrDoc, NostrEncrypt,
+  NostrFetch, NostrGetPublicKey, NostrGetRelays, NostrPublish, NostrPublishDraft,
+  NostrSignEvent, RelaysAdd, RelaysList, RelaysRemove, StorageClear, StorageGet,
+  StorageKeys, StorageRemove, StorageSet, UnknownMethod,
 }
 
 fn setup_test_context() -> Promise(
@@ -822,5 +822,209 @@ pub fn dispatcher_intent_handle_and_emit_test() -> Promise(Nil) {
       promise.resolve(Nil)
     }
     _ -> panic as "expected Success for intent.handle"
+  }
+}
+
+pub fn dispatcher_encrypt_decrypt_locked_keystore_test() -> Promise(Nil) {
+  use #(ctx, cap_store) <- promise.await(setup_test_context())
+  capability_store.set_grant(
+    cap_store,
+    ctx.plugin_id,
+    capability.NostrEncrypt,
+    grant.Always,
+    None,
+  )
+  use _ <- promise.await(keystore.enable_passphrase(ctx.keystore, "secretpass"))
+  let locked_ks = keystore.new(ctx.storage)
+  keystore.is_locked(locked_ks) |> should.equal(True)
+  let ctx = RpcContext(..ctx, keystore: locked_ks)
+  let me = keystore.get_public_key(locked_ks)
+
+  use enc_res <- promise.await(dispatcher.dispatch(
+    ctx,
+    IntId(211),
+    NostrEncrypt(Nip44, me, "secret text"),
+  ))
+  case enc_res {
+    Error(id, code, msg, _) -> {
+      id |> should.equal(Some(IntId(211)))
+      code |> should.equal(error_code.SignerRejected)
+      msg |> should.equal("Keystore is locked")
+    }
+    _ -> panic as "expected SignerRejected Error for encrypt on locked keystore"
+  }
+
+  use dec_res <- promise.await(dispatcher.dispatch(
+    ctx,
+    IntId(212),
+    NostrDecrypt(Nip44, me, "dummy_ciphertext"),
+  ))
+  case dec_res {
+    Error(id, code, msg, _) -> {
+      id |> should.equal(Some(IntId(212)))
+      code |> should.equal(error_code.SignerRejected)
+      msg |> should.equal("Keystore is locked")
+    }
+    _ -> panic as "expected SignerRejected Error for decrypt on locked keystore"
+  }
+
+  promise.resolve(Nil)
+}
+
+pub fn dispatcher_publish_draft_acl_test() -> Promise(Nil) {
+  use #(ctx, cap_store) <- promise.await(setup_test_context())
+
+  let draft =
+    UnsignedEvent(
+      pubkey: None,
+      created_at: 1_700_000_000,
+      kind: kind.Note,
+      tags: [],
+      content: "Draft publish test",
+    )
+
+  // 1. Without NostrSign, publish draft fails with "Permission denied to sign event"
+  use res1 <- promise.await(dispatcher.dispatch(
+    ctx,
+    IntId(201),
+    NostrPublishDraft(draft),
+  ))
+  case res1 {
+    Error(id, code, msg, _) -> {
+      id |> should.equal(Some(IntId(201)))
+      code |> should.equal(error_code.PermissionDenied)
+      msg |> should.equal("Permission denied to sign event")
+    }
+    _ -> panic as "expected PermissionDenied for draft publish without NostrSign"
+  }
+
+  // 2. Grant NostrSign only: draft signing succeeds, but publish fails with "Permission denied for nostr:write"
+  capability_store.set_grant(
+    cap_store,
+    ctx.plugin_id,
+    capability.NostrSign,
+    grant.Always,
+    None,
+  )
+  use res2 <- promise.await(dispatcher.dispatch(
+    ctx,
+    IntId(202),
+    NostrPublishDraft(draft),
+  ))
+  case res2 {
+    Error(id, code, msg, _) -> {
+      id |> should.equal(Some(IntId(202)))
+      code |> should.equal(error_code.PermissionDenied)
+      msg |> should.equal("Permission denied for nostr:write")
+    }
+    _ ->
+      panic as "expected PermissionDenied for draft publish without NostrWrite"
+  }
+
+  // 3. Grant NostrWrite as well: draft publish succeeds
+  capability_store.set_grant(
+    cap_store,
+    ctx.plugin_id,
+    capability.NostrWrite,
+    grant.Always,
+    None,
+  )
+  use res3 <- promise.await(dispatcher.dispatch(
+    ctx,
+    IntId(203),
+    NostrPublishDraft(draft),
+  ))
+  case res3 {
+    Success(id, _) -> {
+      id |> should.equal(IntId(203))
+      promise.resolve(Nil)
+    }
+    _ ->
+      panic as "expected Success for draft publish with both NostrSign and NostrWrite"
+  }
+}
+
+pub fn dispatcher_nostr_doc_test() -> Promise(Nil) {
+  use #(ctx, cap_store) <- promise.await(setup_test_context())
+
+  // 1. Without NostrRead permission -> PermissionDenied
+  let spec_dyn = dynamic.string("omni/settings/v1")
+  let opts_dyn = dynamic.nil()
+  use res1 <- promise.await(dispatcher.dispatch(
+    ctx,
+    IntId(301),
+    NostrDoc(spec_dyn, opts_dyn),
+  ))
+  case res1 {
+    Error(id, code, msg, _) -> {
+      id |> should.equal(Some(IntId(301)))
+      code |> should.equal(error_code.PermissionDenied)
+      msg |> should.equal("Permission denied for nostr:read")
+    }
+    _ -> panic as "expected PermissionDenied without NostrRead"
+  }
+
+  // 2. Grant NostrRead permission -> returns doc structure with null content before any event saved
+  capability_store.set_grant(
+    cap_store,
+    ctx.plugin_id,
+    capability.NostrRead,
+    grant.Always,
+    None,
+  )
+  use res2 <- promise.await(dispatcher.dispatch(
+    ctx,
+    IntId(302),
+    NostrDoc(spec_dyn, opts_dyn),
+  ))
+  case res2 {
+    Success(id, result) -> {
+      id |> should.equal(IntId(302))
+      let dec = {
+        use k <- decode.field("kind", decode.int)
+        use d <- decode.field("d", decode.string)
+        decode.success(#(k, d))
+      }
+      let assert Ok(#(k, d)) = decode.run(result, dec)
+      k |> should.equal(30_078)
+      d |> should.equal("omni/settings/v1")
+    }
+    _ -> panic as "expected Success for nostr.doc"
+  }
+
+  // 3. Save a kind 30078 event with d tag "omni/settings/v1"
+  let draft =
+    UnsignedEvent(
+      pubkey: Some(keystore.get_public_key(ctx.keystore)),
+      created_at: 1_700_000_000,
+      kind: kind.AppData,
+      tags: [["d", "omni/settings/v1"]],
+      content: "{\"theme\":\"dark\"}",
+    )
+  let assert Ok(signed) = keystore.sign_event(ctx.keystore, draft)
+  use _ <- promise.await(event_store.save_event(ctx.event_store, signed))
+
+  // 4. Fetch doc again -> returns saved content
+  use res3 <- promise.await(dispatcher.dispatch(
+    ctx,
+    IntId(303),
+    NostrDoc(spec_dyn, opts_dyn),
+  ))
+  case res3 {
+    Success(id, result) -> {
+      id |> should.equal(IntId(303))
+      let dec = {
+        use k <- decode.field("kind", decode.int)
+        use d <- decode.field("d", decode.string)
+        use content <- decode.field("content", decode.string)
+        decode.success(#(k, d, content))
+      }
+      let assert Ok(#(k, d, content)) = decode.run(result, dec)
+      k |> should.equal(30_078)
+      d |> should.equal("omni/settings/v1")
+      content |> should.equal("{\"theme\":\"dark\"}")
+      promise.resolve(Nil)
+    }
+    _ -> panic as "expected Success with content for nostr.doc"
   }
 }

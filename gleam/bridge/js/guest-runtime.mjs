@@ -29,23 +29,32 @@ import {
   let schemaPort = null;
   let rpcPort = null;
   const pending = new Map();
+  const rpcQueue = [];
   let rpcCounter = 1;
   let session = null;
 
   const callRpc = (method, paramsJson) => {
-    if (!rpcPort) return Promise.reject(new Error("Kernel RPC port not ready"));
     let params = {};
     if (paramsJson) {
-      try {
-        params = JSON.parse(paramsJson);
-      } catch {
-        params = {};
+      if (typeof paramsJson === "string") {
+        try {
+          params = JSON.parse(paramsJson);
+        } catch {
+          params = {};
+        }
+      } else if (typeof paramsJson === "object" && paramsJson !== null) {
+        params = paramsJson;
       }
     }
     const id = rpcCounter++;
     return new Promise((resolve, reject) => {
       pending.set(id, { resolve, reject });
-      rpcPort.postMessage({ jsonrpc: "2.0", id, method, params });
+      const frame = { jsonrpc: "2.0", id, method, params };
+      if (!rpcPort) {
+        rpcQueue.push(frame);
+      } else {
+        rpcPort.postMessage(frame);
+      }
     });
   };
 
@@ -54,6 +63,19 @@ import {
       window.parent.postMessage(message, "*");
     }
     if (schemaPort) schemaPort.postMessage(message);
+  };
+
+  const emitInlineSchema = () => {
+    if (typeof document === "undefined") return;
+    const elem = document.getElementById("omni-schema");
+    if (elem && elem.textContent) {
+      try {
+        const schema = JSON.parse(elem.textContent);
+        postToHost({ type: "omni:schema", schema });
+      } catch (err) {
+        console.error("[Omni bridge] Failed to parse inline #omni-schema:", err);
+      }
+    }
   };
 
   const routeNotification = (data) => {
@@ -93,12 +115,19 @@ import {
     const ports = (event.ports && event.ports.length > 0 ? event.ports : []);
     schemaPort = ports[0] || null;
     rpcPort = ports[1] || null;
-    if (rpcPort) rpcPort.onmessage = onRpcMessage;
+    if (rpcPort) {
+      rpcPort.onmessage = onRpcMessage;
+      while (rpcQueue.length > 0) {
+        const frame = rpcQueue.shift();
+        rpcPort.postMessage(frame);
+      }
+    }
     if (schemaPort) {
       schemaPort.onmessage = (messageEvent) => routeNotification(messageEvent.data);
+      emitInlineSchema();
     }
     if (session.pluginId) {
-      installStorage(String(session.pluginId));
+      installStorage(String(session.pluginId), callRpc);
     }
     if (session.route) window.__OMNI_ROUTE__ = session.route;
     if (session.viewId) window.__OMNI_VIEW__ = session.viewId;
@@ -112,8 +141,8 @@ import {
     });
     return result instanceof Some ? result[0] : null;
   });
-  installLinks(postToHost);
-  installShare(postToHost);
+  installLinks(postToHost, callRpc);
+  installShare(postToHost, callRpc);
   install_actions((rawAction) => {
     let data;
     try {
@@ -123,4 +152,13 @@ import {
     }
     postToHost(data);
   });
+
+  // Check inline schema on boot
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", emitInlineSchema);
+    } else {
+      emitInlineSchema();
+    }
+  }
 })();

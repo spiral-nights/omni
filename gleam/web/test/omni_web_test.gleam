@@ -1453,3 +1453,91 @@ pub fn nip89_discovery_finds_and_installs_handler_test() {
   }
   promise.resolve(Nil)
 }
+
+pub fn installer_resolve_zip_bytes_test() {
+  let index_html =
+    "<!DOCTYPE html><html><head><title>Zip Game</title></head><body><canvas id=\"game\"></canvas></body></html>"
+  let game_js = "console.log('game start');"
+
+  let archive =
+    zip.zip([
+      #("index.html", bit_array.from_string(index_html)),
+      #("game.js", bit_array.from_string(game_js)),
+    ])
+
+  let assert Ok(bundle) =
+    installer.resolve_zip_bytes(
+      archive,
+      "https://example.com/game.zip",
+      "example.game",
+    )
+  bundle.app.id |> should.equal("example.game")
+  bundle.app.name |> should.equal("Zip Game")
+  string.contains(bundle.content, "console.log('game start');")
+  |> should.be_true
+}
+
+pub fn installer_resolve_zip_url_with_test() {
+  let archive =
+    zip.zip([
+      #(
+        "index.html",
+        bit_array.from_string(
+          "<html><head><title>Remote Zip</title></head></html>",
+        ),
+      ),
+    ])
+
+  use result <- promise.await(
+    installer.resolve_zip_url_with(
+      "https://example.com/remote.zip",
+      "remote.zip.app",
+      fn(url) {
+        url |> should.equal("https://example.com/remote.zip")
+        promise.resolve(Ok(archive))
+      },
+    ),
+  )
+
+  let assert Ok(bundle) = result
+  bundle.app.name |> should.equal("Remote Zip")
+  bundle.app.id |> should.equal("remote.zip.app")
+
+  promise.resolve(Nil)
+}
+
+pub fn installer_resolve_with_handles_zip_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+
+  let archive =
+    zip.zip([
+      #(
+        "index.html",
+        bit_array.from_string(
+          "<html><head><title>Base64 Zip</title></head></html>",
+        ),
+      ),
+    ])
+  let b64 = bit_array.base64_encode(archive, True)
+
+  use result <- promise.await(
+    installer.resolve_with(
+      booted.kernel,
+      "https://example.com/bundle.zip",
+      "b64.zip.app",
+      fn(url) {
+        url |> should.equal("https://example.com/bundle.zip")
+        promise.resolve(Ok(b64))
+      },
+    ),
+  )
+
+  let assert Ok(bundle) = result
+  bundle.app.name |> should.equal("Base64 Zip")
+  bundle.app.id |> should.equal("b64.zip.app")
+
+  promise.resolve(Nil)
+}

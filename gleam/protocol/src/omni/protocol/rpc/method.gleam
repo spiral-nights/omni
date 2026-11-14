@@ -172,9 +172,15 @@ pub type Request {
   AuthGenerateKey
   /// Open a protocol URI through the shell intent broker (`kernel.handleUri`).
   KernelHandleUri(uri: String)
+  /// Replaceable Nostr document helper (`nostr.doc`).
+  NostrDoc(spec: Dynamic, options: Dynamic)
   /// Any unrecognized or extension method name.
   UnknownMethod(name: String, params: Option(Dynamic))
 }
+
+/// Type alias for `Request` for terminology compatibility.
+pub type Method =
+  Request
 
 /// Canonical wire method name for a `Request`.
 pub fn method_name(request: Request) -> String {
@@ -209,6 +215,7 @@ pub fn method_name(request: Request) -> String {
     AuthGetNsec -> "auth.getNsec"
     AuthGenerateKey -> "auth.generateKey"
     KernelHandleUri(_) -> "kernel.handleUri"
+    NostrDoc(_, _) -> "nostr.doc"
     UnknownMethod(name, _) -> name
   }
 }

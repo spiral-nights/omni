@@ -1,10 +1,231 @@
 function resolveHost(selector) {
-  if (typeof document === "undefined") return null;
-  return document.querySelector(selector);
+  if (typeof document === "undefined" || !selector) return null;
+  try {
+    return document.querySelector(selector);
+  } catch (_) {
+    return document.getElementById(selector);
+  }
 }
 
 const islandHosts = new Map();
 const workerHosts = new Map();
+const wasmHosts = new Map();
+
+function decodeWasmBytes(content) {
+  let raw = String(content || "").trim();
+  if (raw.startsWith("data:application/wasm;base64,")) {
+    raw = raw.slice("data:application/wasm;base64,".length);
+  }
+  if (raw.startsWith("AGFzbQ") || !raw.startsWith("\0asm")) {
+    try {
+      const binary = atob(raw);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    } catch (_) {}
+  }
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i) & 0xff;
+  return bytes;
+}
+
+class WasmHostInstance {
+  constructor({ pluginId, wasmBytes, userPubkey, onSchema, onRpc }) {
+    this.pluginId = pluginId;
+    this.wasmBytes = wasmBytes;
+    this.userPubkey = userPubkey || "";
+    this.onSchema = onSchema;
+    this.onRpc = onRpc;
+    this.instance = null;
+    this.memory = null;
+    this.bumpPointer = 0;
+    this.destroyed = false;
+  }
+
+  async boot() {
+    const importObject = this.createImportObject();
+    const module = await WebAssembly.compile(this.wasmBytes);
+    this.instance = await WebAssembly.instantiate(module, importObject);
+    this.memory = this.instance.exports.memory || this.memory;
+    this.invokeInit();
+  }
+
+  createImportObject() {
+    this.memory = new WebAssembly.Memory({ initial: 2, maximum: 256 });
+    const readString = (ptr, len) => {
+      if (!this.memory) return "";
+      const slice = new Uint8Array(this.memory.buffer, ptr, len);
+      return new TextDecoder("utf-8").decode(slice);
+    };
+
+    const deliverSchema = (jsonStr) => {
+      if (typeof this.onSchema === "function") {
+        try {
+          this.onSchema(jsonStr);
+        } catch (_) {}
+      }
+    };
+
+    return {
+      ui: {
+        render: (viewPtr, viewLen) => deliverSchema(readString(viewPtr, viewLen)),
+        "render-component": (_compIdPtr, _compIdLen, viewPtr, viewLen) => {
+          deliverSchema(readString(viewPtr, viewLen));
+        },
+        omni_ui_render: (viewPtr, viewLen) => deliverSchema(readString(viewPtr, viewLen)),
+      },
+      nostr: {
+        "get-public-key": (retPtr) => {
+          this.writeStringToReturnPtr(retPtr, this.userPubkey);
+        },
+        omni_nostr_get_public_key: (retPtr) => {
+          this.writeStringToReturnPtr(retPtr, this.userPubkey);
+        },
+      },
+      wasi_snapshot_preview1: {
+        fd_write: (_fd, iovs, iovsLen, nwritten) => {
+          if (!this.memory) return 0;
+          let total = 0;
+          const view = new DataView(this.memory.buffer);
+          let outStr = "";
+          for (let i = 0; i < iovsLen; i++) {
+            const ptr = view.getUint32(iovs + i * 8, true);
+            const len = view.getUint32(iovs + i * 8 + 4, true);
+            const slice = new Uint8Array(this.memory.buffer, ptr, len);
+            outStr += new TextDecoder("utf-8").decode(slice);
+            total += len;
+          }
+          if (nwritten) view.setUint32(nwritten, total, true);
+          const trimmed = outStr.trim();
+          if (
+            (trimmed.startsWith("{") && trimmed.includes('"type"')) ||
+            (trimmed.startsWith("[") && trimmed.includes('"type"'))
+          ) {
+            deliverSchema(trimmed);
+          } else {
+            console.log(`[WasmGuestHost:${this.pluginId}]`, outStr);
+          }
+          return 0;
+        },
+        proc_exit: (_rval) => {},
+        environ_sizes_get: (_countPtr, _sizePtr) => 0,
+        environ_get: (_environPtr, _environBufPtr) => 0,
+      },
+      env: {
+        memory: this.memory,
+      },
+    };
+  }
+
+  invokeInit() {
+    if (!this.instance) return;
+    const exports = this.instance.exports;
+    const initFn = exports.init || exports.omni_init || exports._start;
+    if (typeof initFn === "function") {
+      try {
+        const ret = initFn();
+        if (typeof ret === "string") {
+          this.onSchema?.(ret);
+        } else if (typeof ret === "number" && ret > 0) {
+          const str = this.readNullTerminatedString(ret);
+          if (str) this.onSchema?.(str);
+        }
+      } catch (e) {
+        console.error(`[WasmGuestHost:${this.pluginId}] Error executing init():`, e);
+      }
+    }
+  }
+
+  dispatchAction(actionName, payload) {
+    if (!this.instance || this.destroyed) return;
+    const exports = this.instance.exports;
+    const actionFn =
+      exports["handle-action"] || exports.handle_action || exports.omni_handle_action;
+    if (typeof actionFn !== "function") return;
+
+    try {
+      const actionStr = String(actionName || "");
+      const payloadStr = JSON.stringify(payload || {});
+      const [actionPtr, actionLen] = this.allocateAndWriteString(actionStr);
+      const [payloadPtr, payloadLen] = this.allocateAndWriteString(payloadStr);
+
+      const ret = actionFn(actionPtr, actionLen, payloadPtr, payloadLen);
+      if (typeof ret === "string") {
+        this.onSchema?.(ret);
+      } else if (typeof ret === "number" && ret > 0) {
+        const str = this.readNullTerminatedString(ret);
+        if (str) this.onSchema?.(str);
+      }
+
+      this.deallocateString(actionPtr, actionLen);
+      this.deallocateString(payloadPtr, payloadLen);
+    } catch (e) {
+      console.error(`[WasmGuestHost:${this.pluginId}] Error in dispatchAction:`, e);
+    }
+  }
+
+  allocateAndWriteString(str) {
+    if (!this.memory) return [0, 0];
+    const bytes = new TextEncoder().encode(str);
+    const len = bytes.length;
+    const exports = this.instance?.exports;
+    const allocFn = exports?.alloc || exports?.allocate || exports?.malloc;
+
+    let ptr = 0;
+    if (typeof allocFn === "function") {
+      ptr = allocFn(len + 1);
+    } else {
+      if (!this.bumpPointer) {
+        this.bumpPointer =
+          exports?.__heap_base?.value || exports?.__data_end?.value || 65536;
+      }
+      ptr = this.bumpPointer;
+      this.bumpPointer = (this.bumpPointer + len + 16) & ~7;
+      if (this.bumpPointer >= this.memory.buffer.byteLength) {
+        try {
+          this.memory.grow(1);
+        } catch (_) {}
+      }
+    }
+
+    const target = new Uint8Array(this.memory.buffer, ptr, len + 1);
+    target.set(bytes);
+    target[len] = 0;
+    return [ptr, len];
+  }
+
+  deallocateString(ptr, len) {
+    const deallocFn = this.instance?.exports?.dealloc || this.instance?.exports?.free;
+    if (typeof deallocFn === "function" && ptr > 0) {
+      try {
+        deallocFn(ptr, len);
+      } catch (_) {}
+    }
+  }
+
+  writeStringToReturnPtr(retPtr, str) {
+    const [ptr, len] = this.allocateAndWriteString(str);
+    if (this.memory && retPtr > 0) {
+      const dv = new DataView(this.memory.buffer);
+      dv.setUint32(retPtr, ptr, true);
+      dv.setUint32(retPtr + 4, len, true);
+    }
+  }
+
+  readNullTerminatedString(ptr) {
+    if (!this.memory || ptr <= 0 || ptr >= this.memory.buffer.byteLength) return "";
+    const bytes = new Uint8Array(this.memory.buffer, ptr);
+    let end = 0;
+    while (end < bytes.length && bytes[end] !== 0) end++;
+    return new TextDecoder("utf-8").decode(bytes.subarray(0, end));
+  }
+
+  destroy() {
+    this.destroyed = true;
+    this.instance = null;
+    this.memory = null;
+  }
+}
 
 export function mount_island(selector, srcdoc, pluginId, onRpc, onSchema) {
   const host = resolveHost(selector);
@@ -61,7 +282,7 @@ export function mount_island(selector, srcdoc, pluginId, onRpc, onSchema) {
 
   iframe.srcdoc = String(srcdoc);
   host.appendChild(iframe);
-  islandHosts.set(String(pluginId), { iframe });
+  islandHosts.set(String(pluginId), { iframe, host, selector: String(selector) });
 }
 
 export function mount_worker(selector, script, pluginId, onRpc, onSchema) {
@@ -128,6 +349,14 @@ export function send_plugin_action(pluginId, actionJson) {
   } catch {
     return;
   }
+  const wasmEntry = wasmHosts.get(String(pluginId));
+  if (wasmEntry && wasmEntry.host) {
+    wasmEntry.host.dispatchAction(
+      payload.name || (typeof payload === "string" ? payload : ""),
+      payload,
+    );
+    return;
+  }
   const workerEntry = workerHosts.get(String(pluginId));
   if (workerEntry && workerEntry.worker) {
     workerEntry.worker.postMessage({ type: "omni:action", action: payload });
@@ -147,10 +376,51 @@ export function island_mounted(selector) {
   return Boolean(host && host.querySelector("iframe.omni-sandbox-iframe"));
 }
 
-export function unmount_island(selector) {
-  const host = resolveHost(selector);
-  if (!host) return;
-  host.innerHTML = "";
+export function unmount_island(selectorOrPluginId) {
+  if (!selectorOrPluginId) return;
+  const target = String(selectorOrPluginId);
+
+  // 1. Direct plugin ID lookup in islandHosts
+  const entry = islandHosts.get(target);
+  if (entry) {
+    if (entry.iframe) {
+      try {
+        entry.iframe.remove();
+      } catch (_) {
+        if (entry.iframe.parentNode) {
+          entry.iframe.parentNode.removeChild(entry.iframe);
+        }
+      }
+    }
+    const container =
+      entry.host || entry.iframe?.parentElement || entry.iframe?.parentNode;
+    if (container) {
+      container.innerHTML = "";
+    }
+    islandHosts.delete(target);
+  }
+
+  // 2. DOM selector lookup
+  const host = resolveHost(selectorOrPluginId);
+  if (host) {
+    host.innerHTML = "";
+    for (const [pluginId, item] of islandHosts.entries()) {
+      if (
+        item &&
+        (item.host === host ||
+          item.selector === target ||
+          item.iframe?.parentElement === host ||
+          item.iframe?.parentNode === host)
+      ) {
+        if (item.iframe) {
+          try {
+            item.iframe.remove();
+          } catch (_) {}
+        }
+        islandHosts.delete(pluginId);
+      }
+    }
+  }
 }
 
 export function unmount_worker(pluginId) {
@@ -163,6 +433,47 @@ export function unmount_worker(pluginId) {
     URL.revokeObjectURL(entry.url);
   } catch (_) {}
   workerHosts.delete(String(pluginId));
+}
+
+export function mount_wasm(
+  selector,
+  content,
+  pluginId,
+  userPubkey,
+  onRpc,
+  onSchema,
+) {
+  const host = resolveHost(selector);
+  if (host) host.innerHTML = "";
+  unmount_wasm(pluginId);
+
+  const wasmBytes = decodeWasmBytes(content);
+  const wasmHost = new WasmHostInstance({
+    pluginId: String(pluginId),
+    wasmBytes,
+    userPubkey: String(userPubkey || ""),
+    onSchema: (data) => {
+      if (typeof onSchema !== "function") return;
+      try {
+        onSchema(typeof data === "string" ? data : JSON.stringify(data));
+      } catch (_) {}
+    },
+    onRpc,
+  });
+
+  wasmHosts.set(String(pluginId), { host: wasmHost });
+  wasmHost.boot().catch((err) => {
+    console.error(`[Omni Wasm Error: ${pluginId}]`, err);
+  });
+}
+
+export function unmount_wasm(pluginId) {
+  const entry = wasmHosts.get(String(pluginId));
+  if (!entry) return;
+  try {
+    entry.host.destroy();
+  } catch (_) {}
+  wasmHosts.delete(String(pluginId));
 }
 
 import { start } from "../../../lustre/lustre/runtime/client/spa.ffi.mjs";
@@ -301,7 +612,9 @@ export function after_render(callback) {
 }
 
 function optionValue(value) {
-  return value instanceof Some ? value[0] : undefined;
+  if (value instanceof Some) return value[0];
+  if (typeof value === "string") return value;
+  return undefined;
 }
 
 export function host_share(title, text, url) {
