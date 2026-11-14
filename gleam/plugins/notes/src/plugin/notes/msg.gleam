@@ -11,11 +11,17 @@ pub type Msg {
   ToggleArchive(id: String)
   SetDraftTitle(String)
   SetDraftContent(String)
+  SetDraftTag(String)
   AddTag(String)
+  AddDraftTag
   RemoveTag(String)
   SetSearchQuery(String)
   SelectFolder(NotebookFolder)
   SaveActiveNote
+  AutoSaveTick(Int)
+  SetOnline(Bool)
+  TogglePreview
+  InsertMarkdown(String)
   ToggleEncryptedSync
   /// Decrypted remote document (JSON) received from NIP-78 sync.
   IngestRemoteDoc(String)

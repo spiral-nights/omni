@@ -6,26 +6,32 @@ import gleam/option.{None, Some}
 import gleam/string
 import gleeunit
 import gleeunit/should
+import omni/nostr/event.{Event}
+import omni/nostr/event_id
 import omni/nostr/kind
 import omni/nostr/nip19
+import omni/nostr/pubkey
 import omni/platform/ref
 import omni/platform/storage
 import omni/platform/zip
 import omni/plugin_kit/app
 import omni/plugin_kit/local_store
 import omni/plugin_kit/schema
+import omni/protocol/schema/action.{NavigateTarget}
 import omni/protocol/schema/node
 import plugin/publisher/bundle as publisher_bundle
 import plugin/publisher/main
 import plugin/publisher/model.{
-  type BlossomServer, BlossomServer, Model, PublishDraft, PublishedPlugin,
-  TabPublished, TabServers, TabStudio, TabWidget,
+  type BlossomServer, BlossomServer, ModeBlossom, ModeInlined, Model,
+  PublishDraft, PublishedPlugin, TabPublished, TabServers, TabStudio, TabWidget,
 }
 import plugin/publisher/msg.{
-  AddServer, ChooseLocalZip, DeletePublished, DismissBanner, PublishPackage,
-  PublishServerList, RemoveServer, SelectTab, SetBundleMetadata,
-  SetDraftDescription, SetDraftIcon, SetDraftId, SetDraftName, SetDraftServerUrl,
-  SetDraftVersion, ToggleServer, UploadReported, UseTemplate,
+  AddServer, BundleLoaded, ChooseLocalFile, ChooseLocalZip, DeletePublished,
+  DismissBanner, FetchUrl, InstallFromUrl, InstallLocal, OpenNaddr,
+  PrepareUpdate, PublishPackage, PublishServerList, QueryRelays, RelaysQueried,
+  RemoveServer, SelectTab, SetBundleMetadata, SetBundleUrl, SetDraftDescription,
+  SetDraftIcon, SetDraftId, SetDraftName, SetDraftServerUrl, SetDraftVersion,
+  SetPackagingMode, SingleFileLoaded, ToggleServer, UploadReported, UseTemplate,
 }
 import plugin/publisher/update
 import plugin/publisher/view
@@ -473,4 +479,227 @@ pub fn upload_report_tracks_per_server_results_test() {
 
   let html = view.view(m1) |> schema.encode_schema_message
   string.contains(html, "Uploaded to 1/2 server(s)") |> should.equal(True)
+}
+
+pub fn packaging_mode_toggle_and_inlined_publish_test() {
+  let m0 =
+    Model(
+      ..model.init(TabStudio),
+      user_pubkey: Some(
+        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      ),
+      bundle: Some(publisher_bundle.from_html(
+        "<html><body>inlined</body></html>",
+        "index.html",
+      )),
+    )
+  m0.packaging_mode |> should.equal(ModeBlossom)
+
+  let assert Ok(act) =
+    schema.decode_action_message(
+      "{\"type\":\"omni:action\",\"action\":\"set-packaging-mode\",\"payload\":{\"checked\":true}}",
+    )
+  let assert Some(SetPackagingMode(ModeInlined)) = update.action_to_msg(act)
+  let #(m1, _) = update.update(m0, SetPackagingMode(ModeInlined))
+  m1.packaging_mode |> should.equal(ModeInlined)
+
+  let #(m2, effects) = update.update(m1, PublishPackage)
+  m2.error_message |> should.equal(None)
+  // Inlined mode skips Blossom uploads and embeds HTML in Kind 35129 content
+  let assert [app.Publish(draft)] = effects
+  kind.to_int(draft.kind) |> should.equal(35_129)
+  draft.content |> should.equal("<html><body>inlined</body></html>")
+  list.any(draft.tags, fn(t) {
+    case t {
+      ["server", _] -> True
+      _ -> False
+    }
+  })
+  |> should.equal(False)
+}
+
+pub fn install_local_records_plugin_and_opens_naddr_test() {
+  let m0 =
+    Model(
+      ..model.init(TabStudio),
+      user_pubkey: Some(
+        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      ),
+      bundle: Some(publisher_bundle.from_html(
+        "<html><body>local</body></html>",
+        "index.html",
+      )),
+    )
+  let assert Ok(act) =
+    schema.decode_action_message(
+      "{\"type\":\"omni:action\",\"action\":\"install-local\"}",
+    )
+  let assert Some(InstallLocal) = update.action_to_msg(act)
+  let #(m1, effects) = update.update(m0, InstallLocal)
+  m1.error_message |> should.equal(None)
+  list.length(m1.published) |> should.equal(1)
+  let assert [app.OpenUrl(url)] = effects
+  string.starts_with(url, "nostr:naddr1") |> should.equal(True)
+}
+
+pub fn fetch_url_and_install_url_support_naddr_and_https_test() {
+  let assert Ok(pk) =
+    pubkey.parse(
+      "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+    )
+  let naddr =
+    nip19.encode_naddr(
+      nip19.AddressData(
+        identifier: "org.example.remote",
+        pubkey: pk,
+        kind: kind.from_int(35_129),
+        relays: ["wss://relay.example"],
+      ),
+    )
+
+  let m0 = model.init(TabStudio)
+  let #(m1, _) = update.update(m0, SetBundleUrl(naddr))
+  let #(m2, fetch_effects) = update.update(m1, FetchUrl)
+  m2.error_message |> should.equal(None)
+  m2.draft.id |> should.equal("org.example.remote")
+  fetch_effects |> should.equal([])
+
+  let #(_, install_effects) = update.update(m2, InstallFromUrl)
+  install_effects |> should.equal([app.OpenUrl("nostr:" <> naddr)])
+
+  let #(m3, _) = update.update(m0, SetBundleUrl("https://example.com/app.html"))
+  let #(m4, http_effects) = update.update(m3, FetchUrl)
+  m4.publishing |> should.equal(True)
+  list.any(http_effects, fn(e) {
+    case e {
+      app.Async(_) -> True
+      _ -> False
+    }
+  })
+  |> should.equal(True)
+
+  let #(_, url_install_effects) = update.update(m3, InstallFromUrl)
+  url_install_effects
+  |> should.equal([app.OpenUrl("https://example.com/app.html")])
+}
+
+pub fn single_file_html_and_js_upload_test() {
+  let assert Ok(act) =
+    schema.decode_action_message(
+      "{\"type\":\"omni:action\",\"action\":\"choose-local-file\"}",
+    )
+  let assert Some(ChooseLocalFile) = update.action_to_msg(act)
+  let #(_, picker_effects) =
+    update.update(model.init(TabStudio), ChooseLocalFile)
+  list.length(picker_effects) |> should.equal(1)
+
+  let js_b64 =
+    <<"console.log('omni plugin')":utf8>>
+    |> bit_array.base64_encode(True)
+  let #(m_js, _) =
+    update.update(
+      Model(..model.init(TabStudio), bundle_url: "https://example.com/app.js"),
+      BundleLoaded(Ok(js_b64)),
+    )
+  let assert Some(parsed_js) = m_js.bundle
+  parsed_js.entry |> should.equal("index.js")
+  let assert Ok(js_entry) = publisher_bundle.entry_file(parsed_js)
+  js_entry.mime |> should.equal("application/javascript")
+
+  let #(m_html, _) =
+    update.update(
+      model.init(TabStudio),
+      SingleFileLoaded("widget.htm", "<html><body>hi</body></html>"),
+    )
+  let assert Some(parsed_html) = m_html.bundle
+  parsed_html.entry |> should.equal("widget.htm")
+  let assert Ok(html_entry) = publisher_bundle.entry_file(parsed_html)
+  html_entry.mime |> should.equal("text/html")
+}
+
+pub fn published_tab_query_open_naddr_and_prepare_update_test() {
+  let m_empty = model.init(TabPublished)
+  let #(m_no_relays, _) = update.update(m_empty, QueryRelays)
+  assert m_no_relays.error_message != None
+
+  let m_with_relays = Model(..m_empty, relay_urls: ["wss://relay.example"])
+  let #(m_querying, query_effects) = update.update(m_with_relays, QueryRelays)
+  m_querying.publishing |> should.equal(True)
+  list.length(query_effects) |> should.equal(1)
+
+  let assert Ok(pk) =
+    pubkey.parse(
+      "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+    )
+  let assert Ok(eid) =
+    event_id.parse(
+      "1111111111111111111111111111111111111111111111111111111111111111",
+    )
+  let ev =
+    Event(
+      id: eid,
+      pubkey: pk,
+      created_at: 1_700_000_123,
+      kind: kind.from_int(35_129),
+      tags: [
+        ["d", "org.example.queried"],
+        ["name", "Queried App"],
+        ["version", "2.0.0"],
+        ["description", "From relay"],
+        ["icon", "globe"],
+        ["x", "deadbeef"],
+        ["server", "https://cdn.satellite.earth"],
+      ],
+      content: "",
+      sig: "00",
+    )
+  let assert Some(pkg) = model.published_from_event(ev, ["wss://relay.example"])
+  let #(m_loaded, _) = update.update(m_querying, RelaysQueried(Ok([pkg])))
+  m_loaded.publishing |> should.equal(False)
+  list.length(m_loaded.published) |> should.equal(1)
+
+  let pub_json = view.view(m_loaded) |> schema.encode_schema_message
+  string.contains(pub_json, "Query Relays") |> should.equal(True)
+  string.contains(pub_json, "Install / Update") |> should.equal(True)
+  string.contains(pub_json, "Update .zip") |> should.equal(True)
+
+  let #(_, open_effects) = update.update(m_loaded, OpenNaddr(pkg.naddr))
+  open_effects |> should.equal([app.OpenUrl("nostr:" <> pkg.naddr)])
+
+  let #(m_studio, _) =
+    update.update(m_loaded, PrepareUpdate("org.example.queried"))
+  m_studio.active_tab |> should.equal(TabStudio)
+  m_studio.draft.id |> should.equal("org.example.queried")
+  m_studio.draft.name |> should.equal("Queried App")
+  m_studio.draft.version |> should.equal("2.0.0")
+}
+
+pub fn widget_open_studio_button_emits_navigate_action_test() {
+  let widget = view.view(model.init(TabWidget))
+  let assert node.Card(children: kids, ..) = widget
+  let assert Ok(node.Button(action: act, ..)) =
+    list.find(kids, fn(c) {
+      case c {
+        node.Button(label: "Open Plugin Studio", ..) -> True
+        _ -> False
+      }
+    })
+  act.name |> should.equal("navigate")
+  let assert Some(NavigateTarget(view: Some("studio"), ..)) = act.navigate
+  update.action_to_msg(act) |> should.equal(Some(SelectTab(TabStudio)))
+}
+
+pub fn publish_with_invalid_pubkey_returns_error_instead_of_crashing_test() {
+  let m0 =
+    Model(
+      ..model.init(TabStudio),
+      user_pubkey: Some("not-a-valid-hex-pubkey"),
+      bundle: Some(publisher_bundle.from_html(
+        "<html><body>hi</body></html>",
+        "index.html",
+      )),
+    )
+  let #(m1, effects) = update.update(m0, PublishPackage)
+  m1.error_message |> should.equal(Some("Invalid signing public key."))
+  effects |> should.equal([])
 }

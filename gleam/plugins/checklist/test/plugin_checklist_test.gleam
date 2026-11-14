@@ -2,12 +2,13 @@ import gleam/dict
 import gleam/dynamic
 import gleam/json
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{Some}
 import gleam/string
 import gleeunit
 import gleeunit/should
 import omni/nostr/kind as omni_kind
 import omni/nostr/pubkey
+import omni/platform/clock
 import omni/platform/ref
 import omni/platform/storage
 import omni/plugin_kit/app
@@ -19,12 +20,12 @@ import omni/protocol/schema/action
 import omni/protocol/schema/node.{Card, Metric, MetricString}
 import plugin/checklist/main as checklist_main
 import plugin/checklist/model.{
-  FilterActive, FilterAll, FilterCompleted, Model, TaskItem, ViewCompact,
-  ViewMain, ViewSettings, ViewWidget,
+  FilterActive, FilterAll, FilterCompleted, TaskItem, ViewCompact, ViewMain,
+  ViewSettings, ViewWidget,
 }
 import plugin/checklist/msg.{
-  AddTask, ClearCompleted, DeleteTask, IngestRemoteDoc, LoadTasks,
-  SetDefaultPriority, SetDraftTitle, SetFilter, SetViewMode, ToggleShowCompleted,
+  AddTask, AddTaskWithTitle, ClearCompleted, DeleteTask, IngestRemoteDoc,
+  LoadTasks, SetDefaultPriority, SetDraftTitle, SetFilter, ToggleShowCompleted,
   ToggleSyncNostr, ToggleTask,
 }
 import plugin/checklist/update
@@ -298,4 +299,87 @@ pub fn legacy_task_document_decodes_test() {
   task.id |> should.equal("7")
   task.title |> should.equal("Water the plants")
   task.completed |> should.equal(True)
+}
+
+pub fn add_task_action_reads_payload_keys_test() {
+  let m0 = model.init(route.main())
+
+  // title
+  let act_title =
+    action.new("add-task")
+    |> action.with_payload(
+      dict.from_list([#("title", dynamic.string("  From title  "))]),
+    )
+  let assert Some(AddTaskWithTitle("  From title  ")) =
+    update.action_to_msg(act_title)
+  let #(m1, _) = update.update(m0, AddTaskWithTitle("  From title  "))
+  let assert Ok(t1) = list.last(m1.tasks)
+  t1.title |> should.equal("From title")
+
+  // text (falling back past empty title)
+  let act_text =
+    action.new("create_task")
+    |> action.with_payload(
+      dict.from_list([
+        #("title", dynamic.string("   ")),
+        #("text", dynamic.string("From text")),
+      ]),
+    )
+  let assert Some(AddTaskWithTitle("From text")) =
+    update.action_to_msg(act_text)
+
+  // taskText
+  let act_task_text =
+    action.new("submit-task")
+    |> action.with_payload(
+      dict.from_list([#("taskText", dynamic.string("From taskText"))]),
+    )
+  let assert Some(AddTaskWithTitle("From taskText")) =
+    update.action_to_msg(act_task_text)
+
+  // value
+  let act_value =
+    action.new("add_task")
+    |> action.with_payload(
+      dict.from_list([#("value", dynamic.string("From value"))]),
+    )
+  let assert Some(AddTaskWithTitle("From value")) =
+    update.action_to_msg(act_value)
+
+  // Absent or empty payload falls back to AddTask (uses draft_title)
+  let act_empty = action.new("add-task")
+  let assert Some(AddTask) = update.action_to_msg(act_empty)
+}
+
+pub fn add_task_uses_wall_clock_timestamp_test() {
+  let m0 = model.init(route.main())
+  let before_sec = clock.system().now_ms() / 1000
+  let #(m1, _) = update.update(m0, AddTaskWithTitle("Wall clock task"))
+  let after_sec = clock.system().now_ms() / 1000
+
+  let assert Ok(added) = list.last(m1.tasks)
+  { added.created_at >= before_sec } |> should.be_true()
+  { added.created_at <= after_sec } |> should.be_true()
+  { added.created_at > 1_700_000_000 + m0.next_id } |> should.be_true()
+}
+
+pub fn nip78_d_tag_compatibility_and_legacy_ingest_test() {
+  model.checklist_d_tag |> should.equal("omni/checklist/v1")
+  model.legacy_tasks_d_tag |> should.equal("omni/tasks/v1")
+  model.is_checklist_d_tag("omni/checklist/v1") |> should.be_true()
+  model.is_checklist_d_tag("omni/tasks/v1") |> should.be_true()
+  model.is_checklist_d_tag("omni/notes/v1") |> should.be_false()
+
+  let legacy_spec = model.legacy_tasks_doc_spec()
+  legacy_spec.d_tag |> should.equal("omni/tasks/v1")
+
+  let m0 = model.init(route.main())
+  let legacy_remote =
+    "[{\"id\":1700000000123,\"text\":\"Migrated from main\",\"done\":false}]"
+  let #(m1, effects) = update.update(m0, IngestRemoteDoc(legacy_remote))
+  effects |> should.equal([])
+  let assert [migrated] = m1.tasks
+  migrated.id |> should.equal("1700000000123")
+  migrated.title |> should.equal("Migrated from main")
+  migrated.completed |> should.be_false()
 }

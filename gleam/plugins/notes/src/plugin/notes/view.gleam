@@ -12,12 +12,17 @@ import gleam/string
 import omni/protocol/schema/action
 import omni/protocol/schema/builder as schema
 import omni/protocol/schema/node.{
-  type Node, Button, ButtonGhost, Caption, Input, InputSearch, InputText,
-  JustifyBetween, JustifyEnd, TabItem, Textarea, Toggle, ToneMuted, empty_base,
+  type Node, Body, Button, ButtonGhost, Caption, CodeBlock, Input, InputSearch,
+  InputText, JustifyBetween, JustifyEnd, Mono, StatusConnecting, StatusIndicator,
+  StatusOffline as IndicatorOffline, StatusOnline, Subtitle, TabItem, Textarea,
+  Title, Toggle, ToneMuted, TonePrimary, ToneSecondary, empty_base,
 }
 import omni/protocol/schema/style.{SizeMd, SizeSm, StyleRaw}
 import omni/ui/sanitize
-import plugin/notes/model.{type Model, type NoteDoc, folder_to_id}
+import plugin/notes/model.{
+  type Model, type NoteDoc, StatusOffline, StatusSaved, StatusSaving,
+  folder_to_id,
+}
 
 /// Render the full Notes application view.
 pub fn view(model: Model) -> Node {
@@ -92,6 +97,30 @@ fn render_header(model: Model) -> Node {
     False -> []
   }
 
+  let status_node = case model.save_status {
+    StatusSaved ->
+      StatusIndicator(
+        base: empty_base(),
+        status: StatusOnline,
+        label: Some("Saved"),
+        pulse: Some(False),
+      )
+    StatusSaving ->
+      StatusIndicator(
+        base: empty_base(),
+        status: StatusConnecting,
+        label: Some("Saving..."),
+        pulse: Some(True),
+      )
+    StatusOffline ->
+      StatusIndicator(
+        base: empty_base(),
+        status: IndicatorOffline,
+        label: Some("Offline"),
+        pulse: Some(False),
+      )
+  }
+
   schema.box()
   |> schema.row
   |> schema.justify(JustifyBetween)
@@ -102,6 +131,7 @@ fn render_header(model: Model) -> Node {
       |> schema.children([
         schema.text("Notes"),
         schema.badge(int.to_string(list.length(model.notes)) <> " notes"),
+        status_node,
         ..dirty_badge
       ]),
     schema.box()
@@ -299,15 +329,20 @@ fn render_editor(model: Model) -> Node {
       action_on_change: Some(input_action("title")),
     )
 
-  let content_area =
-    Textarea(
-      base: empty_base(),
-      name: "content",
-      placeholder: Some("Write in Markdown or HTML..."),
-      value: Some(model.draft_content),
-      rows: Some(12),
-      action_on_change: Some(action.new("set-draft-content")),
-    )
+  let editor_toolbar = render_editor_toolbar(model.preview_mode)
+
+  let content_area = case model.preview_mode {
+    False ->
+      Textarea(
+        base: empty_base(),
+        name: "content",
+        placeholder: Some("Write in Markdown..."),
+        value: Some(model.draft_content),
+        rows: Some(12),
+        action_on_change: Some(action.new("set-draft-content")),
+      )
+    True -> render_markdown_preview(model.draft_content)
+  }
 
   let tag_row =
     schema.box()
@@ -323,8 +358,8 @@ fn render_editor(model: Model) -> Node {
         accept: None,
         clearable: None,
         prefix_icon: None,
-        action_on_enter: Some(input_action("tag")),
-        action_on_change: None,
+        action_on_enter: Some(action.new("add_tag")),
+        action_on_change: Some(action.new("set-draft-tag")),
       ),
       action_button("Add Tag", "add_tag", None),
     ])
@@ -355,6 +390,7 @@ fn render_editor(model: Model) -> Node {
   |> schema.title("Editor")
   |> schema.children([
     title_input,
+    editor_toolbar,
     content_area,
     tag_row,
     schema.box()
@@ -363,6 +399,223 @@ fn render_editor(model: Model) -> Node {
       |> schema.children(draft_tags),
     footer,
   ])
+}
+
+fn render_editor_toolbar(preview_mode: Bool) -> Node {
+  let preview_btn = case preview_mode {
+    False ->
+      Button(
+        base: empty_base(),
+        label: "Preview",
+        action: action.new("toggle_preview"),
+        variant: Some(ButtonGhost),
+        size: Some(SizeSm),
+        icon: Some("eye"),
+        icon_position: None,
+        disabled: None,
+        loading: None,
+      )
+    True ->
+      Button(
+        base: empty_base(),
+        label: "Edit",
+        action: action.new("toggle_preview"),
+        variant: Some(ButtonGhost),
+        size: Some(SizeSm),
+        icon: Some("edit"),
+        icon_position: None,
+        disabled: None,
+        loading: None,
+      )
+  }
+
+  let format_buttons = case preview_mode {
+    True -> []
+    False -> [
+      md_format_button("H1", None, "\n# Heading\n"),
+      md_format_button("B", None, "**bold**"),
+      md_format_button("I", None, "*italic*"),
+      md_format_button("List", Some("file-text"), "\n- item"),
+      md_format_button("Code", Some("code"), "\n```\ncode\n```"),
+      md_format_button("Quote", None, "\n> quote"),
+    ]
+  }
+
+  schema.box()
+  |> schema.row
+  |> schema.justify(JustifyBetween)
+  |> schema.gap("xs")
+  |> schema.with_id("notes-editor-toolbar")
+  |> schema.children([
+    schema.box()
+      |> schema.row
+      |> schema.gap("xs")
+      |> schema.children(format_buttons),
+    preview_btn,
+  ])
+}
+
+fn md_format_button(
+  label: String,
+  icon: Option(String),
+  snippet: String,
+) -> Node {
+  let act =
+    action.new("insert_markdown")
+    |> action.with_payload(
+      dynamic_from([#("snippet", dynamic.string(snippet))]),
+    )
+  Button(
+    base: empty_base(),
+    label: label,
+    action: act,
+    variant: Some(ButtonGhost),
+    size: Some(SizeSm),
+    icon: icon,
+    icon_position: None,
+    disabled: None,
+    loading: None,
+  )
+}
+
+fn render_markdown_preview(raw: String) -> Node {
+  let safe = sanitize.strip_unsafe_html(raw)
+  let trimmed = string.trim(safe)
+  let children = case trimmed {
+    "" -> [
+      schema.text("Nothing to preview yet.")
+      |> schema.text_tone(ToneMuted),
+    ]
+    _ -> render_markdown_lines(string.split(safe, on: "\n"), False, [], [])
+  }
+
+  schema.box()
+  |> schema.column
+  |> schema.gap("xs")
+  |> schema.with_id("notes-markdown-preview")
+  |> schema.with_style(StyleRaw(
+    "padding: 12px; min-height: 220px; border: 1px solid var(--border-subtle, #2e2b27); border-radius: 6px;",
+  ))
+  |> schema.children(children)
+}
+
+fn render_markdown_lines(
+  lines: List(String),
+  in_code: Bool,
+  code_acc: List(String),
+  acc: List(Node),
+) -> List(Node) {
+  case lines {
+    [] ->
+      case in_code {
+        True -> {
+          let block =
+            CodeBlock(
+              base: empty_base(),
+              code: string.join(list.reverse(code_acc), with: "\n"),
+              language: None,
+              copyable: Some(True),
+            )
+          list.reverse([block, ..acc])
+        }
+        False -> list.reverse(acc)
+      }
+    [line, ..rest] -> {
+      let trimmed = string.trim(line)
+      case string.starts_with(trimmed, "```") {
+        True ->
+          case in_code {
+            False -> render_markdown_lines(rest, True, [], acc)
+            True -> {
+              let block =
+                CodeBlock(
+                  base: empty_base(),
+                  code: string.join(list.reverse(code_acc), with: "\n"),
+                  language: None,
+                  copyable: Some(True),
+                )
+              render_markdown_lines(rest, False, [], [block, ..acc])
+            }
+          }
+        False ->
+          case in_code {
+            True -> render_markdown_lines(rest, True, [line, ..code_acc], acc)
+            False -> {
+              let node = render_single_markdown_line(trimmed)
+              render_markdown_lines(rest, False, [], [node, ..acc])
+            }
+          }
+      }
+    }
+  }
+}
+
+fn render_single_markdown_line(line: String) -> Node {
+  case line {
+    "" -> schema.spacer()
+    _ ->
+      case string.starts_with(line, "### ") {
+        True ->
+          schema.text(string.drop_start(line, 4))
+          |> schema.text_variant(Subtitle)
+          |> schema.text_tone(TonePrimary)
+        False ->
+          case string.starts_with(line, "## ") {
+            True ->
+              schema.text(string.drop_start(line, 3))
+              |> schema.text_variant(Subtitle)
+              |> schema.text_tone(TonePrimary)
+            False ->
+              case string.starts_with(line, "# ") {
+                True ->
+                  schema.text(string.drop_start(line, 2))
+                  |> schema.text_variant(Title)
+                  |> schema.text_tone(TonePrimary)
+                False ->
+                  case string.starts_with(line, "> ") {
+                    True ->
+                      schema.text(string.drop_start(line, 2))
+                      |> schema.text_variant(Body)
+                      |> schema.text_tone(ToneMuted)
+                    False ->
+                      case
+                        string.starts_with(line, "- ")
+                        || string.starts_with(line, "* ")
+                      {
+                        True ->
+                          schema.text("• " <> string.drop_start(line, 2))
+                          |> schema.text_variant(Body)
+                          |> schema.text_tone(ToneSecondary)
+                        False ->
+                          case
+                            string.starts_with(line, "`")
+                            && string.ends_with(line, "`")
+                          {
+                            True ->
+                              schema.text(line)
+                              |> schema.text_variant(Mono)
+                            False ->
+                              schema.text(strip_basic_tags(line))
+                              |> schema.text_variant(Body)
+                          }
+                      }
+                  }
+              }
+          }
+      }
+  }
+}
+
+fn strip_basic_tags(raw: String) -> String {
+  raw
+  |> replace_all("<p>", "")
+  |> replace_all("</p>", "")
+  |> replace_all("<ul>", "")
+  |> replace_all("</ul>", "")
+  |> replace_all("<li>", "• ")
+  |> replace_all("</li>", " ")
+  |> replace_all("<b>", "")
+  |> replace_all("</b>", "")
 }
 
 fn note_snippet(note: NoteDoc) -> String {

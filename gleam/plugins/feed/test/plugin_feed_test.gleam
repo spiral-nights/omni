@@ -21,15 +21,15 @@ import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import plugin/feed/main as feed_main
 import plugin/feed/model.{
-  Model, TabFollowing, TabGlobal, TabReplies, ViewSearch, ViewSettings,
-  ViewThread, ViewTimeline, ViewWidget,
+  Model, TabFollowing, TabGlobal, TabReplies, ViewCompact, ViewSearch,
+  ViewSettings, ViewThread, ViewTimeline, ViewWidget,
 }
 import plugin/feed/msg.{
-  CancelZap, IngestEvent, LikeNote, LoadMore, NavigateBack, OpenThread,
-  PublishNote, PublishReply, SelectTab, SelectView, SendZap, SetComposerDraft,
-  SetComposerDraftAndPublish, SetReplyDraft, SetSearchQuery, SetZapAmount,
-  SetZapComment, StartReply, StartZap, SubmitSearch, ToggleInlineMedia,
-  ToggleShowReplies, ZapInvoiceResult,
+  CancelZap, IngestEvent, IngestEvents, LikeNote, LoadMore, NavigateBack,
+  OpenThread, PublishNote, PublishReply, RepostNote, SelectTab, SelectView,
+  SendZap, SetComposerDraft, SetComposerDraftAndPublish, SetPageSize,
+  SetReplyDraft, SetSearchQuery, SetZapAmount, SetZapComment, StartReply,
+  StartZap, SubmitSearch, ToggleInlineMedia, ToggleShowReplies, ZapInvoiceResult,
 }
 import plugin/feed/update
 import plugin/feed/view
@@ -719,8 +719,157 @@ pub fn liking_twice_publishes_once_test() {
   let #(m2, first_effects) = update.update(m1, LikeNote(parent.id))
   list.length(first_effects) |> should.equal(1)
 
-  // Once the reaction is known to the plugin a second click must not publish.
+  // Once the reaction is known to the plugin a second click un-toggles locally
+  // without publishing another event.
+  let assert Ok(liked_stats) = dict.get(m2.stats, parent.id)
+  liked_stats.liked_by_me |> should.be_true()
+
   let #(m3, second_effects) = update.update(m2, LikeNote(parent.id))
   list.length(second_effects) |> should.equal(0)
-  m3 |> should.equal(m2)
+  let assert Ok(unliked_stats) = dict.get(m3.stats, parent.id)
+  unliked_stats.liked_by_me |> should.be_false()
+}
+
+pub fn compact_view_routing_and_rendering_test() {
+  model.view_from_route(route.parse_search("?view=compact"))
+  |> should.equal(ViewCompact)
+
+  update.action_to_msg(schema_action("select-view", [#("view", "compact")]))
+  |> should.equal(Some(SelectView(ViewCompact)))
+
+  let m0 = model.init(route.parse_search("?view=compact"))
+  let empty_wire = schema.encode_schema_message(view.view(m0))
+  should.be_true(string.contains(empty_wire, "\"metric\""))
+  should.be_true(string.contains(empty_wire, "feed-compact"))
+  should.be_true(string.contains(empty_wire, "0 notes"))
+  should.be_true(string.contains(empty_wire, "Connecting to relays..."))
+
+  let #(m1, _) =
+    update.update(
+      m0,
+      IngestEvent(note_event(
+        note1_hex,
+        alice_hex,
+        "This is a long note content that should be truncated in compact mode",
+      )),
+    )
+  let populated_wire = schema.encode_schema_message(view.view(m1))
+  should.be_true(string.contains(populated_wire, "1 notes"))
+  should.be_true(string.contains(populated_wire, "..."))
+}
+
+pub fn inline_media_setting_wired_to_note_cards_test() {
+  let m0 = model.init(route.main())
+  let #(m1, _) =
+    update.update(
+      m0,
+      IngestEvent(note_event(
+        note1_hex,
+        alice_hex,
+        "Photo https://example.com/pic.png",
+      )),
+    )
+
+  let wire_on = schema.encode_schema_message(view.view(m1))
+  should.be_true(string.contains(wire_on, "\"showInlineImages\":true"))
+
+  let #(m2, _) = update.update(m1, ToggleInlineMedia)
+  m2.settings.show_inline_media |> should.be_false()
+  let wire_off = schema.encode_schema_message(view.view(m2))
+  should.be_true(string.contains(wire_off, "\"showInlineImages\":false"))
+  should.be_false(string.contains(wire_off, "\"showInlineImages\":true"))
+}
+
+pub fn page_size_settings_control_and_update_test() {
+  let m0 = model.init(route.parse_search("?view=settings"))
+  let wire = schema.encode_schema_message(view.view(m0))
+  should.be_true(string.contains(wire, "pageSize"))
+  should.be_true(string.contains(wire, "set-page-size"))
+
+  update.action_to_msg(schema_action("set-page-size", [#("value", "15")]))
+  |> should.equal(Some(SetPageSize(15)))
+  update.action_to_msg(schema_action("set-page-size", [#("value", "0")]))
+  |> should.equal(None)
+  update.action_to_msg(schema_action("set-page-size", [#("value", "abc")]))
+  |> should.equal(None)
+
+  let #(m1, _) = update.update(m0, SetPageSize(15))
+  m1.settings.page_size |> should.equal(15)
+  m1.visible_limit |> should.equal(15)
+
+  let #(m2, _) = update.update(m1, SetPageSize(250))
+  m2.settings.page_size |> should.equal(100)
+
+  let #(m3, _) = update.update(m2, SetPageSize(0))
+  m3.settings.page_size |> should.equal(100)
+}
+
+pub fn repost_untoggle_test() {
+  let m0 = model.init(route.main())
+  let #(m1, _) =
+    update.update(m0, IngestEvent(note_event(note1_hex, alice_hex, "root")))
+
+  let #(m2, first_effects) = update.update(m1, RepostNote(note1_hex))
+  list.length(first_effects) |> should.equal(1)
+  let assert Ok(s2) = dict.get(m2.stats, note1_hex)
+  s2.reposted_by_me |> should.be_true()
+
+  let #(m3, second_effects) = update.update(m2, RepostNote(note1_hex))
+  list.length(second_effects) |> should.equal(0)
+  let assert Ok(s3) = dict.get(m3.stats, note1_hex)
+  s3.reposted_by_me |> should.be_false()
+}
+
+pub fn loading_and_syncing_indicators_test() {
+  let m0 = model.init(route.main())
+  m0.is_syncing |> should.be_true()
+  m0.is_loading_older |> should.be_false()
+  m0.is_loading_thread |> should.be_false()
+
+  let initial_wire = schema.encode_schema_message(view.view(m0))
+  should.be_true(string.contains(initial_wire, "Syncing relays..."))
+
+  let #(m1, _) =
+    update.update(m0, IngestEvents([note_event(note1_hex, alice_hex, "hello")]))
+  m1.is_syncing |> should.be_false()
+  let synced_wire = schema.encode_schema_message(view.view(m1))
+  should.be_false(string.contains(synced_wire, "Syncing relays..."))
+
+  let #(m2, load_effects) = update.update(m1, LoadMore)
+  m2.is_loading_older |> should.be_true()
+  should.be_true(
+    list.any(load_effects, fn(e) {
+      case e {
+        FetchUntil(_) -> True
+        _ -> False
+      }
+    }),
+  )
+  let loading_more_wire = schema.encode_schema_message(view.view(m2))
+  should.be_true(string.contains(loading_more_wire, "Loading older notes..."))
+  should.be_true(string.contains(loading_more_wire, "Syncing relays..."))
+
+  let #(m3, _) =
+    update.update(m2, IngestEvent(note_event(note2_hex, bob_hex, "older")))
+  m3.is_loading_older |> should.be_false()
+
+  let #(m4, thread_effects) = update.update(m3, OpenThread(note1_hex))
+  m4.is_loading_thread |> should.be_true()
+  should.be_true(
+    list.any(thread_effects, fn(e) {
+      case e {
+        FetchThread(id) -> id == note1_hex
+        _ -> False
+      }
+    }),
+  )
+  let thread_loading_wire = schema.encode_schema_message(view.view(m4))
+  should.be_true(string.contains(
+    thread_loading_wire,
+    "Loading thread replies...",
+  ))
+
+  let #(m5, _) =
+    update.update(m4, IngestEvent(note_event(note1_hex, alice_hex, "hello")))
+  m5.is_loading_thread |> should.be_false()
 }

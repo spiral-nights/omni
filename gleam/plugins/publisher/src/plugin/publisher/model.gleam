@@ -3,8 +3,11 @@
 import gleam/dynamic/decode.{type Decoder}
 import gleam/json.{type Json}
 import gleam/list
-import gleam/option.{type Option, None}
+import gleam/option.{type Option, None, Some}
 import gleam/string
+import omni/nostr/event.{type Event}
+import omni/nostr/kind
+import omni/nostr/nip19
 import omni/plugin_kit/local_store.{type StoreConfig, StoreConfig}
 import plugin/publisher/bundle.{type Bundle, type BundleFile}
 
@@ -14,6 +17,12 @@ pub type StudioTab {
   TabPublished
   TabServers
   TabWidget
+}
+
+/// Packaging mode for NIP-5A nsite publishing.
+pub type PackagingMode {
+  ModeBlossom
+  ModeInlined
 }
 
 /// Metadata record for a published NIP-5A nsite package.
@@ -71,6 +80,7 @@ pub type Model {
     user_pubkey: Option(String),
     relay_urls: List(String),
     upload_reports: List(UploadReport),
+    packaging_mode: PackagingMode,
   )
 }
 
@@ -121,6 +131,7 @@ pub fn init(initial_tab: StudioTab) -> Model {
     user_pubkey: None,
     relay_urls: [],
     upload_reports: [],
+    packaging_mode: ModeBlossom,
   )
 }
 
@@ -239,4 +250,69 @@ pub fn servers_store_config() -> StoreConfig(List(BlossomServer)) {
     decoder: decode.list(server_decoder()),
     default: default_blossom_servers,
   )
+}
+
+/// Converts a NIP-5A (`kind: 35129`) `Event` into a `PublishedPlugin` record.
+pub fn published_from_event(
+  ev: Event,
+  relay_hints: List(String),
+) -> Option(PublishedPlugin) {
+  case kind.to_int(ev.kind) == 35_129 {
+    False -> None
+    True -> {
+      let d = find_tag(ev.tags, "d") |> option.unwrap("")
+      case string.trim(d) {
+        "" -> None
+        clean_id -> {
+          let name =
+            find_tag(ev.tags, "name")
+            |> option.unwrap(clean_id)
+          let version = find_tag(ev.tags, "version") |> option.unwrap("1.0.0")
+          let description =
+            find_tag(ev.tags, "description") |> option.unwrap("")
+          let icon = find_tag(ev.tags, "icon") |> option.unwrap("globe")
+          let sha = find_tag(ev.tags, "x") |> option.unwrap("")
+          let server = find_tag(ev.tags, "server") |> option.unwrap("")
+          let blossom_url = case server, sha {
+            "", _ | _, "" -> ""
+            s, h -> {
+              let base = case string.ends_with(s, "/") {
+                True -> string.drop_end(s, 1)
+                False -> s
+              }
+              base <> "/" <> h
+            }
+          }
+          let naddr =
+            nip19.encode_naddr(nip19.AddressData(
+              identifier: clean_id,
+              pubkey: ev.pubkey,
+              kind: ev.kind,
+              relays: list.take(relay_hints, 3),
+            ))
+          Some(PublishedPlugin(
+            id: clean_id,
+            name: name,
+            version: version,
+            description: description,
+            icon: icon,
+            blossom_sha256: sha,
+            blossom_url: blossom_url,
+            naddr: naddr,
+            published_at: ev.created_at,
+          ))
+        }
+      }
+    }
+  }
+}
+
+fn find_tag(tags: List(List(String)), key: String) -> Option(String) {
+  list.find_map(tags, fn(tag) {
+    case tag {
+      [k, v, ..] if k == key -> Ok(v)
+      _ -> Error(Nil)
+    }
+  })
+  |> option.from_result
 }

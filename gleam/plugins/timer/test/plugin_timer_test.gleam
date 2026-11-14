@@ -18,7 +18,7 @@ import plugin/timer/model.{
 }
 import plugin/timer/msg.{
   AdjustMinutes, ApplyCustomDuration, Complete, Pause, Reset, Resume,
-  SelectPreset, SetCustomMinutes, SetMinutes, Start, Tick, ToggleFocus,
+  SelectPreset, SetCustomMinutes, SetFocus, SetMinutes, Start, Tick, ToggleFocus,
 }
 import plugin/timer/update
 import plugin/timer/view
@@ -31,8 +31,11 @@ pub fn init_and_formatting_test() {
   let m = init()
   m.status |> should.equal(Idle)
   m.preset |> should.equal(Focus25)
+  m.duration_sec |> should.equal(1500)
   m.remaining_sec |> should.equal(1500)
+  m.custom_minutes |> should.equal("25")
   m.completed_sessions |> should.equal(0)
+  m.focus_mode |> should.equal(False)
 
   format_remaining(1500) |> should.equal("25:00")
   format_remaining(9) |> should.equal("00:09")
@@ -74,6 +77,7 @@ pub fn start_pause_resume_reset_test() {
   let #(m5, _) = update.update(m4, Reset)
   m5.status |> should.equal(Idle)
   m5.remaining_sec |> should.equal(1500)
+  m5.focus_mode |> should.equal(False)
 }
 
 pub fn tick_only_while_running_test() {
@@ -151,6 +155,14 @@ pub fn focus_mode_and_adjustments_test() {
   let #(shrunk, _) = update.update(running, ToggleFocus)
   shrunk.focus_mode |> should.equal(False)
 
+  // Explicit expand/shrink messages are idempotent.
+  let #(expanded, _) = update.update(shrunk, SetFocus(True))
+  expanded.focus_mode |> should.equal(True)
+  let #(still_expanded, _) = update.update(expanded, SetFocus(True))
+  still_expanded.focus_mode |> should.equal(True)
+  let #(shrunk_again, _) = update.update(expanded, SetFocus(False))
+  shrunk_again.focus_mode |> should.equal(False)
+
   // Fine adjust moves in whole minutes and clamps to 1..180.
   let m = Model(..m, duration_sec: 1500, remaining_sec: 1500)
   let #(plus, _) = update.update(m, AdjustMinutes(5))
@@ -206,6 +218,24 @@ pub fn action_mapping_test() {
   update.action_to_msg(schema_action("toggle-focus", []))
   |> should.equal(Some(ToggleFocus))
 
+  update.action_to_msg(schema_action("expand-timer", []))
+  |> should.equal(Some(SetFocus(True)))
+
+  update.action_to_msg(schema_action("shrink-timer", []))
+  |> should.equal(Some(SetFocus(False)))
+
+  update.action_to_msg(schema_action("set-preset", [#("minutes", "15")]))
+  |> should.equal(Some(SelectPreset(Long15)))
+
+  update.action_to_msg(schema_action("set-preset", [#("minutes", "20")]))
+  |> should.equal(Some(SetMinutes(20)))
+
+  let int_preset_action =
+    action.new("set-preset")
+    |> action.with_payload(dict.from_list([#("minutes", dynamic.int(5))]))
+  update.action_to_msg(int_preset_action)
+  |> should.equal(Some(SelectPreset(Short5)))
+
   update.action_to_msg(schema_action("set-minutes", [#("minutes", "20")]))
   |> should.equal(Some(SetMinutes(20)))
 
@@ -239,7 +269,12 @@ pub fn view_renders_timer_and_widget_test() {
   should.be_true(string.contains(wire, "25:00"))
   should.be_true(string.contains(wire, "Focus Timer"))
   should.be_true(string.contains(wire, "\"disk\""))
+  should.be_true(string.contains(wire, "expand-timer"))
   should.be_true(string.contains(wire, "Start"))
+
+  let focused = Model(..m, focus_mode: True)
+  let focus_wire = view.view(focused) |> schema.encode_schema_message
+  should.be_true(string.contains(focus_wire, "shrink-timer"))
 
   let running = Model(..m, status: Running)
   let running_wire = view.view(running) |> schema.encode_schema_message
@@ -268,6 +303,38 @@ fn schema_action(name: String, fields: List(#(String, String))) -> Action {
     |> list.map(fn(pair) { #(pair.0, dynamic.string(pair.1)) })
     |> dict.from_list
   action.new(name) |> action.with_payload(payload)
+}
+
+pub fn adjust_minutes_preserves_running_and_paused_test() {
+  let running =
+    Model(
+      ..init(),
+      status: Running,
+      duration_sec: 1500,
+      remaining_sec: 1400,
+      focus_mode: True,
+    )
+  let #(plus, _) = update.update(running, AdjustMinutes(5))
+  plus.status |> should.equal(Running)
+  plus.duration_sec |> should.equal(1800)
+  plus.remaining_sec |> should.equal(1700)
+  plus.custom_minutes |> should.equal("30")
+  plus.focus_mode |> should.equal(True)
+
+  let paused = Model(..plus, status: Paused)
+  let #(minus, _) = update.update(paused, AdjustMinutes(-5))
+  minus.status |> should.equal(Paused)
+  minus.duration_sec |> should.equal(1500)
+  minus.remaining_sec |> should.equal(1400)
+  minus.custom_minutes |> should.equal("25")
+
+  // Decreasing past remaining_sec clamps remaining_sec to 0 without resetting.
+  let near_end =
+    Model(..init(), status: Running, duration_sec: 600, remaining_sec: 120)
+  let #(clamped, _) = update.update(near_end, AdjustMinutes(-5))
+  clamped.status |> should.equal(Running)
+  clamped.duration_sec |> should.equal(300)
+  clamped.remaining_sec |> should.equal(0)
 }
 
 pub fn completion_emits_chime_effect_test() {

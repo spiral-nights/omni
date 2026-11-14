@@ -15,5 +15,6 @@ pub type Msg {
   ApplyCustomDuration
   SetMinutes(Int)
   ToggleFocus
+  SetFocus(Bool)
   AdjustMinutes(Int)
 }

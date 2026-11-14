@@ -32,6 +32,7 @@ pub type FeedView {
   ViewSearch
   ViewSettings
   ViewWidget
+  ViewCompact
 }
 
 /// User-configurable feed display settings.
@@ -63,6 +64,9 @@ pub type Model {
     zap_lnurl: Option(String),
     zap_invoice: Option(String),
     zap_pending: Bool,
+    is_syncing: Bool,
+    is_loading_older: Bool,
+    is_loading_thread: Bool,
   )
 }
 
@@ -85,7 +89,8 @@ pub fn view_from_route(r: Route) -> FeedView {
       }
     "search" -> ViewSearch
     "settings" -> ViewSettings
-    "widget" | "compact" -> ViewWidget
+    "widget" -> ViewWidget
+    "compact" -> ViewCompact
     _ -> ViewTimeline
   }
 }
@@ -93,13 +98,18 @@ pub fn view_from_route(r: Route) -> FeedView {
 /// Initialize the default `Model` for a given initial `Route`.
 pub fn init(initial_route: Route) -> Model {
   let settings = default_settings()
+  let resolved_view = view_from_route(initial_route)
   let initial_search = case route.get_param(initial_route, "q") {
     Some(q) -> q
     None -> ""
   }
+  let initial_thread_loading = case resolved_view {
+    ViewThread(_) -> True
+    _ -> False
+  }
 
   Model(
-    view: view_from_route(initial_route),
+    view: resolved_view,
     active_tab: TabFollowing,
     notes: dict.new(),
     profiles: dict.new(),
@@ -120,6 +130,9 @@ pub fn init(initial_route: Route) -> Model {
     zap_lnurl: None,
     zap_invoice: None,
     zap_pending: False,
+    is_syncing: True,
+    is_loading_older: False,
+    is_loading_thread: initial_thread_loading,
   )
 }
 

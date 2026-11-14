@@ -9,22 +9,24 @@ import gleam/string
 import gleeunit
 import gleeunit/should
 import omni/nostr/kind
+import omni/platform/clock
 import omni/platform/storage
-import omni/plugin_kit/app.{Publish, PublishEncrypted}
+import omni/plugin_kit/app.{Async, Publish, PublishEncrypted}
 import omni/plugin_kit/local_store
 import omni/plugin_kit/route
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import plugin/notes/main as notes_main
 import plugin/notes/model.{
-  FolderAll, FolderArchive, FolderStarred, FolderTag, Model, NoteDoc,
-  content_snippet, from_json_string, init, init_with_notes, note_doc_decoder,
-  to_json_string, word_count,
+  FolderAll, FolderArchive, FolderStarred, FolderTag, NoteDoc, StatusOffline,
+  StatusSaved, StatusSaving, content_snippet, from_json_string, init,
+  init_with_notes, note_doc_decoder, to_json_string, word_count,
 }
 import plugin/notes/msg.{
-  AddTag, CreateNote, DeleteNote, IngestRemoteDoc, RemoveTag, SaveActiveNote,
-  SelectFolder, SelectNote, SetDraftContent, SetDraftTitle, SetPubkey,
-  SetSearchQuery, ToggleArchive, ToggleEncryptedSync, ToggleStar,
+  AddDraftTag, AddTag, AutoSaveTick, CreateNote, DeleteNote, IngestRemoteDoc,
+  InsertMarkdown, RemoveTag, SaveActiveNote, SelectFolder, SelectNote,
+  SetDraftContent, SetDraftTag, SetDraftTitle, SetOnline, SetPubkey,
+  SetSearchQuery, ToggleArchive, ToggleEncryptedSync, TogglePreview, ToggleStar,
 }
 import plugin/notes/update
 import plugin/notes/view
@@ -210,7 +212,7 @@ pub fn storage_backed_spec_persists_notebook_test() {
   let #(m1, _) = spec.update(m0, CreateNote)
   let #(_, _) = spec.update(m1, SetDraftTitle("Persisted"))
 
-  let reloaded = notes_main.notebook_store_config()
+  let _reloaded = notes_main.notebook_store_config()
   let stored = local_store.load(store, notes_main.notebook_store_config())
   list.length(stored.notes) |> should.equal(2)
 }
@@ -363,4 +365,127 @@ pub fn settings_route_renders_the_settings_card_test() {
   |> schema.encode_schema_message
   |> string.contains("notes-settings")
   |> should.equal(False)
+}
+
+pub fn e2_1_add_tag_button_uses_draft_tag_and_action_on_change_test() {
+  let m0 = init()
+  let wire = view.view(m0) |> schema.encode_schema_message
+  string.contains(wire, "set-draft-tag") |> should.equal(True)
+
+  update.action_to_msg(schema_action("set-draft-tag", [#("value", "rust")]))
+  |> should.equal(Some(SetDraftTag("rust")))
+  update.action_to_msg(schema_action("add_tag", []))
+  |> should.equal(Some(AddDraftTag))
+
+  let #(m1, _) = update.update(m0, SetDraftTag("  #Gleam-UI  "))
+  m1.draft_tag |> should.equal("  #Gleam-UI  ")
+
+  let #(m2, effects) = update.update(m1, AddDraftTag)
+  m2.draft_tag |> should.equal("")
+  list.length(effects) |> should.equal(1)
+  let assert Ok(note) = list.find(m2.notes, fn(n) { n.id == "note_1" })
+  should.be_true(list.contains(note.tags, "gleam-ui"))
+}
+
+pub fn e2_2_markdown_toolbar_and_preview_toggle_test() {
+  let m0 = init()
+  let edit_wire = view.view(m0) |> schema.encode_schema_message
+  string.contains(edit_wire, "notes-editor-toolbar") |> should.equal(True)
+  string.contains(edit_wire, "toggle_preview") |> should.equal(True)
+  string.contains(edit_wire, "insert_markdown") |> should.equal(True)
+
+  let #(m1, _) =
+    update.update(m0, SetDraftContent("# Heading\n\n- item\n\n```\ncode\n```"))
+  let #(m2, _) = update.update(m1, InsertMarkdown("\n**bold**"))
+  should.be_true(string.contains(m2.draft_content, "**bold**"))
+  m2.dirty |> should.equal(True)
+
+  let #(m3, _) = update.update(m2, TogglePreview)
+  m3.preview_mode |> should.equal(True)
+  let preview_wire = view.view(m3) |> schema.encode_schema_message
+  string.contains(preview_wire, "notes-markdown-preview") |> should.equal(True)
+  string.contains(preview_wire, "Heading") |> should.equal(True)
+}
+
+pub fn e2_3_debounced_autosave_and_status_indicator_test() {
+  let m0 = init()
+  m0.save_status |> should.equal(StatusSaved)
+  string.contains(view.view(m0) |> schema.encode_schema_message, "Saved")
+  |> should.equal(True)
+
+  let #(m1, effects1) = update.update(m0, SetDraftTitle("Draft 1"))
+  m1.save_status |> should.equal(StatusSaving)
+  m1.save_revision |> should.equal(1)
+  should.be_true(
+    list.any(effects1, fn(e) {
+      case e {
+        Async(_) -> True
+        _ -> False
+      }
+    }),
+  )
+  string.contains(view.view(m1) |> schema.encode_schema_message, "Saving...")
+  |> should.equal(True)
+
+  // Typing again advances save_revision; stale tick (1) is ignored.
+  let #(m2, _) = update.update(m1, SetDraftContent("Updated body"))
+  m2.save_revision |> should.equal(2)
+  let #(m_stale, stale_effects) = update.update(m2, AutoSaveTick(1))
+  m_stale.dirty |> should.equal(True)
+  stale_effects |> should.equal([])
+
+  // Matching tick (2) commits, marks Saved, and publishes.
+  let #(m3, tick_effects) = update.update(m2, AutoSaveTick(2))
+  m3.dirty |> should.equal(False)
+  m3.save_status |> should.equal(StatusSaved)
+  list.length(tick_effects) |> should.equal(1)
+
+  // Offline status indicator.
+  let #(m4, _) = update.update(m3, SetOnline(False))
+  m4.save_status |> should.equal(StatusOffline)
+  string.contains(view.view(m4) |> schema.encode_schema_message, "Offline")
+  |> should.equal(True)
+}
+
+pub fn e2_4_toggle_encrypted_sync_republishes_all_notes_test() {
+  let #(m0, _) = update.update(init(), CreateNote)
+  list.length(m0.notes) |> should.equal(2)
+
+  // Toggling off publishes all notes in plaintext.
+  let #(m1, plain_effects) = update.update(m0, ToggleEncryptedSync)
+  m1.sync_encrypted |> should.equal(False)
+  list.length(plain_effects) |> should.equal(2)
+  should.be_true(
+    list.all(plain_effects, fn(e) {
+      case e {
+        Publish(_) -> True
+        _ -> False
+      }
+    }),
+  )
+
+  // Toggling back on re-publishes all notes encrypted.
+  let #(m2, enc_effects) = update.update(m1, ToggleEncryptedSync)
+  m2.sync_encrypted |> should.equal(True)
+  list.length(enc_effects) |> should.equal(2)
+  should.be_true(
+    list.all(enc_effects, fn(e) {
+      case e {
+        PublishEncrypted(_) -> True
+        _ -> False
+      }
+    }),
+  )
+}
+
+pub fn e2_5_wall_clock_timestamps_test() {
+  let m0 = init()
+  let #(m1, _) = update.update(m0, CreateNote)
+  let assert Ok(created) = list.find(m1.notes, fn(n) { n.id == "note_2" })
+  // Wall-clock Unix timestamp (seconds), not the old 1_700_000_001 counter.
+  should.be_true(created.updated_at > 1_750_000_000)
+
+  let fixed_ts =
+    update.next_timestamp_with_clock(m0, clock.fixed(1_800_000_000_000))
+  fixed_ts |> should.equal(1_800_000_000)
 }

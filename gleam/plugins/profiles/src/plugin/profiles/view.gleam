@@ -14,8 +14,8 @@ import omni/protocol/schema/node.{
   type Node, Avatar, BadgeAccent, Body, Button, ButtonGhost, ButtonPrimary,
   ButtonSecondary, Caption, CodeBlock, IconButton, IconButtonGhost,
   IconButtonSecondary, Input, InputSearch, InputText, InputUrl, JustifyBetween,
-  JustifyEnd, ListItem, StatusConnecting, StatusIndicator, StatusOffline,
-  StatusOnline, Textarea, ToneMuted, TonePrimary,
+  JustifyEnd, ListItem, Metric, MetricInt, MetricString, StatusConnecting,
+  StatusIndicator, StatusOffline, StatusOnline, Textarea, ToneMuted, TonePrimary,
 }
 import omni/protocol/schema/style.{SizeLg, SizeMd, SizeSm, StyleRaw}
 import omni/social/note.{type Note}
@@ -24,8 +24,8 @@ import omni/social/stats
 import omni/social_ui/note_card.{type NoteCardConfig, NoteCardConfig}
 import omni/ui/avatar as generated_avatar
 import plugin/profiles/model.{
-  type Model, SignerLocked, SignerMissing, SignerReady, ViewDirectory,
-  ViewFollowing, ViewKeys, ViewMetadata, ViewProfile,
+  type Model, SignerLocked, SignerMissing, SignerReady, ViewCompact,
+  ViewDirectory, ViewFollowing, ViewKeys, ViewMetadata, ViewProfile, ViewWidget,
 }
 
 /// Render the top-level declarative Schema `Node` for `model`.
@@ -36,6 +36,8 @@ pub fn view(model: Model) -> Node {
     ViewProfile(pubkey) -> render_profile(model, pubkey)
     ViewMetadata -> render_metadata_editor(model)
     ViewKeys -> render_key_custody(model)
+    ViewCompact -> render_compact(model)
+    ViewWidget -> render_widget(model)
   }
 }
 
@@ -99,6 +101,9 @@ fn render_directory(model: Model) -> Node {
 
 fn render_view_tabs(active: String) -> Node {
   let people_action = action.new("view-directory")
+  let my_profile_action = action.new("view-my-profile")
+  let edit_action = action.new("edit-metadata")
+  let keys_action = action.new("view-keys")
   let following_action = action.new("view-following")
   schema.box()
   |> schema.row()
@@ -106,6 +111,12 @@ fn render_view_tabs(active: String) -> Node {
   |> schema.children([
     schema.button("People", people_action)
       |> schema.with_icon("users"),
+    schema.button("My Profile", my_profile_action)
+      |> schema.with_icon("user"),
+    schema.button("Edit", edit_action)
+      |> schema.with_icon("edit"),
+    schema.button("Keys", keys_action)
+      |> schema.with_icon("key"),
     schema.button("Following", following_action)
       |> schema.with_icon("user-check"),
   ])
@@ -366,7 +377,14 @@ fn render_profile(model: Model, pubkey: String) -> Node {
   ))
   |> schema.children(
     list.flatten([
-      [back_button, header, action_row, schema.divider(), notes_header],
+      [
+        render_view_tabs("profile"),
+        back_button,
+        header,
+        action_row,
+        schema.divider(),
+        notes_header,
+      ],
       note_nodes,
     ]),
   )
@@ -374,12 +392,15 @@ fn render_profile(model: Model, pubkey: String) -> Node {
 
 fn render_author_note(model: Model, note: Note) -> Node {
   let author = dict.get(model.profiles, note.pubkey) |> option.from_result
-  let empty_stats = stats.empty_stats(note.id)
+  let note_stats =
+    dict.get(model.stats, note.id)
+    |> option.from_result
+    |> option.unwrap(stats.empty_stats(note.id))
   note_card.render_note_card(
     note,
     author,
     None,
-    empty_stats,
+    note_stats,
     profile_note_card_config(model),
   )
 }
@@ -519,6 +540,7 @@ fn render_metadata_editor(model: Model) -> Node {
     "max-width: 720px; margin: 0 auto; width: 100%;",
   ))
   |> schema.children([
+    render_view_tabs("metadata"),
     status_badge,
     name_input,
     about_area,
@@ -581,6 +603,52 @@ fn render_key_custody(model: Model) -> Node {
       loading: None,
     )
 
+  let switch_account_button =
+    Button(
+      base: node.empty_base(),
+      label: "Switch Account",
+      action: action.new("switch-account")
+        |> action.with_navigate(
+          action.NavigateTarget(
+            ..action.empty_target(),
+            view: Some("settings"),
+            route: Some("?settings=profile"),
+          ),
+        ),
+      variant: Some(ButtonSecondary),
+      size: Some(SizeSm),
+      icon: Some("users"),
+      icon_position: None,
+      disabled: None,
+      loading: None,
+    )
+
+  let generate_keypair_button =
+    Button(
+      base: node.empty_base(),
+      label: "Generate New Keypair",
+      action: action.new("generate-keypair")
+        |> action.with_navigate(
+          action.NavigateTarget(
+            ..action.empty_target(),
+            view: Some("settings"),
+            route: Some("?settings=profile"),
+          ),
+        ),
+      variant: Some(ButtonPrimary),
+      size: Some(SizeSm),
+      icon: Some("key"),
+      icon_position: None,
+      disabled: None,
+      loading: None,
+    )
+
+  let identity_actions =
+    schema.box()
+    |> schema.row
+    |> schema.gap("xs")
+    |> schema.children([switch_account_button, generate_keypair_button])
+
   let back_button =
     Button(
       base: node.empty_base(),
@@ -604,9 +672,11 @@ fn render_key_custody(model: Model) -> Node {
     "max-width: 720px; margin: 0 auto; width: 100%;",
   ))
   |> schema.children([
+    render_view_tabs("keys"),
     npub_node,
     status,
     explanation,
+    identity_actions,
     schema.box()
       |> schema.row
       |> schema.justify(JustifyBetween)
@@ -623,22 +693,166 @@ fn signer_indicator(status: model.SignerStatus) -> node.IndicatorStatus {
 }
 
 // -----------------------------------------------------------------------------
+// 5. Compact & Widget Views
+// -----------------------------------------------------------------------------
+
+fn render_compact(model: Model) -> Node {
+  case model.my_pubkey {
+    Some(pk) -> {
+      let person = dict.get(model.profiles, pk) |> option.from_result
+      let name = profile.best_display_name(person, pk)
+      Metric(
+        base: node.empty_base(),
+        label: name,
+        value: MetricInt(model.follow_count(model)),
+        subtext: Some("following"),
+        trend: None,
+      )
+      |> schema.with_id("profiles-compact")
+    }
+    None ->
+      Metric(
+        base: node.empty_base(),
+        label: "Profiles",
+        value: MetricString("Guest"),
+        subtext: Some(int.to_string(dict.size(model.profiles)) <> " known"),
+        trend: None,
+      )
+      |> schema.with_id("profiles-compact")
+  }
+}
+
+fn render_widget(model: Model) -> Node {
+  let identity_row = case model.my_pubkey {
+    Some(pk) -> {
+      let person = dict.get(model.profiles, pk) |> option.from_result
+      let name = profile.best_display_name(person, pk)
+      let picture = case person {
+        Some(p) -> p.picture
+        None -> None
+      }
+      schema.box()
+      |> schema.row
+      |> schema.justify(JustifyBetween)
+      |> schema.gap("sm")
+      |> schema.children([
+        schema.box()
+          |> schema.row
+          |> schema.gap("sm")
+          |> schema.children([
+            Avatar(
+              base: node.empty_base(),
+              src: picture,
+              pubkey: Some(pk),
+              name: Some(name),
+              size: Some(SizeSm),
+              action: None,
+            ),
+            schema.text(name)
+              |> schema.text_variant(Body)
+              |> schema.text_tone(TonePrimary),
+          ]),
+        schema.button("My Profile", action.new("view-my-profile"))
+          |> schema.with_icon("user"),
+      ])
+    }
+    None ->
+      schema.box()
+      |> schema.row
+      |> schema.justify(JustifyBetween)
+      |> schema.gap("sm")
+      |> schema.children([
+        schema.text("No active identity")
+          |> schema.text_variant(Caption)
+          |> schema.text_tone(ToneMuted),
+        schema.button("Keys", action.new("view-keys"))
+          |> schema.with_icon("key"),
+      ])
+  }
+
+  let recent_people =
+    model.filtered_profiles(model)
+    |> list.take(3)
+    |> list.map(fn(person) {
+      let name = profile.best_display_name(Some(person), person.pubkey)
+      ListItem(
+        base: node.empty_base(),
+        title: name,
+        subtitle: person.nip05,
+        meta: None,
+        icon: None,
+        avatar_url: person.picture,
+        avatar_pubkey: Some(person.pubkey),
+        checked: None,
+        on_check_action: None,
+        on_click_action: Some(action_with_pubkey(
+          "select-profile",
+          person.pubkey,
+        )),
+        actions: [],
+      )
+    })
+
+  let list_block = case recent_people {
+    [] ->
+      schema.text("No profiles discovered yet.")
+      |> schema.text_variant(Caption)
+      |> schema.text_tone(ToneMuted)
+    items -> schema.list_view(items)
+  }
+
+  let quick_actions =
+    schema.box()
+    |> schema.row
+    |> schema.gap("xs")
+    |> schema.children([
+      schema.button("People", action.new("view-directory"))
+        |> schema.with_icon("users"),
+      schema.button("Edit", action.new("edit-metadata"))
+        |> schema.with_icon("edit"),
+    ])
+
+  schema.card()
+  |> schema.with_id("profiles-widget")
+  |> schema.title("Profiles")
+  |> schema.subtitle(
+    int.to_string(model.follow_count(model))
+    <> " following · "
+    <> int.to_string(dict.size(model.profiles))
+    <> " known",
+  )
+  |> schema.with_icon("users")
+  |> schema.page("widget")
+  |> schema.children([identity_row, list_block, quick_actions])
+}
+
+// -----------------------------------------------------------------------------
 // Shared `omni/social_ui/note_card` wiring
 // -----------------------------------------------------------------------------
 
 fn profile_note_card_config(model: Model) -> NoteCardConfig {
   NoteCardConfig(
     interactive: True,
-    show_actions: False,
+    show_actions: True,
     now_sec: model.now_sec,
     on_open_note: Some(view_note_action),
     on_open_author: Some(fn(pubkey) {
       action_with_pubkey("select-profile", pubkey)
     }),
-    on_like: None,
-    on_repost: None,
+    on_like: Some(fn(id) { action_with_id("like-note", id) }),
+    on_repost: Some(fn(id) { action_with_id("repost-note", id) }),
     on_reply: Some(view_note_action),
-    on_zap: None,
+    on_zap: Some(fn(id) { action_with_id("zap-note", id) }),
+  )
+}
+
+fn action_with_id(name: String, note_id: String) -> Action {
+  action.new(name)
+  |> action.with_payload(
+    dict.from_list([
+      #("id", dynamic.string(note_id)),
+      #("noteId", dynamic.string(note_id)),
+    ]),
   )
 }
 

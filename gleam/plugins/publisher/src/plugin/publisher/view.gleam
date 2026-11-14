@@ -1,5 +1,6 @@
 //// Declarative Schema UI views for `plugin_publisher`.
 
+import gleam/bit_array
 import gleam/dict
 import gleam/dynamic
 import gleam/int
@@ -16,9 +17,10 @@ import omni/protocol/schema/node.{
   ListItem, MetricInt, TabItem, ToneSecondary,
 }
 import omni/protocol/schema/style.{SizeSm}
+import plugin/publisher/bundle
 import plugin/publisher/model.{
   type BlossomServer, type Model, type PublishedPlugin, type StudioTab,
-  TabPublished, TabServers, TabStudio, TabWidget,
+  ModeBlossom, ModeInlined, TabPublished, TabServers, TabStudio, TabWidget,
 }
 
 /// Renders the root Schema `Node` for the current `Model`.
@@ -43,7 +45,7 @@ fn view_widget(model: Model) -> Node {
     |> schema.text_tone(ToneSecondary)
 
   let open_btn =
-    schema.button("Open Plugin Studio", tab_action("select-tab", "studio"))
+    schema.button("Open Plugin Studio", action.navigate_view("studio"))
 
   schema.card()
   |> schema.title("Plugin Studio")
@@ -184,18 +186,30 @@ fn render_studio_tab(model: Model) -> List(Node) {
   let bundle_url_input =
     input_with_change(
       "bundleUrl",
-      "Bundle zip URL",
+      "Bundle URL (.zip, .html, .js) or naddr1...",
       model.bundle_url,
       "set-bundle-url",
     )
 
-  let load_bundle_btn =
-    schema.button("Load Bundle", schema.new_action("load-bundle"))
+  let fetch_url_btn =
+    schema.button("Fetch & Inspect", schema.new_action("fetch-url"))
     |> schema.with_icon("download")
+
+  let install_url_btn = case
+    schema.button("Install from URL", schema.new_action("install-url"))
+    |> schema.with_icon("globe")
+  {
+    node.Button(..) as b -> node.Button(..b, variant: Some(ButtonSecondary))
+    other -> other
+  }
 
   let choose_zip_btn =
     schema.button("Choose .zip", schema.new_action("choose-local-zip"))
     |> schema.with_icon("upload")
+
+  let choose_file_btn =
+    schema.button("Choose .html/.js", schema.new_action("choose-local-file"))
+    |> schema.with_icon("file")
 
   let template_btn =
     schema.button("Start from Template", schema.new_action("use-template"))
@@ -207,23 +221,61 @@ fn render_studio_tab(model: Model) -> List(Node) {
     |> schema.gap("sm")
     |> schema.children([
       bundle_url_input,
-      load_bundle_btn,
+      fetch_url_btn,
+      install_url_btn,
+    ])
+
+  let file_row =
+    schema.box()
+    |> schema.row()
+    |> schema.gap("sm")
+    |> schema.children([
       choose_zip_btn,
+      choose_file_btn,
       template_btn,
     ])
 
-  let publish_btn =
-    schema.button(
-      "Upload to Blossom & Publish (NIP-5A)",
-      schema.new_action("publish-package"),
+  let packaging_toggle = case
+    schema.toggle(
+      "packagingMode",
+      model.packaging_mode == ModeInlined,
+      schema.new_action("set-packaging-mode"),
     )
+  {
+    node.Toggle(..) as t ->
+      node.Toggle(
+        ..t,
+        label: Some(case model.packaging_mode {
+          ModeInlined -> "Single-file Inlined (embed in Kind 35129 event)"
+          ModeBlossom -> "Multi-file Blossom (upload blobs & reference)"
+        }),
+      )
+    other -> other
+  }
+
+  let install_local_btn = case
+    schema.button("Install Locally in Omni", schema.new_action("install-local"))
+    |> schema.with_icon("package")
+  {
+    node.Button(..) as b -> node.Button(..b, variant: Some(ButtonSecondary))
+    other -> other
+  }
+
+  let publish_label = case model.packaging_mode {
+    ModeInlined -> "Publish Inlined (NIP-5A)"
+    ModeBlossom -> "Upload to Blossom & Publish (NIP-5A)"
+  }
+
+  let publish_btn =
+    schema.button(publish_label, schema.new_action("publish-package"))
     |> schema.with_icon("upload")
 
   let action_row =
     schema.box()
     |> schema.row()
+    |> schema.gap("sm")
     |> schema.justify(JustifyEnd)
-    |> schema.children([publish_btn])
+    |> schema.children([install_local_btn, publish_btn])
 
   let studio_form_card =
     schema.card()
@@ -234,6 +286,8 @@ fn render_studio_tab(model: Model) -> List(Node) {
       row_meta,
       desc_input,
       bundle_row,
+      file_row,
+      packaging_toggle,
       action_row,
     ])
 
@@ -253,14 +307,30 @@ fn render_studio_tab(model: Model) -> List(Node) {
       |> schema.text_tone(ToneSecondary),
     ])
 
-  let preview_files = case model.bundle {
-    Some(parsed) -> parsed.files
-    None -> []
+  let preview_files = case model.packaging_mode, model.bundle {
+    ModeInlined, _ -> []
+    ModeBlossom, Some(parsed) -> parsed.files
+    ModeBlossom, None -> []
   }
-  let preview_servers =
-    model.servers
-    |> list.filter(fn(s: BlossomServer) { s.enabled })
-    |> list.map(fn(s: BlossomServer) { blossom.normalize_server(s.url) })
+  let preview_servers = case model.packaging_mode {
+    ModeInlined -> []
+    ModeBlossom ->
+      model.servers
+      |> list.filter(fn(s: BlossomServer) { s.enabled })
+      |> list.map(fn(s: BlossomServer) { blossom.normalize_server(s.url) })
+  }
+  let preview_content = case model.packaging_mode, model.bundle {
+    ModeInlined, Some(parsed) ->
+      case bundle.entry_file(parsed) {
+        Ok(entry) ->
+          case bit_array.to_string(entry.bytes) {
+            Ok(txt) -> txt
+            Error(_) -> ""
+          }
+        Error(_) -> ""
+      }
+    _, _ -> ""
+  }
   let tags = model.build_nip5a_tags(d, preview_files, preview_servers)
   let preview_json =
     json.object([
@@ -269,7 +339,7 @@ fn render_studio_tab(model: Model) -> List(Node) {
         "tags",
         json.array(tags, of: fn(tag) { json.array(tag, of: json.string) }),
       ),
-      #("content", json.string("")),
+      #("content", json.string(preview_content)),
     ])
     |> json.to_string
 
@@ -294,13 +364,31 @@ fn render_studio_tab(model: Model) -> List(Node) {
 }
 
 fn render_published_tab(model: Model) -> List(Node) {
-  case model.published {
+  let query_btn =
+    schema.button("Query Relays", schema.new_action("query-relays"))
+    |> schema.with_icon("refresh")
+
+  let toolbar_card =
+    schema.card()
+    |> schema.title("Published Packages (Kind 35129)")
+    |> schema.subtitle("Sync published NIP-5A manifests from configured relays")
+    |> schema.with_icon("globe")
+    |> schema.children([
+      schema.box()
+      |> schema.row()
+      |> schema.justify(JustifyEnd)
+      |> schema.children([query_btn]),
+    ])
+
+  let body = case model.published {
     [] -> [
       schema.empty_state("No published plugins yet")
       |> schema.with_icon("globe"),
     ]
     items -> list.map(items, render_published_card)
   }
+
+  [toolbar_card, ..body]
 }
 
 fn render_bundle_inventory(model: Model) -> Node {
@@ -375,10 +463,29 @@ fn render_published_card(pkg: PublishedPlugin) -> Node {
     naddr_code,
     schema.box()
       |> schema.row()
+      |> schema.gap("sm")
       |> schema.justify(JustifyEnd)
       |> schema.children([
-        schema.button("Delete (Kind 5)", url_action("delete-published", pkg.id))
-        |> schema.with_icon("trash"),
+        schema.button("Install / Update", naddr_action("open-naddr", pkg.naddr))
+          |> schema.with_icon("download"),
+        case
+          schema.button("Update .zip", id_action("prepare-update", pkg.id))
+          |> schema.with_icon("edit")
+        {
+          node.Button(..) as b ->
+            node.Button(..b, variant: Some(ButtonSecondary))
+          other -> other
+        },
+        case
+          schema.button(
+            "Delete (Kind 5)",
+            url_action("delete-published", pkg.id),
+          )
+          |> schema.with_icon("trash")
+        {
+          node.Button(..) as b -> node.Button(..b, variant: Some(ButtonDanger))
+          other -> other
+        },
       ]),
   ])
 }
@@ -502,8 +609,14 @@ fn tab_id(tab: StudioTab) -> String {
   }
 }
 
-fn tab_action(action_name: String, tab: String) -> Action {
-  let payload = dict.from_list([#("tab", dynamic.string(tab))])
+fn naddr_action(action_name: String, naddr: String) -> Action {
+  let payload = dict.from_list([#("naddr", dynamic.string(naddr))])
+  schema.new_action(action_name)
+  |> schema.with_payload(payload)
+}
+
+fn id_action(action_name: String, id: String) -> Action {
+  let payload = dict.from_list([#("id", dynamic.string(id))])
   schema.new_action(action_name)
   |> schema.with_payload(payload)
 }

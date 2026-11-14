@@ -15,8 +15,8 @@ import omni/protocol/schema/node.{
   type Node, AlignCenter, Button, ButtonGhost, ButtonPrimary, ButtonSecondary,
   Caption, CodeBlock, IconButton, IconButtonGhost, IconButtonSecondary, Input,
   InputNumber, InputSearch, JustifyBetween, JustifyCenter, JustifyEnd, ListItem,
-  NodeBase, PageDeclaration, StatusConnecting, StatusIndicator, TabItem, Toggle,
-  ToneMuted,
+  Metric, MetricString, NodeBase, PageDeclaration, StatusConnecting,
+  StatusIndicator, TabItem, Toggle, ToneMuted,
 }
 import omni/protocol/schema/style.{SizeMd, SizeSm, StyleRaw}
 import omni/social/note.{type Note}
@@ -24,8 +24,8 @@ import omni/social/profile
 import omni/social/stats.{type NoteStats}
 import omni/social_ui/note_card.{type NoteCardConfig, NoteCardConfig}
 import plugin/feed/model.{
-  type FeedTab, type Model, TabFollowing, TabGlobal, TabReplies, ViewSearch,
-  ViewSettings, ViewThread, ViewTimeline, ViewWidget,
+  type FeedTab, type Model, TabFollowing, TabGlobal, TabReplies, ViewCompact,
+  ViewSearch, ViewSettings, ViewThread, ViewTimeline, ViewWidget,
 }
 import plugin/feed/zap
 
@@ -37,6 +37,7 @@ pub fn view(model: Model) -> Node {
     ViewSearch -> render_search_view(model)
     ViewSettings -> render_settings_view(model)
     ViewWidget -> render_widget_view(model)
+    ViewCompact -> render_compact_view(model)
   }
 }
 
@@ -46,23 +47,37 @@ pub fn view(model: Model) -> Node {
 
 fn render_timeline_view(model: Model) -> Node {
   let composer_node = render_composer_card(model)
-  let tabs_node = render_feed_tabs(model.active_tab)
+  let tabs_node =
+    render_feed_tabs(model.active_tab, model.is_syncing, model.is_loading_older)
   let visible_notes = model.visible_timeline_notes(model)
   let cfg = feed_note_card_config(model.now_sec)
 
   let timeline_content = case visible_notes {
-    [] -> [
-      note_card.render_empty_timeline(
-        empty_timeline_title(model),
-        empty_timeline_description(model),
-      ),
-    ]
+    [] -> {
+      let empty_card =
+        note_card.render_empty_timeline(
+          empty_timeline_title(model),
+          empty_timeline_description(model),
+        )
+      case model.is_syncing {
+        True -> [
+          StatusIndicator(
+            base: node.empty_base(),
+            status: StatusConnecting,
+            label: Some("Connecting to relays..."),
+            pulse: Some(True),
+          ),
+          empty_card,
+        ]
+        False -> [empty_card]
+      }
+    }
     notes -> {
       let cards =
         list.map(notes, fn(n) { render_feed_note_card(model, n, cfg) })
       // Always offer pagination: the host fetches older notes until relays
       // stop returning results.
-      list.append(cards, [render_load_more_button()])
+      list.append(cards, [render_load_more_button(model.is_loading_older)])
     }
   }
 
@@ -120,7 +135,11 @@ fn render_composer_card(model: Model) -> Node {
   |> schema.children([textarea_node, footer_row])
 }
 
-fn render_feed_tabs(active_tab: FeedTab) -> Node {
+fn render_feed_tabs(
+  active_tab: FeedTab,
+  is_syncing: Bool,
+  is_loading_older: Bool,
+) -> Node {
   let active_id = tab_to_id(active_tab)
   let items = [
     TabItem(
@@ -135,12 +154,24 @@ fn render_feed_tabs(active_tab: FeedTab) -> Node {
 
   let tabs_primitive = schema.tabs(items, active_id, action.new("select-tab"))
 
+  let status_nodes = case is_syncing || is_loading_older {
+    True -> [
+      StatusIndicator(
+        base: node.empty_base(),
+        status: StatusConnecting,
+        label: Some("Syncing relays..."),
+        pulse: Some(True),
+      ),
+    ]
+    False -> []
+  }
+
   schema.box()
   |> schema.row
   |> schema.justify(JustifyBetween)
   |> schema.align(AlignCenter)
   |> schema.with_style(StyleRaw("margin-bottom: 10px;"))
-  |> schema.children([tabs_primitive])
+  |> schema.children([tabs_primitive, ..status_nodes])
 }
 
 fn tab_to_id(tab: FeedTab) -> String {
@@ -151,18 +182,26 @@ fn tab_to_id(tab: FeedTab) -> String {
   }
 }
 
-fn render_load_more_button() -> Node {
+fn render_load_more_button(is_loading_older: Bool) -> Node {
+  let label = case is_loading_older {
+    True -> "Loading older notes..."
+    False -> "Load More"
+  }
+  let loading_flag = case is_loading_older {
+    True -> Some(True)
+    False -> None
+  }
   let btn =
     Button(
       base: node.empty_base(),
-      label: "Load More",
+      label: label,
       action: action.new("load-more"),
       variant: Some(ButtonSecondary),
       size: Some(SizeMd),
       icon: Some("arrow-down"),
       icon_position: None,
-      disabled: None,
-      loading: None,
+      disabled: loading_flag,
+      loading: loading_flag,
     )
 
   schema.box()
@@ -215,14 +254,26 @@ fn render_thread_view(model: Model, note_id: String) -> Node {
 
   let zap_panel = render_zap_panel(model)
 
-  let body_nodes = case model.active_thread(model) {
-    None -> [
+  let body_nodes = case model.active_thread(model), model.is_loading_thread {
+    None, True -> [
+      StatusIndicator(
+        base: node.empty_base(),
+        status: StatusConnecting,
+        label: Some("Loading thread..."),
+        pulse: Some(True),
+      ),
+      note_card.render_empty_timeline(
+        "Loading conversation",
+        "Fetching the requested note and replies from relays...",
+      ),
+    ]
+    None, False -> [
       note_card.render_empty_timeline(
         "Note not found",
         "The requested conversation note has not arrived from relays yet.",
       ),
     ]
-    Some(thread_view) -> {
+    Some(thread_view), is_loading -> {
       let ancestor_cards =
         list.map(thread_view.ancestors, fn(anc) {
           render_feed_note_card(model, anc, cfg)
@@ -230,6 +281,18 @@ fn render_thread_view(model: Model, note_id: String) -> Node {
 
       let focal_card = render_feed_note_card(model, thread_view.focal, cfg)
       let reply_composer = render_reply_composer(model, thread_view.focal.id)
+
+      let loading_nodes = case is_loading {
+        True -> [
+          StatusIndicator(
+            base: node.empty_base(),
+            status: StatusConnecting,
+            label: Some("Loading thread replies..."),
+            pulse: Some(True),
+          ),
+        ]
+        False -> []
+      }
 
       let reply_cards = case thread_view.replies {
         [] -> [
@@ -244,6 +307,7 @@ fn render_thread_view(model: Model, note_id: String) -> Node {
       list.flatten([
         ancestor_cards,
         [focal_card, schema.divider(), reply_composer],
+        loading_nodes,
         reply_cards,
       ])
     }
@@ -390,14 +454,40 @@ fn render_settings_view(model: Model) -> Node {
       disabled: None,
     )
 
-  let page_size_info =
-    schema.text(
-      "Page size: "
-      <> int.to_string(model.settings.page_size)
-      <> " notes per load",
-    )
+  let page_size_label =
+    schema.text("Notes per load")
     |> schema.text_variant(Caption)
     |> schema.text_tone(ToneMuted)
+
+  let page_size_input =
+    Input(
+      base: node.empty_base(),
+      name: "pageSize",
+      placeholder: Some("Notes per load (1-100)"),
+      value: Some(int.to_string(model.settings.page_size)),
+      input_type: Some(InputNumber),
+      accept: None,
+      clearable: None,
+      prefix_icon: None,
+      action_on_enter: Some(action.new("set-page-size")),
+      action_on_change: Some(action.new("set-page-size")),
+    )
+
+  let page_size_presets =
+    schema.box()
+    |> schema.row
+    |> schema.gap("xs")
+    |> schema.children([
+      page_size_preset_button(10, model.settings.page_size),
+      page_size_preset_button(20, model.settings.page_size),
+      page_size_preset_button(50, model.settings.page_size),
+    ])
+
+  let page_size_control =
+    schema.box()
+    |> schema.column
+    |> schema.gap("xs")
+    |> schema.children([page_size_label, page_size_input, page_size_presets])
 
   schema.card()
   |> schema.with_id("feed-settings")
@@ -409,8 +499,33 @@ fn render_settings_view(model: Model) -> Node {
     schema.box()
     |> schema.column
     |> schema.gap("md")
-    |> schema.children([replies_toggle, media_toggle, page_size_info]),
+    |> schema.children([replies_toggle, media_toggle, page_size_control]),
   ])
+}
+
+fn page_size_preset_button(size: Int, current_size: Int) -> Node {
+  let size_text = int.to_string(size)
+  let variant = case size == current_size {
+    True -> ButtonSecondary
+    False -> ButtonGhost
+  }
+  let act =
+    action.new("set-page-size")
+    |> action.with_payload(
+      dict.from_list([#("value", dynamic.string(size_text))]),
+    )
+
+  Button(
+    base: node.empty_base(),
+    label: size_text,
+    action: act,
+    variant: Some(variant),
+    size: Some(SizeSm),
+    icon: None,
+    icon_position: None,
+    disabled: None,
+    loading: None,
+  )
 }
 
 // -----------------------------------------------------------------------------
@@ -506,6 +621,36 @@ fn render_widget_view(model: Model) -> Node {
   |> schema.title("Recent Notes")
   |> schema.with_icon("message")
   |> schema.children([quick_composer, schema.list_view(list_items)])
+}
+
+// -----------------------------------------------------------------------------
+// 6. Compact View
+// -----------------------------------------------------------------------------
+
+fn render_compact_view(model: Model) -> Node {
+  let notes = model.filtered_timeline_notes(model)
+  let count = list.length(notes)
+  let latest = case notes {
+    [first, ..] -> first.content
+    [] ->
+      case model.is_syncing {
+        True -> "Connecting to relays..."
+        False -> "No notes yet"
+      }
+  }
+  let preview = case string.length(latest) > 30 {
+    True -> string.slice(latest, 0, 30) <> "..."
+    False -> latest
+  }
+
+  Metric(
+    base: node.empty_base(),
+    label: "Timeline Notes",
+    value: MetricString(int.to_string(count) <> " notes"),
+    subtext: Some(preview),
+    trend: None,
+  )
+  |> schema.with_id("feed-compact")
 }
 
 // -----------------------------------------------------------------------------
@@ -744,7 +889,14 @@ fn render_feed_note_card(model: Model, n: Note, cfg: NoteCardConfig) -> Node {
   let author_opt = dict.get(model.profiles, n.pubkey) |> option.from_result
   let reply_author_opt = resolve_reply_author_profile(model, n)
   let s = get_note_stats(model, n.id)
-  note_card.render_note_card(n, author_opt, reply_author_opt, s, cfg)
+  note_card.render_note_card_with_inline_images(
+    n,
+    author_opt,
+    reply_author_opt,
+    s,
+    cfg,
+    model.settings.show_inline_media,
+  )
 }
 
 fn resolve_reply_author_profile(

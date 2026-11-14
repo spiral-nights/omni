@@ -8,7 +8,7 @@ import omni/plugin_kit/local_store.{type StoreConfig, StoreConfig}
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema.{type Node}
 import plugin/notes/model.{type Model, encode_notebook, init, notebook_decoder}
-import plugin/notes/msg.{type Msg, SelectFolder, ShowSettings}
+import plugin/notes/msg.{type Msg, ShowSettings}
 import plugin/notes/update
 import plugin/notes/view
 

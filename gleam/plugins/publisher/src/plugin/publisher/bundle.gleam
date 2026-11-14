@@ -2,6 +2,7 @@
 
 import gleam/bit_array
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/string
 import omni/platform/webcrypto
 import omni/platform/zip
@@ -55,11 +56,118 @@ pub fn from_zip_bytes(bytes: BitArray) -> Result(Bundle, String) {
 
 /// Build a single-file HTML bundle.
 pub fn from_html(html: String, entry: String) -> Bundle {
-  let bytes = bit_array.from_string(html)
+  from_single_file_with_mime(html, entry, "text/html")
+}
+
+/// Build a single-file JavaScript bundle.
+pub fn from_js(js: String, entry: String) -> Bundle {
+  from_single_file_with_mime(js, entry, "application/javascript")
+}
+
+/// Build a single-file bundle from text content and a filename hint.
+pub fn from_single_file(content: String, filename: String) -> Bundle {
+  let clean = string.trim(filename)
+  let lower = string.lowercase(clean)
+  case string.ends_with(lower, ".js") {
+    True ->
+      from_js(content, case clean {
+        "" -> "index.js"
+        _ -> clean
+      })
+    False ->
+      case string.ends_with(lower, ".html") || string.ends_with(lower, ".htm") {
+        True ->
+          from_html(content, case clean {
+            "" -> "index.html"
+            _ -> clean
+          })
+        False -> {
+          let mime = blossom.detect_mime_type(clean).mime
+          from_single_file_with_mime(
+            content,
+            case clean {
+              "" -> "index.html"
+              _ -> clean
+            },
+            mime,
+          )
+        }
+      }
+  }
+}
+
+/// Build a bundle from raw bytes, supporting `.zip` archives as well as
+/// standalone `.html`, `.htm`, and `.js` single-file payloads.
+pub fn from_bytes_auto(
+  bytes: BitArray,
+  filename_hint: Option(String),
+) -> Result(Bundle, String) {
+  case bytes {
+    <<0x50, 0x4b, 0x03, 0x04, _:bits>> -> from_zip_bytes(bytes)
+    _ ->
+      case from_zip_bytes(bytes) {
+        Ok(b) -> Ok(b)
+        Error(_) ->
+          case bit_array.to_string(bytes) {
+            Error(Nil) ->
+              Error(
+                "Unsupported binary file. Upload a .zip, .html, .htm, or .js file.",
+              )
+            Ok(text) -> {
+              let entry = infer_single_file_entry(text, filename_hint)
+              Ok(from_single_file(text, entry))
+            }
+          }
+      }
+  }
+}
+
+fn infer_single_file_entry(
+  text: String,
+  filename_hint: Option(String),
+) -> String {
+  case filename_hint {
+    Some(hint) -> {
+      let lower = string.lowercase(string.trim(hint))
+      case string.ends_with(lower, ".js") {
+        True -> "index.js"
+        False ->
+          case
+            string.ends_with(lower, ".html") || string.ends_with(lower, ".htm")
+          {
+            True -> "index.html"
+            False -> sniff_text_entry(text)
+          }
+      }
+    }
+    None -> sniff_text_entry(text)
+  }
+}
+
+fn sniff_text_entry(text: String) -> String {
+  let trimmed = string.lowercase(string.trim_start(text))
+  case
+    string.starts_with(trimmed, "<!doctype")
+    || string.starts_with(trimmed, "<html")
+    || string.starts_with(trimmed, "<head")
+    || string.starts_with(trimmed, "<body")
+    || string.starts_with(trimmed, "<")
+  {
+    True -> "index.html"
+    False -> "index.js"
+  }
+}
+
+fn from_single_file_with_mime(
+  content: String,
+  entry: String,
+  mime: String,
+) -> Bundle {
+  let bytes = bit_array.from_string(content)
   Bundle(entry: entry, files: [
     BundleFile(
       path: entry,
-      mime: "text/html",
+      mime: mime,
       sha256: webcrypto.sha256_hex_bits(bytes),
       size: bit_array_byte_size(bytes),
       bytes: bytes,

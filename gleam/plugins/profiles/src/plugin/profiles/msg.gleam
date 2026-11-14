@@ -6,9 +6,13 @@ import plugin/profiles/model.{type ProfilesView}
 /// All messages handled by `plugin/profiles/update.update`.
 pub type Msg {
   SelectView(ProfilesView)
+  ViewMyProfile
   SelectProfile(pubkey: String)
   SetSearchQuery(String)
   ToggleFollow(pubkey: String)
+  LikeNote(note_id: String)
+  RepostNote(note_id: String)
+  ZapNote(note_id: String)
   SetMetadataName(String)
   SetMetadataAbout(String)
   SetMetadataPicture(String)

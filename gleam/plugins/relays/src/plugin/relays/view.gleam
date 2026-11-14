@@ -108,9 +108,24 @@ fn view_main(model: Model) -> Node {
     False -> "Publish NIP-65 Relay List"
   }
 
+  let refresh_btn = case
+    schema.button("Refresh Pool", schema.new_action("refresh-relays"))
+    |> schema.with_icon("refresh")
+  {
+    node.Button(..) as b -> node.Button(..b, variant: Some(ButtonSecondary))
+    other -> other
+  }
+
   let nip65_btn =
     schema.button(nip65_label, schema.new_action("publish-nip65"))
     |> schema.with_icon("globe")
+
+  let actions_row =
+    schema.box()
+    |> schema.row()
+    |> schema.align(AlignCenter)
+    |> schema.gap("sm")
+    |> schema.children([refresh_btn, nip65_btn])
 
   let metrics_bar =
     schema.box()
@@ -121,7 +136,7 @@ fn view_main(model: Model) -> Node {
     |> schema.children([
       pool_metric,
       events_metric,
-      nip65_btn,
+      actions_row,
     ])
 
   let url_input = case
@@ -199,7 +214,7 @@ fn view_main(model: Model) -> Node {
 
   let all_children =
     list.flatten([
-      [metrics_bar, add_bar],
+      [metrics_bar, add_bar, preset_hint, preset_bar],
       error_nodes,
       relay_cards,
     ])

@@ -1,25 +1,28 @@
 //// Pure Elm-style state transitions and action decoder for `plugin_notes`.
 
 import gleam/int
+import gleam/javascript/promise
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import omni/nostr/event.{UnsignedEvent}
 import omni/nostr/kind
-import omni/plugin_kit/app.{type Effect, Publish, PublishEncrypted}
+import omni/platform/clock
+import omni/plugin_kit/app.{type Effect, Async, Publish, PublishEncrypted}
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/ui/sanitize
 import plugin/notes/model.{
-  type Model, type NoteDoc, Model, NoteDoc, active_note, encode_note_doc,
-  note_doc_decoder, notes_d_tag,
+  type Model, type NoteDoc, Model, NoteDoc, StatusOffline, StatusSaved,
+  StatusSaving, active_note, encode_note_doc, note_doc_decoder, notes_d_tag,
 }
 import plugin/notes/msg.{
-  type Msg, AddTag, CreateNote, DeleteNote, IngestRemoteDoc, RemoveTag,
-  SaveActiveNote, SelectFolder, SelectNote, SetDraftContent, SetDraftTitle,
-  SetPubkey, SetSearchQuery, ShowSettings, ToggleArchive, ToggleEncryptedSync,
-  ToggleStar,
+  type Msg, AddDraftTag, AddTag, AutoSaveTick, CreateNote, DeleteNote,
+  IngestRemoteDoc, InsertMarkdown, RemoveTag, SaveActiveNote, SelectFolder,
+  SelectNote, SetDraftContent, SetDraftTag, SetDraftTitle, SetOnline, SetPubkey,
+  SetSearchQuery, ShowSettings, ToggleArchive, ToggleEncryptedSync,
+  TogglePreview, ToggleStar,
 }
 
 /// Apply a `Msg` to `model`, returning the updated `Model` and resulting effects.
@@ -63,6 +66,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
           draft_content: new_note.content,
           draft_tag: "",
           dirty: False,
+          preview_mode: False,
+          save_status: saved_status(synced_model.online),
           next_id: synced_model.next_id + 1,
         )
       #(next_model, publish_note(next_model, new_note))
@@ -79,6 +84,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
             draft_content: found.content,
             draft_tag: "",
             dirty: False,
+            save_status: saved_status(synced_model.online),
           ),
           commit_effects,
         )
@@ -150,52 +156,37 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       publish_updated_note(model, updated_notes, target_id)
     }
 
-    SetDraftTitle(title) -> #(
-      Model(..model, draft_title: title, dirty: True),
-      [],
-    )
-
-    SetDraftContent(content) -> #(
-      Model(..model, draft_content: content, dirty: True),
-      [],
-    )
-
-    AddTag(raw_tag) -> {
-      let clean_tag =
-        raw_tag
-        |> string.trim
-        |> string.lowercase
-        |> strip_leading_hash
-      case clean_tag == "" {
-        True -> #(model, [])
-        False ->
-          case model.active_note_id {
-            None -> #(Model(..model, draft_tag: clean_tag), [])
-            Some(active_id) -> {
-              let ts = next_timestamp(model)
-              let updated_notes =
-                list.map(model.notes, fn(n) {
-                  case n.id == active_id {
-                    False -> n
-                    True ->
-                      case list.contains(n.tags, clean_tag) {
-                        True -> n
-                        False ->
-                          NoteDoc(
-                            ..n,
-                            tags: list.append(n.tags, [clean_tag]),
-                            updated_at: ts,
-                          )
-                      }
-                  }
-                })
-              let next_model =
-                Model(..model, notes: updated_notes, draft_tag: "")
-              publish_updated_note(next_model, updated_notes, active_id)
-            }
-          }
-      }
+    SetDraftTitle(title) -> {
+      let next_rev = model.save_revision + 1
+      let next_model =
+        Model(
+          ..model,
+          draft_title: title,
+          dirty: True,
+          save_revision: next_rev,
+          save_status: saving_status(model.online),
+        )
+      #(next_model, [debounced_autosave_effect(next_rev)])
     }
+
+    SetDraftContent(content) -> {
+      let next_rev = model.save_revision + 1
+      let next_model =
+        Model(
+          ..model,
+          draft_content: content,
+          dirty: True,
+          save_revision: next_rev,
+          save_status: saving_status(model.online),
+        )
+      #(next_model, [debounced_autosave_effect(next_rev)])
+    }
+
+    SetDraftTag(tag) -> #(Model(..model, draft_tag: tag), [])
+
+    AddTag(raw_tag) -> apply_add_tag(model, raw_tag)
+
+    AddDraftTag -> apply_add_tag(model, model.draft_tag)
 
     RemoveTag(raw_tag) -> {
       let clean_tag =
@@ -240,26 +231,47 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       }
     }
 
-    SaveActiveNote -> {
-      let next_model = save_active_note(model)
-      case active_note(next_model) {
-        None -> #(next_model, [])
-        Some(note) -> {
-          let draft =
-            UnsignedEvent(
-              pubkey: None,
-              created_at: note.updated_at + 1,
-              kind: kind.AppData,
-              tags: [["d", notes_d_tag <> "/" <> note.id]],
-              content: encode_note_doc(note) |> json.to_string,
-            )
-          let effect = case next_model.sync_encrypted {
-            True -> PublishEncrypted(draft)
-            False -> Publish(draft)
+    SaveActiveNote -> save_and_publish_active(model)
+
+    AutoSaveTick(rev) ->
+      case rev == model.save_revision && model.dirty {
+        True -> save_and_publish_active(model)
+        False -> #(model, [])
+      }
+
+    SetOnline(is_online) ->
+      case is_online {
+        False -> #(
+          Model(..model, online: False, save_status: StatusOffline),
+          [],
+        )
+        True -> {
+          let online_model = Model(..model, online: True)
+          case online_model.dirty {
+            True -> save_and_publish_active(online_model)
+            False -> #(Model(..online_model, save_status: StatusSaved), [])
           }
-          #(next_model, [effect])
         }
       }
+
+    TogglePreview -> #(Model(..model, preview_mode: !model.preview_mode), [])
+
+    InsertMarkdown(snippet) -> {
+      let next_content = case model.draft_content {
+        "" -> snippet
+        existing -> existing <> snippet
+      }
+      let next_rev = model.save_revision + 1
+      let next_model =
+        Model(
+          ..model,
+          draft_content: next_content,
+          dirty: True,
+          preview_mode: False,
+          save_revision: next_rev,
+          save_status: saving_status(model.online),
+        )
+      #(next_model, [debounced_autosave_effect(next_rev)])
     }
 
     IngestRemoteDoc(raw) ->
@@ -270,9 +282,16 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
 
     ToggleEncryptedSync -> {
       let next_enc = !model.sync_encrypted
+      let ts = next_timestamp(model)
       let updated_notes =
-        list.map(model.notes, fn(n) { NoteDoc(..n, encrypted: next_enc) })
-      #(Model(..model, sync_encrypted: next_enc, notes: updated_notes), [])
+        list.map(model.notes, fn(n) {
+          NoteDoc(..n, encrypted: next_enc, updated_at: ts)
+        })
+      let next_model =
+        Model(..model, sync_encrypted: next_enc, notes: updated_notes)
+      let effects =
+        list.flat_map(updated_notes, fn(n) { publish_note(next_model, n) })
+      #(next_model, effects)
     }
   }
 }
@@ -334,6 +353,82 @@ fn tombstone_effects(model: Model, note_id: String) -> List(Effect(Msg)) {
   }
 }
 
+fn apply_add_tag(model: Model, raw_tag: String) -> #(Model, List(Effect(Msg))) {
+  let clean_tag =
+    raw_tag
+    |> string.trim
+    |> string.lowercase
+    |> strip_leading_hash
+  case clean_tag == "" {
+    True -> #(model, [])
+    False ->
+      case model.active_note_id {
+        None -> #(Model(..model, draft_tag: clean_tag), [])
+        Some(active_id) -> {
+          let ts = next_timestamp(model)
+          let updated_notes =
+            list.map(model.notes, fn(n) {
+              case n.id == active_id {
+                False -> n
+                True ->
+                  case list.contains(n.tags, clean_tag) {
+                    True -> n
+                    False ->
+                      NoteDoc(
+                        ..n,
+                        tags: list.append(n.tags, [clean_tag]),
+                        updated_at: ts,
+                      )
+                  }
+              }
+            })
+          let next_model = Model(..model, notes: updated_notes, draft_tag: "")
+          publish_updated_note(next_model, updated_notes, active_id)
+        }
+      }
+  }
+}
+
+fn save_and_publish_active(model: Model) -> #(Model, List(Effect(Msg))) {
+  let saved = save_active_note(model)
+  let next_model =
+    Model(
+      ..saved,
+      save_revision: model.save_revision + 1,
+      save_status: saved_status(model.online),
+    )
+  case next_model.online, active_note(next_model) {
+    True, Some(note) -> #(next_model, publish_note(next_model, note))
+    _, _ -> #(next_model, [])
+  }
+}
+
+fn saving_status(online: Bool) -> model.SaveStatus {
+  case online {
+    True -> StatusSaving
+    False -> StatusOffline
+  }
+}
+
+fn saved_status(online: Bool) -> model.SaveStatus {
+  case online {
+    True -> StatusSaved
+    False -> StatusOffline
+  }
+}
+
+fn debounced_autosave_effect(revision: Int) -> Effect(Msg) {
+  Async(fn(dispatch) {
+    let _ =
+      promise.wait(800)
+      |> promise.map(fn(_) {
+        dispatch(AutoSaveTick(revision))
+        Nil
+      })
+    Nil
+  })
+}
+
 fn commit_dirty_active_note(model: Model) -> Model {
   case model.dirty {
     True -> save_active_note(model)
@@ -377,11 +472,16 @@ fn save_active_note(model: Model) -> Model {
 }
 
 fn next_timestamp(model: Model) -> Int {
+  next_timestamp_with_clock(model, clock.system())
+}
+
+/// Compute the next monotonically non-decreasing Unix timestamp (seconds)
+/// floored by `clk.now_ms() / 1000`.
+pub fn next_timestamp_with_clock(model: Model, clk: clock.Clock) -> Int {
+  let now = clk.now_ms() / 1000
   let max_ts =
-    list.fold(model.notes, 1_700_000_000, fn(acc, n) {
-      int.max(acc, n.updated_at)
-    })
-  max_ts + 1
+    list.fold(model.notes, 0, fn(acc, n) { int.max(acc, n.updated_at) })
+  int.max(now, max_ts + 1)
 }
 
 fn strip_leading_hash(s: String) -> String {
@@ -432,10 +532,31 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
         None -> None
       }
 
+    "set_draft_tag" | "set-draft-tag" | "draft_tag" ->
+      case extract_value(act, "tag") {
+        Some(v) -> Some(SetDraftTag(v))
+        None -> None
+      }
+
     "add_tag" | "add-tag" ->
       case extract_value(act, "tag") {
         Some(tag) -> Some(AddTag(tag))
+        None -> Some(AddDraftTag)
+      }
+
+    "toggle_preview" | "toggle-preview" -> Some(TogglePreview)
+
+    "insert_markdown" | "insert-markdown" ->
+      case extract_value(act, "snippet") {
+        Some(s) -> Some(InsertMarkdown(s))
         None -> None
+      }
+
+    "set_online" | "set-online" ->
+      case schema.payload_string(act, "online") {
+        Some("false") | Some("0") -> Some(SetOnline(False))
+        Some("true") | Some("1") -> Some(SetOnline(True))
+        _ -> None
       }
 
     "remove_tag" | "remove-tag" ->
@@ -487,7 +608,7 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
           }
         Some("tag") | Some("draft_tag") ->
           case extract_value(act, "tag") {
-            Some(t) -> Some(AddTag(t))
+            Some(t) -> Some(SetDraftTag(t))
             None -> None
           }
         _ -> None

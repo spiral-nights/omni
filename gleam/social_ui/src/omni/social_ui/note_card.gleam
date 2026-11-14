@@ -272,13 +272,26 @@ fn action_button(
 }
 
 /// Render a complete social note card (`Card` primitive) with optional reply badge,
-/// author header, body text, and interaction bar.
+/// author header, body text, and interaction bar, with inline image rendering enabled.
 pub fn render_note_card(
   n: Note,
   author: Option(Profile),
   reply_author: Option(Profile),
   s: NoteStats,
   config: NoteCardConfig,
+) -> Node {
+  render_note_card_with_inline_images(n, author, reply_author, s, config, True)
+}
+
+/// Render a complete social note card (`Card` primitive) with configurable
+/// inline image rendering (`show_inline_images`).
+pub fn render_note_card_with_inline_images(
+  n: Note,
+  author: Option(Profile),
+  reply_author: Option(Profile),
+  s: NoteStats,
+  config: NoteCardConfig,
+  show_inline_images: Bool,
 ) -> Node {
   let open_action = case config.on_open_note {
     Some(mk) -> Some(mk(n.id))
@@ -295,7 +308,7 @@ pub fn render_note_card(
   let body_base =
     builder.text(n.content)
     |> builder.text_variant(Body)
-    |> builder.with_inline_images(True)
+    |> builder.with_inline_images(show_inline_images)
     |> builder.with_style(StyleRaw(
       "margin-top: 3px; margin-bottom: 4px; cursor: pointer;",
     ))

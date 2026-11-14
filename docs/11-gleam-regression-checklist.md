@@ -82,47 +82,47 @@
 ## E. Per-Plugin Functional Regressions
 
 ### E1. `feed` (`gleam/plugins/feed` & `gleam/social_ui`)
-- [ ] **E1.1** Restore `ViewCompact` rendering (currently aliased to `ViewWidget`).
-- [ ] **E1.2** Wire `show_inline_media` setting into `NoteCardConfig` (`note_card.gleam` currently hardcodes `with_inline_images(True)`).
-- [ ] **E1.3** Add an editable control for `page_size` in `render_settings_view` (currently static `Caption`).
-- [ ] **E1.4** Allow locally un-toggling `LikeNote` / `RepostNote` when already liked/reposted.
-- [ ] **E1.5** Restore relay syncing / loading older notes / thread loading indicators.
+- [x] **E1.1** Restore `ViewCompact` rendering (currently aliased to `ViewWidget`).
+- [x] **E1.2** Wire `show_inline_media` setting into `NoteCardConfig` (`note_card.gleam` currently hardcodes `with_inline_images(True)`).
+- [x] **E1.3** Add an editable control for `page_size` in `render_settings_view` (currently static `Caption`).
+- [x] **E1.4** Allow locally un-toggling `LikeNote` / `RepostNote` when already liked/reposted.
+- [x] **E1.5** Restore relay syncing / loading older notes / thread loading indicators.
 
 ### E2. `notes` (`gleam/plugins/notes`)
-- [ ] **E2.1** Fix `"Add Tag"` button (`view.gleam` / `update.gleam`): add `action_on_change` to the tag `Input` (or rely on `B3` form collection) so `draft_tag` is populated when clicking `"Add Tag"`.
-- [ ] **E2.2** Decide on rich-text WYSIWYG toolbar vs plain `Textarea` (or Markdown preview/toolbar).
-- [ ] **E2.3** Restore debounced auto-save & `Saved / Saving... / Offline` status indicator.
-- [ ] **E2.4** Re-publish notes when `ToggleEncryptedSync` is toggled.
-- [ ] **E2.5** Use wall-clock timestamps (`clock.system().now_ms() / 1000`) instead of monotonic `1_700_000_000` counter in `next_timestamp`.
+- [x] **E2.1** Fix `"Add Tag"` button (`view.gleam` / `update.gleam`): add `action_on_change` to the tag `Input` (or rely on `B3` form collection) so `draft_tag` is populated when clicking `"Add Tag"`.
+- [x] **E2.2** Decide on rich-text WYSIWYG toolbar vs plain `Textarea` (or Markdown preview/toolbar).
+- [x] **E2.3** Restore debounced auto-save & `Saved / Saving... / Offline` status indicator.
+- [x] **E2.4** Re-publish notes when `ToggleEncryptedSync` is toggled.
+- [x] **E2.5** Use wall-clock timestamps (`clock.system().now_ms() / 1000`) instead of monotonic `1_700_000_000` counter in `next_timestamp`.
 
 ### E3. `profiles` (`gleam/plugins/profiles`)
-- [ ] **E3.1** Remove hardcoded fake `my_pubkey` (`a1a1...`) in non-demo `model.init`.
-- [ ] **E3.2** Restore `compact` and `widget` views in `view.gleam`.
-- [ ] **E3.3** Restore `"My Profile"` top-level tab (`Profile | Edit | Keys | Following`).
-- [ ] **E3.4** Restore `"Switch Account"` and `"Generate New Keypair"` actions in `ViewKeys` (or link directly to Shell Identity settings).
-- [ ] **E3.5** Enable interactive `like` / `repost` / `zap` actions on profile note cards (`show_actions: True`).
-- [ ] **E3.6** Use wall-clock timestamp instead of `model.now_sec + 1` on `SaveMetadata`, and handle `nip05`/`lud16`/`website` in generic `"input" | "change"` fallback.
+- [x] **E3.1** Remove hardcoded fake `my_pubkey` (`a1a1...`) in non-demo `model.init`.
+- [x] **E3.2** Restore `compact` and `widget` views in `view.gleam`.
+- [x] **E3.3** Restore `"My Profile"` top-level tab (`Profile | Edit | Keys | Following`).
+- [x] **E3.4** Restore `"Switch Account"` and `"Generate New Keypair"` actions in `ViewKeys` (or link directly to Shell Identity settings).
+- [x] **E3.5** Enable interactive `like` / `repost` / `zap` actions on profile note cards (`show_actions: True`).
+- [x] **E3.6** Use wall-clock timestamp instead of `model.now_sec + 1` on `SaveMetadata`, and handle `nip05`/`lud16`/`website` in generic `"input" | "change"` fallback.
 
 ### E4. `checklist` (`gleam/plugins/checklist`)
-- [ ] **E4.1** Read `payload.title || payload.text || payload.taskText || payload.value` in `add-task` action handler instead of ignoring payload text.
-- [ ] **E4.2** Use wall-clock timestamp instead of `1_700_000_000 + model.next_id` in `AddTask`.
-- [ ] **E4.3** Verify NIP-78 `d` tag compatibility (`omni/tasks/v1` on `main` vs `omni/checklist/v1` on Gleam).
+- [x] **E4.1** Read `payload.title || payload.text || payload.taskText || payload.value` in `add-task` action handler instead of ignoring payload text.
+- [x] **E4.2** Use wall-clock timestamp instead of `1_700_000_000 + model.next_id` in `AddTask`.
+- [x] **E4.3** Verify NIP-78 `d` tag compatibility (`omni/tasks/v1` on `main` vs `omni/checklist/v1` on Gleam).
 
 ### E5. `timer` (`gleam/plugins/timer`)
-- [ ] **E5.1** Align default duration (15 min on `main` vs 25 min on Gleam) if unintended.
-- [ ] **E5.2** Handle `"shrink-timer"` and `"expand-timer"` actions and make the standard timer disk clickable to expand to focus mode.
-- [ ] **E5.3** Fix `"set-preset"` payload handling (`minutes` vs `preset`).
-- [ ] **E5.4** Allow `AdjustMinutes` to adjust `totalSeconds` and `remainingSeconds` without resetting a running/paused timer.
-- [ ] **E5.5** Exit `focus_mode` on `Reset` (matching `main`), and verify host `Tick` interval wiring.
+- [x] **E5.1** Align default duration (15 min on `main` vs 25 min on Gleam) if unintended.
+- [x] **E5.2** Handle `"shrink-timer"` and `"expand-timer"` actions and make the standard timer disk clickable to expand to focus mode.
+- [x] **E5.3** Fix `"set-preset"` payload handling (`minutes` vs `preset`).
+- [x] **E5.4** Allow `AdjustMinutes` to adjust `totalSeconds` and `remainingSeconds` without resetting a running/paused timer.
+- [x] **E5.5** Exit `focus_mode` on `Reset` (matching `main`), and verify host `Tick` interval wiring.
 
 ### E6. `relays` (`gleam/plugins/relays`)
-- [ ] **E6.1** Include `preset_bar` and `preset_hint` in `all_children` in `view.gleam` (currently dead code, so quick-add preset buttons are missing).
-- [ ] **E6.2** Add `local_store` persistence for configured relays (`omni_configured_relays`).
-- [ ] **E6.3** Restore `"Refresh Pool"` button / `"refresh-relays"` action and auto-prepend `wss://` to bare hostnames.
+- [x] **E6.1** Include `preset_bar` and `preset_hint` in `all_children` in `view.gleam` (currently dead code, so quick-add preset buttons are missing).
+- [x] **E6.2** Add `local_store` persistence for configured relays (`omni_configured_relays`).
+- [x] **E6.3** Restore `"Refresh Pool"` button / `"refresh-relays"` action and auto-prepend `wss://` to bare hostnames.
 
 ### E7. `publisher` (`gleam/plugins/publisher`)
-- [ ] **E7.1** Restore single-file inlined vs multi-file Blossom packaging mode toggle (`set-packaging-mode`) and `"Install Locally in Omni"` (`install-local`).
-- [ ] **E7.2** Restore arbitrary URL / `naddr1...` `"Fetch & Inspect"` (`fetch-url`) / `"Install from URL"` (`install-url`) and `.html`/`.htm`/`.js` single-file upload.
-- [ ] **E7.3** Add `"Query Relays"` (`kind: 35129`), `"Install / Update"` (`open-naddr`), and `"Update .zip"` (`prepare-update`) to the Published tab.
-- [ ] **E7.4** Fix widget `"Open Plugin Studio"` button (`view.gleam:46`) to navigate to studio instead of emitting `select-tab`.
-- [ ] **E7.5** Replace `let assert Ok(pk) = pubkey_parse(pubkey_hex)` in `publish_bundle` (`update.gleam:396`) with safe `Result` error handling.
+- [x] **E7.1** Restore single-file inlined vs multi-file Blossom packaging mode toggle (`set-packaging-mode`) and `"Install Locally in Omni"` (`install-local`).
+- [x] **E7.2** Restore arbitrary URL / `naddr1...` `"Fetch & Inspect"` (`fetch-url`) / `"Install from URL"` (`install-url`) and `.html`/`.htm`/`.js` single-file upload.
+- [x] **E7.3** Add `"Query Relays"` (`kind: 35129`), `"Install / Update"` (`open-naddr`), and `"Update .zip"` (`prepare-update`) to the Published tab.
+- [x] **E7.4** Fix widget `"Open Plugin Studio"` button (`view.gleam:46`) to navigate to studio instead of emitting `select-tab`.
+- [x] **E7.5** Replace `let assert Ok(pk) = pubkey_parse(pubkey_hex)` in `publish_bundle` (`update.gleam:396`) with safe `Result` error handling.

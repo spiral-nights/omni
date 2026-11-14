@@ -18,6 +18,13 @@ pub type NotebookFolder {
   FolderTag(String)
 }
 
+/// Sync/save status for the notebook editor.
+pub type SaveStatus {
+  StatusSaved
+  StatusSaving
+  StatusOffline
+}
+
 /// A single personal note document.
 pub type NoteDoc {
   NoteDoc(
@@ -47,6 +54,10 @@ pub type Model {
     next_id: Int,
     my_pubkey: Option(String),
     show_settings: Bool,
+    preview_mode: Bool,
+    save_status: SaveStatus,
+    save_revision: Int,
+    online: Bool,
   )
 }
 
@@ -80,6 +91,10 @@ pub fn init() -> Model {
     next_id: 2,
     my_pubkey: None,
     show_settings: False,
+    preview_mode: False,
+    save_status: StatusSaved,
+    save_revision: 0,
+    online: True,
   )
 }
 
@@ -100,6 +115,10 @@ pub fn init_with_notes(notes: List(NoteDoc)) -> Model {
         next_id: 1,
         my_pubkey: None,
         show_settings: False,
+        preview_mode: False,
+        save_status: StatusSaved,
+        save_revision: 0,
+        online: True,
       )
     [first, ..] ->
       Model(
@@ -115,6 +134,10 @@ pub fn init_with_notes(notes: List(NoteDoc)) -> Model {
         next_id: list.length(notes) + 1,
         my_pubkey: None,
         show_settings: False,
+        preview_mode: False,
+        save_status: StatusSaved,
+        save_revision: 0,
+        online: True,
       )
   }
 }
@@ -383,6 +406,10 @@ pub fn notebook_decoder() -> Decoder(Model) {
     next_id: computed_next_id,
     my_pubkey: None,
     show_settings: False,
+    preview_mode: False,
+    save_status: StatusSaved,
+    save_revision: 0,
+    online: True,
   ))
 }
 

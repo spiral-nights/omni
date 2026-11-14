@@ -159,3 +159,31 @@ pub fn reply_badge_and_empty_timeline_test() {
   string.contains(html, "Notes will stream in as relays respond.")
   |> should.be_true()
 }
+
+pub fn note_card_inline_images_toggle_test() {
+  let now = 1_700_000_000
+  let n =
+    Note(
+      id: note1_hex,
+      pubkey: alice_hex,
+      content: "Check this photo https://example.com/photo.png",
+      created_at: now - 60,
+      reply_to_id: None,
+      root_id: None,
+      reply_to_pubkey: None,
+      mentioned_pubkeys: [],
+      hashtags: [],
+    )
+  let s = stats.empty_stats(note1_hex)
+  let cfg = note_card.default_config(now)
+
+  let with_images =
+    note_card.render_note_card_with_inline_images(n, None, None, s, cfg, True)
+    |> render.render_to_string
+  string.contains(with_images, "<img") |> should.be_true()
+
+  let without_images =
+    note_card.render_note_card_with_inline_images(n, None, None, s, cfg, False)
+    |> render.render_to_string
+  string.contains(without_images, "<img") |> should.be_false()
+}

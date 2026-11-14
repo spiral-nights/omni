@@ -7,27 +7,39 @@ import gleam/option.{type Option, None, Some}
 import gleam/string
 import omni/nostr/event.{UnsignedEvent}
 import omni/nostr/kind
-import omni/plugin_kit/app.{type Effect, Publish}
+import omni/platform/clock
+import omni/plugin_kit/app.{type Effect, OpenUrl, Publish}
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/social/follows
 import omni/social/profile.{type Profile, Profile}
+import omni/social/stats
 import plugin/profiles/model.{
   type Model, type ProfilesView, MetadataDraft, Model, SignerMissing,
-  SignerReady, ViewDirectory, ViewFollowing, ViewKeys, ViewMetadata, ViewProfile,
-  draft_for, ingest_event, metadata_pubkey,
+  SignerReady, ViewCompact, ViewDirectory, ViewFollowing, ViewKeys, ViewMetadata,
+  ViewProfile, ViewWidget, draft_for, ingest_event, metadata_pubkey,
 }
 import plugin/profiles/msg.{
-  type Msg, IngestEvent, IngestEvents, RefreshSigner, SaveMetadata,
-  SelectProfile, SelectView, SetMetadataAbout, SetMetadataLud16, SetMetadataName,
-  SetMetadataNip05, SetMetadataPicture, SetMetadataWebsite, SetPubkey,
-  SetSearchQuery, ToggleFollow,
+  type Msg, IngestEvent, IngestEvents, LikeNote, RefreshSigner, RepostNote,
+  SaveMetadata, SelectProfile, SelectView, SetMetadataAbout, SetMetadataLud16,
+  SetMetadataName, SetMetadataNip05, SetMetadataPicture, SetMetadataWebsite,
+  SetPubkey, SetSearchQuery, ToggleFollow, ViewMyProfile, ZapNote,
 }
 
 /// Apply a `Msg` to `Model`, returning the updated `Model` and any side `Effect`s.
 pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
   case msg {
     SelectView(view) -> #(apply_view(model, view), [])
+
+    ViewMyProfile ->
+      case model.my_pubkey {
+        Some(pk) ->
+          case string.trim(pk) {
+            "" -> #(apply_view(model, ViewKeys), [])
+            cleaned -> #(apply_view(model, ViewProfile(cleaned)), [])
+          }
+        None -> #(apply_view(model, ViewKeys), [])
+      }
 
     SelectProfile(pubkey) -> {
       let cleaned = string.trim(pubkey)
@@ -66,6 +78,56 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
             )),
           ])
         }
+      }
+    }
+
+    LikeNote(note_id) -> {
+      let cleaned = string.trim(note_id)
+      let current =
+        dict.get(model.stats, cleaned)
+        |> option.from_result
+        |> option.unwrap(stats.empty_stats(cleaned))
+      case cleaned == "" || current.liked_by_me {
+        True -> #(model, [])
+        False -> #(
+          Model(..model, stats: stats.mark_liked(model.stats, cleaned)),
+          reaction_effect(model, cleaned, kind.Reaction, "+"),
+        )
+      }
+    }
+
+    RepostNote(note_id) -> {
+      let cleaned = string.trim(note_id)
+      let current =
+        dict.get(model.stats, cleaned)
+        |> option.from_result
+        |> option.unwrap(stats.empty_stats(cleaned))
+      case cleaned == "" || current.reposted_by_me {
+        True -> #(model, [])
+        False -> #(
+          Model(..model, stats: stats.mark_reposted(model.stats, cleaned)),
+          reaction_effect(model, cleaned, kind.Repost, ""),
+        )
+      }
+    }
+
+    ZapNote(note_id) -> {
+      let cleaned = string.trim(note_id)
+      case dict.get(model.notes, cleaned) {
+        Ok(target_note) ->
+          case dict.get(model.profiles, target_note.pubkey) {
+            Ok(author) ->
+              case author.lud16 {
+                Some(lud16) ->
+                  case string.trim(lud16) {
+                    "" -> #(model, [])
+                    addr -> #(model, [OpenUrl("lightning:" <> addr)])
+                  }
+                None -> #(model, [])
+              }
+            Error(Nil) -> #(model, [])
+          }
+        Error(Nil) -> #(model, [])
       }
     }
 
@@ -124,7 +186,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
     )
 
     SaveMetadata -> {
-      let next_model = save_metadata(model)
+      let now = clock.system().now_ms() / 1000
+      let next_model = save_metadata(model, now)
       let content = case metadata_pubkey(model) {
         Some(pubkey) ->
           case dict.get(next_model.profiles, pubkey) {
@@ -136,7 +199,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       #(next_model, [
         Publish(UnsignedEvent(
           pubkey: None,
-          created_at: model.now_sec + 1,
+          created_at: now,
           kind: kind.Metadata,
           tags: [],
           content: content,
@@ -206,6 +269,27 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
     "view-following" | "view_following" | "following" ->
       Some(SelectView(ViewFollowing))
 
+    "view-my-profile" | "view_my_profile" | "my-profile" | "my_profile" ->
+      Some(ViewMyProfile)
+
+    "like-note" | "like_note" ->
+      case extract_string(act, ["id", "noteId", "note_id"]) {
+        Some(id) if id != "" -> Some(LikeNote(id))
+        _ -> None
+      }
+
+    "repost-note" | "repost_note" ->
+      case extract_string(act, ["id", "noteId", "note_id"]) {
+        Some(id) if id != "" -> Some(RepostNote(id))
+        _ -> None
+      }
+
+    "zap-note" | "zap_note" ->
+      case extract_string(act, ["id", "noteId", "note_id"]) {
+        Some(id) if id != "" -> Some(ZapNote(id))
+        _ -> None
+      }
+
     "set-metadata-name" | "set_metadata_name" ->
       case extract_string(act, ["value", "name"]) {
         Some(value) -> Some(SetMetadataName(value))
@@ -256,10 +340,23 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
           Some(SetMetadataAbout(extract_value(act, "about")))
         Some("picture") | Some("metadata_picture") ->
           Some(SetMetadataPicture(extract_value(act, "picture")))
+        Some("nip05") | Some("metadata_nip05") ->
+          Some(SetMetadataNip05(extract_value(act, "nip05")))
+        Some("lud16") | Some("metadata_lud16") | Some("lud06") ->
+          Some(SetMetadataLud16(extract_value(act, "lud16")))
+        Some("website") | Some("metadata_website") | Some("url") ->
+          Some(SetMetadataWebsite(extract_value(act, "website")))
         Some("search") | Some("search_query") ->
           Some(SetSearchQuery(extract_value(act, "query")))
         _ -> None
       }
+
+    "switch-account"
+    | "switch_account"
+    | "generate-keypair"
+    | "generate_keypair" ->
+      // Identity switching and key generation are delegated to Shell Identity settings.
+      None
 
     "view_note" | "open-thread" | "view-thread" ->
       // Note opening is delegated to the host intent broker.
@@ -299,10 +396,14 @@ fn apply_view(model: Model, view: ProfilesView) -> Model {
       )
 
     ViewKeys -> Model(..model, view: ViewKeys)
+
+    ViewCompact -> Model(..model, view: ViewCompact)
+
+    ViewWidget -> Model(..model, view: ViewWidget)
   }
 }
 
-fn save_metadata(model: Model) -> Model {
+fn save_metadata(model: Model, created_at: Int) -> Model {
   case metadata_pubkey(model) {
     None -> model
     Some(pubkey) -> {
@@ -311,7 +412,6 @@ fn save_metadata(model: Model) -> Model {
         |> option.from_result
         |> option.unwrap(profile.empty(pubkey))
       let draft = model.metadata_draft
-      let created_at = model.now_sec + 1
       let updated =
         Profile(
           ..existing,
@@ -382,6 +482,8 @@ fn extract_view(act: Action) -> Option(ProfilesView) {
           }
         "metadata" | "edit" | "editor" -> Some(ViewMetadata)
         "keys" | "key-custody" | "custody" | "signer" -> Some(ViewKeys)
+        "compact" | "header-actions" -> Some(ViewCompact)
+        "widget" | "sidebar" -> Some(ViewWidget)
         _ -> None
       }
     None -> None
@@ -446,4 +548,25 @@ fn text_field(key: String, raw: String) -> Option(#(String, json.Json)) {
     Some(value) -> Some(#(key, json.string(value)))
     None -> None
   }
+}
+
+fn reaction_effect(
+  model: Model,
+  note_id: String,
+  ev_kind: kind.Kind,
+  content: String,
+) -> List(Effect(Msg)) {
+  let tags = case dict.get(model.notes, note_id) {
+    Ok(target) -> [["e", note_id], ["p", target.pubkey]]
+    Error(Nil) -> [["e", note_id]]
+  }
+  [
+    Publish(UnsignedEvent(
+      pubkey: None,
+      created_at: clock.system().now_ms() / 1000,
+      kind: ev_kind,
+      tags: tags,
+      content: content,
+    )),
+  ]
 }

@@ -21,6 +21,7 @@ pub type Msg {
   UpdateRelayCounters(url: String, received: Int, sent: Int)
   ApplyRelayList(List(List(String)))
   PublishNip65
+  RefreshRelays
   DismissError
   SetViewMode(ViewMode)
 }

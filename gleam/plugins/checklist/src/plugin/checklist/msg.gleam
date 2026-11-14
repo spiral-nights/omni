@@ -5,6 +5,7 @@ import plugin/checklist/model.{type FilterTab, type TaskItem, type ViewMode}
 /// Exhaustive message type for the Checklist plugin.
 pub type Msg {
   AddTask
+  AddTaskWithTitle(String)
   ToggleTask(id: String)
   DeleteTask(id: String)
   ClearCompleted

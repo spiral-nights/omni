@@ -15,40 +15,17 @@ import plugin/checklist/model.{
   encode_tasks, tasks_decoder,
 }
 import plugin/checklist/msg.{
-  type Msg, AddTask, ClearCompleted, DeleteTask, IngestRemoteDoc, LoadTasks,
-  SetDefaultPriority, SetDraftTitle, SetFilter, SetViewMode, ToggleShowCompleted,
-  ToggleSyncNostr, ToggleTask,
+  type Msg, AddTask, AddTaskWithTitle, ClearCompleted, DeleteTask,
+  IngestRemoteDoc, LoadTasks, SetDefaultPriority, SetDraftTitle, SetFilter,
+  SetViewMode, ToggleShowCompleted, ToggleSyncNostr, ToggleTask,
 }
 
 /// Applies `msg` to `model` and returns the updated `Model` and resulting `Effect`s.
 pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
   case msg {
-    AddTask -> {
-      let trimmed = string.trim(model.draft_title)
-      case trimmed {
-        "" -> #(model, [])
-        non_empty -> {
-          let new_id = "task-" <> int.to_string(model.next_id)
-          let new_item =
-            TaskItem(
-              id: new_id,
-              title: non_empty,
-              completed: False,
-              created_at: 1_700_000_000 + model.next_id,
-              priority: model.settings.default_priority,
-            )
-          let next_tasks = list.append(model.tasks, [new_item])
-          let next_model =
-            Model(
-              ..model,
-              tasks: next_tasks,
-              draft_title: "",
-              next_id: model.next_id + 1,
-            )
-          #(next_model, tasks_publish_effects(next_model))
-        }
-      }
-    }
+    AddTask -> add_task_with_title(model, model.draft_title)
+
+    AddTaskWithTitle(title) -> add_task_with_title(model, title)
 
     ToggleTask(target_id) -> {
       let next_tasks =
@@ -137,6 +114,37 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
   }
 }
 
+fn add_task_with_title(
+  model: Model,
+  raw_title: String,
+) -> #(Model, List(Effect(Msg))) {
+  let trimmed = string.trim(raw_title)
+  case trimmed {
+    "" -> #(model, [])
+    non_empty -> {
+      let new_id = "task-" <> int.to_string(model.next_id)
+      let now_sec = clock.system().now_ms() / 1000
+      let new_item =
+        TaskItem(
+          id: new_id,
+          title: non_empty,
+          completed: False,
+          created_at: now_sec,
+          priority: model.settings.default_priority,
+        )
+      let next_tasks = list.append(model.tasks, [new_item])
+      let next_model =
+        Model(
+          ..model,
+          tasks: next_tasks,
+          draft_title: "",
+          next_id: model.next_id + 1,
+        )
+      #(next_model, tasks_publish_effects(next_model))
+    }
+  }
+}
+
 fn tasks_publish_effects(model: Model) -> List(Effect(Msg)) {
   case model.settings.sync_nostr {
     False -> []
@@ -158,7 +166,12 @@ fn tasks_publish_effects(model: Model) -> List(Effect(Msg)) {
 pub fn action_to_msg(act: Action) -> Option(Msg) {
   case act.name {
     "add-task" | "add_task" | "create_task" | "submit-task" | "submit_task" ->
-      Some(AddTask)
+      case
+        first_non_empty_payload(act, ["title", "text", "taskText", "value"])
+      {
+        Some(val) -> Some(AddTaskWithTitle(val))
+        None -> Some(AddTask)
+      }
 
     "set-draft-title" | "set_draft_title" | "input-task" ->
       case extract_title_payload(act) {
@@ -216,6 +229,20 @@ fn extract_id_payload(act: Action) -> Option(String) {
         None -> None
       }
   }
+}
+
+fn first_non_empty_payload(act: Action, keys: List(String)) -> Option(String) {
+  list.find_map(keys, fn(key) {
+    case schema.payload_string(act, key) {
+      Some(s) ->
+        case string.trim(s) {
+          "" -> Error(Nil)
+          _ -> Ok(s)
+        }
+      None -> Error(Nil)
+    }
+  })
+  |> option.from_result
 }
 
 fn extract_title_payload(act: Action) -> Option(String) {

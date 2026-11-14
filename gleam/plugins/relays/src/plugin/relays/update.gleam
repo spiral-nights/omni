@@ -18,8 +18,8 @@ import plugin/relays/model.{
 }
 import plugin/relays/msg.{
   type Msg, AddRelay, AddRelayUrl, ApplyRelayList, DismissError, PublishNip65,
-  ReconnectRelay, RemoveRelay, SeedRelays, SetDraftUrl, SetViewMode, ToggleRead,
-  ToggleWrite, UpdateRelayCounters, UpdateRelayState,
+  ReconnectRelay, RefreshRelays, RemoveRelay, SeedRelays, SetDraftUrl,
+  SetViewMode, ToggleRead, ToggleWrite, UpdateRelayCounters, UpdateRelayState,
 }
 
 /// Pure Elm-style state update function for `plugin_relays`.
@@ -138,6 +138,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       )),
     ])
 
+    RefreshRelays -> {
+      let updated =
+        list.map(model.relays, fn(r) { RelayEntry(..r, state: StateConnecting) })
+      let effects =
+        list.map(model.relays, fn(r) { Relay(rc.ReconnectRelay(r.url)) })
+      #(Model(..model, relays: updated, error_banner: None), effects)
+    }
+
     DismissError -> #(Model(..model, error_banner: None), [])
 
     SetViewMode(mode) -> #(Model(..model, view_mode: mode), [])
@@ -152,8 +160,8 @@ fn scope_effects(relays: List(RelayEntry), url: String) -> List(Effect(Msg)) {
 }
 
 fn add_relay_url(model: Model, raw_url: String) -> #(Model, List(Effect(Msg))) {
-  let raw = string.trim(raw_url)
-  case relay_url.parse(raw) {
+  let normalized_input = normalize_input_url(raw_url)
+  case relay_url.parse(normalized_input) {
     Error(Nil) -> #(
       Model(
         ..model,
@@ -256,6 +264,8 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
 
     "publish-nip65" | "publish_nip65" -> Some(PublishNip65)
 
+    "refresh-relays" | "refresh_relays" -> Some(RefreshRelays)
+
     "dismiss-error" | "dismiss_error" -> Some(DismissError)
 
     "set-view-mode" | "set_view_mode" ->
@@ -289,6 +299,18 @@ fn parse_connection_state(raw: String) -> RelayConnectionState {
     "connecting" -> StateConnecting
     "disconnected" | "offline" -> StateDisconnected
     other -> StateError(other)
+  }
+}
+
+fn normalize_input_url(raw: String) -> String {
+  let trimmed = string.trim(raw)
+  case trimmed {
+    "" -> ""
+    _ ->
+      case string.contains(trimmed, "://") {
+        True -> trimmed
+        False -> "wss://" <> trimmed
+      }
   }
 }
 

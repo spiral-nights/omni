@@ -59,7 +59,7 @@ fn render_standard(model: Model) -> Node {
         schema.text("Focus Timer"),
         schema.icon_button("external", action.new("toggle-focus")),
       ]),
-    render_disk(model, 260),
+    render_disk(model, 260) |> schema.action(action.new("expand-timer")),
     schema.text(status_label(model.status)),
     render_fine_adjust(),
     render_presets(model),
@@ -80,7 +80,7 @@ fn render_focus(model: Model) -> Node {
     "padding: 32px; min-height: 420px; align-items: center; justify-content: center;",
   ))
   |> schema.children([
-    render_disk(model, 420) |> schema.action(action.new("toggle-focus")),
+    render_disk(model, 420) |> schema.action(action.new("shrink-timer")),
     schema.text(status_label(model.status)),
     case model.status {
       Completed -> schema.badge("Time is up")

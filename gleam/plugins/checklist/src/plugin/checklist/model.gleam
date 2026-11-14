@@ -80,6 +80,14 @@ pub type Model {
 /// Default NIP-78 addressable document d-tag for checklist synchronization.
 pub const checklist_d_tag = "omni/checklist/v1"
 
+/// Legacy NIP-78 addressable document d-tag used by the TypeScript tasks plugin on `main`.
+pub const legacy_tasks_d_tag = "omni/tasks/v1"
+
+/// Returns `True` if `d_tag` matches either the current checklist d-tag or legacy tasks d-tag.
+pub fn is_checklist_d_tag(d_tag: String) -> Bool {
+  d_tag == checklist_d_tag || d_tag == legacy_tasks_d_tag
+}
+
 /// Default starter tasks when no tasks have been saved yet.
 pub fn default_tasks() -> List(TaskItem) {
   [
@@ -323,6 +331,18 @@ pub fn checklist_doc_spec() -> DocSpec(List(TaskItem)) {
   DocSpec(
     kind: kind.AppData,
     d_tag: checklist_d_tag,
+    encrypted: False,
+    default: default_tasks(),
+    encode: encode_tasks,
+    decoder: tasks_decoder(),
+  )
+}
+
+/// Legacy NIP-78 document specification (`kind: 30078`, `d: "omni/tasks/v1"`) for reading/migrating `main` tasks.
+pub fn legacy_tasks_doc_spec() -> DocSpec(List(TaskItem)) {
+  DocSpec(
+    kind: kind.AppData,
+    d_tag: legacy_tasks_d_tag,
     encrypted: False,
     default: default_tasks(),
     encode: encode_tasks,

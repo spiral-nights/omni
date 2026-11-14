@@ -1,9 +1,12 @@
 //// Domain model and NIP-65 relay list helpers for `plugin_relays`.
 
+import gleam/dynamic/decode
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None}
 import gleam/string
 import omni/nostr/relay_url
+import omni/plugin_kit/local_store.{type StoreConfig, StoreConfig}
 
 /// Connection lifecycle state for a Nostr relay.
 pub type RelayConnectionState {
@@ -41,6 +44,20 @@ pub type Model {
     error_banner: Option(String),
     view_mode: ViewMode,
     syncing_nip65: Bool,
+  )
+}
+
+/// Storage key under which configured relay URLs are persisted.
+pub const storage_key_configured_relays = "omni_configured_relays"
+
+/// Versioned `local_store.StoreConfig` for persisting configured relay URLs.
+pub fn relays_store_config() -> StoreConfig(List(String)) {
+  StoreConfig(
+    key: storage_key_configured_relays,
+    version: 1,
+    encode: fn(urls: List(String)) { json.array(urls, json.string) },
+    decoder: decode.list(of: decode.string),
+    default: default_bootstrap_urls,
   )
 }
 

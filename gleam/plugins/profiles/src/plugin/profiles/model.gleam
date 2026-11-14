@@ -18,6 +18,7 @@ import omni/social/follows.{type Follows}
 import omni/social/note.{type Note, Note}
 import omni/social/profile.{type Profile, Profile}
 import omni/social/profile_cache
+import omni/social/stats.{type NoteStats}
 
 /// Default local identity used by the seeded in-memory profile directory.
 pub const my_pubkey_hex =
@@ -38,6 +39,8 @@ pub type ProfilesView {
   ViewProfile(pubkey: String)
   ViewMetadata
   ViewKeys
+  ViewCompact
+  ViewWidget
 }
 
 /// Availability of the standard NIP-07 signer.
@@ -65,6 +68,7 @@ pub type Model {
     view: ProfilesView,
     profiles: Dict(String, Profile),
     notes: Dict(String, Note),
+    stats: Dict(String, NoteStats),
     follows: Follows,
     my_pubkey: Option(String),
     selected_pubkey: Option(String),
@@ -87,6 +91,8 @@ pub fn view_from_route(r: Route) -> ProfilesView {
     "following" | "follows" -> ViewFollowing
     "metadata" | "edit" | "editor" -> ViewMetadata
     "keys" | "key-custody" | "custody" | "signer" | "settings" -> ViewKeys
+    "compact" | "header-actions" -> ViewCompact
+    "widget" | "sidebar" -> ViewWidget
     _ -> ViewDirectory
   }
 }
@@ -103,7 +109,14 @@ pub fn init(initial_route: Route) -> Model {
     True -> seed_notes()
     False -> dict.new()
   }
-  let my_pubkey = Some(my_pubkey_hex)
+  let my_pubkey = case demo {
+    True -> Some(my_pubkey_hex)
+    False -> None
+  }
+  let follows_pubkey = case demo {
+    True -> my_pubkey_hex
+    False -> ""
+  }
   let selected_pubkey = case view {
     ViewProfile(pk) -> Some(pk)
     _ -> None
@@ -117,7 +130,8 @@ pub fn init(initial_route: Route) -> Model {
     view: view,
     profiles: profiles,
     notes: notes,
-    follows: follows.empty(my_pubkey_hex),
+    stats: dict.new(),
+    follows: follows.empty(follows_pubkey),
     my_pubkey: my_pubkey,
     selected_pubkey: selected_pubkey,
     search_query: "",
@@ -420,6 +434,7 @@ pub fn ingest_event(model: Model, ev: Event) -> Model {
     True -> ev.created_at
     False -> model.now_sec
   }
+  let next_stats = stats.apply_event(model.stats, ev, model.my_pubkey)
 
   case ev.kind {
     kind.Metadata ->
@@ -428,15 +443,17 @@ pub fn ingest_event(model: Model, ev: Event) -> Model {
           Model(
             ..model,
             profiles: upsert_profile(model.profiles, incoming),
+            stats: next_stats,
             now_sec: next_now,
           )
-        Error(_) -> Model(..model, now_sec: next_now)
+        Error(_) -> Model(..model, stats: next_stats, now_sec: next_now)
       }
     kind.Note -> {
       let incoming = note.from_event(ev)
       Model(
         ..model,
         notes: dict.insert(model.notes, incoming.id, incoming),
+        stats: next_stats,
         now_sec: next_now,
       )
     }
@@ -460,10 +477,11 @@ pub fn ingest_event(model: Model, ev: Event) -> Model {
         ..model,
         follows: next_follows,
         my_pubkey: next_my_pubkey,
+        stats: next_stats,
         now_sec: next_now,
       )
     }
-    _ -> Model(..model, now_sec: next_now)
+    _ -> Model(..model, stats: next_stats, now_sec: next_now)
   }
 }
 

@@ -20,15 +20,16 @@ import omni/social/profile.{type Profile}
 import omni/social/stats.{type NoteStats, NoteStats}
 import plugin/feed/model.{
   type FeedTab, type FeedView, type Model, FeedSettings, Model, TabFollowing,
-  TabGlobal, TabReplies, ViewSearch, ViewSettings, ViewThread, ViewTimeline,
-  ViewWidget,
+  TabGlobal, TabReplies, ViewCompact, ViewSearch, ViewSettings, ViewThread,
+  ViewTimeline, ViewWidget,
 }
 import plugin/feed/msg.{
   type Msg, CancelZap, IngestEvent, IngestEvents, LikeNote, LoadMore,
   NavigateBack, OpenThread, PayInvoice, PublishNote, PublishReply, RepostNote,
   SelectTab, SelectView, SendZap, SetComposerDraft, SetComposerDraftAndPublish,
-  SetReplyDraft, SetSearchQuery, SetZapAmount, SetZapComment, StartReply,
-  StartZap, SubmitSearch, ToggleInlineMedia, ToggleShowReplies, ZapInvoiceResult,
+  SetPageSize, SetReplyDraft, SetSearchQuery, SetZapAmount, SetZapComment,
+  StartReply, StartZap, SubmitSearch, ToggleInlineMedia, ToggleShowReplies,
+  ZapInvoiceResult,
 }
 import plugin/feed/zap
 
@@ -40,7 +41,13 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
       [],
     )
 
-    SelectView(view) -> #(Model(..model, view: view), [])
+    SelectView(view) -> {
+      let loading_thread = case view {
+        ViewThread(_) -> True
+        _ -> False
+      }
+      #(Model(..model, view: view, is_loading_thread: loading_thread), [])
+    }
 
     OpenThread(note_id) -> {
       let cleaned = string.trim(note_id)
@@ -51,13 +58,22 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
             ..model,
             view: ViewThread(note_id: cleaned),
             replying_to: Some(cleaned),
+            is_loading_thread: True,
           ),
           [FetchThread(cleaned)],
         )
       }
     }
 
-    NavigateBack -> #(Model(..model, view: ViewTimeline, replying_to: None), [])
+    NavigateBack -> #(
+      Model(
+        ..model,
+        view: ViewTimeline,
+        replying_to: None,
+        is_loading_thread: False,
+      ),
+      [],
+    )
 
     SetComposerDraft(draft) -> #(Model(..model, composer_draft: draft), [])
 
@@ -86,7 +102,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
 
     LikeNote(note_id) ->
       case stats_for(model, note_id).liked_by_me {
-        True -> #(model, [])
+        True -> #(Model(..model, stats: unmark_liked(model.stats, note_id)), [])
         False -> #(
           Model(..model, stats: stats.mark_liked(model.stats, note_id)),
           reaction_effect(model, note_id, kind.Reaction, "+"),
@@ -95,7 +111,10 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
 
     RepostNote(note_id) ->
       case stats_for(model, note_id).reposted_by_me {
-        True -> #(model, [])
+        True -> #(
+          Model(..model, stats: unmark_reposted(model.stats, note_id)),
+          [],
+        )
         False -> #(
           Model(..model, stats: stats.mark_reposted(model.stats, note_id)),
           reaction_effect(model, note_id, kind.Repost, ""),
@@ -135,14 +154,13 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
     }
 
     LoadMore -> {
-      let next_model =
-        Model(
-          ..model,
-          visible_limit: model.visible_limit + model.settings.page_size,
-        )
+      let next_limit = model.visible_limit + model.settings.page_size
       case oldest_note_time(model) {
-        Some(until) -> #(next_model, [FetchUntil(until - 1)])
-        None -> #(next_model, [])
+        Some(until) -> #(
+          Model(..model, visible_limit: next_limit, is_loading_older: True),
+          [FetchUntil(until - 1)],
+        )
+        None -> #(Model(..model, visible_limit: next_limit), [])
       }
     }
 
@@ -159,6 +177,16 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
         FeedSettings(..current, show_inline_media: !current.show_inline_media)
       #(Model(..model, settings: next_settings), [])
     }
+
+    SetPageSize(size) ->
+      case size > 0 {
+        False -> #(model, [])
+        True -> {
+          let clamped = int.clamp(size, min: 1, max: 100)
+          let next_settings = FeedSettings(..model.settings, page_size: clamped)
+          #(Model(..model, settings: next_settings, visible_limit: clamped), [])
+        }
+      }
 
     IngestEvent(ev) -> #(ingest_single_event(model, ev), [])
 
@@ -278,6 +306,16 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
 
     "toggle-inline-media" | "toggle_inline_media" -> Some(ToggleInlineMedia)
 
+    "set-page-size" | "set_page_size" ->
+      case extract_string(act, ["value", "pageSize", "page_size"]) {
+        Some(raw) ->
+          case int.parse(string.trim(raw)) {
+            Ok(n) if n > 0 -> Some(SetPageSize(n))
+            _ -> None
+          }
+        None -> None
+      }
+
     _ -> None
   }
 }
@@ -302,6 +340,9 @@ fn ingest_single_event(model: Model, ev: Event) -> Model {
         profiles: next_profiles,
         stats: updated_stats,
         now_sec: next_now,
+        is_syncing: False,
+        is_loading_older: False,
+        is_loading_thread: False,
       )
     }
 
@@ -309,7 +350,15 @@ fn ingest_single_event(model: Model, ev: Event) -> Model {
       let parsed_note = note.from_event(ev)
       let resolved_note = enrich_reply_pubkey(parsed_note, model.notes)
       let next_notes = dict.insert(model.notes, resolved_note.id, resolved_note)
-      Model(..model, notes: next_notes, stats: updated_stats, now_sec: next_now)
+      Model(
+        ..model,
+        notes: next_notes,
+        stats: updated_stats,
+        now_sec: next_now,
+        is_syncing: False,
+        is_loading_older: False,
+        is_loading_thread: False,
+      )
     }
 
     kind.ContactList -> {
@@ -334,10 +383,21 @@ fn ingest_single_event(model: Model, ev: Event) -> Model {
         my_pubkey: next_my_pubkey,
         stats: updated_stats,
         now_sec: next_now,
+        is_syncing: False,
+        is_loading_older: False,
+        is_loading_thread: False,
       )
     }
 
-    _ -> Model(..model, stats: updated_stats, now_sec: next_now)
+    _ ->
+      Model(
+        ..model,
+        stats: updated_stats,
+        now_sec: next_now,
+        is_syncing: False,
+        is_loading_older: False,
+        is_loading_thread: False,
+      )
   }
 }
 
@@ -550,7 +610,8 @@ fn extract_view(act: Action) -> Option(FeedView) {
           }
         "search" -> Some(ViewSearch)
         "settings" -> Some(ViewSettings)
-        "widget" | "compact" -> Some(ViewWidget)
+        "widget" -> Some(ViewWidget)
+        "compact" -> Some(ViewCompact)
         _ -> None
       }
     None ->
@@ -643,6 +704,22 @@ fn stats_for(model: Model, note_id: String) -> NoteStats {
         reposted_by_me: False,
       )
   }
+}
+
+fn unmark_liked(
+  stats_map: dict.Dict(String, NoteStats),
+  note_id: String,
+) -> dict.Dict(String, NoteStats) {
+  let current = get_or_empty_stats(stats_map, note_id)
+  dict.insert(stats_map, note_id, NoteStats(..current, liked_by_me: False))
+}
+
+fn unmark_reposted(
+  stats_map: dict.Dict(String, NoteStats),
+  note_id: String,
+) -> dict.Dict(String, NoteStats) {
+  let current = get_or_empty_stats(stats_map, note_id)
+  dict.insert(stats_map, note_id, NoteStats(..current, reposted_by_me: False))
 }
 
 fn reaction_effect(

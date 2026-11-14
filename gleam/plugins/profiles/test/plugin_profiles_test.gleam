@@ -9,9 +9,11 @@ import gleeunit
 import gleeunit/should
 import omni/nostr/event.{type Event, Event}
 import omni/nostr/event_id
-import omni/nostr/kind.{type Kind, ContactList, Metadata, Note as KindNote}
+import omni/nostr/kind.{
+  type Kind, ContactList, Metadata, Note as KindNote, Reaction, Repost,
+}
 import omni/nostr/pubkey
-import omni/plugin_kit/app.{Publish}
+import omni/plugin_kit/app.{OpenUrl, Publish}
 import omni/plugin_kit/local_store
 import omni/plugin_kit/route
 import omni/plugin_kit/schema
@@ -19,15 +21,16 @@ import omni/protocol/schema/action.{type Action}
 import omni/testkit/fake_ports
 import plugin/profiles/main as profiles_main
 import plugin/profiles/model.{
-  Model, SignerLocked, SignerMissing, SignerReady, ViewDirectory, ViewFollowing,
-  ViewKeys, ViewMetadata, ViewProfile, bob_pubkey_hex, filtered_profiles,
-  follow_count, following, following_profiles, my_pubkey_hex, notes_by_author,
-  own_npub, selected_profile,
+  Model, SignerLocked, SignerMissing, SignerReady, ViewCompact, ViewDirectory,
+  ViewFollowing, ViewKeys, ViewMetadata, ViewProfile, ViewWidget, bob_pubkey_hex,
+  filtered_profiles, follow_count, following, following_profiles, my_pubkey_hex,
+  notes_by_author, own_npub, selected_profile,
 }
 import plugin/profiles/msg.{
-  IngestEvent, RefreshSigner, SaveMetadata, SelectProfile, SelectView,
-  SetMetadataAbout, SetMetadataLud16, SetMetadataName, SetMetadataNip05,
-  SetMetadataPicture, SetMetadataWebsite, SetSearchQuery, ToggleFollow,
+  IngestEvent, LikeNote, RefreshSigner, RepostNote, SaveMetadata, SelectProfile,
+  SelectView, SetMetadataAbout, SetMetadataLud16, SetMetadataName,
+  SetMetadataNip05, SetMetadataPicture, SetMetadataWebsite, SetSearchQuery,
+  ToggleFollow, ViewMyProfile, ZapNote,
 }
 import plugin/profiles/update
 import plugin/profiles/view
@@ -49,9 +52,12 @@ pub fn init_has_no_demo_people_without_the_flag_test() {
   let m = model.init(route.main())
   dict.size(m.profiles) |> should.equal(0)
   dict.size(m.notes) |> should.equal(0)
+  m.my_pubkey |> should.equal(None)
+  m.follows.pubkey |> should.equal("")
 
   let demo = model.init(route.parse_search("?demo=1"))
   dict.size(demo.profiles) |> should.equal(3)
+  demo.my_pubkey |> should.equal(Some(my_pubkey_hex))
 
   model.demo_enabled(route.parse_search("?demo=0")) |> should.be_false()
   model.demo_enabled(route.parse_search("?demo=1")) |> should.be_true()
@@ -152,12 +158,15 @@ pub fn metadata_edit_and_save_test() {
   let #(m3, _) = update.update(m2, SetMetadataPicture("https://x.test/a.png"))
   m3.metadata_dirty |> should.equal(True)
 
-  let #(m4, _) = update.update(m3, SaveMetadata)
+  let #(m4, effects) = update.update(m3, SaveMetadata)
   let assert Ok(saved) = dict.get(m4.profiles, my_pubkey_hex)
   saved.name |> should.equal(Some("Alice Updated"))
   saved.about |> should.equal(Some("New bio"))
   saved.picture |> should.equal(Some("https://x.test/a.png"))
-  saved.created_at |> should.equal(m3.now_sec + 1)
+  should.be_true(saved.created_at > 1_700_000_000)
+  m4.now_sec |> should.equal(saved.created_at)
+  let assert [Publish(draft)] = effects
+  draft.created_at |> should.equal(saved.created_at)
   m4.metadata_dirty |> should.equal(False)
   m4.metadata_draft.name |> should.equal("Alice Updated")
   m4.view |> should.equal(ViewMetadata)
@@ -498,4 +507,115 @@ pub fn following_view_lists_only_followed_profiles_test() {
   let html = view.view(m1) |> schema.encode_schema_message
   string.contains(html, "profiles-following") |> should.equal(True)
   string.contains(html, "Following") |> should.equal(True)
+}
+
+pub fn compact_and_widget_views_render_test() {
+  let m_compact = model.init(route.parse_search("?demo=1&view=compact"))
+  m_compact.view |> should.equal(ViewCompact)
+  let compact_wire = view.view(m_compact) |> schema.encode_schema_message
+  string.contains(compact_wire, "profiles-compact") |> should.be_true()
+  string.contains(compact_wire, "Alice") |> should.be_true()
+
+  let m_guest_compact = model.init(route.parse_search("?view=compact"))
+  let guest_compact_wire =
+    view.view(m_guest_compact) |> schema.encode_schema_message
+  string.contains(guest_compact_wire, "Guest") |> should.be_true()
+
+  let m_widget = model.init(route.parse_search("?demo=1&view=widget"))
+  m_widget.view |> should.equal(ViewWidget)
+  let widget_wire = view.view(m_widget) |> schema.encode_schema_message
+  string.contains(widget_wire, "profiles-widget") |> should.be_true()
+  string.contains(widget_wire, "My Profile") |> should.be_true()
+}
+
+pub fn my_profile_tab_and_navigation_test() {
+  let m0 = model.init(route.parse_search("?demo=1"))
+  let wire = view.view(m0) |> schema.encode_schema_message
+  string.contains(wire, "My Profile") |> should.be_true()
+  string.contains(wire, "Edit") |> should.be_true()
+  string.contains(wire, "Keys") |> should.be_true()
+  string.contains(wire, "Following") |> should.be_true()
+
+  update.action_to_msg(schema_action("view-my-profile", []))
+  |> should.equal(Some(ViewMyProfile))
+
+  let #(m1, _) = update.update(m0, ViewMyProfile)
+  m1.view |> should.equal(ViewProfile(my_pubkey_hex))
+
+  let guest = model.init(route.main())
+  let #(guest_next, _) = update.update(guest, ViewMyProfile)
+  guest_next.view |> should.equal(ViewKeys)
+}
+
+pub fn keys_view_renders_switch_account_and_generate_keypair_test() {
+  let m = model.init(route.parse_search("?demo=1&view=keys"))
+  let keys_wire = view.view(m) |> schema.encode_schema_message
+  string.contains(keys_wire, "Switch Account") |> should.be_true()
+  string.contains(keys_wire, "Generate New Keypair") |> should.be_true()
+  string.contains(keys_wire, "switch-account") |> should.be_true()
+  string.contains(keys_wire, "generate-keypair") |> should.be_true()
+  string.contains(keys_wire, "?settings=profile") |> should.be_true()
+
+  update.action_to_msg(schema_action("switch-account", []))
+  |> should.equal(None)
+  update.action_to_msg(schema_action("generate-keypair", []))
+  |> should.equal(None)
+}
+
+pub fn profile_note_cards_support_like_repost_and_zap_actions_test() {
+  let m0 = model.init(route.parse_search("?demo=1"))
+  let #(m1, _) = update.update(m0, SelectProfile(my_pubkey_hex))
+  let wire = view.view(m1) |> schema.encode_schema_message
+
+  string.contains(wire, "like-note") |> should.be_true()
+  string.contains(wire, "repost-note") |> should.be_true()
+  string.contains(wire, "zap-note") |> should.be_true()
+
+  update.action_to_msg(schema_action("like-note", [#("id", alice_note_id)]))
+  |> should.equal(Some(LikeNote(alice_note_id)))
+  update.action_to_msg(schema_action("repost-note", [#("id", alice_note_id)]))
+  |> should.equal(Some(RepostNote(alice_note_id)))
+  update.action_to_msg(schema_action("zap-note", [#("id", alice_note_id)]))
+  |> should.equal(Some(ZapNote(alice_note_id)))
+
+  let #(m2, like_effects) = update.update(m1, LikeNote(alice_note_id))
+  let assert Ok(liked_stats) = dict.get(m2.stats, alice_note_id)
+  liked_stats.liked_by_me |> should.be_true()
+  let assert [Publish(like_ev)] = like_effects
+  like_ev.kind |> should.equal(Reaction)
+
+  let #(m3, repost_effects) = update.update(m2, RepostNote(alice_note_id))
+  let assert Ok(reposted_stats) = dict.get(m3.stats, alice_note_id)
+  reposted_stats.reposted_by_me |> should.be_true()
+  let assert [Publish(repost_ev)] = repost_effects
+  repost_ev.kind |> should.equal(Repost)
+
+  let #(_, zap_effects) = update.update(m3, ZapNote(alice_note_id))
+  zap_effects |> should.equal([OpenUrl("lightning:alice@getalby.com")])
+}
+
+pub fn generic_input_fallback_handles_nip05_lud16_and_website_test() {
+  update.action_to_msg(
+    schema_action("input", [
+      #("name", "nip05"),
+      #("value", "alice@nostr.example"),
+    ]),
+  )
+  |> should.equal(Some(SetMetadataNip05("alice@nostr.example")))
+
+  update.action_to_msg(
+    schema_action("change", [
+      #("name", "lud16"),
+      #("value", "alice@wallet.example"),
+    ]),
+  )
+  |> should.equal(Some(SetMetadataLud16("alice@wallet.example")))
+
+  update.action_to_msg(
+    schema_action("input", [
+      #("name", "website"),
+      #("value", "https://alice.nostr.example"),
+    ]),
+  )
+  |> should.equal(Some(SetMetadataWebsite("https://alice.nostr.example")))
 }

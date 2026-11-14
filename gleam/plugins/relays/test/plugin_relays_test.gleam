@@ -9,10 +9,10 @@ import gleeunit
 import gleeunit/should
 import omni/nostr/kind as nostr_kind
 import omni/platform/ref
+import omni/platform/storage
 import omni/plugin_kit/app
-import omni/plugin_kit/route
+import omni/plugin_kit/local_store
 import omni/plugin_kit/schema
-import omni/plugin_kit/schema as schema_action
 import omni/protocol/relay_command as rc
 import omni/protocol/schema/node
 import plugin/relays/main
@@ -22,8 +22,8 @@ import plugin/relays/model.{
 }
 import plugin/relays/msg.{
   AddRelay, AddRelayUrl, ApplyRelayList, DismissError, PublishNip65,
-  ReconnectRelay, RemoveRelay, SeedRelays, SetDraftUrl, SetViewMode, ToggleRead,
-  ToggleWrite, UpdateRelayCounters, UpdateRelayState,
+  ReconnectRelay, RefreshRelays, RemoveRelay, SeedRelays, SetDraftUrl,
+  SetViewMode, ToggleRead, ToggleWrite, UpdateRelayCounters, UpdateRelayState,
 }
 import plugin/relays/update
 import plugin/relays/view
@@ -321,8 +321,8 @@ pub fn relay_mutations_emit_pool_commands_test() {
 pub fn preset_action_adds_the_relay_url_test() {
   let m0 = model.init(ViewMain)
   let act =
-    schema_action.new_action("add-relay")
-    |> schema_action.with_payload(
+    schema.new_action("add-relay")
+    |> schema.with_payload(
       dict.from_list([
         #("url", dynamic.string("wss://relay.primal.net")),
       ]),
@@ -349,4 +349,97 @@ pub fn seed_relays_replaces_the_default_list_test() {
     update.update(m0, SeedRelays(["wss://one.example", "wss://two.example"]))
   list.map(m1.relays, fn(r) { r.url })
   |> should.equal(["wss://one.example", "wss://two.example"])
+}
+
+pub fn view_main_renders_preset_bar_and_refresh_button_test() {
+  let m = model.init(ViewMain)
+  let json_main = schema.encode_schema_message(view.view(m))
+
+  // E6.1: preset_hint and preset_bar buttons are included in view_main
+  should.be_true(string.contains(json_main, "Quick add popular relays:"))
+  should.be_true(string.contains(json_main, "Ditto"))
+  should.be_true(string.contains(json_main, "Damus"))
+  should.be_true(string.contains(json_main, "nos.lol"))
+  should.be_true(string.contains(json_main, "Primal"))
+  should.be_true(string.contains(json_main, "nostr.band"))
+
+  // E6.3: Refresh Pool button and refresh-relays action are rendered
+  should.be_true(string.contains(json_main, "Refresh Pool"))
+  should.be_true(string.contains(json_main, "refresh-relays"))
+}
+
+pub fn refresh_relays_action_reconnects_all_relays_test() {
+  let m0 = model.init(ViewMain)
+  let act = schema.new_action("refresh-relays")
+  update.action_to_msg(act) |> should.equal(Some(RefreshRelays))
+
+  let #(m1, effects) = update.update(m0, RefreshRelays)
+  should.be_true(list.all(m1.relays, fn(r) { r.state == StateConnecting }))
+  should.equal(list.length(effects), list.length(m0.relays))
+  should.be_true(
+    list.all(effects, fn(effect) {
+      case effect {
+        app.Relay(rc.ReconnectRelay(_)) -> True
+        _ -> False
+      }
+    }),
+  )
+}
+
+pub fn add_relay_auto_prepends_wss_to_bare_hostname_test() {
+  let m0 = model.init(ViewMain)
+
+  let #(m1, effects) = update.update(m0, AddRelayUrl("relay.primal.net"))
+  m1.error_banner |> should.equal(None)
+  should.be_true(
+    list.any(m1.relays, fn(r) { r.url == "wss://relay.primal.net" }),
+  )
+  should.be_true(
+    list.any(effects, fn(effect) {
+      case effect {
+        app.Relay(rc.AddRelay("wss://relay.primal.net")) -> True
+        _ -> False
+      }
+    }),
+  )
+
+  // Explicit non-ws scheme is still rejected
+  let #(m2, _) = update.update(m1, AddRelayUrl("https://not-ws.example.com"))
+  should.be_true(m2.error_banner != None)
+}
+
+pub fn local_store_persists_configured_relays_test() {
+  let store = storage.in_memory()
+  let cfg = model.relays_store_config()
+  cfg.key |> should.equal("omni_configured_relays")
+
+  // Empty storage falls back to bootstrap defaults
+  let running = main.start_app_with_storage("?view=main", store, fn(_) { Nil })
+  list.map(app.current_model(running).relays, fn(r) { r.url })
+  |> should.equal(model.default_bootstrap_urls())
+
+  // Adding a relay persists to omni_configured_relays
+  app.dispatch(running, AddRelayUrl("wss://nos.lol"))
+  let saved = local_store.load(store, cfg)
+  should.be_true(list.contains(saved, "wss://nos.lol"))
+
+  // Restarting with the same store restores the persisted list
+  let restarted =
+    main.start_app_with_storage("?view=main", store, fn(_) { Nil })
+  let restored_urls =
+    list.map(app.current_model(restarted).relays, fn(r) { r.url })
+  should.be_true(list.contains(restored_urls, "wss://nos.lol"))
+
+  // Raw JSON array compatibility (matching kernel relay_pool format)
+  let raw_store = storage.in_memory()
+  let _ =
+    storage.set(
+      raw_store,
+      "omni_configured_relays",
+      "[\"wss://custom.relay.example\"]",
+    )
+  let raw_app =
+    main.start_app_with_storage("?view=main", raw_store, fn(_) { Nil })
+  list.map(app.current_model(raw_app).relays, fn(r) { r.url })
+  |> should.equal(["wss://custom.relay.example"])
 }
