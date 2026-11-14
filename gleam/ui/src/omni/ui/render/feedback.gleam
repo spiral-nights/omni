@@ -13,6 +13,7 @@ import lustre/element.{type Element}
 import lustre/element/html
 import lustre/element/svg
 import lustre/event
+import omni/platform/form
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/codec
 import omni/protocol/schema/node.{
@@ -34,7 +35,7 @@ pub fn render_status_indicator(
     attribute.class("omni-status-indicator omni-status-" <> st_str)
 
   let pulse_class = case pulse {
-    Some(True) -> " omni-status-pulse"
+    Some(True) -> " omni-pulse omni-status-pulse"
     _ -> ""
   }
 
@@ -59,6 +60,119 @@ pub fn render_status_indicator(
       base_attrs,
     ])
   html.div(attrs, [dot_el, ..label_el])
+}
+
+/// 12 clock dial tick lines around the SVG perimeter.
+pub fn render_dial_ticks() -> List(Element(Action)) {
+  [
+    #(
+      "50.00",
+      "9.00",
+      "50.00",
+      "4.00",
+      "var(--omni-text-secondary, #9e988f)",
+      "1.4",
+    ),
+    #(
+      "71.50",
+      "12.76",
+      "73.00",
+      "10.16",
+      "var(--omni-border-strong, #383530)",
+      "0.8",
+    ),
+    #(
+      "87.24",
+      "28.50",
+      "89.84",
+      "27.00",
+      "var(--omni-border-strong, #383530)",
+      "0.8",
+    ),
+    #(
+      "91.00",
+      "50.00",
+      "96.00",
+      "50.00",
+      "var(--omni-text-secondary, #9e988f)",
+      "1.4",
+    ),
+    #(
+      "87.24",
+      "71.50",
+      "89.84",
+      "73.00",
+      "var(--omni-border-strong, #383530)",
+      "0.8",
+    ),
+    #(
+      "71.50",
+      "87.24",
+      "73.00",
+      "89.84",
+      "var(--omni-border-strong, #383530)",
+      "0.8",
+    ),
+    #(
+      "50.00",
+      "91.00",
+      "50.00",
+      "96.00",
+      "var(--omni-text-secondary, #9e988f)",
+      "1.4",
+    ),
+    #(
+      "28.50",
+      "87.24",
+      "27.00",
+      "89.84",
+      "var(--omni-border-strong, #383530)",
+      "0.8",
+    ),
+    #(
+      "12.76",
+      "71.50",
+      "10.16",
+      "73.00",
+      "var(--omni-border-strong, #383530)",
+      "0.8",
+    ),
+    #(
+      "9.00",
+      "50.00",
+      "4.00",
+      "50.00",
+      "var(--omni-text-secondary, #9e988f)",
+      "1.4",
+    ),
+    #(
+      "12.76",
+      "28.50",
+      "10.16",
+      "27.00",
+      "var(--omni-border-strong, #383530)",
+      "0.8",
+    ),
+    #(
+      "28.50",
+      "12.76",
+      "27.00",
+      "10.16",
+      "var(--omni-border-strong, #383530)",
+      "0.8",
+    ),
+  ]
+  |> list.map(fn(t) {
+    svg.line([
+      attribute.attribute("x1", t.0),
+      attribute.attribute("y1", t.1),
+      attribute.attribute("x2", t.2),
+      attribute.attribute("y2", t.3),
+      attribute.attribute("stroke", t.4),
+      attribute.attribute("stroke-width", t.5),
+      attribute.attribute("stroke-linecap", "round"),
+    ])
+  })
 }
 
 /// Renders a `Progress` bar, spinner, disk, or ring primitive.
@@ -151,12 +265,11 @@ pub fn render_progress(
       [spinner_el, ..label_el]
     }
 
-    ProgressDisk | ProgressRing -> {
+    ProgressRing -> {
       let sz = option.unwrap(size, 120)
       let sz_str = int.to_string(sz)
       let stroke_color =
         option.unwrap(color, "var(--omni-accent-primary, #d4a373)")
-      // Circumference for r=40 is ~251.33
       let circumference = 251.33
       let dash = float.to_string(ratio *. circumference)
       let circ_str = float.to_string(circumference)
@@ -166,8 +279,14 @@ pub fn render_progress(
         _ -> "true"
       }
 
+      let ticks_els = case show_ticks {
+        Some(True) -> render_dial_ticks()
+        _ -> []
+      }
+
       let svg_children =
         list.flatten([
+          ticks_els,
           [
             svg.circle([
               attribute.attribute("cx", "50"),
@@ -204,6 +323,99 @@ pub fn render_progress(
             None -> []
           },
         ])
+
+      [
+        svg.svg(
+          [
+            attribute.attribute("viewBox", "0 0 100 100"),
+            attribute.attribute("width", sz_str),
+            attribute.attribute("height", sz_str),
+            attribute.class("omni-progress-circular"),
+            attribute.attribute("data-ticks", ticks_attr),
+          ],
+          svg_children,
+        ),
+      ]
+    }
+
+    ProgressDisk -> {
+      let sz = option.unwrap(size, 120)
+      let sz_str = int.to_string(sz)
+      let disk_color =
+        option.unwrap(color, "var(--omni-accent-primary, #d4a373)")
+
+      let ticks_attr = case show_ticks {
+        Some(False) -> "false"
+        _ -> "true"
+      }
+
+      let ticks_els = case show_ticks {
+        Some(True) -> render_dial_ticks()
+        _ -> []
+      }
+
+      let bg_track =
+        svg.circle([
+          attribute.attribute("cx", "50"),
+          attribute.attribute("cy", "50"),
+          attribute.attribute("r", "40"),
+          attribute.attribute("fill", "none"),
+          attribute.attribute("stroke", "var(--omni-bg-elevated, #22201d)"),
+          attribute.attribute("stroke-width", "2"),
+        ])
+
+      let wedge_el = case ratio >=. 0.999 {
+        True -> [
+          svg.circle([
+            attribute.attribute("cx", "50"),
+            attribute.attribute("cy", "50"),
+            attribute.attribute("r", "40"),
+            attribute.attribute("fill", disk_color),
+            attribute.attribute("fill-opacity", "0.92"),
+          ]),
+        ]
+        False ->
+          case ratio >. 0.001 {
+            True -> {
+              let path_d = form.pie_wedge_path(ratio, 50.0, 50.0, 40.0)
+              [
+                svg.path([
+                  attribute.attribute("d", path_d),
+                  attribute.attribute("fill", disk_color),
+                  attribute.attribute("fill-opacity", "0.92"),
+                ]),
+              ]
+            }
+            False -> []
+          }
+      }
+
+      let label_els = case label {
+        Some(lbl) -> [
+          svg.circle([
+            attribute.attribute("cx", "50"),
+            attribute.attribute("cy", "50"),
+            attribute.attribute("r", "14"),
+            attribute.attribute("fill", "var(--omni-bg-canvas, #141312)"),
+            attribute.attribute("fill-opacity", "0.88"),
+            attribute.attribute("stroke", "var(--omni-border-subtle, #262421)"),
+            attribute.attribute("stroke-width", "0.75"),
+          ]),
+          svg.text(
+            [
+              attribute.attribute("x", "50"),
+              attribute.attribute("y", "53"),
+              attribute.attribute("text-anchor", "middle"),
+              attribute.attribute("class", "omni-progress-svg-label"),
+            ],
+            lbl,
+          ),
+        ]
+        None -> []
+      }
+
+      let svg_children =
+        list.flatten([ticks_els, [bg_track], wedge_el, label_els])
 
       [
         svg.svg(

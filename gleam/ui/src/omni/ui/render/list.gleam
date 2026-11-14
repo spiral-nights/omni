@@ -51,17 +51,33 @@ pub fn render_list(
   let items_el =
     html.div([attribute.class("omni-list-items")], list.map(items, render_node))
 
-  let loading_el = case loading_more {
-    Some(True) -> [
-      html.div([attribute.class("omni-list-sentinel omni-list-loading")], [
-        html.span([attribute.class("omni-spinner")], []),
-      ]),
-    ]
-    _ -> []
+  let sentinel_el = case has_more {
+    Some(False) -> []
+    _ -> {
+      let is_loading = option.unwrap(loading_more, False)
+      let sentinel_class = case is_loading {
+        True -> "omni-list-sentinel omni-list-loading"
+        False -> "omni-list-sentinel"
+      }
+      let spinner = case is_loading {
+        True -> [html.span([attribute.class("omni-spinner")], [])]
+        False -> []
+      }
+      let click_attrs = case on_scroll_end_action {
+        Some(act) -> [
+          event.stop_propagation(event.on_click(act)),
+          attribute.attribute("data-action", act.name),
+        ]
+        None -> []
+      }
+      let sentinel_attrs =
+        list.flatten([[attribute.class(sentinel_class)], click_attrs])
+      [html.div(sentinel_attrs, spinner)]
+    }
   }
 
   let attrs = list.flatten([[class_attr, role_attr], base_attrs, extra_attrs])
-  html.div(attrs, [items_el, ..loading_el])
+  html.div(attrs, [items_el, ..sentinel_el])
 }
 
 /// Renders a `ListItem` row primitive.
@@ -80,7 +96,7 @@ pub fn render_list_item(
   render_node: fn(Node) -> Element(Action),
 ) -> Element(Action) {
   let interactive_class = case on_click_action {
-    Some(_) -> " omni-list-item-interactive"
+    Some(_) -> " omni-list-item-clickable omni-list-item-interactive"
     None -> ""
   }
   let checked_class = case checked {
@@ -100,7 +116,10 @@ pub fn render_list_item(
         None -> []
       },
       case on_click_action {
-        Some(act) -> [event.stop_propagation(event.on_click(act))]
+        Some(act) -> [
+          attribute.attribute("clickable", ""),
+          event.stop_propagation(event.on_click(act)),
+        ]
         None -> []
       },
     ])

@@ -51,12 +51,12 @@ facade so `apps/web` can call `start_with_bridge`, `render`, `spawn_plugin`, etc
 
 ## Shell and theme model
 
-`omni_shell` owns one Elm loop shared by every theme. Themes (`classic`,
-`panorama`, `editorial`) implement `theme() -> Theme` and `view(model)`, and are
+`omni_shell` owns one Elm loop shared by every theme. Themes (`editorial`,
+`panorama`) implement `theme() -> Theme` and `view(model)`, and are
 selected through the storage-backed `ShellRegistry`. The shell is strictly
 plugin-agnostic: no hard-coded plugin IDs, no layout knowledge of any plugin.
 Shared `omni-*` layout styles live in `assets/styles/shell-modules.css`;
-theme chrome lives in `classic.css`, `panorama.css`, `editorial.css`.
+theme chrome lives in `editorial.css`, `panorama.css`.
 Design tokens are `tokens.css`; Schema primitives are `schema.css`.
 
 ## Runtime boundaries

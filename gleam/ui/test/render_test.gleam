@@ -10,9 +10,9 @@ import omni/protocol/schema/node.{
   AlignCenter, Avatar, Badge, BadgeOutline, BadgeSuccess, Banner, BannerWarning,
   Body, Box, Button, ButtonPrimary, ButtonSecondary, Card, CodeBlock, Column,
   Divider, EmptyState, Horizontal, Icon, IconButton, IconButtonDanger, IconLeft,
-  IconRight, Input, InputSearch, JustifyBetween, List as SchemaList, ListItem,
-  Metric, MetricInt, NodeBase, PageDeclaration, Progress, ProgressBar,
-  ProgressRing, ProgressSpinner, Row, Select, SelectOption, Spacer,
+  IconRight, Input, InputFile, InputSearch, JustifyBetween, List as SchemaList,
+  ListItem, Metric, MetricInt, NodeBase, PageDeclaration, Progress, ProgressBar,
+  ProgressDisk, ProgressRing, ProgressSpinner, Row, Select, SelectOption, Spacer,
   StatusIndicator, StatusOnline, TabItem, Tabs, Text, Textarea, Title, Toggle,
   ToneAccent, TonePrimary, TrendUp, Vertical, VirtualList, empty_base,
 }
@@ -73,7 +73,7 @@ pub fn render_base_attributes_test() {
   should.be_true(string.contains(html_str, "padding:1rem;"))
   should.be_true(string.contains(
     html_str,
-    "omni-text omni-text-title omni-tone-accent omni-text-truncate",
+    "omni-text omni-text-title omni-text-accent omni-tone-accent omni-text-truncate",
   ))
 }
 
@@ -108,12 +108,16 @@ pub fn render_box_test() {
   let s = render.render_to_string(n)
   should.be_true(string.contains(
     s,
-    "class=\"omni-box omni-box-row omni-box-interactive omni-box-wrap\"",
+    "class=\"omni-box omni-box-row omni-box-gap-md omni-box-padding-sm omni-box-align-center omni-box-justify-between omni-box-interactive omni-box-wrap\"",
   ))
   should.be_true(string.contains(s, "data-direction=\"row\""))
+  should.be_true(string.contains(s, "gap=\"md\""))
   should.be_true(string.contains(s, "data-gap=\"md\""))
+  should.be_true(string.contains(s, "padding=\"sm\""))
   should.be_true(string.contains(s, "data-padding=\"sm\""))
+  should.be_true(string.contains(s, "align=\"center\""))
   should.be_true(string.contains(s, "data-align=\"center\""))
+  should.be_true(string.contains(s, "justify=\"between\""))
   should.be_true(string.contains(s, "data-justify=\"between\""))
   should.be_true(string.contains(s, "data-wrap=\"true\""))
   should.be_true(string.contains(s, "Child"))
@@ -442,7 +446,7 @@ pub fn render_feedback_primitives_test() {
   ))
   should.be_true(string.contains(
     sis,
-    "omni-status-dot omni-status-online omni-status-pulse",
+    "omni-status-dot omni-status-online omni-pulse omni-status-pulse",
   ))
 
   let prog_bar =
@@ -993,4 +997,140 @@ pub fn rich_text_supports_markdown_links_and_leaves_plain_text_alone_test() {
   render.render_to_string(plain)
   |> string.contains("<span class=\"omni-rich-text\">")
   |> should.be_false()
+}
+
+pub fn input_action_on_enter_and_clear_button_test() {
+  let inp =
+    Input(
+      base: empty_base(),
+      name: "task_name",
+      placeholder: Some("New task..."),
+      value: Some("Draft task"),
+      input_type: None,
+      accept: None,
+      clearable: Some(True),
+      prefix_icon: None,
+      action_on_enter: Some(action.new("add-task")),
+      action_on_change: Some(action.new("task-changed")),
+    )
+  let html_str = render.render_to_string(inp)
+  should.be_true(string.contains(html_str, "class=\"omni-input\""))
+  should.be_true(string.contains(html_str, "omni-input-clear-btn"))
+  should.be_true(string.contains(html_str, "aria-label=\"Clear input\""))
+  should.be_true(string.contains(html_str, "data-icon=\"x\""))
+}
+
+pub fn input_file_supports_clearable_and_file_type_test() {
+  let file_inp =
+    Input(
+      base: empty_base(),
+      name: "avatar_upload",
+      placeholder: None,
+      value: None,
+      input_type: Some(InputFile),
+      accept: Some("image/*"),
+      clearable: Some(True),
+      prefix_icon: None,
+      action_on_enter: None,
+      action_on_change: Some(action.new("file-selected")),
+    )
+  let html_str = render.render_to_string(file_inp)
+  should.be_true(string.contains(html_str, "type=\"file\""))
+  should.be_true(string.contains(html_str, "accept=\"image/*\""))
+  should.be_true(string.contains(html_str, "omni-input-clear-btn"))
+}
+
+pub fn toggle_double_firing_prevention_test() {
+  let tog =
+    Toggle(
+      base: empty_base(),
+      name: "dark_mode",
+      label: Some("Dark Mode"),
+      checked: True,
+      action: action.new("toggle-dark-mode"),
+      disabled: Some(False),
+    )
+  let html_str = render.render_to_string(tog)
+  should.be_true(string.contains(
+    html_str,
+    "<label class=\"omni-toggle omni-toggle-checked\">",
+  ))
+  should.be_true(string.contains(
+    html_str,
+    "<input checked class=\"omni-toggle-checkbox\" name=\"dark_mode\" type=\"checkbox\">",
+  ))
+  // Ensure the outer label does not carry extra click/dispatched attributes
+  should.be_false(string.contains(html_str, "data-action="))
+}
+
+pub fn list_infinite_scroll_sentinel_test() {
+  let item =
+    ListItem(
+      base: empty_base(),
+      title: "Test Note",
+      subtitle: None,
+      meta: None,
+      icon: None,
+      avatar_url: None,
+      avatar_pubkey: None,
+      checked: None,
+      on_check_action: None,
+      on_click_action: None,
+      actions: [],
+    )
+  // When has_more == Some(True) and loading_more == Some(False)
+  let lst_more =
+    SchemaList(
+      base: empty_base(),
+      items: [item],
+      on_scroll_end_action: Some(action.new("load-more-notes")),
+      has_more: Some(True),
+      loading_more: Some(False),
+    )
+  let html_more = render.render_to_string(lst_more)
+  should.be_true(string.contains(html_more, "class=\"omni-list-sentinel\""))
+  should.be_true(string.contains(html_more, "data-action=\"load-more-notes\""))
+  should.be_false(string.contains(html_more, "omni-list-loading"))
+
+  // When has_more == Some(False)
+  let lst_no_more =
+    SchemaList(
+      base: empty_base(),
+      items: [item],
+      on_scroll_end_action: Some(action.new("load-more-notes")),
+      has_more: Some(False),
+      loading_more: Some(False),
+    )
+  let html_no_more = render.render_to_string(lst_no_more)
+  should.be_false(string.contains(html_no_more, "omni-list-sentinel"))
+}
+
+pub fn progress_disk_svg_pie_wedge_and_ticks_test() {
+  let disk =
+    Progress(
+      base: empty_base(),
+      value: 25.0,
+      max: Some(100.0),
+      label: Some("15:00"),
+      variant: Some(ProgressDisk),
+      size: Some(200),
+      color: Some("#d4a373"),
+      show_ticks: Some(True),
+      action: None,
+    )
+  let html_str = render.render_to_string(disk)
+  should.be_true(string.contains(html_str, "omni-progress-disk"))
+  should.be_true(string.contains(html_str, "omni-progress-circular"))
+  should.be_true(string.contains(
+    html_str,
+    "d=\"M 50 50 L 50 10 A 40 40 0 0 1 90.00 50.00 Z\"",
+  ))
+  should.be_true(string.contains(html_str, "fill=\"#d4a373\""))
+  // Verify dial tick lines are present
+  should.be_true(string.contains(html_str, "<line"))
+  should.be_true(string.contains(html_str, "x1=\"50.00\""))
+  should.be_true(string.contains(html_str, "y1=\"9.00\""))
+  should.be_true(string.contains(html_str, "y2=\"4.00\""))
+  should.be_true(string.contains(html_str, "x1=\"91.00\""))
+  should.be_true(string.contains(html_str, "x2=\"96.00\""))
 }

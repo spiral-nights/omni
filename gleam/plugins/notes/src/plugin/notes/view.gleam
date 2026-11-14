@@ -28,18 +28,35 @@ pub fn view(model: Model) -> Node {
 }
 
 fn render_notebook(model: Model) -> Node {
+  let sidebar =
+    schema.box()
+    |> schema.column
+    |> schema.gap("sm")
+    |> schema.with_style(StyleRaw("flex: 0 0 320px; max-width: 320px;"))
+    |> schema.children([render_folder_tabs(model), render_note_list(model)])
+
+  let editor_pane =
+    schema.box()
+    |> schema.column
+    |> schema.with_style(StyleRaw("flex: 1; min-width: 0;"))
+    |> schema.children([render_editor(model)])
+
+  let split_pane =
+    schema.box()
+    |> schema.row
+    |> schema.gap("md")
+    |> schema.children([sidebar, editor_pane])
+
   schema.box()
   |> schema.column
   |> schema.gap("md")
   |> schema.with_style(StyleRaw(
-    "padding: 16px; max-width: 780px; margin: 0 auto;",
+    "padding: 16px; max-width: 1100px; margin: 0 auto;",
   ))
   |> schema.children([
     render_header(model),
     render_toolbar(model),
-    render_folder_tabs(model),
-    render_note_list(model),
-    render_editor(model),
+    split_pane,
   ])
 }
 

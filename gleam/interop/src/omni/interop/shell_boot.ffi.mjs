@@ -327,6 +327,13 @@ export function apply_document_theme(themeMode, accentCss) {
   if (!root) return;
   root.setAttribute("data-theme-mode", String(themeMode || "dark"));
   root.setAttribute("style", String(accentCss || ""));
+  const resolvedMode =
+    themeMode === "system"
+      ? typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+        ? "light"
+        : "dark"
+      : themeMode;
+  root.style.colorScheme = resolvedMode || "dark";
 }
 
 export function listen_shell_scroll(onChange) {

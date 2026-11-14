@@ -56,6 +56,8 @@ pub fn render_text(
     attribute.class(
       "omni-text omni-text-"
       <> vr_str
+      <> " omni-text-"
+      <> tn_str
       <> " omni-tone-"
       <> tn_str
       <> trunc_class
@@ -66,6 +68,7 @@ pub fn render_text(
     list.flatten([
       [
         attribute.attribute("data-variant", vr_str),
+        attribute.attribute("tone", tn_str),
         attribute.attribute("data-tone", tn_str),
       ],
       case truncate {

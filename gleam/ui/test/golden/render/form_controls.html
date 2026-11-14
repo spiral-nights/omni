@@ -1,4 +1,4 @@
-<div class="omni-box omni-box-column" data-direction="column" data-gap="md" data-padding="md" id="settings-form">
+<div class="omni-box omni-box-column omni-box-gap-md omni-box-padding-md" data-direction="column" data-gap="md" data-padding="md" gap="md" id="settings-form" padding="md">
   <div class="omni-tabs omni-tabs-nav" role="tablist">
     <button aria-selected="true" class="omni-tab-btn active" data-tab-id="general" role="tab" type="button">
       <span class="omni-tab-icon">
@@ -36,6 +36,12 @@
       </svg>
     </span>
     <input class="omni-input" name="display_name" placeholder="Display Name" type="text" value="Alice">
+    <button aria-label="Clear input" class="omni-input-clear-btn" type="button">
+      <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="omni-icon" data-icon="x" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24" width="14">
+        <line x1="18" x2="6" y1="6" y2="18"></line>
+        <line x1="6" x2="18" y1="6" y2="18"></line>
+      </svg>
+    </button>
   </div>
   <textarea class="omni-textarea" name="about" placeholder="Bio" rows="3">
     Local-first enthusiast
@@ -60,7 +66,7 @@
       0ms Local Event Store Cache
     </span>
   </label>
-  <button class="omni-button omni-button-primary omni-button-md" data-action="save-settings" data-icon="check" data-size="md" data-variant="primary" type="button">
+  <button class="omni-button omni-button-primary omni-button-md" data-action="save-settings" data-icon="check" data-size="md" data-variant="primary" icon="check" size="md" type="button" variant="primary">
     <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="omni-icon" data-icon="check" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24" width="16">
       <polyline points="20 6 9 17 4 12"></polyline>
     </svg>

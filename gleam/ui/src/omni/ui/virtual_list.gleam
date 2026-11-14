@@ -3,12 +3,17 @@
 //// Computes visible item slices and top/bottom spacer heights from scroll
 //// offset and viewport dimensions without any DOM or FFI dependencies.
 
+import gleam/dict
+import gleam/dynamic
+import gleam/dynamic/decode
+import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import lustre/attribute.{type Attribute}
 import lustre/element.{type Element}
 import lustre/element/html
+import lustre/event
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{type Node}
 
@@ -159,6 +164,38 @@ pub fn render_virtual_list_at(
       [],
     )
 
-  let attrs = list.flatten([[class_attr], base_attrs, data_attrs])
+  let scroll_attr =
+    event.on("scroll", {
+      use target_st <- decode.subfield(
+        ["target", "scrollTop"],
+        decode.one_of(decode.int, [
+          decode.map(decode.float, float.round),
+          decode.success(0),
+        ]),
+      )
+      use target_vh <- decode.subfield(
+        ["target", "clientHeight"],
+        decode.one_of(decode.int, [
+          decode.map(decode.float, float.round),
+          decode.success(800),
+        ]),
+      )
+      let safe_h = case item_height > 0 {
+        True -> item_height
+        False -> 1
+      }
+      let act =
+        action.new("virtual-list-scroll")
+        |> action.with_payload(
+          dict.from_list([
+            #("scrollTop", dynamic.int(target_st)),
+            #("clientHeight", dynamic.int(target_vh)),
+            #("startIndex", dynamic.int(target_st / safe_h)),
+          ]),
+        )
+      decode.success(act)
+    })
+
+  let attrs = list.flatten([[class_attr, scroll_attr], base_attrs, data_attrs])
   html.div(attrs, [top_spacer, viewport_el, bottom_spacer])
 }

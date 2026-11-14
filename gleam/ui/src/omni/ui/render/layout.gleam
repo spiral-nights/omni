@@ -36,6 +36,26 @@ pub fn render_box(
   let dir_str = codec.direction_to_string(dir)
   let dir_class = "omni-box-" <> dir_str
 
+  let gap_class = case gap {
+    Some(g) -> " omni-box-gap-" <> style.size_to_string(g)
+    None -> ""
+  }
+
+  let pad_class = case padding {
+    Some(p) -> " omni-box-padding-" <> style.size_to_string(p)
+    None -> ""
+  }
+
+  let align_class = case align {
+    Some(a) -> " omni-box-align-" <> codec.align_to_string(a)
+    None -> ""
+  }
+
+  let justify_class = case justify {
+    Some(j) -> " omni-box-justify-" <> codec.justify_to_string(j)
+    None -> ""
+  }
+
   let interactive_class = case action {
     Some(_) -> " omni-box-interactive"
     None -> ""
@@ -47,29 +67,44 @@ pub fn render_box(
   }
 
   let class_attr =
-    attribute.class("omni-box " <> dir_class <> interactive_class <> wrap_class)
+    attribute.class(
+      "omni-box "
+      <> dir_class
+      <> gap_class
+      <> pad_class
+      <> align_class
+      <> justify_class
+      <> interactive_class
+      <> wrap_class,
+    )
 
   let data_attrs =
     list.flatten([
       [attribute.attribute("data-direction", dir_str)],
       case gap {
-        Some(g) -> [attribute.attribute("data-gap", style.size_to_string(g))]
+        Some(g) -> [
+          attribute.attribute("gap", style.size_to_string(g)),
+          attribute.attribute("data-gap", style.size_to_string(g)),
+        ]
         None -> []
       },
       case padding {
         Some(p) -> [
+          attribute.attribute("padding", style.size_to_string(p)),
           attribute.attribute("data-padding", style.size_to_string(p)),
         ]
         None -> []
       },
       case align {
         Some(a) -> [
+          attribute.attribute("align", codec.align_to_string(a)),
           attribute.attribute("data-align", codec.align_to_string(a)),
         ]
         None -> []
       },
       case justify {
         Some(j) -> [
+          attribute.attribute("justify", codec.justify_to_string(j)),
           attribute.attribute("data-justify", codec.justify_to_string(j)),
         ]
         None -> []

@@ -56,3 +56,31 @@ style, script, head, title, meta, link,
   outline: 2px solid var(--omni-accent-primary, #d4a373);
   outline-offset: 2px;
 }
+
+/* Boot root */
+#omni-boot-root,
+.omni-boot-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Boot error */
+.omni-boot-error {
+  margin: 40px auto;
+  max-width: 520px;
+  padding: 24px;
+  border-radius: 8px;
+  border: 1px solid #e06c75;
+  background: #191816;
+  color: #ede8df;
+  font-family: monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}

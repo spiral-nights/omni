@@ -238,7 +238,7 @@ pub fn view_renders_timer_and_widget_test() {
   let wire = view.view(m) |> schema.encode_schema_message
   should.be_true(string.contains(wire, "25:00"))
   should.be_true(string.contains(wire, "Focus Timer"))
-  should.be_true(string.contains(wire, "conic-gradient"))
+  should.be_true(string.contains(wire, "\"disk\""))
   should.be_true(string.contains(wire, "Start"))
 
   let running = Model(..m, status: Running)

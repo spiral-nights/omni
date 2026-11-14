@@ -8,7 +8,7 @@
 
 - Headless kernel: ACL/capabilities, keystore, 0ms event store, relay pool,
   RPC dispatcher, plugin resolver, intent broker, NIP-78 workspace sync.
-- Swappable shell (`omni_shell`) with Classic, Panorama, and Editorial themes,
+- Swappable shell (`omni_shell`) with Editorial and Panorama themes,
   storage-backed shell registry, settings for profile/relays/plugins/placements/
   permissions/intents/workspace/shells, app store, update modal.
 - First-party plugins: feed, notes, timer, profiles, checklist, relays,

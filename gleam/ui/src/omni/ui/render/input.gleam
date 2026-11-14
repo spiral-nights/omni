@@ -6,6 +6,7 @@
 
 import gleam/dict
 import gleam/dynamic.{type Dynamic}
+import gleam/dynamic/decode
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -13,12 +14,13 @@ import lustre/attribute.{type Attribute}
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
+import omni/platform/form
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/codec
 import omni/protocol/schema/node.{
   type ButtonVariant, type IconButtonVariant, type IconPosition, type InputType,
   type SelectOption, type TabItem, ButtonPrimary, IconButtonGhost, IconLeft,
-  IconRight, InputText,
+  IconRight, InputFile, InputText,
 }
 import omni/protocol/schema/style.{type SizeToken, SizeMd, SizeSm}
 import omni/ui/icons
@@ -37,6 +39,38 @@ pub fn merge_action_payload(
       dict.insert(acc, pair.0, pair.1)
     })
   action.with_payload(act, merged)
+}
+
+/// Merge ambient form values into an `Action`'s payload without overwriting explicit keys.
+pub fn merge_ambient_payload(
+  act: Action,
+  ambient: List(#(String, Dynamic)),
+) -> Action {
+  let existing = case act.payload {
+    Some(d) -> d
+    None -> dict.new()
+  }
+  let merged =
+    list.fold(ambient, existing, fn(acc, pair) {
+      case dict.has_key(acc, pair.0) {
+        True -> acc
+        False -> dict.insert(acc, pair.0, pair.1)
+      }
+    })
+  action.with_payload(act, merged)
+}
+
+fn button_click_attr(btn_action: Action) -> Attribute(Action) {
+  event.advanced("click", {
+    use ev <- decode.then(decode.dynamic)
+    let ambient = form.collect_ambient_form_values(ev)
+    let act = merge_ambient_payload(btn_action, ambient)
+    decode.success(event.handler(
+      act,
+      prevent_default: False,
+      stop_propagation: True,
+    ))
+  })
 }
 
 /// Renders a `Button` primitive.
@@ -100,20 +134,33 @@ pub fn render_button(
     html.span([attribute.class("omni-button-label")], [element.text(label)]),
   ]
 
-  let extra_attrs = [
-    attribute.type_("button"),
-    attribute.attribute("data-variant", vr_str),
-    attribute.attribute("data-size", sz_str),
-    attribute.attribute("data-action", btn_action.name),
-    case icon {
-      Some(ic) -> attribute.attribute("data-icon", ic)
-      None -> attribute.attribute("data-icon", "")
-    },
-    case is_disabled {
-      True -> attribute.disabled(True)
-      False -> event.stop_propagation(event.on_click(btn_action))
-    },
-  ]
+  let icon_attrs = case icon {
+    Some(ic) -> [
+      attribute.attribute("icon", ic),
+      attribute.attribute("data-icon", ic),
+    ]
+    None -> [
+      attribute.attribute("icon", ""),
+      attribute.attribute("data-icon", ""),
+    ]
+  }
+
+  let extra_attrs =
+    list.flatten([
+      [
+        attribute.type_("button"),
+        attribute.attribute("variant", vr_str),
+        attribute.attribute("data-variant", vr_str),
+        attribute.attribute("size", sz_str),
+        attribute.attribute("data-size", sz_str),
+        attribute.attribute("data-action", btn_action.name),
+      ],
+      icon_attrs,
+      case is_disabled {
+        True -> [attribute.disabled(True)]
+        False -> [button_click_attr(btn_action)]
+      },
+    ])
 
   let attrs = list.flatten([[class_attr], base_attrs, extra_attrs])
   let children =
@@ -159,9 +206,12 @@ pub fn render_icon_button(
     list.flatten([
       [
         attribute.type_("button"),
+        attribute.attribute("variant", vr_str),
         attribute.attribute("data-variant", vr_str),
+        attribute.attribute("size", sz_str),
         attribute.attribute("data-size", sz_str),
         attribute.attribute("data-action", btn_action.name),
+        attribute.attribute("icon", icon),
         attribute.attribute("data-icon", icon),
         attribute.attribute("aria-label", aria_label),
       ],
@@ -171,7 +221,7 @@ pub fn render_icon_button(
       },
       case is_disabled {
         True -> [attribute.disabled(True)]
-        False -> [event.stop_propagation(event.on_click(btn_action))]
+        False -> [button_click_attr(btn_action)]
       },
     ])
 
@@ -217,6 +267,39 @@ pub fn render_input(
     None -> []
   }
 
+  let clear_btn_el = case clearable {
+    Some(True) -> {
+      let clear_action = case action_on_change {
+        Some(act) ->
+          merge_action_payload(act, [
+            #("value", dynamic.string("")),
+            #("name", dynamic.string(name)),
+            #(name, dynamic.string("")),
+          ])
+        None ->
+          action.with_payload(
+            action.new("clear-input"),
+            dict.from_list([
+              #("name", dynamic.string(name)),
+              #("value", dynamic.string("")),
+            ]),
+          )
+      }
+      [
+        html.button(
+          [
+            attribute.class("omni-input-clear-btn"),
+            attribute.type_("button"),
+            attribute.attribute("aria-label", "Clear input"),
+            event.stop_propagation(event.on_click(clear_action)),
+          ],
+          [icons.render_icon("x", 14)],
+        ),
+      ]
+    }
+    _ -> []
+  }
+
   let input_attrs =
     list.flatten([
       [
@@ -237,35 +320,188 @@ pub fn render_input(
         None -> []
       },
       case action_on_change {
-        Some(act) -> [
-          event.on_input(fn(val) {
-            merge_action_payload(act, [
-              #("value", dynamic.string(val)),
-              #("name", dynamic.string(name)),
-              #(name, dynamic.string(val)),
-            ])
-          }),
-        ]
+        Some(act) ->
+          case inp_type {
+            InputFile -> [
+              event.advanced("change", {
+                use ev <- decode.then(decode.dynamic)
+                let _ = form.handle_file_input_change(ev)
+                use file_name <- decode.subfield(
+                  ["target", "files", "0", "name"],
+                  decode.one_of(decode.string, [decode.success("")]),
+                )
+                use file_size <- decode.subfield(
+                  ["target", "files", "0", "size"],
+                  decode.one_of(decode.int, [decode.success(0)]),
+                )
+                use file_type <- decode.subfield(
+                  ["target", "files", "0", "type"],
+                  decode.one_of(decode.string, [decode.success("")]),
+                )
+                let file_act =
+                  merge_action_payload(act, [
+                    #("fileName", dynamic.string(file_name)),
+                    #("fileSize", dynamic.int(file_size)),
+                    #("fileType", dynamic.string(file_type)),
+                    #("value", dynamic.string(file_name)),
+                    #("name", dynamic.string(name)),
+                    #(name, dynamic.string(file_name)),
+                  ])
+                decode.success(event.handler(
+                  file_act,
+                  prevent_default: False,
+                  stop_propagation: False,
+                ))
+              }),
+              event.advanced("omni-file-loaded", {
+                use file_name <- decode.subfield(
+                  ["detail", "fileName"],
+                  decode.one_of(decode.string, [decode.success("")]),
+                )
+                use file_size <- decode.subfield(
+                  ["detail", "fileSize"],
+                  decode.one_of(decode.int, [decode.success(0)]),
+                )
+                use file_type <- decode.subfield(
+                  ["detail", "fileType"],
+                  decode.one_of(decode.string, [decode.success("")]),
+                )
+                use file_bytes <- decode.subfield(
+                  ["detail", "fileBytes"],
+                  decode.dynamic,
+                )
+                let file_act =
+                  merge_action_payload(act, [
+                    #("fileName", dynamic.string(file_name)),
+                    #("fileSize", dynamic.int(file_size)),
+                    #("fileType", dynamic.string(file_type)),
+                    #("fileBytes", file_bytes),
+                    #("value", dynamic.string(file_name)),
+                    #("name", dynamic.string(name)),
+                    #(name, dynamic.string(file_name)),
+                  ])
+                decode.success(event.handler(
+                  file_act,
+                  prevent_default: False,
+                  stop_propagation: True,
+                ))
+              }),
+            ]
+            _ -> [
+              event.on_input(fn(val) {
+                merge_action_payload(act, [
+                  #("value", dynamic.string(val)),
+                  #("name", dynamic.string(name)),
+                  #(name, dynamic.string(val)),
+                ])
+              }),
+            ]
+          }
         None -> []
       },
       case action_on_enter {
         Some(act) -> {
-          let current_val = option.unwrap(value, "")
-          [
-            event.on_keydown(fn(_key) {
-              merge_action_payload(act, [
-                #("value", dynamic.string(current_val)),
-                #("name", dynamic.string(name)),
-              ])
-            }),
-          ]
+          let enter_decoder = {
+            use key <- decode.field("key", decode.string)
+            case key {
+              "Enter" -> {
+                use val <- decode.subfield(
+                  ["target", "value"],
+                  decode.one_of(decode.string, [
+                    decode.map(decode.dynamic, fn(_) {
+                      option.unwrap(value, "")
+                    }),
+                  ]),
+                )
+                let act_with_val =
+                  merge_action_payload(act, [
+                    #("value", dynamic.string(val)),
+                    #("name", dynamic.string(name)),
+                    #(name, dynamic.string(val)),
+                  ])
+                decode.success(event.handler(
+                  act_with_val,
+                  prevent_default: True,
+                  stop_propagation: False,
+                ))
+              }
+              _ ->
+                decode.failure(
+                  event.handler(act, False, False),
+                  "Expected Enter key",
+                )
+            }
+          }
+          [event.advanced("keydown", enter_decoder)]
         }
         None -> []
       },
     ])
 
-  let wrapper_attrs = list.flatten([[wrapper_class], base_attrs])
-  html.div(wrapper_attrs, list.flatten([prefix_el, [html.input(input_attrs)]]))
+  let drag_drop_attrs = case inp_type {
+    InputFile -> [
+      event.advanced("dragover", {
+        use _ev <- decode.then(decode.dynamic)
+        decode.success(event.handler(
+          action.new("dragover"),
+          prevent_default: True,
+          stop_propagation: True,
+        ))
+      }),
+      event.advanced("drop", {
+        use ev <- decode.then(decode.dynamic)
+        let _ = form.handle_file_drop(ev)
+        use file_name <- decode.subfield(
+          ["dataTransfer", "files", "0", "name"],
+          decode.one_of(decode.string, [decode.success("")]),
+        )
+        use file_size <- decode.subfield(
+          ["dataTransfer", "files", "0", "size"],
+          decode.one_of(decode.int, [decode.success(0)]),
+        )
+        use file_type <- decode.subfield(
+          ["dataTransfer", "files", "0", "type"],
+          decode.one_of(decode.string, [decode.success("")]),
+        )
+        let drop_action = case action_on_change {
+          Some(act) ->
+            merge_action_payload(act, [
+              #("fileName", dynamic.string(file_name)),
+              #("fileSize", dynamic.int(file_size)),
+              #("fileType", dynamic.string(file_type)),
+              #("value", dynamic.string(file_name)),
+              #("name", dynamic.string(name)),
+              #(name, dynamic.string(file_name)),
+            ])
+          None ->
+            action.with_payload(
+              action.new("file-drop"),
+              dict.from_list([
+                #("fileName", dynamic.string(file_name)),
+                #("fileSize", dynamic.int(file_size)),
+                #("fileType", dynamic.string(file_type)),
+                #("value", dynamic.string(file_name)),
+                #("name", dynamic.string(name)),
+                #(name, dynamic.string(file_name)),
+              ]),
+            )
+        }
+        decode.success(event.handler(
+          drop_action,
+          prevent_default: True,
+          stop_propagation: True,
+        ))
+      }),
+    ]
+    _ -> []
+  }
+
+  let wrapper_attrs =
+    list.flatten([[wrapper_class], base_attrs, drag_drop_attrs])
+  html.div(
+    wrapper_attrs,
+    list.flatten([prefix_el, [html.input(input_attrs)], clear_btn_el]),
+  )
 }
 
 /// Renders a `Textarea` multi-line input primitive.
@@ -329,14 +565,6 @@ pub fn render_toggle(
   let class_attr =
     attribute.class("omni-toggle" <> checked_class <> disabled_class)
 
-  let next_checked = !checked
-  let dispatched_action =
-    merge_action_payload(toggle_action, [
-      #("checked", dynamic.bool(next_checked)),
-      #("name", dynamic.string(name)),
-      #(name, dynamic.bool(next_checked)),
-    ])
-
   let checkbox_attrs =
     list.flatten([
       [
@@ -374,12 +602,7 @@ pub fn render_toggle(
     None -> []
   }
 
-  let click_attr = case is_disabled {
-    True -> []
-    False -> [event.stop_propagation(event.on_click(dispatched_action))]
-  }
-
-  let attrs = list.flatten([[class_attr], base_attrs, click_attr])
+  let attrs = list.flatten([[class_attr], base_attrs])
   html.label(
     attrs,
     list.flatten([[html.input(checkbox_attrs), track_el], label_el]),

@@ -21,7 +21,7 @@ An extensible, local-first Nostr client and sandboxed micro-frontend runtime for
 4. **Kernel is headless; shell owns presentation.** `omni_kernel` handles
    storage, crypto, relays, ACL, RPC, and plugin resolution. `omni_shell`
    handles layouts, dock, widgets, settings, and themes.
-5. **Shells are swappable plugins.** `classic`, `panorama`, and `editorial`
+5. **Shells are swappable plugins.** `editorial` and `panorama`
    implement the same `Theme` interface and are chosen through the
    storage-backed `ShellRegistry`.
 6. **No hard-coded plugin IDs in shell, UI, or styles.** Ever. Tests use

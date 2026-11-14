@@ -69,8 +69,11 @@ body.theme-editorial[data-theme-mode="light"],
 
 /* Dark Mode: Obsidian Sanctuary (Warm Slate Broadsheet Newspaper) */
 :root.theme-editorial[data-theme-mode="dark"],
+:root.theme-editorial[data-theme-mode="system"],
 body.theme-editorial[data-theme-mode="dark"],
-.editorial-shell-root[data-theme-mode="dark"] {
+body.theme-editorial[data-theme-mode="system"],
+.editorial-shell-root[data-theme-mode="dark"],
+.editorial-shell-root[data-theme-mode="system"] {
   color-scheme: dark !important;
   /* Warm dark broadsheet newsprint paper ground — soft, rich paper tone, not harsh pitch black */
   --omni-bg-canvas: #1c1b20;
@@ -98,6 +101,78 @@ body.theme-editorial[data-theme-mode="dark"],
   --border-subtle: var(--omni-border-subtle);
   --border-strong: var(--omni-border-strong);
   --border-focus: var(--omni-border-focus);
+}
+
+/* System Appearance Mode in Light Color Scheme */
+@media (prefers-color-scheme: light) {
+  :root.theme-editorial[data-theme-mode="system"],
+  body.theme-editorial[data-theme-mode="system"],
+  .editorial-shell-root[data-theme-mode="system"] {
+    color-scheme: light !important;
+    --omni-bg-canvas: #fbfbf9;
+    --omni-bg-surface: #f4f4f2;
+    --omni-bg-elevated: #ffffff;
+    --omni-bg-subtle: #eeeeec;
+    --editorial-bg-rgb: 251, 251, 249;
+
+    --omni-text-primary: #0f172a;
+    --omni-text-secondary: #565e74;
+    --omni-text-muted: #94a3b8;
+
+    --omni-border-subtle: #e2e8f0;
+    --omni-border-strong: #cbd5e1;
+    --omni-border-focus: var(--omni-accent-primary, #1e40af);
+
+    /* Generic Standalone Tokens */
+    --bg-canvas: var(--omni-bg-canvas);
+    --bg-surface: var(--omni-bg-surface);
+    --bg-elevated: var(--omni-bg-elevated);
+    --bg-subtle: var(--omni-bg-subtle);
+    --text-primary: var(--omni-text-primary);
+    --text-secondary: var(--omni-text-secondary);
+    --text-muted: var(--omni-text-muted);
+    --border-subtle: var(--omni-border-subtle);
+    --border-strong: var(--omni-border-strong);
+    --border-focus: var(--omni-border-focus);
+  }
+
+  .editorial-shell-root[data-theme-mode="system"]::before {
+    opacity: 0.065;
+    filter: none;
+    mix-blend-mode: multiply;
+  }
+
+  .editorial-shell-root[data-theme-mode="system"] .editorial-floating-exit-fullscreen {
+    background: rgba(251, 251, 249, 0.6);
+    color: var(--omni-text-primary, #141312);
+    border-color: rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  }
+
+  .editorial-shell-root[data-theme-mode="system"] .editorial-floating-exit-fullscreen:hover,
+  .editorial-shell-root[data-theme-mode="system"] .editorial-floating-exit-fullscreen:focus-visible,
+  .editorial-shell-root[data-theme-mode="system"] .editorial-floating-exit-fullscreen.active-reveal {
+    opacity: 1;
+    background: rgba(251, 251, 249, 0.98);
+    border-color: var(--omni-accent-primary, #d97706);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    transform: translateY(0) scale(1.02);
+  }
+
+  .editorial-shell-root[data-theme-mode="system"] .editorial-floating-exit-fullscreen:active {
+    background: rgba(251, 251, 249, 0.98);
+  }
+
+  .editorial-shell-root[data-theme-mode="system"] .editorial-back-to-top {
+    background: rgba(251, 251, 249, 0.82);
+    color: var(--omni-text-primary, #141312);
+    border-color: rgba(0, 0, 0, 0.12);
+  }
+
+  .editorial-shell-root[data-theme-mode="system"] .editorial-dock-inner {
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 12px 36px -4px rgba(15, 23, 42, 0.10), 0 4px 12px rgba(15, 23, 42, 0.05);
+  }
 }
 
 :root.theme-editorial,
@@ -146,7 +221,8 @@ style, script, head, title, meta, link,
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 250 250' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
-.editorial-shell-root[data-theme-mode="dark"]::before {
+.editorial-shell-root[data-theme-mode="dark"]::before,
+.editorial-shell-root[data-theme-mode="system"]::before {
   opacity: 0.085;
   filter: invert(1);
   mix-blend-mode: screen;

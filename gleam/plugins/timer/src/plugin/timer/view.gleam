@@ -8,12 +8,12 @@ import gleam/option.{None, Some}
 import omni/protocol/schema/action
 import omni/protocol/schema/builder as schema
 import omni/protocol/schema/node.{
-  type Node, AlignCenter, Button, ButtonPrimary, Input, InputText,
-  JustifyBetween, JustifyCenter, empty_base,
+  type Node, Button, ButtonPrimary, Input, InputText, JustifyBetween,
+  JustifyCenter, Progress, ProgressDisk, empty_base,
 }
 import omni/protocol/schema/style.{SizeMd, SizeSm, StyleRaw}
 import plugin/timer/model.{
-  type Model, Completed, Idle, Paused, Running, disk_background, elapsed_percent,
+  type Model, Completed, Idle, Paused, Running, disk_color, elapsed_percent,
   format_remaining, status_label,
 }
 
@@ -90,35 +90,16 @@ fn render_focus(model: Model) -> Node {
 }
 
 fn render_disk(model: Model, size: Int) -> Node {
-  let size_str = int.to_string(size)
-  let inner = int.to_string(size - 56)
-  schema.box()
-  |> schema.with_style(StyleRaw(
-    "width: "
-    <> size_str
-    <> "px; height: "
-    <> size_str
-    <> "px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: "
-    <> disk_background(model)
-    <> ";",
-  ))
-  |> schema.child(
-    schema.box()
-    |> schema.column
-    |> schema.align(AlignCenter)
-    |> schema.justify(JustifyCenter)
-    |> schema.with_style(StyleRaw(
-      "width: "
-      <> inner
-      <> "px; height: "
-      <> inner
-      <> "px; border-radius: 50%; background: var(--color-canvas, #141312);",
-    ))
-    |> schema.children([
-      schema.text(format_remaining(model.remaining_sec))
-        |> schema.with_style(StyleRaw("font-size: 2.5rem; font-weight: 700;")),
-      schema.text(status_label(model.status)),
-    ]),
+  Progress(
+    base: empty_base(),
+    value: int.to_float(elapsed_percent(model)),
+    max: Some(100.0),
+    label: Some(format_remaining(model.remaining_sec)),
+    variant: Some(ProgressDisk),
+    size: Some(size),
+    color: Some(disk_color(model)),
+    show_ticks: Some(True),
+    action: None,
   )
 }
 
