@@ -11,7 +11,7 @@ export function findPackages(dir = gleamRoot) {
   const found = [];
   if (!existsSync(dir)) return found;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name === "build" || entry.name === "node_modules") continue;
+    if (!entry.isDirectory() || entry.name === "build" || entry.name === "dist" || entry.name === "node_modules") continue;
     const full = join(dir, entry.name);
     if (existsSync(join(full, "gleam.toml"))) found.push(full);
     else found.push(...findPackages(full));
@@ -54,4 +54,20 @@ export function orderedPackages() {
 
   packages.sort((a, b) => a.name.localeCompare(b.name)).forEach((p) => visit(p));
   return ordered;
+}
+
+/**
+ * Packages that no other Gleam package depends on (leaf/root build targets).
+ * Compiling these with `gleam build` compiles the entire dependency graph without
+ * repeating `gleam build` in every intermediate package directory.
+ */
+export function rootPackages() {
+  const ordered = orderedPackages();
+  const dependedOn = new Set();
+  for (const pkg of ordered) {
+    for (const dep of pkg.deps) {
+      dependedOn.add(dep);
+    }
+  }
+  return ordered.filter((pkg) => !dependedOn.has(pkg.dir));
 }

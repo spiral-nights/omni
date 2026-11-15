@@ -134,7 +134,7 @@ describe("mobile shell: viewport, dock, and stylesheet contracts", () => {
       "utf8",
     );
     expect(css).toMatch(
-      /\.editorial-dock\s*\{[^}]*position:\s*fixed;[^}]*left:\s*0;[^}]*right:\s*0;/s,
+      /\.editorial-dock\s*\{[^}]*position:\s*fixed;[^}]*top:\s*58px;[^}]*bottom:\s*0;[^}]*left:\s*0;/s,
     );
     expect(css).not.toMatch(/\.omni-shell\.omni-shell-classic/);
 

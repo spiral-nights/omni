@@ -266,18 +266,14 @@ style, script, head, title, meta, link,
   color: inherit;
 }
 
-/* 2. Panorama Horizontal Canvas */
+/* 2. Panorama Horizontal Canvas (Windows Phone People Hub Sliding Strip) */
 .panorama-canvas {
+  --panorama-pane-width: calc(100vw - 56px);
   flex: 1;
   min-height: 0;
   display: flex;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  scroll-padding-left: 20px;
-  scroll-padding-right: 48px;
+  flex-direction: row;
+  overflow: hidden;
   position: relative;
 }
 
@@ -286,10 +282,10 @@ style, script, head, title, meta, link,
 }
 
 .panorama-section {
-  flex: 0 0 calc(100vw - 44px);
-  max-width: calc(100vw - 44px);
+  flex: 0 0 var(--panorama-pane-width);
+  width: var(--panorama-pane-width);
+  max-width: var(--panorama-pane-width);
   height: 100%;
-  scroll-snap-align: start;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 8px 16px 24px 16px;
@@ -299,6 +295,25 @@ style, script, head, title, meta, link,
   scrollbar-width: none;
   -ms-overflow-style: none;
   box-sizing: border-box;
+  transform: translateX(
+    calc(-1 * var(--panorama-active-index, 0) * var(--panorama-pane-width))
+  );
+  transition:
+    transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.28s ease;
+}
+
+.panorama-section:not(.panorama-active-section) {
+  opacity: 0.38;
+  cursor: pointer;
+}
+
+.panorama-section:not(.panorama-active-section):hover {
+  opacity: 0.62;
+}
+
+.panorama-section:not(.panorama-active-section) > * {
+  pointer-events: none;
 }
 
 #panorama-section-system {
@@ -312,10 +327,12 @@ style, script, head, title, meta, link,
 }
 
 @media (min-width: 768px) {
+  .panorama-canvas {
+    --panorama-pane-width: calc(100vw - 140px);
+  }
+
   .panorama-section {
-    flex: 0 0 min(540px, calc(100vw - 64px));
-    max-width: min(540px, calc(100vw - 64px));
-    padding: 8px 24px 24px 24px;
+    padding: 12px 32px 24px 32px;
   }
 
   #panorama-section-system {

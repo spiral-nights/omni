@@ -1205,6 +1205,43 @@
 .plugin-relay-access-box {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+}
+
+.omni-relay-scoping-panel,
+.omni-relay-scoping-app-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.omni-relay-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--omni-radius-pill, 9999px);
+  font-size: 0.72rem;
+  font-weight: 500;
+  background: var(--omni-bg-subtle, #22201d);
+  border: 1px solid var(--omni-border-subtle, #272522);
+  color: var(--omni-text-secondary, #9e988f);
+  white-space: nowrap;
+}
+
+.omni-relay-mode-pill[data-relay-mode="custom"] {
+  color: var(--omni-accent-primary, #d4a373);
+  border-color: color-mix(in srgb, var(--omni-accent-primary, #d4a373) 45%, transparent);
+  background: color-mix(in srgb, var(--omni-accent-primary, #d4a373) 12%, transparent);
+}
+
+.omni-relay-mode-pill[data-relay-mode="local"] {
+  color: var(--omni-text-primary, #ede8df);
+  border-color: var(--omni-border-subtle, #383530);
+}
+
+.omni-relay-scope-options {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1215,19 +1252,29 @@
 }
 
 .omni-custom-relay-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--omni-font-mono, monospace);
-  font-size: 0.68rem;
-  background: var(--omni-bg-subtle, #22201d);
-  border: 1px solid var(--omni-border-subtle, #272522);
+  font-size: 0.72rem;
+  background: var(--omni-bg-canvas, #141312);
+  border: 1px solid var(--omni-border-subtle, #383530);
   color: var(--omni-text-secondary, #9e988f);
-  padding: 2px 8px;
+  padding: 5px 10px;
   border-radius: var(--omni-radius-pill, 9999px);
   cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.omni-custom-relay-chip:hover {
+  border-color: var(--omni-accent-primary, #d4a373);
+  color: var(--omni-text-primary, #ede8df);
 }
 
 .omni-custom-relay-chip.selected {
   color: var(--omni-accent-primary, #d4a373);
   border-color: var(--omni-accent-primary, #d4a373);
+  background: color-mix(in srgb, var(--omni-accent-primary, #d4a373) 15%, transparent);
 }
 
 /* --- Modal cards (update modal, intent chooser) --- */
@@ -1511,9 +1558,9 @@ button.omni-kind-badge {
 }
 
 .panorama-section .omni-hosted-app {
-  padding: 16px 20px;
-  max-width: 1360px;
-  margin: 0 auto;
+  padding: 16px 0;
+  max-width: 960px;
+  margin: 0;
 }
 
 .omni-hosted-app .omni-schema-host {
@@ -1663,11 +1710,27 @@ button.omni-kind-badge {
   color: var(--omni-text-muted, #6b665f);
 }
 
-.omni-relay-scope-btn,
 .omni-intent-capability-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.omni-relay-scope-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: var(--omni-radius-pill, 9999px);
+  border: 1px solid var(--omni-border-subtle, #383530);
+  background: var(--omni-bg-canvas, #141312);
+  color: var(--omni-text-secondary, #9e988f);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
 .intent-capability-card {
@@ -1728,12 +1791,13 @@ button.omni-kind-badge {
 .omni-relay-scope-btn:hover,
 .omni-intent-toggle-btn:hover {
   border-color: var(--omni-accent-primary, #d4a373);
+  color: var(--omni-text-primary, #ede8df);
 }
 .omni-relay-scope-btn.active,
 .omni-intent-toggle-btn.active {
   border-color: var(--omni-accent-primary, #d4a373);
   background: color-mix(in srgb, var(--omni-accent-primary, #d4a373) 18%, transparent);
-  color: var(--omni-text-primary, #ede8df);
+  color: var(--omni-accent-primary, #d4a373);
 }
 
 /* --- Collapsible Settings Sections --- */

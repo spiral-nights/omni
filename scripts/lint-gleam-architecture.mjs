@@ -46,7 +46,7 @@ const fail = (file, msg) => errors.push(`${relative(repoRoot, file)}: ${msg}`);
 function walk(dir, visit) {
   if (!existsSync(dir)) return;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === "build" || entry.name === "node_modules" || entry.name === ".git") continue;
+    if (entry.name === "build" || entry.name === "dist" || entry.name === "node_modules" || entry.name === ".git") continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) walk(full, visit);
     else visit(full);

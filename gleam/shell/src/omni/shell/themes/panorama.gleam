@@ -5,6 +5,7 @@
 //// tile, and a full-width content canvas for the active pivot section.
 //// Strictly plugin-agnostic: zero hardcoded plugin IDs.
 
+import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
 import lustre/attribute
@@ -19,8 +20,8 @@ import omni/shell/layout/header_actions
 import omni/shell/layout/viewport_host
 import omni/shell/layout/widgets_grid
 import omni/shell/model.{
-  type Model, type SettingsTab, AppStore, PrimaryApp, Settings, TabProfile,
-  TabShells, WidgetsDashboard,
+  type InstalledApp, type Model, type SettingsTab, AppStore, PrimaryApp,
+  Settings, TabProfile, TabShells, WidgetsDashboard,
 }
 import omni/shell/msg.{
   type Msg, NavigateTo, OpenApp, OpenSettings, ToggleFullscreen,
@@ -56,6 +57,7 @@ pub fn view(model: Model) -> Element(Msg) {
     True -> "omni-shell panorama-shell-root app-fullscreen"
     False -> "omni-shell panorama-shell-root"
   }
+  let active_idx = active_pivot_index(model)
   html.div(
     [
       attribute.class(root_classes),
@@ -66,7 +68,17 @@ pub fn view(model: Model) -> Element(Msg) {
     ],
     [
       render_header(model),
-      html.div([attribute.class("panorama-canvas")], render_sections(model)),
+      html.div(
+        [
+          attribute.class("panorama-canvas"),
+          attribute.attribute("data-active-index", int.to_string(active_idx)),
+          attribute.attribute(
+            "style",
+            "--panorama-active-index: " <> int.to_string(active_idx),
+          ),
+        ],
+        render_sections(model),
+      ),
       render_overlays(model),
     ],
   )
@@ -92,10 +104,43 @@ fn render_header(model: Model) -> Element(Msg) {
   )
 }
 
+fn pivot_apps(model: Model) -> List(InstalledApp) {
+  let docked = model.dock_apps(model)
+  case model.active_page {
+    PrimaryApp(active_id, _) ->
+      case list.any(docked, fn(app) { app.id == active_id }) {
+        True -> docked
+        False ->
+          case model.find_app(model, active_id) {
+            Some(app) -> list.append(docked, [app])
+            None -> docked
+          }
+      }
+    _ -> docked
+  }
+}
+
+fn active_pivot_index(model: Model) -> Int {
+  let apps = pivot_apps(model)
+  let app_count = list.length(apps)
+  case model.active_page {
+    PrimaryApp(active_id, _) ->
+      list.index_fold(apps, 0, fn(found, app, idx) {
+        case app.id == active_id {
+          True -> idx
+          False -> found
+        }
+      })
+    WidgetsDashboard -> app_count
+    AppStore -> app_count + 1
+    Settings(_) -> app_count + 2
+  }
+}
+
 /// Metro pivot strip: one item per pinned/dock app plus the system panes.
 fn render_pivot_nav(model: Model) -> Element(Msg) {
   let app_items =
-    model.dock_apps(model)
+    pivot_apps(model)
     |> list.map(fn(app) {
       render_pivot_item(
         id: "pivot-app-" <> app.id,
@@ -235,50 +280,37 @@ fn avatar_img(url: String, alt: String) -> Element(Msg) {
   ])
 }
 
-/// Active pivot section canvas: full app, widgets mosaic, app store, or system.
+/// Panoramic section strip in fixed hub order: apps, widgets, app store, system.
 fn render_sections(model: Model) -> List(Element(Msg)) {
-  let active_app_id = case model.active_page {
-    PrimaryApp(plugin_id, _) -> Some(plugin_id)
-    _ -> None
+  let app_sections =
+    pivot_apps(model)
+    |> list.map(fn(app) {
+      case model.active_page {
+        PrimaryApp(active_id, route) if active_id == app.id ->
+          render_app_section(model, app.id, route, True)
+        _ -> render_app_section(model, app.id, None, False)
+      }
+    })
+
+  let widgets_active = case model.active_page {
+    WidgetsDashboard -> True
+    _ -> False
   }
-
-  let other_apps =
-    model.dock_apps(model)
-    |> list.filter(fn(app) { Some(app.id) != active_app_id })
-    |> list.map(fn(app) { render_app_section(model, app.id, None, False) })
-
-  let widgets_section = case model.active_page {
-    WidgetsDashboard -> []
-    _ -> [render_widgets_section(model)]
+  let apps_active = case model.active_page {
+    AppStore -> True
+    _ -> False
   }
-
-  let apps_section = case model.active_page {
-    AppStore -> []
-    _ -> [render_app_store_section(model)]
-  }
-
-  let system_section = case model.active_page {
-    Settings(_) -> []
-    _ -> [render_settings_section(model, TabShells)]
+  let #(system_active, system_tab) = case model.active_page {
+    Settings(tab) -> #(True, tab)
+    _ -> #(False, TabShells)
   }
 
   list.flatten([
-    [render_active_section(model)],
-    other_apps,
-    widgets_section,
-    apps_section,
-    system_section,
+    app_sections,
+    [render_widgets_section(model, widgets_active)],
+    [render_app_store_section(model, apps_active)],
+    [render_settings_section(model, system_tab, system_active)],
   ])
-}
-
-fn render_active_section(model: Model) -> Element(Msg) {
-  case model.active_page {
-    PrimaryApp(plugin_id, route) ->
-      render_app_section(model, plugin_id, route, True)
-    WidgetsDashboard -> render_widgets_section(model)
-    AppStore -> render_app_store_section(model)
-    Settings(tab) -> render_settings_section(model, tab)
-  }
 }
 
 fn render_app_section(
@@ -292,56 +324,80 @@ fn render_app_section(
     None -> plugin_id
   }
   let class_name = case is_active {
-    True -> "panorama-section panorama-app-active-view"
+    True -> "panorama-section panorama-active-section panorama-app-active-view"
     False -> "panorama-section"
   }
+  let base_attrs = [
+    attribute.class(class_name),
+    attribute.id("panorama-section-app-" <> plugin_id),
+    attribute.attribute("data-pivot", "app"),
+  ]
+  let attrs = case is_active {
+    True -> base_attrs
+    False -> [event.on_click(OpenApp(plugin_id, None)), ..base_attrs]
+  }
 
-  html.section(
-    [
-      attribute.class(class_name),
-      attribute.id("panorama-section-app-" <> plugin_id),
-      attribute.attribute("data-pivot", "app"),
-    ],
-    [
-      html.div([attribute.class("panorama-section-title-bar")], [
-        html.h2([], [element.text(title)]),
-      ]),
-      viewport_host.render_embedded_or_island(model, plugin_id, route),
-    ],
-  )
+  html.section(attrs, [
+    html.div([attribute.class("panorama-section-title-bar")], [
+      html.h2([], [element.text(title)]),
+    ]),
+    viewport_host.render_embedded_or_island(model, plugin_id, route),
+  ])
 }
 
-fn render_widgets_section(model: Model) -> Element(Msg) {
-  html.section(
-    [
-      attribute.class("panorama-section"),
-      attribute.id("panorama-section-widgets"),
-      attribute.attribute("data-pivot", "widgets"),
-    ],
-    [widgets_grid.render_widgets_grid(model)],
-  )
+fn render_widgets_section(model: Model, is_active: Bool) -> Element(Msg) {
+  let class_name = case is_active {
+    True -> "panorama-section panorama-active-section"
+    False -> "panorama-section"
+  }
+  let base_attrs = [
+    attribute.class(class_name),
+    attribute.id("panorama-section-widgets"),
+    attribute.attribute("data-pivot", "widgets"),
+  ]
+  let attrs = case is_active {
+    True -> base_attrs
+    False -> [event.on_click(NavigateTo(WidgetsDashboard)), ..base_attrs]
+  }
+  html.section(attrs, [widgets_grid.render_widgets_grid(model)])
 }
 
-fn render_app_store_section(model: Model) -> Element(Msg) {
-  html.section(
-    [
-      attribute.class("panorama-section"),
-      attribute.id("panorama-section-apps"),
-      attribute.attribute("data-pivot", "apps"),
-    ],
-    [app_store.render_app_store(model, app_store.curated_catalog())],
-  )
+fn render_app_store_section(model: Model, is_active: Bool) -> Element(Msg) {
+  let class_name = case is_active {
+    True -> "panorama-section panorama-active-section"
+    False -> "panorama-section"
+  }
+  let base_attrs = [
+    attribute.class(class_name),
+    attribute.id("panorama-section-apps"),
+    attribute.attribute("data-pivot", "apps"),
+  ]
+  let attrs = case is_active {
+    True -> base_attrs
+    False -> [event.on_click(NavigateTo(AppStore)), ..base_attrs]
+  }
+  html.section(attrs, [app_store.render_app_store(model, [])])
 }
 
-fn render_settings_section(model: Model, tab: SettingsTab) -> Element(Msg) {
-  html.section(
-    [
-      attribute.class("panorama-section panorama-system-view"),
-      attribute.id("panorama-section-system"),
-      attribute.attribute("data-pivot", "system"),
-    ],
-    [render_system_section(model, tab)],
-  )
+fn render_settings_section(
+  model: Model,
+  tab: SettingsTab,
+  is_active: Bool,
+) -> Element(Msg) {
+  let class_name = case is_active {
+    True -> "panorama-section panorama-active-section panorama-system-view"
+    False -> "panorama-section panorama-system-view"
+  }
+  let base_attrs = [
+    attribute.class(class_name),
+    attribute.id("panorama-section-system"),
+    attribute.attribute("data-pivot", "system"),
+  ]
+  let attrs = case is_active {
+    True -> base_attrs
+    False -> [event.on_click(OpenSettings(tab)), ..base_attrs]
+  }
+  html.section(attrs, [render_system_section(model, tab)])
 }
 
 fn render_system_section(model: Model, tab: SettingsTab) -> Element(Msg) {

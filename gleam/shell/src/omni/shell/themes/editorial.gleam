@@ -91,17 +91,6 @@ fn render_header(model: Model) -> Element(Msg) {
     html.div([attribute.class("editorial-header-inner")], [
       html.div([attribute.class("editorial-header-left")], [
         header_actions.render_back_button(model),
-        html.button(
-          [
-            attribute.type_("button"),
-            attribute.id("btn-editorial-dock-settings"),
-            attribute.class("editorial-header-btn"),
-            attribute.title("Settings"),
-            attribute.attribute("aria-label", "Open Settings"),
-            event.on_click(OpenSettings(model.TabShells)),
-          ],
-          [icons.render_icon("sliders", 17)],
-        ),
       ]),
       html.div(
         [
@@ -215,7 +204,7 @@ fn render_active_page(model: Model) -> Element(Msg) {
           attribute.class("editorial-viewport-page active"),
           attribute.id("editorial-page-apps"),
         ],
-        [app_store.render_app_store(model, app_store.curated_catalog())],
+        [app_store.render_app_store(model, [])],
       )
 
     Settings(_) ->

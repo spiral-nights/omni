@@ -7,7 +7,7 @@
   "exports": {
     "./*": {
       "types": "./build/dev/javascript/omni_interop/omni/interop/*.d.mts",
-      "default": "./build/dev/javascript/omni_interop/omni/interop/*.mjs"
+      "default": "./dist/*.mjs"
     }
   },
   "scripts": {

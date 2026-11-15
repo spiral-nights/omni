@@ -47,6 +47,7 @@ import omni/platform/http
 import omni/platform/nip44
 import omni/platform/promise_ext
 import omni/platform/ref
+import omni/platform/secp256k1
 import omni/platform/storage
 import omni/platform/url
 import omni/plugin_kit/zap
@@ -66,9 +67,10 @@ import omni/shell/model.{
   Model, PrimaryApp, TabProfile, UserProfileSummary,
 }
 import omni/shell/msg.{
-  type Msg, DispatchIntent, HostedSchemaAction, InstallApp, InstallCustomShell,
-  InstallShell, OpenApp, OpenIntentApp, OpenSettings, SelectShell,
-  SetCapabilityGrants, ShowIntentPrompt, ToggleCapabilityGrant, UninstallShell,
+  type Msg, AccountSwitchResult, DispatchIntent, HostedSchemaAction, InstallApp,
+  InstallCustomShell, InstallShell, KeyImportResult, OpenApp, OpenIntentApp,
+  OpenSettings, SelectShell, SetCapabilityGrants, ShowIntentPrompt,
+  ToggleCapabilityGrant, UninstallShell,
 }
 import omni/shell/registry.{type ShellRegistry}
 import omni/shell/shell
@@ -514,9 +516,9 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
         Ok(app) ->
           case app.handle_action(action) {
             True -> #(refresh_embedded_views(booted), [])
-            False -> #(route_intent(booted, action), [])
+            False -> handle_unhandled_hosted_action(booted, action)
           }
-        Error(Nil) -> #(route_intent(booted, action), [])
+        Error(Nil) -> handle_unhandled_hosted_action(booted, action)
       }
     DispatchIntent(name, payload) -> {
       let action = action.Action(name: name, payload: payload, navigate: None)
@@ -578,6 +580,57 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
       }
     }
     _ -> dispatch_normal(booted, msg)
+  }
+}
+
+fn sync_identity_to_builtins(booted: Booted) -> Booted {
+  let pk_hex = pubkey.to_hex(keystore.get_public_key(booted.kernel.keystore))
+  dict.each(booted.builtins, fn(_id, app) {
+    case app.set_pubkey {
+      Some(set_pk) -> set_pk(pk_hex)
+      None -> Nil
+    }
+  })
+  let with_identity =
+    Booted(
+      ..booted,
+      model: Model(
+        ..booted.model,
+        user_profile: Some(session_profile(booted.kernel)),
+        accounts: keystore.accounts(booted.kernel.keystore),
+      ),
+    )
+  refresh_embedded_views(with_identity)
+}
+
+fn handle_unhandled_hosted_action(
+  booted: Booted,
+  action: Action,
+) -> #(Booted, List(ShellEffect)) {
+  case action.name {
+    "generate-keypair" | "generate_keypair" -> {
+      let fresh_priv = secp256k1.generate_private_key()
+      let after_import = case import_key(booted, fresh_priv) {
+        Ok(next) -> {
+          let #(with_toast, _) = dispatch(next, KeyImportResult(Ok(Nil)))
+          with_toast
+        }
+        Error(err) -> {
+          let #(with_err, _) = dispatch(booted, KeyImportResult(Error(err)))
+          with_err
+        }
+      }
+      case navigate_settings_tab(action) {
+        Some(tab) -> dispatch(after_import, OpenSettings(tab))
+        None -> #(after_import, [])
+      }
+    }
+    _ ->
+      case navigate_settings_tab(action) {
+        Some(tab) ->
+          dispatch(sync_identity_to_builtins(booted), OpenSettings(tab))
+        None -> #(route_intent(booted, action), [])
+      }
   }
 }
 
@@ -746,6 +799,14 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
       })
     False -> next_model
   }
+  let refreshed = case msg {
+    KeyImportResult(Ok(_)) | AccountSwitchResult(Ok(_)) -> {
+      let synced =
+        sync_identity_to_builtins(Booted(..routed_booted, model: refreshed))
+      synced.model
+    }
+    _ -> refreshed
+  }
 
   let host_effects =
     effects
@@ -793,17 +854,7 @@ pub fn tick_builtins(booted: Booted) -> Bool {
 pub fn import_key(booted: Booted, raw: String) -> Result(Booted, String) {
   case keystore.switch_key(booted.kernel.keystore, raw) {
     Error(err) -> Error(err)
-    Ok(_pubkey) ->
-      Ok(
-        Booted(
-          ..booted,
-          model: Model(
-            ..booted.model,
-            user_profile: Some(session_profile(booted.kernel)),
-            accounts: keystore.accounts(booted.kernel.keystore),
-          ),
-        ),
-      )
+    Ok(_pubkey) -> Ok(sync_identity_to_builtins(booted))
   }
 }
 
@@ -881,17 +932,7 @@ pub fn switch_account(
   ))
   promise.resolve(case result {
     Error(err) -> Error(err)
-    Ok(_) ->
-      Ok(
-        Booted(
-          ..booted,
-          model: Model(
-            ..booted.model,
-            user_profile: Some(session_profile(booted.kernel)),
-            accounts: keystore.accounts(booted.kernel.keystore),
-          ),
-        ),
-      )
+    Ok(_) -> Ok(sync_identity_to_builtins(booted))
   })
 }
 

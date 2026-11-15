@@ -168,7 +168,20 @@ pub fn render_app_store(
 
   let installed_section = render_installed_index(model)
 
+  let q = string.lowercase(string.trim(model.search_query))
+  let has_installed_matches =
+    list.any(model.installed_apps, fn(app) {
+      case q {
+        "" -> True
+        _ ->
+          string.contains(string.lowercase(model.app_title(app)), q)
+          || string.contains(string.lowercase(app.id), q)
+          || string.contains(string.lowercase(app.description), q)
+      }
+    })
+
   let grid_body = case cards {
+    [] if q == "" || has_installed_matches -> element.none()
     [] ->
       html.div([attribute.class("omni-empty-state")], [
         html.div([attribute.class("omni-empty-state-icon")], [
@@ -396,43 +409,56 @@ fn render_installed_row(_model: Model, app: InstalledApp) -> Element(Msg) {
           element.text(app.description),
         ]),
       ]),
-      html.div([attribute.class("omni-app-index-actions")], [
-        html.button(
-          [
-            attribute.type_("button"),
-            attribute.id("btn-app-index-update-" <> app.id),
-            attribute.class("omni-button omni-button-secondary"),
-            event.stop_propagation(
-              event.on_click(
-                ShowUpdateModal(UpdateModalState(
-                  plugin_id: app.id,
-                  plugin_name: title,
-                  current_version: version,
-                  latest_version: version,
-                  changelog: None,
-                  source_url: app.source_url,
-                )),
+      html.div(
+        [attribute.class("omni-app-index-actions")],
+        list.flatten([
+          case
+            app.source_url != ""
+            && !string.starts_with(app.source_url, "https://nsite.example/")
+          {
+            False -> []
+            True -> [
+              html.button(
+                [
+                  attribute.type_("button"),
+                  attribute.id("btn-app-index-update-" <> app.id),
+                  attribute.class("omni-button omni-button-secondary"),
+                  event.stop_propagation(
+                    event.on_click(
+                      ShowUpdateModal(UpdateModalState(
+                        plugin_id: app.id,
+                        plugin_name: title,
+                        current_version: version,
+                        latest_version: version,
+                        changelog: None,
+                        source_url: app.source_url,
+                      )),
+                    ),
+                  ),
+                ],
+                [
+                  icons.render_icon("download", 14),
+                  html.span([], [element.text("Update")]),
+                ],
               ),
+            ]
+          },
+          [
+            html.button(
+              [
+                attribute.type_("button"),
+                attribute.id("btn-app-index-open-" <> app.id),
+                attribute.class("omni-button omni-button-secondary"),
+                event.on_click(OpenApp(app.id, None)),
+              ],
+              [
+                icons.render_icon("external", 14),
+                html.span([], [element.text("Open")]),
+              ],
             ),
           ],
-          [
-            icons.render_icon("download", 14),
-            html.span([], [element.text("Update")]),
-          ],
-        ),
-        html.button(
-          [
-            attribute.type_("button"),
-            attribute.id("btn-app-index-open-" <> app.id),
-            attribute.class("omni-button omni-button-secondary"),
-            event.on_click(OpenApp(app.id, None)),
-          ],
-          [
-            icons.render_icon("external", 14),
-            html.span([], [element.text("Open")]),
-          ],
-        ),
-      ]),
+        ]),
+      ),
     ],
   )
 }

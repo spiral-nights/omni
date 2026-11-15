@@ -66,12 +66,13 @@ describe("interactive shell mount", () => {
     await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
     expect(root.innerHTML).toContain("Following");
 
-    // Apps page: built-ins are already installed (matched by source URL).
+    // Apps page: built-ins appear under Your Apps without duplicate catalog cards.
     (document.querySelector("#btn-editorial-dock-apps") as HTMLElement).dispatchEvent(
       new MouseEvent("click", { bubbles: true, cancelable: true }),
     );
     await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
     expect(root.innerHTML).toContain("omni-app-store");
-    expect(root.innerHTML).toContain("Installed");
+    expect(root.innerHTML).toContain("Your Apps");
+    expect(root.innerHTML).not.toContain("omni-catalog-card");
   });
 });

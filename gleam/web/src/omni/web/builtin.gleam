@@ -40,6 +40,7 @@ pub type BuiltinApp {
     render: fn() -> Node,
     navigate: fn(String) -> Nil,
     handle_action: fn(Action) -> Bool,
+    set_pubkey: Option(fn(String) -> Nil),
     ingest: Option(fn(Event) -> Nil),
     ingest_many: Option(fn(List(Event)) -> Nil),
     relay_status: Option(fn(String, Bool, Option(Int), Int, Int) -> Nil),
@@ -89,6 +90,7 @@ fn feed_app(store: storage.Storage) -> BuiltinApp {
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
+    set_pubkey: None,
     ingest: Some(fn(event) {
       app.dispatch(running, feed_msg.IngestEvent(event))
     }),
@@ -124,6 +126,9 @@ fn profiles_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
+    set_pubkey: Some(fn(pk) {
+      app.dispatch(running, profiles_msg.SetPubkey(pk))
+    }),
     ingest: Some(fn(event) {
       app.dispatch(running, profiles_msg.IngestEvent(event))
     }),
@@ -157,6 +162,7 @@ fn relays_app(relay_urls: List(String)) -> BuiltinApp {
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
+    set_pubkey: None,
     ingest: None,
     ingest_many: None,
     relay_status: Some(fn(url, connected, latency, received, sent) {
@@ -205,6 +211,7 @@ fn publisher_app(
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
+    set_pubkey: None,
     ingest: None,
     ingest_many: None,
     relay_status: None,
@@ -242,6 +249,7 @@ fn checklist_app(store: storage.Storage) -> BuiltinApp {
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
+    set_pubkey: None,
     ingest: None,
     ingest_many: None,
     relay_status: None,
@@ -273,6 +281,7 @@ fn notes_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
+    set_pubkey: Some(fn(pk) { app.dispatch(running, notes_msg.SetPubkey(pk)) }),
     ingest: None,
     ingest_many: None,
     relay_status: None,
@@ -304,6 +313,7 @@ fn timer_app() -> BuiltinApp {
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
+    set_pubkey: None,
     ingest: None,
     ingest_many: None,
     relay_status: None,

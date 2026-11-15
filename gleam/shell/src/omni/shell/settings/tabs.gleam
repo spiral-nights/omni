@@ -13,6 +13,7 @@ import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
+import omni/protocol/schema/action
 import omni/shell/layout/viewport_host
 import omni/shell/model.{
   type InstalledApp, type Model, type SettingsTab, type SyncStatus, Settings,
@@ -20,9 +21,9 @@ import omni/shell/model.{
   TabProfile, TabRelays, TabShells, TabWorkspace, app_has_settings_view,
 }
 import omni/shell/msg.{
-  type Msg, DisablePassphrase, EnablePassphrase, ExportKey, ImportKey,
-  OpenSettings, SetKeyInput, SetPassphrase, SwitchAccount, ToggleAutoSync,
-  TriggerWorkspaceSync, UnlockKey,
+  type Msg, DisablePassphrase, EnablePassphrase, ExportKey, HostedSchemaAction,
+  ImportKey, OpenSettings, SetKeyInput, SetPassphrase, SwitchAccount,
+  ToggleAutoSync, TriggerWorkspaceSync, UnlockKey,
 }
 import omni/shell/settings/intents
 import omni/shell/settings/permissions
@@ -444,6 +445,18 @@ fn key_custody_card(model: Model) -> Element(Msg) {
             event.on_click(ExportKey),
           ],
           [element.text("Export nsec")],
+        ),
+        html.button(
+          [
+            attribute.type_("button"),
+            attribute.id("btn-generate-key"),
+            attribute.class("omni-button omni-button-secondary"),
+            event.on_click(HostedSchemaAction(
+              "",
+              action.new("generate-keypair"),
+            )),
+          ],
+          [element.text("Generate New Keypair")],
         ),
       ]),
       passphrase_section(model),

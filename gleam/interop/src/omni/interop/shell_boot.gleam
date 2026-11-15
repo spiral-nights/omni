@@ -638,10 +638,13 @@ fn apply_effects(
                 empty_profile(keystore.get_public_key(next.kernel.keystore)),
               )),
             )
+            ShellBoot(next)
           }
-          Error(err) -> dispatch_shell_msg(KeyImportResult(Error(err)))
+          Error(err) -> {
+            dispatch_shell_msg(KeyImportResult(Error(err)))
+            acc
+          }
         }
-        acc
       }
 
       update.ExportKeyEffect -> {
