@@ -1064,7 +1064,11 @@ fn handle_install_from_url(model: Model) -> #(Model, List(Effect(Msg))) {
                 status_message: Some("Installing from " <> raw <> "..."),
                 error_message: None,
               ),
-              [OpenUrl(raw)],
+              [
+                OpenUrl(
+                  "omni-install:" <> string.trim(model.draft.id) <> "|" <> raw,
+                ),
+              ],
             )
             False -> #(
               Model(
@@ -1151,10 +1155,8 @@ fn handle_install_local(model: Model) -> #(Model, List(Effect(Msg))) {
         )
       let without_existing =
         list.filter(model.published, fn(p: PublishedPlugin) { p.id != clean_id })
-      let effects = case naddr {
-        "" -> []
-        addr -> [OpenUrl("nostr:" <> addr)]
-      }
+      let install_target =
+        "omni-install:" <> clean_id <> "|" <> bundle.to_data_uri(parsed)
       #(
         Model(
           ..model,
@@ -1164,7 +1166,7 @@ fn handle_install_local(model: Model) -> #(Model, List(Effect(Msg))) {
           ),
           error_message: None,
         ),
-        effects,
+        [OpenUrl(install_target)],
       )
     }
   }

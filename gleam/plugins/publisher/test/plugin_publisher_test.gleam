@@ -542,7 +542,8 @@ pub fn install_local_records_plugin_and_opens_naddr_test() {
   m1.error_message |> should.equal(None)
   list.length(m1.published) |> should.equal(1)
   let assert [app.OpenUrl(url)] = effects
-  string.starts_with(url, "nostr:naddr1") |> should.equal(True)
+  string.starts_with(url, "omni-install:") |> should.equal(True)
+  string.contains(url, "|data:application/zip;base64,") |> should.equal(True)
 }
 
 pub fn fetch_url_and_install_url_support_naddr_and_https_test() {
@@ -582,8 +583,9 @@ pub fn fetch_url_and_install_url_support_naddr_and_https_test() {
   |> should.equal(True)
 
   let #(_, url_install_effects) = update.update(m3, InstallFromUrl)
-  url_install_effects
-  |> should.equal([app.OpenUrl("https://example.com/app.html")])
+  let assert [app.OpenUrl(install_url)] = url_install_effects
+  string.ends_with(install_url, "|https://example.com/app.html")
+  |> should.equal(True)
 }
 
 pub fn single_file_html_and_js_upload_test() {

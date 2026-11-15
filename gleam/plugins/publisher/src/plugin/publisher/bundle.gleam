@@ -24,6 +24,13 @@ pub type Bundle {
   Bundle(entry: String, files: List(BundleFile))
 }
 
+/// Pack `b` into a `data:application/zip;base64,...` URI for local installation.
+pub fn to_data_uri(b: Bundle) -> String {
+  let entries = list.map(b.files, fn(f) { #(f.path, f.bytes) })
+  let archive = zip.zip(entries)
+  "data:application/zip;base64," <> bit_array.base64_encode(archive, True)
+}
+
 /// Build a bundle from raw zip `bytes`.
 pub fn from_zip_bytes(bytes: BitArray) -> Result(Bundle, String) {
   case zip.unzip(bytes) {

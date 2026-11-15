@@ -1,9 +1,14 @@
 function resolveHost(selector) {
   if (typeof document === "undefined" || !selector) return null;
+  const raw = String(selector);
+  if (raw.startsWith("#") && !/[\s\[>,+~:]/.test(raw)) {
+    const byId = document.getElementById(raw.slice(1));
+    if (byId) return byId;
+  }
   try {
-    return document.querySelector(selector);
+    return document.querySelector(raw);
   } catch (_) {
-    return document.getElementById(selector);
+    return document.getElementById(raw.startsWith("#") ? raw.slice(1) : raw);
   }
 }
 

@@ -203,6 +203,19 @@
   flex-direction: column;
 }
 
+.omni-sandbox-iframe {
+  width: 100%;
+  min-height: calc(100vh - 140px);
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: var(--omni-radius-md, 10px);
+  background: transparent;
+}
+
+.omni-viewport-island[data-viewport-slot="widget"] .omni-sandbox-iframe {
+  min-height: 220px;
+}
+
 /* --- Widgets dashboard grid --- */
 .omni-widgets-grid {
   display: grid;

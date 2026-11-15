@@ -853,7 +853,22 @@ fn drain_urls(host: ShellBoot) -> Nil {
     dict.fold(host.booted.builtins, [], fn(acc, _id, app) {
       list.append(acc, app.take_urls())
     })
-  list.each(urls, browser.open_external)
+  list.each(urls, fn(url) {
+    case string.starts_with(url, "omni-install:") {
+      True -> {
+        let rest = string.drop_start(url, 13)
+        case string.split_once(rest, "|") {
+          Ok(#(plugin_id, target)) -> install_bundle(host, target, plugin_id)
+          Error(Nil) -> Nil
+        }
+      }
+      False ->
+        case string.starts_with(url, "nostr:naddr1") {
+          True -> install_bundle(host, string.drop_start(url, 6), "")
+          False -> browser.open_external(url)
+        }
+    }
+  })
   Nil
 }
 
@@ -1132,7 +1147,7 @@ fn install_bundle(host: ShellBoot, target: String, plugin_id: String) -> Nil {
         }
         Ok(bundle) -> {
           dispatch_shell_msg(InstallApp(bundle.app))
-          dispatch_shell_msg(OpenApp(plugin_id, None))
+          dispatch_shell_msg(OpenApp(bundle.app.id, None))
           Nil
         }
       }

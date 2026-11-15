@@ -252,15 +252,15 @@ fn render_studio_tab(model: Model) -> List(Node) {
       node.Toggle(
         ..t,
         label: Some(case model.packaging_mode {
-          ModeInlined -> "Single-file Inlined (embed in Kind 35129 event)"
-          ModeBlossom -> "Multi-file Blossom (upload blobs & reference)"
+          ModeInlined -> "Embed single HTML file directly in Nostr event"
+          ModeBlossom -> "Upload multi-file bundle to Blossom media server"
         }),
       )
     other -> other
   }
 
   let install_local_btn = case
-    schema.button("Install Locally in Omni", schema.new_action("install-local"))
+    schema.button("Install on This Device", schema.new_action("install-local"))
     |> schema.with_icon("package")
   {
     node.Button(..) as b -> node.Button(..b, variant: Some(ButtonSecondary))
@@ -268,13 +268,20 @@ fn render_studio_tab(model: Model) -> List(Node) {
   }
 
   let publish_label = case model.packaging_mode {
-    ModeInlined -> "Publish Inlined (NIP-5A)"
-    ModeBlossom -> "Upload to Blossom & Publish (NIP-5A)"
+    ModeInlined -> "Publish to Nostr"
+    ModeBlossom -> "Upload & Publish to Nostr"
   }
 
   let publish_btn =
     schema.button(publish_label, schema.new_action("publish-package"))
     |> schema.with_icon("upload")
+
+  let action_hint =
+    schema.text(
+      "Install on This Device saves the app locally in your browser. Publish shares it to your Nostr relays.",
+    )
+    |> schema.text_variant(node.Caption)
+    |> schema.text_tone(node.ToneMuted)
 
   let action_row =
     schema.box()
@@ -286,12 +293,15 @@ fn render_studio_tab(model: Model) -> List(Node) {
   let details_card =
     schema.card()
     |> schema.title("2. App Details & Publish")
-    |> schema.subtitle("Configure NIP-5A metadata, packaging mode, and publish")
+    |> schema.subtitle(
+      "Set app metadata, install locally to test, or publish to Nostr",
+    )
     |> schema.with_icon("edit")
     |> schema.children([
       row_meta,
       desc_input,
       packaging_toggle,
+      action_hint,
       action_row,
     ])
 
