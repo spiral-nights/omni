@@ -20,6 +20,7 @@ pub type NotebookFolder {
 
 /// Sync/save status for the notebook editor.
 pub type SaveStatus {
+  StatusIdle
   StatusSaved
   StatusSaving
   StatusOffline
@@ -66,7 +67,7 @@ pub fn default_welcome_note() -> NoteDoc {
   NoteDoc(
     id: "note_1",
     title: "Welcome to Notes",
-    content: "<p>A private, local-first personal notebook for your thoughts.</p><ul><li><b>End-to-End Encrypted</b>: Only your key can decrypt your notes via NIP-44.</li><li><b>Multi-Device Sync</b>: Changes sync seamlessly via NIP-78 replaceable documents.</li><li><b>Zero Distractions</b>: Clean typography, tag organization, and offline access.</li></ul>",
+    content: "A private, local-first personal notebook for your thoughts.\n\n- End-to-End Encrypted: Only your key can decrypt your notes via NIP-44.\n- Multi-Device Sync: Changes sync seamlessly via NIP-78 replaceable documents.\n- Zero Distractions: Clean typography, tag organization, and offline access.",
     tags: ["welcome", "nostr"],
     starred: True,
     archived: False,
@@ -92,7 +93,7 @@ pub fn init() -> Model {
     my_pubkey: None,
     show_settings: False,
     preview_mode: False,
-    save_status: StatusSaved,
+    save_status: StatusIdle,
     save_revision: 0,
     online: True,
   )
@@ -116,7 +117,7 @@ pub fn init_with_notes(notes: List(NoteDoc)) -> Model {
         my_pubkey: None,
         show_settings: False,
         preview_mode: False,
-        save_status: StatusSaved,
+        save_status: StatusIdle,
         save_revision: 0,
         online: True,
       )
@@ -135,7 +136,7 @@ pub fn init_with_notes(notes: List(NoteDoc)) -> Model {
         my_pubkey: None,
         show_settings: False,
         preview_mode: False,
-        save_status: StatusSaved,
+        save_status: StatusIdle,
         save_revision: 0,
         online: True,
       )
@@ -407,7 +408,7 @@ pub fn notebook_decoder() -> Decoder(Model) {
     my_pubkey: None,
     show_settings: False,
     preview_mode: False,
-    save_status: StatusSaved,
+    save_status: StatusIdle,
     save_revision: 0,
     online: True,
   ))

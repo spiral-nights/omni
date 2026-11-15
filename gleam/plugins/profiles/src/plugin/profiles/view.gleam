@@ -195,7 +195,10 @@ fn render_directory_item(model: Model, person: profile.Profile) -> Node {
     subtitle: subtitle,
     meta: meta,
     icon: None,
-    avatar_url: person.picture,
+    avatar_url: case follow {
+      True -> person.picture
+      False -> None
+    },
     avatar_pubkey: Some(person.pubkey),
     checked: None,
     on_check_action: None,
@@ -220,7 +223,10 @@ fn render_profile(model: Model, pubkey: String) -> Node {
   let avatar =
     Avatar(
       base: node.empty_base(),
-      src: person.picture,
+      src: case follow {
+        True -> person.picture
+        False -> None
+      },
       pubkey: Some(pubkey),
       name: Some(name),
       size: Some(SizeLg),
@@ -368,7 +374,6 @@ fn render_profile(model: Model, pubkey: String) -> Node {
 
   schema.card()
   |> schema.with_id("profile-" <> pubkey)
-  |> schema.banner_background(generated_avatar.banner_gradient(pubkey))
   |> schema.title("Profile")
   |> schema.with_icon("user")
   |> schema.page("profile")
@@ -391,7 +396,15 @@ fn render_profile(model: Model, pubkey: String) -> Node {
 }
 
 fn render_author_note(model: Model, note: Note) -> Node {
-  let author = dict.get(model.profiles, note.pubkey) |> option.from_result
+  let author =
+    dict.get(model.profiles, note.pubkey)
+    |> option.from_result
+    |> fn(opt) {
+      case model.following(model, note.pubkey) {
+        True -> opt
+        False -> option.map(opt, fn(p) { profile.Profile(..p, picture: None) })
+      }
+    }
   let note_stats =
     dict.get(model.stats, note.id)
     |> option.from_result
@@ -727,9 +740,9 @@ fn render_widget(model: Model) -> Node {
     Some(pk) -> {
       let person = dict.get(model.profiles, pk) |> option.from_result
       let name = profile.best_display_name(person, pk)
-      let picture = case person {
-        Some(p) -> p.picture
-        None -> None
+      let picture = case model.following(model, pk), person {
+        True, Some(p) -> p.picture
+        _, _ -> None
       }
       schema.box()
       |> schema.row
@@ -781,7 +794,10 @@ fn render_widget(model: Model) -> Node {
         subtitle: person.nip05,
         meta: None,
         icon: None,
-        avatar_url: person.picture,
+        avatar_url: case model.following(model, person.pubkey) {
+          True -> person.picture
+          False -> None
+        },
         avatar_pubkey: Some(person.pubkey),
         checked: None,
         on_check_action: None,

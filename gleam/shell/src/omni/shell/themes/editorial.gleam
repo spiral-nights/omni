@@ -22,8 +22,7 @@ import omni/shell/model.{
   type Model, type SettingsTab, AppStore, PrimaryApp, Settings, WidgetsDashboard,
 }
 import omni/shell/msg.{
-  type Msg, NavigateTo, OpenApp, OpenSearch, OpenSettings, ScrollToTop,
-  ToggleFullscreen,
+  type Msg, NavigateTo, OpenApp, OpenSettings, ScrollToTop, ToggleFullscreen,
 }
 import omni/shell/settings/intents
 import omni/shell/settings/permission_prompt
@@ -34,7 +33,6 @@ import omni/shell/theme.{type Theme, Theme}
 import omni/shell/toast
 import omni/shell/update_modal
 import omni/ui/icons
-import omni/ui/sanitize
 
 /// Build the built-in Editorial `Theme` strategy descriptor.
 pub fn theme() -> Theme {
@@ -96,17 +94,6 @@ fn render_header(model: Model) -> Element(Msg) {
         html.button(
           [
             attribute.type_("button"),
-            attribute.id("btn-editorial-search"),
-            attribute.class("editorial-header-btn"),
-            attribute.title("Search"),
-            attribute.attribute("aria-label", "Search"),
-            event.on_click(OpenSearch),
-          ],
-          [icons.render_icon("search", 17)],
-        ),
-        html.button(
-          [
-            attribute.type_("button"),
             attribute.id("btn-editorial-dock-settings"),
             attribute.class("editorial-header-btn"),
             attribute.title("Settings"),
@@ -120,7 +107,10 @@ fn render_header(model: Model) -> Element(Msg) {
         [
           attribute.class("editorial-header-center"),
           attribute.id("editorial-brand-container"),
-          attribute.title("Omni"),
+          attribute.title("All Apps"),
+          attribute.role("button"),
+          attribute.attribute("tabindex", "0"),
+          event.on_click(NavigateTo(AppStore)),
         ],
         [
           html.h1([attribute.class("editorial-brand-title")], [
@@ -137,17 +127,6 @@ fn render_header(model: Model) -> Element(Msg) {
       ),
       html.div([attribute.class("editorial-header-right")], [
         header_actions.render_header_actions(model),
-        html.button(
-          [
-            attribute.type_("button"),
-            attribute.id("btn-editorial-toggle-fullscreen"),
-            attribute.class("editorial-header-btn"),
-            attribute.title("Toggle Expansive Fullscreen"),
-            attribute.attribute("aria-label", "Toggle Fullscreen"),
-            event.on_click(ToggleFullscreen),
-          ],
-          [icons.render_icon("external", 17)],
-        ),
         render_profile_avatar(model),
       ]),
     ]),
@@ -181,17 +160,10 @@ fn settings_subtitle(tab: SettingsTab) -> String {
 
 fn render_profile_avatar(model: Model) -> Element(Msg) {
   let #(title, avatar_src) = case model.user_profile {
-    Some(profile) -> {
-      let safe_pic = case profile.picture {
-        Some(raw) -> sanitize.sanitize_url(raw)
-        None -> None
-      }
-      let url = case safe_pic {
-        Some(pic) -> pic
-        None -> shell.avatar_data_uri(profile.pubkey, profile.display_name)
-      }
-      #(profile.display_name, url)
-    }
+    Some(profile) -> #(
+      profile.display_name,
+      shell.avatar_data_uri(profile.pubkey, profile.display_name),
+    )
     None -> #("Active Profile", shell.avatar_data_uri("anonymous", "O"))
   }
 
@@ -400,7 +372,7 @@ fn render_overlays(model: Model) -> Element(Msg) {
         [
           attribute.type_("button"),
           attribute.id("btn-editorial-back-to-top"),
-          attribute.class("editorial-back-to-top"),
+          attribute.class("editorial-back-to-top visible"),
           attribute.title("Back to top"),
           attribute.attribute("aria-label", "Back to top"),
           event.on_click(ScrollToTop),

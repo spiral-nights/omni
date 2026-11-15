@@ -65,6 +65,7 @@ pub type Msg {
 
   // Host-rendered built-in plugin views
   EmbedSchema(plugin_id: String, node: Node)
+  EmbedSchemas(views: List(#(String, Node)))
   ClearEmbeddedSchema(plugin_id: String)
   HostedSchemaAction(plugin_id: String, action: Action)
   DispatchIntent(action: String, payload: Option(Dict(String, Dynamic)))

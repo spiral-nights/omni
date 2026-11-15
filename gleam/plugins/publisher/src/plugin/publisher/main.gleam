@@ -104,8 +104,20 @@ fn app_spec_persisted(
     },
     update: fn(current, message) {
       let #(next, effects) = update.update(current, message)
-      let _ = local_store.save(store, published_cfg, next.published)
-      let _ = local_store.save(store, servers_cfg, next.servers)
+      case next.published == current.published {
+        True -> Nil
+        False -> {
+          let _ = local_store.save(store, published_cfg, next.published)
+          Nil
+        }
+      }
+      case next.servers == current.servers {
+        True -> Nil
+        False -> {
+          let _ = local_store.save(store, servers_cfg, next.servers)
+          Nil
+        }
+      }
       #(next, effects)
     },
     view: view.view,

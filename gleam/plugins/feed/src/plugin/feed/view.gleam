@@ -19,6 +19,7 @@ import omni/protocol/schema/node.{
   StatusIndicator, TabItem, Toggle, ToneMuted,
 }
 import omni/protocol/schema/style.{SizeMd, SizeSm, StyleRaw}
+import omni/social/follows
 import omni/social/note.{type Note}
 import omni/social/profile
 import omni/social/stats.{type NoteStats}
@@ -294,13 +295,14 @@ fn render_thread_view(model: Model, note_id: String) -> Node {
         False -> []
       }
 
-      let reply_cards = case thread_view.replies {
-        [] -> [
+      let reply_cards = case thread_view.replies, is_loading {
+        [], True -> []
+        [], False -> [
           schema.text("No replies yet. Be the first to reply!")
           |> schema.text_variant(Caption)
           |> schema.text_tone(ToneMuted),
         ]
-        replies ->
+        replies, _ ->
           list.map(replies, fn(rep) { render_feed_note_card(model, rep, cfg) })
       }
 
@@ -886,7 +888,15 @@ fn feed_note_card_config(now_sec: Int) -> NoteCardConfig {
 }
 
 fn render_feed_note_card(model: Model, n: Note, cfg: NoteCardConfig) -> Node {
-  let author_opt = dict.get(model.profiles, n.pubkey) |> option.from_result
+  let author_opt =
+    dict.get(model.profiles, n.pubkey)
+    |> option.from_result
+    |> fn(opt) {
+      case follows.is_following(model.follows, n.pubkey) {
+        True -> opt
+        False -> option.map(opt, fn(p) { profile.Profile(..p, picture: None) })
+      }
+    }
   let reply_author_opt = resolve_reply_author_profile(model, n)
   let s = get_note_stats(model, n.id)
   note_card.render_note_card_with_inline_images(

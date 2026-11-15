@@ -15,6 +15,8 @@ pub fn icon_names() -> List(String) {
     "arrow-left",
     "arrow-up",
     "arrow-down",
+    "expand",
+    "minimize",
     "search",
     "more",
     "menu",
@@ -180,6 +182,20 @@ fn help_circle_children() -> List(Element(msg)) {
 
 fn lookup_icon_children(name: String) -> Result(List(Element(msg)), Nil) {
   case name {
+    "expand" ->
+      Ok([
+        svg.path([attribute("d", "M15 3h6v6")]),
+        svg.path([attribute("d", "M9 21H3v-6")]),
+        svg.path([attribute("d", "M21 3l-7 7")]),
+        svg.path([attribute("d", "M3 21l7-7")]),
+      ])
+    "minimize" ->
+      Ok([
+        svg.path([attribute("d", "M4 14h6v6")]),
+        svg.path([attribute("d", "M20 10h-6V4")]),
+        svg.path([attribute("d", "M14 10l7-7")]),
+        svg.path([attribute("d", "M3 21l7-7")]),
+      ])
     "arrow-left" ->
       Ok([
         svg.line([

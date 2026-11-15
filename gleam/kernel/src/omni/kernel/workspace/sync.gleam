@@ -9,6 +9,7 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/set
 import omni/platform/storage.{type Storage}
+import omni/protocol/viewport
 import omni/protocol/workspace.{
   type PluginConfig, type WorkspaceState, PluginConfig, WorkspaceState,
 }
@@ -59,7 +60,9 @@ fn merge_plugin_config(
 
   let older_extra_placements =
     list.filter(older.placements, fn(pl) {
-      !set.contains(newer_placement_ids, pl.id)
+      let unpinned_in_newer =
+        newer.pinned == Some(False) && pl.viewport == viewport.Dock
+      !unpinned_in_newer && !set.contains(newer_placement_ids, pl.id)
     })
 
   let merged_placements = list.append(newer.placements, older_extra_placements)

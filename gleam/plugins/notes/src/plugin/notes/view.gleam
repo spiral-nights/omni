@@ -20,7 +20,7 @@ import omni/protocol/schema/node.{
 import omni/protocol/schema/style.{SizeMd, SizeSm, StyleRaw}
 import omni/ui/sanitize
 import plugin/notes/model.{
-  type Model, type NoteDoc, StatusOffline, StatusSaved, StatusSaving,
+  type Model, type NoteDoc, StatusIdle, StatusOffline, StatusSaved, StatusSaving,
   folder_to_id,
 }
 
@@ -37,26 +37,27 @@ fn render_notebook(model: Model) -> Node {
     schema.box()
     |> schema.column
     |> schema.gap("sm")
-    |> schema.with_style(StyleRaw("flex: 0 0 320px; max-width: 320px;"))
+    |> schema.with_id("notes-sidebar")
     |> schema.children([render_folder_tabs(model), render_note_list(model)])
 
   let editor_pane =
     schema.box()
     |> schema.column
-    |> schema.with_style(StyleRaw("flex: 1; min-width: 0;"))
+    |> schema.with_style(StyleRaw("flex: 1; min-width: 0; width: 100%;"))
     |> schema.children([render_editor(model)])
 
   let split_pane =
     schema.box()
     |> schema.row
     |> schema.gap("md")
+    |> schema.with_id("notes-split-pane")
     |> schema.children([sidebar, editor_pane])
 
   schema.box()
   |> schema.column
   |> schema.gap("md")
   |> schema.with_style(StyleRaw(
-    "padding: 16px; max-width: 1100px; margin: 0 auto;",
+    "padding: 12px; max-width: 1100px; margin: 0 auto; width: 100%; box-sizing: border-box;",
   ))
   |> schema.children([
     render_header(model),
@@ -97,28 +98,32 @@ fn render_header(model: Model) -> Node {
     False -> []
   }
 
-  let status_node = case model.save_status {
-    StatusSaved ->
+  let status_nodes = case model.save_status {
+    StatusIdle -> []
+    StatusSaved -> [
       StatusIndicator(
         base: empty_base(),
         status: StatusOnline,
         label: Some("Saved"),
         pulse: Some(False),
-      )
-    StatusSaving ->
+      ),
+    ]
+    StatusSaving -> [
       StatusIndicator(
         base: empty_base(),
         status: StatusConnecting,
         label: Some("Saving..."),
         pulse: Some(True),
-      )
-    StatusOffline ->
+      ),
+    ]
+    StatusOffline -> [
       StatusIndicator(
         base: empty_base(),
         status: IndicatorOffline,
         label: Some("Offline"),
         pulse: Some(False),
-      )
+      ),
+    ]
   }
 
   schema.box()
@@ -128,12 +133,16 @@ fn render_header(model: Model) -> Node {
     schema.box()
       |> schema.row
       |> schema.gap("sm")
-      |> schema.children([
-        schema.text("Notes"),
-        schema.badge(int.to_string(list.length(model.notes)) <> " notes"),
-        status_node,
-        ..dirty_badge
-      ]),
+      |> schema.children(
+        list.flatten([
+          [
+            schema.text("Notes"),
+            schema.badge(int.to_string(list.length(model.notes)) <> " notes"),
+          ],
+          status_nodes,
+          dirty_badge,
+        ]),
+      ),
     schema.box()
       |> schema.row
       |> schema.gap("xs")

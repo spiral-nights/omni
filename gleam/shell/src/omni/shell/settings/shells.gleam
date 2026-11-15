@@ -281,7 +281,15 @@ pub fn render_shells_panel(
         html.div([attribute.class("omni-accent-swatch-row")], accent_swatches),
         html.div([attribute.class("omni-accent-custom-input-row")], [
           html.label([attribute.for("input-custom-accent-color")], [
-            element.text("Custom Hex Accent:"),
+            element.text("Custom Accent:"),
+          ]),
+          html.input([
+            attribute.type_("color"),
+            attribute.id("input-custom-accent-picker"),
+            attribute.class("omni-accent-color-picker"),
+            attribute.attribute("aria-label", "Pick custom accent color"),
+            attribute.value(model.accent_color),
+            event.on_input(SetAccentColor),
           ]),
           html.input([
             attribute.type_("text"),
@@ -332,15 +340,9 @@ fn render_shell_card(
         element.text("Current"),
       ])
     False ->
-      html.button(
-        [
-          attribute.type_("button"),
-          attribute.class("omni-button omni-button-primary btn-activate-shell"),
-          attribute.attribute("data-shell-id", shell.id),
-          event.on_click(SelectShell(shell.id)),
-        ],
-        [element.text("Activate")],
-      )
+      html.span([attribute.class("omni-shell-activate-hint")], [
+        element.text("Click to activate"),
+      ])
   }
 
   let badge_el = case shell.is_builtin {
@@ -354,59 +356,65 @@ fn render_shell_card(
       ])
   }
 
-  html.article(
-    [
-      attribute.class(case is_active {
-        True -> "omni-shell-card active"
-        False -> "omni-shell-card"
-      }),
+  let card_attrs = case is_active {
+    True -> [
+      attribute.class("omni-shell-card active"),
       attribute.attribute("data-shell-card", shell.id),
-    ],
-    [
-      html.div([attribute.class("omni-shell-card-header")], [
-        html.div([attribute.class("omni-shell-card-identity")], [
-          html.div([attribute.class("omni-shell-card-icon")], [
-            icons.render_icon(shell.icon, 18),
+    ]
+    False -> [
+      attribute.class("omni-shell-card selectable"),
+      attribute.attribute("data-shell-card", shell.id),
+      attribute.attribute("data-shell-id", shell.id),
+      attribute.role("button"),
+      attribute.attribute("tabindex", "0"),
+      event.on_click(SelectShell(shell.id)),
+    ]
+  }
+
+  html.article(card_attrs, [
+    html.div([attribute.class("omni-shell-card-header")], [
+      html.div([attribute.class("omni-shell-card-identity")], [
+        html.div([attribute.class("omni-shell-card-icon")], [
+          icons.render_icon(shell.icon, 18),
+        ]),
+        html.div([attribute.class("omni-shell-card-titles")], [
+          html.div([attribute.class("omni-shell-card-title-row")], [
+            html.strong([attribute.class("omni-shell-card-name")], [
+              element.text(shell.name),
+            ]),
+            case is_active {
+              True ->
+                html.span([attribute.class("omni-shell-badge active")], [
+                  element.text("Active"),
+                ])
+              False -> element.none()
+            },
+            badge_el,
           ]),
-          html.div([attribute.class("omni-shell-card-titles")], [
-            html.div([attribute.class("omni-shell-card-title-row")], [
-              html.strong([attribute.class("omni-shell-card-name")], [
-                element.text(shell.name),
-              ]),
-              case is_active {
-                True ->
-                  html.span([attribute.class("omni-shell-badge active")], [
-                    element.text("Active"),
-                  ])
-                False -> element.none()
-              },
-              badge_el,
-            ]),
-            html.span([attribute.class("omni-shell-card-meta")], [
-              element.text("by " <> shell.author <> " • v" <> shell.version),
-            ]),
+          html.span([attribute.class("omni-shell-card-meta")], [
+            element.text("by " <> shell.author <> " • v" <> shell.version),
           ]),
         ]),
-        html.div([attribute.class("omni-shell-card-actions")], [
-          action_el,
-          case shell.is_builtin {
-            True -> element.none()
-            False ->
-              html.button(
-                [
-                  attribute.type_("button"),
-                  attribute.id("btn-uninstall-shell-" <> shell.id),
-                  attribute.class("omni-button omni-button-danger"),
-                  event.on_click(UninstallShell(shell.id)),
-                ],
-                [element.text("Uninstall")],
-              )
-          },
-        ]),
       ]),
-      html.p([attribute.class("omni-shell-card-description")], [
-        element.text(shell.description),
+      html.div([attribute.class("omni-shell-card-actions")], [
+        action_el,
+        case shell.is_builtin {
+          True -> element.none()
+          False ->
+            html.button(
+              [
+                attribute.type_("button"),
+                attribute.id("btn-uninstall-shell-" <> shell.id),
+                attribute.class("omni-button omni-button-danger"),
+                event.stop_propagation(event.on_click(UninstallShell(shell.id))),
+              ],
+              [element.text("Uninstall")],
+            )
+        },
       ]),
-    ],
-  )
+    ]),
+    html.p([attribute.class("omni-shell-card-description")], [
+      element.text(shell.description),
+    ]),
+  ])
 }

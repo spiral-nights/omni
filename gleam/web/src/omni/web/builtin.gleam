@@ -41,6 +41,7 @@ pub type BuiltinApp {
     navigate: fn(String) -> Nil,
     handle_action: fn(Action) -> Bool,
     ingest: Option(fn(Event) -> Nil),
+    ingest_many: Option(fn(List(Event)) -> Nil),
     relay_status: Option(fn(String, Bool, Option(Int), Int, Int) -> Nil),
     apply_relay_list: Option(fn(List(List(String))) -> Nil),
     take_publishes: fn() -> List(UnsignedEvent),
@@ -83,12 +84,16 @@ pub fn apps(
 
 fn feed_app(store: storage.Storage) -> BuiltinApp {
   let running = feed.start_app_with_storage("", store, fn(_) { Nil })
+  app.disable_history(running)
   BuiltinApp(
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: Some(fn(event) {
       app.dispatch(running, feed_msg.IngestEvent(event))
+    }),
+    ingest_many: Some(fn(events) {
+      app.dispatch(running, feed_msg.IngestEvents(events))
     }),
     relay_status: None,
     apply_relay_list: None,
@@ -113,6 +118,7 @@ fn feed_app(store: storage.Storage) -> BuiltinApp {
 
 fn profiles_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
   let running = profiles.start_app_with_storage("", store, fn(_) { Nil })
+  app.disable_history(running)
   app.dispatch(running, profiles_msg.SetPubkey(pubkey_hex))
   BuiltinApp(
     render: fn() { app.current_view(running) },
@@ -120,6 +126,9 @@ fn profiles_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: Some(fn(event) {
       app.dispatch(running, profiles_msg.IngestEvent(event))
+    }),
+    ingest_many: Some(fn(events) {
+      app.dispatch(running, profiles_msg.IngestEvents(events))
     }),
     relay_status: None,
     apply_relay_list: None,
@@ -142,12 +151,14 @@ fn profiles_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
 
 fn relays_app(relay_urls: List(String)) -> BuiltinApp {
   let running = relays.start_app("", fn(_) { Nil })
+  app.disable_history(running)
   app.dispatch(running, relays_msg.SeedRelays(relay_urls))
   BuiltinApp(
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: None,
+    ingest_many: None,
     relay_status: Some(fn(url, connected, latency, received, sent) {
       let state = case connected {
         True -> StateConnected
@@ -189,11 +200,13 @@ fn publisher_app(
       relay_urls,
       fn(_) { Nil },
     )
+  app.disable_history(running)
   BuiltinApp(
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: None,
+    ingest_many: None,
     relay_status: None,
     apply_relay_list: None,
     take_publishes: fn() { app.take_publishes(running) },
@@ -224,11 +237,13 @@ fn publisher_app(
 
 fn checklist_app(store: storage.Storage) -> BuiltinApp {
   let running = checklist.start_app_with_storage("", store, fn(_) { Nil })
+  app.disable_history(running)
   BuiltinApp(
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: None,
+    ingest_many: None,
     relay_status: None,
     apply_relay_list: None,
     take_publishes: fn() { app.take_publishes(running) },
@@ -252,12 +267,14 @@ fn checklist_app(store: storage.Storage) -> BuiltinApp {
 
 fn notes_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
   let running = notes.start_app_with_storage("", store, fn(_) { Nil })
+  app.disable_history(running)
   app.dispatch(running, notes_msg.SetPubkey(pubkey_hex))
   BuiltinApp(
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: None,
+    ingest_many: None,
     relay_status: None,
     apply_relay_list: None,
     take_publishes: fn() { app.take_publishes(running) },
@@ -281,12 +298,14 @@ fn notes_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
 
 fn timer_app() -> BuiltinApp {
   let running = timer.start_app("", fn(_) { Nil })
+  app.disable_history(running)
 
   BuiltinApp(
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
     ingest: None,
+    ingest_many: None,
     relay_status: None,
     apply_relay_list: None,
     take_publishes: fn() { app.take_publishes(running) },

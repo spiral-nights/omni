@@ -1266,22 +1266,11 @@ pub fn boot_shell_catalog_install_uninstall_test() {
 
   let booted = boot.init_with_relays(ports, [], None)
   list.length(booted.model.installed_shells) |> should.equal(2)
-  list.any(booted.model.curated_shells, fn(item) { item.id == "mantra" })
-  |> should.be_true()
-
-  let #(installed, _) =
-    boot.dispatch(booted, omni_shell_msg.InstallShell("mantra"))
-  list.length(installed.model.installed_shells) |> should.equal(3)
-  list.any(installed.model.curated_shells, fn(item) { item.id == "mantra" })
-  |> should.be_false()
-
-  let #(removed, _) =
-    boot.dispatch(installed, omni_shell_msg.UninstallShell("mantra"))
-  list.length(removed.model.installed_shells) |> should.equal(2)
+  booted.model.curated_shells |> should.equal([])
 
   let #(with_url, _) =
     boot.dispatch(
-      removed,
+      booted,
       omni_shell_msg.SetCustomShellUrl("https://example.test/shell.html"),
     )
   let #(custom, _) =
@@ -1538,6 +1527,82 @@ pub fn installer_resolve_with_handles_zip_test() {
   let assert Ok(bundle) = result
   bundle.app.name |> should.equal("Base64 Zip")
   bundle.app.id |> should.equal("b64.zip.app")
+
+  promise.resolve(Nil)
+}
+
+pub fn view_profile_routes_directly_to_user_profile_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+
+  let target_pk = string.repeat("a", 64)
+  let act =
+    schema_action.new("view_profile")
+    |> schema_action.with_payload(
+      dict.from_list([#("pubkey", dynamic.string(target_pk))]),
+    )
+
+  let #(after_open, _) =
+    boot.dispatch(
+      booted,
+      omni_shell_msg.HostedSchemaAction("org.omni.plugin.feed", act),
+    )
+
+  after_open.model.intent_prompt |> should.equal(None)
+  after_open.model.active_page
+  |> should.equal(model.PrimaryApp(
+    "org.omni.plugin.profiles",
+    Some("?view=profile&id=" <> target_pk),
+  ))
+
+  let assert Ok(profiles_view) =
+    dict.get(after_open.model.embedded_views, "org.omni.plugin.profiles")
+  let rendered = schema_codec.encode_node(profiles_view)
+  string.contains(rendered, "Back to Directory") |> should.be_true
+  string.contains(rendered, string.slice(target_pk, 0, 8)) |> should.be_true
+
+  promise.resolve(Nil)
+}
+
+pub fn select_intent_handler_preserves_target_profile_view_test() {
+  let store = storage.in_memory()
+  use ports_res <- promise.await(test_ports(store))
+  let assert Ok(ports) = ports_res
+  let booted = boot.init_with_relays(ports, [], None)
+
+  let target_pk = string.repeat("b", 64)
+  let act =
+    schema_action.new("view_profile")
+    |> schema_action.with_payload(
+      dict.from_list([#("pubkey", dynamic.string(target_pk))]),
+    )
+  let payload_json = schema_action.to_json(act) |> json.to_string
+  let prompt =
+    model.IntentPromptState(
+      intent_name: "view_profile",
+      candidates: ["org.omni.plugin.profiles", "org.omni.plugin.feed"],
+      payload_json: payload_json,
+    )
+  let #(prompted, _) =
+    boot.dispatch(booted, omni_shell_msg.ShowIntentPrompt(prompt))
+  let #(selected, _) =
+    boot.dispatch(
+      prompted,
+      omni_shell_msg.SelectIntentHandler("org.omni.plugin.profiles"),
+    )
+
+  selected.model.active_page
+  |> should.equal(model.PrimaryApp(
+    "org.omni.plugin.profiles",
+    Some("?view=profile&id=" <> target_pk),
+  ))
+  let assert Ok(profiles_view) =
+    dict.get(selected.model.embedded_views, "org.omni.plugin.profiles")
+  let rendered = schema_codec.encode_node(profiles_view)
+  string.contains(rendered, "Back to Directory") |> should.be_true
+  string.contains(rendered, string.slice(target_pk, 0, 8)) |> should.be_true
 
   promise.resolve(Nil)
 }

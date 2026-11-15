@@ -10,7 +10,7 @@ import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
 import omni/shell/model.{
-  type InstalledApp, type Model, AppStore, PrimaryApp, Settings, TabProfile,
+  type InstalledApp, type Model, AppStore, PrimaryApp, Settings, TabShells,
   WidgetsDashboard,
 }
 import omni/shell/msg.{type Msg, NavigateTo, OpenApp, OpenSettings}
@@ -56,7 +56,7 @@ pub fn render_dock(model: Model) -> Element(Msg) {
       label: "Settings",
       icon_name: "settings",
       active: is_settings_active,
-      on_click_msg: OpenSettings(TabProfile),
+      on_click_msg: OpenSettings(TabShells),
     ),
   ]
 

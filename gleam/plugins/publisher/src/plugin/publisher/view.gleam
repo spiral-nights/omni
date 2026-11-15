@@ -215,25 +215,31 @@ fn render_studio_tab(model: Model) -> List(Node) {
     schema.button("Start from Template", schema.new_action("use-template"))
     |> schema.with_icon("file")
 
-  let bundle_row =
+  let source_url_row =
     schema.box()
     |> schema.row()
     |> schema.gap("sm")
-    |> schema.children([
-      bundle_url_input,
-      fetch_url_btn,
-      install_url_btn,
-    ])
+    |> schema.children([bundle_url_input, fetch_url_btn])
 
-  let file_row =
+  let source_file_row =
     schema.box()
     |> schema.row()
     |> schema.gap("sm")
     |> schema.children([
       choose_zip_btn,
       choose_file_btn,
+      install_url_btn,
       template_btn,
     ])
+
+  let source_card =
+    schema.card()
+    |> schema.title("1. Choose Source")
+    |> schema.subtitle(
+      "Load a local bundle (.zip, .html, .js) or fetch from a URL / naddr",
+    )
+    |> schema.with_icon("upload")
+    |> schema.children([source_url_row, source_file_row])
 
   let packaging_toggle = case
     schema.toggle(
@@ -277,16 +283,14 @@ fn render_studio_tab(model: Model) -> List(Node) {
     |> schema.justify(JustifyEnd)
     |> schema.children([install_local_btn, publish_btn])
 
-  let studio_form_card =
+  let details_card =
     schema.card()
-    |> schema.title("Plugin Studio Form")
-    |> schema.subtitle("Configure NIP-5A metadata and entry bundle")
+    |> schema.title("2. App Details & Publish")
+    |> schema.subtitle("Configure NIP-5A metadata, packaging mode, and publish")
     |> schema.with_icon("edit")
     |> schema.children([
       row_meta,
       desc_input,
-      bundle_row,
-      file_row,
       packaging_toggle,
       action_row,
     ])
@@ -360,7 +364,17 @@ fn render_studio_tab(model: Model) -> List(Node) {
 
   let inventory = render_bundle_inventory(model)
 
-  [studio_form_card, hash_inspector_card, inventory, preview_card]
+  case model.bundle, model.upload_reports {
+    Some(_), _ -> [
+      source_card,
+      details_card,
+      hash_inspector_card,
+      inventory,
+      preview_card,
+    ]
+    None, [] -> [source_card, details_card]
+    None, _ -> [source_card, details_card, inventory]
+  }
 }
 
 fn render_published_tab(model: Model) -> List(Node) {

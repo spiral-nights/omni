@@ -603,19 +603,50 @@ export function host_share(title, text, url) {
   }
 }
 
+let lastThemeMode = null;
+let lastAccentStyle = null;
+
 export function apply_document_theme(themeMode, accentCss) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   if (!root) return;
-  root.setAttribute("data-theme-mode", String(themeMode || "dark"));
-  root.setAttribute("style", String(accentCss || ""));
+  const modeStr = String(themeMode || "dark");
   const resolvedMode =
-    themeMode === "system"
-      ? typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+    modeStr === "system"
+      ? typeof window !== "undefined" &&
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: light)").matches
         ? "light"
         : "dark"
-      : themeMode;
-  root.style.colorScheme = resolvedMode || "dark";
+      : modeStr;
+  const fullStyle = `${String(accentCss || "")};color-scheme:${resolvedMode || "dark"}`;
+  if (modeStr !== lastThemeMode) {
+    lastThemeMode = modeStr;
+    root.setAttribute("data-theme-mode", modeStr);
+  }
+  if (fullStyle !== lastAccentStyle) {
+    lastAccentStyle = fullStyle;
+    root.setAttribute("style", fullStyle);
+  }
+}
+
+let frameScheduled = false;
+
+export function schedule_frame(callback) {
+  if (typeof window === "undefined") {
+    queueMicrotask(callback);
+    return;
+  }
+  if (frameScheduled) return;
+  frameScheduled = true;
+  const raf =
+    typeof window.requestAnimationFrame === "function"
+      ? window.requestAnimationFrame.bind(window)
+      : (fn) => window.setTimeout(fn, 16);
+  raf(() => {
+    frameScheduled = false;
+    callback();
+  });
 }
 
 export function listen_shell_scroll(onChange) {
@@ -690,7 +721,15 @@ export function listen_app_context_menu(onOpen) {
     const appId = target.getAttribute("data-context-app-id");
     if (!appId) return;
     event.preventDefault();
-    onOpen(appId, Math.round(event.clientX || 0), Math.round(event.clientY || 0));
+    const menuW = 210;
+    const menuH = 220;
+    const vw = typeof window !== "undefined" ? window.innerWidth || 1024 : 1024;
+    const vh = typeof window !== "undefined" ? window.innerHeight || 768 : 768;
+    const rawX = Math.round(event.clientX || 0);
+    const rawY = Math.round(event.clientY || 0);
+    const x = Math.max(8, Math.min(rawX, vw - menuW));
+    const y = rawY + menuH > vh ? Math.max(8, rawY - menuH) : Math.max(8, rawY);
+    onOpen(appId, x, y);
   });
 
   let timer = null;
@@ -752,4 +791,66 @@ export function scroll_shell_top() {
 
 export function set_timeout(ms, cb) {
   setTimeout(cb, ms);
+}
+
+const pendingProfileAuthors = new Set();
+let profileFlushTimer = null;
+let pendingViewPush = false;
+let viewPushScheduled = false;
+
+export function enqueue_ingest_flush(author, needs_view_push, on_flush) {
+  if (author) {
+    pendingProfileAuthors.add(author);
+    if (pendingProfileAuthors.size >= 25) {
+      if (profileFlushTimer !== null) {
+        clearTimeout(profileFlushTimer);
+        profileFlushTimer = null;
+      }
+      const authorsJoined = Array.from(pendingProfileAuthors).join(",");
+      pendingProfileAuthors.clear();
+      on_flush(authorsJoined, false);
+    } else if (profileFlushTimer === null) {
+      profileFlushTimer = setTimeout(() => {
+        profileFlushTimer = null;
+        const authorsJoined = Array.from(pendingProfileAuthors).join(",");
+        pendingProfileAuthors.clear();
+        if (authorsJoined) on_flush(authorsJoined, false);
+      }, 350);
+    }
+  }
+  if (needs_view_push) {
+    pendingViewPush = true;
+    if (!viewPushScheduled) {
+      viewPushScheduled = true;
+      schedule_frame(() => {
+        viewPushScheduled = false;
+        const shouldPushViews = pendingViewPush;
+        pendingViewPush = false;
+        if (shouldPushViews) on_flush("", true);
+      });
+    }
+  }
+}
+
+let pendingPublicEvents = [];
+let publicIngestTimer = null;
+
+export function enqueue_public_event(event, on_flush) {
+  pendingPublicEvents.push(event);
+  if (pendingPublicEvents.length >= 25) {
+    if (publicIngestTimer !== null) {
+      clearTimeout(publicIngestTimer);
+      publicIngestTimer = null;
+    }
+    const batch = pendingPublicEvents;
+    pendingPublicEvents = [];
+    on_flush(batch);
+  } else if (publicIngestTimer === null) {
+    publicIngestTimer = setTimeout(() => {
+      publicIngestTimer = null;
+      const batch = pendingPublicEvents;
+      pendingPublicEvents = [];
+      if (batch.length > 0) on_flush(batch);
+    }, 200);
+  }
 }

@@ -69,6 +69,7 @@ pub type RunningApp(model, msg) {
     model_ref: Ref(model),
     view_ref: Ref(Node),
     route_ref: Ref(Route),
+    record_history: Ref(Bool),
     history_ref: Ref(List(String)),
     emit_schema: fn(Node) -> Nil,
     publishes: Ref(List(UnsignedEvent)),
@@ -104,6 +105,7 @@ pub fn start(
       model_ref: ref.new(initial_model),
       view_ref: ref.new(initial_node),
       route_ref: ref.new(initial_route),
+      record_history: ref.new(True),
       history_ref: ref.new([initial_json]),
       emit_schema: emit_schema,
       publishes: ref.new([]),
@@ -133,8 +135,13 @@ pub fn dispatch(app: RunningApp(model, msg), msg: msg) -> Nil {
   let next_node = app.spec.view(next_model)
   ref.set(app.view_ref, next_node)
 
-  let encoded = schema.encode_schema_message(next_node)
-  ref.update(app.history_ref, fn(hist) { list.append(hist, [encoded]) })
+  case ref.get(app.record_history) {
+    True -> {
+      let encoded = schema.encode_schema_message(next_node)
+      ref.update(app.history_ref, fn(hist) { [encoded, ..hist] })
+    }
+    False -> Nil
+  }
   app.emit_schema(next_node)
 
   run_effects(app, effects)
@@ -189,7 +196,14 @@ pub fn current_route(app: RunningApp(model, msg)) -> Route {
 
 /// Returns the chronological history of emitted `omni:schema` JSON payloads.
 pub fn emitted_schema_history(app: RunningApp(model, msg)) -> List(String) {
-  ref.get(app.history_ref)
+  list.reverse(ref.get(app.history_ref))
+}
+
+/// Disables schema JSON history retention for production hosts where only
+/// `current_view` is read.
+pub fn disable_history(app: RunningApp(model, msg)) -> Nil {
+  ref.set(app.record_history, False)
+  ref.set(app.history_ref, [])
 }
 
 fn run_effects(app: RunningApp(model, msg), effects: List(Effect(msg))) -> Nil {

@@ -50,7 +50,13 @@ pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
     },
     update: fn(current_model: Model, message: Msg) {
       let #(next_model, effects) = update.update(current_model, message)
-      let _ = local_store.save(store, cfg, next_model)
+      case next_model == current_model {
+        True -> Nil
+        False -> {
+          let _ = local_store.save(store, cfg, next_model)
+          Nil
+        }
+      }
       #(next_model, effects)
     },
     view: view.view,

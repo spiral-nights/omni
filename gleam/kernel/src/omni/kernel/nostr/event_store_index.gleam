@@ -63,9 +63,9 @@ pub fn stored_event_json(event: Event) -> String {
 
 /// Applies the schema creation to an open IndexedDB upgrade migration.
 pub fn upgrade_schema(upgrade: idb.IdbUpgrade) -> Result(Nil, String) {
-  case upgrade.old_version {
-    0 -> upgrade.create_store(store_def())
-    _ ->
+  case upgrade.create_store(store_def()) {
+    Error(err) -> Error(err)
+    Ok(Nil) ->
       upgrade.create_index(
         events_store_name,
         IndexDef(name: "kind_created", key_path: "kind_created", unique: False),
@@ -80,6 +80,8 @@ pub type QueryPlan {
   ByKind(Int)
   ByCreatedAt(Int, Int)
   ByKindCreated(Int, Int, Int)
+  ByKinds(List(Int))
+  ByKindsCreated(List(Int), Int, Int)
   ScanAll
 }
 
@@ -111,6 +113,8 @@ pub fn plan_query(filter: Filter) -> QueryPlan {
         _ ->
           case filter.kinds {
             Some([k]) -> plan_kind_range(kind.to_int(k), filter)
+            Some([_, _, ..] as ks) ->
+              plan_kinds_range(list.map(ks, kind.to_int), filter)
             _ -> plan_time_range(filter)
           }
       }
@@ -123,6 +127,18 @@ fn plan_kind_range(kind_int: Int, filter: Filter) -> QueryPlan {
     since, until ->
       ByKindCreated(
         kind_int,
+        option.unwrap(since, 0),
+        option.unwrap(until, max_timestamp),
+      )
+  }
+}
+
+fn plan_kinds_range(kinds: List(Int), filter: Filter) -> QueryPlan {
+  case filter.since, filter.until {
+    None, None -> ByKinds(kinds)
+    since, until ->
+      ByKindsCreated(
+        kinds,
         option.unwrap(since, 0),
         option.unwrap(until, max_timestamp),
       )

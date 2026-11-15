@@ -395,6 +395,40 @@ pub fn get_events(
       ))
       decode_records(res)
     }
+    event_store_index.ByKinds(kinds) -> {
+      use nested <- promise.map(
+        promise.await_list(
+          list.map(kinds, fn(k) {
+            use res <- promise.map(idb.query_by_index(
+              store.db,
+              event_store_index.events_store_name,
+              "kind",
+              int.to_string(k),
+            ))
+            decode_records(res)
+          }),
+        ),
+      )
+      list.flatten(nested)
+    }
+    event_store_index.ByKindsCreated(kinds, lower, upper) -> {
+      use nested <- promise.map(
+        promise.await_list(
+          list.map(kinds, fn(k) {
+            use res <- promise.map(idb.query_by_index_tuple_range(
+              store.db,
+              event_store_index.events_store_name,
+              "kind_created",
+              k,
+              lower,
+              upper,
+            ))
+            decode_records(res)
+          }),
+        ),
+      )
+      list.flatten(nested)
+    }
     event_store_index.ByCreatedAt(lower, upper) -> {
       use res <- promise.map(idb.query_by_index_range(
         store.db,

@@ -688,7 +688,16 @@ pub fn pull_to_refresh_state_machine_and_indicator_test() {
 pub fn shell_registry_install_uninstall_persists_test() {
   let store = storage.in_memory()
   let reg = registry.with_builtin_themes()
-  let assert Ok(desc) = list.first(registry.curated_descriptors())
+  let desc =
+    registry.ShellDescriptor(
+      id: "example.shell.custom",
+      name: "Example Custom",
+      description: "Custom shell descriptor for persistence test.",
+      icon: "layout",
+      author: "Omni Test",
+      version: "1.0.0",
+      base_layout: "editorial",
+    )
 
   let installed = registry.install_descriptor(reg, desc)
   registry.save_installed_shells(installed, store)
@@ -718,8 +727,8 @@ pub fn shells_panel_renders_curated_catalog_and_install_test() {
       installed_shells: shells.builtin_shells(),
       curated_shells: [
         ShellInfo(
-          id: "mantra",
-          name: "Mantra Shell",
+          id: "example-custom-shell",
+          name: "Custom Shell",
           description: "Curated shell",
           icon: "layout",
           author: "Omni Core Team",
@@ -735,7 +744,10 @@ pub fn shells_panel_renders_curated_catalog_and_install_test() {
     |> element.to_string
 
   should.be_true(string.contains(html_str, "id=\"curated-shells-list\""))
-  should.be_true(string.contains(html_str, "id=\"btn-install-shell-mantra\""))
+  should.be_true(string.contains(
+    html_str,
+    "id=\"btn-install-shell-example-custom-shell\"",
+  ))
   should.be_true(string.contains(html_str, "id=\"input-custom-shell-url\""))
   should.be_true(string.contains(html_str, "id=\"btn-install-shell-panorama\""))
 }

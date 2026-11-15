@@ -272,7 +272,7 @@ fn action_button(
 }
 
 /// Render a complete social note card (`Card` primitive) with optional reply badge,
-/// author header, body text, and interaction bar, with inline image rendering enabled.
+/// author header, body text, and interaction bar, with inline image rendering disabled.
 pub fn render_note_card(
   n: Note,
   author: Option(Profile),
@@ -280,7 +280,7 @@ pub fn render_note_card(
   s: NoteStats,
   config: NoteCardConfig,
 ) -> Node {
-  render_note_card_with_inline_images(n, author, reply_author, s, config, True)
+  render_note_card_with_inline_images(n, author, reply_author, s, config, False)
 }
 
 /// Render a complete social note card (`Card` primitive) with configurable

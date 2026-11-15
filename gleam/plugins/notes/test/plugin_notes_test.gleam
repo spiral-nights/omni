@@ -18,9 +18,9 @@ import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import plugin/notes/main as notes_main
 import plugin/notes/model.{
-  FolderAll, FolderArchive, FolderStarred, FolderTag, NoteDoc, StatusOffline,
-  StatusSaved, StatusSaving, content_snippet, from_json_string, init,
-  init_with_notes, note_doc_decoder, to_json_string, word_count,
+  FolderAll, FolderArchive, FolderStarred, FolderTag, NoteDoc, StatusIdle,
+  StatusOffline, StatusSaved, StatusSaving, content_snippet, from_json_string,
+  init, init_with_notes, note_doc_decoder, to_json_string, word_count,
 }
 import plugin/notes/msg.{
   AddDraftTag, AddTag, AutoSaveTick, CreateNote, DeleteNote, IngestRemoteDoc,
@@ -409,9 +409,9 @@ pub fn e2_2_markdown_toolbar_and_preview_toggle_test() {
 
 pub fn e2_3_debounced_autosave_and_status_indicator_test() {
   let m0 = init()
-  m0.save_status |> should.equal(StatusSaved)
+  m0.save_status |> should.equal(StatusIdle)
   string.contains(view.view(m0) |> schema.encode_schema_message, "Saved")
-  |> should.equal(True)
+  |> should.equal(False)
 
   let #(m1, effects1) = update.update(m0, SetDraftTitle("Draft 1"))
   m1.save_status |> should.equal(StatusSaving)
@@ -438,6 +438,8 @@ pub fn e2_3_debounced_autosave_and_status_indicator_test() {
   let #(m3, tick_effects) = update.update(m2, AutoSaveTick(2))
   m3.dirty |> should.equal(False)
   m3.save_status |> should.equal(StatusSaved)
+  string.contains(view.view(m3) |> schema.encode_schema_message, "Saved")
+  |> should.equal(True)
   list.length(tick_effects) |> should.equal(1)
 
   // Offline status indicator.

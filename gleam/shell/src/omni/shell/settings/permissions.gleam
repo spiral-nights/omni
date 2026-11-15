@@ -18,9 +18,6 @@ import omni/shell/msg.{
   type Msg, InstallApp, OpenSettings, SetCustomInstallUrl, ToggleAppEnabled,
   ToggleCapabilityGrant, UninstallApp,
 }
-import omni/shell/settings/intents as intents_settings
-import omni/shell/settings/placements as placements_settings
-import omni/shell/settings/relay_scoping as relay_scoping_settings
 import omni/ui/icons
 import omni/ui/plugin_icon
 
@@ -336,19 +333,6 @@ fn render_plugin_permission_card(
         ]),
         html.div([attribute.class("write-permissions-kinds")], kind_badges),
       ]),
-      html.div(
-        [
-          attribute.class("omni-app-settings-sections"),
-          attribute.id("settings-placements-panel"),
-        ],
-        [
-          placements_settings.render_app_placements_card(app),
-          relay_scoping_settings.render_app_relay_scope_card(app),
-          html.div([attribute.id("settings-intents-panel")], [
-            intents_settings.render_app_intents_card(app),
-          ]),
-        ],
-      ),
     ],
   )
 }

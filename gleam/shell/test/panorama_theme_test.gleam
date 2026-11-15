@@ -146,7 +146,8 @@ pub fn panorama_view_renders_profile_identity_test() {
   let html_str = panorama.view(m) |> element.to_string
 
   should.be_true(string.contains(html_str, ">Satoshi</span>"))
-  should.be_true(string.contains(
+  should.be_true(string.contains(html_str, "data:image/svg+xml"))
+  should.be_false(string.contains(
     html_str,
     "src=\"https://example.com/avatar.png\"",
   ))

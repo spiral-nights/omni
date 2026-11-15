@@ -74,12 +74,26 @@ pub fn get_profile(store: Storage, pubkey: String) -> Option(Profile) {
 
 /// Insert or update a `Profile` in `store` (replacing only if `incoming.created_at >= existing.created_at`).
 pub fn upsert(store: Storage, incoming: Profile) -> Dict(String, Profile) {
-  local_store.update(store, default_config(), fn(current) {
-    case dict.get(current, incoming.pubkey) {
-      Ok(existing) if existing.created_at > incoming.created_at -> current
-      _ -> dict.insert(current, incoming.pubkey, incoming)
-    }
-  })
+  upsert_many(store, [incoming])
+}
+
+/// Insert or update a batch of `Profile` records in a single storage read/write.
+pub fn upsert_many(
+  store: Storage,
+  incoming: List(Profile),
+) -> Dict(String, Profile) {
+  case incoming {
+    [] -> load(store)
+    _ ->
+      local_store.update(store, default_config(), fn(current) {
+        list.fold(incoming, current, fn(acc, prof) {
+          case dict.get(acc, prof.pubkey) {
+            Ok(existing) if existing.created_at > prof.created_at -> acc
+            _ -> dict.insert(acc, prof.pubkey, prof)
+          }
+        })
+      })
+  }
 }
 
 /// Default TTL before a cached profile is refreshed from relays.
@@ -131,6 +145,41 @@ pub fn mark_fetched(store: Storage, pubkey: String, now_ms: Int) -> Nil {
       dict.insert(current, pubkey, now_ms)
     })
   Nil
+}
+
+/// Filter `authors` to those missing or stale (older than `ttl_ms`) and record
+/// their fetch timestamp in a single read/write cycle.
+pub fn filter_missing_and_mark(
+  store: Storage,
+  authors: List(String),
+  now_ms: Int,
+  ttl_ms: Int,
+) -> List(String) {
+  let profiles = load(store)
+  let timestamps = load_timestamps(store)
+  let missing =
+    authors
+    |> list.filter(fn(author) {
+      case dict.get(profiles, author) {
+        Error(Nil) -> True
+        Ok(_) ->
+          case dict.get(timestamps, author) {
+            Ok(fetched_at) -> now_ms - fetched_at > ttl_ms
+            Error(Nil) -> True
+          }
+      }
+    })
+  case missing {
+    [] -> []
+    _ -> {
+      let next_timestamps =
+        list.fold(missing, timestamps, fn(acc, author) {
+          dict.insert(acc, author, now_ms)
+        })
+      let _ = local_store.save(store, timestamps_config(), next_timestamps)
+      missing
+    }
+  }
 }
 
 /// Cached profiles whose last fetch is older than `ttl_ms`.

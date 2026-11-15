@@ -16,6 +16,7 @@ import omni/nostr/kind
 import omni/nostr/pubkey
 import omni/nostr/relay_frame
 import omni/nostr/relay_url
+import omni/platform/promise_ext
 import omni/platform/ref
 import omni/platform/storage
 import omni/platform/websocket
@@ -351,4 +352,16 @@ pub fn duplicate_sub_ids_do_not_overwrite_handlers_test() {
 
   closer_b()
   assert dict.has_key(ref.get(pool.subscribers), sub_id) == False
+}
+
+pub fn failed_handshake_schedules_single_retry_test() -> Promise(Nil) {
+  let store = storage.in_memory()
+  let assert Ok(url1) = relay_url.parse("wss://offline.example")
+  let pool = relay_pool.new(store, [url1])
+
+  use _ <- promise.await(promise_ext.delay(80, Nil))
+  assert dict.get(ref.get(pool.retries), "wss://offline.example") == Ok(1)
+  assert dict.has_key(ref.get(pool.pending_reconnects), "wss://offline.example")
+    == True
+  promise.resolve(Nil)
 }

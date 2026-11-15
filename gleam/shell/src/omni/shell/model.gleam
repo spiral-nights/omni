@@ -233,7 +233,7 @@ pub fn init(active_shell_id: String, apps: List(InstalledApp)) -> Model {
     pull_refreshing: False,
     pull_state: PullIdle,
     search_query: "",
-    app_store_view: "grid",
+    app_store_view: "ledger",
     custom_install_url: "",
     embedded_views: dict.new(),
     default_intents: dict.new(),
@@ -501,7 +501,7 @@ pub fn apply_workspace_state(model: Model, ws: WorkspaceState) -> Model {
   let next_page = case ws.active_page {
     Some("widgets") | Some("dashboard") -> WidgetsDashboard
     Some("apps") -> AppStore
-    Some("settings") -> Settings(TabProfile)
+    Some("settings") -> Settings(TabShells)
     Some(plugin_id) ->
       case list.find(merged_apps, fn(a) { a.id == plugin_id && a.enabled }) {
         Ok(app) -> PrimaryApp(plugin_id: app.id, route: None)

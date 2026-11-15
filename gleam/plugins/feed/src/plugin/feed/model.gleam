@@ -70,9 +70,9 @@ pub type Model {
   )
 }
 
-/// Default feed settings (`show_replies: False`, `show_inline_media: True`, `page_size: 20`).
+/// Default feed settings (`show_replies: False`, `show_inline_media: False`, `page_size: 20`).
 pub fn default_settings() -> FeedSettings {
-  FeedSettings(show_replies: False, show_inline_media: True, page_size: 20)
+  FeedSettings(show_replies: False, show_inline_media: False, page_size: 20)
 }
 
 /// Resolve a `FeedView` from a parsed URL `Route`.
@@ -226,7 +226,7 @@ fn is_followed_or_self(model: Model, author_pubkey: String) -> Bool {
 
   case has_any_follows, model.my_pubkey {
     False, None -> True
-    False, Some(_) -> True
+    False, Some(_) -> is_me
     True, _ -> is_me || follows.is_following(model.follows, author_pubkey)
   }
 }
@@ -254,7 +254,7 @@ pub fn settings_decoder() -> Decoder(FeedSettings) {
   use show_replies <- decode.optional_field("show_replies", False, decode.bool)
   use show_inline_media <- decode.optional_field(
     "show_inline_media",
-    True,
+    False,
     decode.bool,
   )
   use page_size <- decode.optional_field("page_size", 20, decode.int)

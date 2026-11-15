@@ -534,20 +534,10 @@ pub fn header_actions_renders_sync_fullscreen_and_profile_test() {
 
   let hdr_html = header_actions.render_header_actions(m) |> element.to_string
   should.be_true(string.contains(hdr_html, "id=\"btn-shell-toggle-fullscreen\""))
-  should.be_true(string.contains(hdr_html, "data-sync-status=\"sync-ok\""))
+  should.be_false(string.contains(hdr_html, "data-sync-status="))
   should.be_true(string.contains(
     hdr_html,
     "id=\"slot-header-actions-example.app.alpha\"",
-  ))
-  should.be_true(string.contains(hdr_html, "Satoshi"))
-
-  // Also test SyncError and SyncIdle rendering
-  let m_err = Model(..m, sync_status: SyncError("timeout"))
-  let hdr_err_html =
-    header_actions.render_header_actions(m_err) |> element.to_string
-  should.be_true(string.contains(
-    hdr_err_html,
-    "data-sync-status=\"sync-error\"",
   ))
 }
 

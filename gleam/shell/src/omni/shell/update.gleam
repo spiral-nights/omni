@@ -9,7 +9,7 @@ import gleam/string
 import omni/kernel/workspace/sync as workspace_sync
 import omni/platform/clock
 import omni/protocol/schema/action.{type Action}
-import omni/protocol/viewport.{type Viewport, Main}
+import omni/protocol/viewport.{type Viewport, Dock, Main}
 import omni/protocol/workspace.{type WorkspaceState}
 import omni/shell/gestures/pull_to_refresh
 import omni/shell/model.{
@@ -21,21 +21,22 @@ import omni/shell/msg.{
   type Msg, AccountSwitchResult, AddAppPlacement, ApplyRemoteWorkspace,
   ClearEmbeddedSchema, ConfirmPluginUpdate, DisablePassphrase,
   DismissAppContextMenu, DismissIntentPrompt, DismissToast, DismissUpdateModal,
-  DispatchIntent, EmbedSchema, EnablePassphrase, EscapePressed, ExportKey,
-  FinishPullRefresh, HistorySync, HostedSchemaAction, ImportKey, InstallApp,
-  InstallCustomShell, InstallShell, KeyImportResult, KeySecurityResult,
-  KeySecurityStatus, NavigateBack, NavigateTo, OpenApp, OpenAppContextMenu,
-  OpenIntentApp, OpenSearch, OpenSettings, PullTouchEnd, PullTouchMove,
-  PullTouchStart, RemoveAppPlacement, ResolvePermission, ScrollToTop,
-  SelectIntentHandler, SelectShell, SetAccentColor, SetAppPlacements,
-  SetAppRelays, SetAppStoreView, SetCapabilityGrants, SetCustomInstallUrl,
-  SetCustomShellUrl, SetDefaultIntent, SetExportedNsec, SetKeyInput,
-  SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode, SetUpdateSourceUrl,
-  SetUserProfile, ShellScrolled, ShowIntentPrompt, ShowPermissionPrompt,
-  ShowToast, ShowToastTone, ShowUpdateModal, StartPullRefresh, SwitchAccount,
-  ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned, ToggleAutoSync,
-  ToggleCapabilityGrant, ToggleFullscreen, ToggleRememberIntentChoice,
-  TriggerWorkspaceSync, UninstallApp, UninstallShell, UnlockKey, UpdateFromFile,
+  DispatchIntent, EmbedSchema, EmbedSchemas, EnablePassphrase, EscapePressed,
+  ExportKey, FinishPullRefresh, HistorySync, HostedSchemaAction, ImportKey,
+  InstallApp, InstallCustomShell, InstallShell, KeyImportResult,
+  KeySecurityResult, KeySecurityStatus, NavigateBack, NavigateTo, OpenApp,
+  OpenAppContextMenu, OpenIntentApp, OpenSearch, OpenSettings, PullTouchEnd,
+  PullTouchMove, PullTouchStart, RemoveAppPlacement, ResolvePermission,
+  ScrollToTop, SelectIntentHandler, SelectShell, SetAccentColor,
+  SetAppPlacements, SetAppRelays, SetAppStoreView, SetCapabilityGrants,
+  SetCustomInstallUrl, SetCustomShellUrl, SetDefaultIntent, SetExportedNsec,
+  SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
+  SetUpdateSourceUrl, SetUserProfile, ShellScrolled, ShowIntentPrompt,
+  ShowPermissionPrompt, ShowToast, ShowToastTone, ShowUpdateModal,
+  StartPullRefresh, SwitchAccount, ToggleAppEnabled, ToggleAppIntent,
+  ToggleAppPinned, ToggleAutoSync, ToggleCapabilityGrant, ToggleFullscreen,
+  ToggleRememberIntentChoice, TriggerWorkspaceSync, UninstallApp, UninstallShell,
+  UnlockKey, UpdateFromFile,
 }
 
 /// Side-effect commands emitted by the pure shell `update` function.
@@ -314,7 +315,22 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       let updated_apps =
         list.map(model.installed_apps, fn(app) {
           case app.id == plugin_id {
-            True -> InstalledApp(..app, pinned: !app.pinned)
+            True -> {
+              let currently_pinned =
+                app.pinned
+                || list.any(app.placements, fn(p) { p.viewport == Dock })
+              case currently_pinned {
+                True ->
+                  InstalledApp(
+                    ..app,
+                    pinned: False,
+                    placements: list.filter(app.placements, fn(p) {
+                      p.viewport != Dock
+                    }),
+                  )
+                False -> InstalledApp(..app, pinned: True)
+              }
+            }
             False -> app
           }
         })
@@ -658,6 +674,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       ),
       [],
     )
+
+    EmbedSchemas(views) -> {
+      let next_views =
+        list.fold(views, model.embedded_views, fn(acc, pair) {
+          dict.insert(acc, pair.0, pair.1)
+        })
+      #(Model(..model, embedded_views: next_views), [])
+    }
 
     ClearEmbeddedSchema(plugin_id) -> #(
       Model(

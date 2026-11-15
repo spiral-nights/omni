@@ -10,6 +10,7 @@ import gleam/bit_array
 import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
+import gleam/javascript/array.{type Array}
 import gleam/javascript/promise
 import gleam/json
 import gleam/list
@@ -70,6 +71,7 @@ import omni/shell/msg.{
   StartPullRefresh, UninstallApp,
 }
 import omni/shell/update
+import omni/social/follows as social_follows
 import omni/social/profile as social_profile
 import omni/social/profile_cache as social_profile_cache
 import omni/social/queries as social_queries
@@ -101,7 +103,7 @@ pub fn start_with_bridge(
     source -> Some(source)
   }
   use db_res <- promise.await(
-    idb.open(db_name, 1, fn(upgrade) {
+    idb.open(db_name, 2, fn(upgrade) {
       let _ = event_store_index.upgrade_schema(upgrade)
       Nil
     }),
@@ -363,6 +365,10 @@ fn handle_shell_message(
     accent.style_attribute(next.model.accent_color),
   )
   let host = apply_effects(ShellBoot(next), effects)
+  let _ = case next.model.active_page != current.booted.model.active_page {
+    True -> maybe_fetch_profile_notes(host, next.model.active_page)
+    False -> Nil
+  }
   let _ = drain_fetches(host)
   let _ = drain_thread_fetches(host)
   let _ = drain_relay_commands(host)
@@ -444,11 +450,11 @@ pub fn mount_shell(selector: String, host: ShellBoot) -> Nil {
   start_interval(1000, fn() {
     case dict.values(host.booted.builtins) {
       [] -> Nil
-      _ -> {
-        let _ = boot.tick_builtins(host.booted)
-        push_views(host)
-        Nil
-      }
+      _ ->
+        case boot.tick_builtins(host.booted) {
+          True -> push_views(host)
+          False -> Nil
+        }
     }
   })
 }
@@ -553,7 +559,7 @@ fn tab_from_slug(parsed: Route) -> SettingsTab {
             False -> TabProfile
           }
       }
-    None -> TabProfile
+    None -> TabShells
   }
 }
 
@@ -719,48 +725,68 @@ fn apply_effects(
 }
 
 fn ingest_public_event(host: ShellBoot, event: nostr_event.Event) -> Nil {
-  dict.each(host.booted.builtins, fn(_id, app) {
-    case app.ingest {
-      Some(ingest) -> ingest(event)
-      None -> Nil
-    }
+  enqueue_public_event(event, fn(batch) {
+    flush_public_event_batch(host, array.to_list(batch))
   })
+}
 
-  case social_profile.from_event(event) {
-    Ok(profile) -> {
-      let _ = social_profile_cache.upsert(host.booted.kernel.storage, profile)
+fn flush_public_event_batch(
+  host: ShellBoot,
+  events: List(nostr_event.Event),
+) -> Nil {
+  deliver_events_to_builtins(host, events)
+  let profiles = list.filter_map(events, social_profile.from_event)
+  case profiles {
+    [] -> Nil
+    _ -> {
+      let _ =
+        social_profile_cache.upsert_many(host.booted.kernel.storage, profiles)
       Nil
     }
-    Error(_) -> Nil
   }
-
-  let author = pubkey.to_hex(event.pubkey)
-  request_missing_profiles(host, [author])
+  let authors =
+    list.map(events, fn(ev) { pubkey.to_hex(ev.pubkey) })
+    |> list.unique
+  request_missing_profiles(host, authors)
   push_views(host)
+}
+
+fn schedule_push_views(host: ShellBoot) -> Nil {
+  enqueue_ingest_flush("", True, flush_ingest(host))
+}
+
+fn flush_ingest(host: ShellBoot) -> fn(String, Bool) -> Nil {
+  fn(authors_csv, should_push) {
+    let authors = case authors_csv {
+      "" -> []
+      raw -> string.split(raw, ",")
+    }
+    request_missing_profiles(host, authors)
+    case should_push {
+      True -> push_views(host)
+      False -> Nil
+    }
+  }
 }
 
 fn request_missing_profiles(host: ShellBoot, authors: List(String)) -> Nil {
   let store = host.booted.kernel.storage
   let now = host.booted.kernel.clock.now_ms()
-  let missing =
+  let normalized =
     authors
     |> list.filter(fn(author) { string.length(author) == 64 })
     |> list.unique
-    |> list.filter(fn(author) {
-      social_profile_cache.needs_fetch(
-        store,
-        author,
-        now,
-        social_profile_cache.default_ttl_ms,
-      )
-    })
+  let missing =
+    social_profile_cache.filter_missing_and_mark(
+      store,
+      normalized,
+      now,
+      social_profile_cache.default_ttl_ms,
+    )
 
   case missing {
     [] -> Nil
     missing -> {
-      list.each(missing, fn(author) {
-        social_profile_cache.mark_fetched(store, author, now)
-      })
       let _ =
         coordinator.fetch(
           host.booted.kernel.coordinator,
@@ -773,25 +799,52 @@ fn request_missing_profiles(host: ShellBoot, authors: List(String)) -> Nil {
           )),
         )
         |> promise.map(fn(events) {
-          list.each(events, fn(event) {
-            case social_profile.from_event(event) {
-              Ok(profile) -> {
-                let _ = social_profile_cache.upsert(store, profile)
-                dict.each(host.booted.builtins, fn(_id, app) {
-                  case app.ingest {
-                    Some(ingest) -> ingest(event)
-                    None -> Nil
-                  }
-                })
+          let pairs =
+            list.filter_map(events, fn(event) {
+              case social_profile.from_event(event) {
+                Ok(profile) -> Ok(#(event, profile))
+                Error(_) -> Error(Nil)
               }
-              Error(_) -> Nil
+            })
+          case pairs {
+            [] -> Nil
+            _ -> {
+              let _ =
+                social_profile_cache.upsert_many(
+                  store,
+                  list.map(pairs, fn(pair) { pair.1 }),
+                )
+              ingest_events_to_builtins(
+                host,
+                list.map(pairs, fn(pair) { pair.0 }),
+              )
+              schedule_push_views(host)
             }
-          })
-          push_views(host)
+          }
           Nil
         })
       Nil
     }
+  }
+}
+
+fn ingest_events_to_builtins(
+  host: ShellBoot,
+  events: List(nostr_event.Event),
+) -> Nil {
+  case events {
+    [] -> Nil
+    _ ->
+      dict.each(host.booted.builtins, fn(_id, app) {
+        case app.ingest_many {
+          Some(ingest_many) -> ingest_many(events)
+          None ->
+            case app.ingest {
+              Some(ingest) -> list.each(events, ingest)
+              None -> Nil
+            }
+        }
+      })
   }
 }
 
@@ -911,14 +964,101 @@ fn fetch_thread(host: ShellBoot, note_id: String) -> Nil {
       Some(FetchOptions(timeout_ms: Some(4000), relays: None, local_only: None)),
     )
     |> promise.map(fn(events) {
-      list.each(events, fn(event) {
-        dict.each(host.booted.builtins, fn(_id, app) {
-          case app.ingest {
-            Some(ingest) -> ingest(event)
-            None -> Nil
+      deliver_events_to_builtins(host, events)
+      push_views(host)
+      Nil
+    })
+  Nil
+}
+
+fn deliver_events_to_builtins(host: ShellBoot, events) -> Nil {
+  dict.each(host.booted.builtins, fn(_id, app) {
+    case app.ingest_many {
+      Some(ingest_many) -> ingest_many(events)
+      None ->
+        case app.ingest {
+          Some(ingest) -> list.each(events, ingest)
+          None -> Nil
+        }
+    }
+  })
+}
+
+fn maybe_fetch_profile_notes(host: ShellBoot, page: Page) -> Nil {
+  case page {
+    PrimaryApp(_, Some(raw_route)) -> {
+      let parsed = route.parse_search(raw_route)
+      case string.lowercase(string.trim(parsed.view)) {
+        "profile" ->
+          case route.get_param(parsed, "id") {
+            Some(pk) if pk != "" -> fetch_author_notes(host, pk)
+            _ -> Nil
           }
+        _ -> Nil
+      }
+    }
+    _ -> Nil
+  }
+}
+
+fn fetch_following_notes(host: ShellBoot, followed: List(String)) -> Nil {
+  case list.take(followed, 100) {
+    [] -> Nil
+    authors -> {
+      let filter =
+        Filter(
+          ids: None,
+          authors: Some(authors),
+          kinds: Some([kind.Note, kind.Repost, kind.Reaction]),
+          since: None,
+          until: None,
+          limit: Some(40),
+          search: None,
+          tags: dict.new(),
+        )
+      let _ =
+        coordinator.fetch(
+          host.booted.kernel.coordinator,
+          "omni_internal_following_notes",
+          [filter],
+          Some(FetchOptions(
+            timeout_ms: Some(4000),
+            relays: None,
+            local_only: None,
+          )),
+        )
+        |> promise.map(fn(events) {
+          deliver_events_to_builtins(host, events)
+          push_views(host)
+          Nil
         })
-      })
+      Nil
+    }
+  }
+}
+
+/// Fetch recent Kind 0 metadata and Kind 1 notes for a viewed profile.
+fn fetch_author_notes(host: ShellBoot, pubkey: String) -> Nil {
+  let profile_filter =
+    Filter(
+      ids: None,
+      authors: Some([pubkey]),
+      kinds: Some([kind.Metadata, kind.Note]),
+      since: None,
+      until: None,
+      limit: Some(30),
+      search: None,
+      tags: dict.new(),
+    )
+  let _ =
+    coordinator.fetch(
+      host.booted.kernel.coordinator,
+      "omni_internal_profile_" <> string.slice(pubkey, 0, 12),
+      [profile_filter],
+      Some(FetchOptions(timeout_ms: Some(4000), relays: None, local_only: None)),
+    )
+    |> promise.map(fn(events) {
+      deliver_events_to_builtins(host, events)
       push_views(host)
       Nil
     })
@@ -945,14 +1085,7 @@ fn fetch_older(host: ShellBoot, until: Int) -> Nil {
       Some(FetchOptions(timeout_ms: Some(4000), relays: None, local_only: None)),
     )
     |> promise.map(fn(events) {
-      list.each(events, fn(event) {
-        dict.each(host.booted.builtins, fn(_id, app) {
-          case app.ingest {
-            Some(ingest) -> ingest(event)
-            None -> Nil
-          }
-        })
-      })
+      deliver_events_to_builtins(host, events)
       push_views(host)
       Nil
     })
@@ -968,14 +1101,7 @@ fn refresh_public_feed(host: ShellBoot) -> Nil {
       Some(FetchOptions(timeout_ms: Some(3000), relays: None, local_only: None)),
     )
     |> promise.map(fn(events) {
-      list.each(events, fn(event) {
-        dict.each(host.booted.builtins, fn(_id, app) {
-          case app.ingest {
-            Some(ingest) -> ingest(event)
-            None -> Nil
-          }
-        })
-      })
+      ingest_events_to_builtins(host, events)
       push_views(host)
       dispatch_shell_msg(FinishPullRefresh)
       Nil
@@ -1232,13 +1358,16 @@ pub fn watch_permission_prompts(host: ShellBoot) -> Nil {
 /// events, push live relay statuses, and refresh the embedded Schema views.
 pub fn start_live_data(host: ShellBoot) -> Nil {
   let _ =
-    coordinator.subscribe(
+    coordinator.fetch(
       host.booted.kernel.coordinator,
       "omni_internal_feed",
       [public_events_filter()],
-      fn(event) { ingest_public_event(host, event) },
-      None,
+      Some(FetchOptions(timeout_ms: Some(4000), relays: None, local_only: None)),
     )
+    |> promise.map(fn(events) {
+      flush_public_event_batch(host, events)
+      Nil
+    })
 
   let self_pubkey = rpc.public_key_hex(host.booted)
   let _ =
@@ -1331,7 +1460,11 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
             None -> Nil
           }
         })
-        push_views(host)
+        fetch_following_notes(
+          host,
+          social_follows.from_event(event).followed_pubkeys,
+        )
+        schedule_push_views(host)
       },
       None,
     )
@@ -1366,7 +1499,7 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
           host,
           relay_pool.get_statuses(host.booted.kernel.relay_pool),
         )
-        push_views(host)
+        schedule_push_views(host)
       },
       None,
     )
@@ -1378,7 +1511,7 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
   let _ =
     relay_pool.watch_statuses(host.booted.kernel.relay_pool, fn(statuses) {
       push_relay_statuses(host, statuses)
-      push_views(host)
+      schedule_push_views(host)
     })
 
   push_views(host)
@@ -1508,16 +1641,21 @@ fn public_events_filter() -> Filter {
     kinds: Some([kind.Note, kind.Metadata, kind.Repost, kind.Reaction]),
     since: None,
     until: None,
-    limit: Some(80),
+    limit: Some(40),
     search: None,
     tags: dict.new(),
   )
 }
 
 fn push_views(host: ShellBoot) -> Nil {
-  dict.each(host.booted.builtins, fn(plugin_id, app) {
-    dispatch_shell_msg(EmbedSchema(plugin_id, app.render()))
-  })
+  let views =
+    host.booted.builtins
+    |> dict.to_list
+    |> list.map(fn(pair) { #(pair.0, pair.1.render()) })
+  case views {
+    [] -> Nil
+    _ -> dispatch_shell_msg(msg.EmbedSchemas(views))
+  }
 }
 
 @external(javascript, "./shell_boot.ffi.mjs", "dispatch_shell_msg")
@@ -1671,6 +1809,19 @@ fn mount_wasm(
 
 @external(javascript, "./shell_boot.ffi.mjs", "unmount_wasm")
 fn unmount_wasm(plugin_id: String) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "enqueue_ingest_flush")
+fn enqueue_ingest_flush(
+  author: String,
+  needs_view_push: Bool,
+  on_flush: fn(String, Bool) -> Nil,
+) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "enqueue_public_event")
+fn enqueue_public_event(
+  event: nostr_event.Event,
+  on_flush: fn(Array(nostr_event.Event)) -> Nil,
+) -> Nil
 
 fn plugin_settings_id(tab_id: String) -> String {
   string.drop_start(tab_id, 7)

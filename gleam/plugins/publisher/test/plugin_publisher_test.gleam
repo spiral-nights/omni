@@ -180,9 +180,12 @@ pub fn blossom_server_management_test() {
 pub fn tab_navigation_and_views_test() {
   let m_studio = model.init(TabStudio)
   let json_studio = schema.encode_schema_message(view.view(m_studio))
-  assert string.contains(json_studio, "Plugin Studio Form")
-  assert string.contains(json_studio, "Bundle Hash Inspector")
-  assert string.contains(json_studio, "code-block")
+  assert string.contains(json_studio, "1. Choose Source")
+  assert string.contains(json_studio, "2. App Details & Publish")
+  let #(m_with_bundle, _) = update.update(m_studio, UseTemplate)
+  let json_with_bundle = schema.encode_schema_message(view.view(m_with_bundle))
+  assert string.contains(json_with_bundle, "Bundle Hash Inspector")
+  assert string.contains(json_with_bundle, "code-block")
 
   let #(m_pub, _) = update.update(m_studio, SelectTab(TabPublished))
   let json_pub = schema.encode_schema_message(view.view(m_pub))

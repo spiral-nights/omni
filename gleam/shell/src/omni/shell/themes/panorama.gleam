@@ -23,7 +23,7 @@ import omni/shell/model.{
   TabShells, WidgetsDashboard,
 }
 import omni/shell/msg.{
-  type Msg, NavigateTo, OpenApp, OpenSearch, OpenSettings, ToggleFullscreen,
+  type Msg, NavigateTo, OpenApp, OpenSettings, ToggleFullscreen,
 }
 import omni/shell/settings/intents
 import omni/shell/settings/permission_prompt
@@ -34,7 +34,6 @@ import omni/shell/theme.{type Theme, Theme}
 import omni/shell/toast
 import omni/shell/update_modal
 import omni/ui/icons
-import omni/ui/sanitize
 
 /// Build the built-in Panorama Hub `Theme` strategy descriptor.
 pub fn theme() -> Theme {
@@ -67,9 +66,7 @@ pub fn view(model: Model) -> Element(Msg) {
     ],
     [
       render_header(model),
-      html.div([attribute.class("panorama-canvas")], [
-        render_active_section(model),
-      ]),
+      html.div([attribute.class("panorama-canvas")], render_sections(model)),
       render_overlays(model),
     ],
   )
@@ -88,28 +85,6 @@ fn render_header(model: Model) -> Element(Msg) {
         render_pivot_nav(model),
         html.div([attribute.class("panorama-header-profile-wrap")], [
           header_actions.render_header_actions(model),
-          html.button(
-            [
-              attribute.type_("button"),
-              attribute.id("btn-panorama-search"),
-              attribute.class("panorama-header-btn"),
-              attribute.title("Search"),
-              attribute.attribute("aria-label", "Search"),
-              event.on_click(OpenSearch),
-            ],
-            [icons.render_icon("search", 16)],
-          ),
-          html.button(
-            [
-              attribute.type_("button"),
-              attribute.id("btn-panorama-toggle-fullscreen"),
-              attribute.class("panorama-header-btn"),
-              attribute.title("Toggle Fullscreen"),
-              attribute.attribute("aria-label", "Toggle Fullscreen"),
-              event.on_click(ToggleFullscreen),
-            ],
-            [icons.render_icon("external", 16)],
-          ),
           render_profile_tile(model),
         ]),
       ]),
@@ -221,36 +196,16 @@ fn render_pivot_item(
 /// Metro user profile tile in the header.
 fn render_profile_tile(model: Model) -> Element(Msg) {
   let #(display_name, avatar_content) = case model.user_profile {
-    Some(profile) -> {
-      let safe_pic = case profile.picture {
-        Some(raw) -> sanitize.sanitize_url(raw)
-        None -> None
-      }
-      case safe_pic {
-        Some(url) -> #(
-          profile.display_name,
-          avatar_img(url, profile.display_name),
-        )
-        None -> #(
-          profile.display_name,
-          html.img([
-            attribute.class("panorama-header-avatar-img"),
-            attribute.src(shell.avatar_data_uri(
-              profile.pubkey,
-              profile.display_name,
-            )),
-            attribute.alt(profile.display_name),
-          ]),
-        )
-      }
-    }
+    Some(profile) -> #(
+      profile.display_name,
+      avatar_img(
+        shell.avatar_data_uri(profile.pubkey, profile.display_name),
+        profile.display_name,
+      ),
+    )
     None -> #(
       "Identity",
-      html.img([
-        attribute.class("panorama-header-avatar-img"),
-        attribute.src(shell.avatar_data_uri("anonymous", "I")),
-        attribute.alt("Identity"),
-      ]),
+      avatar_img(shell.avatar_data_uri("anonymous", "I"), "Identity"),
     )
   }
 
@@ -281,59 +236,112 @@ fn avatar_img(url: String, alt: String) -> Element(Msg) {
 }
 
 /// Active pivot section canvas: full app, widgets mosaic, app store, or system.
+fn render_sections(model: Model) -> List(Element(Msg)) {
+  let active_app_id = case model.active_page {
+    PrimaryApp(plugin_id, _) -> Some(plugin_id)
+    _ -> None
+  }
+
+  let other_apps =
+    model.dock_apps(model)
+    |> list.filter(fn(app) { Some(app.id) != active_app_id })
+    |> list.map(fn(app) { render_app_section(model, app.id, None, False) })
+
+  let widgets_section = case model.active_page {
+    WidgetsDashboard -> []
+    _ -> [render_widgets_section(model)]
+  }
+
+  let apps_section = case model.active_page {
+    AppStore -> []
+    _ -> [render_app_store_section(model)]
+  }
+
+  let system_section = case model.active_page {
+    Settings(_) -> []
+    _ -> [render_settings_section(model, TabShells)]
+  }
+
+  list.flatten([
+    [render_active_section(model)],
+    other_apps,
+    widgets_section,
+    apps_section,
+    system_section,
+  ])
+}
+
 fn render_active_section(model: Model) -> Element(Msg) {
   case model.active_page {
-    PrimaryApp(plugin_id, route) -> {
-      let title = case model.find_app(model, plugin_id) {
-        Some(app) -> model.app_title(app)
-        None -> plugin_id
-      }
-
-      html.section(
-        [
-          attribute.class("panorama-section panorama-app-active-view"),
-          attribute.id("panorama-section-app-" <> plugin_id),
-          attribute.attribute("data-pivot", "app"),
-        ],
-        [
-          html.div([attribute.class("panorama-section-title-bar")], [
-            html.h2([], [element.text(title)]),
-          ]),
-          viewport_host.render_embedded_or_island(model, plugin_id, route),
-        ],
-      )
-    }
-
-    WidgetsDashboard ->
-      html.section(
-        [
-          attribute.class("panorama-section"),
-          attribute.id("panorama-section-widgets"),
-          attribute.attribute("data-pivot", "widgets"),
-        ],
-        [widgets_grid.render_widgets_grid(model)],
-      )
-
-    AppStore ->
-      html.section(
-        [
-          attribute.class("panorama-section"),
-          attribute.id("panorama-section-apps"),
-          attribute.attribute("data-pivot", "apps"),
-        ],
-        [app_store.render_app_store(model, app_store.curated_catalog())],
-      )
-
-    Settings(tab) ->
-      html.section(
-        [
-          attribute.class("panorama-section panorama-system-view"),
-          attribute.id("panorama-section-system"),
-          attribute.attribute("data-pivot", "system"),
-        ],
-        [render_system_section(model, tab)],
-      )
+    PrimaryApp(plugin_id, route) ->
+      render_app_section(model, plugin_id, route, True)
+    WidgetsDashboard -> render_widgets_section(model)
+    AppStore -> render_app_store_section(model)
+    Settings(tab) -> render_settings_section(model, tab)
   }
+}
+
+fn render_app_section(
+  model: Model,
+  plugin_id: String,
+  route: option.Option(String),
+  is_active: Bool,
+) -> Element(Msg) {
+  let title = case model.find_app(model, plugin_id) {
+    Some(app) -> model.app_title(app)
+    None -> plugin_id
+  }
+  let class_name = case is_active {
+    True -> "panorama-section panorama-app-active-view"
+    False -> "panorama-section"
+  }
+
+  html.section(
+    [
+      attribute.class(class_name),
+      attribute.id("panorama-section-app-" <> plugin_id),
+      attribute.attribute("data-pivot", "app"),
+    ],
+    [
+      html.div([attribute.class("panorama-section-title-bar")], [
+        html.h2([], [element.text(title)]),
+      ]),
+      viewport_host.render_embedded_or_island(model, plugin_id, route),
+    ],
+  )
+}
+
+fn render_widgets_section(model: Model) -> Element(Msg) {
+  html.section(
+    [
+      attribute.class("panorama-section"),
+      attribute.id("panorama-section-widgets"),
+      attribute.attribute("data-pivot", "widgets"),
+    ],
+    [widgets_grid.render_widgets_grid(model)],
+  )
+}
+
+fn render_app_store_section(model: Model) -> Element(Msg) {
+  html.section(
+    [
+      attribute.class("panorama-section"),
+      attribute.id("panorama-section-apps"),
+      attribute.attribute("data-pivot", "apps"),
+    ],
+    [app_store.render_app_store(model, app_store.curated_catalog())],
+  )
+}
+
+fn render_settings_section(model: Model, tab: SettingsTab) -> Element(Msg) {
+  html.section(
+    [
+      attribute.class("panorama-section panorama-system-view"),
+      attribute.id("panorama-section-system"),
+      attribute.attribute("data-pivot", "system"),
+    ],
+    [render_system_section(model, tab)],
+  )
 }
 
 fn render_system_section(model: Model, tab: SettingsTab) -> Element(Msg) {

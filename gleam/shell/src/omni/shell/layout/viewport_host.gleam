@@ -68,8 +68,12 @@ pub fn render_embedded_or_island_in(
   case dict.get(model.embedded_views, plugin_id) {
     Ok(node) ->
       html.div([attribute.class("omni-hosted-app")], [
-        element.map(render.render(node), fn(action) {
-          HostedSchemaAction(plugin_id, action)
+        // Reference equality memo avoids re-converting unchanged plugin Schema
+        // trees on unrelated shell renders such as scroll or modal updates.
+        element.memo([element.ref(node), element.ref(plugin_id)], fn() {
+          element.map(render.render(node), fn(action) {
+            HostedSchemaAction(plugin_id, action)
+          })
         }),
       ])
     Error(Nil) -> render_slot_anchor(vp, plugin_id, route, True)

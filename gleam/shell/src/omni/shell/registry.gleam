@@ -11,7 +11,6 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import omni/platform/storage.{type Storage, type StorageError}
-import omni/shell/styles
 import omni/shell/theme.{type Theme, Theme}
 import omni/shell/themes/editorial
 import omni/shell/themes/panorama
@@ -155,17 +154,7 @@ pub type ShellDescriptor {
 
 /// Curated shell catalog. Entries are installable but start uninstalled.
 pub fn curated_descriptors() -> List(ShellDescriptor) {
-  [
-    ShellDescriptor(
-      id: "mantra",
-      name: "Mantra Shell",
-      description: "Calm, centered reading shell layered on the Panorama hub layout with generous whitespace.",
-      icon: "layout",
-      author: "Omni Core Team",
-      version: "1.0.0",
-      base_layout: "panorama",
-    ),
-  ]
+  []
 }
 
 /// Build a `Theme` strategy for a descriptor using its base layout renderer.

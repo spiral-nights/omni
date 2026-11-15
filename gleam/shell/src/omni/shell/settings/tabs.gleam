@@ -230,6 +230,38 @@ fn render_tab_button(
   )
 }
 
+fn render_collapsible_section(
+  id: String,
+  title: String,
+  icon_name: String,
+  open_by_default: Bool,
+  body: Element(Msg),
+) -> Element(Msg) {
+  let attrs = case open_by_default {
+    True -> [
+      attribute.id(id),
+      attribute.class("omni-settings-collapsible"),
+      attribute.open(True),
+    ]
+    False -> [
+      attribute.id(id),
+      attribute.class("omni-settings-collapsible"),
+    ]
+  }
+  html.details(attrs, [
+    html.summary([attribute.class("omni-settings-collapsible-summary")], [
+      html.span([attribute.class("omni-settings-collapsible-title")], [
+        icons.render_icon(icon_name, 16),
+        html.span([], [element.text(title)]),
+      ]),
+      html.span([attribute.class("omni-settings-collapsible-chevron")], [
+        icons.render_icon("chevron-down", 16),
+      ]),
+    ]),
+    html.div([attribute.class("omni-settings-collapsible-body")], [body]),
+  ])
+}
+
 fn render_active_tab_panel(
   model: Model,
   active_tab: SettingsTab,
@@ -239,10 +271,34 @@ fn render_active_tab_panel(
     TabRelays -> relay_scoping.render_relay_scoping_panel(model)
     TabPlugins ->
       html.div([attribute.class("omni-settings-plugins-combined")], [
-        placements.render_placements_panel(model),
-        intents.render_default_applications_panel(model),
-        intents.render_intents_panel(model),
-        permissions.render_permissions_panel(model),
+        render_collapsible_section(
+          "settings-section-placements",
+          "App Surfaces & Placements",
+          "pin",
+          False,
+          placements.render_placements_panel(model),
+        ),
+        render_collapsible_section(
+          "settings-section-default-apps",
+          "Default Applications",
+          "bolt",
+          False,
+          intents.render_default_applications_panel(model),
+        ),
+        render_collapsible_section(
+          "settings-section-intents",
+          "Handled Intents & Protocol Routing",
+          "bolt",
+          False,
+          intents.render_intents_panel(model),
+        ),
+        render_collapsible_section(
+          "settings-section-permissions",
+          "Installed Applications & Capability Governance",
+          "plugins",
+          False,
+          permissions.render_permissions_panel(model),
+        ),
       ])
     TabWorkspace -> render_workspace_tab(model)
     TabShells -> shells.render_shells_panel(model, shells.builtin_shells())

@@ -265,7 +265,7 @@ pub fn engagement_and_toggles_are_noops_or_state_updates_test() {
   m1.notes |> dict.size |> should.equal(0)
 
   let #(m2, _) = update.update(m1, ToggleInlineMedia)
-  m2.settings.show_inline_media |> should.equal(False)
+  m2.settings.show_inline_media |> should.equal(True)
 
   let #(m3, _) = update.update(m2, ToggleShowReplies)
   m3.settings.show_replies |> should.equal(True)
@@ -770,14 +770,14 @@ pub fn inline_media_setting_wired_to_note_cards_test() {
       )),
     )
 
-  let wire_on = schema.encode_schema_message(view.view(m1))
-  should.be_true(string.contains(wire_on, "\"showInlineImages\":true"))
-
-  let #(m2, _) = update.update(m1, ToggleInlineMedia)
-  m2.settings.show_inline_media |> should.be_false()
-  let wire_off = schema.encode_schema_message(view.view(m2))
+  let wire_off = schema.encode_schema_message(view.view(m1))
   should.be_true(string.contains(wire_off, "\"showInlineImages\":false"))
   should.be_false(string.contains(wire_off, "\"showInlineImages\":true"))
+
+  let #(m2, _) = update.update(m1, ToggleInlineMedia)
+  m2.settings.show_inline_media |> should.be_true()
+  let wire_on = schema.encode_schema_message(view.view(m2))
+  should.be_true(string.contains(wire_on, "\"showInlineImages\":true"))
 }
 
 pub fn page_size_settings_control_and_update_test() {

@@ -74,7 +74,7 @@ pub fn system_apps() -> List(InstalledApp) {
         ),
       ],
       placements: [],
-      handled_intents: ["view-note", "create-note", "view-profile", "search"],
+      handled_intents: ["view-note", "create-note", "search"],
       disabled_intents: [],
       relays: None,
       source_url: "https://nsite.example/reader.html",
@@ -87,7 +87,7 @@ pub fn system_apps() -> List(InstalledApp) {
       description: "Daily task list with All/Active/Completed filters and progress.",
       icon: "check-circle",
       enabled: True,
-      pinned: True,
+      pinned: False,
       views: [
         ViewOption(id: "main", title: "Checklist", path: "/", format: "html"),
         ViewOption(
@@ -153,7 +153,7 @@ pub fn system_apps() -> List(InstalledApp) {
       description: "Private encrypted notebook backed by NIP-78 documents.",
       icon: "notes",
       enabled: True,
-      pinned: True,
+      pinned: False,
       views: [
         ViewOption(id: "main", title: "Notes", path: "/", format: "html"),
         ViewOption(
@@ -177,7 +177,7 @@ pub fn system_apps() -> List(InstalledApp) {
       description: "Relay connection states, read/write scoping, and NIP-65 lists.",
       icon: "relays",
       enabled: True,
-      pinned: True,
+      pinned: False,
       views: [
         ViewOption(id: "main", title: "Relays", path: "/", format: "html"),
       ],

@@ -371,6 +371,9 @@ fn render_installed_row(model: Model, app: InstalledApp) -> Element(Msg) {
       attribute.class("omni-app-index-row"),
       attribute.attribute("data-app-id", app.id),
       attribute.attribute("data-context-app-id", app.id),
+      attribute.role("button"),
+      attribute.attribute("tabindex", "0"),
+      event.on_click(OpenApp(app.id, None)),
     ],
     [
       html.div([attribute.class("omni-app-index-icon")], [
@@ -399,15 +402,17 @@ fn render_installed_row(model: Model, app: InstalledApp) -> Element(Msg) {
             attribute.type_("button"),
             attribute.id("btn-app-index-update-" <> app.id),
             attribute.class("omni-button omni-button-secondary"),
-            event.on_click(
-              ShowUpdateModal(UpdateModalState(
-                plugin_id: app.id,
-                plugin_name: title,
-                current_version: version,
-                latest_version: version,
-                changelog: None,
-                source_url: app.source_url,
-              )),
+            event.stop_propagation(
+              event.on_click(
+                ShowUpdateModal(UpdateModalState(
+                  plugin_id: app.id,
+                  plugin_name: title,
+                  current_version: version,
+                  latest_version: version,
+                  changelog: None,
+                  source_url: app.source_url,
+                )),
+              ),
             ),
           ],
           [

@@ -155,7 +155,8 @@ pub fn editorial_view_renders_profile_avatar_test() {
     html_str,
     "id=\"btn-editorial-profile-toggle\"",
   ))
-  should.be_true(string.contains(
+  should.be_true(string.contains(html_str, "data:image/svg+xml"))
+  should.be_false(string.contains(
     html_str,
     "src=\"https://example.com/avatar.png\"",
   ))

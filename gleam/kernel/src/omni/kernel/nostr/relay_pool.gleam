@@ -65,6 +65,9 @@ pub type RelayPool {
     subscribers: Ref(Dict(String, List(Subscriber))),
     subscriber_seq: Ref(Int),
     retries: Ref(Dict(String, Int)),
+    connected_at: Ref(Dict(String, Int)),
+    pending_reconnects: Ref(Dict(String, Int)),
+    reconnect_seq: Ref(Int),
     status_listeners: Ref(List(fn(List(#(RelayUrl, RelayStatus))) -> Nil)),
     receipts: Ref(Dict(String, PublishReceipt)),
     notice_listeners: Ref(List(fn(String, String) -> Nil)),
@@ -117,6 +120,9 @@ pub fn new(storage: Storage, bootstrap_relays: List(RelayUrl)) -> RelayPool {
       subscribers: ref.new(dict.new()),
       subscriber_seq: ref.new(0),
       retries: ref.new(dict.new()),
+      connected_at: ref.new(dict.new()),
+      pending_reconnects: ref.new(dict.new()),
+      reconnect_seq: ref.new(0),
       status_listeners: ref.new([]),
       receipts: ref.new(dict.new()),
       notice_listeners: ref.new([]),
@@ -148,7 +154,11 @@ fn begin_connect(pool: RelayPool, url: RelayUrl, url_str: String) -> Nil {
     websocket.connect(url_str, fn(event) {
       case event {
         websocket.Open -> {
-          ref.update(pool.retries, fn(r) { dict.delete(r, url_str) })
+          let now_ms = clock.system().now_ms()
+          ref.update(pool.connected_at, fn(c) {
+            dict.insert(c, url_str, now_ms)
+          })
+          ref.update(pool.pending_reconnects, fn(p) { dict.delete(p, url_str) })
           set_status(pool, url_str, Connected)
           case dict.get(ref.get(pool.sockets), url_str) {
             Ok(sock) -> replay_subscriptions(pool, url_str, sock)
@@ -160,12 +170,14 @@ fn begin_connect(pool: RelayPool, url: RelayUrl, url_str: String) -> Nil {
             "relay",
             url_str <> " closed (" <> int.to_string(code) <> "): " <> reason,
           )
+          reset_retries_if_stable(pool, url_str)
           ref.update(pool.sockets, fn(s) { dict.delete(s, url_str) })
           set_status(pool, url_str, Disconnected(reason))
           reconnect(pool, url, url_str)
         }
         websocket.Error(err) -> {
           log.error("relay", url_str <> " socket error: " <> err)
+          reset_retries_if_stable(pool, url_str)
           ref.update(pool.sockets, fn(s) { dict.delete(s, url_str) })
           set_status(pool, url_str, Disconnected(err))
           reconnect(pool, url, url_str)
@@ -191,6 +203,7 @@ pub fn force_reconnect(pool: RelayPool, url: RelayUrl) -> Nil {
     Error(Nil) -> Nil
   }
   ref.update(pool.sockets, fn(sockets) { dict.delete(sockets, url_str) })
+  ref.update(pool.pending_reconnects, fn(p) { dict.delete(p, url_str) })
   set_status(pool, url_str, Disconnected("manual reconnect"))
   begin_connect(pool, url, url_str)
 }
@@ -202,25 +215,53 @@ fn reconnect(pool: RelayPool, url: RelayUrl, url_str: String) -> Nil {
     })
   case still_configured {
     False -> Nil
-    True -> {
-      let attempt = case dict.get(ref.get(pool.retries), url_str) {
-        Ok(n) -> n + 1
-        Error(Nil) -> 1
-      }
-      ref.update(pool.retries, fn(r) { dict.insert(r, url_str, attempt) })
-      let exponent = int.min(attempt - 1, 6)
-      let delay_ms = int.min(30_000, 500 * pow2(exponent))
-      let _ =
-        promise_ext.delay(delay_ms, Nil)
-        |> promise.map(fn(_) {
-          case dict.get(ref.get(pool.statuses), url_str) {
-            Ok(Connected) | Ok(Connecting) -> Nil
-            _ -> connect(pool, url)
+    True ->
+      // Error + Close both fire when a handshake fails; keep a single timer per URL.
+      case dict.get(ref.get(pool.pending_reconnects), url_str) {
+        Ok(_) -> Nil
+        Error(Nil) -> {
+          let attempt = case dict.get(ref.get(pool.retries), url_str) {
+            Ok(n) -> n + 1
+            Error(Nil) -> 1
           }
-        })
-      Nil
-    }
+          ref.update(pool.retries, fn(r) { dict.insert(r, url_str, attempt) })
+          let token = ref.get(pool.reconnect_seq) + 1
+          ref.set(pool.reconnect_seq, token)
+          ref.update(pool.pending_reconnects, fn(p) {
+            dict.insert(p, url_str, token)
+          })
+          let exponent = int.min(attempt - 1, 5)
+          let delay_ms = int.min(60_000, 2000 * pow2(exponent))
+          let _ =
+            promise_ext.delay(delay_ms, Nil)
+            |> promise.map(fn(_) {
+              case dict.get(ref.get(pool.pending_reconnects), url_str) {
+                Ok(current) if current == token -> {
+                  ref.update(pool.pending_reconnects, fn(p) {
+                    dict.delete(p, url_str)
+                  })
+                  case dict.get(ref.get(pool.statuses), url_str) {
+                    Ok(Connected) | Ok(Connecting) -> Nil
+                    _ -> connect(pool, url)
+                  }
+                }
+                _ -> Nil
+              }
+            })
+          Nil
+        }
+      }
   }
+}
+
+fn reset_retries_if_stable(pool: RelayPool, url_str: String) -> Nil {
+  let now_ms = clock.system().now_ms()
+  case dict.get(ref.get(pool.connected_at), url_str) {
+    Ok(opened_ms) if now_ms - opened_ms >= 10_000 ->
+      ref.update(pool.retries, fn(r) { dict.delete(r, url_str) })
+    _ -> Nil
+  }
+  ref.update(pool.connected_at, fn(c) { dict.delete(c, url_str) })
 }
 
 fn pow2(n: Int) -> Int {

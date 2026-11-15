@@ -2,9 +2,9 @@ import gleam/option.{Some}
 import gleam/order
 import gleam/string
 import omni/kernel/nostr/event_store_index.{
-  ByIds, ByKind, ByPubkey, ScanAll, compare_created_at_desc, deduplicate_by_id,
-  find_prunable_events, matches_deletion, matches_replaceable_target, plan_query,
-  sort_newest_first,
+  ByIds, ByKind, ByKinds, ByKindsCreated, ByPubkey, ScanAll,
+  compare_created_at_desc, deduplicate_by_id, find_prunable_events,
+  matches_deletion, matches_replaceable_target, plan_query, sort_newest_first,
 }
 import omni/nostr/event.{type Event, Event}
 import omni/nostr/event_id.{type EventId}
@@ -128,4 +128,20 @@ pub fn find_prunable_events_test() {
   let prunable = find_prunable_events([b1, b2, b3, a1], 2, Some(alice))
   // Kept: b3, b2; prunable: b1. Alice's a1 is user-protected.
   assert prunable == [b1]
+}
+
+pub fn plan_multi_kind_query_test() {
+  let multi =
+    filter.new()
+    |> filter.with_kinds([kind.Note, kind.Repost, kind.Reaction])
+  assert plan_query(multi) == ByKinds([1, 6, 7])
+
+  let bounded =
+    filter.Filter(
+      ..filter.new()
+      |> filter.with_kinds([kind.Note, kind.Repost]),
+      since: Some(100),
+      until: Some(200),
+    )
+  assert plan_query(bounded) == ByKindsCreated([1, 6], 100, 200)
 }

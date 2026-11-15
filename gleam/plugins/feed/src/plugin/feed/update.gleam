@@ -190,7 +190,18 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
 
     IngestEvent(ev) -> #(ingest_single_event(model, ev), [])
 
-    IngestEvents(events) -> #(list.fold(events, model, ingest_single_event), [])
+    IngestEvents(events) -> {
+      let next = list.fold(events, model, ingest_single_event)
+      #(
+        Model(
+          ..next,
+          is_syncing: False,
+          is_loading_older: False,
+          is_loading_thread: False,
+        ),
+        [],
+      )
+    }
   }
 }
 

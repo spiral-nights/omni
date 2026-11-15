@@ -64,13 +64,13 @@ import omni/sandbox/iframe_host.{type IframeMount, IframeConfig}
 import omni/sandbox/manager.{type SandboxManager, SpawnOptions}
 import omni/shell/accent
 import omni/shell/model.{
-  type Model, type UserProfileSummary, IntentPromptState, Model, PrimaryApp,
-  UserProfileSummary,
+  type Model, type SettingsTab, type UserProfileSummary, IntentPromptState,
+  Model, PrimaryApp, TabProfile, UserProfileSummary,
 }
 import omni/shell/msg.{
   type Msg, DispatchIntent, HostedSchemaAction, InstallApp, InstallCustomShell,
-  InstallShell, OpenApp, OpenIntentApp, SelectShell, SetCapabilityGrants,
-  ShowIntentPrompt, ToggleCapabilityGrant, UninstallShell,
+  InstallShell, OpenApp, OpenIntentApp, OpenSettings, SelectShell,
+  SetCapabilityGrants, ShowIntentPrompt, ToggleCapabilityGrant, UninstallShell,
 }
 import omni/shell/registry.{type ShellRegistry}
 import omni/shell/shell
@@ -340,8 +340,9 @@ pub fn route_intent(booted: Booted, action: Action) -> Booted {
           action.name,
           action.payload,
         )
+      let intent_route = intent_route_for_action(handler.route, action)
       let #(navigated, _) =
-        dispatch(booted, OpenIntentApp(handler.plugin_id, handler.route))
+        dispatch(booted, OpenIntentApp(handler.plugin_id, intent_route))
       case invoked {
         True -> navigated
         False -> forward_action(navigated, handler.plugin_id, action)
@@ -362,6 +363,84 @@ pub fn route_intent(booted: Booted, action: Action) -> Booted {
       prompted
     }
     _ -> booted
+  }
+}
+
+fn navigate_settings_tab(act: Action) -> Option(SettingsTab) {
+  case act.name {
+    "switch-account" | "generate-keypair" -> Some(TabProfile)
+    _ ->
+      case act.navigate {
+        Some(target) ->
+          case target.view {
+            Some("settings") -> Some(TabProfile)
+            _ -> None
+          }
+        None -> None
+      }
+  }
+}
+
+fn intent_route_for_action(
+  default_route: Option(String),
+  act: Action,
+) -> Option(String) {
+  case act.name {
+    "view_profile" | "view-profile" ->
+      case payload_string(act, ["pubkey", "id", "npub"]) {
+        Some(pk) -> Some("?view=profile&id=" <> pk)
+        None -> default_route
+      }
+    "view_note" | "view-note" ->
+      case payload_string(act, ["id", "noteId", "eventId"]) {
+        Some(id) -> Some("?view=thread&id=" <> id)
+        None -> default_route
+      }
+    _ -> default_route
+  }
+}
+
+fn hosted_route_for_action(
+  _plugin_id: String,
+  act: Action,
+  prev: Option(Option(String)),
+) -> Option(Option(String)) {
+  case act.name {
+    "open-thread" | "view-thread" | "view_thread" | "view-note" | "view_note" ->
+      case payload_string(act, ["id", "noteId", "eventId"]) {
+        Some(id) -> Some(Some("?view=thread&id=" <> id))
+        None -> prev
+      }
+    "select-profile" | "select_profile" | "view-profile" | "view_profile" ->
+      case payload_string(act, ["pubkey", "id", "npub"]) {
+        Some(pk) -> Some(Some("?view=profile&id=" <> pk))
+        None -> prev
+      }
+    "back"
+    | "back-to-feed"
+    | "navigate-back"
+    | "navigate_back"
+    | "view-directory"
+    | "view-timeline" -> Some(None)
+    _ -> prev
+  }
+}
+
+fn payload_string(act: Action, keys: List(String)) -> Option(String) {
+  case act.payload {
+    Some(payload) ->
+      list.find_map(keys, fn(k) {
+        case dict.get(payload, k) {
+          Ok(val) ->
+            case decode.run(val, decode.string) {
+              Ok(s) if s != "" -> Ok(s)
+              _ -> Error(Nil)
+            }
+          Error(Nil) -> Error(Nil)
+        }
+      })
+      |> option.from_result
+    None -> None
   }
 }
 
@@ -539,27 +618,6 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
           let _ = route_intent(booted, action.new(intent_name))
           #(reg, Nil)
         }
-        update.DispatchIntentToPlugin(plugin_id, intent_name, payload_json) -> {
-          case action.decode_json(payload_json) {
-            Ok(act) -> {
-              let _ =
-                forward_action(
-                  booted,
-                  plugin_id,
-                  action.with_payload(
-                    action.new(intent_name),
-                    act.payload |> option.unwrap(dict.new()),
-                  ),
-                )
-              Nil
-            }
-            Error(_) -> {
-              let _ = forward_action(booted, plugin_id, action.new(intent_name))
-              Nil
-            }
-          }
-          #(reg, Nil)
-        }
         update.SetIntentDefault(action, plugin_id) -> {
           ref.update(booted.intent_broker, fn(current) {
             broker.set_default_handler(current, action, plugin_id)
@@ -589,24 +647,43 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
     })
 
   // Forward schema actions to the in-process built-in apps.
-  let _ =
-    list.each(effects, fn(effect) {
-      case effect {
-        update.DispatchHostedAction(plugin_id, action) ->
-          case dict.get(booted.builtins, plugin_id) {
-            Ok(app) ->
-              case app.handle_action(action) {
-                True -> Nil
-                False -> {
-                  let _ = route_intent(booted, action)
-                  Nil
+  let #(routed_booted, handled_builtin_action, hosted_route) =
+    list.fold(
+      effects,
+      #(Booted(..booted, model: next_model), False, None),
+      fn(acc, effect) {
+        let #(cur_booted, changed, route_override) = acc
+        case effect {
+          update.DispatchHostedAction(plugin_id, action) ->
+            case dict.get(cur_booted.builtins, plugin_id) {
+              Ok(app) ->
+                case app.handle_action(action) {
+                  True -> #(
+                    cur_booted,
+                    True,
+                    hosted_route_for_action(plugin_id, action, route_override),
+                  )
+                  False ->
+                    case navigate_settings_tab(action) {
+                      Some(tab) -> {
+                        let #(settings_booted, _) =
+                          dispatch(cur_booted, OpenSettings(tab))
+                        #(settings_booted, changed, route_override)
+                      }
+                      None -> #(
+                        route_intent(cur_booted, action),
+                        changed,
+                        route_override,
+                      )
+                    }
                 }
-              }
-            Error(Nil) -> Nil
-          }
-        _ -> Nil
-      }
-    })
+              Error(Nil) -> acc
+            }
+          _ -> acc
+        }
+      },
+    )
+  let next_model = routed_booted.model
 
   // Follow the active app's route only when the page actually changes. Plugin
   // internal navigation (thread views, profile details) must survive unrelated
@@ -616,22 +693,61 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
     OpenApp(_, _) | msg.NavigateTo(_) -> True
     _ -> False
   }
-  let _ = case page_changed || explicit_open, next_model.active_page {
+  let navigated = page_changed || explicit_open
+  let _ = case navigated, next_model.active_page {
     True, PrimaryApp(plugin_id, route) ->
-      case dict.get(booted.builtins, plugin_id) {
+      case dict.get(routed_booted.builtins, plugin_id) {
         Ok(app) -> app.navigate(option.unwrap(route, ""))
         Error(Nil) -> Nil
       }
     _, _ -> Nil
   }
 
-  let refreshed =
-    dict.fold(booted.builtins, next_model, fn(m, id, app) {
-      Model(
-        ..m,
-        embedded_views: dict.insert(m.embedded_views, id, app.render()),
-      )
+  let #(handled_intent_action, hosted_route) =
+    list.fold(effects, #(False, hosted_route), fn(acc, effect) {
+      let #(changed, route_override) = acc
+      case effect {
+        update.DispatchIntentToPlugin(plugin_id, intent_name, payload_json) -> {
+          let act = case action.decode_json(payload_json) {
+            Ok(decoded) ->
+              action.with_payload(
+                action.new(intent_name),
+                decoded.payload |> option.unwrap(dict.new()),
+              )
+            Error(_) -> action.new(intent_name)
+          }
+          let handled = case dict.get(routed_booted.builtins, plugin_id) {
+            Ok(app) -> app.handle_action(act)
+            Error(Nil) -> False
+          }
+          let next_route = case intent_route_for_action(None, act) {
+            Some(r) -> Some(Some(r))
+            None -> route_override
+          }
+          #(changed || handled, next_route)
+        }
+        _ -> acc
+      }
     })
+
+  let next_model = case hosted_route, next_model.active_page {
+    Some(route_opt), PrimaryApp(plugin_id, _) ->
+      Model(..next_model, active_page: PrimaryApp(plugin_id, route_opt))
+    _, _ -> next_model
+  }
+
+  let refreshed = case
+    navigated || handled_builtin_action || handled_intent_action
+  {
+    True ->
+      dict.fold(routed_booted.builtins, next_model, fn(m, id, app) {
+        Model(
+          ..m,
+          embedded_views: dict.insert(m.embedded_views, id, app.render()),
+        )
+      })
+    False -> next_model
+  }
 
   let host_effects =
     effects
