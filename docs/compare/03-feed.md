@@ -138,11 +138,10 @@ timeline schema contains exactly one node with `data-tab-id` per tab id.
    `SelectView(view_from_route(""))` = `SelectView(ViewTimeline)`
    (`model.gleam:66-84`, `main.gleam:33-37`).
 6. `push_views` dispatches an `EmbedSchema` message for every builtin app
-   (`shell_boot.gleam:1028-1032`). It is called from `ingest_public_event`
-   (`:397-416`), `refresh_public_feed` (`:573-597`), relay-status callbacks, profile
-   fetches and pull-to-refresh. Therefore the next relay event — typically the next few
-   hundred milliseconds — reverted the thread view to the timeline. The click “worked”
-   only for a flash.
+   (`shell_boot.gleam:1028-1032`). It is called from `refresh_public_feed` (`:573-597`),
+   relay-status callbacks, profile fetches and pull-to-refresh. Therefore the next relay
+   event — typically the next few hundred milliseconds — reverted the thread view to the
+   timeline. The click “worked” only for a flash.
 
 Commit `4aa7851` fixes this by only calling `app.navigate` when the shell page changed
 or the user explicitly opened an app (`boot.gleam:433-448`).

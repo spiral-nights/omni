@@ -92,6 +92,22 @@ style, script, head, title, meta, link,
 }
 
 /* 1. Panorama Hero Header & Pivot Navigation */
+.panorama-shell-root.app-fullscreen .panorama-hero-header {
+  display: none !important;
+}
+
+.panorama-shell-root.app-fullscreen .panorama-active-section {
+  padding: 0 !important;
+  width: 100vw !important;
+  max-width: 100% !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+}
+
+.panorama-shell-root.app-fullscreen .editorial-floating-exit-fullscreen {
+  display: inline-flex;
+}
+
 .panorama-hero-header {
   padding: 10px 16px 6px 16px;
   flex-shrink: 0;

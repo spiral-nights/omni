@@ -167,3 +167,21 @@ pub fn prepare_port_transfer_test() {
   transfer.has_channel1 |> should.be_true
   transfer.has_channel2 |> should.be_true
 }
+
+pub fn custom_raw_bridge_script_is_wrapped_in_script_tag_test() {
+  let cfg =
+    iframe_host.IframeConfig(
+      plugin_id: "org.omni.plugin.weather",
+      content: "<!DOCTYPE html><html><head><title>Weather</title></head><body><div id=\"root\"></div></body></html>",
+      csp: None,
+      tokens: None,
+      theme_mode: None,
+      bridge_script: Some("console.log('bridge');"),
+    )
+  let srcdoc = iframe_host.build_srcdoc(cfg)
+  string.contains(
+    srcdoc,
+    "<script id=\"omni-guest-bridge\">\nconsole.log('bridge');\n</script>",
+  )
+  |> should.be_true
+}

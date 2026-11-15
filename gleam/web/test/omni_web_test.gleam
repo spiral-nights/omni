@@ -297,7 +297,16 @@ pub fn publish_pipeline_signs_broadcasts_and_ingests_test() {
   // The signed event is stored locally for 0ms reads.
   use count <- promise.await(event_store.count_events(
     booted.kernel.event_store,
-    Filter(None, None, Some([nostr_kind.Note]), None, None, None, None, dict.new()),
+    Filter(
+      None,
+      None,
+      Some([nostr_kind.Note]),
+      None,
+      None,
+      None,
+      None,
+      dict.new(),
+    ),
   ))
   should.be_true(count >= 1)
 
@@ -781,7 +790,16 @@ pub fn workspace_publish_is_debounced_test() -> promise.Promise(Nil) {
   use _ <- promise.await(omni_promise_ext.delay(1000, Nil))
   use count <- promise.await(event_store.count_events(
     after.kernel.event_store,
-    Filter(None, None, Some([nostr_kind.AppData]), None, None, None, None, dict.new()),
+    Filter(
+      None,
+      None,
+      Some([nostr_kind.AppData]),
+      None,
+      None,
+      None,
+      None,
+      dict.new(),
+    ),
   ))
   count |> should.equal(1)
   promise.resolve(Nil)

@@ -9,6 +9,7 @@ import gleam/option.{type Option}
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
+import lustre/element/keyed
 import omni/protocol/viewport.{type Viewport, Main}
 import omni/shell/model.{type Model}
 import omni/shell/msg.{type Msg, HostedSchemaAction}
@@ -65,17 +66,29 @@ pub fn render_embedded_or_island_in(
   plugin_id: String,
   route: Option(String),
 ) -> Element(Msg) {
+  let vp_str = viewport.to_string(vp)
   case dict.get(model.embedded_views, plugin_id) {
     Ok(node) ->
-      html.div([attribute.class("omni-hosted-app")], [
-        // Reference equality memo avoids re-converting unchanged plugin Schema
-        // trees on unrelated shell renders such as scroll or modal updates.
-        element.memo([element.ref(node), element.ref(plugin_id)], fn() {
-          element.map(render.render(node), fn(action) {
-            HostedSchemaAction(plugin_id, action)
-          })
-        }),
+      keyed.div([attribute.class("omni-viewport-host")], [
+        #(
+          "hosted:" <> vp_str <> ":" <> plugin_id,
+          html.div([attribute.class("omni-hosted-app")], [
+            // Reference equality memo avoids re-converting unchanged plugin Schema
+            // trees on unrelated shell renders such as scroll or modal updates.
+            element.memo([element.ref(node), element.ref(plugin_id)], fn() {
+              element.map(render.render(node), fn(action) {
+                HostedSchemaAction(plugin_id, action)
+              })
+            }),
+          ]),
+        ),
       ])
-    Error(Nil) -> render_slot_anchor(vp, plugin_id, route, True)
+    Error(Nil) ->
+      keyed.div([attribute.class("omni-viewport-host")], [
+        #(
+          "island:" <> vp_str <> ":" <> plugin_id,
+          render_slot_anchor(vp, plugin_id, route, True),
+        ),
+      ])
   }
 }

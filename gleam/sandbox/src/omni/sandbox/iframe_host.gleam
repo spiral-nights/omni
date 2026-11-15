@@ -102,6 +102,20 @@ pub fn build_guest_bridge_script(plugin_id: String) -> String {
   <> "</script>"
 }
 
+fn wrap_bridge_script(raw: String) -> String {
+  let trimmed = string.trim_start(raw)
+  case string.starts_with(string.lowercase(trimmed), "<script") {
+    True -> raw
+    False -> {
+      let safe =
+        raw
+        |> string.replace("</script", "<\\/script")
+        |> string.replace("</SCRIPT", "<\\/SCRIPT")
+      "<script id=\"omni-guest-bridge\">\n" <> safe <> "\n</script>"
+    }
+  }
+}
+
 /// Generates sandboxed `srcdoc` HTML embedding:
 /// - Injected strict CSP `<meta http-equiv="Content-Security-Policy" content="...">`
 /// - Injected design tokens `<style id="omni-design-tokens">`
@@ -125,7 +139,7 @@ pub fn build_srcdoc(config: IframeConfig) -> String {
   let theme_style =
     tokens.theme_mode_style_tag(unwrap(config.theme_mode, "dark"), overrides)
   let bridge = case config.bridge_script {
-    Some(b) -> b
+    Some(b) -> wrap_bridge_script(b)
     None -> build_guest_bridge_script(config.plugin_id)
   }
 
