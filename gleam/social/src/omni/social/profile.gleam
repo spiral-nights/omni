@@ -85,7 +85,8 @@ fn metadata_decoder(
   default_pubkey: String,
   default_created_at: Int,
 ) -> Decoder(Profile) {
-  let opt_str = decode.optional(decode.string)
+  let opt_str =
+    decode.one_of(decode.optional(decode.string), [decode.success(None)])
   use name <- decode.optional_field("name", None, opt_str)
   use display_name <- decode.optional_field("display_name", None, opt_str)
   use display_name_camel <- decode.optional_field("displayName", None, opt_str)

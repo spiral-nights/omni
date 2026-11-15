@@ -957,7 +957,7 @@ pub fn rich_text_embeds_media_when_enabled_test() {
   let link_only =
     Text(
       base: empty_base(),
-      content: "look https://example.com/cat.png",
+      content: "look https://example.com/cat.png and https://example.com/clip.mp4",
       variant: Some(Body),
       tone: None,
       truncate: None,
@@ -966,7 +966,21 @@ pub fn rich_text_embeds_media_when_enabled_test() {
     )
   let without_media = render.render_to_string(link_only)
   should.be_false(string.contains(without_media, "omni-inline-image"))
-  should.be_true(string.contains(without_media, "class=\"omni-rich-link\""))
+  should.be_false(string.contains(without_media, "omni-inline-video"))
+  should.be_true(string.contains(
+    without_media,
+    "class=\"omni-rich-link feed-media-callout\"",
+  ))
+  should.be_true(string.contains(without_media, "data-media-kind=\"image\""))
+  should.be_true(string.contains(without_media, "data-media-kind=\"video\""))
+  should.be_true(string.contains(
+    without_media,
+    "<span class=\"media-callout-badge\">Image</span>",
+  ))
+  should.be_true(string.contains(
+    without_media,
+    "<span class=\"media-callout-badge\">Video</span>",
+  ))
 }
 
 pub fn rich_text_supports_markdown_links_and_leaves_plain_text_alone_test() {

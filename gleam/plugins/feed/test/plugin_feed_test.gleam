@@ -776,8 +776,9 @@ pub fn inline_media_setting_wired_to_note_cards_test() {
 
   let #(m2, _) = update.update(m1, ToggleInlineMedia)
   m2.settings.show_inline_media |> should.be_true()
-  let wire_on = schema.encode_schema_message(view.view(m2))
-  should.be_true(string.contains(wire_on, "\"showInlineImages\":true"))
+  let wire_after = schema.encode_schema_message(view.view(m2))
+  should.be_true(string.contains(wire_after, "\"showInlineImages\":false"))
+  should.be_false(string.contains(wire_after, "\"showInlineImages\":true"))
 }
 
 pub fn page_size_settings_control_and_update_test() {
@@ -872,4 +873,40 @@ pub fn loading_and_syncing_indicators_test() {
   let #(m5, _) =
     update.update(m4, IngestEvent(note_event(note1_hex, alice_hex, "hello")))
   m5.is_loading_thread |> should.be_false()
+}
+
+pub fn app_spec_with_storage_loads_and_persists_profiles_test() {
+  let store = storage.in_memory()
+  let spec = feed_main.app_spec_with_storage(store)
+  let #(m0, _) = spec.init(route.main())
+  dict.size(m0.profiles) |> should.equal(0)
+
+  let meta_ev =
+    make_event(
+      note1_hex,
+      alice_hex,
+      1_700_000_200,
+      Metadata,
+      [],
+      "{\"display_name\":\"Alice Wonderland\",\"name\":\"alice\",\"nip05_valid\":true}",
+    )
+  let #(m1, _) = spec.update(m0, IngestEvent(meta_ev))
+  let #(m2, _) =
+    spec.update(m1, IngestEvent(note_event(note2_hex, alice_hex, "hello feed")))
+  let #(m3, _) = spec.update(m2, SelectTab(TabGlobal))
+  let wire1 = schema.encode_schema_message(spec.view(m3))
+  should.be_true(string.contains(wire1, "Alice Wonderland"))
+
+  // Restart with the same storage: cached profiles are restored immediately
+  let #(reloaded, _) = spec.init(route.main())
+  dict.size(reloaded.profiles) |> should.equal(1)
+  let #(reloaded_with_note, _) =
+    spec.update(
+      reloaded,
+      IngestEvent(note_event(note2_hex, alice_hex, "hello feed")),
+    )
+  let #(reloaded_global, _) =
+    spec.update(reloaded_with_note, SelectTab(TabGlobal))
+  let wire2 = schema.encode_schema_message(spec.view(reloaded_global))
+  should.be_true(string.contains(wire2, "Alice Wonderland"))
 }

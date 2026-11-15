@@ -3,6 +3,7 @@
 //// Gleam replacement for the MoonBit feed. Built on the shared `omni_social`
 //// data layer and `omni_social_ui` note card views.
 
+import gleam/dict
 import gleam/option.{Some}
 import omni/platform/storage.{type Storage}
 import omni/plugin_kit/app.{type AppSpec, type RunningApp, AppSpec}
@@ -10,6 +11,7 @@ import omni/plugin_kit/local_store
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema.{type Node}
 import omni/social/follows
+import omni/social/profile_cache
 import plugin/feed/model.{type Model, Model}
 import plugin/feed/msg.{type Msg, SelectView}
 import plugin/feed/update
@@ -39,7 +41,16 @@ pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
       let base = model.init(initial_route)
       let loaded_settings = local_store.load(store, settings_cfg)
       let loaded_follows = local_store.load(store, follows_cfg)
-      #(Model(..base, settings: loaded_settings, follows: loaded_follows), [])
+      let loaded_profiles = profile_cache.load(store)
+      #(
+        Model(
+          ..base,
+          settings: loaded_settings,
+          follows: loaded_follows,
+          profiles: loaded_profiles,
+        ),
+        [],
+      )
     },
     update: fn(current_model: Model, message: Msg) {
       let #(next_model, effects) = update.update(current_model, message)
@@ -54,6 +65,14 @@ pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
         True -> Nil
         False -> {
           let _ = local_store.save(store, follows_cfg, next_model.follows)
+          Nil
+        }
+      }
+      case next_model.profiles == current_model.profiles {
+        True -> Nil
+        False -> {
+          let _ =
+            profile_cache.upsert_many(store, dict.values(next_model.profiles))
           Nil
         }
       }

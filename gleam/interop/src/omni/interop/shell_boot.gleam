@@ -39,6 +39,7 @@ import omni/platform/idb
 import omni/platform/json as platform_json
 import omni/platform/log
 import omni/platform/nip44
+import omni/platform/ref
 import omni/platform/storage
 import omni/platform/url
 import omni/plugin_kit/local_store
@@ -771,19 +772,6 @@ fn flush_public_event_batch(
   events: List(nostr_event.Event),
 ) -> Nil {
   deliver_events_to_builtins(host, events)
-  let profiles = list.filter_map(events, social_profile.from_event)
-  case profiles {
-    [] -> Nil
-    _ -> {
-      let _ =
-        social_profile_cache.upsert_many(host.booted.kernel.storage, profiles)
-      Nil
-    }
-  }
-  let authors =
-    list.map(events, fn(ev) { pubkey.to_hex(ev.pubkey) })
-    |> list.unique
-  request_missing_profiles(host, authors)
   push_views(host)
 }
 
@@ -813,12 +801,15 @@ fn request_missing_profiles(host: ShellBoot, authors: List(String)) -> Nil {
     |> list.filter(fn(author) { string.length(author) == 64 })
     |> list.unique
   let missing =
-    social_profile_cache.filter_missing_and_mark(
-      store,
-      normalized,
-      now,
-      social_profile_cache.default_ttl_ms,
-    )
+    normalized
+    |> list.filter(fn(author) {
+      social_profile_cache.needs_fetch(
+        store,
+        author,
+        now,
+        social_profile_cache.default_ttl_ms,
+      )
+    })
 
   case missing {
     [] -> Nil
@@ -845,11 +836,19 @@ fn request_missing_profiles(host: ShellBoot, authors: List(String)) -> Nil {
           case pairs {
             [] -> Nil
             _ -> {
+              let now_done = host.booted.kernel.clock.now_ms()
               let _ =
                 social_profile_cache.upsert_many(
                   store,
                   list.map(pairs, fn(pair) { pair.1 }),
                 )
+              list.each(pairs, fn(pair) {
+                social_profile_cache.mark_fetched(
+                  store,
+                  pair.1.pubkey,
+                  now_done,
+                )
+              })
               ingest_events_to_builtins(
                 host,
                 list.map(pairs, fn(pair) { pair.0 }),
@@ -1022,17 +1021,34 @@ fn fetch_thread(host: ShellBoot, note_id: String) -> Nil {
   Nil
 }
 
-fn deliver_events_to_builtins(host: ShellBoot, events) -> Nil {
-  dict.each(host.booted.builtins, fn(_id, app) {
-    case app.ingest_many {
-      Some(ingest_many) -> ingest_many(events)
-      None ->
-        case app.ingest {
-          Some(ingest) -> list.each(events, ingest)
-          None -> Nil
-        }
+fn deliver_events_to_builtins(
+  host: ShellBoot,
+  events: List(nostr_event.Event),
+) -> Nil {
+  ingest_events_to_builtins(host, events)
+  let profiles = list.filter_map(events, social_profile.from_event)
+  case profiles {
+    [] -> Nil
+    _ -> {
+      let now = host.booted.kernel.clock.now_ms()
+      let _ =
+        social_profile_cache.upsert_many(host.booted.kernel.storage, profiles)
+      list.each(profiles, fn(p) {
+        social_profile_cache.mark_fetched(
+          host.booted.kernel.storage,
+          p.pubkey,
+          now,
+        )
+      })
+      Nil
     }
-  })
+  }
+  let authors =
+    list.flat_map(events, fn(ev) {
+      [pubkey.to_hex(ev.pubkey), ..nostr_event.get_tag_values(ev.tags, "p")]
+    })
+    |> list.unique
+  request_missing_profiles(host, authors)
 }
 
 fn maybe_fetch_profile_notes(host: ShellBoot, page: Page) -> Nil {
@@ -1056,6 +1072,7 @@ fn fetch_following_notes(host: ShellBoot, followed: List(String)) -> Nil {
   case list.take(followed, 100) {
     [] -> Nil
     authors -> {
+      request_missing_profiles(host, authors)
       let filter =
         Filter(
           ids: None,
@@ -1588,9 +1605,60 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
     host,
     relay_pool.get_statuses(host.booted.kernel.relay_pool),
   )
+  let prev_connected =
+    ref.new(
+      relay_pool.get_statuses(host.booted.kernel.relay_pool)
+      |> list.filter_map(fn(pair) {
+        case pair.1 {
+          relay_pool.Connected -> Ok(relay_url.to_string(pair.0))
+          _ -> Error(Nil)
+        }
+      }),
+    )
   let _ =
     relay_pool.watch_statuses(host.booted.kernel.relay_pool, fn(statuses) {
       push_relay_statuses(host, statuses)
+      let now_connected =
+        list.filter_map(statuses, fn(pair) {
+          case pair.1 {
+            relay_pool.Connected -> Ok(relay_url.to_string(pair.0))
+            _ -> Error(Nil)
+          }
+        })
+      let newly_connected =
+        list.any(now_connected, fn(url) {
+          !list.contains(ref.get(prev_connected), url)
+        })
+      ref.set(prev_connected, now_connected)
+      case newly_connected {
+        False -> Nil
+        True -> {
+          let _ =
+            coordinator.fetch(
+              host.booted.kernel.coordinator,
+              "omni_internal_feed_reconnect",
+              [public_events_filter()],
+              Some(FetchOptions(
+                timeout_ms: Some(4000),
+                relays: None,
+                local_only: None,
+              )),
+            )
+            |> promise.map(fn(events) {
+              flush_public_event_batch(host, events)
+              Nil
+            })
+          let latest_follows =
+            local_store.load(
+              host.booted.kernel.storage,
+              social_follows.store_config(),
+            )
+          case latest_follows.followed_pubkeys {
+            [] -> Nil
+            followed -> fetch_following_notes(host, followed)
+          }
+        }
+      }
       schedule_push_views(host)
     })
 

@@ -9,6 +9,7 @@ import omni/plugin_kit/local_store
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema.{type Node}
 import omni/social/follows
+import omni/social/profile_cache
 import plugin/profiles/model.{type Model, Model}
 import plugin/profiles/msg.{type Msg, SelectView}
 import plugin/profiles/update
@@ -36,7 +37,8 @@ pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
   AppSpec(
     init: fn(initial_route: Route) {
       let base = model.init(initial_route)
-      let cached = local_store.load(store, cfg)
+      let cached =
+        dict.merge(profile_cache.load(store), local_store.load(store, cfg))
       let cached_follows = local_store.load(store, follows_cfg)
       let with_profiles = case dict.size(cached) {
         0 -> base
@@ -54,6 +56,8 @@ pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
         True -> Nil
         False -> {
           let _ = local_store.save(store, cfg, next_model.profiles)
+          let _ =
+            profile_cache.upsert_many(store, dict.values(next_model.profiles))
           Nil
         }
       }

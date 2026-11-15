@@ -446,16 +446,6 @@ fn render_settings_view(model: Model) -> Node {
       disabled: None,
     )
 
-  let media_toggle =
-    Toggle(
-      base: node.empty_base(),
-      name: "showInlineMedia",
-      label: Some("Show inline media images"),
-      checked: model.settings.show_inline_media,
-      action: action.new("toggle-inline-media"),
-      disabled: None,
-    )
-
   let page_size_label =
     schema.text("Notes per load")
     |> schema.text_variant(Caption)
@@ -501,7 +491,7 @@ fn render_settings_view(model: Model) -> Node {
     schema.box()
     |> schema.column
     |> schema.gap("md")
-    |> schema.children([replies_toggle, media_toggle, page_size_control]),
+    |> schema.children([replies_toggle, page_size_control]),
   ])
 }
 
@@ -905,7 +895,7 @@ fn render_feed_note_card(model: Model, n: Note, cfg: NoteCardConfig) -> Node {
     reply_author_opt,
     s,
     cfg,
-    model.settings.show_inline_media,
+    False,
   )
 }
 

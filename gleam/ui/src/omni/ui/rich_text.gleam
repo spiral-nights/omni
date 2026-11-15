@@ -15,6 +15,7 @@ import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import omni/protocol/schema/action.{type Action}
+import omni/ui/icons
 import omni/ui/sanitize
 
 const bech32_charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
@@ -152,12 +153,12 @@ fn classify(word: String, allow_media: Bool) -> List(Element(Action)) {
         Some(Image) ->
           case allow_media {
             True -> [media_element(word, Image)]
-            False -> [link_label(shorten_url(word), word)]
+            False -> [media_callout(word, Image)]
           }
         Some(Video) ->
           case allow_media {
             True -> [media_element(word, Video)]
-            False -> [link_label(shorten_url(word), word)]
+            False -> [media_callout(word, Video)]
           }
         None ->
           case plain_url(word) {
@@ -305,6 +306,37 @@ fn media_element(url: String, kind: MediaKind) -> Element(Action) {
         ],
         [],
       )
+  }
+}
+
+fn media_callout(url: String, kind: MediaKind) -> Element(Action) {
+  let label = shorten_url(url)
+  case sanitize.sanitize_url(url) {
+    Some(safe) -> {
+      let #(icon_name, badge_text, kind_attr) = case kind {
+        Image -> #("image", "Image", "image")
+        Video -> #("external", "Video", "video")
+      }
+      html.a(
+        [
+          attribute.class("omni-rich-link feed-media-callout"),
+          attribute.href(safe),
+          attribute.attribute("target", "_blank"),
+          attribute.attribute("rel", "noopener noreferrer"),
+          attribute.title(safe),
+          attribute.attribute("data-url", safe),
+          attribute.attribute("data-media-kind", kind_attr),
+        ],
+        [
+          icons.render_icon(icon_name, 14),
+          html.span([attribute.class("media-callout-url")], [html.text(label)]),
+          html.span([attribute.class("media-callout-badge")], [
+            html.text(badge_text),
+          ]),
+        ],
+      )
+    }
+    None -> html.text(label)
   }
 }
 
