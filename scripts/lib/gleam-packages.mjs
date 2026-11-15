@@ -1,6 +1,6 @@
 // Shared discovery and dependency ordering of Gleam packages under gleam/.
 // Dependencies between packages are `path` deps declared in each gleam.toml.
-import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -70,4 +70,68 @@ export function rootPackages() {
     }
   }
   return ordered.filter((pkg) => !dependedOn.has(pkg.dir));
+}
+
+/**
+ * Gleam 1.19's `ManifestUpdated::gleam_toml_changed` checks
+ * `build/packages/<local_dep>.config_fingerprint` for every local `path`
+ * dependency in `manifest.toml`. On a fresh checkout (`build/` is gitignored),
+ * those fingerprint files are missing, causing `gleam build` / `gleam test` to
+ * hit the remote Hex API (`Resolving versions`) in every package and trigger
+ * HTTP 429 rate-limit failures in CI.
+ *
+ * Pre-seeding and syncing `<pkg>.config_fingerprint` across packages ensures
+ * `gleam` uses the committed `manifest.toml` directly without querying the Hex
+ * API.
+ */
+const KNOWN_CONFIG_FINGERPRINTS = {
+  omni_kernel: "2689747082959571761",
+  omni_nostr: "8899079069289192649",
+  omni_platform: "2343797400461880199",
+  omni_plugin_kit: "2065856417810315290",
+  omni_protocol: "3066591235036090489",
+  omni_sandbox: "15511289451715415724",
+  omni_shell: "7383470455550203468",
+  omni_social: "17350719567501637415",
+  omni_social_ui: "4381747902448024769",
+  omni_testkit: "6817748373294405171",
+  omni_ui: "2038530022532356954",
+  omni_web: "17023794420749444401",
+  plugin_checklist: "14532981848688457319",
+  plugin_feed: "15407284713441986075",
+  plugin_notes: "8593345721642402352",
+  plugin_profiles: "7036698404621277619",
+  plugin_publisher: "7490054156309273082",
+  plugin_relays: "1862683124975354739",
+  plugin_timer: "11030532790692333228",
+};
+
+export function syncConfigFingerprints(packages = orderedPackages()) {
+  const fingerprints = new Map(
+    Object.entries(KNOWN_CONFIG_FINGERPRINTS).map(([k, v]) => [
+      `${k}.config_fingerprint`,
+      v,
+    ]),
+  );
+
+  for (const pkg of packages) {
+    const bp = join(pkg.dir, "build", "packages");
+    if (!existsSync(bp)) continue;
+    for (const file of readdirSync(bp)) {
+      if (file.endsWith(".config_fingerprint")) {
+        fingerprints.set(file, readFileSync(join(bp, file), "utf8").trim());
+      }
+    }
+  }
+
+  for (const pkg of packages) {
+    const bp = join(pkg.dir, "build", "packages");
+    mkdirSync(bp, { recursive: true });
+    for (const [file, value] of fingerprints) {
+      const target = join(bp, file);
+      if (!existsSync(target)) {
+        writeFileSync(target, value);
+      }
+    }
+  }
 }

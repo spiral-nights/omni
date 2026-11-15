@@ -10,7 +10,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync } from "node:fs";
 import { join, normalize } from "node:path";
 import { buildSync } from "esbuild";
-import { gleamRoot } from "./lib/gleam-packages.mjs";
+import { gleamRoot, syncConfigFingerprints } from "./lib/gleam-packages.mjs";
 
 const interopDir = join(gleamRoot, "interop");
 const compiledInteropDir = join(
@@ -26,8 +26,10 @@ const bundledInteropDir = join(interopDir, "dist");
 
 export function buildInterop() {
   const started = Date.now();
+  syncConfigFingerprints();
   const r = spawnSync("gleam", ["build"], { cwd: interopDir, stdio: "inherit" });
   if (r.status !== 0) throw new Error("gleam build failed for omni_interop");
+  syncConfigFingerprints();
 
   const entryPoints = readdirSync(compiledInteropDir)
     .filter((f) => f.endsWith(".mjs") && !f.endsWith(".ffi.mjs"))

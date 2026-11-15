@@ -4,17 +4,19 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { build } from "esbuild";
-import { gleamRoot } from "./lib/gleam-packages.mjs";
+import { gleamRoot, syncConfigFingerprints } from "./lib/gleam-packages.mjs";
 
 const bridgeDir = join(gleamRoot, "bridge");
 const entry = join(bridgeDir, "js", "guest-runtime.mjs");
 const outfile = join(bridgeDir, "dist", "guest-runtime.js");
 
+syncConfigFingerprints();
 const compile = spawnSync("gleam", ["build"], {
   cwd: bridgeDir,
   stdio: "inherit",
 });
 if (compile.status !== 0) process.exit(compile.status ?? 1);
+syncConfigFingerprints();
 
 const compiledModule = join(
   bridgeDir,

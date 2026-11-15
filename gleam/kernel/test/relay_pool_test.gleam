@@ -356,12 +356,12 @@ pub fn duplicate_sub_ids_do_not_overwrite_handlers_test() {
 
 pub fn failed_handshake_schedules_single_retry_test() -> Promise(Nil) {
   let store = storage.in_memory()
-  let assert Ok(url1) = relay_url.parse("wss://offline.example")
+  let assert Ok(url1) = relay_url.parse("ws://127.0.0.1:1")
   let pool = relay_pool.new(store, [url1])
 
   use _ <- promise.await(promise_ext.delay(80, Nil))
-  assert dict.get(ref.get(pool.retries), "wss://offline.example") == Ok(1)
-  assert dict.has_key(ref.get(pool.pending_reconnects), "wss://offline.example")
+  assert dict.get(ref.get(pool.retries), "ws://127.0.0.1:1") == Ok(1)
+  assert dict.has_key(ref.get(pool.pending_reconnects), "ws://127.0.0.1:1")
     == True
   promise.resolve(Nil)
 }
