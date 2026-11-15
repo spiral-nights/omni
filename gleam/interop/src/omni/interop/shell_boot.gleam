@@ -10,7 +10,6 @@ import gleam/bit_array
 import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
-import gleam/javascript/array.{type Array}
 import gleam/javascript/promise
 import gleam/json
 import gleam/list
@@ -724,12 +723,6 @@ fn apply_effects(
   })
 }
 
-fn ingest_public_event(host: ShellBoot, event: nostr_event.Event) -> Nil {
-  enqueue_public_event(event, fn(batch) {
-    flush_public_event_batch(host, array.to_list(batch))
-  })
-}
-
 fn flush_public_event_batch(
   host: ShellBoot,
   events: List(nostr_event.Event),
@@ -761,7 +754,7 @@ fn flush_ingest(host: ShellBoot) -> fn(String, Bool) -> Nil {
       "" -> []
       raw -> string.split(raw, ",")
     }
-    request_missing_profiles(host, authors)
+    let _ = request_missing_profiles(host, authors)
     case should_push {
       True -> push_views(host)
       False -> Nil
@@ -1830,12 +1823,6 @@ fn enqueue_ingest_flush(
   author: String,
   needs_view_push: Bool,
   on_flush: fn(String, Bool) -> Nil,
-) -> Nil
-
-@external(javascript, "./shell_boot.ffi.mjs", "enqueue_public_event")
-fn enqueue_public_event(
-  event: nostr_event.Event,
-  on_flush: fn(Array(nostr_event.Event)) -> Nil,
 ) -> Nil
 
 fn plugin_settings_id(tab_id: String) -> String {

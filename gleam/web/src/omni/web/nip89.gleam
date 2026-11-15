@@ -7,7 +7,7 @@
 import gleam/dict
 import gleam/javascript/promise.{type Promise}
 import gleam/list
-import gleam/option.{type Option, None, Some}
+import gleam/option.{None, Some}
 import omni/kernel/kernel.{type OmniKernel}
 import omni/kernel/nostr/coordinator
 import omni/nostr/event.{type Event}

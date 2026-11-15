@@ -363,7 +363,7 @@ fn render_installed_index(model: Model) -> Element(Msg) {
   }
 }
 
-fn render_installed_row(model: Model, app: InstalledApp) -> Element(Msg) {
+fn render_installed_row(_model: Model, app: InstalledApp) -> Element(Msg) {
   let title = model.app_title(app)
   let version = option.unwrap(app.version, "0.1.0")
   html.div(

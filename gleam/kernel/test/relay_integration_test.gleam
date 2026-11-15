@@ -13,9 +13,7 @@ import omni/nostr/event_id
 import omni/nostr/filter.{Filter}
 import omni/nostr/kind
 import omni/nostr/relay_frame
-import omni/nostr/relay_url
 import omni/platform/promise_ext
-import omni/platform/promise_ext as pe
 import omni/platform/ref
 import omni/platform/storage
 

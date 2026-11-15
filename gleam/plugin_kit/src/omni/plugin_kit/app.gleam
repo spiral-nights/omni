@@ -229,7 +229,6 @@ fn run_effect(app: RunningApp(model, msg), effect: Effect(msg)) -> Nil {
       ref.update(app.uploads, fn(queue) { [upload, ..queue] })
     Search(query) -> ref.update(app.searches, fn(queue) { [query, ..queue] })
     OpenUrl(url) -> ref.update(app.urls, fn(queue) { [url, ..queue] })
-    OpenUrl(url) -> ref.update(app.urls, fn(queue) { [url, ..queue] })
     ZapInvoice(invoice) ->
       ref.update(app.zap_invoices, fn(queue) { [invoice, ..queue] })
   }

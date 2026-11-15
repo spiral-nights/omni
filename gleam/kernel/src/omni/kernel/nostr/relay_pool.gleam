@@ -323,11 +323,11 @@ fn dispatch_frame(
 ) -> Nil {
   let subs = ref.get(pool.subscribers)
   case frame {
-    relay_frame.EventFrame(sub_id, _) -> {
+    relay_frame.EventFrame(_sub_id, _) -> {
       bump_counter(pool, source_url, 0, 1)
       deliver_frame(pool, subs, source_url, frame)
     }
-    relay_frame.Eose(sub_id) | relay_frame.Closed(sub_id, _) -> {
+    relay_frame.Eose(_sub_id) | relay_frame.Closed(_sub_id, _) -> {
       deliver_frame(pool, subs, source_url, frame)
     }
     relay_frame.Notice(message) -> {
@@ -370,7 +370,7 @@ fn dispatch_frame(
 }
 
 fn deliver_frame(
-  pool: RelayPool,
+  _pool: RelayPool,
   subs: Dict(String, List(Subscriber)),
   source_url: String,
   frame: RelayFrame,

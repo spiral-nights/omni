@@ -19,6 +19,7 @@ omni_social = { path = "../social" }
 omni_sandbox = { path = "../sandbox" }
 omni_plugin_kit = { path = "../plugin_kit" }
 lustre = ">= 5.7.1 and < 6.0.0"
+gleam_json = ">= 3.1.0 and < 4.0.0"
 
 [dev_dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

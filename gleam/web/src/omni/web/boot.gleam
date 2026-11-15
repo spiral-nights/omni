@@ -29,7 +29,6 @@ import omni/kernel/kernel.{
   type KernelPorts, type OmniKernel, KernelPorts, OmniKernel,
 }
 import omni/kernel/nostr/coordinator as subscription_coordinator
-import omni/kernel/nostr/coordinator
 import omni/kernel/nostr/event_store
 import omni/kernel/nostr/relay_pool
 import omni/kernel/plugins/registry as plugin_registry
@@ -56,9 +55,8 @@ import omni/protocol/capability
 import omni/protocol/grant.{Always, Deny}
 import omni/protocol/intent.{IntentHandler}
 import omni/protocol/plugin_id
-import omni/protocol/rpc/method.{type FetchOptions, FetchOptions}
+import omni/protocol/rpc/method.{FetchOptions}
 import omni/protocol/schema/action.{type Action}
-import omni/protocol/schema/node
 import omni/protocol/workspace
 import omni/sandbox/iframe_host.{type IframeMount, IframeConfig}
 import omni/sandbox/manager.{type SandboxManager, SpawnOptions}
@@ -1205,7 +1203,7 @@ pub fn process_searches(booted: Booted) -> Promise(Bool) {
           |> omni_filter.with_kinds([kind.Note])
           |> omni_filter.with_search(query)
           |> omni_filter.with_limit(50)
-        use events <- promise.await(coordinator.fetch(
+        use events <- promise.await(subscription_coordinator.fetch(
           booted.kernel.coordinator,
           "omni_internal_search",
           [filter],

@@ -10,7 +10,6 @@ import gleam/order.{type Order}
 import gleam/set
 import gleam/string
 import omni/nostr/event.{type Event}
-import omni/nostr/event_codec
 import omni/nostr/event_id
 import omni/nostr/filter.{type Filter}
 import omni/nostr/kind

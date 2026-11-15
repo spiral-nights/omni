@@ -22,7 +22,6 @@ import omni/kernel/workspace/sync as workspace_sync
 import omni/nostr/event.{type Event, Event, UnsignedEvent}
 import omni/nostr/event_id
 import omni/nostr/filter.{Filter}
-import omni/nostr/kind
 import omni/nostr/kind as nostr_kind
 import omni/nostr/pubkey
 import omni/nostr/relay_frame
@@ -46,10 +45,9 @@ import omni/protocol/schema/codec as schema_codec
 import omni/protocol/workspace
 import omni/sandbox/manager
 import omni/shell/model
-import omni/shell/msg as omni_shell_msg
 import omni/shell/msg.{
   EmbedSchema, HostedSchemaAction, NavigateTo, ToggleFullscreen,
-}
+} as omni_shell_msg
 import omni/shell/registry
 import omni/web/boot
 import omni/web/config
@@ -287,7 +285,7 @@ pub fn publish_pipeline_signs_broadcasts_and_ingests_test() {
     UnsignedEvent(
       pubkey: None,
       created_at: 1_700_000_002,
-      kind: kind.Note,
+      kind: nostr_kind.Note,
       tags: [["t", "gleam"]],
       content: "published through the host",
     )
@@ -299,7 +297,7 @@ pub fn publish_pipeline_signs_broadcasts_and_ingests_test() {
   // The signed event is stored locally for 0ms reads.
   use count <- promise.await(event_store.count_events(
     booted.kernel.event_store,
-    Filter(None, None, Some([kind.Note]), None, None, None, None, dict.new()),
+    Filter(None, None, Some([nostr_kind.Note]), None, None, None, None, dict.new()),
   ))
   should.be_true(count >= 1)
 
@@ -316,7 +314,7 @@ pub fn encrypted_publish_encrypts_content_test() {
     UnsignedEvent(
       pubkey: None,
       created_at: 1_700_000_003,
-      kind: kind.AppData,
+      kind: nostr_kind.AppData,
       tags: [["d", "omni/notes/v1/note_1"]],
       content: "top secret plaintext",
     )
@@ -491,7 +489,7 @@ fn manifest_event(content: String, tags: List(List(String))) -> Event {
     UnsignedEvent(
       pubkey: None,
       created_at: 1_700_000_000,
-      kind: kind.from_int(35_129),
+      kind: nostr_kind.from_int(35_129),
       tags: tags,
       content: content,
     )
@@ -783,7 +781,7 @@ pub fn workspace_publish_is_debounced_test() -> promise.Promise(Nil) {
   use _ <- promise.await(omni_promise_ext.delay(1000, Nil))
   use count <- promise.await(event_store.count_events(
     after.kernel.event_store,
-    Filter(None, None, Some([kind.AppData]), None, None, None, None, dict.new()),
+    Filter(None, None, Some([nostr_kind.AppData]), None, None, None, None, dict.new()),
   ))
   count |> should.equal(1)
   promise.resolve(Nil)
@@ -950,7 +948,7 @@ pub fn publisher_publish_uploads_and_broadcasts_nip5a_test() -> promise.Promise(
     Filter(
       None,
       None,
-      Some([kind.from_int(35_129)]),
+      Some([nostr_kind.from_int(35_129)]),
       None,
       None,
       None,
@@ -965,7 +963,7 @@ pub fn publisher_publish_uploads_and_broadcasts_nip5a_test() -> promise.Promise(
     Filter(
       None,
       None,
-      Some([kind.from_int(35_129)]),
+      Some([nostr_kind.from_int(35_129)]),
       None,
       None,
       None,
@@ -1367,7 +1365,7 @@ fn sign_nip89_event(
     UnsignedEvent(
       pubkey: None,
       created_at: 1_700_000_000,
-      kind: kind.from_int(kind_int),
+      kind: nostr_kind.from_int(kind_int),
       tags: tags,
       content: content,
     )

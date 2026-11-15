@@ -840,22 +840,3 @@ export function enqueue_ingest_flush(author, needs_view_push, on_flush) {
 let pendingPublicEvents = [];
 let publicIngestTimer = null;
 
-export function enqueue_public_event(event, on_flush) {
-  pendingPublicEvents.push(event);
-  if (pendingPublicEvents.length >= 25) {
-    if (publicIngestTimer !== null) {
-      clearTimeout(publicIngestTimer);
-      publicIngestTimer = null;
-    }
-    const batch = pendingPublicEvents;
-    pendingPublicEvents = [];
-    on_flush(batch);
-  } else if (publicIngestTimer === null) {
-    publicIngestTimer = setTimeout(() => {
-      publicIngestTimer = null;
-      const batch = pendingPublicEvents;
-      pendingPublicEvents = [];
-      if (batch.length > 0) on_flush(batch);
-    }, 200);
-  }
-}

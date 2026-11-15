@@ -15,29 +15,28 @@ import omni/shell/layout/viewport_host
 import omni/shell/layout/widgets_grid
 import omni/shell/model.{
   type InstalledApp, AppStore, InstalledApp, IntentPromptState, Model,
-  PlacementConfig, PrimaryApp, Settings, SyncError, Synced, Syncing, TabPlugins,
-  TabRelays, UpdateModalState, UserProfileSummary, ViewOption, WidgetsDashboard,
+  PlacementConfig, PrimaryApp, Settings, Synced, Syncing, TabPlugins, TabRelays,
+  UpdateModalState, UserProfileSummary, ViewOption, WidgetsDashboard,
 }
 import omni/shell/msg.{
   AccountSwitchResult, AddAppPlacement, ApplyRemoteWorkspace,
-  ConfirmPluginUpdate, DisablePassphrase, DismissIntentPrompt, DismissToast,
-  DismissUpdateModal, EnablePassphrase, EscapePressed, ExportKey,
-  FinishPullRefresh, HistorySync, ImportKey, InstallApp, KeySecurityStatus,
-  NavigateBack, NavigateTo, OpenApp, OpenIntentApp, OpenSettings,
-  RemoveAppPlacement, SelectIntentHandler, SelectShell, SetAccentColor,
-  SetAppPlacements, SetAppRelays, SetCustomInstallUrl, SetExportedNsec,
-  SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
-  SetUserProfile, ShellScrolled, ShowIntentPrompt, ShowToast, ShowToastTone,
-  ShowUpdateModal, StartPullRefresh, SwitchAccount, ToggleAppEnabled,
-  ToggleAppIntent, ToggleAppPinned, ToggleAutoSync, ToggleFullscreen,
-  TriggerWorkspaceSync, UninstallApp, UnlockKey,
+  ConfirmPluginUpdate, DismissIntentPrompt, DismissToast, DismissUpdateModal,
+  EnablePassphrase, EscapePressed, ExportKey, FinishPullRefresh, HistorySync,
+  ImportKey, InstallApp, KeySecurityStatus, NavigateBack, NavigateTo, OpenApp,
+  OpenIntentApp, OpenSettings, RemoveAppPlacement, SelectIntentHandler,
+  SelectShell, SetAccentColor, SetAppPlacements, SetAppRelays,
+  SetCustomInstallUrl, SetExportedNsec, SetKeyInput, SetPassphrase,
+  SetSearchQuery, SetSyncStatus, SetThemeMode, SetUserProfile, ShellScrolled,
+  ShowIntentPrompt, ShowToast, ShowToastTone, ShowUpdateModal, StartPullRefresh,
+  SwitchAccount, ToggleAppEnabled, ToggleAppIntent, ToggleAppPinned,
+  ToggleAutoSync, ToggleFullscreen, TriggerWorkspaceSync, UninstallApp,
+  UnlockKey,
 }
 import omni/shell/shell
 import omni/shell/themes/editorial as editorial_theme
 import omni/shell/update.{
   DispatchIntentToPlugin, MountPluginInSlot, PersistAccentColor,
-  PersistWorkspaceLocal, RefreshActiveView, SwitchActiveShell,
-  UnmountPluginFromSlot, UpgradePlugin,
+  RefreshActiveView, SwitchActiveShell, UnmountPluginFromSlot, UpgradePlugin,
 }
 
 pub fn main() {

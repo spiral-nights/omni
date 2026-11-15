@@ -283,7 +283,7 @@ pub fn relay_pool_read_write_scopes_are_honoured_test() {
     )
   // Only the read relay receives the REQ.
   assert list.length(ref.get(read_frames)) == 1
-  assert list.length(ref.get(write_frames)) == 0
+  assert list.is_empty(ref.get(write_frames))
 
   let event = make_test_event()
   let waiter = publish_tracked(pool, event, 300)

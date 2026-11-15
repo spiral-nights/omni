@@ -4,7 +4,6 @@
 //// `AppStore`, `Settings`) following the canonical `.dock-item` hierarchy.
 
 import gleam/list
-import gleam/option.{None}
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
@@ -14,7 +13,6 @@ import omni/shell/model.{
   WidgetsDashboard,
 }
 import omni/shell/msg.{type Msg, NavigateTo, OpenApp, OpenSettings}
-import omni/ui/icons
 import omni/ui/plugin_icon
 
 /// Render the primary navigation dock `<nav class="omni-dock">`.

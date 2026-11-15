@@ -22,7 +22,6 @@ import omni/social/note.{type Note}
 import omni/social/profile
 import omni/social/stats
 import omni/social_ui/note_card.{type NoteCardConfig, NoteCardConfig}
-import omni/ui/avatar as generated_avatar
 import plugin/profiles/model.{
   type Model, SignerLocked, SignerMissing, SignerReady, ViewCompact,
   ViewDirectory, ViewFollowing, ViewKeys, ViewMetadata, ViewProfile, ViewWidget,

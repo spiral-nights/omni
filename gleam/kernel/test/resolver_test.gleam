@@ -1,7 +1,7 @@
 import gleam/bit_array
 import gleam/dict
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{None}
 import gleam/string
 import gleeunit/should
 import omni/kernel/crypto/keystore

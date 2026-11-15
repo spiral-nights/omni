@@ -3,7 +3,6 @@
 //// Strictly plugin-agnostic: zero hardcoded plugin IDs.
 
 import gleam/list
-import gleam/option.{None, Some}
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html

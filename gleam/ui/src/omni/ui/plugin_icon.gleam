@@ -5,7 +5,6 @@
 //// other glyphs fall back to the icon library so the UI stays monochrome.
 
 import gleam/bit_array
-import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string

@@ -42,13 +42,13 @@ pub fn main() -> Nil {
 
 pub fn studio_draft_validation_and_publish_test() {
   let m0 = model.init(TabStudio)
-  assert list.length(m0.published) == 0
+  assert list.is_empty(m0.published)
 
   // Empty ID rejected
   let #(m1, _) = update.update(m0, SetDraftId("   "))
   let #(m2, _) = update.update(m1, PublishPackage)
   assert m2.error_message != None
-  assert list.length(m2.published) == 0
+  assert list.is_empty(m2.published)
 
   // Dismiss banner clears error
   let #(m3, _) = update.update(m2, DismissBanner)
@@ -367,7 +367,7 @@ pub fn default_servers_round_trip_test() {
 pub fn template_bundle_and_inventory_render_test() {
   let m0 = model.init(TabStudio)
   let #(m1, effects) = update.update(m0, UseTemplate)
-  assert list.length(effects) == 0
+  assert list.is_empty(effects)
   assert m1.bundle != None
   assert m1.draft.entry_html == "index.html"
   assert m1.draft.bundle_size_bytes > 0
@@ -400,7 +400,7 @@ pub fn delete_published_queues_kind5_test() {
       ],
     )
   let #(m1, effects) = update.update(m0, DeletePublished("org.example.app"))
-  assert list.length(m1.published) == 0
+  assert list.is_empty(m1.published)
 
   let assert [app.Publish(draft)] = effects
   kind.to_int(draft.kind) |> should.equal(5)

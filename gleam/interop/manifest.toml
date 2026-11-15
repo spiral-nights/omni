@@ -30,7 +30,7 @@ packages = [
   { name = "omni_web", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_javascript", "gleam_json", "gleam_stdlib", "lustre", "omni_kernel", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol", "omni_sandbox", "omni_shell", "omni_ui", "plugin_checklist", "plugin_feed", "plugin_notes", "plugin_profiles", "plugin_publisher", "plugin_relays", "plugin_timer"], source = "local", path = "../web" },
   { name = "plugin_checklist", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol"], source = "local", path = "../plugins/checklist" },
   { name = "plugin_feed", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol", "omni_social", "omni_social_ui"], source = "local", path = "../plugins/feed" },
-  { name = "plugin_notes", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "lustre", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol", "omni_ui"], source = "local", path = "../plugins/notes" },
+  { name = "plugin_notes", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_javascript", "gleam_json", "gleam_stdlib", "lustre", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol", "omni_ui"], source = "local", path = "../plugins/notes" },
   { name = "plugin_profiles", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol", "omni_social", "omni_social_ui", "omni_ui"], source = "local", path = "../plugins/profiles" },
   { name = "plugin_publisher", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_javascript", "gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol"], source = "local", path = "../plugins/publisher" },
   { name = "plugin_relays", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "omni_nostr", "omni_platform", "omni_plugin_kit", "omni_protocol"], source = "local", path = "../plugins/relays" },
@@ -39,6 +39,7 @@ packages = [
 
 [requirements]
 gleam_javascript = { version = ">= 1.0.1 and < 2.0.0" }
+gleam_json = { version = ">= 3.1.0 and < 4.0.0" }
 gleam_stdlib = { version = ">= 1.0.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
 lustre = { version = ">= 5.7.1 and < 6.0.0" }
