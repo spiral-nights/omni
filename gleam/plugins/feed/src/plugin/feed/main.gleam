@@ -3,7 +3,6 @@
 //// Gleam replacement for the MoonBit feed. Built on the shared `omni_social`
 //// data layer and `omni_social_ui` note card views.
 
-import gleam/dict
 import gleam/option.{Some}
 import omni/platform/storage.{type Storage}
 import omni/plugin_kit/app.{type AppSpec, type RunningApp, AppSpec}
@@ -11,9 +10,10 @@ import omni/plugin_kit/local_store
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema.{type Node}
 import omni/social/follows
+import omni/social/profile
 import omni/social/profile_cache
 import plugin/feed/model.{type Model, Model}
-import plugin/feed/msg.{type Msg, SelectView}
+import plugin/feed/msg.{type Msg, IngestEvent, SelectView}
 import plugin/feed/update
 import plugin/feed/view
 
@@ -68,13 +68,16 @@ pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
           Nil
         }
       }
-      case next_model.profiles == current_model.profiles {
-        True -> Nil
-        False -> {
-          let _ =
-            profile_cache.upsert_many(store, dict.values(next_model.profiles))
-          Nil
-        }
+      case message {
+        IngestEvent(event) ->
+          case profile.from_event(event) {
+            Ok(parsed) -> {
+              let _ = profile_cache.upsert(store, parsed)
+              Nil
+            }
+            Error(_) -> Nil
+          }
+        _ -> Nil
       }
       #(next_model, effects)
     },

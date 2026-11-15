@@ -83,7 +83,9 @@ fn render_directory(model: Model) -> Node {
     ]
     matched -> [
       schema.list_view(
-        list.map(matched, fn(person) { render_directory_item(model, person) }),
+        matched
+        |> list.take(50)
+        |> list.map(fn(person) { render_directory_item(model, person) }),
       ),
     ]
   }
@@ -144,7 +146,9 @@ fn render_following(model: Model) -> Node {
     ]
     matched -> [
       schema.list_view(
-        list.map(matched, fn(person) { render_directory_item(model, person) }),
+        matched
+        |> list.take(50)
+        |> list.map(fn(person) { render_directory_item(model, person) }),
       ),
     ]
   }

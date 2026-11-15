@@ -10,6 +10,7 @@ import omni/nostr/event.{type Event}
 import omni/nostr/kind
 import omni/nostr/nip19
 import omni/nostr/pubkey
+import omni/platform/ref
 
 /// A Nostr user profile decoded from Kind 0 metadata.
 pub type Profile {
@@ -170,28 +171,30 @@ pub fn to_metadata_json(profile: Profile) -> String {
 /// Convert a hex pubkey (or `npub1...` string) into a truncated `npub1xxxx...yyyy` representation.
 pub fn truncate_npub(pubkey_or_npub: String) -> String {
   let trimmed = string.trim(pubkey_or_npub)
-  let npub_str = case string.starts_with(trimmed, "npub1") {
-    True -> trimmed
-    False ->
-      case pubkey.parse(trimmed) {
-        Ok(pk) -> nip19.encode_npub(pk)
-        Error(Nil) ->
-          case trimmed {
-            "" -> "npub1..."
-            _ -> "npub1" <> trimmed
-          }
-      }
-  }
-
-  let len = string.length(npub_str)
-  case len > 16 {
-    True -> {
-      let prefix = string.slice(npub_str, at_index: 0, length: 9)
-      let suffix = string.slice(npub_str, at_index: len - 4, length: 4)
-      prefix <> "..." <> suffix
+  ref.memoize_string(trimmed, fn() {
+    let npub_str = case string.starts_with(trimmed, "npub1") {
+      True -> trimmed
+      False ->
+        case pubkey.parse(trimmed) {
+          Ok(pk) -> nip19.encode_npub(pk)
+          Error(Nil) ->
+            case trimmed {
+              "" -> "npub1..."
+              _ -> "npub1" <> trimmed
+            }
+        }
     }
-    False -> npub_str
-  }
+
+    let len = string.length(npub_str)
+    case len > 16 {
+      True -> {
+        let prefix = string.slice(npub_str, at_index: 0, length: 9)
+        let suffix = string.slice(npub_str, at_index: len - 4, length: 4)
+        prefix <> "..." <> suffix
+      }
+      False -> npub_str
+    }
+  })
 }
 
 /// Resolve the best human-readable display name for a user:

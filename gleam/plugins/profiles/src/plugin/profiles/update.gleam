@@ -7,6 +7,8 @@ import gleam/option.{type Option, None, Some}
 import gleam/string
 import omni/nostr/event.{UnsignedEvent}
 import omni/nostr/kind
+import omni/nostr/nip19
+import omni/nostr/pubkey
 import omni/platform/clock
 import omni/plugin_kit/app.{type Effect, OpenUrl, Publish}
 import omni/plugin_kit/schema
@@ -491,17 +493,29 @@ fn extract_view(act: Action) -> Option(ProfilesView) {
 }
 
 fn extract_pubkey(act: Action) -> Option(String) {
-  list.find_map(["pubkey", "id", "npub", "value"], fn(key) {
+  list.find_map(["pubkey", "id", "npub", "target", "value"], fn(key) {
     case schema.payload_string(act, key) {
       Some(value) ->
         case string.trim(value) {
           "" -> Error(Nil)
-          cleaned -> Ok(cleaned)
+          cleaned -> Ok(normalize_pubkey(cleaned))
         }
       None -> Error(Nil)
     }
   })
   |> option.from_result
+}
+
+fn normalize_pubkey(raw: String) -> String {
+  let stripped = case string.starts_with(raw, "nostr:") {
+    True -> string.drop_start(raw, 6)
+    False -> raw
+  }
+  case nip19.decode(stripped) {
+    Ok(nip19.Npub(pk)) -> pubkey.to_hex(pk)
+    Ok(nip19.Nprofile(data)) -> pubkey.to_hex(data.pubkey)
+    _ -> stripped
+  }
 }
 
 fn extract_value(act: Action, fallback_key: String) -> String {

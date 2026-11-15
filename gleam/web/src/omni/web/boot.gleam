@@ -40,6 +40,7 @@ import omni/nostr/event_codec
 import omni/nostr/event_id
 import omni/nostr/filter as omni_filter
 import omni/nostr/kind
+import omni/nostr/nip19
 import omni/nostr/pubkey
 import omni/nostr/relay_url
 import omni/platform/clock
@@ -318,11 +319,34 @@ fn refresh_embedded_views(booted: Booted) -> Booted {
   )
 }
 
+fn refresh_embedded_view(booted: Booted, plugin_id: String) -> Booted {
+  let model = case dict.get(booted.builtins, plugin_id) {
+    Ok(app) -> {
+      let rendered = app.render()
+      let with_view =
+        Model(
+          ..booted.model,
+          embedded_views: dict.insert(
+            booted.model.embedded_views,
+            plugin_id,
+            rendered,
+          ),
+        )
+      update.sync_schema_page_route(with_view, plugin_id, rendered)
+    }
+    Error(Nil) -> booted.model
+  }
+  Booted(
+    ..booted,
+    model: Model(..model, user_profile: Some(session_profile(booted.kernel))),
+  )
+}
+
 fn forward_action(booted: Booted, plugin_id: String, action: Action) -> Booted {
   case dict.get(booted.builtins, plugin_id) {
     Ok(app) -> {
       let _ = app.handle_action(action)
-      refresh_embedded_views(booted)
+      refresh_embedded_view(booted, plugin_id)
     }
     Error(Nil) -> booted
   }
@@ -392,13 +416,13 @@ fn intent_route_for_action(
 ) -> Option(String) {
   case act.name {
     "view_profile" | "view-profile" ->
-      case payload_string(act, ["pubkey", "id", "npub"]) {
-        Some(pk) -> Some("?view=profile&id=" <> pk)
+      case payload_string(act, ["pubkey", "id", "npub", "target"]) {
+        Some(pk) -> Some("?view=profile&id=" <> normalize_pubkey_id(pk))
         None -> default_route
       }
     "view_note" | "view-note" ->
-      case payload_string(act, ["id", "noteId", "eventId"]) {
-        Some(id) -> Some("?view=thread&id=" <> id)
+      case payload_string(act, ["id", "noteId", "eventId", "target"]) {
+        Some(id) -> Some("?view=thread&id=" <> normalize_event_id(id))
         None -> default_route
       }
     _ -> default_route
@@ -412,13 +436,13 @@ fn hosted_route_for_action(
 ) -> Option(Option(String)) {
   case act.name {
     "open-thread" | "view-thread" | "view_thread" | "view-note" | "view_note" ->
-      case payload_string(act, ["id", "noteId", "eventId"]) {
-        Some(id) -> Some(Some("?view=thread&id=" <> id))
+      case payload_string(act, ["id", "noteId", "eventId", "target"]) {
+        Some(id) -> Some(Some("?view=thread&id=" <> normalize_event_id(id)))
         None -> prev
       }
     "select-profile" | "select_profile" | "view-profile" | "view_profile" ->
-      case payload_string(act, ["pubkey", "id", "npub"]) {
-        Some(pk) -> Some(Some("?view=profile&id=" <> pk))
+      case payload_string(act, ["pubkey", "id", "npub", "target"]) {
+        Some(pk) -> Some(Some("?view=profile&id=" <> normalize_pubkey_id(pk)))
         None -> prev
       }
     "back"
@@ -428,6 +452,32 @@ fn hosted_route_for_action(
     | "view-directory"
     | "view-timeline" -> Some(None)
     _ -> prev
+  }
+}
+
+fn normalize_pubkey_id(raw: String) -> String {
+  let trimmed = string.trim(raw)
+  let stripped = case string.starts_with(trimmed, "nostr:") {
+    True -> string.drop_start(trimmed, 6)
+    False -> trimmed
+  }
+  case nip19.decode(stripped) {
+    Ok(nip19.Npub(pk)) -> pubkey.to_hex(pk)
+    Ok(nip19.Nprofile(data)) -> pubkey.to_hex(data.pubkey)
+    _ -> string.lowercase(stripped)
+  }
+}
+
+fn normalize_event_id(raw: String) -> String {
+  let trimmed = string.trim(raw)
+  let stripped = case string.starts_with(trimmed, "nostr:") {
+    True -> string.drop_start(trimmed, 6)
+    False -> trimmed
+  }
+  case nip19.decode(stripped) {
+    Ok(nip19.Note(id)) -> event_id.to_hex(id)
+    Ok(nip19.Nevent(data)) -> event_id.to_hex(data.id)
+    _ -> string.lowercase(stripped)
   }
 }
 
@@ -544,7 +594,7 @@ pub fn dispatch(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
       case dict.get(booted.builtins, plugin_id) {
         Ok(app) ->
           case app.handle_action(action) {
-            True -> #(refresh_embedded_views(booted), [])
+            True -> #(refresh_embedded_view(booted, plugin_id), [])
             False -> handle_unhandled_hosted_action(booted, action)
           }
         Error(Nil) -> handle_unhandled_hosted_action(booted, action)
@@ -727,6 +777,7 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
     })
 
   // Forward schema actions to the in-process built-in apps.
+  let pre_effects_model = next_model
   let #(routed_booted, handled_builtin_action, hosted_route) =
     list.fold(
       effects,
@@ -768,7 +819,10 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
   // Follow the active app's route only when the page actually changes. Plugin
   // internal navigation (thread views, profile details) must survive unrelated
   // shell messages such as streamed schema refreshes or ingested relay events.
-  let page_changed = next_model.active_page != booted.model.active_page
+  // When `effects` ran `DispatchHostedAction` which routed an intent via
+  // `route_intent`, `routed_booted` has already dispatched `OpenIntentApp` and
+  // navigated the target plugin, so compare against `pre_effects_model`.
+  let page_changed = pre_effects_model.active_page != booted.model.active_page
   let explicit_open = case msg {
     OpenApp(_, _) | msg.NavigateTo(_) -> True
     _ -> False
@@ -820,12 +874,28 @@ fn dispatch_normal(booted: Booted, msg: Msg) -> #(Booted, List(ShellEffect)) {
     navigated || handled_builtin_action || handled_intent_action
   {
     True ->
-      dict.fold(routed_booted.builtins, next_model, fn(m, id, app) {
-        Model(
-          ..m,
-          embedded_views: dict.insert(m.embedded_views, id, app.render()),
-        )
-      })
+      case next_model.active_page {
+        PrimaryApp(active_id, _) ->
+          case dict.get(routed_booted.builtins, active_id) {
+            Ok(app) ->
+              Model(
+                ..next_model,
+                embedded_views: dict.insert(
+                  next_model.embedded_views,
+                  active_id,
+                  app.render(),
+                ),
+              )
+            Error(Nil) -> next_model
+          }
+        _ ->
+          dict.fold(routed_booted.builtins, next_model, fn(m, id, app) {
+            Model(
+              ..m,
+              embedded_views: dict.insert(m.embedded_views, id, app.render()),
+            )
+          })
+      }
     False -> next_model
   }
   let refreshed = case msg {

@@ -119,7 +119,7 @@ pub fn render_box(
         None -> []
       },
       case action {
-        Some(act) -> [event.on_click(act)]
+        Some(act) -> [event.stop_propagation(event.on_click(act))]
         None -> []
       },
     ])

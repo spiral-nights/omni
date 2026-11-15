@@ -6,7 +6,9 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import omni/nostr/event.{type Event, UnsignedEvent}
+import omni/nostr/event_id
 import omni/nostr/kind
+import omni/nostr/nip19
 import omni/nostr/pubkey
 import omni/plugin_kit/app.{
   type Effect, FetchThread, FetchUntil, OpenUrl, Publish, Search, ZapInvoice,
@@ -229,8 +231,10 @@ pub fn action_to_msg(act: Action) -> Option(Msg) {
       }
 
     "open-thread" | "view-thread" | "view_thread" | "view-note" | "view_note" ->
-      case extract_string(act, ["id", "noteId", "note_id", "eventId"]) {
-        Some(id) if id != "" -> Some(OpenThread(id))
+      case
+        extract_string(act, ["id", "noteId", "note_id", "eventId", "target"])
+      {
+        Some(id) if id != "" -> Some(OpenThread(normalize_note_id(id)))
         _ -> None
       }
 
@@ -642,6 +646,19 @@ fn extract_view(act: Action) -> Option(FeedView) {
           }
         None -> None
       }
+  }
+}
+
+fn normalize_note_id(raw: String) -> String {
+  let trimmed = string.trim(raw)
+  let stripped = case string.starts_with(trimmed, "nostr:") {
+    True -> string.drop_start(trimmed, 6)
+    False -> trimmed
+  }
+  case nip19.decode(stripped) {
+    Ok(nip19.Note(id)) -> event_id.to_hex(id)
+    Ok(nip19.Nevent(data)) -> event_id.to_hex(data.id)
+    _ -> trimmed
   }
 }
 

@@ -9,9 +9,10 @@ import omni/plugin_kit/local_store
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema.{type Node}
 import omni/social/follows
+import omni/social/profile
 import omni/social/profile_cache
 import plugin/profiles/model.{type Model, Model}
-import plugin/profiles/msg.{type Msg, SelectView}
+import plugin/profiles/msg.{type Msg, IngestEvent, SaveMetadata, SelectView}
 import plugin/profiles/update
 import plugin/profiles/view
 
@@ -52,14 +53,30 @@ pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
     },
     update: fn(current_model: Model, message: Msg) {
       let #(next_model, effects) = update.update(current_model, message)
-      case next_model.profiles == current_model.profiles {
-        True -> Nil
-        False -> {
+      case message {
+        IngestEvent(event) ->
+          case profile.from_event(event) {
+            Ok(parsed) -> {
+              let _ = profile_cache.upsert(store, parsed)
+              Nil
+            }
+            Error(_) -> Nil
+          }
+        SaveMetadata -> {
           let _ = local_store.save(store, cfg, next_model.profiles)
-          let _ =
-            profile_cache.upsert_many(store, dict.values(next_model.profiles))
-          Nil
+          case next_model.my_pubkey {
+            Some(pk) ->
+              case dict.get(next_model.profiles, pk) {
+                Ok(prof) -> {
+                  let _ = profile_cache.upsert(store, prof)
+                  Nil
+                }
+                Error(_) -> Nil
+              }
+            _ -> Nil
+          }
         }
+        _ -> Nil
       }
       case next_model.follows == current_model.follows {
         True -> Nil

@@ -85,7 +85,7 @@ pub fn view_from_route(r: Route) -> ProfilesView {
   case string.lowercase(string.trim(r.view)) {
     "profile" ->
       case route_param(r, ["id", "pubkey", "npub"]) {
-        Some(pk) -> ViewProfile(pk)
+        Some(pk) -> ViewProfile(normalize_pubkey_param(pk))
         None -> ViewDirectory
       }
     "following" | "follows" -> ViewFollowing
@@ -94,6 +94,19 @@ pub fn view_from_route(r: Route) -> ProfilesView {
     "compact" | "header-actions" -> ViewCompact
     "widget" | "sidebar" -> ViewWidget
     _ -> ViewDirectory
+  }
+}
+
+fn normalize_pubkey_param(raw: String) -> String {
+  let trimmed = string.trim(raw)
+  let stripped = case string.starts_with(trimmed, "nostr:") {
+    True -> string.drop_start(trimmed, 6)
+    False -> trimmed
+  }
+  case nip19.decode(stripped) {
+    Ok(nip19.Npub(pk)) -> pubkey.to_hex(pk)
+    Ok(nip19.Nprofile(data)) -> pubkey.to_hex(data.pubkey)
+    _ -> trimmed
   }
 }
 
@@ -260,17 +273,15 @@ pub fn seed_notes() -> Dict(String, Note) {
 /// Profiles sorted by display name (case-insensitive), then pubkey.
 pub fn all_profiles(model: Model) -> List(Profile) {
   dict.values(model.profiles)
+  |> list.map(fn(prof) { #(string.lowercase(display_name(prof)), prof) })
   |> list.sort(fn(a, b) {
-    let by_name =
-      string.compare(
-        string.lowercase(display_name(a)),
-        string.lowercase(display_name(b)),
-      )
+    let by_name = string.compare(a.0, b.0)
     case by_name {
-      order.Eq -> string.compare(a.pubkey, b.pubkey)
+      order.Eq -> string.compare(a.1.pubkey, b.1.pubkey)
       other -> other
     }
   })
+  |> list.map(fn(pair) { pair.1 })
 }
 
 /// Profiles matching the current case-insensitive directory search query.

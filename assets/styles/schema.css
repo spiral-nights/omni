@@ -622,6 +622,12 @@ omni-text a:hover,
   font-family: var(--omni-font-mono, monospace);
   font-size: 0.85em;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.omni-inline-entity:hover {
+  border-color: var(--omni-accent-primary, #d4a373);
+  filter: brightness(1.15);
 }
 
 .omni-inline-image {

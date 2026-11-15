@@ -800,16 +800,14 @@ fn request_missing_profiles(host: ShellBoot, authors: List(String)) -> Nil {
     authors
     |> list.filter(fn(author) { string.length(author) == 64 })
     |> list.unique
+    |> list.take(50)
   let missing =
-    normalized
-    |> list.filter(fn(author) {
-      social_profile_cache.needs_fetch(
-        store,
-        author,
-        now,
-        social_profile_cache.default_ttl_ms,
-      )
-    })
+    social_profile_cache.filter_missing_and_mark(
+      store,
+      normalized,
+      now,
+      social_profile_cache.default_ttl_ms,
+    )
 
   case missing {
     [] -> Nil
@@ -836,19 +834,11 @@ fn request_missing_profiles(host: ShellBoot, authors: List(String)) -> Nil {
           case pairs {
             [] -> Nil
             _ -> {
-              let now_done = host.booted.kernel.clock.now_ms()
               let _ =
                 social_profile_cache.upsert_many(
                   store,
                   list.map(pairs, fn(pair) { pair.1 }),
                 )
-              list.each(pairs, fn(pair) {
-                social_profile_cache.mark_fetched(
-                  store,
-                  pair.1.pubkey,
-                  now_done,
-                )
-              })
               ingest_events_to_builtins(
                 host,
                 list.map(pairs, fn(pair) { pair.0 }),
@@ -1030,25 +1020,17 @@ fn deliver_events_to_builtins(
   case profiles {
     [] -> Nil
     _ -> {
-      let now = host.booted.kernel.clock.now_ms()
       let _ =
         social_profile_cache.upsert_many(host.booted.kernel.storage, profiles)
-      list.each(profiles, fn(p) {
-        social_profile_cache.mark_fetched(
-          host.booted.kernel.storage,
-          p.pubkey,
-          now,
-        )
-      })
       Nil
     }
   }
   let authors =
-    list.flat_map(events, fn(ev) {
-      [pubkey.to_hex(ev.pubkey), ..nostr_event.get_tag_values(ev.tags, "p")]
-    })
+    list.map(events, fn(ev) { pubkey.to_hex(ev.pubkey) })
     |> list.unique
-  request_missing_profiles(host, authors)
+  list.each(authors, fn(author) {
+    enqueue_ingest_flush(author, False, flush_ingest(host))
+  })
 }
 
 fn maybe_fetch_profile_notes(host: ShellBoot, page: Page) -> Nil {

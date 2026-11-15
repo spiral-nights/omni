@@ -33,3 +33,7 @@ pub fn get_and_set(ref: Ref(a), value: a) -> a {
   set(ref, value)
   prev
 }
+
+/// Memoizes a `String -> String` computation in an in-memory bounded cache.
+@external(javascript, "./ref.ffi.mjs", "memoize_string")
+pub fn memoize_string(key: String, compute: fn() -> String) -> String

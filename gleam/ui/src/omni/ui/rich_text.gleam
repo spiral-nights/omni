@@ -8,12 +8,15 @@
 //// Everything is rendered as DOM elements rather than raw HTML, so note content
 //// can never inject markup.
 
+import gleam/dict
+import gleam/dynamic
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
+import lustre/event
 import omni/protocol/schema/action.{type Action}
 import omni/ui/icons
 import omni/ui/sanitize
@@ -171,17 +174,66 @@ fn classify(word: String, allow_media: Bool) -> List(Element(Action)) {
 
 fn entity_element(word: String) -> List(Element(Action)) {
   case entity_label(word) {
-    Some(label) -> [
-      html.span(
-        [
-          attribute.class("omni-inline-entity"),
-          attribute.title(word),
-          attribute.attribute("data-entity", word),
-        ],
-        [element_text(label)],
-      ),
-    ]
+    Some(label) -> {
+      let click_attrs = case entity_action(word) {
+        Some(act) -> [event.stop_propagation(event.on_click(act))]
+        None -> []
+      }
+      [
+        html.span(
+          list.append(
+            [
+              attribute.class("omni-inline-entity"),
+              attribute.title(word),
+              attribute.attribute("data-entity", word),
+            ],
+            click_attrs,
+          ),
+          [element_text(label)],
+        ),
+      ]
+    }
     None -> [element_text(word)]
+  }
+}
+
+fn entity_action(word: String) -> Option(Action) {
+  let raw = case string.starts_with(word, "nostr:") {
+    True -> string.slice(word, 6, string.length(word) - 6)
+    False -> word
+  }
+  let lower = string.lowercase(raw)
+  case
+    string.starts_with(lower, "npub1") || string.starts_with(lower, "nprofile1")
+  {
+    True ->
+      Some(
+        action.new("view_profile")
+        |> action.with_payload(
+          dict.from_list([
+            #("pubkey", dynamic.string(lower)),
+            #("npub", dynamic.string(lower)),
+            #("id", dynamic.string(lower)),
+          ]),
+        ),
+      )
+    False ->
+      case
+        string.starts_with(lower, "note1")
+        || string.starts_with(lower, "nevent1")
+      {
+        True ->
+          Some(
+            action.new("view_note")
+            |> action.with_payload(
+              dict.from_list([
+                #("id", dynamic.string(lower)),
+                #("noteId", dynamic.string(lower)),
+              ]),
+            ),
+          )
+        False -> None
+      }
   }
 }
 

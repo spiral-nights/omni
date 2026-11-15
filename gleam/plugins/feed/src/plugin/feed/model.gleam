@@ -10,6 +10,8 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
 import gleam/string
+import omni/nostr/event_id
+import omni/nostr/nip19
 import omni/plugin_kit/local_store.{type StoreConfig, StoreConfig}
 import omni/plugin_kit/route.{type Route}
 import omni/social/follows.{type Follows}
@@ -80,10 +82,11 @@ pub fn view_from_route(r: Route) -> FeedView {
   case string.lowercase(string.trim(r.view)) {
     "thread" ->
       case route.get_param(r, "id") {
-        Some(id) if id != "" -> ViewThread(note_id: id)
+        Some(id) if id != "" -> ViewThread(note_id: normalize_note_param(id))
         _ ->
           case route.get_param(r, "eventId") {
-            Some(eid) if eid != "" -> ViewThread(note_id: eid)
+            Some(eid) if eid != "" ->
+              ViewThread(note_id: normalize_note_param(eid))
             _ -> ViewTimeline
           }
       }
@@ -92,6 +95,19 @@ pub fn view_from_route(r: Route) -> FeedView {
     "widget" -> ViewWidget
     "compact" -> ViewCompact
     _ -> ViewTimeline
+  }
+}
+
+fn normalize_note_param(raw: String) -> String {
+  let trimmed = string.trim(raw)
+  let stripped = case string.starts_with(trimmed, "nostr:") {
+    True -> string.drop_start(trimmed, 6)
+    False -> trimmed
+  }
+  case nip19.decode(stripped) {
+    Ok(nip19.Note(id)) -> event_id.to_hex(id)
+    Ok(nip19.Nevent(data)) -> event_id.to_hex(data.id)
+    _ -> trimmed
   }
 }
 
