@@ -289,6 +289,8 @@ pub const with_style = builder.with_style
 
 pub const page = builder.page
 
+pub const page_with_url = builder.page_with_url
+
 pub const row = builder.row
 
 pub const column = builder.column

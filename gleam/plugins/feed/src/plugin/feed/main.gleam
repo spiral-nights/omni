@@ -9,6 +9,7 @@ import omni/plugin_kit/app.{type AppSpec, type RunningApp, AppSpec}
 import omni/plugin_kit/local_store
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema.{type Node}
+import omni/social/follows
 import plugin/feed/model.{type Model, Model}
 import plugin/feed/msg.{type Msg, SelectView}
 import plugin/feed/update
@@ -31,12 +32,14 @@ pub fn app_spec() -> AppSpec(Model, Msg) {
 /// instance so display settings are loaded from and saved to `local_store`.
 pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
   let settings_cfg = model.settings_store_config()
+  let follows_cfg = follows.store_config()
 
   AppSpec(
     init: fn(initial_route: Route) {
       let base = model.init(initial_route)
       let loaded_settings = local_store.load(store, settings_cfg)
-      #(Model(..base, settings: loaded_settings), [])
+      let loaded_follows = local_store.load(store, follows_cfg)
+      #(Model(..base, settings: loaded_settings, follows: loaded_follows), [])
     },
     update: fn(current_model: Model, message: Msg) {
       let #(next_model, effects) = update.update(current_model, message)
@@ -44,6 +47,13 @@ pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
         True -> Nil
         False -> {
           let _ = local_store.save(store, settings_cfg, next_model.settings)
+          Nil
+        }
+      }
+      case next_model.follows == current_model.follows {
+        True -> Nil
+        False -> {
+          let _ = local_store.save(store, follows_cfg, next_model.follows)
           Nil
         }
       }

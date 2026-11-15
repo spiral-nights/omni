@@ -8,6 +8,7 @@
 import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/string
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
@@ -241,13 +242,19 @@ fn render_pivot_item(
 /// Metro user profile tile in the header.
 fn render_profile_tile(model: Model) -> Element(Msg) {
   let #(display_name, avatar_content) = case model.user_profile {
-    Some(profile) -> #(
-      profile.display_name,
-      avatar_img(
-        shell.avatar_data_uri(profile.pubkey, profile.display_name),
-        profile.display_name,
-      ),
-    )
+    Some(profile) -> {
+      let src = case profile.picture {
+        Some(pic) -> {
+          let trimmed = string.trim(pic)
+          case trimmed {
+            "" -> shell.avatar_data_uri(profile.pubkey, profile.display_name)
+            url -> url
+          }
+        }
+        None -> shell.avatar_data_uri(profile.pubkey, profile.display_name)
+      }
+      #(profile.display_name, avatar_img(src, profile.display_name))
+    }
     None -> #(
       "Identity",
       avatar_img(shell.avatar_data_uri("anonymous", "I"), "Identity"),

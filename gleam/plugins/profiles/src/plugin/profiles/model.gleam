@@ -328,8 +328,14 @@ pub fn following(model: Model, target_pubkey: String) -> Bool {
 /// Profiles followed by the local user, matching the current search.
 pub fn following_profiles(model: Model) -> List(Profile) {
   let needle = string.lowercase(string.trim(model.search_query))
-  all_profiles(model)
-  |> list.filter(fn(prof) { following(model, prof.pubkey) })
+  let known = all_profiles(model)
+  let from_known =
+    list.filter(known, fn(prof) { following(model, prof.pubkey) })
+  let missing =
+    model.follows.followed_pubkeys
+    |> list.filter(fn(pk) { !dict.has_key(model.profiles, pk) })
+    |> list.map(profile.empty)
+  list.append(from_known, missing)
   |> list.filter(fn(prof) {
     case needle {
       "" -> True

@@ -351,6 +351,13 @@ pub fn page(n: Node, page_id: String) -> Node {
   node.set_base(n, NodeBase(..b, page: Some(p)))
 }
 
+/// Declare a logical page with an explicit route URL (`?view=...`) for back navigation.
+pub fn page_with_url(n: Node, page_id: String, url: String) -> Node {
+  let b = node.get_base(n)
+  let p = PageDeclaration(id: page_id, title: None, url: Some(url))
+  node.set_base(n, NodeBase(..b, page: Some(p)))
+}
+
 // -----------------------------------------------------------------------------
 // Layout Modifiers
 // -----------------------------------------------------------------------------

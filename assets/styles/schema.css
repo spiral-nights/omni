@@ -491,11 +491,27 @@ omni-card:hover,
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--omni-text-primary, #ede8df);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .omni-card-subtitle {
   margin: 2px 0 0 0;
   font-size: 0.78rem;
   color: var(--omni-text-muted, #78716c);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+@media (max-width: 600px) {
+  omni-card,
+  .omni-card {
+    padding: 12px 14px;
+  }
+  .omni-card-title {
+    font-size: 0.95rem;
+  }
+  .omni-metric-value {
+    font-size: 1.25rem;
+  }
 }
 .omni-card-body {
   display: flex;
@@ -996,6 +1012,8 @@ div.omni-input {
   display: flex;
   align-items: center;
   width: 100%;
+  flex: 1 1 200px;
+  min-width: 0;
 }
 .omni-input-prefix-icon {
   position: absolute;

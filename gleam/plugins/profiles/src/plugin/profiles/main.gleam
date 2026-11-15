@@ -8,6 +8,7 @@ import omni/plugin_kit/app.{type AppSpec, type RunningApp, AppSpec}
 import omni/plugin_kit/local_store
 import omni/plugin_kit/route.{type Route}
 import omni/plugin_kit/schema.{type Node}
+import omni/social/follows
 import plugin/profiles/model.{type Model, Model}
 import plugin/profiles/msg.{type Msg, SelectView}
 import plugin/profiles/update
@@ -30,15 +31,22 @@ pub fn app_spec() -> AppSpec(Model, Msg) {
 /// instance so discovered profiles are loaded from and saved to `local_store`.
 pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
   let cfg = model.profile_store_config()
+  let follows_cfg = follows.store_config()
 
   AppSpec(
     init: fn(initial_route: Route) {
       let base = model.init(initial_route)
       let cached = local_store.load(store, cfg)
-      case dict.size(cached) {
-        0 -> #(base, [])
-        _ -> #(Model(..base, profiles: cached), [])
+      let cached_follows = local_store.load(store, follows_cfg)
+      let with_profiles = case dict.size(cached) {
+        0 -> base
+        _ -> Model(..base, profiles: cached)
       }
+      let with_follows = case cached_follows.followed_pubkeys {
+        [] -> with_profiles
+        _ -> Model(..with_profiles, follows: cached_follows)
+      }
+      #(with_follows, [])
     },
     update: fn(current_model: Model, message: Msg) {
       let #(next_model, effects) = update.update(current_model, message)
@@ -46,6 +54,13 @@ pub fn app_spec_with_storage(store: Storage) -> AppSpec(Model, Msg) {
         True -> Nil
         False -> {
           let _ = local_store.save(store, cfg, next_model.profiles)
+          Nil
+        }
+      }
+      case next_model.follows == current_model.follows {
+        True -> Nil
+        False -> {
+          let _ = local_store.save(store, follows_cfg, next_model.follows)
           Nil
         }
       }

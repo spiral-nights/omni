@@ -73,7 +73,7 @@ pub fn apps(
   let store = storage.local_or_in_memory()
 
   [
-    #("org.omni.plugin.feed", feed_app(store)),
+    #("org.omni.plugin.feed", feed_app(store, pubkey_hex)),
     #("org.omni.plugin.checklist", checklist_app(store)),
     #("org.omni.plugin.timer", timer_app()),
     #("org.omni.plugin.notes", notes_app(store, pubkey_hex)),
@@ -83,14 +83,17 @@ pub fn apps(
   ]
 }
 
-fn feed_app(store: storage.Storage) -> BuiltinApp {
+fn feed_app(store: storage.Storage, pubkey_hex: String) -> BuiltinApp {
   let running = feed.start_app_with_storage("", store, fn(_) { Nil })
   app.disable_history(running)
+  app.dispatch(running, feed_msg.SetPubkey(pubkey_hex))
   BuiltinApp(
     render: fn() { app.current_view(running) },
     navigate: fn(raw) { app.navigate(running, route.parse_search(raw)) },
     handle_action: fn(action) { app.handle_action(running, action) },
-    set_pubkey: None,
+    set_pubkey: Some(fn(next_pubkey) {
+      app.dispatch(running, feed_msg.SetPubkey(next_pubkey))
+    }),
     ingest: Some(fn(event) {
       app.dispatch(running, feed_msg.IngestEvent(event))
     }),

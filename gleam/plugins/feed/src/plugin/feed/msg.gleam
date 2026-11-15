@@ -31,6 +31,7 @@ pub type Msg {
   ToggleShowReplies
   ToggleInlineMedia
   SetPageSize(Int)
+  SetPubkey(String)
   IngestEvent(Event)
   IngestEvents(List(Event))
 }

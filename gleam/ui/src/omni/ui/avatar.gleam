@@ -157,7 +157,7 @@ pub fn render(key: String, letter: String) -> Element(msg) {
           attribute("y", "52"),
           attribute(
             "font-family",
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+            "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
           ),
           attribute("font-size", "46"),
           attribute("font-weight", "900"),

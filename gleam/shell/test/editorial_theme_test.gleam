@@ -155,11 +155,16 @@ pub fn editorial_view_renders_profile_avatar_test() {
     html_str,
     "id=\"btn-editorial-profile-toggle\"",
   ))
-  should.be_true(string.contains(html_str, "data:image/svg+xml"))
-  should.be_false(string.contains(
+  should.be_true(string.contains(
     html_str,
     "src=\"https://example.com/avatar.png\"",
   ))
+
+  let fallback_prof = UserProfileSummary(..prof, picture: None)
+  let m_fallback =
+    Model(..model.init("editorial", []), user_profile: Some(fallback_prof))
+  let fallback_html = editorial.view(m_fallback) |> element.to_string
+  should.be_true(string.contains(fallback_html, "data:image/svg+xml"))
 }
 
 pub fn editorial_view_renders_active_pivot_subtitle_for_apps_test() {

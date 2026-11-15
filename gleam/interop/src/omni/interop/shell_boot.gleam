@@ -41,6 +41,7 @@ import omni/platform/log
 import omni/platform/nip44
 import omni/platform/storage
 import omni/platform/url
+import omni/plugin_kit/local_store
 import omni/plugin_kit/route.{type Route}
 import omni/protocol/relay_command.{
   type RelayCommand, AddRelay as RelayAdd, ReconnectRelay as RelayReconnect,
@@ -394,9 +395,38 @@ fn handle_shell_message(
     |> promise.map(fn(event_ids) {
       case event_ids {
         [] -> Nil
-        _ -> push_views(host)
+        _ -> {
+          let cached_follows =
+            local_store.load(
+              host.booted.kernel.storage,
+              social_follows.store_config(),
+            )
+          case cached_follows.followed_pubkeys {
+            [] -> Nil
+            followed -> fetch_following_notes(host, followed)
+          }
+          push_views(host)
+        }
       }
     })
+  case message {
+    msg.HostedSchemaAction(_, act) ->
+      case act.name {
+        "select-tab" | "set-tab" | "select_tab" | "toggle-follow" -> {
+          let cached_follows =
+            local_store.load(
+              host.booted.kernel.storage,
+              social_follows.store_config(),
+            )
+          case cached_follows.followed_pubkeys {
+            [] -> Nil
+            followed -> fetch_following_notes(host, followed)
+          }
+        }
+        _ -> Nil
+      }
+    _ -> Nil
+  }
   #(host, effect.none())
 }
 
@@ -632,12 +662,16 @@ fn apply_effects(
         case boot.import_key(acc.booted, raw) {
           Ok(next) -> {
             dispatch_shell_msg(KeyImportResult(Ok(Nil)))
-            dispatch_shell_msg(
-              SetUserProfile(profile_summary_for(
-                user_npub(ShellBoot(next)),
-                empty_profile(keystore.get_public_key(next.kernel.keystore)),
-              )),
-            )
+            case next.model.user_profile {
+              Some(summary) -> dispatch_shell_msg(SetUserProfile(summary))
+              None ->
+                dispatch_shell_msg(
+                  SetUserProfile(profile_summary_for(
+                    user_npub(ShellBoot(next)),
+                    empty_profile(keystore.get_public_key(next.kernel.keystore)),
+                  )),
+                )
+            }
             ShellBoot(next)
           }
           Error(err) -> {
@@ -691,12 +725,18 @@ fn apply_effects(
             case result {
               Ok(next) -> {
                 dispatch_shell_msg(AccountSwitchResult(Ok(Nil)))
-                dispatch_shell_msg(
-                  SetUserProfile(profile_summary_for(
-                    user_npub(ShellBoot(next)),
-                    empty_profile(keystore.get_public_key(next.kernel.keystore)),
-                  )),
-                )
+                case next.model.user_profile {
+                  Some(summary) -> dispatch_shell_msg(SetUserProfile(summary))
+                  None ->
+                    dispatch_shell_msg(
+                      SetUserProfile(profile_summary_for(
+                        user_npub(ShellBoot(next)),
+                        empty_profile(keystore.get_public_key(
+                          next.kernel.keystore,
+                        )),
+                      )),
+                    )
+                }
               }
               Error(err) -> dispatch_shell_msg(AccountSwitchResult(Error(err)))
             }
@@ -1104,6 +1144,25 @@ fn fetch_older(host: ShellBoot, until: Int) -> Nil {
 }
 
 fn refresh_public_feed(host: ShellBoot) -> Nil {
+  let self_pubkey = rpc.public_key_hex(host.booted)
+  set_timeout(4000, fn() { dispatch_shell_msg(FinishPullRefresh) })
+  let _ =
+    coordinator.fetch(
+      host.booted.kernel.coordinator,
+      "omni_internal_refresh_follows",
+      [contact_list_filter(self_pubkey)],
+      Some(FetchOptions(timeout_ms: Some(3000), relays: None, local_only: None)),
+    )
+    |> promise.map(fn(events) {
+      deliver_events_to_builtins(host, events)
+      list.each(events, fn(ev) {
+        fetch_following_notes(
+          host,
+          social_follows.from_event(ev).followed_pubkeys,
+        )
+      })
+      Nil
+    })
   let _ =
     coordinator.fetch(
       host.booted.kernel.coordinator,
@@ -1112,7 +1171,7 @@ fn refresh_public_feed(host: ShellBoot) -> Nil {
       Some(FetchOptions(timeout_ms: Some(3000), relays: None, local_only: None)),
     )
     |> promise.map(fn(events) {
-      ingest_events_to_builtins(host, events)
+      flush_public_event_batch(host, events)
       push_views(host)
       dispatch_shell_msg(FinishPullRefresh)
       Nil
@@ -1458,7 +1517,13 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
       None,
     )
 
-  // Follows: fetch the user's own kind-3 contact list into Profiles.
+  // Follows: seed from persisted local store and subscribe to live Kind 3 updates.
+  let cached_follows =
+    local_store.load(host.booted.kernel.storage, social_follows.store_config())
+  case cached_follows.followed_pubkeys {
+    [] -> Nil
+    followed -> fetch_following_notes(host, followed)
+  }
   let _ =
     coordinator.subscribe(
       host.booted.kernel.coordinator,
@@ -1487,13 +1552,17 @@ pub fn start_live_data(host: ShellBoot) -> Nil {
       "omni_internal_profile",
       [profile_filter(self_pubkey)],
       fn(event) {
+        deliver_events_to_builtins(host, [event])
         case social_profile.from_event(event) {
-          Ok(profile) ->
+          Ok(profile) -> {
+            social_profile_cache.upsert(host.booted.kernel.storage, profile)
             dispatch_shell_msg(
               SetUserProfile(profile_summary_for(user_npub(host), profile)),
             )
+          }
           Error(_) -> Nil
         }
+        schedule_push_views(host)
       },
       None,
     )

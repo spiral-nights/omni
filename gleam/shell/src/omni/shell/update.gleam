@@ -9,6 +9,7 @@ import gleam/string
 import omni/kernel/workspace/sync as workspace_sync
 import omni/platform/clock
 import omni/protocol/schema/action.{type Action}
+import omni/protocol/schema/node as schema_node
 import omni/protocol/viewport.{type Viewport, Dock, Main}
 import omni/protocol/workspace.{type WorkspaceState}
 import omni/shell/gestures/pull_to_refresh
@@ -667,13 +668,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       #(next_model, workspace_persistence_effects(next_model))
     }
 
-    EmbedSchema(plugin_id, node) -> #(
-      Model(
-        ..model,
-        embedded_views: dict.insert(model.embedded_views, plugin_id, node),
-      ),
-      [],
-    )
+    EmbedSchema(plugin_id, node) -> {
+      let with_view =
+        Model(
+          ..model,
+          embedded_views: dict.insert(model.embedded_views, plugin_id, node),
+        )
+      #(sync_schema_page_route(with_view, plugin_id, node), [])
+    }
 
     EmbedSchemas(views) -> {
       let next_views =
@@ -1050,5 +1052,56 @@ fn workspace_persistence_effects(model: Model) -> List(ShellEffect) {
   case model.auto_sync_nip78 {
     True -> [PersistWorkspaceLocal(ws), PublishWorkspaceNip78(ws)]
     False -> [PersistWorkspaceLocal(ws)]
+  }
+}
+
+/// Extract a canonical route (`None` for the root page, `Some("?view=...")` for
+/// sub-pages) from a schema root node's `PageDeclaration`, if present.
+pub fn schema_page_route(node: schema_node.Node) -> Option(Option(String)) {
+  case schema_node.get_base(node).page {
+    None -> None
+    Some(page) ->
+      case page.url {
+        Some(url) ->
+          case string.trim(url) {
+            "" | "/" | "?" -> Some(None)
+            cleaned -> Some(Some(cleaned))
+          }
+        None -> {
+          let pid = string.lowercase(string.trim(page.id))
+          case pid {
+            ""
+            | "main"
+            | "index"
+            | "home"
+            | "default"
+            | "timeline"
+            | "directory" -> Some(None)
+            _ -> Some(Some("?view=" <> pid))
+          }
+        }
+      }
+  }
+}
+
+/// Synchronize `model.active_page` and `model.back_stack` when the active
+/// `PrimaryApp` plugin transitions to a different schema `page`.
+pub fn sync_schema_page_route(
+  model: Model,
+  plugin_id: String,
+  node: schema_node.Node,
+) -> Model {
+  case model.active_page, schema_page_route(node) {
+    PrimaryApp(active_id, current_route), Some(next_route)
+      if active_id == plugin_id && current_route != next_route
+    -> {
+      let next_page = PrimaryApp(plugin_id: plugin_id, route: next_route)
+      let next_back_stack = case page_index(model.back_stack, next_page, 0) {
+        Some(index) -> list.drop(model.back_stack, index + 1)
+        None -> [model.active_page, ..model.back_stack]
+      }
+      Model(..model, active_page: next_page, back_stack: next_back_stack)
+    }
+    _, _ -> model
   }
 }

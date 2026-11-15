@@ -261,14 +261,19 @@ pub fn view_note_intent_is_emitted_but_not_consumed_test() {
 }
 
 pub fn directory_view_renders_people_and_search_test() {
-  let m = model.init(route.parse_search("?demo=1"))
-  let wire = view.view(m) |> schema.encode_schema_message
+  let m0 = model.init(route.parse_search("?demo=1"))
+  let #(m1, _) = update.update(m0, ToggleFollow(bob_pubkey_hex))
+  let wire = view.view(m1) |> schema.encode_schema_message
 
-  string.contains(wire, "People") |> should.be_true()
+  string.contains(wire, "Follows") |> should.be_true()
   string.contains(wire, "profiles-directory") |> should.be_true()
-  string.contains(wire, "alice@profiles.example") |> should.be_true()
+  string.contains(wire, "bob@profiles.example") |> should.be_true()
   string.contains(wire, "toggle-follow") |> should.be_true()
   string.contains(wire, "select-profile") |> should.be_true()
+
+  let #(m2, _) = update.update(m0, SetSearchQuery("alice"))
+  let search_wire = view.view(m2) |> schema.encode_schema_message
+  string.contains(search_wire, "alice@profiles.example") |> should.be_true()
 }
 
 pub fn profile_view_renders_detail_follow_and_notes_test() {
@@ -394,7 +399,7 @@ pub fn storage_backed_spec_persists_profiles_test() {
 pub fn running_app_emits_schema_and_handles_actions_test() {
   let running = profiles_main.start_app("", fn(_node) { Nil })
   let wire = app.current_view(running) |> schema.encode_schema_message
-  string.contains(wire, "People") |> should.be_true()
+  string.contains(wire, "Follows") |> should.be_true()
 
   let handled =
     app.handle_action(
@@ -531,10 +536,10 @@ pub fn compact_and_widget_views_render_test() {
 pub fn my_profile_tab_and_navigation_test() {
   let m0 = model.init(route.parse_search("?demo=1"))
   let wire = view.view(m0) |> schema.encode_schema_message
+  string.contains(wire, "Follows") |> should.be_true()
   string.contains(wire, "My Profile") |> should.be_true()
   string.contains(wire, "Edit") |> should.be_true()
   string.contains(wire, "Keys") |> should.be_true()
-  string.contains(wire, "Following") |> should.be_true()
 
   update.action_to_msg(schema_action("view-my-profile", []))
   |> should.equal(Some(ViewMyProfile))

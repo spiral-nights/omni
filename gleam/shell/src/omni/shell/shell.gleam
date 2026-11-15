@@ -38,5 +38,6 @@ fn percent_encode_svg(svg: String) -> String {
   |> string.replace("#", "%23")
   |> string.replace("<", "%3C")
   |> string.replace(">", "%3E")
-  |> string.replace("\"", "'")
+  |> string.replace("\"", "%22")
+  |> string.replace("'", "%27")
 }

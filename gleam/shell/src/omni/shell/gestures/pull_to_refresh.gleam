@@ -42,9 +42,15 @@ pub fn on_touch_move(state: PullState, client_y: Float) -> PullState {
     PullIdle -> PullIdle
     Refreshing -> Refreshing
     Pulling(start_y, _, _) -> update_pull_distance(start_y, client_y)
-    ReadyToRefresh(_) -> {
-      // Re-evaluate against synthetic origin so moving back up can return to Pulling
-      update_pull_distance(0.0, client_y)
+    ReadyToRefresh(prev_dist) -> {
+      // Reconstruct the effective touch origin so pulling further down or
+      // moving back up above the threshold transitions smoothly.
+      let synthetic_start_y = client_y -. prev_dist
+      let next_start_y = case synthetic_start_y >. 0.0 {
+        True -> synthetic_start_y
+        False -> 0.0
+      }
+      update_pull_distance(next_start_y, client_y)
     }
   }
 }
@@ -81,30 +87,49 @@ pub fn render_indicator(model: Model, pull_state: PullState) -> Element(Msg) {
     False -> pull_state
   }
 
-  let #(state_class, label, icon_name, distance_str) = case effective_state {
+  let #(state_class, label, icon_name, distance_str, style_attr) = case
+    effective_state
+  {
     PullIdle -> #(
       "omni-pull-to-refresh",
       "pull down to refresh",
       "refresh",
       "0",
+      "transform: translate(-50%, -100%); opacity: 0;",
     )
-    Pulling(_, _, dist) -> #(
-      "omni-pull-to-refresh pulling",
-      "pull down to refresh",
-      "refresh",
-      float.to_string(dist),
-    )
-    ReadyToRefresh(dist) -> #(
-      "omni-pull-to-refresh ready",
-      "release to refresh",
-      "arrow-down",
-      float.to_string(dist),
-    )
+    Pulling(_, _, dist) -> {
+      let offset = dist -. 28.0
+      let opacity = float.min(1.0, dist /. threshold_px)
+      #(
+        "omni-pull-to-refresh pulling",
+        "pull down to refresh",
+        "refresh",
+        float.to_string(dist),
+        "transform: translate(-50%, "
+          <> float.to_string(offset)
+          <> "px); opacity: "
+          <> float.to_string(opacity)
+          <> ";",
+      )
+    }
+    ReadyToRefresh(dist) -> {
+      let offset = dist -. 28.0
+      #(
+        "omni-pull-to-refresh ready",
+        "release to refresh",
+        "arrow-down",
+        float.to_string(dist),
+        "transform: translate(-50%, "
+          <> float.to_string(offset)
+          <> "px); opacity: 1;",
+      )
+    }
     Refreshing -> #(
       "omni-pull-to-refresh is-refreshing",
       "refreshing...",
       "spinner",
       float.to_string(threshold_px),
+      "transform: translate(-50%, 64px); opacity: 1;",
     )
   }
 
@@ -113,6 +138,7 @@ pub fn render_indicator(model: Model, pull_state: PullState) -> Element(Msg) {
       attribute.id("omni-pull-to-refresh"),
       attribute.class(state_class),
       attribute.attribute("data-pull-distance", distance_str),
+      attribute.attribute("style", style_attr),
       attribute.attribute("aria-live", case effective_state {
         Refreshing -> "polite"
         _ -> "off"

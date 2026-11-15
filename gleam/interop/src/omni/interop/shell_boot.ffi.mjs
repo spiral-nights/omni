@@ -687,29 +687,75 @@ export function listen_escape(onEscape) {
   });
 }
 
+function getActiveScrollTop(eventTarget) {
+  let maxScrollTop = window.scrollY || 0;
+  if (eventTarget && typeof eventTarget.closest === "function") {
+    const container = eventTarget.closest(
+      ".editorial-app-page.active, .editorial-viewport-page.active, .panorama-active-section, .omni-main-viewport",
+    );
+    if (container && typeof container.scrollTop === "number") {
+      maxScrollTop = Math.max(maxScrollTop, container.scrollTop);
+    }
+  }
+  const activePage =
+    document.querySelector(".editorial-app-page.active") ||
+    document.querySelector(".editorial-viewport-page.active") ||
+    document.querySelector(".panorama-active-section") ||
+    document.querySelector(".omni-main-viewport");
+  if (activePage && typeof activePage.scrollTop === "number") {
+    maxScrollTop = Math.max(maxScrollTop, activePage.scrollTop);
+  }
+  return maxScrollTop;
+}
+
 export function listen_pull_to_refresh(onStart, onMove, onEnd) {
   if (typeof document === "undefined") return;
-  let tracking = false;
+  let candidate = false;
+  let activePull = false;
+  let startY = 0;
+
   document.addEventListener(
     "touchstart",
     (e) => {
       if (!e.touches || e.touches.length !== 1) return;
-      tracking = true;
-      onStart(window.scrollY || 0, e.touches[0].clientY);
+      const scrollTop = getActiveScrollTop(e.target);
+      if (scrollTop <= 1) {
+        candidate = true;
+        activePull = false;
+        startY = e.touches[0].clientY;
+      } else {
+        candidate = false;
+        activePull = false;
+      }
     },
     { passive: true },
   );
   document.addEventListener(
     "touchmove",
     (e) => {
-      if (!tracking || !e.touches || !e.touches.length) return;
-      onMove(e.touches[0].clientY);
+      if (!candidate || !e.touches || !e.touches.length) return;
+      const currentY = e.touches[0].clientY;
+      const dy = currentY - startY;
+      if (!activePull) {
+        if (dy < -4 || getActiveScrollTop(e.target) > 1) {
+          candidate = false;
+          return;
+        }
+        if (dy > 4) {
+          activePull = true;
+          onStart(0, startY);
+        } else {
+          return;
+        }
+      }
+      onMove(currentY);
     },
     { passive: true },
   );
   const finish = () => {
-    if (!tracking) return;
-    tracking = false;
+    candidate = false;
+    if (!activePull) return;
+    activePull = false;
     onEnd();
   };
   document.addEventListener("touchend", finish, { passive: true });

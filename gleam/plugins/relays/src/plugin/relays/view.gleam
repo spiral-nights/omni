@@ -123,6 +123,7 @@ fn view_main(model: Model) -> Node {
   let actions_row =
     schema.box()
     |> schema.row()
+    |> schema.wrap(True)
     |> schema.align(AlignCenter)
     |> schema.gap("sm")
     |> schema.children([refresh_btn, nip65_btn])
@@ -130,6 +131,7 @@ fn view_main(model: Model) -> Node {
   let metrics_bar =
     schema.box()
     |> schema.row()
+    |> schema.wrap(True)
     |> schema.align(AlignCenter)
     |> schema.justify(JustifyBetween)
     |> schema.gap("md")
@@ -159,6 +161,7 @@ fn view_main(model: Model) -> Node {
   let add_bar =
     schema.box()
     |> schema.row()
+    |> schema.wrap(True)
     |> schema.gap("sm")
     |> schema.align(AlignCenter)
     |> schema.children([url_input, add_btn])
@@ -166,6 +169,7 @@ fn view_main(model: Model) -> Node {
   let preset_bar =
     schema.box()
     |> schema.row()
+    |> schema.wrap(True)
     |> schema.gap("xs")
     |> schema.align(AlignCenter)
     |> schema.children([
@@ -319,19 +323,41 @@ fn render_relay_card(entry: RelayEntry) -> Node {
     )
     |> schema.text_tone(ToneSecondary)
 
+  let status_group =
+    schema.box()
+    |> schema.row()
+    |> schema.wrap(True)
+    |> schema.align(AlignCenter)
+    |> schema.gap("sm")
+    |> schema.children([status_ind, latency_badge])
+
+  let toggles_group =
+    schema.box()
+    |> schema.row()
+    |> schema.wrap(True)
+    |> schema.align(AlignCenter)
+    |> schema.gap("md")
+    |> schema.children([read_toggle, write_toggle])
+
+  let buttons_group =
+    schema.box()
+    |> schema.row()
+    |> schema.wrap(True)
+    |> schema.align(AlignCenter)
+    |> schema.gap("xs")
+    |> schema.children([reconnect_btn, remove_btn])
+
   let controls_row =
     schema.box()
     |> schema.row()
+    |> schema.wrap(True)
     |> schema.align(AlignCenter)
     |> schema.justify(JustifyBetween)
     |> schema.gap("sm")
     |> schema.children([
-      status_ind,
-      latency_badge,
-      read_toggle,
-      write_toggle,
-      reconnect_btn,
-      remove_btn,
+      status_group,
+      toggles_group,
+      buttons_group,
     ])
 
   schema.card()

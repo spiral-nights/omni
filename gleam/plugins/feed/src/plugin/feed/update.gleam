@@ -27,9 +27,9 @@ import plugin/feed/msg.{
   type Msg, CancelZap, IngestEvent, IngestEvents, LikeNote, LoadMore,
   NavigateBack, OpenThread, PayInvoice, PublishNote, PublishReply, RepostNote,
   SelectTab, SelectView, SendZap, SetComposerDraft, SetComposerDraftAndPublish,
-  SetPageSize, SetReplyDraft, SetSearchQuery, SetZapAmount, SetZapComment,
-  StartReply, StartZap, SubmitSearch, ToggleInlineMedia, ToggleShowReplies,
-  ZapInvoiceResult,
+  SetPageSize, SetPubkey, SetReplyDraft, SetSearchQuery, SetZapAmount,
+  SetZapComment, StartReply, StartZap, SubmitSearch, ToggleInlineMedia,
+  ToggleShowReplies, ZapInvoiceResult,
 }
 import plugin/feed/zap
 
@@ -187,6 +187,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
           #(Model(..model, settings: next_settings, visible_limit: clamped), [])
         }
       }
+
+    SetPubkey(pk) -> {
+      let cleaned = string.lowercase(string.trim(pk))
+      case cleaned {
+        "" -> #(Model(..model, my_pubkey: None), [])
+        _ -> #(Model(..model, my_pubkey: Some(cleaned)), [])
+      }
+    }
 
     IngestEvent(ev) -> #(ingest_single_event(model, ev), [])
 
@@ -377,7 +385,7 @@ fn ingest_single_event(model: Model, ev: Event) -> Model {
       let should_apply_follows = case model.my_pubkey {
         Some(me) ->
           string.lowercase(string.trim(me)) == parsed_follows.pubkey
-          || model.follows.followed_pubkeys == []
+          && parsed_follows.updated_at >= model.follows.updated_at
         None -> parsed_follows.updated_at >= model.follows.updated_at
       }
       let next_follows = case should_apply_follows {

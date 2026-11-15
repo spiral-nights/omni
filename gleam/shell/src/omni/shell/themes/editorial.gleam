@@ -7,6 +7,7 @@
 
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/string
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
@@ -149,10 +150,19 @@ fn settings_subtitle(tab: SettingsTab) -> String {
 
 fn render_profile_avatar(model: Model) -> Element(Msg) {
   let #(title, avatar_src) = case model.user_profile {
-    Some(profile) -> #(
-      profile.display_name,
-      shell.avatar_data_uri(profile.pubkey, profile.display_name),
-    )
+    Some(profile) -> {
+      let src = case profile.picture {
+        Some(pic) -> {
+          let trimmed = string.trim(pic)
+          case trimmed {
+            "" -> shell.avatar_data_uri(profile.pubkey, profile.display_name)
+            url -> url
+          }
+        }
+        None -> shell.avatar_data_uri(profile.pubkey, profile.display_name)
+      }
+      #(profile.display_name, src)
+    }
     None -> #("Active Profile", shell.avatar_data_uri("anonymous", "O"))
   }
 

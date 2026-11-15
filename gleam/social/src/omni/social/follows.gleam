@@ -1,9 +1,12 @@
 //// Nostr Kind 3 contact list (follows) representation, mutation, and tag serialization.
 
+import gleam/dynamic/decode.{type Decoder}
+import gleam/json.{type Json}
 import gleam/list
 import gleam/string
 import omni/nostr/event.{type Event}
 import omni/nostr/pubkey
+import omni/plugin_kit/local_store.{type StoreConfig, StoreConfig}
 
 /// A user's Nostr Kind 3 contact list.
 pub type Follows {
@@ -70,4 +73,40 @@ pub fn toggle_follow(
 /// Serialize `follows` into NIP-02 `"p"` tags (`[["p", "<pubkey>"], ...]`).
 pub fn to_tags(follows: Follows) -> List(List(String)) {
   list.map(follows.followed_pubkeys, fn(pk) { ["p", pk] })
+}
+
+/// Encode `Follows` into JSON for local storage persistence.
+pub fn encode(follows: Follows) -> Json {
+  json.object([
+    #("pubkey", json.string(follows.pubkey)),
+    #("followed_pubkeys", json.array(follows.followed_pubkeys, json.string)),
+    #("updated_at", json.int(follows.updated_at)),
+  ])
+}
+
+/// Decode `Follows` from JSON.
+pub fn decoder() -> Decoder(Follows) {
+  use pubkey <- decode.optional_field("pubkey", "", decode.string)
+  use followed_pubkeys <- decode.optional_field(
+    "followed_pubkeys",
+    [],
+    decode.list(decode.string),
+  )
+  use updated_at <- decode.optional_field("updated_at", 0, decode.int)
+  decode.success(Follows(
+    pubkey: pubkey,
+    followed_pubkeys: followed_pubkeys,
+    updated_at: updated_at,
+  ))
+}
+
+/// Shared `local_store.StoreConfig` for persisting the user's Kind 3 follows list.
+pub fn store_config() -> StoreConfig(Follows) {
+  StoreConfig(
+    key: "omni_social_follows_v1",
+    version: 1,
+    encode: encode,
+    decoder: decoder(),
+    default: fn() { empty("") },
+  )
 }

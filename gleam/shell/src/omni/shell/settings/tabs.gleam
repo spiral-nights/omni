@@ -310,8 +310,16 @@ fn render_active_tab_panel(
 fn render_profile_tab(model: Model) -> Element(Msg) {
   let profile_card = case model.user_profile {
     Some(profile) -> {
-      let avatar_uri =
-        shell.avatar_data_uri(profile.pubkey, profile.display_name)
+      let avatar_uri = case profile.picture {
+        Some(pic) -> {
+          let trimmed = string.trim(pic)
+          case trimmed {
+            "" -> shell.avatar_data_uri(profile.pubkey, profile.display_name)
+            url -> url
+          }
+        }
+        None -> shell.avatar_data_uri(profile.pubkey, profile.display_name)
+      }
       html.div(
         [attribute.class("omni-settings-card omni-profile-summary-card")],
         [

@@ -418,7 +418,7 @@ fn render_search_view(model: Model) -> Node {
   |> schema.with_id("feed-search")
   |> schema.title("Search Notes")
   |> schema.with_icon("search")
-  |> schema.page("search")
+  |> schema.page_with_url("search", "?view=search")
   |> schema.with_style(StyleRaw(
     "max-width: 720px; margin: 0 auto; width: 100%;",
   ))
@@ -496,7 +496,7 @@ fn render_settings_view(model: Model) -> Node {
   |> schema.title("Feed Settings")
   |> schema.subtitle("Customize how timeline notes and media are displayed")
   |> schema.with_icon("settings")
-  |> schema.page("settings")
+  |> schema.page_with_url("settings", "?view=settings")
   |> schema.children([
     schema.box()
     |> schema.column

@@ -8,6 +8,7 @@ import gleam/dynamic
 import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/string
 import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{
@@ -59,14 +60,26 @@ fn render_directory(model: Model) -> Node {
       action_on_change: Some(action.new("search")),
     )
 
-  let people = model.filtered_profiles(model)
+  let is_searching = string.trim(model.search_query) != ""
+  let people = case is_searching {
+    True -> model.filtered_profiles(model)
+    False -> model.following_profiles(model)
+  }
 
   let body = case people {
     [] -> [
-      note_card.render_empty_timeline(
-        "No matching people",
-        "Try another name, npub, or NIP-05 identifier.",
-      ),
+      case is_searching {
+        True ->
+          note_card.render_empty_timeline(
+            "No matching people",
+            "Try another name, npub, or NIP-05 identifier.",
+          )
+        False ->
+          note_card.render_empty_timeline(
+            "Not following anyone yet",
+            "Search above by name, npub, or NIP-05 to find and follow people.",
+          )
+      },
     ]
     matched -> [
       schema.list_view(
@@ -76,7 +89,7 @@ fn render_directory(model: Model) -> Node {
   }
 
   let count_badge =
-    schema.badge(int.to_string(list.length(people)) <> " people")
+    schema.badge(int.to_string(list.length(people)) <> " following")
 
   let header =
     schema.box()
@@ -86,9 +99,9 @@ fn render_directory(model: Model) -> Node {
 
   schema.card()
   |> schema.with_id("profiles-directory")
-  |> schema.title("People")
-  |> schema.subtitle("Browse profiles and follow creators on Nostr")
-  |> schema.with_icon("users")
+  |> schema.title("Follows")
+  |> schema.subtitle("People you follow and discover on Nostr")
+  |> schema.with_icon("user-check")
   |> schema.page("directory")
   |> schema.with_style(StyleRaw(
     "max-width: 720px; margin: 0 auto; width: 100%;",
@@ -99,25 +112,23 @@ fn render_directory(model: Model) -> Node {
 }
 
 fn render_view_tabs(active: String) -> Node {
-  let people_action = action.new("view-directory")
+  let follows_action = action.new("view-directory")
   let my_profile_action = action.new("view-my-profile")
   let edit_action = action.new("edit-metadata")
   let keys_action = action.new("view-keys")
-  let following_action = action.new("view-following")
   schema.box()
   |> schema.row()
+  |> schema.wrap(True)
   |> schema.gap("xs")
   |> schema.children([
-    schema.button("People", people_action)
-      |> schema.with_icon("users"),
+    schema.button("Follows", follows_action)
+      |> schema.with_icon("user-check"),
     schema.button("My Profile", my_profile_action)
       |> schema.with_icon("user"),
     schema.button("Edit", edit_action)
       |> schema.with_icon("edit"),
     schema.button("Keys", keys_action)
       |> schema.with_icon("key"),
-    schema.button("Following", following_action)
-      |> schema.with_icon("user-check"),
   ])
   |> schema.with_id("profiles-tabs-" <> active)
 }
@@ -143,7 +154,7 @@ fn render_following(model: Model) -> Node {
   |> schema.title("Following")
   |> schema.subtitle("People you follow with your Kind 3 contact list")
   |> schema.with_icon("user-check")
-  |> schema.page("following")
+  |> schema.page_with_url("following", "?view=following")
   |> schema.with_style(StyleRaw(
     "max-width: 720px; margin: 0 auto; width: 100%;",
   ))
@@ -375,7 +386,7 @@ fn render_profile(model: Model, pubkey: String) -> Node {
   |> schema.with_id("profile-" <> pubkey)
   |> schema.title("Profile")
   |> schema.with_icon("user")
-  |> schema.page("profile")
+  |> schema.page_with_url("profile-" <> pubkey, "?view=profile&id=" <> pubkey)
   |> schema.with_style(StyleRaw(
     "max-width: 720px; margin: 0 auto; width: 100%;",
   ))
@@ -547,7 +558,7 @@ fn render_metadata_editor(model: Model) -> Node {
   |> schema.title("Edit Metadata")
   |> schema.subtitle("Publish a Kind 0 profile event from your signer")
   |> schema.with_icon("edit")
-  |> schema.page("metadata")
+  |> schema.page_with_url("metadata", "?view=metadata")
   |> schema.with_style(StyleRaw(
     "max-width: 720px; margin: 0 auto; width: 100%;",
   ))
@@ -679,7 +690,7 @@ fn render_key_custody(model: Model) -> Node {
   |> schema.title("Key Custody")
   |> schema.subtitle("NIP-07 signer status and public identity")
   |> schema.with_icon("key")
-  |> schema.page("keys")
+  |> schema.page_with_url("keys", "?view=keys")
   |> schema.with_style(StyleRaw(
     "max-width: 720px; margin: 0 auto; width: 100%;",
   ))

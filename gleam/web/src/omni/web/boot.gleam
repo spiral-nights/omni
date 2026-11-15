@@ -50,6 +50,7 @@ import omni/platform/ref
 import omni/platform/secp256k1
 import omni/platform/storage
 import omni/platform/url
+import omni/plugin_kit/local_store
 import omni/plugin_kit/zap
 import omni/protocol/blossom
 import omni/protocol/capability
@@ -82,6 +83,7 @@ import omni/web/config
 import omni/web/installer
 import omni/web/nip65
 import omni/web/permission_prompt.{type PermissionPrompts}
+import plugin/profiles/model as profiles_model
 
 /// Storage key holding the user's chosen accent color.
 pub const accent_color_storage_key = "omni_accent_color"
@@ -305,12 +307,15 @@ fn register_intent_handlers(booted: Booted) -> Nil {
 fn refresh_embedded_views(booted: Booted) -> Booted {
   let model =
     dict.fold(booted.builtins, booted.model, fn(m, id, app) {
-      Model(
-        ..m,
-        embedded_views: dict.insert(m.embedded_views, id, app.render()),
-      )
+      let rendered = app.render()
+      let with_view =
+        Model(..m, embedded_views: dict.insert(m.embedded_views, id, rendered))
+      update.sync_schema_page_route(with_view, id, rendered)
     })
-  Booted(..booted, model: model)
+  Booted(
+    ..booted,
+    model: Model(..model, user_profile: Some(session_profile(booted.kernel))),
+  )
 }
 
 fn forward_action(booted: Booted, plugin_id: String, action: Action) -> Booted {
@@ -467,13 +472,37 @@ fn install_auth_handler(booted: Booted) -> Nil {
 fn session_profile(kernel: OmniKernel) -> UserProfileSummary {
   let public_hex = pubkey.to_hex(keystore.get_public_key(kernel.keystore))
   let npub = keystore.get_npub(kernel.keystore)
-  UserProfileSummary(
-    pubkey: public_hex,
-    npub: npub,
-    display_name: "npub" <> string.drop_start(npub, 5) |> string.slice(0, 8),
-    picture: None,
-    nip05: None,
-  )
+  let fallback = "npub" <> string.drop_start(npub, 5) |> string.slice(0, 8)
+  let cached =
+    local_store.load(kernel.storage, profiles_model.profile_store_config())
+    |> dict.get(string.lowercase(public_hex))
+  case cached {
+    Ok(prof) -> {
+      let display_name = case prof.display_name {
+        Some(name) if name != "" -> name
+        _ ->
+          case prof.name {
+            Some(name) if name != "" -> name
+            _ -> fallback
+          }
+      }
+      UserProfileSummary(
+        pubkey: public_hex,
+        npub: npub,
+        display_name: display_name,
+        picture: prof.picture,
+        nip05: prof.nip05,
+      )
+    }
+    Error(Nil) ->
+      UserProfileSummary(
+        pubkey: public_hex,
+        npub: npub,
+        display_name: fallback,
+        picture: None,
+        nip05: None,
+      )
+  }
 }
 
 fn grant_default_capabilities(booted: Booted) -> Nil {
