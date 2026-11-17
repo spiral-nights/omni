@@ -544,6 +544,12 @@ pub fn my_profile_tab_and_navigation_test() {
   update.action_to_msg(schema_action("view-my-profile", []))
   |> should.equal(Some(ViewMyProfile))
 
+  update.action_to_msg(schema_action("select-view", [#("tab", "my-profile")]))
+  |> should.equal(Some(ViewMyProfile))
+
+  update.action_to_msg(schema_action("select-view", [#("tab", "keys")]))
+  |> should.equal(Some(SelectView(ViewKeys)))
+
   let #(m1, _) = update.update(m0, ViewMyProfile)
   m1.view |> should.equal(ViewProfile(my_pubkey_hex))
 

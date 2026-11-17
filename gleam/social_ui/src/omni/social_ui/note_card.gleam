@@ -4,12 +4,15 @@
 //// Used by both `plugin_feed` (interactive timeline & threads) and `plugin_profiles`
 //// (read-only or intent-linked author notes).
 
-import gleam/dict
+import gleam/dict.{type Dict}
 import gleam/dynamic
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
+import omni/nostr/event_id
+import omni/nostr/nip19
+import omni/nostr/pubkey
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/builder
 import omni/protocol/schema/node.{
@@ -293,6 +296,30 @@ pub fn render_note_card_with_inline_images(
   config: NoteCardConfig,
   show_inline_images: Bool,
 ) -> Node {
+  render_note_card_with_entities(
+    n,
+    author,
+    reply_author,
+    s,
+    config,
+    show_inline_images,
+    dict.new(),
+    dict.new(),
+  )
+}
+
+/// Render a complete social note card (`Card` primitive) with configurable
+/// inline image rendering and resolved inline `npub`/`nprofile`/`note`/`nevent` entities.
+pub fn render_note_card_with_entities(
+  n: Note,
+  author: Option(Profile),
+  reply_author: Option(Profile),
+  s: NoteStats,
+  config: NoteCardConfig,
+  show_inline_images: Bool,
+  profiles: Dict(String, Profile),
+  notes: Dict(String, Note),
+) -> Node {
   let open_action = case config.on_open_note {
     Some(mk) -> Some(mk(n.id))
     None -> None
@@ -304,11 +331,13 @@ pub fn render_note_card_with_inline_images(
   }
 
   let header_node = render_author_header(n, author, config)
+  let resolved = resolve_inline_entities(n.content, profiles, notes)
 
   let body_base =
     builder.text(n.content)
     |> builder.text_variant(Body)
     |> builder.with_inline_images(show_inline_images)
+    |> builder.with_resolved_entities(resolved)
     |> builder.with_style(StyleRaw(
       "margin-top: 3px; margin-bottom: 4px; cursor: pointer;",
     ))
@@ -336,6 +365,141 @@ pub fn render_note_card_with_inline_images(
   case open_action {
     Some(act) -> builder.action(card_base, act)
     None -> card_base
+  }
+}
+
+fn resolve_inline_entities(
+  content: String,
+  profiles: Dict(String, Profile),
+  notes: Dict(String, Note),
+) -> Dict(String, String) {
+  let has_entities =
+    string.contains(content, "npub1")
+    || string.contains(content, "nprofile1")
+    || string.contains(content, "note1")
+    || string.contains(content, "nevent1")
+  case has_entities {
+    False -> dict.new()
+    True ->
+      content
+      |> string.replace("\n", " ")
+      |> string.replace("\r", " ")
+      |> string.replace("\t", " ")
+      |> string.split(" ")
+      |> list.fold(dict.new(), fn(acc, token) {
+        let cleaned =
+          token
+          |> strip_trailing_entity_punct
+          |> strip_nostr_scheme
+          |> string.lowercase
+        case string.length(cleaned) >= 20 {
+          False -> acc
+          True ->
+            case nip19.decode(cleaned) {
+              Ok(nip19.Npub(pk)) ->
+                insert_profile_entity(acc, cleaned, pubkey.to_hex(pk), profiles)
+              Ok(nip19.Nprofile(data)) ->
+                insert_profile_entity(
+                  acc,
+                  cleaned,
+                  pubkey.to_hex(data.pubkey),
+                  profiles,
+                )
+              Ok(nip19.Note(eid)) ->
+                insert_note_entity(
+                  acc,
+                  cleaned,
+                  event_id.to_hex(eid),
+                  profiles,
+                  notes,
+                )
+              Ok(nip19.Nevent(data)) ->
+                insert_note_entity(
+                  acc,
+                  cleaned,
+                  event_id.to_hex(data.id),
+                  profiles,
+                  notes,
+                )
+              _ -> acc
+            }
+        }
+      })
+  }
+}
+
+fn insert_profile_entity(
+  acc: Dict(String, String),
+  key: String,
+  pk_hex: String,
+  profiles: Dict(String, Profile),
+) -> Dict(String, String) {
+  case dict.get(profiles, pk_hex) {
+    Ok(prof) ->
+      case has_profile_name(prof) {
+        True ->
+          dict.insert(acc, key, profile.best_display_name(Some(prof), pk_hex))
+        False -> acc
+      }
+    Error(Nil) -> acc
+  }
+}
+
+fn insert_note_entity(
+  acc: Dict(String, String),
+  key: String,
+  id_hex: String,
+  profiles: Dict(String, Profile),
+  notes: Dict(String, Note),
+) -> Dict(String, String) {
+  case dict.get(notes, id_hex) {
+    Ok(ref_note) -> {
+      let author_prefix = case dict.get(profiles, ref_note.pubkey) {
+        Ok(prof) ->
+          case has_profile_name(prof) {
+            True ->
+              "@"
+              <> profile.best_display_name(Some(prof), ref_note.pubkey)
+              <> ": "
+            False -> ""
+          }
+        Error(Nil) -> ""
+      }
+      dict.insert(acc, key, author_prefix <> ref_note.content)
+    }
+    Error(Nil) -> acc
+  }
+}
+
+fn has_profile_name(prof: Profile) -> Bool {
+  let dn = string.trim(option.unwrap(prof.display_name, ""))
+  let nm = string.trim(option.unwrap(prof.name, ""))
+  dn != "" || nm != ""
+}
+
+fn strip_nostr_scheme(token: String) -> String {
+  case string.starts_with(token, "nostr:") {
+    True -> string.drop_start(token, 6)
+    False -> token
+  }
+}
+
+fn strip_trailing_entity_punct(token: String) -> String {
+  let trimmed = string.trim(token)
+  case string.length(trimmed) > 0 {
+    False -> trimmed
+    True -> {
+      let last = string.slice(trimmed, string.length(trimmed) - 1, 1)
+      case string.contains(".,;:!?)]}\"'", last) {
+        True ->
+          strip_trailing_entity_punct(string.slice(
+            trimmed,
+            0,
+            string.length(trimmed) - 1,
+          ))
+        False -> trimmed
+      }
+    }
   }
 }
 

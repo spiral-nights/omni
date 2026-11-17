@@ -13,9 +13,9 @@ import omni/plugin_kit/schema
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/node.{
   type Node, AlignCenter, Button, ButtonGhost, ButtonPrimary, ButtonSecondary,
-  Caption, CodeBlock, IconButton, IconButtonGhost, IconButtonSecondary, Input,
-  InputNumber, InputSearch, JustifyBetween, JustifyCenter, JustifyEnd, ListItem,
-  Metric, MetricString, NodeBase, PageDeclaration, StatusConnecting,
+  Caption, CodeBlock, Icon, IconButton, IconButtonGhost, IconButtonSecondary,
+  Input, InputNumber, InputSearch, JustifyBetween, JustifyCenter, JustifyEnd,
+  ListItem, Metric, MetricString, NodeBase, PageDeclaration, StatusConnecting,
   StatusIndicator, TabItem, Toggle, ToneMuted,
 }
 import omni/protocol/schema/style.{SizeMd, SizeSm, StyleRaw}
@@ -62,12 +62,18 @@ fn render_timeline_view(model: Model) -> Node {
         )
       case model.is_syncing {
         True -> [
-          StatusIndicator(
-            base: node.empty_base(),
-            status: StatusConnecting,
-            label: Some("Connecting to relays..."),
-            pulse: Some(True),
-          ),
+          schema.box()
+            |> schema.row
+            |> schema.justify(JustifyCenter)
+            |> schema.align(AlignCenter)
+            |> schema.gap("sm")
+            |> schema.with_style(StyleRaw("padding: 16px 0;"))
+            |> schema.children([
+              Icon(base: node.empty_base(), name: "loader", size: Some(18)),
+              schema.text("Loading notes...")
+                |> schema.text_variant(Caption)
+                |> schema.text_tone(ToneMuted),
+            ]),
           empty_card,
         ]
         False -> [empty_card]
@@ -157,12 +163,17 @@ fn render_feed_tabs(
 
   let status_nodes = case is_syncing || is_loading_older {
     True -> [
-      StatusIndicator(
-        base: node.empty_base(),
-        status: StatusConnecting,
-        label: Some("Syncing relays..."),
-        pulse: Some(True),
-      ),
+      schema.box()
+      |> schema.row
+      |> schema.align(AlignCenter)
+      |> schema.gap("xs")
+      |> schema.with_style(StyleRaw("flex-shrink: 0;"))
+      |> schema.children([
+        Icon(base: node.empty_base(), name: "loader", size: Some(14)),
+        schema.text("Syncing relays...")
+          |> schema.text_variant(Caption)
+          |> schema.text_tone(ToneMuted),
+      ]),
     ]
     False -> []
   }
@@ -204,6 +215,7 @@ fn render_load_more_button(is_loading_older: Bool) -> Node {
       disabled: loading_flag,
       loading: loading_flag,
     )
+    |> schema.with_id("btn-feed-load-more")
 
   schema.box()
   |> schema.row
@@ -889,13 +901,15 @@ fn render_feed_note_card(model: Model, n: Note, cfg: NoteCardConfig) -> Node {
     }
   let reply_author_opt = resolve_reply_author_profile(model, n)
   let s = get_note_stats(model, n.id)
-  note_card.render_note_card_with_inline_images(
+  note_card.render_note_card_with_entities(
     n,
     author_opt,
     reply_author_opt,
     s,
     cfg,
     False,
+    model.profiles,
+    model.notes,
   )
 }
 

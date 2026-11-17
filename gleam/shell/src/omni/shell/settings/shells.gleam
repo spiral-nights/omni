@@ -180,7 +180,7 @@ pub fn render_shells_panel(
             attribute.disabled(string.trim(model.custom_shell_url) == ""),
             event.on_click(InstallCustomShell("editorial")),
           ],
-          [element.text("Install Editorial Layout")],
+          [element.text("Install with Editorial")],
         ),
         html.button(
           [
@@ -190,7 +190,7 @@ pub fn render_shells_panel(
             attribute.disabled(string.trim(model.custom_shell_url) == ""),
             event.on_click(InstallCustomShell("panorama")),
           ],
-          [element.text("Install Panorama Layout")],
+          [element.text("Install with Panorama")],
         ),
       ]),
     ])

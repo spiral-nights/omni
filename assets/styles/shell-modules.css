@@ -527,7 +527,15 @@
 .omni-app-store-header {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+}
+
+.omni-app-store-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .omni-app-store-title-group {
@@ -605,12 +613,6 @@
   padding: 6px 10px;
 }
 
-.omni-app-store-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-}
-
 .omni-app-store-ledger {
   display: flex;
   flex-direction: column;
@@ -627,30 +629,6 @@
   flex: 1;
   margin: 0;
   -webkit-line-clamp: 1;
-}
-
-.omni-app-store-view-toggle {
-  display: flex;
-  gap: 4px;
-  justify-content: flex-end;
-}
-
-.omni-view-toggle-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: transparent;
-  color: var(--omni-text-secondary, #9e988f);
-  border: 1px solid var(--omni-border-subtle, #272522);
-  border-radius: var(--omni-radius-sm, 6px);
-  cursor: pointer;
-}
-
-.omni-view-toggle-btn.active {
-  color: var(--omni-accent-primary, #d4a373);
-  border-color: var(--omni-accent-primary, #d4a373);
 }
 
 .omni-app-index {

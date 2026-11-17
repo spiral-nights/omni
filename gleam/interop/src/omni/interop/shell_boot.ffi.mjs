@@ -659,6 +659,7 @@ export function listen_shell_scroll(onChange) {
   let lastY = 0;
   let lastDown = null;
   let lastAtTop = null;
+  let lastAutoLoadAt = 0;
   document.addEventListener(
     "scroll",
     (event) => {
@@ -674,6 +675,31 @@ export function listen_shell_scroll(onChange) {
         lastDown = down;
         lastAtTop = atTop;
         onChange(atTop, down);
+      }
+      if (down) {
+        const el = getActiveScrollElement();
+        if (el) {
+          const isRoot =
+            el === document.documentElement || el === document.scrollingElement;
+          const scrollTop = isRoot ? window.scrollY || el.scrollTop || 0 : el.scrollTop;
+          const clientHeight = isRoot ? window.innerHeight : el.clientHeight;
+          const scrollHeight = el.scrollHeight;
+          if (
+            scrollHeight > clientHeight + 40 &&
+            scrollTop + clientHeight >= scrollHeight - 300
+          ) {
+            const now = Date.now();
+            if (now - lastAutoLoadAt > 800) {
+              const btn =
+                document.querySelector("#btn-feed-load-more button") ||
+                document.getElementById("btn-feed-load-more");
+              if (btn && !btn.disabled && typeof btn.click === "function") {
+                lastAutoLoadAt = now;
+                btn.click();
+              }
+            }
+          }
+        }
       }
     },
     true,
@@ -826,18 +852,64 @@ export function listen_app_context_menu(onOpen) {
   document.addEventListener("touchcancel", clearTimer, { passive: true });
 }
 
+function getActiveScrollElement() {
+  return (
+    document.querySelector(".editorial-app-page.active") ||
+    document.querySelector(".editorial-viewport-page.active") ||
+    document.querySelector(".panorama-active-section") ||
+    document.querySelector(".omni-main-viewport") ||
+    document.scrollingElement ||
+    document.documentElement
+  );
+}
+
 export function scroll_shell_top() {
   if (typeof document === "undefined") return;
-  const target =
-    document.querySelector(".editorial-viewport-page.active") ||
-    document.scrollingElement ||
-    document.documentElement;
+  const target = getActiveScrollElement();
   if (target && typeof target.scrollTo === "function") {
     target.scrollTo({ top: 0, behavior: "smooth" });
   }
   if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
+}
+
+const scrollHistoryStack = [];
+
+function setScrollTopImmediate(y) {
+  const target = getActiveScrollElement();
+  if (target) {
+    if (typeof target.scrollTo === "function") {
+      try {
+        target.scrollTo({ top: y, behavior: "instant" });
+      } catch (_) {
+        target.scrollTo(0, y);
+      }
+    }
+    target.scrollTop = y;
+  }
+  if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+    try {
+      window.scrollTo({ top: y, behavior: "instant" });
+    } catch (_) {
+      window.scrollTo(0, y);
+    }
+  }
+}
+
+export function push_scroll_and_reset_top() {
+  if (typeof document === "undefined") return;
+  const current = getActiveScrollTop(null);
+  scrollHistoryStack.push(current);
+  schedule_frame(() => setScrollTopImmediate(0));
+}
+
+export function pop_and_restore_scroll() {
+  if (typeof document === "undefined") return;
+  const prev = scrollHistoryStack.length > 0 ? scrollHistoryStack.pop() : 0;
+  schedule_frame(() => {
+    schedule_frame(() => setScrollTopImmediate(prev));
+  });
 }
 
 export function set_timeout(ms, cb) {
@@ -880,6 +952,36 @@ export function enqueue_ingest_flush(author, needs_view_push, on_flush) {
         if (shouldPushViews) on_flush("", true);
       });
     }
+  }
+}
+
+const seenOrRequestedEventIds = new Set();
+const pendingEventFetchIds = new Set();
+let eventFetchTimer = null;
+
+export function mark_event_seen(eventId) {
+  if (eventId) seenOrRequestedEventIds.add(eventId);
+}
+
+export function enqueue_event_fetch(eventId, on_flush) {
+  if (!eventId || seenOrRequestedEventIds.has(eventId)) return;
+  seenOrRequestedEventIds.add(eventId);
+  pendingEventFetchIds.add(eventId);
+  if (pendingEventFetchIds.size >= 25) {
+    if (eventFetchTimer !== null) {
+      clearTimeout(eventFetchTimer);
+      eventFetchTimer = null;
+    }
+    const idsJoined = Array.from(pendingEventFetchIds).join(",");
+    pendingEventFetchIds.clear();
+    on_flush(idsJoined);
+  } else if (eventFetchTimer === null) {
+    eventFetchTimer = setTimeout(() => {
+      eventFetchTimer = null;
+      const idsJoined = Array.from(pendingEventFetchIds).join(",");
+      pendingEventFetchIds.clear();
+      if (idsJoined) on_flush(idsJoined);
+    }, 350);
   }
 }
 

@@ -107,7 +107,16 @@ pub fn render(n: Node) -> Element(Action) {
 
         Spacer(_, size) -> layout.render_spacer(b_attrs, size)
 
-        Text(_, content, variant, tone, truncate, act, show_inline_images) ->
+        Text(
+          _,
+          content,
+          variant,
+          tone,
+          truncate,
+          act,
+          show_inline_images,
+          resolved_entities,
+        ) ->
           text.render_text(
             b_attrs,
             content,
@@ -116,6 +125,7 @@ pub fn render(n: Node) -> Element(Action) {
             truncate,
             act,
             show_inline_images,
+            resolved_entities,
           )
 
         Badge(_, label, tone, variant, dot) ->

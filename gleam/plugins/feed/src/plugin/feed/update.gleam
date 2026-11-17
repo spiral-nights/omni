@@ -425,8 +425,12 @@ fn ingest_single_event(model: Model, ev: Event) -> Model {
 }
 
 fn oldest_note_time(model: Model) -> Option(Int) {
-  model.notes
-  |> dict.values
+  let visible = model.visible_timeline_notes(model)
+  let source = case visible {
+    [] -> dict.values(model.notes)
+    _ -> visible
+  }
+  source
   |> list.fold(None, fn(acc, note) {
     case acc {
       None -> Some(note.created_at)

@@ -377,6 +377,8 @@ style, script, head, title, meta, link,
 .editorial-header-avatar {
   width: 30px;
   height: 30px;
+  padding: 0;
+  flex-shrink: 0;
   border-radius: 50%;
   background: var(--omni-accent-primary);
   color: var(--omni-accent-contrast);
@@ -392,6 +394,7 @@ style, script, head, title, meta, link,
 }
 
 .editorial-header-avatar img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;

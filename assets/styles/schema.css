@@ -630,6 +630,20 @@ omni-text a:hover,
   filter: brightness(1.15);
 }
 
+.omni-inline-entity.omni-inline-quote {
+  display: block;
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: var(--omni-radius-sm, 6px);
+  border-left: 2px solid var(--omni-accent-primary, #d4a373);
+  background: var(--omni-bg-surface, #191816);
+  color: var(--omni-text-secondary, #ede8df);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .omni-inline-image {
   display: block;
   max-width: 100%;
@@ -1018,8 +1032,16 @@ div.omni-input {
   display: flex;
   align-items: center;
   width: 100%;
-  flex: 1 1 200px;
+  flex: 0 0 auto;
   min-width: 0;
+}
+.omni-box-row > omni-input,
+.omni-box-row > .omni-input-wrapper,
+.omni-box-row > div.omni-input,
+.omni-box[direction="row"] > omni-input,
+.omni-box[direction="row"] > .omni-input-wrapper,
+.omni-box[direction="row"] > div.omni-input {
+  flex: 1 1 200px;
 }
 .omni-input-prefix-icon {
   position: absolute;

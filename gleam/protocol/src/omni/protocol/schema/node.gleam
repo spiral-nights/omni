@@ -3,6 +3,7 @@
 //// Plugins emit these declarative component nodes across sandboxes over
 //// Channel 1 (`omni:schema` wire format) for mounting into the host DOM.
 
+import gleam/dict.{type Dict}
 import gleam/option.{type Option, None}
 import omni/protocol/schema/action.{type Action}
 import omni/protocol/schema/style.{type SizeToken, type Style}
@@ -210,6 +211,7 @@ pub type Node {
     truncate: Option(Bool),
     action: Option(Action),
     show_inline_images: Option(Bool),
+    resolved_entities: Option(Dict(String, String)),
   )
   Badge(
     base: NodeBase,

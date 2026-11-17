@@ -4,6 +4,7 @@
 //// Renders text and display primitives into standard Lustre HTML elements
 //// with `.omni-*` CSS classes and strict URL sanitization.
 
+import gleam/dict.{type Dict}
 import gleam/float
 import gleam/int
 import gleam/list
@@ -35,6 +36,7 @@ pub fn render_text(
   truncate: Option(Bool),
   action: Option(Action),
   show_inline_images: Option(Bool),
+  resolved_entities: Option(Dict(String, String)),
 ) -> Element(Action) {
   let vr = option.unwrap(variant, Body)
   let vr_str = codec.text_variant_to_string(vr)
@@ -92,7 +94,10 @@ pub fn render_text(
   }
 
   let attrs = list.flatten([[class_attr], base_attrs, extra_attrs])
-  html.div(attrs, rich_text.render(content, allow_media))
+  html.div(
+    attrs,
+    rich_text.render_with_entities(content, allow_media, resolved_entities),
+  )
 }
 
 /// Renders a `Badge` status pill primitive.

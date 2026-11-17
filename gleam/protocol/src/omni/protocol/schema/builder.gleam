@@ -9,6 +9,7 @@
 //// |> child(button("Click Me", action.new("button_click")))
 //// ```
 
+import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{None, Some}
 import omni/protocol/schema/action.{type Action}
@@ -84,6 +85,7 @@ pub fn text(content: String) -> Node {
     truncate: None,
     action: None,
     show_inline_images: None,
+    resolved_entities: None,
   )
 }
 
@@ -547,6 +549,18 @@ pub fn with_inline_images(n: Node, enabled: Bool) -> Node {
   case n {
     Text(..) as txt -> Text(..txt, show_inline_images: Some(enabled))
     other -> other
+  }
+}
+
+/// Attach resolved entity labels/content (keyed by lowercase bech32 id) to a Text node.
+pub fn with_resolved_entities(n: Node, entities: Dict(String, String)) -> Node {
+  case dict.size(entities) {
+    0 -> n
+    _ ->
+      case n {
+        Text(..) as txt -> Text(..txt, resolved_entities: Some(entities))
+        other -> other
+      }
   }
 }
 

@@ -16,7 +16,8 @@ import omni/protocol/schema/node.{
   ButtonSecondary, Caption, CodeBlock, IconButton, IconButtonGhost,
   IconButtonSecondary, Input, InputSearch, InputText, InputUrl, JustifyBetween,
   JustifyEnd, ListItem, Metric, MetricInt, MetricString, StatusConnecting,
-  StatusIndicator, StatusOffline, StatusOnline, Textarea, ToneMuted, TonePrimary,
+  StatusIndicator, StatusOffline, StatusOnline, TabItem, Textarea, ToneMuted,
+  TonePrimary,
 }
 import omni/protocol/schema/style.{SizeLg, SizeMd, SizeSm, StyleRaw}
 import omni/social/note.{type Note}
@@ -114,24 +115,28 @@ fn render_directory(model: Model) -> Node {
 }
 
 fn render_view_tabs(active: String) -> Node {
-  let follows_action = action.new("view-directory")
-  let my_profile_action = action.new("view-my-profile")
-  let edit_action = action.new("edit-metadata")
-  let keys_action = action.new("view-keys")
-  schema.box()
-  |> schema.row()
-  |> schema.wrap(True)
-  |> schema.gap("xs")
-  |> schema.children([
-    schema.button("Follows", follows_action)
-      |> schema.with_icon("user-check"),
-    schema.button("My Profile", my_profile_action)
-      |> schema.with_icon("user"),
-    schema.button("Edit", edit_action)
-      |> schema.with_icon("edit"),
-    schema.button("Keys", keys_action)
-      |> schema.with_icon("key"),
-  ])
+  let active_id = case active {
+    "following" -> "directory"
+    other -> other
+  }
+  let items = [
+    TabItem(
+      id: "directory",
+      label: "Follows",
+      icon: Some("user-check"),
+      badge: None,
+    ),
+    TabItem(
+      id: "my-profile",
+      label: "My Profile",
+      icon: Some("user"),
+      badge: None,
+    ),
+    TabItem(id: "metadata", label: "Edit", icon: Some("edit"), badge: None),
+    TabItem(id: "keys", label: "Keys", icon: Some("key"), badge: None),
+  ]
+
+  schema.tabs(items, active_id, action.new("select-view"))
   |> schema.with_id("profiles-tabs-" <> active)
 }
 
@@ -397,7 +402,10 @@ fn render_profile(model: Model, pubkey: String) -> Node {
   |> schema.children(
     list.flatten([
       [
-        render_view_tabs("profile"),
+        render_view_tabs(case model.is_own_profile(model, pubkey) {
+          True -> "my-profile"
+          False -> "profile"
+        }),
         back_button,
         header,
         action_row,
@@ -423,12 +431,15 @@ fn render_author_note(model: Model, note: Note) -> Node {
     dict.get(model.stats, note.id)
     |> option.from_result
     |> option.unwrap(stats.empty_stats(note.id))
-  note_card.render_note_card(
+  note_card.render_note_card_with_entities(
     note,
     author,
     None,
     note_stats,
     profile_note_card_config(model),
+    False,
+    model.profiles,
+    model.notes,
   )
 }
 

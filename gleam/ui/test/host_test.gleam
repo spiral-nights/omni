@@ -39,6 +39,7 @@ pub fn host_init_and_set_schema_test() {
           truncate: None,
           action: None,
           show_inline_images: None,
+          resolved_entities: None,
         ),
       ],
     )

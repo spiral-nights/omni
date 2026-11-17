@@ -235,10 +235,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(Effect(Msg))) {
 /// Map an incoming Schema `Action` over Channel 1 to an optional `Msg`.
 pub fn action_to_msg(act: Action) -> Option(Msg) {
   case act.name {
-    "select-view" | "select_view" | "navigate" ->
-      case extract_view(act) {
-        Some(view) -> Some(SelectView(view))
-        None -> None
+    "select-view" | "select_view" | "select-tab" | "select_tab" | "navigate" ->
+      case extract_string(act, ["tab", "view", "value"]) {
+        Some("my-profile") -> Some(ViewMyProfile)
+        _ ->
+          case extract_view(act) {
+            Some(view) -> Some(SelectView(view))
+            None -> None
+          }
       }
 
     "select-profile" | "select_profile" | "view-profile" | "view_profile" ->
@@ -463,7 +467,7 @@ fn refresh_signer(model: Model) -> Model {
 }
 
 fn extract_view(act: Action) -> Option(ProfilesView) {
-  let raw = case extract_string(act, ["view"]) {
+  let raw = case extract_string(act, ["view", "tab", "value"]) {
     Some(value) -> Some(value)
     None ->
       case act.navigate {

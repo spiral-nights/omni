@@ -8,7 +8,7 @@
 //// Everything is rendered as DOM elements rather than raw HTML, so note content
 //// can never inject markup.
 
-import gleam/dict
+import gleam/dict.{type Dict}
 import gleam/dynamic
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -34,12 +34,24 @@ const video_extensions = [".mp4", ".webm", ".mov"]
 /// Content without links or Nostr identifiers is emitted as a single text node,
 /// so plain labels are not wrapped in extra markup.
 pub fn render(content: String, allow_media: Bool) -> List(Element(Action)) {
+  render_with_entities(content, allow_media, None)
+}
+
+/// Render note content as a list of inline elements, substituting resolved
+/// display names or quoted note content for inline Nostr entities when available.
+pub fn render_with_entities(
+  content: String,
+  allow_media: Bool,
+  resolved: Option(Dict(String, String)),
+) -> List(Element(Action)) {
   case needs_rich(content) {
     False -> [html.text(content)]
     True ->
       content
       |> split_segments()
-      |> list.map(fn(segment) { classify_segment(segment, allow_media) })
+      |> list.map(fn(segment) {
+        classify_segment(segment, allow_media, resolved)
+      })
       |> coalesce()
   }
 }
@@ -64,23 +76,31 @@ type Part {
   Rich(List(Element(Action)))
 }
 
-fn classify_segment(segment: String, allow_media: Bool) -> Part {
+fn classify_segment(
+  segment: String,
+  allow_media: Bool,
+  resolved: Option(Dict(String, String)),
+) -> Part {
   case string.trim(segment) {
     "" -> Plain(segment)
     _ ->
       case markdown_link(segment) {
         Ok(#(label, url)) -> Rich([link_label(label, url)])
-        Error(Nil) -> classify_plain_segment(segment, allow_media)
+        Error(Nil) -> classify_plain_segment(segment, allow_media, resolved)
       }
   }
 }
 
-fn classify_plain_segment(segment: String, allow_media: Bool) -> Part {
+fn classify_plain_segment(
+  segment: String,
+  allow_media: Bool,
+  resolved: Option(Dict(String, String)),
+) -> Part {
   let #(core, trailing) = strip_trailing(segment)
   case core {
     "" -> Plain(segment)
     _ ->
-      case classify(core, allow_media) {
+      case classify(core, allow_media, resolved) {
         [only] ->
           case is_plain_element(core) {
             True -> Plain(segment)
@@ -148,7 +168,11 @@ fn flush_text(
   }
 }
 
-fn classify(word: String, allow_media: Bool) -> List(Element(Action)) {
+fn classify(
+  word: String,
+  allow_media: Bool,
+  resolved: Option(Dict(String, String)),
+) -> List(Element(Action)) {
   case markdown_link(word) {
     Ok(#(label, url)) -> [link_label(label, url)]
     Error(Nil) ->
@@ -166,34 +190,77 @@ fn classify(word: String, allow_media: Bool) -> List(Element(Action)) {
         None ->
           case plain_url(word) {
             Some(url) -> [link_label(shorten_url(url), url)]
-            None -> entity_element(word)
+            None -> entity_element(word, resolved)
           }
       }
   }
 }
 
-fn entity_element(word: String) -> List(Element(Action)) {
+fn entity_element(
+  word: String,
+  resolved: Option(Dict(String, String)),
+) -> List(Element(Action)) {
   case entity_label(word) {
-    Some(label) -> {
+    Some(fallback_label) -> {
       let click_attrs = case entity_action(word) {
         Some(act) -> [event.stop_propagation(event.on_click(act))]
         None -> []
+      }
+      let lower = strip_nostr_prefix(word) |> string.lowercase
+      let resolved_val = case resolved {
+        Some(map) ->
+          case dict.get(map, lower) {
+            Ok(v) if v != "" -> Some(v)
+            _ -> None
+          }
+        None -> None
+      }
+      let #(class_name, display_label) = case resolved_val {
+        Some(val) ->
+          case
+            string.starts_with(lower, "npub1")
+            || string.starts_with(lower, "nprofile1")
+          {
+            True -> {
+              let at_name = case string.starts_with(val, "@") {
+                True -> val
+                False -> "@" <> val
+              }
+              #("omni-inline-entity omni-inline-mention", at_name)
+            }
+            False ->
+              case
+                string.starts_with(lower, "note1")
+                || string.starts_with(lower, "nevent1")
+              {
+                True -> #("omni-inline-entity omni-inline-quote", val)
+                False -> #("omni-inline-entity", val)
+              }
+          }
+        None -> #("omni-inline-entity", fallback_label)
       }
       [
         html.span(
           list.append(
             [
-              attribute.class("omni-inline-entity"),
+              attribute.class(class_name),
               attribute.title(word),
               attribute.attribute("data-entity", word),
             ],
             click_attrs,
           ),
-          [element_text(label)],
+          [element_text(display_label)],
         ),
       ]
     }
     None -> [element_text(word)]
+  }
+}
+
+fn strip_nostr_prefix(word: String) -> String {
+  case string.starts_with(word, "nostr:") {
+    True -> string.slice(word, 6, string.length(word) - 6)
+    False -> word
   }
 }
 

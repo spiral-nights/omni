@@ -752,6 +752,11 @@ fn decode_text(base: NodeBase) -> decode.Decoder(Node) {
     None,
     decode.optional(decode.bool),
   )
+  use resolved <- decode.optional_field(
+    "resolvedEntities",
+    None,
+    decode.optional(decode.dict(decode.string, decode.string)),
+  )
 
   decode.success(Text(
     base: base,
@@ -761,6 +766,7 @@ fn decode_text(base: NodeBase) -> decode.Decoder(Node) {
     truncate: trunc,
     action: act,
     show_inline_images: inline_img,
+    resolved_entities: resolved,
   ))
 }
 
@@ -1568,7 +1574,7 @@ pub fn node_to_json(n: Node) -> json.Json {
       json.object(add_base_fields(fields, base))
     }
 
-    Text(base, content, vr, tn, trunc, act, inline_img) -> {
+    Text(base, content, vr, tn, trunc, act, inline_img, resolved) -> {
       let fields = [
         #("type", json.string("text")),
         #("content", json.string(content)),
@@ -1594,6 +1600,13 @@ pub fn node_to_json(n: Node) -> json.Json {
       }
       let fields = case inline_img {
         Some(img) -> [#("showInlineImages", json.bool(img)), ..fields]
+        None -> fields
+      }
+      let fields = case resolved {
+        Some(ent) -> [
+          #("resolvedEntities", json.dict(ent, fn(k) { k }, json.string)),
+          ..fields
+        ]
         None -> fields
       }
       json.object(add_base_fields(fields, base))

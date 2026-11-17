@@ -13,7 +13,7 @@ import omni/shell/model.{
   type InstalledApp, type Model, InstalledApp, UpdateModalState, ViewOption,
 }
 import omni/shell/msg.{
-  type Msg, InstallApp, OpenApp, SetAppStoreView, SetCustomInstallUrl,
+  type Msg, InstallApp, OpenApp, SetCustomInstallUrl, SetInstallUrlModal,
   SetSearchQuery, ShowUpdateModal,
 }
 import omni/ui/icons
@@ -161,7 +161,6 @@ pub fn render_app_store(
   catalog: List(CatalogEntry),
 ) -> Element(Msg) {
   let filtered = filter_catalog(catalog, model.search_query)
-  let custom_url_trimmed = string.trim(model.custom_install_url)
 
   let cards =
     list.map(filtered, fn(entry) { render_catalog_card(model, entry) })
@@ -198,16 +197,7 @@ pub fn render_app_store(
           ),
         ]),
       ])
-    items ->
-      html.div(
-        [
-          attribute.class(case model.app_store_view {
-            "ledger" -> "omni-app-store-ledger"
-            _ -> "omni-app-store-grid"
-          }),
-        ],
-        items,
-      )
+    items -> html.div([attribute.class("omni-app-store-ledger")], items)
   }
 
   html.div(
@@ -217,18 +207,32 @@ pub fn render_app_store(
     ],
     [
       html.header([attribute.class("omni-app-store-header")], [
-        html.div([attribute.class("omni-app-store-title-group")], [
-          icons.render_icon("apps", 22),
-          html.div([], [
-            html.h2([attribute.class("omni-app-store-title")], [
-              element.text("Decentralized App Store"),
-            ]),
-            html.p([attribute.class("omni-app-store-subtitle")], [
-              element.text(
-                "Discover standard Nostr sites (NIP-5A nsites), Blossom bundles, and sandboxed micro-apps.",
-              ),
+        html.div([attribute.class("omni-app-store-header-top")], [
+          html.div([attribute.class("omni-app-store-title-group")], [
+            icons.render_icon("apps", 22),
+            html.div([], [
+              html.h2([attribute.class("omni-app-store-title")], [
+                element.text("Applications"),
+              ]),
+              html.p([attribute.class("omni-app-store-subtitle")], [
+                element.text(
+                  "Discover standard Nostr sites (NIP-5A nsites), Blossom bundles, and sandboxed micro-apps.",
+                ),
+              ]),
             ]),
           ]),
+          html.button(
+            [
+              attribute.type_("button"),
+              attribute.id("btn-open-install-url-modal"),
+              attribute.class("omni-button omni-button-secondary"),
+              event.on_click(SetInstallUrlModal(True)),
+            ],
+            [
+              icons.render_icon("plus", 14),
+              html.span([], [element.text("Install URL")]),
+            ],
+          ),
         ]),
         html.div([attribute.class("omni-app-store-controls")], [
           // Search Bar
@@ -245,76 +249,100 @@ pub fn render_app_store(
               event.on_input(SetSearchQuery),
             ]),
           ]),
-          html.div([attribute.class("omni-app-store-view-toggle")], [
-            html.button(
-              [
-                attribute.type_("button"),
-                attribute.id("btn-app-store-view-grid"),
-                attribute.class(case model.app_store_view {
-                  "ledger" -> "omni-view-toggle-btn"
-                  _ -> "omni-view-toggle-btn active"
-                }),
-                attribute.title("Grid view"),
-                attribute.attribute("aria-pressed", case model.app_store_view {
-                  "ledger" -> "false"
-                  _ -> "true"
-                }),
-                event.on_click(SetAppStoreView("grid")),
-              ],
-              [icons.render_icon("grid", 15)],
-            ),
-            html.button(
-              [
-                attribute.type_("button"),
-                attribute.id("btn-app-store-view-ledger"),
-                attribute.class(case model.app_store_view {
-                  "ledger" -> "omni-view-toggle-btn active"
-                  _ -> "omni-view-toggle-btn"
-                }),
-                attribute.title("Ledger view"),
-                attribute.attribute("aria-pressed", case model.app_store_view {
-                  "ledger" -> "true"
-                  _ -> "false"
-                }),
-                event.on_click(SetAppStoreView("ledger")),
-              ],
-              [icons.render_icon("menu", 15)],
-            ),
-          ]),
-          // Custom naddr / URL Install Bar
-          html.div([attribute.class("omni-app-store-custom-install")], [
-            html.input([
-              attribute.type_("text"),
-              attribute.id("input-app-store-custom-url"),
-              attribute.class("omni-input omni-app-store-url-input"),
-              attribute.placeholder(
-                "Install from naddr1..., Blossom hash, or https:// URL",
-              ),
-              attribute.value(model.custom_install_url),
-              event.on_input(SetCustomInstallUrl),
-            ]),
-            html.button(
-              [
-                attribute.type_("button"),
-                attribute.id("btn-app-store-install-url"),
-                attribute.class("omni-button omni-button-primary"),
-                attribute.disabled(custom_url_trimmed == ""),
-                event.on_click(
-                  InstallApp(custom_url_to_installed_app(custom_url_trimmed)),
-                ),
-              ],
-              [
-                icons.render_icon("download", 14),
-                html.span([], [element.text("Install URL")]),
-              ],
-            ),
-          ]),
         ]),
       ]),
       installed_section,
       grid_body,
+      render_install_url_modal(model),
     ],
   )
+}
+
+fn render_install_url_modal(model: Model) -> Element(Msg) {
+  case model.install_url_modal_open {
+    False -> element.none()
+    True -> {
+      let custom_url_trimmed = string.trim(model.custom_install_url)
+      html.div(
+        [
+          attribute.class("omni-modal-overlay open"),
+          attribute.id("install-url-modal"),
+          attribute.attribute("role", "dialog"),
+          attribute.attribute("aria-modal", "true"),
+          attribute.attribute("aria-labelledby", "install-url-modal-title"),
+        ],
+        [
+          html.div([attribute.class("omni-modal-card")], [
+            html.header([attribute.class("omni-modal-header")], [
+              html.div([attribute.class("omni-modal-title-group")], [
+                icons.render_icon("download", 18),
+                html.h3(
+                  [
+                    attribute.id("install-url-modal-title"),
+                    attribute.class("omni-modal-title"),
+                  ],
+                  [element.text("Install App from URL")],
+                ),
+              ]),
+              html.button(
+                [
+                  attribute.type_("button"),
+                  attribute.id("btn-close-install-url-modal"),
+                  attribute.class("omni-modal-close"),
+                  attribute.attribute("aria-label", "Close"),
+                  event.on_click(SetInstallUrlModal(False)),
+                ],
+                [icons.render_icon("x", 16)],
+              ),
+            ]),
+            html.div([attribute.class("omni-modal-body")], [
+              html.p([attribute.class("omni-app-store-subtitle")], [
+                element.text(
+                  "Enter an naddr1..., Blossom hash, or https:// URL for a standard Nostr site (NIP-5A nsite).",
+                ),
+              ]),
+              html.input([
+                attribute.type_("text"),
+                attribute.id("input-app-store-custom-url"),
+                attribute.class("omni-input omni-app-store-url-input"),
+                attribute.placeholder(
+                  "naddr1..., Blossom hash, or https:// URL",
+                ),
+                attribute.value(model.custom_install_url),
+                event.on_input(SetCustomInstallUrl),
+              ]),
+            ]),
+            html.footer([attribute.class("omni-modal-actions")], [
+              html.button(
+                [
+                  attribute.type_("button"),
+                  attribute.id("btn-cancel-install-url"),
+                  attribute.class("omni-button omni-button-ghost"),
+                  event.on_click(SetInstallUrlModal(False)),
+                ],
+                [element.text("Cancel")],
+              ),
+              html.button(
+                [
+                  attribute.type_("button"),
+                  attribute.id("btn-app-store-install-url"),
+                  attribute.class("omni-button omni-button-primary"),
+                  attribute.disabled(custom_url_trimmed == ""),
+                  event.on_click(
+                    InstallApp(custom_url_to_installed_app(custom_url_trimmed)),
+                  ),
+                ],
+                [
+                  icons.render_icon("download", 14),
+                  html.span([], [element.text("Install")]),
+                ],
+              ),
+            ]),
+          ]),
+        ],
+      )
+    }
+  }
 }
 
 fn render_installed_index(model: Model) -> Element(Msg) {

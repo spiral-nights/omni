@@ -49,8 +49,8 @@ pub type Msg {
   InstallApp(InstalledApp)
   UninstallApp(plugin_id: String)
   SetCustomInstallUrl(String)
+  SetInstallUrlModal(Bool)
   SetSearchQuery(String)
-  SetAppStoreView(String)
 
   // Intents & permissions
   ToggleAppIntent(plugin_id: String, intent_name: String)

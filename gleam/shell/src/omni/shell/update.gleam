@@ -29,8 +29,8 @@ import omni/shell/msg.{
   OpenAppContextMenu, OpenIntentApp, OpenSearch, OpenSettings, PullTouchEnd,
   PullTouchMove, PullTouchStart, RemoveAppPlacement, ResolvePermission,
   ScrollToTop, SelectIntentHandler, SelectShell, SetAccentColor,
-  SetAppPlacements, SetAppRelays, SetAppStoreView, SetCapabilityGrants,
-  SetCustomInstallUrl, SetCustomShellUrl, SetDefaultIntent, SetExportedNsec,
+  SetAppPlacements, SetAppRelays, SetCapabilityGrants, SetCustomInstallUrl,
+  SetCustomShellUrl, SetDefaultIntent, SetExportedNsec, SetInstallUrlModal,
   SetKeyInput, SetPassphrase, SetSearchQuery, SetSyncStatus, SetThemeMode,
   SetUpdateSourceUrl, SetUserProfile, ShellScrolled, ShowIntentPrompt,
   ShowPermissionPrompt, ShowToast, ShowToastTone, ShowUpdateModal,
@@ -241,7 +241,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
                 None ->
                   case model.update_modal {
                     Some(_) -> #(Model(..model, update_modal: None), [])
-                    None -> #(Model(..model, fullscreen: False), [])
+                    None ->
+                      case model.install_url_modal_open {
+                        True -> #(
+                          Model(..model, install_url_modal_open: False),
+                          [],
+                        )
+                        False -> #(Model(..model, fullscreen: False), [])
+                      }
                   }
               }
           }
@@ -449,7 +456,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
         False -> list.append(model.installed_apps, [new_app])
       }
       let next_model =
-        Model(..model, installed_apps: updated_apps, custom_install_url: "")
+        Model(
+          ..model,
+          installed_apps: updated_apps,
+          custom_install_url: "",
+          install_url_modal_open: False,
+        )
       // Only a first install triggers resolution; later `InstallApp` messages
       // carry already-resolved metadata (e.g. updates) and must not re-fetch.
       let is_custom_nsite = string.starts_with(new_app.id, "nsite.custom.")
@@ -509,16 +521,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, List(ShellEffect)) {
       #(Model(..model, custom_install_url: url), [])
     }
 
-    SetSearchQuery(query) -> {
-      #(Model(..model, search_query: query), [])
+    SetInstallUrlModal(open) -> {
+      #(Model(..model, install_url_modal_open: open), [])
     }
 
-    SetAppStoreView(view) -> {
-      let normalized = case string.lowercase(string.trim(view)) {
-        "ledger" -> "ledger"
-        _ -> "grid"
-      }
-      #(Model(..model, app_store_view: normalized), [])
+    SetSearchQuery(query) -> {
+      #(Model(..model, search_query: query), [])
     }
 
     ToggleAppIntent(plugin_id, intent_name) -> {

@@ -27,8 +27,10 @@ import omni/kernel/nostr/relay_pool
 import omni/kernel/plugins/updates
 import omni/kernel/rpc/dispatcher
 import omni/nostr/event as nostr_event
+import omni/nostr/event_id
 import omni/nostr/filter.{type Filter, Filter}
 import omni/nostr/kind
+import omni/nostr/nip19
 import omni/nostr/pubkey
 import omni/nostr/relay_url
 import omni/platform/audio
@@ -367,7 +369,13 @@ fn handle_shell_message(
   )
   let host = apply_effects(ShellBoot(next), effects)
   let _ = case next.model.active_page != current.booted.model.active_page {
-    True -> maybe_fetch_profile_notes(host, next.model.active_page)
+    True -> {
+      maybe_fetch_profile_notes(host, next.model.active_page)
+      case message {
+        msg.HistorySync(_, backward: True) -> pop_and_restore_scroll()
+        _ -> push_scroll_and_reset_top()
+      }
+    }
     False -> Nil
   }
   let _ = drain_fetches(host)
@@ -424,6 +432,46 @@ fn handle_shell_message(
             followed -> fetch_following_notes(host, followed)
           }
         }
+        "select-profile" | "select_profile" | "view-profile" | "view_profile" -> {
+          push_scroll_and_reset_top()
+          case extract_action_pubkey(act) {
+            Some(pk) -> fetch_author_notes(host, pk)
+            None -> Nil
+          }
+        }
+        "view-my-profile" | "view_my_profile" -> {
+          push_scroll_and_reset_top()
+          case next.model.user_profile {
+            Some(prof) if prof.pubkey != "" ->
+              fetch_author_notes(host, prof.pubkey)
+            _ -> Nil
+          }
+        }
+        "select-view" | "select_view" ->
+          case extract_action_string(act, ["tab", "view", "value"]) {
+            Some("my-profile") -> {
+              push_scroll_and_reset_top()
+              case next.model.user_profile {
+                Some(prof) if prof.pubkey != "" ->
+                  fetch_author_notes(host, prof.pubkey)
+                _ -> Nil
+              }
+            }
+            Some("directory") -> pop_and_restore_scroll()
+            _ -> Nil
+          }
+        "view_note"
+        | "view-note"
+        | "open-thread"
+        | "view-thread"
+        | "view_thread" -> push_scroll_and_reset_top()
+        "back"
+        | "back-to-feed"
+        | "navigate-back"
+        | "navigate_back"
+        | "view-directory"
+        | "view_directory"
+        | "back-to-directory" -> pop_and_restore_scroll()
         _ -> Nil
       }
     _ -> Nil
@@ -1015,6 +1063,7 @@ fn deliver_events_to_builtins(
   host: ShellBoot,
   events: List(nostr_event.Event),
 ) -> Nil {
+  list.each(events, fn(ev) { mark_event_seen(event_id.to_hex(ev.id)) })
   ingest_events_to_builtins(host, events)
   let profiles = list.filter_map(events, social_profile.from_event)
   case profiles {
@@ -1025,12 +1074,230 @@ fn deliver_events_to_builtins(
       Nil
     }
   }
+  let #(inline_pubkeys, inline_event_ids) = collect_inline_refs(events)
   let authors =
-    list.map(events, fn(ev) { pubkey.to_hex(ev.pubkey) })
+    list.append(
+      list.map(events, fn(ev) { pubkey.to_hex(ev.pubkey) }),
+      inline_pubkeys,
+    )
     |> list.unique
   list.each(authors, fn(author) {
     enqueue_ingest_flush(author, False, flush_ingest(host))
   })
+  list.each(inline_event_ids, fn(id) {
+    enqueue_event_fetch(id, flush_inline_events(host))
+  })
+}
+
+fn collect_inline_refs(
+  events: List(nostr_event.Event),
+) -> #(List(String), List(String)) {
+  list.fold(events, #([], []), fn(acc, ev) {
+    case ev.kind == kind.Note {
+      False -> acc
+      True -> {
+        let content = ev.content
+        let has_marker =
+          string.contains(content, "npub1")
+          || string.contains(content, "nprofile1")
+          || string.contains(content, "note1")
+          || string.contains(content, "nevent1")
+        case has_marker {
+          False -> acc
+          True ->
+            content
+            |> string.replace("\n", " ")
+            |> string.replace("\r", " ")
+            |> string.replace("\t", " ")
+            |> string.split(" ")
+            |> list.fold(acc, fn(inner_acc, token) {
+              let cleaned =
+                token
+                |> strip_entity_trailing
+                |> strip_nostr_scheme
+                |> string.lowercase
+              case string.length(cleaned) >= 20 {
+                False -> inner_acc
+                True ->
+                  case nip19.decode(cleaned) {
+                    Ok(nip19.Npub(pk)) -> #(
+                      [pubkey.to_hex(pk), ..inner_acc.0],
+                      inner_acc.1,
+                    )
+                    Ok(nip19.Nprofile(data)) -> #(
+                      [pubkey.to_hex(data.pubkey), ..inner_acc.0],
+                      inner_acc.1,
+                    )
+                    Ok(nip19.Note(eid)) -> #(inner_acc.0, [
+                      event_id.to_hex(eid),
+                      ..inner_acc.1
+                    ])
+                    Ok(nip19.Nevent(data)) -> {
+                      let next_pks = case data.author {
+                        Some(pk) -> [pubkey.to_hex(pk), ..inner_acc.0]
+                        None -> inner_acc.0
+                      }
+                      #(next_pks, [event_id.to_hex(data.id), ..inner_acc.1])
+                    }
+                    _ -> inner_acc
+                  }
+              }
+            })
+        }
+      }
+    }
+  })
+}
+
+fn flush_inline_events(host: ShellBoot) -> fn(String) -> Nil {
+  fn(ids_csv) {
+    let ids =
+      case ids_csv {
+        "" -> []
+        raw -> string.split(raw, ",")
+      }
+      |> list.filter(fn(id) { string.length(id) == 64 })
+      |> list.unique
+      |> list.take(50)
+    case ids {
+      [] -> Nil
+      _ -> {
+        let filter =
+          Filter(
+            ids: Some(ids),
+            authors: None,
+            kinds: None,
+            since: None,
+            until: None,
+            limit: Some(list.length(ids)),
+            search: None,
+            tags: dict.new(),
+          )
+        let _ =
+          coordinator.fetch(
+            host.booted.kernel.coordinator,
+            "omni_internal_inline_cache",
+            [filter],
+            Some(FetchOptions(
+              timeout_ms: None,
+              relays: None,
+              local_only: Some(True),
+            )),
+          )
+          |> promise.await(fn(cached) {
+            case cached {
+              [] -> Nil
+              _ -> {
+                let _ = deliver_events_to_builtins(host, cached)
+                schedule_push_views(host)
+              }
+            }
+            let cached_ids = list.map(cached, fn(ev) { event_id.to_hex(ev.id) })
+            let missing =
+              list.filter(ids, fn(id) { !list.contains(cached_ids, id) })
+            case missing {
+              [] -> promise.resolve(Nil)
+              _ -> {
+                let remote_filter =
+                  Filter(
+                    ids: Some(missing),
+                    authors: None,
+                    kinds: None,
+                    since: None,
+                    until: None,
+                    limit: Some(list.length(missing)),
+                    search: None,
+                    tags: dict.new(),
+                  )
+                coordinator.fetch(
+                  host.booted.kernel.coordinator,
+                  "omni_internal_inline_events",
+                  [remote_filter],
+                  Some(FetchOptions(
+                    timeout_ms: Some(4000),
+                    relays: None,
+                    local_only: None,
+                  )),
+                )
+                |> promise.map(fn(fetched) {
+                  case fetched {
+                    [] -> Nil
+                    _ -> {
+                      let _ = deliver_events_to_builtins(host, fetched)
+                      schedule_push_views(host)
+                    }
+                  }
+                  Nil
+                })
+              }
+            }
+          })
+        Nil
+      }
+    }
+  }
+}
+
+fn extract_action_string(
+  act: schema_action.Action,
+  keys: List(String),
+) -> Option(String) {
+  let payload = option.unwrap(act.payload, dict.new())
+  list.find_map(keys, fn(key) {
+    case dict.get(payload, key) {
+      Ok(val) ->
+        case decode.run(val, decode.string) {
+          Ok(s) if s != "" -> Ok(s)
+          _ -> Error(Nil)
+        }
+      Error(Nil) -> Error(Nil)
+    }
+  })
+  |> option.from_result
+}
+
+fn extract_action_pubkey(act: schema_action.Action) -> Option(String) {
+  case extract_action_string(act, ["pubkey", "id", "npub", "target", "value"]) {
+    Some(raw) -> {
+      let cleaned = strip_nostr_scheme(string.trim(raw))
+      case nip19.decode(cleaned) {
+        Ok(nip19.Npub(pk)) -> Some(pubkey.to_hex(pk))
+        Ok(nip19.Nprofile(data)) -> Some(pubkey.to_hex(data.pubkey))
+        _ ->
+          case string.length(cleaned) == 64 {
+            True -> Some(cleaned)
+            False -> None
+          }
+      }
+    }
+    None -> None
+  }
+}
+
+fn strip_nostr_scheme(raw: String) -> String {
+  case string.starts_with(raw, "nostr:") {
+    True -> string.drop_start(raw, 6)
+    False -> raw
+  }
+}
+
+fn strip_entity_trailing(token: String) -> String {
+  let trimmed = string.trim(token)
+  case string.length(trimmed) > 0 {
+    False -> trimmed
+    True -> {
+      let last = string.slice(trimmed, string.length(trimmed) - 1, 1)
+      case string.contains(".,;:!?)]}\"'", last) {
+        True ->
+          strip_entity_trailing(string.slice(
+            trimmed,
+            0,
+            string.length(trimmed) - 1,
+          ))
+        False -> trimmed
+      }
+    }
+  }
 }
 
 fn maybe_fetch_profile_notes(host: ShellBoot, page: Page) -> Nil {
@@ -1116,26 +1383,53 @@ fn fetch_author_notes(host: ShellBoot, pubkey: String) -> Nil {
 }
 
 fn fetch_older(host: ShellBoot, until: Int) -> Nil {
-  let filter =
+  let global_filter =
     Filter(
       ids: None,
       authors: None,
-      kinds: Some([kind.Note, kind.Repost, kind.Reaction]),
+      kinds: Some([kind.Note]),
       since: None,
       until: Some(until),
       limit: Some(40),
       search: None,
       tags: dict.new(),
     )
+  let cached_follows =
+    local_store.load(host.booted.kernel.storage, social_follows.store_config())
+  let filters = case list.take(cached_follows.followed_pubkeys, 100) {
+    [] -> [global_filter]
+    followed -> [
+      Filter(
+        ids: None,
+        authors: Some(followed),
+        kinds: Some([kind.Note]),
+        since: None,
+        until: Some(until),
+        limit: Some(40),
+        search: None,
+        tags: dict.new(),
+      ),
+      global_filter,
+    ]
+  }
   let _ =
     coordinator.fetch(
       host.booted.kernel.coordinator,
       "omni_internal_older",
-      [filter],
+      filters,
       Some(FetchOptions(timeout_ms: Some(4000), relays: None, local_only: None)),
     )
     |> promise.map(fn(events) {
-      deliver_events_to_builtins(host, events)
+      case events {
+        [] ->
+          dict.each(host.booted.builtins, fn(_id, app) {
+            case app.ingest_many {
+              Some(ingest_many) -> ingest_many([])
+              None -> Nil
+            }
+          })
+        _ -> deliver_events_to_builtins(host, events)
+      }
       push_views(host)
       Nil
     })
@@ -1813,6 +2107,12 @@ fn listen_app_context_menu(on_open: fn(String, Int, Int) -> Nil) -> Nil
 @external(javascript, "./shell_boot.ffi.mjs", "scroll_shell_top")
 fn scroll_shell_top() -> Nil
 
+@external(javascript, "./shell_boot.ffi.mjs", "push_scroll_and_reset_top")
+fn push_scroll_and_reset_top() -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "pop_and_restore_scroll")
+fn pop_and_restore_scroll() -> Nil
+
 @external(javascript, "./shell_boot.ffi.mjs", "set_timeout")
 fn set_timeout(ms: Int, cb: fn() -> Nil) -> Nil
 
@@ -1946,6 +2246,12 @@ fn enqueue_ingest_flush(
   needs_view_push: Bool,
   on_flush: fn(String, Bool) -> Nil,
 ) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "mark_event_seen")
+fn mark_event_seen(event_id: String) -> Nil
+
+@external(javascript, "./shell_boot.ffi.mjs", "enqueue_event_fetch")
+fn enqueue_event_fetch(event_id: String, on_flush: fn(String) -> Nil) -> Nil
 
 fn plugin_settings_id(tab_id: String) -> String {
   string.drop_start(tab_id, 7)

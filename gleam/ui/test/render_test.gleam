@@ -1,3 +1,4 @@
+import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
@@ -38,6 +39,7 @@ pub fn render_invisible_node_returns_empty_test() {
       truncate: None,
       action: None,
       show_inline_images: None,
+      resolved_entities: None,
     )
   render.render_to_string(n)
   |> should.equal("")
@@ -65,6 +67,7 @@ pub fn render_base_attributes_test() {
       truncate: Some(True),
       action: None,
       show_inline_images: None,
+      resolved_entities: None,
     )
   let html_str = render.render_to_string(n)
   should.be_true(string.contains(html_str, "id=\"node-1\""))
@@ -102,6 +105,7 @@ pub fn render_box_test() {
           truncate: None,
           action: None,
           show_inline_images: None,
+          resolved_entities: None,
         ),
       ],
     )
@@ -150,6 +154,7 @@ pub fn render_card_test() {
           truncate: None,
           action: None,
           show_inline_images: None,
+          resolved_entities: None,
         ),
       ],
       footer: [
@@ -698,6 +703,7 @@ pub fn golden_card_composite_test() {
           truncate: None,
           action: None,
           show_inline_images: None,
+          resolved_entities: None,
         ),
       ],
       footer: [
@@ -928,6 +934,7 @@ pub fn rich_text_linkifies_and_chips_entities_test() {
       truncate: None,
       action: None,
       show_inline_images: None,
+      resolved_entities: None,
     )
   let html_str = render.render_to_string(node)
   should.be_true(string.contains(html_str, "class=\"omni-rich-link\""))
@@ -946,6 +953,7 @@ pub fn rich_text_embeds_media_when_enabled_test() {
       truncate: None,
       action: None,
       show_inline_images: Some(True),
+      resolved_entities: None,
     )
   let with_media = render.render_to_string(image)
   should.be_true(string.contains(with_media, "class=\"omni-inline-image\""))
@@ -963,6 +971,7 @@ pub fn rich_text_embeds_media_when_enabled_test() {
       truncate: None,
       action: None,
       show_inline_images: Some(False),
+      resolved_entities: None,
     )
   let without_media = render.render_to_string(link_only)
   should.be_false(string.contains(without_media, "omni-inline-image"))
@@ -993,6 +1002,7 @@ pub fn rich_text_supports_markdown_links_and_leaves_plain_text_alone_test() {
       truncate: None,
       action: None,
       show_inline_images: None,
+      resolved_entities: None,
     )
   let md_html = render.render_to_string(md)
   should.be_true(string.contains(md_html, ">docs</a>"))
@@ -1007,10 +1017,37 @@ pub fn rich_text_supports_markdown_links_and_leaves_plain_text_alone_test() {
       truncate: None,
       action: None,
       show_inline_images: None,
+      resolved_entities: None,
     )
   render.render_to_string(plain)
   |> string.contains("<span class=\"omni-rich-text\">")
   |> should.be_false()
+}
+
+pub fn rich_text_renders_resolved_npub_and_nevent_test() {
+  let npub = "npub1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
+  let nevent = "nevent1qqs8p0k2a8e3j4m5n6p7q8r9s0t2u3v4w5x6y7z8a9c0d2e3f4g5h6"
+  let resolved =
+    dict.from_list([
+      #(npub, "Alice"),
+      #(nevent, "@Bob: Hello from the quoted note"),
+    ])
+  let node =
+    Text(
+      base: empty_base(),
+      content: "ping nostr:" <> npub <> " and " <> nevent,
+      variant: Some(Body),
+      tone: None,
+      truncate: None,
+      action: None,
+      show_inline_images: None,
+      resolved_entities: Some(resolved),
+    )
+  let rendered = render.render_to_string(node)
+  should.be_true(string.contains(rendered, "omni-inline-mention"))
+  should.be_true(string.contains(rendered, "@Alice"))
+  should.be_true(string.contains(rendered, "omni-inline-quote"))
+  should.be_true(string.contains(rendered, "@Bob: Hello from the quoted note"))
 }
 
 pub fn input_action_on_enter_and_clear_button_test() {
